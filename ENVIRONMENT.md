@@ -169,8 +169,9 @@ default.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_ENABLE` | Whether DNS-over-QUIC (RFC 9250) is enabled. Needs `libmsquic` — included in the Docker image; install it yourself on a bare-metal host. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_PORT` | The DoQ listen port. | `853` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_IDLE_TIMEOUT` | QUIC connection idle timeout. | `00:00:30` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_IDLE_TIMEOUT` | QUIC connection idle timeout, also the deadline for a stream's query to arrive and for each response write. | `00:00:30` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_BIDIRECTIONAL_STREAMS` | Max concurrent bidirectional QUIC streams per connection. | `100` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_CONNECTIONS` | Max concurrent QUIC connections; one over the limit is closed with `DOQ_EXCESSIVE_LOAD`. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for DoQ. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |

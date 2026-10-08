@@ -136,6 +136,11 @@ public record DnsOverHttpsSettingsDetail(bool Enable, string Path, int MaxMessag
 /// </param>
 /// <param name="IdleTimeout">How long a QUIC connection may stay idle before the server closes it. A change needs a listener restart.</param>
 /// <param name="MaxConcurrentBidirectionalStreams">How many bidirectional streams one QUIC connection may have open at once. A change needs a listener restart.</param>
+/// <param name="MaxConcurrentConnections">
+///     How many QUIC connections the transport serves at once. A connection over the limit is closed
+///     with the DNS-over-QUIC error code <c>DOQ_EXCESSIVE_LOAD</c>. Must be at least 1. A change
+///     needs a listener restart.
+/// </param>
 /// <param name="Certificate">The transport's server certificate configuration. A change needs a listener restart.</param>
 public record DnsOverQuicSettingsDetail(
     bool Enable,
@@ -143,6 +148,7 @@ public record DnsOverQuicSettingsDetail(
     List<string> ListenAddresses,
     TimeSpan IdleTimeout,
     int MaxConcurrentBidirectionalStreams,
+    int MaxConcurrentConnections,
     TlsCertificateSettingsDetail Certificate
 );
 

@@ -125,6 +125,47 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         Assert.False(detail.Enable);
         Assert.Equal(853, detail.Port);
         Assert.Equal(100, detail.MaxConcurrentBidirectionalStreams);
+        Assert.Equal(512, detail.MaxConcurrentConnections);
+    }
+
+    [Fact]
+    public async Task PatchDnsOverQuic_WithZeroMaxConcurrentConnections_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/transport-settings/dns-over-quic",
+                new { maxConcurrentConnections = 0 }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchDnsOverQuic_WithMaxConcurrentConnections_WritesItAndReportsRestartRequired()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/transport-settings/dns-over-quic",
+                new { maxConcurrentConnections = 64 }
+            )
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.TransportRestartRequiredNote, result.Note);
+
+        JsonObject root = (JsonObject)
+            JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+        Assert.Equal(
+            64,
+            root["DnsServer"]["Protocol"]["DnsOverQuic"]["MaxConcurrentConnections"].GetValue<int>()
+        );
     }
 
     [Fact]

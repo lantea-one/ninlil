@@ -295,6 +295,118 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AConnectionOverMaxConcurrentConnections_IsClosedWithExcessiveLoad()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        (DnsQueryProcessingPipeline pipeline, DnsOverQuicListener listener, int port) =
+            await StartListenAddressListenerAsync(
+                string.Empty,
+                NullLogger<DnsOverQuicListener>.Instance,
+                configured => configured.MaxConcurrentConnections = 1
+            );
+
+        try
+        {
+            await using QuicConnection first = await ConnectToAsync(port);
+            await using (QuicStream firstStream = await OpenAnsweredStreamAsync(first))
+            {
+                // The first connection is now registered on the server.
+            }
+
+            await using QuicConnection second = await ConnectToAsync(port);
+            QuicException closed = await Assert.ThrowsAsync<QuicException>(async () =>
+            {
+                await using QuicStream stream = await second.OpenOutboundStreamAsync(
+                    QuicStreamType.Bidirectional
+                );
+                await SendAsync(stream, BuildQuery(5, "over-the-limit.example.com"));
+                await ReceiveAsync(stream);
+            });
+
+            Assert.Equal(QuicError.ConnectionAborted, closed.QuicError);
+            Assert.Equal(4, closed.ApplicationErrorCode);
+
+            // Closing the first connection frees its slot for a new one.
+            await first.CloseAsync(0);
+            Assert.NotNull(await QueryEventuallyAsync(port));
+        }
+        finally
+        {
+            await listener.StopAsync(CancellationToken.None);
+            await pipeline.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task AStreamThatNeverSendsItsQuery_IsResetAfterTheIdleTimeout()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        (DnsQueryProcessingPipeline pipeline, DnsOverQuicListener listener, int port) =
+            await StartListenAddressListenerAsync(
+                string.Empty,
+                NullLogger<DnsOverQuicListener>.Instance,
+                configured => configured.IdleTimeout = TimeSpan.FromSeconds(1)
+            );
+
+        try
+        {
+            // Keep-alives stop the QUIC connection idling out first, so it is the stream's read
+            // deadline that ends the stream.
+            await using QuicConnection connection = await ConnectToAsync(
+                port,
+                keepAlive: TimeSpan.FromMilliseconds(200)
+            );
+            await using QuicStream stream = await connection.OpenOutboundStreamAsync(
+                QuicStreamType.Bidirectional
+            );
+            // A stream is only announced to the server once it carries data; send the length
+            // prefix of a message that never follows.
+            await stream.WriteAsync(new byte[] { 0, 40 });
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            QuicException reset = await Assert.ThrowsAsync<QuicException>(async () =>
+                await stream.ReadExactlyAsync(new byte[1], timeout.Token)
+            );
+
+            Assert.Equal(QuicError.StreamAborted, reset.QuicError);
+            Assert.Equal(3, reset.ApplicationErrorCode);
+        }
+        finally
+        {
+            await listener.StopAsync(CancellationToken.None);
+            await pipeline.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task AQueryThePipelineDrops_ResetsItsStreamWithRequestCancelled()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        await using QuicConnection connection = await ConnectAsync();
+        await using QuicStream stream = await connection.OpenOutboundStreamAsync(
+            QuicStreamType.Bidirectional
+        );
+        await SendAsync(stream, BuildQuery(8, "drop.example.com"));
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+        QuicException reset = await Assert.ThrowsAsync<QuicException>(async () =>
+            await stream.ReadExactlyAsync(new byte[1], timeout.Token)
+        );
+
+        Assert.Equal(QuicError.StreamAborted, reset.QuicError);
+        Assert.Equal(3, reset.ApplicationErrorCode);
+
+        // The connection is unaffected: a following query on a new stream is answered.
+        await using QuicStream next = await OpenAnsweredStreamAsync(connection);
+    }
+
+    [Fact]
     public async Task ListenAddresses_LoopbackOnly_AnswersThereButNotOnAnotherLocalAddress()
     {
         IPAddress other = LocalAddresses.OtherLoopback();
@@ -367,7 +479,11 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         DnsQueryProcessingPipeline Pipeline,
         DnsOverQuicListener Listener,
         int Port
-    )> StartListenAddressListenerAsync(string listenAddresses, ILogger<DnsOverQuicListener> logger)
+    )> StartListenAddressListenerAsync(
+        string listenAddresses,
+        ILogger<DnsOverQuicListener> logger,
+        Action<DnsOverQuicOptions> configure = null
+    )
     {
         int port = LocalAddresses.GetFreePort();
         DnsQueryProcessingPipeline pipeline = new(
@@ -379,20 +495,21 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         );
         await pipeline.StartAsync(CancellationToken.None);
 
+        DnsOverQuicOptions listenerOptions = new()
+        {
+            Enable = true,
+            Port = port,
+            ListenAddresses = listenAddresses,
+            // Reuse the shared self-signed certificate file, so each listener does not
+            // generate its own.
+            Certificate = _options.Certificate,
+        };
+        configure?.Invoke(listenerOptions);
+
         DnsOverQuicListener listener = new(
             pipeline,
             BuildScopeFactory(),
-            new StaticOptionsMonitor<DnsOverQuicOptions>(
-                new DnsOverQuicOptions
-                {
-                    Enable = true,
-                    Port = port,
-                    ListenAddresses = listenAddresses,
-                    // Reuse the shared self-signed certificate file, so each listener does not
-                    // generate its own.
-                    Certificate = _options.Certificate,
-                }
-            ),
+            new StaticOptionsMonitor<DnsOverQuicOptions>(listenerOptions),
             logger
         );
         await listener.StartAsync(CancellationToken.None);
@@ -478,11 +595,50 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             .BuildServiceProvider()
             .GetRequiredService<IServiceScopeFactory>();
 
-    private async Task<QuicConnection> ConnectAsync() =>
+    private async Task<QuicConnection> ConnectAsync() => await ConnectToAsync(_options.Port);
+
+    /// <summary>
+    ///     This method opens a stream on a connection, sends a query and reads its answer,
+    ///     returning the stream. It fails the test if the answer is wrong.
+    /// </summary>
+    private static async Task<QuicStream> OpenAnsweredStreamAsync(QuicConnection connection)
+    {
+        QuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional);
+        await SendAsync(stream, BuildQuery(3, "answered.example.com"));
+        DnsMessage response = await ReceiveAsync(stream);
+        Assert.Equal((ushort)3, response.Id);
+        return stream;
+    }
+
+    /// <summary>
+    ///     This method queries a port until it answers, for up to five seconds. A freed
+    ///     connection slot is released on the server a moment after the client closes.
+    /// </summary>
+    private static async Task<DnsMessage> QueryEventuallyAsync(int port)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        DnsMessage response = null;
+
+        while (response is null && DateTime.UtcNow < deadline)
+        {
+            response = await TryQueryAsync(IPAddress.Loopback, port);
+
+            if (response is null)
+                await Task.Delay(100);
+        }
+
+        return response;
+    }
+
+    private static async Task<QuicConnection> ConnectToAsync(
+        int port,
+        TimeSpan? keepAlive = null
+    ) =>
         await QuicConnection.ConnectAsync(
             new QuicClientConnectionOptions
             {
-                RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, _options.Port),
+                KeepAliveInterval = keepAlive ?? Timeout.InfiniteTimeSpan,
+                RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, port),
                 ClientAuthenticationOptions = new SslClientAuthenticationOptions
                 {
                     ApplicationProtocols = [DoqProtocol],
@@ -560,6 +716,11 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         )
         {
             DnsQuestion question = context.Request.Questions[0];
+
+            // A name under "drop." fails the dispatch, which makes the pipeline drop the query.
+            if (question.Name.ToString().StartsWith("drop.", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Dispatch failed on purpose.");
+
             DnsMessage response = new()
             {
                 Id = context.Request.Id,

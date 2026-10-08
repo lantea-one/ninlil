@@ -521,6 +521,28 @@ public class TransportSettingsController(
             touchedRestartRequiringField = true;
         }
 
+        if (
+            patch.TryGetMergePatchField(
+                "maxConcurrentConnections",
+                out JsonElement maxConcurrentConnectionsElement
+            )
+        )
+        {
+            int maxConcurrentConnections = maxConcurrentConnectionsElement.GetInt32();
+
+            if (maxConcurrentConnections < 1)
+                throw new ValidationException("'maxConcurrentConnections' must be at least 1.");
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    DnsOverQuicOptions.SectionName,
+                    nameof(DnsOverQuicOptions.MaxConcurrentConnections),
+                    maxConcurrentConnections
+                )
+            );
+            touchedRestartRequiringField = true;
+        }
+
         if (patch.TryGetMergePatchField("certificate", out JsonElement certificate))
             AddCertificateSettings(
                 certificate,
@@ -1145,6 +1167,7 @@ public class TransportSettingsController(
             ToListenAddressList(options.ListenAddresses),
             options.IdleTimeout,
             options.MaxConcurrentBidirectionalStreams,
+            options.MaxConcurrentConnections,
             ToCertificateDetail(options.Certificate)
         );
 

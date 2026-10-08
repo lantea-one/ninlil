@@ -11,8 +11,8 @@ namespace Ninlil.Web.Examples.TransportSettings;
 public class DnsOverQuicSettingsDetailExample : IExamplesProvider<DnsOverQuicSettingsDetail>
 {
     /// <summary>
-    ///     This method returns DNS-over-QUIC enabled with the default port, timeout and stream
-    ///     limit and a self-signed certificate (no PFX path).
+    ///     This method returns DNS-over-QUIC enabled with the default port, timeout, stream
+    ///     and connection limits and a self-signed certificate (no PFX path).
     /// </summary>
     public DnsOverQuicSettingsDetail GetExamples() =>
         new(
@@ -21,6 +21,7 @@ public class DnsOverQuicSettingsDetailExample : IExamplesProvider<DnsOverQuicSet
             ListenAddresses: [],
             IdleTimeout: TimeSpan.FromSeconds(30),
             MaxConcurrentBidirectionalStreams: 100,
+            MaxConcurrentConnections: 512,
             Certificate: new TlsCertificateSettingsDetail(
                 PfxPath: "",
                 PfxPasswordConfigured: false,

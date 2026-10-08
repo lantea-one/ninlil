@@ -38,8 +38,12 @@ namespace Ninlil.Dns.Protocol.DnsOverQuic;
 ///         discusses the replay risk it brings.
 ///     </para>
 ///     <para>
-///         There is no limit on the number of connections, only on streams per connection
-///         (<see cref="DnsOverQuicOptions.MaxConcurrentBidirectionalStreams" />).
+///         Connections are limited to <see cref="DnsOverQuicOptions.MaxConcurrentConnections" />
+///         (one over it is closed with <c>DOQ_EXCESSIVE_LOAD</c>) and streams per connection to
+///         <see cref="DnsOverQuicOptions.MaxConcurrentBidirectionalStreams" />. Every stream has
+///         a read deadline and a write deadline of <see cref="DnsOverQuicOptions.IdleTimeout" />,
+///         and a stream task, not a pipeline worker, writes the reply, so a client that stops
+///         reading cannot stall the pipeline.
 ///     </para>
 /// </summary>
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
@@ -93,6 +97,37 @@ public sealed class DnsOverQuicListener(
     private const string TransportName = "DNS-over-QUIC";
 
     /// <summary>
+    ///     This constant contains the DoQ application error code for a protocol violation, here a
+    ///     message that does not decode (RFC 9250 §8.4, <c>DOQ_PROTOCOL_ERROR</c>).
+    /// </summary>
+    private const long DoqProtocolError = 0x2;
+
+    /// <summary>
+    ///     This constant contains the DoQ application error code for a stream the server gives
+    ///     up on: a missed deadline or a dropped query (RFC 9250 §8.4,
+    ///     <c>DOQ_REQUEST_CANCELLED</c>).
+    /// </summary>
+    private const long DoqRequestCancelled = 0x3;
+
+    /// <summary>
+    ///     This constant contains the DoQ application error code for refusing work because the
+    ///     server is loaded: a connection over the limit, or a rate-limited query (RFC 9250
+    ///     §8.4, <c>DOQ_EXCESSIVE_LOAD</c>).
+    /// </summary>
+    private const long DoqExcessiveLoad = 0x4;
+
+    /// <summary>
+    ///     This field counts the connections being served, across every listen address.
+    /// </summary>
+    private int _activeConnections;
+
+    /// <summary>
+    ///     This field contains the connection limit, read from
+    ///     <see cref="DnsOverQuicOptions.MaxConcurrentConnections" /> when the listener starts.
+    /// </summary>
+    private int _maxConnections = int.MaxValue;
+
+    /// <summary>
     ///     This field backs <see cref="FailedListenAddresses" />, replaced on every start.
     /// </summary>
     private IReadOnlyList<string> _failedListenAddresses = [];
@@ -121,6 +156,8 @@ public sealed class DnsOverQuicListener(
         );
 
         DnsOverQuicOptions current = options.CurrentValue;
+        _maxConnections = current.MaxConcurrentConnections;
+        Volatile.Write(ref _activeConnections, 0);
         bool explicitAddresses = ListenAddressList.Split(current.ListenAddresses).Count > 0;
 
         IReadOnlyList<IPEndPoint> endpoints = ListenSocketSet.ResolveEndpoints(
@@ -296,6 +333,13 @@ public sealed class DnsOverQuicListener(
                 continue;
             }
 
+            if (Interlocked.Increment(ref _activeConnections) > _maxConnections)
+            {
+                Interlocked.Decrement(ref _activeConnections);
+                _ = RejectConnectionAsync(connection);
+                continue;
+            }
+
             _ = HandleConnectionAsync(connection, stoppingToken);
         }
     }
@@ -303,13 +347,21 @@ public sealed class DnsOverQuicListener(
     /// <summary>
     ///     This method serves one accepted QUIC connection, handling every stream the peer opens
     ///     concurrently; each stream is an independent query (RFC 9250 §4.2). Streams are
-    ///     separate, so unlike DNS over TLS no per-connection write lock is needed.
+    ///     separate, so unlike DNS over TLS no per-connection write lock is needed. The
+    ///     connection holds one slot of <see cref="DnsOverQuicOptions.MaxConcurrentConnections" />
+    ///     until it ends, and the token passed to its streams is cancelled then, so a stream
+    ///     waiting for a reply the client can no longer receive stops waiting.
     /// </summary>
     private async Task HandleConnectionAsync(
         QuicConnection connection,
         CancellationToken stoppingToken
     )
     {
+        TimeSpan idleTimeout = options.CurrentValue.IdleTimeout;
+        CancellationTokenSource connectionCts = CancellationTokenSource.CreateLinkedTokenSource(
+            stoppingToken
+        );
+
         try
         {
             while (true)
@@ -327,8 +379,39 @@ public sealed class DnsOverQuicListener(
                     break;
                 }
 
-                _ = HandleStreamAsync(connection, stream, stoppingToken);
+                _ = HandleStreamAsync(connection, stream, idleTimeout, connectionCts.Token);
             }
+        }
+        finally
+        {
+            await connectionCts.CancelAsync();
+            connectionCts.Dispose();
+            await connection.DisposeAsync();
+            Interlocked.Decrement(ref _activeConnections);
+        }
+    }
+
+    /// <summary>
+    ///     This method refuses a connection that arrived over
+    ///     <see cref="DnsOverQuicOptions.MaxConcurrentConnections" />, closing it with
+    ///     <c>DOQ_EXCESSIVE_LOAD</c> (RFC 9250 §8.4) so a well-behaved client backs off. It runs
+    ///     off the accept loop, which must not wait for a slow peer.
+    /// </summary>
+    private async Task RejectConnectionAsync(QuicConnection connection)
+    {
+        try
+        {
+            using CancellationTokenSource closeTimeout = new(TimeSpan.FromSeconds(5));
+            await connection.CloseAsync(DoqExcessiveLoad, closeTimeout.Token);
+        }
+        catch (Exception exception)
+            when (exception
+                    is QuicException
+                        or OperationCanceledException
+                        or ObjectDisposedException
+            )
+        {
+            logger.LogDebug(exception, "Closing an over-limit DNS-over-QUIC connection failed.");
         }
         finally
         {
@@ -337,30 +420,36 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method answers the query on one stream: it reads the length-prefixed message (the
-    ///     client then closes its side of the stream, so nothing more needs reading), routes a
-    ///     zone transfer to <see cref="HandleZoneTransferAsync" /> and any other query to the
-    ///     pipeline, whose response is written back framed the same way before the server closes
-    ///     its side (RFC 9250 §4.2). A message that does not decode is logged and the stream
-    ///     dropped. The source address is the QUIC connection's remote address.
+    ///     This method answers the query on one stream: it reads the length-prefixed message
+    ///     within <paramref name="idleTimeout" /> (the client then closes its side of the stream,
+    ///     so nothing more needs reading), routes a zone transfer to
+    ///     <see cref="HandleZoneTransferAsync" /> and any other query to the pipeline. A pipeline
+    ///     worker never writes to the stream: the stream's own task waits for the reply, then
+    ///     writes it framed the same way and closes the stream's write side (RFC 9250 §4.2),
+    ///     within <paramref name="idleTimeout" />. A stream that misses a deadline, or whose
+    ///     query the pipeline drops, is reset with a DoQ error code (RFC 9250 §8.4) instead of
+    ///     being left open. A message that does not decode is logged at Debug and the stream
+    ///     reset. The source address is the QUIC connection's remote address.
     /// </summary>
     private async Task HandleStreamAsync(
         QuicConnection connection,
         QuicStream stream,
-        CancellationToken stoppingToken
+        TimeSpan idleTimeout,
+        CancellationToken connectionToken
     )
     {
         try
         {
-            byte[] lengthPrefix = new byte[2];
+            byte[] messageBuffer;
 
-            if (!await ReadExactAsync(stream, lengthPrefix, stoppingToken))
-                return;
+            using (
+                CancellationTokenSource readCts = LinkedWithTimeout(connectionToken, idleTimeout)
+            )
+            {
+                messageBuffer = await ReadQueryAsync(stream, readCts.Token);
+            }
 
-            ushort messageLength = BinaryPrimitives.ReadUInt16BigEndian(lengthPrefix);
-            byte[] messageBuffer = new byte[messageLength];
-
-            if (!await ReadExactAsync(stream, messageBuffer, stoppingToken))
+            if (messageBuffer is null)
                 return;
 
             DnsMessage request;
@@ -372,12 +461,12 @@ public sealed class DnsOverQuicListener(
             }
             catch (FormatException exception)
             {
-                logger.LogWarning(
+                logger.LogDebug(
                     exception,
                     "Discarding a malformed DNS-over-QUIC message from {RemoteAddress}.",
                     connection.RemoteEndPoint.Address
                 );
-                await stream.DisposeAsync();
+                AbortQuietly(stream, DoqProtocolError);
                 return;
             }
 
@@ -393,29 +482,79 @@ public sealed class DnsOverQuicListener(
                     connection.RemoteEndPoint.Address,
                     questionType.Value,
                     stream,
-                    stoppingToken
+                    idleTimeout,
+                    connectionToken
                 );
                 return;
             }
+
+            TaskCompletionSource<QueryOutcome> outcome = new(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
 
             await pipeline.EnqueueAsync(
                 new DnsInboundMessage(
                     messageBuffer,
                     DnsTransportProtocolEnum.Quic,
                     connection.RemoteEndPoint.Address,
-                    (responseBytes, sendToken) =>
-                        WriteResponseAsync(stream, responseBytes, sendToken)
-                ),
-                stoppingToken
+                    (responseBytes, _) =>
+                    {
+                        // Copied, so the pipeline may reuse its buffer; the stream task writes
+                        // it later.
+                        outcome.TrySetResult(new QueryOutcome(responseBytes.ToArray(), default));
+                        return ValueTask.CompletedTask;
+                    }
+                )
+                {
+                    OnDropped = reason => outcome.TrySetResult(new QueryOutcome(null, reason)),
+                    MaxResponseOctets = ushort.MaxValue,
+                },
+                connectionToken
+            );
+
+            QueryOutcome result = await outcome.Task.WaitAsync(connectionToken);
+
+            if (result.Response is null)
+            {
+                AbortQuietly(
+                    stream,
+                    result.DropReason
+                        is DnsQueryDropReasonEnum.RateLimited
+                            or DnsQueryDropReasonEnum.SubnetRateLimited
+                        ? DoqExcessiveLoad
+                        : DoqRequestCancelled
+                );
+                return;
+            }
+
+            await WriteAsync(
+                stream,
+                Frame(result.Response),
+                completeWrites: true,
+                idleTimeout,
+                connectionToken
             );
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            // A read or write deadline passed, or the connection or host is closing.
+            logger.LogDebug(
+                "DNS-over-QUIC stream from {Endpoint} was reset: a deadline passed or the connection closed.",
+                connection.RemoteEndPoint
+            );
+            AbortQuietly(stream, DoqRequestCancelled);
+        }
+        catch (Exception exception)
         {
             logger.LogDebug(
                 exception,
                 "DNS-over-QUIC stream from {Endpoint} ended abnormally.",
                 connection.RemoteEndPoint
             );
+            AbortQuietly(stream, DoqRequestCancelled);
+        }
+        finally
+        {
             await stream.DisposeAsync();
         }
     }
@@ -424,7 +563,10 @@ public sealed class DnsOverQuicListener(
     ///     This method answers an AXFR or IXFR query on its stream with the sequence of messages
     ///     from <see cref="IZoneTransferService" />, the DNS-over-QUIC counterpart of the transfer
     ///     handling in <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c> and
-    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>.
+    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>. Like those, it runs under
+    ///     <see cref="FramedDnsStreamSession.MaxTransferDuration" />, not the read-idle timeout,
+    ///     because a transfer is long by nature; a secondary that stops reading is cut by the
+    ///     per-write deadline instead.
     /// </summary>
     private async Task HandleZoneTransferAsync(
         DnsMessage request,
@@ -433,102 +575,154 @@ public sealed class DnsOverQuicListener(
         IPAddress remoteAddress,
         DnsResourceRecordTypeEnum questionType,
         QuicStream stream,
-        CancellationToken stoppingToken
+        TimeSpan writeDeadline,
+        CancellationToken connectionToken
     )
+    {
+        using CancellationTokenSource transferCts = LinkedWithTimeout(
+            connectionToken,
+            FramedDnsStreamSession.MaxTransferDuration
+        );
+        CancellationToken transferToken = transferCts.Token;
+
+        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        IZoneTransferService transferService =
+            scope.ServiceProvider.GetRequiredService<IZoneTransferService>();
+
+        DnsQueryContext context = new(
+            request,
+            DnsTransportProtocolEnum.Quic,
+            remoteAddress,
+            DateTimeOffset.UtcNow,
+            rawMessage,
+            tsigRecordStartOffset
+        );
+
+        IAsyncEnumerable<DnsMessage> responses =
+            questionType == DnsResourceRecordTypeEnum.Axfr
+                ? transferService.CreateAxfrResponseAsync(context, transferToken)
+                : transferService.CreateIxfrResponseAsync(context, transferToken);
+
+        // Every response message goes on this stream, since RFC 9250 §4.2 gives each query
+        // one stream and a transfer is the answer to one query. Only the last message closes
+        // the stream's write side, so each message is held back one step until the next
+        // arrives.
+        byte[] pendingFrame = null;
+
+        await foreach (DnsMessage responseMessage in responses.WithCancellation(transferToken))
+        {
+            if (pendingFrame is not null)
+                await WriteAsync(
+                    stream,
+                    pendingFrame,
+                    completeWrites: false,
+                    writeDeadline,
+                    transferToken
+                );
+
+            pendingFrame = Frame(DnsMessageWriter.Write(responseMessage));
+        }
+
+        if (pendingFrame is not null)
+            await WriteAsync(
+                stream,
+                pendingFrame,
+                completeWrites: true,
+                writeDeadline,
+                transferToken
+            );
+    }
+
+    /// <summary>
+    ///     This method returns a linked token source that is cancelled with
+    ///     <paramref name="parent" /> or after <paramref name="timeout" />. The caller disposes it.
+    /// </summary>
+    private static CancellationTokenSource LinkedWithTimeout(
+        CancellationToken parent,
+        TimeSpan timeout
+    )
+    {
+        CancellationTokenSource source = CancellationTokenSource.CreateLinkedTokenSource(parent);
+        source.CancelAfter(timeout);
+        return source;
+    }
+
+    /// <summary>
+    ///     This method prefixes a DNS message with its two-octet length (RFC 9250 §4.2).
+    /// </summary>
+    private static byte[] Frame(ReadOnlySpan<byte> messageBytes)
+    {
+        byte[] framed = new byte[2 + messageBytes.Length];
+        BinaryPrimitives.WriteUInt16BigEndian(framed, (ushort)messageBytes.Length);
+        messageBytes.CopyTo(framed.AsSpan(2));
+        return framed;
+    }
+
+    /// <summary>
+    ///     This method writes one framed message under its own <paramref name="writeDeadline" />.
+    ///     QUIC flow control makes a write wait for a client that does not read, so without a
+    ///     deadline such a client would hold the stream open indefinitely.
+    /// </summary>
+    /// <exception cref="OperationCanceledException">
+    ///     Thrown when the deadline passes or <paramref name="token" /> is cancelled.
+    /// </exception>
+    private static async ValueTask WriteAsync(
+        QuicStream stream,
+        ReadOnlyMemory<byte> framed,
+        bool completeWrites,
+        TimeSpan writeDeadline,
+        CancellationToken token
+    )
+    {
+        using CancellationTokenSource writeCts = LinkedWithTimeout(token, writeDeadline);
+        await stream.WriteAsync(framed, completeWrites, writeCts.Token);
+    }
+
+    /// <summary>
+    ///     This method resets both directions of a stream with a DoQ application error code.
+    ///     The stream may already be closed by the peer, which is ignored.
+    /// </summary>
+    private static void AbortQuietly(QuicStream stream, long errorCode)
     {
         try
         {
-            await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-            IZoneTransferService transferService =
-                scope.ServiceProvider.GetRequiredService<IZoneTransferService>();
-
-            DnsQueryContext context = new(
-                request,
-                DnsTransportProtocolEnum.Quic,
-                remoteAddress,
-                DateTimeOffset.UtcNow,
-                rawMessage,
-                tsigRecordStartOffset
-            );
-
-            IAsyncEnumerable<DnsMessage> responses =
-                questionType == DnsResourceRecordTypeEnum.Axfr
-                    ? transferService.CreateAxfrResponseAsync(context, stoppingToken)
-                    : transferService.CreateIxfrResponseAsync(context, stoppingToken);
-
-            // Every response message goes on this stream, since RFC 9250 §4.2 gives each query
-            // one stream and a transfer is the answer to one query. Only the last message closes
-            // the stream's write side, so each message is held back one step until the next
-            // arrives.
-            byte[] pendingMessageBytes = null;
-
-            await foreach (DnsMessage responseMessage in responses.WithCancellation(stoppingToken))
-            {
-                if (pendingMessageBytes is not null)
-                    await WriteFramedNotLastAsync(stream, pendingMessageBytes, stoppingToken);
-
-                pendingMessageBytes = DnsMessageWriter.Write(responseMessage);
-            }
-
-            if (pendingMessageBytes is not null)
-            {
-                byte[] lengthPrefix = new byte[2];
-                BinaryPrimitives.WriteUInt16BigEndian(
-                    lengthPrefix,
-                    (ushort)pendingMessageBytes.Length
-                );
-                await stream.WriteAsync(lengthPrefix, stoppingToken);
-                await stream.WriteAsync(pendingMessageBytes, completeWrites: true, stoppingToken);
-            }
+            stream.Abort(QuicAbortDirection.Both, errorCode);
         }
-        finally
+        catch (Exception exception)
+            when (exception is QuicException or ObjectDisposedException or InvalidOperationException
+            )
         {
-            await stream.DisposeAsync();
+            // Already closed; nothing left to reset.
         }
     }
 
     /// <summary>
-    ///     This method writes one length-prefixed message that is not the last in a sequence,
-    ///     leaving the stream's write side open. Only <see cref="HandleZoneTransferAsync" /> uses
-    ///     it.
+    ///     This method reads a length-prefixed query from a stream.
     /// </summary>
-    private static async ValueTask WriteFramedNotLastAsync(
+    /// <returns>The message bytes, or <see langword="null" /> if the stream ended with no data.</returns>
+    private static async ValueTask<byte[]> ReadQueryAsync(
         QuicStream stream,
-        byte[] messageBytes,
-        CancellationToken stoppingToken
+        CancellationToken token
     )
     {
         byte[] lengthPrefix = new byte[2];
-        BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)messageBytes.Length);
 
-        await stream.WriteAsync(lengthPrefix, stoppingToken);
-        await stream.WriteAsync(messageBytes, stoppingToken);
+        if (!await ReadExactAsync(stream, lengthPrefix, token))
+            return null;
+
+        byte[] messageBuffer = new byte[BinaryPrimitives.ReadUInt16BigEndian(lengthPrefix)];
+
+        if (!await ReadExactAsync(stream, messageBuffer, token))
+            throw new IOException("The stream ended before the DNS message arrived.");
+
+        return messageBuffer;
     }
 
     /// <summary>
-    ///     This method writes one length-prefixed response and closes the stream's write side. No
-    ///     write lock is needed, since the stream carries one query and is never reused (RFC 9250
-    ///     §4.2).
+    ///     This record carries how a pipeline query ended to the stream task waiting for it:
+    ///     with a reply, or (<paramref name="Response" /> null) dropped for the given reason.
     /// </summary>
-    private static async ValueTask WriteResponseAsync(
-        QuicStream stream,
-        ReadOnlyMemory<byte> messageBytes,
-        CancellationToken stoppingToken
-    )
-    {
-        try
-        {
-            byte[] lengthPrefix = new byte[2];
-            BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)messageBytes.Length);
-
-            await stream.WriteAsync(lengthPrefix, stoppingToken);
-            await stream.WriteAsync(messageBytes, completeWrites: true, stoppingToken);
-        }
-        finally
-        {
-            await stream.DisposeAsync();
-        }
-    }
+    private readonly record struct QueryOutcome(byte[] Response, DnsQueryDropReasonEnum DropReason);
 
     /// <summary>
     ///     This method fills a buffer completely from a stream, or reports a clean end-of-stream.

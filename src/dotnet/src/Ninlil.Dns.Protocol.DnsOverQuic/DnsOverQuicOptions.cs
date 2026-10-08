@@ -6,8 +6,9 @@ namespace Ninlil.Dns.Protocol.DnsOverQuic;
 /// <summary>
 ///     This class binds to the <c>DnsServer:Protocol:DnsOverQuic</c> section of the
 ///     application's configuration and controls how <see cref="DnsOverQuicListener" /> binds
-///     and behaves. Most settings are read when the listener starts and apply on restart; the
-///     per-connection settings (<see cref="IdleTimeout" />,
+///     and behaves. Most settings, including <see cref="MaxConcurrentConnections" />, are read when
+///     the listener starts and apply on restart; the per-connection settings
+///     (<see cref="IdleTimeout" />,
 ///     <see cref="MaxConcurrentBidirectionalStreams" />) are read for each new connection.
 /// </summary>
 public class DnsOverQuicOptions
@@ -49,7 +50,9 @@ public class DnsOverQuicOptions
     public string ListenAddresses { get; set; } = string.Empty;
 
     /// <summary>
-    ///     This property contains how long a QUIC connection may be idle before it is closed.
+    ///     This property contains how long a QUIC connection may be idle before it is closed. It
+    ///     is also the deadline for a client to send its query on a new stream and for the
+    ///     server to write each response message; a stream that misses either is reset.
     /// </summary>
     public TimeSpan IdleTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
@@ -58,6 +61,14 @@ public class DnsOverQuicOptions
     ///     9250 §4.2) one QUIC connection may have open at once.
     /// </summary>
     public int MaxConcurrentBidirectionalStreams { get; set; } = 100;
+
+    /// <summary>
+    ///     This property contains how many QUIC connections the listener serves at once, across
+    ///     all its listen addresses. A connection over the limit is closed at once with
+    ///     <c>DOQ_EXCESSIVE_LOAD</c> (RFC 9250 §8.4). The default matches DNS over TLS. Applies
+    ///     on restart.
+    /// </summary>
+    public int MaxConcurrentConnections { get; set; } = 512;
 
     /// <summary>
     ///     This property contains this transport's server certificate configuration.
