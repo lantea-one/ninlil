@@ -153,6 +153,27 @@
             />
           </div>
 
+          @if (twoFactorForm.controls.provider.value === 'Email') {
+            <p class="text-body-secondary small">
+              @if (emailCodeState() === 'sent') {
+                A code was sent to your e-mail address. Enter it above.
+              } @else {
+                Request a code, then enter it above.
+              }
+            </p>
+            <button
+              cButton
+              color="secondary"
+              variant="outline"
+              type="button"
+              class="mb-3"
+              [disabled]="emailCodeState() === 'sending'"
+              (click)="sendEmailCode()"
+            >
+              {{ emailCodeState() === 'sent' ? 'Send another code' : 'Send code' }}
+            </button>
+          }
+
           @if (twoFactorForm.controls.provider.value === 'RecoveryCode') {
             <p class="text-body-secondary small">
               Enter one of your unused recovery codes. It can only be used once.

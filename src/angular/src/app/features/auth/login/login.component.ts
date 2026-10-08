@@ -17,7 +17,7 @@ import {
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
 import { firstValueFrom } from 'rxjs';
-import { SsoService } from '../../../api-client';
+import { AuthService as AuthApiService, SsoService } from '../../../api-client';
 import { AuthService } from '../../../core/auth/auth.service';
 import { BrandingService } from '../../../core/branding/branding.service';
 import { BrowserNavigationService } from '../../../core/browser/browser-navigation.service';
@@ -70,6 +70,7 @@ export class LoginComponent implements OnInit {
   private readonly themeService = inject(ThemeService);
   private readonly brandingService = inject(BrandingService);
   private readonly ssoApi = inject(SsoService);
+  private readonly authApi = inject(AuthApiService);
   private readonly browserNavigation = inject(BrowserNavigationService);
 
   /** Which step of the sign-in flow is currently shown. */
@@ -181,9 +182,39 @@ export class LoginComponent implements OnInit {
     }
   }
 
+  /** Whether an e-mailed code is being requested, and whether the last request succeeded. */
+  readonly emailCodeState = signal<'idle' | 'sending' | 'sent'>('idle');
+
+  /**
+   * This method asks the server to e-mail a verification code for the pending sign-in
+   * (`POST /api/auth/login/two-factor/email-code`). The pending sign-in's `mfaToken` authorizes
+   * it, since there is no session yet.
+   */
+  async sendEmailCode(): Promise<void> {
+    if (!this.mfaToken || this.emailCodeState() === 'sending') return;
+
+    this.emailCodeState.set('sending');
+    this.errorMessage.set(null);
+
+    try {
+      await firstValueFrom(
+        this.authApi.apiAuthLoginTwoFactorEmailCodePost({
+          twoFactorEmailCodeRequest: { mfaToken: this.mfaToken },
+        }),
+      );
+      this.emailCodeState.set('sent');
+    } catch {
+      this.emailCodeState.set('idle');
+      this.errorMessage.set(
+        'A code could not be sent. The account may have no confirmed e-mail address.',
+      );
+    }
+  }
+
   /** This method returns to the credentials step, abandoning the pending two-factor challenge. */
   cancelTwoFactor(): void {
     this.mfaToken = null;
+    this.emailCodeState.set('idle');
     this.twoFactorForm.reset({ code: '', provider: 'Authenticator' });
     this.errorMessage.set(null);
     this.step.set('credentials');

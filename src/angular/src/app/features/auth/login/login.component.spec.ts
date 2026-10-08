@@ -6,6 +6,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { BrowserNavigationService } from '../../../core/browser/browser-navigation.service';
 import {
   AppearanceSettingsService as AppearanceApiService,
+  AuthService as AuthApiService,
   BrandingSettingsService as BrandingApiService,
   SsoService as SsoApiService,
 } from '../../../api-client';
@@ -48,6 +49,7 @@ describe('LoginComponent', () => {
   let appearanceApiSpy: FakeAppearanceApiService;
   let brandingApiSpy: FakeBrandingApiService;
   let ssoApiSpy: FakeSsoApiService;
+  let authApiSpy: { apiAuthLoginTwoFactorEmailCodePost: jasmine.Spy };
   let browserNavigationSpy: { navigateFullPage: jasmine.Spy };
   let navigateByUrlSpy: jasmine.Spy;
 
@@ -76,6 +78,11 @@ describe('LoginComponent', () => {
         .createSpy('apiAuthSsoGet')
         .and.returnValue(of({ enabled: false, displayName: 'Single Sign-On' })),
     };
+    authApiSpy = {
+      apiAuthLoginTwoFactorEmailCodePost: jasmine
+        .createSpy('apiAuthLoginTwoFactorEmailCodePost')
+        .and.returnValue(of(undefined)),
+    };
     configureSso?.(ssoApiSpy);
     browserNavigationSpy = { navigateFullPage: jasmine.createSpy('navigateFullPage') };
 
@@ -87,6 +94,7 @@ describe('LoginComponent', () => {
         { provide: AppearanceApiService, useValue: appearanceApiSpy },
         { provide: BrandingApiService, useValue: brandingApiSpy },
         { provide: SsoApiService, useValue: ssoApiSpy },
+        { provide: AuthApiService, useValue: authApiSpy },
         { provide: BrowserNavigationService, useValue: browserNavigationSpy },
         {
           provide: ActivatedRoute,
@@ -301,6 +309,41 @@ describe('LoginComponent', () => {
       'Authenticator',
     );
     expect(navigateByUrlSpy).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('requests an e-mailed code with only the pending sign-in token', async () => {
+    const fixture = await createComponent();
+    authServiceFake.login.and.resolveTo({ requiresTwoFactor: true, mfaToken: 'pending-token' });
+    fixture.componentInstance.credentialsForm.patchValue({
+      userName: 'someone',
+      password: 'correct-password',
+    });
+    await fixture.componentInstance.submitCredentials();
+
+    await fixture.componentInstance.sendEmailCode();
+
+    expect(authApiSpy.apiAuthLoginTwoFactorEmailCodePost).toHaveBeenCalledWith({
+      twoFactorEmailCodeRequest: { mfaToken: 'pending-token' },
+    });
+    expect(fixture.componentInstance.emailCodeState()).toBe('sent');
+  });
+
+  it('shows an error when the e-mailed code cannot be requested', async () => {
+    const fixture = await createComponent();
+    authServiceFake.login.and.resolveTo({ requiresTwoFactor: true, mfaToken: 'pending-token' });
+    fixture.componentInstance.credentialsForm.patchValue({
+      userName: 'someone',
+      password: 'correct-password',
+    });
+    await fixture.componentInstance.submitCredentials();
+    authApiSpy.apiAuthLoginTwoFactorEmailCodePost.and.returnValue(
+      throwError(() => new Error('bad request')),
+    );
+
+    await fixture.componentInstance.sendEmailCode();
+
+    expect(fixture.componentInstance.emailCodeState()).toBe('idle');
+    expect(fixture.componentInstance.errorMessage()).toContain('could not be sent');
   });
 
   it('shows an error and stays on the two-factor step when the code is rejected', async () => {
