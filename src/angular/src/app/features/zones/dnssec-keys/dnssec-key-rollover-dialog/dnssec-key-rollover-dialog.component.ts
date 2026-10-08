@@ -24,7 +24,11 @@ import {
   DnssecKeysService,
 } from '../../../../api-client';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
-import { DEFAULT_RSA_KEY_SIZE_BITS, isRsaAlgorithm } from '../dnssec-key.model';
+import {
+  DEFAULT_RSA_KEY_SIZE_BITS,
+  isRsaAlgorithm,
+  SIGNING_DNSSEC_ALGORITHMS,
+} from '../dnssec-key.model';
 
 /**
  * This component is the rollover dialog of `DnssecKeyListComponent`. It starts an RFC 6781
@@ -72,7 +76,7 @@ export class DnssecKeyRolloverDialogComponent {
   /** Emits the incoming replacement key once the rollover has started. */
   readonly rolled = output<DnssecKeyDetail>();
 
-  readonly algorithmOptions = Object.values(DnssecAlgorithmEnum);
+  readonly algorithmOptions = SIGNING_DNSSEC_ALGORITHMS;
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 

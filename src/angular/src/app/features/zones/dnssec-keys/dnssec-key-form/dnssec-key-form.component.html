@@ -71,12 +71,12 @@
                 }
               </select>
               <p class="hint">
-                RSA (SHA-1/SHA-256/SHA-512 variants) is the most broadly compatible with older
-                validators but produces the largest signatures and keys. ECDSA P-256/P-384 and EdDSA
+                RSA (SHA-256/SHA-512) is the most broadly compatible with older validators but
+                produces the largest signatures and keys. ECDSA P-256/P-384 and EdDSA
                 (Ed25519/Ed448) are modern, widely-supported choices with much smaller signatures
                 and faster signing -- ECDSA P-256 or Ed25519 is a reasonable default for a new zone.
-                MD5 and SHA-1-based algorithms are kept only for compatibility with existing
-                deployments and shouldn't be chosen for a new key.
+                MD5, DSA, GOST and SHA-1-based algorithms are not offered: RFC 8624 forbids or
+                discourages signing with them, and this server refuses to.
               </p>
             </div>
 

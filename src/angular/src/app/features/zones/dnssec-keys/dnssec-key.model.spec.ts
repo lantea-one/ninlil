@@ -9,6 +9,9 @@ import {
   canStartRollover,
   dnssecAlgorithmNumber,
   isRsaAlgorithm,
+  isSigningProhibited,
+  SIGNING_DNSSEC_ALGORITHMS,
+  SIGNING_PROHIBITED_DNSSEC_ALGORITHMS,
   lifecycleStateBadgeColor,
 } from './dnssec-key.model';
 
@@ -132,5 +135,21 @@ describe('dnssec-key.model', () => {
     expect(dnssecAlgorithmNumber(DnssecAlgorithmEnum.Ecdsap256Sha256)).toBe(13);
     expect(dnssecAlgorithmNumber(DnssecAlgorithmEnum.Ed448)).toBe(16);
     expect(dnssecAlgorithmNumber(undefined)).toBeNull();
+  });
+});
+
+describe('signing-prohibited DNSSEC algorithms', () => {
+  it('lists exactly the six algorithms the server never signs with', () => {
+    expect([...SIGNING_PROHIBITED_DNSSEC_ALGORITHMS].map((a) => dnssecAlgorithmNumber(a))).toEqual([
+      1, 3, 5, 6, 7, 12,
+    ]);
+  });
+
+  it('offers every other algorithm for signing', () => {
+    expect(SIGNING_DNSSEC_ALGORITHMS.map((a) => dnssecAlgorithmNumber(a))).toEqual([
+      8, 10, 13, 14, 15, 16,
+    ]);
+    expect(isSigningProhibited(DnssecAlgorithmEnum.Rsasha1)).toBeTrue();
+    expect(isSigningProhibited(DnssecAlgorithmEnum.Ed25519)).toBeFalse();
   });
 });

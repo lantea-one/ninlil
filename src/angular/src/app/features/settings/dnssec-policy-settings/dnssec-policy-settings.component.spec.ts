@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { DnssecAlgorithmEnum, DnssecPolicySettingsService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { SIGNING_PROHIBITED_DNSSEC_ALGORITHMS } from '../../zones/dnssec-keys/dnssec-key.model';
 import { DnssecPolicySettingsComponent } from './dnssec-policy-settings.component';
 
 function flushMicrotasks(): Promise<void> {
@@ -56,6 +57,30 @@ describe('DnssecPolicySettingsComponent', () => {
     expect(fixture.componentInstance.isSelected(DnssecAlgorithmEnum.Rsasha256)).toBeTrue();
     expect(fixture.componentInstance.isSelected(DnssecAlgorithmEnum.Ed25519)).toBeFalse();
     expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  it('offers no checkbox for an algorithm the server refuses to sign with', async () => {
+    const fixture = await createComponent();
+    const rendered = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('input[id^="dnssec-policy-"]'),
+    ).map((input) => input.id.replace('dnssec-policy-', ''));
+
+    for (const algorithm of SIGNING_PROHIBITED_DNSSEC_ALGORITHMS) {
+      expect(fixture.componentInstance.algorithmOptions).not.toContain(algorithm);
+      expect(rendered).not.toContain(algorithm);
+    }
+    expect(rendered).toContain(DnssecAlgorithmEnum.Ed25519);
+  });
+
+  it('drops a prohibited algorithm that is already in the stored allowlist', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiDnssecPolicySettingsGet.and.returnValue(
+        of({ allowedAlgorithms: [DnssecAlgorithmEnum.Rsasha1, DnssecAlgorithmEnum.Ed25519] }),
+      );
+    });
+
+    expect(fixture.componentInstance.isSelected(DnssecAlgorithmEnum.Rsasha1)).toBeFalse();
+    expect(fixture.componentInstance.isSelected(DnssecAlgorithmEnum.Ed25519)).toBeTrue();
   });
 
   it('toggle() flips a single algorithm', async () => {

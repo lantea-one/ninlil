@@ -44,6 +44,33 @@ export function dnssecAlgorithmNumber(algorithm: DnssecAlgorithmEnum | undefined
   return algorithm ? DNSSEC_ALGORITHM_NUMBERS[algorithm] : null;
 }
 
+/**
+ * This constant lists the algorithms the server never signs with: RSAMD5, DSA, RSASHA1,
+ * DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1 and ECC-GOST (RFC 8624 §3.1; the server also bars 5 and 7).
+ * It mirrors `DnssecAlgorithmRegistry.IsSigningProhibited`, and the backend answers 400 for any of
+ * them. The key form, the rollover dialog, the zone form and the policy page offer only the
+ * algorithms outside this list. The record forms (DNSKEY, RRSIG, DS, CERT) keep every value,
+ * because they enter data and do not sign.
+ */
+export const SIGNING_PROHIBITED_DNSSEC_ALGORITHMS: readonly DnssecAlgorithmEnum[] = [
+  DnssecAlgorithmEnum.Rsamd5,
+  DnssecAlgorithmEnum.Dsa,
+  DnssecAlgorithmEnum.Rsasha1,
+  DnssecAlgorithmEnum.DsaNsec3Sha1,
+  DnssecAlgorithmEnum.Rsasha1Nsec3Sha1,
+  DnssecAlgorithmEnum.EccGost,
+];
+
+/** This function reports whether the server refuses to sign with an algorithm. */
+export function isSigningProhibited(algorithm: DnssecAlgorithmEnum | undefined | null): boolean {
+  return !!algorithm && SIGNING_PROHIBITED_DNSSEC_ALGORITHMS.includes(algorithm);
+}
+
+/** This constant contains the algorithms a key, zone or policy form offers: every one the server may sign with. */
+export const SIGNING_DNSSEC_ALGORITHMS: DnssecAlgorithmEnum[] = Object.values(
+  DnssecAlgorithmEnum,
+).filter((algorithm) => !isSigningProhibited(algorithm));
+
 /** This constant contains the RSA key size the key forms start with, the same 2048 bits the backend uses when none is given. */
 export const DEFAULT_RSA_KEY_SIZE_BITS = 2048;
 

@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { DnssecAlgorithmEnum, DnssecKeyRoleEnum, DnssecKeysService } from '../../../../api-client';
 import { NotificationService } from '../../../../shared/notification/notification.service';
+import { SIGNING_PROHIBITED_DNSSEC_ALGORITHMS } from '../dnssec-key.model';
 import { DnssecKeyFormComponent } from './dnssec-key-form.component';
 
 function flushMicrotasks(): Promise<void> {
@@ -68,6 +69,20 @@ describe('DnssecKeyFormComponent', () => {
     expect(fixture.componentInstance.isEditMode).toBeFalse();
     expect(dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysIdGet).not.toHaveBeenCalled();
     expect(fixture.componentInstance.form.controls.role.value).toBe(DnssecKeyRoleEnum.Zsk);
+  });
+
+  it('offers none of the algorithms the server refuses to sign with', async () => {
+    const fixture = await createComponent(null);
+    const options = fixture.componentInstance.algorithmOptions;
+    const rendered = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('#dnssec-key-algorithm option'),
+    ).map((option) => option.textContent?.trim());
+
+    for (const algorithm of SIGNING_PROHIBITED_DNSSEC_ALGORITHMS) {
+      expect(options).not.toContain(algorithm);
+      expect(rendered).not.toContain(algorithm);
+    }
+    expect(rendered).toContain(DnssecAlgorithmEnum.Ecdsap256Sha256);
   });
 
   it('showKeySize() is true only for an RSA-family algorithm', async () => {

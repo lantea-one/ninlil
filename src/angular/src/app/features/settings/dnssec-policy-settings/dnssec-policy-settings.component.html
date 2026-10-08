@@ -13,9 +13,10 @@
 
       <div cFormText class="mb-3">
         Restricts which algorithms a brand-new DNSSEC signing key may use. Nothing checked means no
-        restriction at all -- every algorithm this server supports may be used. This restricts only
-        the generation of new signing keys, never the validation of an already-signed, externally
-        hosted zone's own algorithm choice.
+        restriction at all -- every algorithm listed here may be used. RSAMD5, DSA, RSASHA1,
+        DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1 and ECC-GOST are not listed, because this server never
+        signs with them (RFC 8624). This restricts only the generation of new signing keys, never
+        the validation of an already-signed, externally hosted zone's own algorithm choice.
       </div>
 
       <div class="algorithm-grid">

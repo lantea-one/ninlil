@@ -21,7 +21,11 @@ import {
 import { DnssecAlgorithmEnum, DnssecKeyRoleEnum, DnssecKeysService } from '../../../../api-client';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
-import { DEFAULT_RSA_KEY_SIZE_BITS, isRsaAlgorithm } from '../dnssec-key.model';
+import {
+  DEFAULT_RSA_KEY_SIZE_BITS,
+  isRsaAlgorithm,
+  SIGNING_DNSSEC_ALGORITHMS,
+} from '../dnssec-key.model';
 
 /**
  * This component is both the "Generate key" page (`/zones/:zoneId/dnssec-keys/new`) and the "Edit
@@ -72,7 +76,7 @@ export class DnssecKeyFormComponent implements OnInit {
   readonly isEditMode = this.keyId !== null;
 
   readonly roleOptions = Object.values(DnssecKeyRoleEnum);
-  readonly algorithmOptions = Object.values(DnssecAlgorithmEnum);
+  readonly algorithmOptions = SIGNING_DNSSEC_ALGORITHMS;
 
   readonly loading = signal(this.isEditMode);
   readonly submitting = signal(false);

@@ -4,10 +4,12 @@ import { of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   CloudProviderCredentialsService,
+  DnssecAlgorithmEnum,
   TsigKeysService,
   ZonesService,
   ZoneTypeEnum,
 } from '../../../api-client';
+import { SIGNING_PROHIBITED_DNSSEC_ALGORITHMS } from '../dnssec-keys/dnssec-key.model';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ZoneFormComponent } from './zone-form.component';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -133,6 +135,17 @@ describe('ZoneFormComponent', () => {
     ).toBeFalse();
   });
 
+  it('offers none of the algorithms the server refuses to sign with', async () => {
+    const fixture = await createComponent(null);
+
+    for (const algorithm of SIGNING_PROHIBITED_DNSSEC_ALGORITHMS) {
+      expect(fixture.componentInstance.dnssecAlgorithms).not.toContain(algorithm);
+    }
+    expect(fixture.componentInstance.dnssecAlgorithms).toContain(
+      DnssecAlgorithmEnum.Ecdsap256Sha256,
+    );
+  });
+
   it('create mode: defaults to type Primary, with no owning zone to load', async () => {
     const fixture = await createComponent(null);
 
@@ -174,6 +187,32 @@ describe('ZoneFormComponent', () => {
     expect(fixture.componentInstance.selectedType()).toBe(ZoneTypeEnum.Secondary);
     expect(fixture.componentInstance.form.controls.primaryServerAddressesText.value).toBe(
       '192.0.2.1\n192.0.2.2',
+    );
+  });
+
+  it('edit mode: shows the default algorithm for a zone stored with one the server no longer signs with', async () => {
+    const fixture = await createComponent('zone-1', () => {
+      zonesApiSpy.apiZonesIdGet.and.returnValue(
+        of({
+          id: 'zone-1',
+          name: 'example.com',
+          type: ZoneTypeEnum.Primary,
+          isDnssecSigned: true,
+          dnssecAlgorithm: DnssecAlgorithmEnum.Rsasha1,
+          isDisabled: false,
+          primaryServerAddresses: [],
+          forwarderAddresses: [],
+          notifyAddresses: [],
+          dynamicUpdateEnabled: false,
+          cloudSyncInterval: '00:05:00',
+          autoManageCaaRecords: null,
+          autoManagePtrRecords: null,
+        }),
+      );
+    });
+
+    expect(fixture.componentInstance.form.controls.dnssecAlgorithm.value).toBe(
+      DnssecAlgorithmEnum.Ecdsap256Sha256,
     );
   });
 

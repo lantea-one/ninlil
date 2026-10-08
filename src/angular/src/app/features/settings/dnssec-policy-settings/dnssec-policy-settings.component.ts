@@ -14,6 +14,10 @@ import {
 } from '@coreui/angular';
 import { firstValueFrom } from 'rxjs';
 import { DnssecAlgorithmEnum, DnssecPolicySettingsService } from '../../../api-client';
+import {
+  isSigningProhibited,
+  SIGNING_DNSSEC_ALGORITHMS,
+} from '../../zones/dnssec-keys/dnssec-key.model';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
@@ -50,8 +54,8 @@ export class DnssecPolicySettingsComponent implements OnInit {
   private readonly dnssecPolicyApi = inject(DnssecPolicySettingsService);
   private readonly notification = inject(NotificationService);
 
-  /** Every `DnssecAlgorithmEnum` value, one checkbox each. */
-  readonly algorithmOptions = Object.values(DnssecAlgorithmEnum);
+  /** Every algorithm the server may sign with, one checkbox each. */
+  readonly algorithmOptions = SIGNING_DNSSEC_ALGORITHMS;
 
   readonly loading = signal(true);
   readonly submitting = signal(false);
@@ -106,7 +110,9 @@ export class DnssecPolicySettingsComponent implements OnInit {
 
     try {
       const settings = await firstValueFrom(this.dnssecPolicyApi.apiDnssecPolicySettingsGet());
-      this.selectedAlgorithms.set(new Set(settings.allowedAlgorithms ?? []));
+      this.selectedAlgorithms.set(
+        new Set((settings.allowedAlgorithms ?? []).filter((a) => !isSigningProhibited(a))),
+      );
     } catch (error) {
       this.errorMessage.set(
         extractErrorMessage(error, 'Could not load the DNSSEC algorithm policy.'),

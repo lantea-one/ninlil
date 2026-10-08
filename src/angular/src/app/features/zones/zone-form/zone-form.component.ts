@@ -39,6 +39,7 @@ import {
   ZoneTypeEnum,
   ZonesService,
 } from '../../../api-client';
+import { isSigningProhibited, SIGNING_DNSSEC_ALGORITHMS } from '../dnssec-keys/dnssec-key.model';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import {
@@ -153,7 +154,7 @@ export class ZoneFormComponent implements OnInit {
   readonly isEditMode = this.zoneId !== null;
 
   readonly zoneTypeOptions = ZONE_TYPE_OPTIONS;
-  readonly dnssecAlgorithms = Object.values(DnssecAlgorithmEnum);
+  readonly dnssecAlgorithms = SIGNING_DNSSEC_ALGORITHMS;
   readonly denialOfExistenceModes = Object.values(DnssecDenialOfExistenceModeEnum);
   readonly transferTransportOptions = Object.values(ZoneTransferTransportEnum);
 
@@ -492,7 +493,12 @@ export class ZoneFormComponent implements OnInit {
       tsigKeySelection,
       dynamicUpdateEnabled: zone.dynamicUpdateEnabled ?? false,
       isDnssecSigned: zone.isDnssecSigned ?? false,
-      dnssecAlgorithm: zone.dnssecAlgorithm ?? DnssecAlgorithmEnum.Ecdsap256Sha256,
+      // A zone stored with an algorithm the server no longer signs with shows the default, so
+      // saving it does not send a value the API refuses.
+      dnssecAlgorithm:
+        zone.dnssecAlgorithm && !isSigningProhibited(zone.dnssecAlgorithm)
+          ? zone.dnssecAlgorithm
+          : DnssecAlgorithmEnum.Ecdsap256Sha256,
       denialOfExistenceMode: zone.denialOfExistenceMode ?? DnssecDenialOfExistenceModeEnum.Nsec3,
       nsec3Iterations: zone.nsec3Iterations ?? 10,
       nsec3SaltHex: zone.nsec3SaltHex ?? '',

@@ -8,6 +8,7 @@ import {
   DnssecKeyRoleEnum,
   DnssecKeysService,
 } from '../../../../api-client';
+import { SIGNING_PROHIBITED_DNSSEC_ALGORITHMS } from '../dnssec-key.model';
 import { DnssecKeyRolloverDialogComponent } from './dnssec-key-rollover-dialog.component';
 
 const KSK: DnssecKeyDetail = {
@@ -54,6 +55,15 @@ describe('DnssecKeyRolloverDialogComponent', () => {
       id: 'key-1',
       dnssecKeyRolloverRequest: { keySizeBits: 0 },
     });
+  });
+
+  it('offers none of the algorithms the server refuses to sign with', async () => {
+    const fixture = await createComponent();
+
+    for (const algorithm of SIGNING_PROHIBITED_DNSSEC_ALGORITHMS) {
+      expect(fixture.componentInstance.algorithmOptions).not.toContain(algorithm);
+    }
+    expect(fixture.componentInstance.algorithmOptions).toContain(DnssecAlgorithmEnum.Ed25519);
   });
 
   it('sends a newly chosen algorithm, performing an algorithm rollover', async () => {
