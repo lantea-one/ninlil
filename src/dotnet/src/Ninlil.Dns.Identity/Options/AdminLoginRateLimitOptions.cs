@@ -5,7 +5,8 @@ namespace Ninlil.Dns.Identity.Options;
 ///     This class binds to the <c>DnsServer:AdminLoginRateLimit</c> section of the application's
 ///     configuration and controls brute-force protection for the two endpoints an attacker could
 ///     use to guess credentials: <c>Web.Controllers.AuthController.Login</c> and
-///     <c>Web.Controllers.AuthController.TwoFactorLogin</c>.
+///     <c>Web.Controllers.AuthController.TwoFactorLogin</c>. The same limits, counted separately,
+///     apply to <c>Web.Controllers.AuthController.ForgotPassword</c>, which sends e-mail.
 ///     <c>Extension.ServiceCollectionAdminLoginRateLimitingExtension</c> reads it once at startup,
 ///     because the <c>Microsoft.AspNetCore.RateLimiting</c> policy is set up before the dependency
 ///     injection container is built, so changes need a restart (as with

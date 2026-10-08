@@ -75,6 +75,7 @@ export class SmtpSettingsComponent implements OnInit {
     password: [''],
     fromAddress: ['', [Validators.required, Validators.email]],
     fromDisplayName: ['Ninlil', [Validators.required]],
+    publicBaseUrl: [''],
   });
 
   ngOnInit(): void {
@@ -123,6 +124,7 @@ export class SmtpSettingsComponent implements OnInit {
         username: settings.username ?? '',
         fromAddress: settings.fromAddress ?? '',
         fromDisplayName: settings.fromDisplayName ?? 'Ninlil',
+        publicBaseUrl: settings.publicBaseUrl ?? '',
       });
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load SMTP settings.'));

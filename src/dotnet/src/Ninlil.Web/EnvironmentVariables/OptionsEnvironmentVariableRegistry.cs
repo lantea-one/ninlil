@@ -161,7 +161,8 @@ public static class OptionsEnvironmentVariableRegistry
     /// <summary>
     ///     This property lists the configuration paths read by key through the
     ///     <see cref="Microsoft.Extensions.Configuration.IConfiguration" /> indexer rather than an
-    ///     options class: the two bootstrap administrator settings. The
+    ///     options class: the two bootstrap administrator settings, and ASP.NET Core's
+    ///     <c>AllowedHosts</c>, which host filtering reads (see <see cref="AllowedHostsConfigurationKey" />). The
     ///     <c>standaloneConfigurationPaths</c> parameter of
     ///     <see cref="OptionsEnvironmentVariableMap.BuildMappings" /> explains why they are an
     ///     exception.
@@ -170,5 +171,15 @@ public static class OptionsEnvironmentVariableRegistry
     [
         AdministratorBootstrapper.UserNameConfigurationKey,
         AdministratorBootstrapper.PasswordConfigurationKey,
+        AllowedHostsConfigurationKey,
     ];
+
+    /// <summary>
+    ///     This constant contains the key ASP.NET Core's host filtering middleware, which
+    ///     <c>WebApplication.CreateBuilder</c> adds, reads its semicolon-separated Host header
+    ///     allowlist from. It is mapped so <c>NINLIL_ALLOWED_HOSTS</c> can set it. Unset, every
+    ///     Host is accepted: an install is usually reached by an address or name the server cannot
+    ///     know in advance, and nothing the server builds trusts the Host header.
+    /// </summary>
+    public const string AllowedHostsConfigurationKey = "AllowedHosts";
 }

@@ -109,6 +109,21 @@
             <label cLabel for="smtp-from-display-name">From display name</label>
             <input cFormControl id="smtp-from-display-name" formControlName="fromDisplayName" />
           </div>
+
+          <div class="field">
+            <label cLabel for="smtp-public-base-url">Public base URL</label>
+            <input
+              cFormControl
+              id="smtp-public-base-url"
+              type="url"
+              formControlName="publicBaseUrl"
+              placeholder="https://dns.example.com"
+            />
+            <small class="hint">
+              Where users open this console. Password-reset links in e-mails point here; with it
+              empty, no reset link is sent.
+            </small>
+          </div>
         </div>
 
         <p class="hint">

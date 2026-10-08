@@ -122,6 +122,7 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 | `NINLIL_EMAIL_USE_TLS` | Whether the SMTP connection uses TLS. | `true` |
 | `NINLIL_EMAIL_FROM_ADDRESS` | The `From:` address on outbound mail. | *(none)* |
 | `NINLIL_EMAIL_FROM_DISPLAY_NAME` | The `From:` display name on outbound mail. | `Ninlil` |
+| `NINLIL_EMAIL_PUBLIC_BASE_URL` | The address users open the admin console at (for example `https://dns.example.com`); password-reset links point here. Links are never built from the request's Host header. While unset, no reset link is sent: an administrator's e-mailed reset fails with an error and Forgot Password only logs a warning. | *(none)* |
 | `NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_ENABLE` | Whether admin-console sign-in attempts are rate-limited (brute-force protection, separate from the DNS-query-level rate limiter below). | `true` |
 | `NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_PERMIT_LIMIT` | How many sign-in attempts are permitted within the window. | `5` |
 | `NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_WINDOW` | The sliding window the permit limit above applies over. | `00:05:00` |
@@ -538,3 +539,11 @@ one-time bootstrap credential has no real reason to be an injectable configurati
 |---|---|---|
 | `NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_USER_NAME` | The bootstrap administrator account's username. | `admin` |
 | `NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD` | The bootstrap administrator account's password. If unset, a strong random password is generated and printed once to the startup log — there is no way to retrieve it again afterward. Setting this explicitly is useful for a scripted/unattended first boot. | *(none — random-generated if unset)* |
+
+## Host filtering
+
+ASP.NET Core's `AllowedHosts` setting, also read directly by key.
+
+| Variable | Controls | Default |
+|---|---|---|
+| `NINLIL_ALLOWED_HOSTS` | A semicolon-separated list of Host header values the web listener answers (for example `dns.example.com;192.168.1.10`; `*.example.com` matches subdomains). Any other Host gets `400`. Unset accepts every Host, because an install is usually reached by an address or name the server cannot know in advance; nothing the server builds (such as password-reset links, see `NINLIL_EMAIL_PUBLIC_BASE_URL`) trusts the Host header. | `*` |

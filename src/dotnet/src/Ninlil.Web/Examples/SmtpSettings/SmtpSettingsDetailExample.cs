@@ -12,7 +12,8 @@ public class SmtpSettingsDetailExample : IExamplesProvider<SmtpSettingsDetail>
 {
     /// <summary>
     ///     This method returns a configured server on the usual submission port 587 with TLS and a
-    ///     username, a password set (shown only as configured) and a sender address.
+    ///     username, a password set (shown only as configured), a sender address and the console
+    ///     address reset links point to.
     /// </summary>
     public SmtpSettingsDetail GetExamples() =>
         new(
@@ -22,6 +23,7 @@ public class SmtpSettingsDetailExample : IExamplesProvider<SmtpSettingsDetail>
             Username: "notifications@example.com",
             PasswordConfigured: true,
             FromAddress: "notifications@example.com",
-            FromDisplayName: "Ninlil"
+            FromDisplayName: "Ninlil",
+            PublicBaseUrl: "https://dns.example.com"
         );
 }

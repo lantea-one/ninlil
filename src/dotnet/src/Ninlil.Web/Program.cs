@@ -918,10 +918,10 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// The admin sign-in limiter policy
-// (ServiceCollectionAdminLoginRateLimitingExtension.AuthenticationEndpointPolicyName) applies only
-// where [EnableRateLimiting] names it (AuthController.Login and TwoFactorLogin); this middleware is
-// what enforces that attribute.
+// The admin sign-in limiter policies (ServiceCollectionAdminLoginRateLimitingExtension's
+// AuthenticationEndpointPolicyName and PasswordResetEndpointPolicyName) apply only where
+// [EnableRateLimiting] names them (AuthController.Login, TwoFactorLogin and ForgotPassword); this
+// middleware is what enforces that attribute.
 app.UseRateLimiter();
 
 app.MapControllers();

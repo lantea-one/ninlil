@@ -11,14 +11,15 @@ namespace Ninlil.Web.Tests;
 ///     This class covers the anonymous password-recovery request
 ///     (<see cref="AuthController.ForgotPassword" />) over HTTP on the shared in-process host. Its
 ///     main concern is account enumeration: a registered address, an unknown one, an empty one
-///     and a disabled account must all get the same status and body. Response timing is not
-///     compared.
+///     and a disabled account must all get the same status and body. That the response does not
+///     wait for SMTP, and how the link is built, is covered by <see cref="PasswordResetLinkTests" />.
 ///     <para>
 ///         The shared host has no SMTP server configured, as
 ///         <c>PasswordChangeAndResetTests.AdminResetPassword_EmailLink_WithNoSmtpConfigured_...</c>
 ///         also relies on. A registered address therefore also checks that the action skips the
 ///         send when SMTP is not set up instead of letting <c>SmtpClient</c> throw and return a
-///         <c>500</c>. Whether an e-mail is sent when SMTP is configured is not tested here.
+///         <c>500</c>. Whether an e-mail is sent when SMTP is configured is tested in
+///         <see cref="PasswordResetLinkTests" />.
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]

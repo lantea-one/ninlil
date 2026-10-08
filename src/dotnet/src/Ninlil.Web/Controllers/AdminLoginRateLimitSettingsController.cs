@@ -19,7 +19,8 @@ namespace Ninlil.Web.Controllers;
 ///     This controller reads and writes <see cref="AdminLoginRateLimitOptions" />: whether the
 ///     admin sign-in limiter is on, and how many attempts per client IP address it allows in each
 ///     fixed window. This limiter guards <c>AuthController.Login</c> and
-///     <c>AuthController.TwoFactorLogin</c>; it is separate from the DNS query limiter that
+///     <c>AuthController.TwoFactorLogin</c>, and with a separate count
+///     <c>AuthController.ForgotPassword</c>; it is separate from the DNS query limiter that
 ///     <see cref="RateLimitingSettingsController" /> manages (see
 ///     <see cref="AdminLoginRateLimitOptions" /> for why). Reading needs
 ///     <c>adminloginratelimit:read</c> and writing needs <c>adminloginratelimit:write</c>.

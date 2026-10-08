@@ -27,7 +27,8 @@ public class SmtpSettingsPatchRequestExample : IExamplesProvider<JsonElement>
                   "username": "notifications@example.com",
                   "password": "a-real-smtp-password",
                   "fromAddress": "notifications@example.com",
-                  "fromDisplayName": "Ninlil"
+                  "fromDisplayName": "Ninlil",
+                  "publicBaseUrl": "https://dns.example.com"
                 }
                 """
             )

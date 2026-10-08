@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Identity.Email;
 using Ninlil.Dns.Identity.Extension;
 using Ninlil.Dns.Identity.Options;
 using Ninlil.Dns.Identity.Token;
@@ -34,8 +35,11 @@ namespace Ninlil.Web.Controllers;
 ///         <see cref="Login" /> and <see cref="TwoFactorLogin" />, the actions an attacker would
 ///         use to guess a password or code, are rate limited by the
 ///         <see cref="ServiceCollectionAdminLoginRateLimitingExtension.AuthenticationEndpointPolicyName" />
-///         policy. <c>AdminLoginRateLimitOptions</c> explains how that limiter differs from the DNS
-///         query rate limiter.
+///         policy. <see cref="ForgotPassword" />, which sends e-mail to any address an anonymous
+///         caller names, has its own counter under the same limits
+///         (<see cref="ServiceCollectionAdminLoginRateLimitingExtension.PasswordResetEndpointPolicyName" />).
+///         <c>AdminLoginRateLimitOptions</c> explains how that limiter differs from the DNS query
+///         rate limiter.
 ///     </para>
 ///     <para>
 ///         <b>Two ways to hold a refresh token.</b> A script or API client gets the refresh token
@@ -70,8 +74,13 @@ namespace Ninlil.Web.Controllers;
 ///     Supplies this node's cluster node id, which <see cref="ResetPassword" /> stamps onto
 ///     <see cref="AuditableEntityBase.OriginatingNodeId" />.
 /// </param>
+/// <param name="scopeFactory">
+///     Creates the service scope <see cref="ForgotPassword" /> sends its e-mail from after the
+///     response has gone.
+/// </param>
 /// <param name="logger">
-///     Logs a failed send in <see cref="ForgotPassword" />, which is never reported to the caller.
+///     Logs a failed or impossible send in <see cref="ForgotPassword" />, which is never reported
+///     to the caller.
 /// </param>
 [ApiController]
 [Route("api/auth")]
@@ -84,6 +93,7 @@ public class AuthController(
     IOptionsMonitor<EmailSenderOptions> emailOptions,
     IDnsServerEventPublisher eventPublisher,
     IOptionsMonitor<ClusterOptions> clusterOptions,
+    IServiceScopeFactory scopeFactory,
     ILogger<AuthController> logger
 ) : ControllerBase
 {
@@ -97,8 +107,8 @@ public class AuthController(
     /// <summary>
     ///     This action starts a self-service password reset. Given an e-mail address and no
     ///     sign-in, it sends a reset-link e-mail through <see cref="PasswordResetLinkSender" />
-    ///     when a matching account exists, is not disabled, has an e-mail address, and SMTP is
-    ///     configured. Allows anonymous callers.
+    ///     when a matching account exists, is not disabled, has an e-mail address, and SMTP and
+    ///     the public base URL are configured. Allows anonymous callers and is rate limited.
     ///     <para>
     ///         <b>The response never varies.</b> It is always 200 with the same
     ///         <see cref="ForgotPasswordResult" />, whichever condition failed, including "no
@@ -109,14 +119,21 @@ public class AuthController(
     ///         server rejects the message, say) is logged rather than returned as a 500 for the
     ///         same reason.
     ///     </para>
+    ///     <para>
+    ///         <b>Neither does its timing, as far as is practical.</b> The e-mail is sent in the
+    ///         background after the response, so a slow SMTP conversation cannot reveal that an
+    ///         account exists. Only the account lookup and the token generation run inline.
+    ///     </para>
     /// </summary>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(
+        ServiceCollectionAdminLoginRateLimitingExtension.PasswordResetEndpointPolicyName
+    )]
     [SwaggerRequestExample(typeof(ForgotPasswordRequest), typeof(ForgotPasswordRequestExample))]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ForgotPasswordResultExample))]
     public async Task<ActionResult<ForgotPasswordResult>> ForgotPassword(
-        ForgotPasswordRequest request,
-        CancellationToken stoppingToken
+        ForgotPasswordRequest request
     )
     {
         UserEntity user = string.IsNullOrWhiteSpace(request.Email)
@@ -129,30 +146,69 @@ public class AuthController(
             && !string.IsNullOrWhiteSpace(user.Email)
             && !string.IsNullOrWhiteSpace(emailOptions.CurrentValue.SmtpHost);
 
+        if (canSendLink && !passwordResetLinkSender.IsPublicBaseUrlConfigured)
+        {
+            // The caller is not told (see the summary); the log is where an administrator finds
+            // out why no e-mail arrived.
+            logger.LogWarning(
+                "A Forgot Password reset link for account {UserId} was not sent: "
+                    + PasswordResetLinkSender.PublicBaseUrlNotConfiguredMessage,
+                user.Id
+            );
+            canSendLink = false;
+        }
+
         if (canSendLink)
         {
             try
             {
-                await passwordResetLinkSender.SendAsync(
-                    user,
-                    Request.Scheme,
-                    Request.Host,
-                    stoppingToken
-                );
+                string resetUrl = await passwordResetLinkSender.CreateResetLinkAsync(user);
+
+                // Deliberately not awaited: the response must not wait for SMTP (see the summary).
+                _ = DeliverResetLinkAsync(user.Id, user.Email, resetUrl);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception)
             {
-                // The response is the same whatever happened (see the summary). The failure is
-                // logged so an administrator can still find a broken SMTP configuration.
+                // A 500 here would only ever happen for an existing account, so it is logged and
+                // the response stays the same (see the summary).
                 logger.LogWarning(
                     exception,
-                    "Failed to send a Forgot Password reset link to account {UserId}.",
+                    "Failed to build a Forgot Password reset link for account {UserId}.",
                     user.Id
                 );
             }
         }
 
         return Ok(new ForgotPasswordResult(ForgotPasswordGenericMessage));
+    }
+
+    /// <summary>
+    ///     This method sends a Forgot Password e-mail from a service scope of its own, since it
+    ///     runs on after the request (and its scope) has ended. It never throws: a failure is
+    ///     logged so an administrator can still find a broken SMTP configuration.
+    /// </summary>
+    private async Task DeliverResetLinkAsync(Guid userId, string toAddress, string resetUrl)
+    {
+        try
+        {
+            await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+            IEmailSender emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
+
+            await PasswordResetLinkSender.SendLinkAsync(
+                emailSender,
+                toAddress,
+                resetUrl,
+                CancellationToken.None
+            );
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Failed to send a Forgot Password reset link to account {UserId}.",
+                userId
+            );
+        }
     }
 
     /// <summary>

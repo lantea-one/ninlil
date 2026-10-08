@@ -10,6 +10,7 @@ using Ninlil.Web.Examples.SmtpSettings;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
 using Ninlil.Web.Options;
+using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -52,8 +53,9 @@ public class SmtpSettingsController(
     ///     <paramref name="patch" /> keeps its value, including <c>password</c>, so an operator can
     ///     change only <c>smtpHost</c> without resupplying a password <see cref="Get" /> never
     ///     shows. The password is stored in plain text in the configuration file. Every field takes
-    ///     effect at once. Returns 400 for a blank host or display name, a port outside 1-65535 or
-    ///     a malformed from-address. Requires <c>smtpsettings:write</c>.
+    ///     effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a
+    ///     malformed from-address or a <c>publicBaseUrl</c> that is not an absolute http or https
+    ///     URL. Requires <c>smtpsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("smtpsettings:write")]
@@ -154,6 +156,30 @@ public class SmtpSettingsController(
             );
         }
 
+        // A blank value is accepted and clears the setting, which stops reset links being sent.
+        if (patch.TryGetMergePatchField("publicBaseUrl", out JsonElement publicBaseUrlElement))
+        {
+            string publicBaseUrl = publicBaseUrlElement.GetString()?.Trim() ?? "";
+
+            if (
+                publicBaseUrl.Length > 0
+                && !PasswordResetLinkSender.TryParsePublicBaseUrl(publicBaseUrl, out _)
+            )
+                throw new ValidationException(
+                    $"'{publicBaseUrl}' is not a valid 'publicBaseUrl'. It must be an absolute "
+                        + "http or https URL with no query string, such as "
+                        + "'https://dns.example.com'."
+                );
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    EmailSenderOptions.SectionName,
+                    nameof(EmailSenderOptions.PublicBaseUrl),
+                    publicBaseUrl
+                )
+            );
+        }
+
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
@@ -195,6 +221,7 @@ public class SmtpSettingsController(
             options.Username,
             !string.IsNullOrEmpty(options.Password),
             options.FromAddress,
-            options.FromDisplayName
+            options.FromDisplayName,
+            options.PublicBaseUrl
         );
 }

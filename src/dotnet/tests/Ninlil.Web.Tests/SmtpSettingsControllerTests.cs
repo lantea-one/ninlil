@@ -174,6 +174,46 @@ public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task Patch_WithAPublicBaseUrlThatIsNotAnHttpUrl_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/smtp-settings", new { publicBaseUrl = "dns.example.com" })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Patch_WithAPublicBaseUrl_WritesItToTheConfigurationFile()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    "/api/smtp-settings",
+                    new { publicBaseUrl = "https://dns.example.com" }
+                )
+            );
+            response.EnsureSuccessStatusCode();
+
+            JsonObject root = (JsonObject)
+                JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+            Assert.Equal(
+                "https://dns.example.com",
+                root["Email"]["PublicBaseUrl"].GetValue<string>()
+            );
+        }
+        finally
+        {
+            await client.SendAsync(PatchRequest("/api/smtp-settings", new { publicBaseUrl = "" }));
+        }
+    }
+
+    [Fact]
     public async Task Patch_WithAnEmptyBody_ReturnsOkWithoutWritingAnything()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();

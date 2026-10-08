@@ -417,8 +417,9 @@ public class UsersController(
     ///             <see cref="Controllers.AuthController.ResetPassword" />. The link carries an
     ///             Identity reset token, Base64Url-encoded for the query string (see
     ///             <see cref="ConfirmPasswordResetRequest" />). The account must have an e-mail
-    ///             address and SMTP must be configured (see <c>SmtpSettingsController</c>);
-    ///             otherwise this returns 400 with a clear message.
+    ///             address, and SMTP and the public base URL the link points at must be
+    ///             configured (see <c>SmtpSettingsController</c>); otherwise this returns 400
+    ///             with a clear message.
     ///         </item>
     ///     </list>
     /// </summary>
@@ -474,7 +475,8 @@ public class UsersController(
                     + "mode instead."
             );
 
-        await passwordResetLinkSender.SendAsync(user, Request.Scheme, Request.Host, stoppingToken);
+        // Throws a ValidationException naming the setting when no public base URL is configured.
+        await passwordResetLinkSender.SendAsync(user, stoppingToken);
 
         return Ok(new AdminResetPasswordResult(request.Mode, null));
     }

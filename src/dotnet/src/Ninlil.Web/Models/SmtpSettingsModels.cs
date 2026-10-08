@@ -17,6 +17,10 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="FromAddress">The e-mail address messages are sent from.</param>
 /// <param name="FromDisplayName">The display name messages are sent from. Defaults to "Ninlil".</param>
+/// <param name="PublicBaseUrl">
+///     The address users open the admin console at, which password-reset links point to. Empty
+///     means no reset link can be sent. Links never use the request's Host header.
+/// </param>
 public record SmtpSettingsDetail(
     string SmtpHost,
     int SmtpPort,
@@ -24,5 +28,6 @@ public record SmtpSettingsDetail(
     string Username,
     bool PasswordConfigured,
     string FromAddress,
-    string FromDisplayName
+    string FromDisplayName,
+    string PublicBaseUrl
 );

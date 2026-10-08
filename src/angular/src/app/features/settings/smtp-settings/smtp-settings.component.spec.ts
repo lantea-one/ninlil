@@ -36,6 +36,7 @@ describe('SmtpSettingsComponent', () => {
         passwordConfigured: true,
         fromAddress: 'notifications@example.com',
         fromDisplayName: 'Ninlil',
+        publicBaseUrl: 'https://dns.example.com',
       }),
     );
     configureApi?.();
@@ -61,6 +62,9 @@ describe('SmtpSettingsComponent', () => {
     expect(apiSpy.apiSmtpSettingsGet).toHaveBeenCalled();
     expect(fixture.componentInstance.form.controls.smtpHost.value).toBe('smtp.example.com');
     expect(fixture.componentInstance.form.controls.smtpPort.value).toBe(587);
+    expect(fixture.componentInstance.form.controls.publicBaseUrl.value).toBe(
+      'https://dns.example.com',
+    );
     expect(fixture.componentInstance.passwordConfigured()).toBeTrue();
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
@@ -78,7 +82,10 @@ describe('SmtpSettingsComponent', () => {
     await fixture.componentInstance.save();
 
     expect(apiSpy.apiSmtpSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ smtpHost: 'smtp2.example.com' }),
+      body: jasmine.objectContaining({
+        smtpHost: 'smtp2.example.com',
+        publicBaseUrl: 'https://dns.example.com',
+      }),
     });
     const sentBody = apiSpy.apiSmtpSettingsPatch.calls.mostRecent().args[0].body;
     expect('password' in sentBody).toBeFalse();

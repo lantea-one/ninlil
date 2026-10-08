@@ -4,7 +4,8 @@ namespace Ninlil.Dns.Identity.Options;
 /// <summary>
 ///     This class binds to the <c>Email</c> section of the application's configuration and
 ///     describes the SMTP server <see cref="Email.SmtpEmailSender" /> sends through, mainly for
-///     the e-mail two-factor codes issued by <c>EmailTokenProvider&lt;UserEntity&gt;</c>.
+///     the e-mail two-factor codes issued by <c>EmailTokenProvider&lt;UserEntity&gt;</c> and
+///     the password-reset links built from <see cref="PublicBaseUrl" />.
 /// </summary>
 public class EmailSenderOptions
 {
@@ -50,4 +51,14 @@ public class EmailSenderOptions
     ///     This property contains the display name messages are sent from.
     /// </summary>
     public string FromDisplayName { get; set; } = "Ninlil";
+
+    /// <summary>
+    ///     This property contains the address users open the admin console at, for example
+    ///     <c>https://dns.example.com</c>. Password-reset links in e-mails point here. They are
+    ///     never built from the request's Host header, which a caller can forge to send a genuine
+    ///     reset token to a host of their choosing. Empty, the default, means no reset link can be
+    ///     sent: an administrator's e-mailed reset is refused with an error and Forgot Password
+    ///     sends nothing and logs a warning.
+    /// </summary>
+    public string PublicBaseUrl { get; set; }
 }

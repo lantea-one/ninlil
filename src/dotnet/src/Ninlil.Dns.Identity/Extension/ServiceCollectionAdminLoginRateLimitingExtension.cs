@@ -13,7 +13,8 @@ namespace Ninlil.Dns.Identity.Extension;
 ///     This class provides our <see cref="IServiceCollection" /> extension for the admin sign-in
 ///     brute-force limiter, built on the ASP.NET Core <see cref="Microsoft.AspNetCore.RateLimiting" />
 ///     middleware. It applies only to the sign-in endpoints (see
-///     <see cref="AuthenticationEndpointPolicyName" />) and is separate from the DNS query limiter
+///     <see cref="AuthenticationEndpointPolicyName" />) and the Forgot Password request (see
+///     <see cref="PasswordResetEndpointPolicyName" />), and is separate from the DNS query limiter
 ///     in <c>Server.RateLimiting</c>; <see cref="AdminLoginRateLimitOptions" /> explains why it
 ///     fails closed.
 /// </summary>
@@ -27,8 +28,18 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
     public const string AuthenticationEndpointPolicyName = "admin-login";
 
     /// <summary>
+    ///     This constant contains the policy name that
+    ///     <c>Web.Controllers.AuthController.ForgotPassword</c> applies, so an anonymous caller
+    ///     cannot make the server send unlimited reset e-mails. It uses the same
+    ///     <see cref="AdminLoginRateLimitOptions" /> limits as <see cref="AuthenticationEndpointPolicyName" />
+    ///     but counts separately, so asking for a reset link does not use up sign-in attempts.
+    /// </summary>
+    public const string PasswordResetEndpointPolicyName = "password-reset";
+
+    /// <summary>
     ///     This method registers <see cref="AdminLoginRateLimitOptions" /> and the
-    ///     <see cref="AuthenticationEndpointPolicyName" /> policy: a fixed-window limiter partitioned
+    ///     <see cref="AuthenticationEndpointPolicyName" /> and
+    ///     <see cref="PasswordResetEndpointPolicyName" /> policies: each a fixed-window limiter partitioned
     ///     by client IP address (see <see cref="AdminLoginRateLimitOptions" /> for why not by user
     ///     name), with <see cref="FixedWindowRateLimiterOptions.QueueLimit" /> zero, so a request over
     ///     the limit gets <c>429 Too Many Requests</c> at once rather than waiting in a queue.
@@ -63,32 +74,32 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
             // Set explicitly so a change in the library default cannot alter the response.
             rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-            rateLimiterOptions.AddPolicy(
-                AuthenticationEndpointPolicyName,
-                httpContext =>
-                {
-                    // Partitioned by remote IP address, never by user name, so an attacker cannot lock
-                    // a known administrator out. Connections without a remote address share one
-                    // "unknown" partition.
-                    string partitionKey =
-                        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-
-                    return options.Enable
-                        ? RateLimitPartition.GetFixedWindowLimiter(
-                            partitionKey,
-                            _ => new FixedWindowRateLimiterOptions
-                            {
-                                PermitLimit = options.PermitLimit,
-                                Window = options.Window,
-                                QueueLimit = 0,
-                                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                            }
-                        )
-                        : RateLimitPartition.GetNoLimiter(partitionKey);
-                }
-            );
+            // Each policy keeps its own partitions, so the two counters are independent.
+            rateLimiterOptions.AddPolicy(AuthenticationEndpointPolicyName, GetPartition);
+            rateLimiterOptions.AddPolicy(PasswordResetEndpointPolicyName, GetPartition);
         });
 
         return instance;
+
+        RateLimitPartition<string> GetPartition(HttpContext httpContext)
+        {
+            // Partitioned by remote IP address, never by user name, so an attacker cannot lock a
+            // known administrator out. Connections without a remote address share one "unknown"
+            // partition.
+            string partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            return options.Enable
+                ? RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = options.PermitLimit,
+                        Window = options.Window,
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    }
+                )
+                : RateLimitPartition.GetNoLimiter(partitionKey);
+        }
     }
 }

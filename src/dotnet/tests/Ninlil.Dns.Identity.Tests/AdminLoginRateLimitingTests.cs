@@ -12,8 +12,9 @@ namespace Ninlil.Dns.Identity.Tests;
 /// <summary>
 ///     This class tests the request-time behavior of
 ///     <see cref="ServiceCollectionAdminLoginRateLimitingExtension" />: a 429 past the limit, reset
-///     when the window rolls over, and no limiting when disabled. Each test builds a minimal
-///     ASP.NET Core host on <see cref="TestServer" /> with one protected endpoint, instead of the
+///     when the window rolls over, no limiting when disabled, and a separate count for the Forgot
+///     Password policy. Each test builds a minimal ASP.NET Core host on <see cref="TestServer" />
+///     with a sign-in and a Forgot Password endpoint, instead of the
 ///     full <c>Ninlil.Web.Program</c>.
 ///     <para>
 ///         <b>Why not <c>NinlilDnsWebApplicationFactory</c>:</b> its in-memory transport leaves
@@ -27,7 +28,7 @@ public class AdminLoginRateLimitingTests
 {
     /// <summary>
     ///     This method starts a minimal <see cref="WebApplication" /> with only the rate limiter and
-    ///     one endpoint protected by its policy, and returns an <see cref="HttpClient" /> for it over
+    ///     one endpoint for each of its policies, and returns an <see cref="HttpClient" /> for it over
     ///     the <see cref="TestServer" /> in-memory transport.
     /// </summary>
     private static async Task<(WebApplication App, HttpClient Client)> StartHostAsync(
@@ -51,10 +52,54 @@ public class AdminLoginRateLimitingTests
             .RequireRateLimiting(
                 ServiceCollectionAdminLoginRateLimitingExtension.AuthenticationEndpointPolicyName
             );
+        app.MapPost("/forgot-password", () => Results.Ok())
+            .RequireRateLimiting(
+                ServiceCollectionAdminLoginRateLimitingExtension.PasswordResetEndpointPolicyName
+            );
 
         await app.StartAsync();
 
         return (app, app.GetTestClient());
+    }
+
+    /// <summary>
+    ///     This test checks that the Forgot Password policy limits too, so an anonymous caller
+    ///     cannot make the server send unlimited reset e-mails, and that it counts apart from
+    ///     sign-in attempts.
+    /// </summary>
+    [Fact]
+    public async Task ForgotPassword_PastThePermitLimit_IsRejectedWithoutUsingUpSignInAttempts()
+    {
+        (WebApplication app, HttpClient client) = await StartHostAsync(
+            enable: true,
+            permitLimit: 2,
+            window: TimeSpan.FromMinutes(5)
+        );
+
+        try
+        {
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                HttpResponseMessage response = await client.PostAsync(
+                    "/forgot-password",
+                    content: null
+                );
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            }
+
+            HttpResponseMessage rejected = await client.PostAsync(
+                "/forgot-password",
+                content: null
+            );
+            Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+
+            HttpResponseMessage login = await client.PostAsync("/login", content: null);
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
     }
 
     [Fact]
