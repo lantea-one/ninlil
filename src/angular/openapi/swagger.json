@@ -32995,6 +32995,7 @@
                   "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentBidirectionalStreams": 100,
+                  "maxConcurrentConnections": 512,
                   "certificate": {
                     "pfxPath": "",
                     "pfxPasswordConfigured": false,
@@ -33016,6 +33017,7 @@
                   "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentBidirectionalStreams": 100,
+                  "maxConcurrentConnections": 512,
                   "certificate": {
                     "pfxPath": "",
                     "pfxPasswordConfigured": false,
@@ -33037,6 +33039,7 @@
                   "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentBidirectionalStreams": 100,
+                  "maxConcurrentConnections": 512,
                   "certificate": {
                     "pfxPath": "",
                     "pfxPasswordConfigured": false,
@@ -41545,6 +41548,11 @@
           "maxConcurrentBidirectionalStreams": {
             "type": "integer",
             "description": "How many bidirectional streams one QUIC connection may have open at once. A change needs a listener restart.",
+            "format": "int32"
+          },
+          "maxConcurrentConnections": {
+            "type": "integer",
+            "description": "How many QUIC connections the transport serves at once. A connection over the limit is closed\nwith the DNS-over-QUIC error code `DOQ_EXCESSIVE_LOAD`. Must be at least 1. A change\nneeds a listener restart.",
             "format": "int32"
           },
           "certificate": {

@@ -34,6 +34,10 @@ export interface DnsOverQuicSettingsDetail {
      * How many bidirectional streams one QUIC connection may have open at once. A change needs a listener restart.
      */
     maxConcurrentBidirectionalStreams?: number;
+    /**
+     * How many QUIC connections the transport serves at once. A connection over the limit is closed with the DNS-over-QUIC error code `DOQ_EXCESSIVE_LOAD`. Must be at least 1. A change needs a listener restart.
+     */
+    maxConcurrentConnections?: number;
     certificate?: TlsCertificateSettingsDetail;
 }
 
