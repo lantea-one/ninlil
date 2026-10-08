@@ -18,9 +18,14 @@ namespace Ninlil.Dns.Protocol.DnsOverHttps;
 ///     address, which the web host's forwarded-headers handling may have set from a trusted
 ///     proxy.
 ///     <para>
-///         The handler waits for the pipeline's response with no timeout of its own; a query the
-///         pipeline drops without answering (rate limiting, a denied client, a malformed message)
-///         leaves the request waiting until the client gives up.
+///         The pipeline either answers a query or reports why it dropped it
+///         (<see cref="DnsQueryDropReasonEnum" />), and the handler turns the report into an HTTP
+///         outcome: <c>429</c> when rate limited, <c>400</c> for a malformed message, <c>500</c> for
+///         an internal failure or an oversized reply, and for a denied client no response at all,
+///         because the connection is aborted (the same silence a UDP client gets, so a blocked
+///         source learns nothing). If the pipeline reports nothing within
+///         <see cref="ResponseBackstop" />, the request gets <c>504</c>, so no request waits for
+///         a pipeline that has stalled.
 ///     </para>
 /// </summary>
 internal static class DnsOverHttpsRequestHandler
@@ -31,6 +36,13 @@ internal static class DnsOverHttpsRequestHandler
     ///     Content-Type differs in any way, parameters included, gets <c>415</c>.
     /// </summary>
     private const string DnsMessageContentType = "application/dns-message";
+
+    /// <summary>
+    ///     This field contains the longest the handler waits for the pipeline to answer or report
+    ///     a drop. Normal queries finish within the recursive resolver's overall timeout, so
+    ///     reaching this means the pipeline is stalled, and the client gets <c>504</c>.
+    /// </summary>
+    internal static readonly TimeSpan ResponseBackstop = TimeSpan.FromSeconds(30);
 
     /// <summary>
     ///     This method answers the GET form of RFC 8484 §4.1. A missing or undecodable
@@ -131,7 +143,7 @@ internal static class DnsOverHttpsRequestHandler
     /// <summary>
     ///     This method does the work shared by both forms: it rejects an empty or oversized
     ///     message with <c>400</c>, enqueues the query onto the pipeline, and writes the answer
-    ///     back as the response body.
+    ///     back as the response body, or maps a reported drop to a status (see the class summary).
     /// </summary>
     private static async Task ResolveAndRespondAsync(
         HttpContext context,
@@ -147,9 +159,10 @@ internal static class DnsOverHttpsRequestHandler
             return;
         }
 
-        TaskCompletionSource<byte[]> responseSource = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        // Completed once by either the responder or the drop notifier; the pipeline calls
+        // exactly one of them.
+        TaskCompletionSource<(byte[] Response, DnsQueryDropReasonEnum? DropReason)> outcomeSource =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         await pipeline.EnqueueAsync(
             new DnsInboundMessage(
@@ -158,17 +171,49 @@ internal static class DnsOverHttpsRequestHandler
                 context.Connection.RemoteIpAddress ?? IPAddress.Loopback,
                 (responseBytes, _) =>
                 {
-                    responseSource.TrySetResult(responseBytes.ToArray());
+                    outcomeSource.TrySetResult((responseBytes.ToArray(), null));
                     return ValueTask.CompletedTask;
                 },
                 clientId
-            ),
+            )
+            {
+                OnDropped = reason => outcomeSource.TrySetResult((null, reason)),
+            },
             context.RequestAborted
         );
 
-        byte[] responseBytes = await responseSource.Task.WaitAsync(context.RequestAborted);
+        (byte[] Response, DnsQueryDropReasonEnum? DropReason) outcome;
+
+        try
+        {
+            outcome = await outcomeSource.Task.WaitAsync(ResponseBackstop, context.RequestAborted);
+        }
+        catch (TimeoutException)
+        {
+            context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
+            return;
+        }
+
+        if (outcome.DropReason is { } dropReason)
+        {
+            if (dropReason == DnsQueryDropReasonEnum.ClientDenied)
+            {
+                // No reply at all, like a denied UDP client.
+                context.Abort();
+                return;
+            }
+
+            context.Response.StatusCode = dropReason switch
+            {
+                DnsQueryDropReasonEnum.RateLimited or DnsQueryDropReasonEnum.SubnetRateLimited =>
+                    StatusCodes.Status429TooManyRequests,
+                DnsQueryDropReasonEnum.Malformed => StatusCodes.Status400BadRequest,
+                _ => StatusCodes.Status500InternalServerError,
+            };
+            return;
+        }
 
         context.Response.ContentType = DnsMessageContentType;
-        await context.Response.Body.WriteAsync(responseBytes, context.RequestAborted);
+        await context.Response.Body.WriteAsync(outcome.Response, context.RequestAborted);
     }
 }
