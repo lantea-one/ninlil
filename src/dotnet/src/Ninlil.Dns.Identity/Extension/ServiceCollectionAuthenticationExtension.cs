@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -176,10 +177,29 @@ public static class ServiceCollectionAuthenticationExtension
                             IJwtTokenService jwtTokenService =
                                 services.GetRequiredService<IJwtTokenService>();
 
-                            UserEntity user = await provisioningService.FindOrProvisionUserAsync(
-                                context.Principal,
-                                stoppingToken
-                            );
+                            UserEntity user;
+                            try
+                            {
+                                user = await provisioningService.FindOrProvisionUserAsync(
+                                    context.Principal,
+                                    stoppingToken
+                                );
+                            }
+                            catch (OidcSignInRefusedException refusal)
+                            {
+                                // Same outcome as a failed provider flow (see OnRemoteFailure);
+                                // the reason stays in the log and is not shown to the user.
+                                services
+                                    .GetRequiredService<ILoggerFactory>()
+                                    .CreateLogger(typeof(OidcUserProvisioningService))
+                                    .LogWarning(
+                                        "OpenID Connect sign-in refused: {Reason}",
+                                        refusal.Message
+                                    );
+                                context.HandleResponse();
+                                context.Response.Redirect("/login?ssoError=1");
+                                return;
+                            }
 
                             AccessTokenResult accessToken =
                                 await jwtTokenService.CreateAccessTokenAsync(user, stoppingToken);

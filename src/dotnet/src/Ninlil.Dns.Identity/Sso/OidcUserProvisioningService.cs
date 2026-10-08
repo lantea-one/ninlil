@@ -19,6 +19,14 @@ namespace Ninlil.Dns.Identity.Sso;
 ///         privileges here.
 ///     </para>
 ///     <para>
+///         <b>Refusals.</b> A linked account that is disabled or locked out is refused, as a
+///         password sign-in refuses it, and so is a new account whose verified e-mail address
+///         already belongs to another account. Both throw <see cref="OidcSignInRefusedException" />.
+///         A new account takes the provider's e-mail address only when the provider asserts
+///         <c>email_verified=true</c>; otherwise it gets a placeholder address. A taken user name
+///         gets a numeric suffix.
+///     </para>
+///     <para>
 ///         It writes through <see cref="IUserRepository" /> and <see cref="IUnitOfWork" /> rather
 ///         than <c>Microsoft.AspNetCore.Identity.UserManager{TUser}</c>, because there is no
 ///         password to handle and it must set <see cref="UserEntity.ExternalIdentityProvider" />
@@ -74,7 +82,23 @@ public sealed class OidcUserProvisioningService(
         );
 
         if (existingUser is not null)
+        {
+            // A provider login must not bypass what a password login enforces.
+            if (existingUser.IsDisabled)
+                throw new OidcSignInRefusedException(
+                    $"The account '{existingUser.UserName}' is disabled."
+                );
+
+            if (
+                existingUser is { LockoutEnabled: true, LockoutEndUtc: { } lockoutEndUtc }
+                && lockoutEndUtc > DateTimeOffset.UtcNow
+            )
+                throw new OidcSignInRefusedException(
+                    $"The account '{existingUser.UserName}' is locked out until {lockoutEndUtc:O}."
+                );
+
             return existingUser;
+        }
 
         // First sign-in: create an account with no permissions.
         string preferredUsername = ReadClaim(principal, "preferred_username");
@@ -84,8 +108,29 @@ public sealed class OidcUserProvisioningService(
         string userName = await ResolveUniqueUserNameAsync(candidateUserName, stoppingToken);
 
         string name = ReadClaim(principal, "name");
-        string realEmail = ReadClaim(principal, JwtRegisteredClaimNames.Email, ClaimTypes.Email);
-        bool hasRealEmail = !string.IsNullOrWhiteSpace(realEmail);
+        string claimedEmail = ReadClaim(principal, JwtRegisteredClaimNames.Email, ClaimTypes.Email);
+
+        // Only an address the provider vouches for (email_verified=true) is stored. An unverified
+        // address could be one the user does not own, so storing it would let them squat on it
+        // and block its real owner; such an account gets the placeholder instead.
+        bool hasRealEmail = !string.IsNullOrWhiteSpace(claimedEmail) && IsEmailVerified(principal);
+        string realEmail = hasRealEmail ? claimedEmail : null;
+
+        // A verified address that already belongs to another account is refused, not merged:
+        // linking by e-mail is how a provider-side address change or reassignment becomes an
+        // account takeover, and Identity's RequireUniqueEmail would break the duplicate later.
+        if (
+            hasRealEmail
+            && await userRepository.FindByNormalizedEmailAsync(
+                realEmail.ToUpperInvariant(),
+                stoppingToken
+            )
+                is not null
+        )
+            throw new OidcSignInRefusedException(
+                $"The e-mail address '{realEmail}' already belongs to another local account."
+            );
+
         string effectiveEmail = hasRealEmail ? realEmail : $"{subjectId}@{PlaceholderEmailDomain}";
 
         UserEntity newUser = new()
@@ -145,6 +190,15 @@ public sealed class OidcUserProvisioningService(
 
         return attempt;
     }
+
+    /// <summary>
+    ///     This method reports whether the provider asserts the token's e-mail address is verified.
+    ///     Providers send <c>email_verified</c> as a JSON boolean or, in some, as the string
+    ///     <c>"true"</c>; a missing or unreadable claim counts as not verified.
+    /// </summary>
+    /// <param name="principal">The principal to read the claim from.</param>
+    private static bool IsEmailVerified(ClaimsPrincipal principal) =>
+        bool.TryParse(ReadClaim(principal, "email_verified"), out bool verified) && verified;
 
     /// <summary>
     ///     This method returns the first claim present among the given types, in order.

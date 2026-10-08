@@ -61,7 +61,8 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
         string subject,
         string preferredUsername = null,
         string name = null,
-        string email = null
+        string email = null,
+        string emailVerified = null
     )
     {
         List<Claim> claims = [new Claim(JwtRegisteredClaimNames.Sub, subject)];
@@ -72,6 +73,8 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
             claims.Add(new Claim("name", name));
         if (email is not null)
             claims.Add(new Claim(JwtRegisteredClaimNames.Email, email));
+        if (emailVerified is not null)
+            claims.Add(new Claim("email_verified", emailVerified));
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "oidc"));
     }
@@ -83,7 +86,8 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
             "subject-1",
             preferredUsername: "alice",
             name: "Alice Example",
-            email: "alice@example.com"
+            email: "alice@example.com",
+            emailVerified: "true"
         );
 
         UserEntity user = await _service.FindOrProvisionUserAsync(principal);
@@ -140,7 +144,8 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
         ClaimsPrincipal firstPrincipal = BuildPrincipal(
             "subject-2",
             preferredUsername: "carol",
-            email: "carol@old-example.com"
+            email: "carol@old-example.com",
+            emailVerified: "true"
         );
         UserEntity firstResult = await _service.FindOrProvisionUserAsync(firstPrincipal);
         await _context.SaveChangesAsync();
@@ -191,6 +196,126 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
         Assert.Equal("dave", firstUser.UserName);
         Assert.Equal("dave-2", secondUser.UserName);
         Assert.NotEqual(firstUser.Id, secondUser.Id);
+    }
+
+    private async Task<UserEntity> AddLocalUserAsync(
+        string userName,
+        string email,
+        Action<UserEntity> change = null
+    )
+    {
+        UserEntity user = new()
+        {
+            Id = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UserName = userName,
+            NormalizedUserName = userName.ToUpperInvariant(),
+            DisplayName = userName,
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            SecurityStamp = Guid.NewGuid().ToString("N"),
+            ConcurrencyStamp = Guid.NewGuid().ToString(),
+        };
+        change?.Invoke(user);
+        await _userRepository.AddAsync(user);
+        await _context.SaveChangesAsync();
+        return user;
+    }
+
+    [Fact]
+    public async Task ADisabledLinkedAccountIsRefused()
+    {
+        await _service.FindOrProvisionUserAsync(BuildPrincipal("subject-disabled"));
+        UserEntity user = await _userRepository.FindByExternalSubjectAsync(
+            OidcUserProvisioningService.ProviderName,
+            "subject-disabled"
+        );
+        user.IsDisabled = true;
+        await _context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<OidcSignInRefusedException>(() =>
+            _service.FindOrProvisionUserAsync(BuildPrincipal("subject-disabled"))
+        );
+    }
+
+    [Fact]
+    public async Task ALockedOutLinkedAccountIsRefusedUntilTheLockoutEnds()
+    {
+        await _service.FindOrProvisionUserAsync(BuildPrincipal("subject-locked"));
+        UserEntity user = await _userRepository.FindByExternalSubjectAsync(
+            OidcUserProvisioningService.ProviderName,
+            "subject-locked"
+        );
+        user.LockoutEnabled = true;
+        user.LockoutEndUtc = DateTimeOffset.UtcNow.AddHours(1);
+        await _context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<OidcSignInRefusedException>(() =>
+            _service.FindOrProvisionUserAsync(BuildPrincipal("subject-locked"))
+        );
+
+        user.LockoutEndUtc = DateTimeOffset.UtcNow.AddMinutes(-1);
+        await _context.SaveChangesAsync();
+
+        UserEntity allowed = await _service.FindOrProvisionUserAsync(
+            BuildPrincipal("subject-locked")
+        );
+        Assert.Equal(user.Id, allowed.Id);
+    }
+
+    [Fact]
+    public async Task AVerifiedEmailOfAnExistingLocalAccountIsRefusedAndNothingIsCreated()
+    {
+        await AddLocalUserAsync("erin", "erin@example.com");
+
+        await Assert.ThrowsAsync<OidcSignInRefusedException>(() =>
+            _service.FindOrProvisionUserAsync(
+                BuildPrincipal(
+                    "subject-erin",
+                    preferredUsername: "erin-sso",
+                    email: "Erin@Example.com",
+                    emailVerified: "true"
+                )
+            )
+        );
+
+        Assert.Single(await _userRepository.ListAsync());
+    }
+
+    [Theory]
+    [InlineData("false")]
+    [InlineData(null)]
+    public async Task AnUnverifiedEmailNeverLinksToOrCopiesAnExistingAccount(string emailVerified)
+    {
+        UserEntity local = await AddLocalUserAsync("frank", "frank@example.com");
+
+        UserEntity provisioned = await _service.FindOrProvisionUserAsync(
+            BuildPrincipal(
+                "subject-frank",
+                preferredUsername: "frank-sso",
+                email: "frank@example.com",
+                emailVerified: emailVerified
+            )
+        );
+        await _context.SaveChangesAsync();
+
+        Assert.NotEqual(local.Id, provisioned.Id);
+        Assert.Equal("subject-frank@sso.invalid", provisioned.Email);
+        Assert.False(provisioned.EmailConfirmed);
+        Assert.Equal("frank@example.com", local.Email);
+        Assert.Null(local.ExternalSubjectId);
+    }
+
+    [Fact]
+    public async Task AUserNameOfAnExistingLocalAccountGetsASuffixInsteadOfADuplicate()
+    {
+        await AddLocalUserAsync("grace", "grace@example.com");
+
+        UserEntity provisioned = await _service.FindOrProvisionUserAsync(
+            BuildPrincipal("subject-grace", preferredUsername: "Grace")
+        );
+
+        Assert.Equal("Grace-2", provisioned.UserName);
     }
 
     [Fact]
