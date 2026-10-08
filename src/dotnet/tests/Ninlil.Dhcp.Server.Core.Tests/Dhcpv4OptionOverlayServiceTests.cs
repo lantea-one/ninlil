@@ -431,6 +431,43 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
         Assert.False(offer.TryGetRawOption(202, out _));
     }
 
+    [Fact]
+    public async Task Discover_WithStoredOptionsBreakingTheRules_SkipsThemAndStillEncodes()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "bad-stored-options-scope",
+            "192.0.2.190",
+            "192.0.2.192"
+        );
+
+        // Rows like these can exist from before the REST layer enforced the rules.
+        await _host.SeedCustomOptionAsync(scope.Id, 0, "AABB");
+        await _host.SeedCustomOptionAsync(scope.Id, 53, "05");
+        await _host.SeedCustomOptionAsync(scope.Id, 200, new string('A', 600));
+        await _host.SeedCustomOptionAsync(scope.Id, 66, "746674702e6578616d706c65");
+        await _host.SeedTagRuleAsync(
+            "Oversized rule option",
+            new Dictionary<byte, string> { [201] = new string('B', 600), [202] = "0102" },
+            scopeId: scope.Id
+        );
+
+        Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
+            NewDiscover([0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f], 0x500e),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(offer);
+        Assert.True(offer.TryGetMessageType(out Dhcpv4MessageTypeEnum messageType));
+        Assert.Equal(Dhcpv4MessageTypeEnum.Offer, messageType);
+        Assert.False(offer.TryGetRawOption(0, out _));
+        Assert.False(offer.TryGetRawOption(200, out _));
+        Assert.False(offer.TryGetRawOption(201, out _));
+        Assert.True(offer.TryGetRawOption(66, out _));
+        Assert.True(offer.TryGetRawOption(202, out _));
+        Assert.NotEmpty(Dhcpv4MessageWriter.Write(offer));
+    }
+
     private static Dhcpv4Message NewDiscover(byte[] clientHardwareAddress, uint transactionId)
     {
         Dhcpv4Message discover = new()

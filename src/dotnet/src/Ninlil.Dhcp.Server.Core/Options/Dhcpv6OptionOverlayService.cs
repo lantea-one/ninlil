@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
@@ -34,10 +35,12 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     Supplies the server's IPv6 address for a <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
 ///     option.
 /// </param>
+/// <param name="logger">Reports a stored option that fails <see cref="DhcpRawOptionRules" />.</param>
 public sealed class Dhcpv6OptionOverlayService(
     IDhcpTagRuleRepository tagRuleRepository,
     IDhcpTagRuleOptionRepository tagRuleOptionRepository,
-    IDhcpv6ServerAddressProvider serverAddressProvider
+    IDhcpv6ServerAddressProvider serverAddressProvider,
+    ILogger<Dhcpv6OptionOverlayService> logger
 ) : IDhcpv6OptionOverlayService
 {
     /// <inheritdoc />
@@ -70,6 +73,7 @@ public sealed class Dhcpv6OptionOverlayService(
             foreach (DhcpTagRuleOptionEntity ruleOption in ruleOptions)
                 ApplyRawOption(
                     reply,
+                    $"tag rule {rule.Id} option {ruleOption.Id}",
                     ruleOption.OptionTag,
                     ruleOption.ValueHex,
                     ruleOption.ValueSource
@@ -179,29 +183,34 @@ public sealed class Dhcpv6OptionOverlayService(
     /// <summary>
     ///     This method puts one option on the reply, like the helper of the same name in
     ///     <see cref="Dhcpv4OptionOverlayService" />, with the 16-byte IPv6 address for a
-    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option and invalid hex skipped.
+    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option and invalid hex skipped. An option that fails
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv6" /> is skipped with a warning.
     /// </summary>
     private void ApplyRawOption(
         Dhcpv6Message reply,
+        string source,
         byte tag,
         string valueHex,
         DhcpOptionValueSourceEnum valueSource
     )
     {
-        if (valueSource == DhcpOptionValueSourceEnum.ServerAddress)
-        {
-            reply.SetRawOption(tag, serverAddressProvider.Value.GetAddressBytes());
-            return;
-        }
-
         byte[] value;
 
-        try
+        if (valueSource == DhcpOptionValueSourceEnum.ServerAddress)
+            value = serverAddressProvider.Value.GetAddressBytes();
+        else
+            try
+            {
+                value = Convert.FromHexString(valueHex ?? string.Empty);
+            }
+            catch (FormatException)
+            {
+                return;
+            }
+
+        if (!DhcpRawOptionRules.TryValidateDhcpv6(tag, value.Length, out string error))
         {
-            value = Convert.FromHexString(valueHex ?? string.Empty);
-        }
-        catch (FormatException)
-        {
+            logger.LogWarning("Skipping {Source} option: {Error}", source, error);
             return;
         }
 

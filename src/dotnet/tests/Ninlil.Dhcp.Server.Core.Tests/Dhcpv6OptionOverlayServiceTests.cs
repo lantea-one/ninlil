@@ -431,6 +431,45 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
         Assert.False(advertise.TryGetRawOption(211, out _));
     }
 
+    [Fact]
+    public async Task Solicit_WithStoredRuleOptionsBreakingTheRules_SkipsThemAndStillEncodes()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "bad-stored-options-scope",
+            "2001:db8:b6::10",
+            "2001:db8:b6::12"
+        );
+
+        // Code 0 is reserved and 70 000 bytes do not fit the two-byte length field. The byte
+        // tag type cannot hold a code over 255, so the oversized value uses tag 67.
+        await _host.SeedTagRuleAsync(
+            "Bad stored options",
+            new Dictionary<byte, string>
+            {
+                [0] = "AABB",
+                [67] = new string('A', 140_000),
+                [68] = "70786574",
+            },
+            scopeId: scope.Id
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x0b, 0x0b, 0x0b, 0x0b, 0x00, 0x0b];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x1b60);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.False(advertise.TryGetRawOption(0, out _));
+        Assert.False(advertise.TryGetRawOption(67, out _));
+        Assert.True(advertise.TryGetRawOption(68, out _));
+        Assert.NotEmpty(Dhcpv6MessageWriter.Write(advertise));
+    }
+
     private static Dhcpv6Message NewSolicit(byte[] clientDuid, uint transactionId)
     {
         Dhcpv6Message solicit = new()

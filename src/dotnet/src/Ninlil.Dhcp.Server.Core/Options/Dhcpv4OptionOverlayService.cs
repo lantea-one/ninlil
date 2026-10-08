@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
@@ -29,11 +30,13 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     Supplies the server's IPv4 address for a <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
 ///     option.
 /// </param>
+/// <param name="logger">Reports a stored option that fails <see cref="DhcpRawOptionRules" />.</param>
 public sealed class Dhcpv4OptionOverlayService(
     IDhcpScopeCustomOptionRepository customOptionRepository,
     IDhcpTagRuleRepository tagRuleRepository,
     IDhcpTagRuleOptionRepository tagRuleOptionRepository,
-    IDhcpServerIdentifierProvider serverIdentifierProvider
+    IDhcpServerIdentifierProvider serverIdentifierProvider,
+    ILogger<Dhcpv4OptionOverlayService> logger
 ) : IDhcpv4OptionOverlayService
 {
     /// <inheritdoc />
@@ -50,6 +53,7 @@ public sealed class Dhcpv4OptionOverlayService(
         foreach (DhcpScopeCustomOptionEntity customOption in customOptions)
             ApplyRawOption(
                 reply,
+                $"scope custom option {customOption.Id}",
                 customOption.OptionTag,
                 customOption.ValueHex,
                 customOption.ValueSource
@@ -74,6 +78,7 @@ public sealed class Dhcpv4OptionOverlayService(
             foreach (DhcpTagRuleOptionEntity ruleOption in ruleOptions)
                 ApplyRawOption(
                     reply,
+                    $"tag rule {rule.Id} option {ruleOption.Id}",
                     ruleOption.OptionTag,
                     ruleOption.ValueHex,
                     ruleOption.ValueSource
@@ -167,30 +172,36 @@ public sealed class Dhcpv4OptionOverlayService(
     ///     address as 4 raw bytes (<see cref="System.Net.IPAddress.GetAddressBytes" />); a
     ///     <see cref="DhcpOptionValueSourceEnum.Custom" /> option carries its decoded
     ///     <paramref name="valueHex" />, and is skipped if that is not valid hex, since validation
-    ///     belongs to the REST layer when the value is written. Tag and length are not checked
-    ///     here.
+    ///     belongs to the REST layer when the value is written. An option whose tag or length fails
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a row stored before the REST
+    ///     layer enforced the rules) is skipped with a warning, because writing it would corrupt
+    ///     or abort the reply.
     /// </summary>
     private void ApplyRawOption(
         Dhcpv4Message reply,
+        string source,
         byte tag,
         string valueHex,
         DhcpOptionValueSourceEnum valueSource
     )
     {
-        if (valueSource == DhcpOptionValueSourceEnum.ServerAddress)
-        {
-            reply.SetRawOption(tag, serverIdentifierProvider.Value.GetAddressBytes());
-            return;
-        }
-
         byte[] value;
 
-        try
+        if (valueSource == DhcpOptionValueSourceEnum.ServerAddress)
+            value = serverIdentifierProvider.Value.GetAddressBytes();
+        else
+            try
+            {
+                value = Convert.FromHexString(valueHex ?? string.Empty);
+            }
+            catch (FormatException)
+            {
+                return;
+            }
+
+        if (!DhcpRawOptionRules.TryValidateDhcpv4(tag, value.Length, out string error))
         {
-            value = Convert.FromHexString(valueHex ?? string.Empty);
-        }
-        catch (FormatException)
-        {
+            logger.LogWarning("Skipping {Source} option: {Error}", source, error);
             return;
         }
 

@@ -164,7 +164,11 @@ public record DhcpReservationDetail(
 ///     This class carries the fields used to create or fully replace a custom, raw DHCPv4 option
 ///     in a scope (<c>POST</c> and <c>PUT</c> under <c>/api/dhcp-scopes/{scopeId}/custom-options</c>).
 /// </summary>
-/// <param name="OptionTag">The option's numeric tag. Use 1 to 254: 0 (Pad) and 255 (End) are reserved markers.</param>
+/// <param name="OptionTag">
+///     The option's numeric tag. Use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)
+///     and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and
+///     255 (End) are reserved markers. The value is at most 255 bytes.
+/// </param>
 /// <param name="ValueHex">
 ///     The option's raw value bytes as a hexadecimal string with an even number of digits; it is
 ///     stored in uppercase. It is not used, and may be blank, when
@@ -266,7 +270,11 @@ public record DhcpTagRuleDetail(
 ///     This class carries the fields used to create or fully replace an option a tag rule
 ///     contributes (<c>POST</c> and <c>PUT</c> under <c>/api/dhcp-tag-rules/{tagRuleId}/options</c>).
 /// </summary>
-/// <param name="OptionTag">The option's numeric tag, as in <see cref="DhcpScopeCustomOptionWriteRequest.OptionTag" />.</param>
+/// <param name="OptionTag">
+///     The option's numeric tag, as in <see cref="DhcpScopeCustomOptionWriteRequest.OptionTag" />.
+///     Those limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6
+///     scope only rejects tag 0 and values over 65 535 bytes.
+/// </param>
 /// <param name="ValueHex">
 ///     The option's raw value bytes as hexadecimal, as in
 ///     <see cref="DhcpScopeCustomOptionWriteRequest.ValueHex" />. It is not used, and may be

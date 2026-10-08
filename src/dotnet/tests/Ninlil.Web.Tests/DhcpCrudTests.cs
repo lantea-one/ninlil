@@ -530,6 +530,107 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task RawOptionRules_OnScopeCustomOptionsAndTagRuleOptions_RejectBadTagsAndLengths()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpScopeDetail scope = await CreateScopeAsync(client, $"raw-rules-{Guid.NewGuid():N}");
+        string customOptionsUrl = $"/api/dhcp-scopes/{scope.Id}/custom-options";
+
+        // Reserved DHCPv4 tags are rejected and the message names the tag.
+        foreach (int tag in new[] { 0, 52, 53, 82, 255 })
+        {
+            HttpResponseMessage reservedResponse = await client.PostAsJsonAsync(
+                customOptionsUrl,
+                new { optionTag = tag, valueHex = "01" }
+            );
+            Assert.Equal(HttpStatusCode.BadRequest, reservedResponse.StatusCode);
+            Assert.Contains($"tag {tag}", await reservedResponse.Content.ReadAsStringAsync());
+        }
+
+        // 256 bytes is one over the one-byte length field; 254 bytes is accepted.
+        HttpResponseMessage tooLongResponse = await client.PostAsJsonAsync(
+            customOptionsUrl,
+            new { optionTag = 200, valueHex = new string('A', 512) }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, tooLongResponse.StatusCode);
+        Assert.Contains("255", await tooLongResponse.Content.ReadAsStringAsync());
+
+        HttpResponseMessage okResponse = await client.PostAsJsonAsync(
+            customOptionsUrl,
+            new { optionTag = 200, valueHex = new string('A', 508) }
+        );
+        Assert.Equal(HttpStatusCode.Created, okResponse.StatusCode);
+        DhcpScopeCustomOptionDetail ok =
+            await okResponse.Content.ReadFromJsonAsync<DhcpScopeCustomOptionDetail>();
+
+        // The same rules apply to a replace.
+        HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
+            $"{customOptionsUrl}/{ok.Id}",
+            new { optionTag = 53, valueHex = "01" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, replaceResponse.StatusCode);
+
+        // A global tag rule feeds the DHCPv4 engine, so it gets the DHCPv4 limits.
+        HttpResponseMessage globalRuleResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new { name = $"raw-global-{Guid.NewGuid():N}" }
+        );
+        Assert.Equal(HttpStatusCode.Created, globalRuleResponse.StatusCode);
+        DhcpTagRuleDetail globalRule =
+            await globalRuleResponse.Content.ReadFromJsonAsync<DhcpTagRuleDetail>();
+
+        HttpResponseMessage globalTooLongResponse = await client.PostAsJsonAsync(
+            $"/api/dhcp-tag-rules/{globalRule.Id}/options",
+            new { optionTag = 200, valueHex = new string('A', 512) }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, globalTooLongResponse.StatusCode);
+
+        HttpResponseMessage globalReservedResponse = await client.PostAsJsonAsync(
+            $"/api/dhcp-tag-rules/{globalRule.Id}/options",
+            new { optionTag = 82, valueHex = "01" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, globalReservedResponse.StatusCode);
+
+        // A rule for a DHCPv6 scope only has the DHCPv6 limits, so 300 bytes pass.
+        HttpResponseMessage v6ScopeResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            new
+            {
+                name = $"raw-rules-v6-{Guid.NewGuid():N}",
+                protocolVersion = "IPv6",
+                rangeStartAddress = "2001:db8:b6::100",
+                rangeEndAddress = "2001:db8:b6::200",
+                subnetPrefixLength = 64,
+                defaultLeaseDuration = "1.00:00:00",
+                maxLeaseDuration = "7.00:00:00",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, v6ScopeResponse.StatusCode);
+        DhcpScopeDetail v6Scope =
+            await v6ScopeResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        HttpResponseMessage v6RuleResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new { name = $"raw-v6-{Guid.NewGuid():N}", scopeId = v6Scope.Id }
+        );
+        Assert.Equal(HttpStatusCode.Created, v6RuleResponse.StatusCode);
+        DhcpTagRuleDetail v6Rule =
+            await v6RuleResponse.Content.ReadFromJsonAsync<DhcpTagRuleDetail>();
+
+        HttpResponseMessage v6LongResponse = await client.PostAsJsonAsync(
+            $"/api/dhcp-tag-rules/{v6Rule.Id}/options",
+            new { optionTag = 200, valueHex = new string('A', 600) }
+        );
+        Assert.Equal(HttpStatusCode.Created, v6LongResponse.StatusCode);
+
+        HttpResponseMessage v6ZeroResponse = await client.PostAsJsonAsync(
+            $"/api/dhcp-tag-rules/{v6Rule.Id}/options",
+            new { optionTag = 0, valueHex = "01" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, v6ZeroResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task DhcpEndpoints_WithoutAToken_ReturnUnauthorized()
     {
         HttpClient client = factory.CreateClient();

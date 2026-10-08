@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dhcp.Common.Enum;
+using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
+using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
@@ -93,7 +95,8 @@ public class DhcpScopeCustomOptionsController(
     /// <summary>
     ///     This action adds a custom option to a scope. The value is stored as uppercase hex.
     ///     Returns 400 for a value that is not even-length hex, or a missing value when the source
-    ///     is <c>Custom</c>, and 404 for an unknown scope. Requires <c>dhcpscopes:write</c>.
+    ///     is <c>Custom</c>, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over
+    ///     255 bytes, and 404 for an unknown scope. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -111,10 +114,11 @@ public class DhcpScopeCustomOptionsController(
         CancellationToken stoppingToken
     )
     {
-        if (await scopeRepository.GetByIdAsync(scopeId, stoppingToken) is null)
+        DhcpScopeEntity scope = await scopeRepository.GetByIdAsync(scopeId, stoppingToken);
+        if (scope is null)
             throw new NotFoundException("DhcpScope", scopeId.ToString());
 
-        if (!TryValidate(request, out string normalizedValueHex, out string error))
+        if (!TryValidate(request, scope, out string normalizedValueHex, out string error))
             throw new ValidationException(error);
 
         DhcpScopeCustomOptionEntity customOption = new()
@@ -164,7 +168,11 @@ public class DhcpScopeCustomOptionsController(
         if (customOption is null || customOption.ScopeId != scopeId)
             throw new NotFoundException("DhcpScopeCustomOption", id.ToString());
 
-        if (!TryValidate(request, out string normalizedValueHex, out string error))
+        DhcpScopeEntity scope = await scopeRepository.GetByIdAsync(scopeId, stoppingToken);
+        if (scope is null)
+            throw new NotFoundException("DhcpScope", scopeId.ToString());
+
+        if (!TryValidate(request, scope, out string normalizedValueHex, out string error))
             throw new ValidationException(error);
 
         customOption.OptionTag = request.OptionTag;
@@ -210,9 +218,12 @@ public class DhcpScopeCustomOptionsController(
     ///     <see cref="DhcpOptionValueSourceEnum.Custom" />, where the stored value is what gets
     ///     sent. For <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the server's address is
     ///     sent instead and the value is never read, so a blank value is stored as an empty string.
+    ///     For a DHCPv4 <paramref name="scope" /> the tag and value length must also pass
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a server address is 4 bytes).
     /// </summary>
     private static bool TryValidate(
         DhcpScopeCustomOptionWriteRequest request,
+        DhcpScopeEntity scope,
         out string normalizedValueHex,
         out string error
     )
@@ -231,7 +242,7 @@ public class DhcpScopeCustomOptionsController(
             if (request.ValueSource == DhcpOptionValueSourceEnum.ServerAddress)
             {
                 normalizedValueHex = string.Empty;
-                return true;
+                return TryValidateRawOption(request.OptionTag, 4, scope, out error);
             }
 
             error = "'valueHex' is required.";
@@ -250,7 +261,30 @@ public class DhcpScopeCustomOptionsController(
             return false;
         }
 
-        return true;
+        return TryValidateRawOption(
+            request.OptionTag,
+            normalizedValueHex.Length / 2,
+            scope,
+            out error
+        );
+    }
+
+    /// <summary>
+    ///     This method applies <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> to an option of
+    ///     a DHCPv4 scope. Only the DHCPv4 engine delivers custom options, so a DHCPv6 scope is
+    ///     not checked.
+    /// </summary>
+    private static bool TryValidateRawOption(
+        byte tag,
+        int valueLength,
+        DhcpScopeEntity scope,
+        out string error
+    )
+    {
+        error = null;
+
+        return scope.ProtocolVersion != InternetProtocolVersionEnum.IPv4
+            || DhcpRawOptionRules.TryValidateDhcpv4(tag, valueLength, out error);
     }
 
     /// <summary>
