@@ -74,7 +74,12 @@ public class ZoneTransferService(
         {
             // A zone without an SOA cannot be transferred (RFC 5936 needs it at both ends); this
             // should not happen.
-            yield return ErrorResponse(request, DnsResponseCodeEnum.ServerFailure);
+            yield return await SignedErrorResponseAsync(
+                request,
+                DnsResponseCodeEnum.ServerFailure,
+                tsigResult.Key.Name,
+                stoppingToken
+            );
             yield break;
         }
 
@@ -177,7 +182,12 @@ public class ZoneTransferService(
                 is not SoaRecordData clientSoaData
         )
         {
-            yield return ErrorResponse(request, DnsResponseCodeEnum.FormatError);
+            yield return await SignedErrorResponseAsync(
+                request,
+                DnsResponseCodeEnum.FormatError,
+                tsigResult.Key.Name,
+                stoppingToken
+            );
             yield break;
         }
 
@@ -192,7 +202,12 @@ public class ZoneTransferService(
                 is not SoaRecordData currentSoaData
         )
         {
-            yield return ErrorResponse(request, DnsResponseCodeEnum.ServerFailure);
+            yield return await SignedErrorResponseAsync(
+                request,
+                DnsResponseCodeEnum.ServerFailure,
+                tsigResult.Key.Name,
+                stoppingToken
+            );
             yield break;
         }
 
@@ -378,10 +393,13 @@ public class ZoneTransferService(
         )
             return (null, null, ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
-        // Zone transfers always require TSIG; there is no address-based allowance.
+        // Zone transfers always require TSIG; there is no address-based allowance. A request
+        // without a signature gets a plain REFUSED: there is no key to sign with.
         if (request.Tsig is null)
             return (null, null, ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
+        // Stream transfers bypass the query pipeline (ZoneTransferRequestRunner), so its
+        // transaction-signature gate has not run and this is the only verification.
         TsigVerificationResult tsigResult = await tsigService.VerifyAsync(
             context.RawMessage,
             context.TsigRecordStartOffset,
@@ -390,15 +408,51 @@ public class ZoneTransferService(
         );
 
         if (!tsigResult.IsValid)
-            return (null, null, ErrorResponse(request, tsigResult.Error));
+            return (
+                null,
+                null,
+                await tsigService.SignErrorResponseAsync(
+                    ErrorResponse(request, DnsResponseCodeEnum.NotAuthoritative),
+                    request.Tsig,
+                    tsigResult,
+                    stoppingToken
+                )
+            );
 
         // A transfer must name the zone apex, not a name inside the zone.
         CachedZone zone = zoneCache.FindZone(question.Name);
 
         return zone is null || zone.ApexName != question.Name
-            ? (null, null, ErrorResponse(request, DnsResponseCodeEnum.Refused))
+            ? (
+                null,
+                null,
+                await SignedErrorResponseAsync(
+                    request,
+                    DnsResponseCodeEnum.Refused,
+                    tsigResult.Key.Name,
+                    stoppingToken
+                )
+            )
             : (zone, tsigResult, null);
     }
+
+    /// <summary>
+    ///     This method builds an error reply to a request whose TSIG verified and signs it from
+    ///     the request MAC (RFC 8945 §5.3), so the client can tell the reply came from the primary.
+    /// </summary>
+    private async Task<DnsMessage> SignedErrorResponseAsync(
+        DnsMessage request,
+        DnsResponseCodeEnum responseCode,
+        string keyName,
+        CancellationToken stoppingToken
+    ) =>
+        await tsigService.SignResponseAsync(
+            ErrorResponse(request, responseCode),
+            keyName,
+            request.Id,
+            request.Tsig.Mac,
+            stoppingToken
+        );
 
     /// <summary>
     ///     This method builds one message in a transfer response sequence.
@@ -420,9 +474,9 @@ public class ZoneTransferService(
         };
 
     /// <summary>
-    ///     This method builds the reply to a rejected transfer, echoing the question. It is never
-    ///     signed, which also satisfies the RFC 8945 §5.2 rule against signing with an unknown
-    ///     key.
+    ///     This method builds the unsigned reply to a rejected transfer, echoing the question. The
+    ///     caller signs it when the request's TSIG verified (<see cref="SignedErrorResponseAsync" />)
+    ///     and leaves it unsigned or error-marked otherwise (RFC 8945 §5.3.2).
     /// </summary>
     private static DnsMessage ErrorResponse(DnsMessage request, DnsResponseCodeEnum responseCode) =>
         new()
