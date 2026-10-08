@@ -164,7 +164,8 @@ public class RolesController(
     /// <summary>
     ///     This action grants a role a permission, giving it to every user who holds the role. The
     ///     permission string is not checked against <c>GET /api/permissions</c>. Requires
-    ///     <c>roles:write</c>.
+    ///     <c>roles:write</c>, and the caller must hold the permission it grants (only a holder of
+    ///     <c>*</c> can grant <c>*</c>); otherwise this returns 403 naming the missing permission.
     /// </summary>
     [HttpPost("{id:guid}/permissions")]
     [RequirePermission("roles:write")]
@@ -174,6 +175,10 @@ public class RolesController(
         RoleEntity role = await roleManager.FindByIdAsync(id.ToString());
         if (role is null)
             throw new NotFoundException("Role", id.ToString());
+
+        ObjectResult refusal = this.RefuseUnheldPermissions([request.Permission]);
+        if (refusal is not null)
+            return refusal;
 
         await roleManager.AddClaimAsync(
             role,

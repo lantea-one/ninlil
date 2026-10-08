@@ -38,6 +38,10 @@ namespace Ninlil.Web.Controllers;
 ///     </para>
 /// </summary>
 /// <param name="userManager">Creates, updates and deletes user accounts.</param>
+/// <param name="roleManager">
+///     Reads a role's permissions, so <see cref="AddToRole" /> can refuse a role that carries
+///     permissions the caller does not hold.
+/// </param>
 /// <param name="userRepository">
 ///     Lists user accounts; <see cref="UserManager{TUser}.Users" /> is unavailable because
 ///     <c>NinlilDnsUserStore</c> does not implement <c>IQueryableUserStore</c>.
@@ -68,6 +72,7 @@ namespace Ninlil.Web.Controllers;
 [Route("api/users")]
 public class UsersController(
     UserManager<UserEntity> userManager,
+    RoleManager<RoleEntity> roleManager,
     IUserRepository userRepository,
     IOptionsMonitor<EmailSenderOptions> emailOptions,
     PasswordResetLinkSender passwordResetLinkSender,
@@ -217,7 +222,9 @@ public class UsersController(
 
     /// <summary>
     ///     This action adds a user to a role, by role name. Returns 400 when the role does not
-    ///     exist or the user already holds it. Requires <c>users:write</c>.
+    ///     exist or the user already holds it. Requires <c>users:write</c>, and the caller must
+    ///     hold every permission the role carries (a role holding <c>*</c> needs a <c>*</c>
+    ///     holder); otherwise this returns 403 naming the missing permissions.
     /// </summary>
     [HttpPost("{id:guid}/roles")]
     [RequirePermission("users:write")]
@@ -230,6 +237,19 @@ public class UsersController(
         UserEntity user = await userManager.FindByIdAsync(id.ToString());
         if (user is null)
             throw new NotFoundException("User", id.ToString());
+
+        RoleEntity role = await roleManager.FindByNameAsync(request.RoleName);
+        if (role is not null)
+        {
+            IList<Claim> roleClaims = await roleManager.GetClaimsAsync(role);
+            ObjectResult refusal = this.RefuseUnheldPermissions(
+                roleClaims
+                    .Where(claim => claim.Type == NinlilDnsClaimTypes.Permission)
+                    .Select(claim => claim.Value)
+            );
+            if (refusal is not null)
+                return refusal;
+        }
 
         IdentityResult result = await userManager.AddToRoleAsync(user, request.RoleName);
         result.ThrowIfFailed();
@@ -266,7 +286,8 @@ public class UsersController(
     /// <summary>
     ///     This action grants a user a permission directly, independent of their roles. The
     ///     permission string is not checked against <c>GET /api/permissions</c>. Requires
-    ///     <c>users:write</c>.
+    ///     <c>users:write</c>, and the caller must hold the permission it grants (only a holder of
+    ///     <c>*</c> can grant <c>*</c>); otherwise this returns 403 naming the missing permission.
     /// </summary>
     [HttpPost("{id:guid}/permissions")]
     [RequirePermission("users:write")]
@@ -276,6 +297,10 @@ public class UsersController(
         UserEntity user = await userManager.FindByIdAsync(id.ToString());
         if (user is null)
             throw new NotFoundException("User", id.ToString());
+
+        ObjectResult refusal = this.RefuseUnheldPermissions([request.Permission]);
+        if (refusal is not null)
+            return refusal;
 
         await userManager.AddClaimAsync(
             user,
