@@ -36,6 +36,13 @@ internal sealed class StubDhcpv4RequestHandler : IDhcpv4RequestHandler
     /// </summary>
     public byte[] LastRequestHardwareAddress { get; private set; }
 
+    /// <summary>
+    ///     This property, when set, replaces the fixed OFFER: <see cref="HandleRequestAsync" />
+    ///     returns whatever the function returns (or lets it throw). A resilience test uses it to
+    ///     make the handler misbehave on chosen requests.
+    /// </summary>
+    public Func<Dhcpv4Message, Dhcpv4Message> Override { get; set; }
+
     /// <inheritdoc />
     public ValueTask<Dhcpv4Message> HandleRequestAsync(
         Dhcpv4Message request,
@@ -45,6 +52,9 @@ internal sealed class StubDhcpv4RequestHandler : IDhcpv4RequestHandler
     {
         ReceivedRequest = true;
         LastRequestHardwareAddress = request.ClientHardwareAddress;
+
+        if (Override is not null)
+            return ValueTask.FromResult(Override(request));
 
         if (
             !request.TryGetMessageType(out Dhcpv4MessageTypeEnum messageType)

@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Control;
+using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 
 // Define our namespace.
@@ -67,13 +68,25 @@ public sealed class Dhcpv4UdpListener(
     private Task _receiveLoopTask;
 
     /// <summary>
-    ///     This property reports whether the socket is bound. It is not cleared if the receive
-    ///     loop ends on an unexpected exception.
+    ///     This property reports whether the socket is bound. It stays true if the receive loop
+    ///     ends unexpectedly, so <see cref="StopAsync" /> can still release the socket; use
+    ///     <see cref="IDhcpProtocolService.IsRunning" /> to learn whether datagrams are being
+    ///     served.
     /// </summary>
     public bool IsListening { get; private set; }
 
-    /// <inheritdoc />
-    bool IDhcpProtocolService.IsRunning => IsListening;
+    /// <summary>
+    ///     This property reports whether the socket is bound and the receive loop is still
+    ///     running, so a dead loop is not reported as a healthy listener.
+    /// </summary>
+    bool IDhcpProtocolService.IsRunning
+    {
+        get
+        {
+            lock (_lifecycleLock)
+                return IsListening && _receiveLoopTask is { IsCompleted: false };
+        }
+    }
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -85,7 +98,24 @@ public sealed class Dhcpv4UdpListener(
         {
             // Starting a running listener does nothing (see IDhcpProtocolService).
             if (IsListening)
-                return Task.CompletedTask;
+            {
+                if (_receiveLoopTask is { IsCompleted: false })
+                    return Task.CompletedTask;
+
+                // The receive loop ended on its own, so the listener is bound but deaf. Release
+                // the old socket and bind again.
+                logger.LogWarning(
+                    "The DHCPv4 receive loop is not running; releasing the old socket and starting again."
+                );
+
+                _socket.Dispose();
+                _receiveLoopCts.Dispose();
+
+                _socket = null;
+                _receiveLoopCts = null;
+                _receiveLoopTask = null;
+                IsListening = false;
+            }
 
             // DHCPv4 is IPv4-only. EnableBroadcast is needed to send to the limited-broadcast
             // address; receiving broadcasts needs no option on a wildcard-bound socket.
@@ -154,26 +184,36 @@ public sealed class Dhcpv4UdpListener(
             IsListening = false;
         }
 
-        // Cancel the token and close the socket. Closing is what unblocks a pending
-        // ReceiveFromAsync on platforms where the token alone does not.
-        await receiveLoopCts.CancelAsync();
-        socket.Close();
-
-        if (receiveLoopTask is not null)
+        try
         {
-            try
+            // Cancel the token and close the socket. Closing is what unblocks a pending
+            // ReceiveFromAsync on platforms where the token alone does not.
+            await receiveLoopCts.CancelAsync();
+            socket.Close();
+
+            if (receiveLoopTask is not null)
             {
-                await receiveLoopTask.WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                // Either the caller's token fired while waiting or the loop ended by cancellation.
-                // The socket is already closed, so the loop can no longer use it.
+                try
+                {
+                    await receiveLoopTask.WaitAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Either the caller's token fired while waiting or the loop ended by
+                    // cancellation. The socket is already closed, so the loop can no longer use it.
+                }
+                catch (Exception exception)
+                {
+                    // A loop that faulted must not skip the disposals below.
+                    logger.LogError(exception, "The DHCPv4 receive loop ended with an error.");
+                }
             }
         }
-
-        receiveLoopCts.Dispose();
-        socket.Dispose();
+        finally
+        {
+            receiveLoopCts.Dispose();
+            socket.Dispose();
+        }
 
         logger.LogInformation("The DHCPv4 listener stopped and released its bound socket.");
     }
@@ -183,10 +223,32 @@ public sealed class Dhcpv4UdpListener(
     ///     <paramref name="socket" /> until <paramref name="stoppingToken" /> is cancelled and
     ///     handling each with <see cref="ProcessDatagramAsync" /> one at a time. The socket and
     ///     token are passed in rather than read from the fields, because <see cref="StopAsync" />
-    ///     clears the fields before the loop notices it should exit. An exception other than the
-    ///     receive errors caught here ends the loop.
+    ///     clears the fields before the loop notices it should exit. Each datagram is processed
+    ///     inside its own try/catch, so one bad datagram never ends the loop. If the loop ends
+    ///     while no stop was requested, it logs a Critical entry and
+    ///     <see cref="IDhcpProtocolService.IsRunning" /> turns false.
     /// </summary>
     private async Task RunReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await ReceiveDatagramsAsync(socket, stoppingToken);
+        }
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+        {
+            logger.LogCritical(exception, "The DHCPv4 receive loop stopped unexpectedly.");
+            return;
+        }
+
+        if (!stoppingToken.IsCancellationRequested)
+            logger.LogCritical("The DHCPv4 receive loop stopped unexpectedly.");
+    }
+
+    /// <summary>
+    ///     This method reads and processes datagrams until a stop is requested or the socket is
+    ///     closed. It is the body of <see cref="RunReceiveLoopAsync" />.
+    /// </summary>
+    private async Task ReceiveDatagramsAsync(Socket socket, CancellationToken stoppingToken)
     {
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
 
@@ -227,15 +289,32 @@ public sealed class Dhcpv4UdpListener(
             byte[] datagram = receiveBuffer[..result.ReceivedBytes];
             IPEndPoint remoteEndPoint = (IPEndPoint)result.RemoteEndPoint;
 
-            await ProcessDatagramAsync(socket, datagram, remoteEndPoint, stoppingToken);
+            try
+            {
+                await ProcessDatagramAsync(socket, datagram, remoteEndPoint, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                // One datagram must never end the loop: that would silence the server for every
+                // client. Log it and read the next one.
+                logger.LogError(
+                    exception,
+                    "Processing a DHCPv4 datagram from {RemoteEndPoint} failed.",
+                    remoteEndPoint
+                );
+            }
         }
     }
 
     /// <summary>
     ///     This method decodes one datagram, calls the request handler and sends any reply. A
     ///     malformed datagram or a handler exception is logged and dropped so that one bad packet
-    ///     does not stop the listener. An exception from encoding the reply is not caught here
-    ///     (see <see cref="SendReplyAsync" />).
+    ///     does not stop the listener. Only a stop request lets an exception escape; the receive
+    ///     loop catches anything else.
     /// </summary>
     private async Task ProcessDatagramAsync(
         Socket socket,
@@ -252,7 +331,8 @@ public sealed class Dhcpv4UdpListener(
             )
         )
         {
-            logger.LogWarning(
+            // Any host on the network can send junk, so this is not worth a warning.
+            logger.LogDebug(
                 "Discarding an unparseable DHCPv4 datagram from {RemoteEndPoint}: {Reason}",
                 remoteEndPoint,
                 failureReason
@@ -266,8 +346,10 @@ public sealed class Dhcpv4UdpListener(
         {
             reply = await handler.HandleRequestAsync(request, remoteEndPoint, stoppingToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
         {
+            // This includes a handler that times out with an OperationCanceledException: only a
+            // stop request may end the loop.
             logger.LogError(
                 exception,
                 "The DHCPv4 request handler threw while handling a request from {RemoteEndPoint}.",
@@ -285,9 +367,9 @@ public sealed class Dhcpv4UdpListener(
     /// <summary>
     ///     This method encodes the reply and sends it where RFC 2131 Section 4.1 says, based on the
     ///     request's "giaddr" and "ciaddr" fields and broadcast flag: to the relay agent, by
-    ///     broadcast, or by unicast to the client's address. Encoding happens outside the
-    ///     try/catch, so a reply the writer rejects throws out of the receive loop. A DHCPNAK
-    ///     follows the same rules, so it is unicast to a client that set "ciaddr".
+    ///     broadcast, or by unicast to the client's address. A reply the writer rejects (an
+    ///     option longer than 255 bytes, for example) is logged and dropped. A DHCPNAK follows the
+    ///     same rules, so it is unicast to a client that set "ciaddr".
     ///     <para>
     ///         RFC 2131 Section 4.1 has one more case: with no "giaddr", no "ciaddr" and no
     ///         broadcast flag, the reply should be unicast to "yiaddr" at the client's hardware
@@ -304,7 +386,24 @@ public sealed class Dhcpv4UdpListener(
         CancellationToken stoppingToken
     )
     {
-        byte[] replyBytes = Dhcpv4MessageWriter.Write(reply);
+        byte[] replyBytes;
+
+        try
+        {
+            replyBytes = Dhcpv4MessageWriter.Write(reply);
+        }
+        catch (Exception exception)
+        {
+            reply.TryGetMessageType(out Dhcpv4MessageTypeEnum replyType);
+
+            logger.LogError(
+                exception,
+                "Could not encode the DHCPv4 {MessageType} reply to a request with transaction ID {TransactionId}; no reply is sent.",
+                replyType,
+                request.TransactionId
+            );
+            return;
+        }
 
         IPEndPoint destination;
 
