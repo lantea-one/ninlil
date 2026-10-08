@@ -33,8 +33,9 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         and its <c>LeaseExpiresAtUtc</c> is in the future, so <see cref="DeclineAsync" /> marks
 ///         the row for the address <c>Expired</c> with an expiry
 ///         <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" /> ahead, which keeps
-///         the address from every client until then. The quarantine is stored on whatever row
-///         references the address, usually the declining client's own row.
+///         the address from every client until then. The quarantine is stored on the declining
+///         client's own row only; a DECLINE of an address that is free or leased to another
+///         client changes nothing.
 ///     </para>
 /// </summary>
 /// <param name="leaseRepository">The repository leases are read and written through.</param>
@@ -251,20 +252,32 @@ public sealed class Dhcpv4LeaseAllocationService(
         string clientKey = Dhcpv4ClientIdentifier.Format(request);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        // Look up by address, not client: the address is quarantined whichever row refers to
-        // it. With no row, a new one is created for the declining client.
         LeaseEntity lease = await leaseRepository.FindByIpAddressAsync(
             scope.Name,
             declinedAddress.ToString(),
             cancellationToken
         );
-        bool isNewLease = lease is null;
-        lease ??= NewLease(scope, clientKey, declinedAddress);
+
+        // Only the client's own row may be quarantined. A missing row is not created, or one
+        // host could decline every free address and empty the pool.
+        if (
+            lease is null
+            || !string.Equals(lease.ClientIdentifier, clientKey, StringComparison.Ordinal)
+        )
+        {
+            logger.LogWarning(
+                "Ignored DECLINE of {Address} from {ClientIdentifier} in scope '{ScopeName}': not its lease.",
+                declinedAddress,
+                clientKey,
+                scope.Name
+            );
+            return;
+        }
 
         lease.State = LeaseStateEnum.Expired;
         lease.LeaseExpiresAtUtc = now.Add(options.Value.DeclinedAddressQuarantineDuration);
 
-        await SaveAsync(lease, isNewLease, now, cancellationToken);
+        await SaveAsync(lease, isNewLease: false, now, cancellationToken);
 
         logger.LogWarning(
             "Client {ClientIdentifier} declined {Address} in scope '{ScopeName}'; quarantining it until {QuarantineUntilUtc:o}.",

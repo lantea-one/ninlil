@@ -242,8 +242,11 @@ public sealed class Dhcpv4RequestHandler(
     /// <summary>
     ///     This method handles a DHCPDECLINE (RFC 2131 Section 4.3.3): the client found the
     ///     address in use, for example by ARP, and names it in the Requested IP Address option
-    ///     (tag 50). The address is quarantined; there is no reply. The Server Identifier option
-    ///     is not checked, so a DECLINE meant for another server is acted on too.
+    ///     (tag 50). The address is quarantined only when it is the declining client's own lease
+    ///     (see <see cref="IDhcpv4LeaseAllocationService.DeclineAsync" />); there is no reply. A
+    ///     DECLINE that names another server is dropped. RFC 2131 Section 4.3.3 requires the
+    ///     option, but one without it is tolerated, as other servers do; the ownership check
+    ///     still applies.
     /// </summary>
     private async Task<Dhcpv4Message> HandleDeclineAsync(
         Dhcpv4Message request,
@@ -252,6 +255,9 @@ public sealed class Dhcpv4RequestHandler(
         CancellationToken cancellationToken
     )
     {
+        if (IsAddressedToAnotherServer(request))
+            return null;
+
         if (!request.TryGetRequestedIpAddress(out IPAddress declinedAddress))
             return null;
 
@@ -269,8 +275,17 @@ public sealed class Dhcpv4RequestHandler(
     }
 
     /// <summary>
+    ///     This method tells whether a message carries a Server Identifier that is not this
+    ///     server's. A message without the option is not counted as addressed to another server.
+    /// </summary>
+    private bool IsAddressedToAnotherServer(Dhcpv4Message request) =>
+        request.TryGetServerIdentifier(out IPAddress server)
+        && !server.Equals(serverIdentifierProvider.Value);
+
+    /// <summary>
     ///     This method handles a DHCPRELEASE (RFC 2131 Section 4.3.6): the client gives up its
-    ///     lease, named by <c>ciaddr</c>, before it expires. There is no reply.
+    ///     lease, named by <c>ciaddr</c>, before it expires. There is no reply. A RELEASE that
+    ///     names another server is dropped; one without a Server Identifier is tolerated.
     /// </summary>
     private async Task<Dhcpv4Message> HandleReleaseAsync(
         Dhcpv4Message request,
@@ -279,7 +294,7 @@ public sealed class Dhcpv4RequestHandler(
         CancellationToken cancellationToken
     )
     {
-        if (request.ClientIpAddress.Equals(IPAddress.Any))
+        if (IsAddressedToAnotherServer(request) || request.ClientIpAddress.Equals(IPAddress.Any))
             return null;
 
         DhcpScopeEntity scope = await scopeResolver.ResolveAsync(request, cancellationToken);

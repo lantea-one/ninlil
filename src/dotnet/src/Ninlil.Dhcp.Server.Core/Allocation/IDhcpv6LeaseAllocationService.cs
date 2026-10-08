@@ -69,13 +69,19 @@ public interface IDhcpv6LeaseAllocationService
     /// <summary>
     ///     This method withholds an address a client reported in a DECLINE as already in use, for
     ///     <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" />, stored as in DHCPv4
-    ///     (see <c>Dhcpv4LeaseAllocationService</c>).
+    ///     (see <c>Dhcpv4LeaseAllocationService</c>). Only the declining client's own row is
+    ///     marked; with no row, or another client's, nothing changes.
     /// </summary>
     /// <param name="scope">The scope <paramref name="declinedAddress" /> belongs to.</param>
+    /// <param name="clientKey">The declining client's formatted DUID.</param>
     /// <param name="declinedAddress">The address the client reported as already in use.</param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
-    Task DeclineAddressAsync(
+    /// <returns>
+    ///     <see langword="true" /> if the address was the client's lease and is now quarantined.
+    /// </returns>
+    Task<bool> DeclineAddressAsync(
         DhcpScopeEntity scope,
+        string clientKey,
         IPAddress declinedAddress,
         CancellationToken cancellationToken = default
     );

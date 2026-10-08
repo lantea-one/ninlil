@@ -317,6 +317,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, clientDuid);
 
         Dhcpv6Message release = NewMessage(Dhcpv6MessageTypeEnum.Release, clientDuid, 0x9001);
+        release.SetServerIdentifier(await GetServerDuidAsync());
         Dhcpv6IdentityAssociationForNonTemporaryAddresses releaseNa = NewNaRequest(1);
         releaseNa.Addresses.Add(
             new Dhcpv6IdentityAssociationAddress { Address = IPAddress.Parse(active.IpAddress) }
@@ -372,6 +373,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         IPAddress offeredAddress = offered[0].Addresses[0].Address;
 
         Dhcpv6Message decline = NewMessage(Dhcpv6MessageTypeEnum.Decline, clientDuid, 0xA001);
+        decline.SetServerIdentifier(await GetServerDuidAsync());
         Dhcpv6IdentityAssociationForNonTemporaryAddresses declineNa = NewNaRequest(1);
         declineNa.Addresses.Add(new Dhcpv6IdentityAssociationAddress { Address = offeredAddress });
         decline.AddIdentityAssociationForNonTemporaryAddresses(declineNa);
@@ -394,6 +396,140 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         );
 
         Assert.Null(secondAdvertise);
+    }
+
+    [Fact]
+    public async Task Decline_OfAnotherClientsAddress_RepliesNoBindingAndChangesNothing()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "decline-foreign-v6",
+            "2001:db8:c::10",
+            "2001:db8:c::11"
+        );
+        byte[] ownerDuid = [0x00, 0x01, 0x00, 0x01, 0x10, 0x10, 0x10, 0x10, 0x00, 0x01];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, ownerDuid);
+
+        byte[] otherDuid = [0x00, 0x01, 0x00, 0x01, 0x20, 0x20, 0x20, 0x20, 0x00, 0x02];
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            await NewDeclineAsync(otherDuid, IPAddress.Parse(active.IpAddress)),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoBinding, NaStatus(reply));
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, FormatDuid(ownerDuid));
+        Assert.Equal(LeaseStateEnum.Active, after.State);
+        Assert.Equal(active.LeaseExpiresAtUtc, after.LeaseExpiresAtUtc);
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, FormatDuid(otherDuid)));
+    }
+
+    [Fact]
+    public async Task Decline_OfAFreeAddress_RepliesNoBindingAndCreatesNoRow()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "decline-free-v6",
+            "2001:db8:d::10",
+            "2001:db8:d::10"
+        );
+        byte[] duid = [0x00, 0x01, 0x00, 0x01, 0x30, 0x30, 0x30, 0x30, 0x00, 0x01];
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            await NewDeclineAsync(duid, IPAddress.Parse("2001:db8:d::10")),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoBinding, NaStatus(reply));
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, FormatDuid(duid)));
+
+        // The pool is still offered to another client.
+        Dhcpv6Message solicit = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, 0x31, 0x31, 0x31, 0x31, 0x00, 0x02],
+            0xD000
+        );
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+        Assert.NotNull(
+            await _host.Handler.HandleRequestAsync(solicit, RemoteEndPoint, CancellationToken.None)
+        );
+    }
+
+    [Fact]
+    public async Task Decline_WithAWrongOrMissingServerIdentifier_GetsNoReplyAndChangesNothing()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "decline-sid-v6",
+            "2001:db8:e::10",
+            "2001:db8:e::10"
+        );
+        byte[] duid = [0x00, 0x01, 0x00, 0x01, 0x40, 0x40, 0x40, 0x40, 0x00, 0x01];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, duid);
+        IPAddress address = IPAddress.Parse(active.IpAddress);
+
+        Dhcpv6Message wrong = await NewDeclineAsync(duid, address);
+        wrong.SetServerIdentifier([0x00, 0x01, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x00, 0x99]);
+        Assert.Null(
+            await _host.Handler.HandleRequestAsync(wrong, RemoteEndPoint, CancellationToken.None)
+        );
+
+        Dhcpv6Message missing = NewMessage(Dhcpv6MessageTypeEnum.Decline, duid, 0xE001);
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses na = NewNaRequest(1);
+        na.Addresses.Add(new Dhcpv6IdentityAssociationAddress { Address = address });
+        missing.AddIdentityAssociationForNonTemporaryAddresses(na);
+        Assert.Null(
+            await _host.Handler.HandleRequestAsync(missing, RemoteEndPoint, CancellationToken.None)
+        );
+
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, FormatDuid(duid));
+        Assert.Equal(LeaseStateEnum.Active, after.State);
+    }
+
+    [Fact]
+    public async Task Decline_FromTheOwner_RepliesSuccessAndQuarantines()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "decline-owner-v6",
+            "2001:db8:f::10",
+            "2001:db8:f::10"
+        );
+        byte[] duid = [0x00, 0x01, 0x00, 0x01, 0x50, 0x50, 0x50, 0x50, 0x00, 0x01];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, duid);
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            await NewDeclineAsync(duid, IPAddress.Parse(active.IpAddress)),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Equal(Dhcpv6StatusCodeEnum.Success, NaStatus(reply));
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, FormatDuid(duid));
+        Assert.Equal(LeaseStateEnum.Expired, after.State);
+        Assert.True(after.LeaseExpiresAtUtc > DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
+    public async Task Release_WithAWrongServerIdentifier_GetsNoReplyAndLeavesTheLeaseUnchanged()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "release-sid-v6",
+            "2001:db8:10::10",
+            "2001:db8:10::10"
+        );
+        byte[] duid = [0x00, 0x01, 0x00, 0x01, 0x60, 0x60, 0x60, 0x60, 0x00, 0x01];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, duid);
+
+        Dhcpv6Message release = NewMessage(Dhcpv6MessageTypeEnum.Release, duid, 0x1001);
+        release.SetServerIdentifier([0x00, 0x01, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x00, 0x99]);
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses na = NewNaRequest(1);
+        na.Addresses.Add(
+            new Dhcpv6IdentityAssociationAddress { Address = IPAddress.Parse(active.IpAddress) }
+        );
+        release.AddIdentityAssociationForNonTemporaryAddresses(na);
+
+        Assert.Null(
+            await _host.Handler.HandleRequestAsync(release, RemoteEndPoint, CancellationToken.None)
+        );
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, FormatDuid(duid));
+        Assert.Equal(LeaseStateEnum.Active, after.State);
     }
 
     [Fact]
@@ -604,6 +740,35 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         await _host.Handler.HandleRequestAsync(request, RemoteEndPoint, CancellationToken.None);
 
         return await _host.FindLeaseAsync(scope.Name, FormatDuid(clientDuid));
+    }
+
+    /// <summary>
+    ///     This method builds a DECLINE of one address, carrying this server's Server Identifier.
+    /// </summary>
+    private async Task<Dhcpv6Message> NewDeclineAsync(byte[] clientDuid, IPAddress address)
+    {
+        Dhcpv6Message decline = NewMessage(Dhcpv6MessageTypeEnum.Decline, clientDuid, 0xE000);
+        decline.SetServerIdentifier(await GetServerDuidAsync());
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses na = NewNaRequest(1);
+        na.Addresses.Add(new Dhcpv6IdentityAssociationAddress { Address = address });
+        decline.AddIdentityAssociationForNonTemporaryAddresses(na);
+        return decline;
+    }
+
+    /// <summary>
+    ///     This method reads the Status Code of the first IA_NA in a reply.
+    /// </summary>
+    private static Dhcpv6StatusCodeEnum NaStatus(Dhcpv6Message reply)
+    {
+        Assert.NotNull(reply);
+        reply.TryGetIdentityAssociationsForNonTemporaryAddresses(
+            out IReadOnlyList<Dhcpv6IdentityAssociationForNonTemporaryAddresses> associations
+        );
+        Assert.True(
+            associations[0]
+                .Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum statusCode, out string _)
+        );
+        return statusCode;
     }
 
     /// <summary>

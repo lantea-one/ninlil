@@ -289,6 +289,7 @@ public sealed class Dhcpv6RequestHandler(
             ),
             Dhcpv6MessageTypeEnum.Decline => await HandleDeclineAsync(
                 request,
+                clientKey,
                 scopeResolver,
                 leaseAllocationService,
                 cancellationToken
@@ -458,13 +459,7 @@ public sealed class Dhcpv6RequestHandler(
         CancellationToken cancellationToken
     )
     {
-        if (
-            requireServerIdentifierMatch
-            && (
-                !request.TryGetServerIdentifier(out byte[] requestedServerDuid)
-                || !requestedServerDuid.AsSpan().SequenceEqual(serverIdentifierProvider.Value)
-            )
-        )
+        if (requireServerIdentifierMatch && !HasOurServerIdentifier(request))
             // No Server Identifier, or another server's: not for us, so stay silent (RFC 8415).
             return null;
 
@@ -527,9 +522,18 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
+    ///     This method tells whether a message carries this server's Server Identifier. A missing
+    ///     one does not match.
+    /// </summary>
+    private bool HasOurServerIdentifier(Dhcpv6Message request) =>
+        request.TryGetServerIdentifier(out byte[] requestedServerDuid)
+        && requestedServerDuid.AsSpan().SequenceEqual(serverIdentifierProvider.Value);
+
+    /// <summary>
     ///     This method handles a RELEASE (RFC 8415). Unlike DHCPv4, a DHCPv6 server replies, with
     ///     <c>Success</c> or <c>NoBinding</c> per IA. Only the first address or prefix of each IA is
-    ///     released, and the Server Identifier is not checked.
+    ///     released. A RELEASE without this server's Server Identifier gets no reply (RFC 8415
+    ///     Section 16.9).
     /// </summary>
     private async Task<Dhcpv6Message> HandleReleaseAsync(
         Dhcpv6Message request,
@@ -539,6 +543,9 @@ public sealed class Dhcpv6RequestHandler(
         CancellationToken cancellationToken
     )
     {
+        if (!HasOurServerIdentifier(request))
+            return null;
+
         Dhcpv6IdentityAssociationForNonTemporaryAddresses requestedNa = FirstOrDefaultNa(request);
         Dhcpv6IdentityAssociationForPrefixDelegation requestedPd = FirstOrDefaultPd(request);
 
@@ -606,17 +613,23 @@ public sealed class Dhcpv6RequestHandler(
 
     /// <summary>
     ///     This method handles a DECLINE (RFC 8415): the client found addresses in its first IA_NA
-    ///     already in use by duplicate address detection, and each is quarantined. Unlike DHCPv4,
-    ///     the server replies, always with <c>Success</c>. Prefixes cannot be declined. The Server
-    ///     Identifier and the owner of each address are not checked.
+    ///     already in use by duplicate address detection, and each address that is the client's
+    ///     own lease is quarantined. Unlike DHCPv4, the server replies: <c>Success</c> when at
+    ///     least one address was the client's, otherwise <c>NoBinding</c> (Section 18.3.8).
+    ///     Prefixes cannot be declined. A DECLINE without this server's Server Identifier gets no
+    ///     reply (Section 16.8).
     /// </summary>
     private async Task<Dhcpv6Message> HandleDeclineAsync(
         Dhcpv6Message request,
+        string clientKey,
         IDhcpv6ScopeResolver scopeResolver,
         IDhcpv6LeaseAllocationService leaseAllocationService,
         CancellationToken cancellationToken
     )
     {
+        if (!HasOurServerIdentifier(request))
+            return null;
+
         Dhcpv6IdentityAssociationForNonTemporaryAddresses requestedNa = FirstOrDefaultNa(request);
 
         if (requestedNa is null)
@@ -627,18 +640,23 @@ public sealed class Dhcpv6RequestHandler(
             DhcpScopeKindEnum.AddressAssignment,
             cancellationToken
         );
+        bool declinedAny = false;
 
         if (scope is not null)
             foreach (Dhcpv6IdentityAssociationAddress declined in requestedNa.Addresses)
-                await leaseAllocationService.DeclineAddressAsync(
+                declinedAny |= await leaseAllocationService.DeclineAddressAsync(
                     scope,
+                    clientKey,
                     declined.Address,
                     cancellationToken
                 );
 
         Dhcpv6Message reply = NewReply(request, Dhcpv6MessageTypeEnum.Reply);
         reply.AddIdentityAssociationForNonTemporaryAddresses(
-            BuildNaStatus(requestedNa.IdentityAssociationId, Dhcpv6StatusCodeEnum.Success)
+            BuildNaStatus(
+                requestedNa.IdentityAssociationId,
+                declinedAny ? Dhcpv6StatusCodeEnum.Success : Dhcpv6StatusCodeEnum.NoBinding
+            )
         );
         Dhcpv6OptionDeliveryService.Apply(reply, scope, request, serverIdentifierProvider.Value);
         return reply;

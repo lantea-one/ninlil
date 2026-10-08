@@ -337,6 +337,142 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Decline_FromAnotherClient_LeavesTheOwnersLeaseAlone()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "decline-foreign",
+            "192.0.2.110",
+            "192.0.2.111"
+        );
+        byte[] ownerHardwareAddress = [0x10, 0x10, 0x10, 0x10, 0x10, 0x10];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, ownerHardwareAddress);
+
+        Dhcpv4Message decline = NewDecline(
+            [0x20, 0x20, 0x20, 0x20, 0x20, 0x20],
+            IPAddress.Parse(active.IpAddress),
+            IPAddress.Parse(Dhcpv4EngineTestHost.ServerIdentifierAddress)
+        );
+        Assert.Null(
+            await _host.Handler.HandleRequestAsync(decline, RemoteEndPoint, CancellationToken.None)
+        );
+
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, "10:10:10:10:10:10");
+        Assert.Equal(LeaseStateEnum.Active, after.State);
+        Assert.Equal(active.LeaseExpiresAtUtc, after.LeaseExpiresAtUtc);
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, "20:20:20:20:20:20"));
+
+        // The owner's next REQUEST is still ACKed.
+        Dhcpv4Message renew = NewMessage(ownerHardwareAddress, 0xC001);
+        renew.SetMessageType(Dhcpv4MessageTypeEnum.Request);
+        renew.ClientIpAddress = IPAddress.Parse(active.IpAddress);
+        Dhcpv4Message ack = await _host.Handler.HandleRequestAsync(
+            renew,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+        Assert.NotNull(ack);
+        Assert.True(ack.TryGetMessageType(out Dhcpv4MessageTypeEnum type));
+        Assert.Equal(Dhcpv4MessageTypeEnum.Ack, type);
+    }
+
+    [Fact]
+    public async Task Decline_OfAFreeAddress_CreatesNoRowAndTheAddressStaysAvailable()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "decline-free",
+            "192.0.2.120",
+            "192.0.2.120"
+        );
+
+        Dhcpv4Message decline = NewDecline(
+            [0x30, 0x30, 0x30, 0x30, 0x30, 0x30],
+            IPAddress.Parse("192.0.2.120"),
+            IPAddress.Parse(Dhcpv4EngineTestHost.ServerIdentifierAddress)
+        );
+        await _host.Handler.HandleRequestAsync(decline, RemoteEndPoint, CancellationToken.None);
+
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, "30:30:30:30:30:30"));
+
+        // The one-address pool is still offered to another client.
+        Dhcpv4Message discover = NewMessage([0x31, 0x31, 0x31, 0x31, 0x31, 0x31], 0xC100);
+        discover.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
+        Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
+            discover,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+        Assert.NotNull(offer);
+        Assert.Equal(IPAddress.Parse("192.0.2.120"), offer.YourIpAddress);
+    }
+
+    [Fact]
+    public async Task Decline_NamingAnotherServer_IsIgnored()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "decline-other-server",
+            "192.0.2.130",
+            "192.0.2.130"
+        );
+        byte[] hardwareAddress = [0x40, 0x40, 0x40, 0x40, 0x40, 0x40];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, hardwareAddress);
+
+        Dhcpv4Message decline = NewDecline(
+            hardwareAddress,
+            IPAddress.Parse(active.IpAddress),
+            IPAddress.Parse("192.0.2.200")
+        );
+        await _host.Handler.HandleRequestAsync(decline, RemoteEndPoint, CancellationToken.None);
+
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, "40:40:40:40:40:40");
+        Assert.Equal(LeaseStateEnum.Active, after.State);
+        Assert.Equal(active.LeaseExpiresAtUtc, after.LeaseExpiresAtUtc);
+    }
+
+    [Fact]
+    public async Task Decline_FromTheOwnerWithoutAServerIdentifier_StillQuarantines()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "decline-no-sid",
+            "192.0.2.140",
+            "192.0.2.140"
+        );
+        byte[] hardwareAddress = [0x50, 0x50, 0x50, 0x50, 0x50, 0x50];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, hardwareAddress);
+
+        Dhcpv4Message decline = NewDecline(
+            hardwareAddress,
+            IPAddress.Parse(active.IpAddress),
+            serverIdentifier: null
+        );
+        await _host.Handler.HandleRequestAsync(decline, RemoteEndPoint, CancellationToken.None);
+
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, "50:50:50:50:50:50");
+        Assert.Equal(LeaseStateEnum.Expired, after.State);
+        Assert.True(after.LeaseExpiresAtUtc > DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
+    public async Task Release_NamingAnotherServer_LeavesTheLeaseUnchanged()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "release-other-server",
+            "192.0.2.150",
+            "192.0.2.150"
+        );
+        byte[] hardwareAddress = [0x60, 0x60, 0x60, 0x60, 0x60, 0x60];
+        LeaseEntity active = await ConfirmAddressForNewClientAsync(scope, hardwareAddress);
+
+        Dhcpv4Message release = NewMessage(hardwareAddress, 0xC200);
+        release.SetMessageType(Dhcpv4MessageTypeEnum.Release);
+        release.ClientIpAddress = IPAddress.Parse(active.IpAddress);
+        release.SetServerIdentifier(IPAddress.Parse("192.0.2.200"));
+        await _host.Handler.HandleRequestAsync(release, RemoteEndPoint, CancellationToken.None);
+
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, "60:60:60:60:60:60");
+        Assert.Equal(LeaseStateEnum.Active, after.State);
+    }
+
+    [Fact]
     public async Task Inform_RespondsWithOptionsButNoAddressOrLeaseTime()
     {
         await _host.SeedScopeAsync(
@@ -392,6 +528,26 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
 
         string clientKey = string.Join(':', clientHardwareAddress.Select(b => b.ToString("x2")));
         return await _host.FindLeaseAsync(scope.Name, clientKey);
+    }
+
+    /// <summary>
+    ///     This method builds a DECLINE of an address, with a Server Identifier unless
+    ///     <paramref name="serverIdentifier" /> is <see langword="null" />.
+    /// </summary>
+    private static Dhcpv4Message NewDecline(
+        byte[] clientHardwareAddress,
+        IPAddress declinedAddress,
+        IPAddress serverIdentifier
+    )
+    {
+        Dhcpv4Message decline = NewMessage(clientHardwareAddress, 0xC000);
+        decline.SetMessageType(Dhcpv4MessageTypeEnum.Decline);
+        decline.SetRequestedIpAddress(declinedAddress);
+
+        if (serverIdentifier is not null)
+            decline.SetServerIdentifier(serverIdentifier);
+
+        return decline;
     }
 
     /// <summary>

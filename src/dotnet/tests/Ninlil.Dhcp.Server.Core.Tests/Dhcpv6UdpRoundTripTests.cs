@@ -133,6 +133,7 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
             TransactionId = 0x2222,
         };
         release.SetClientIdentifier(clientDuid);
+        release.SetServerIdentifier(serverDuid);
         Dhcpv6IdentityAssociationForNonTemporaryAddresses releaseNa = new()
         {
             IdentityAssociationId = 1,

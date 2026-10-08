@@ -204,8 +204,9 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <inheritdoc />
-    public async Task DeclineAddressAsync(
+    public async Task<bool> DeclineAddressAsync(
         DhcpScopeEntity scope,
+        string clientKey,
         IPAddress declinedAddress,
         CancellationToken cancellationToken = default
     )
@@ -217,20 +218,36 @@ public sealed class Dhcpv6LeaseAllocationService(
             declinedAddress.ToString(),
             cancellationToken
         );
-        bool isNewLease = lease is null;
-        lease ??= NewLease(scope, clientKey: null, ipAddress: declinedAddress);
+
+        // Only the client's own row may be quarantined; a missing row is not created, or one
+        // host could decline every free address and empty the pool.
+        if (
+            lease is null
+            || !string.Equals(lease.ClientIdentifier, clientKey, StringComparison.Ordinal)
+        )
+        {
+            logger.LogWarning(
+                "Ignored DECLINE of {Address} from {ClientIdentifier} in scope '{ScopeName}': not its lease.",
+                declinedAddress,
+                clientKey,
+                scope.Name
+            );
+            return false;
+        }
 
         lease.State = LeaseStateEnum.Expired;
         lease.LeaseExpiresAtUtc = now.Add(options.Value.DeclinedAddressQuarantineDuration);
 
-        await SaveAsync(lease, isNewLease, now, cancellationToken);
+        await SaveAsync(lease, isNewLease: false, now, cancellationToken);
 
         logger.LogWarning(
-            "{Address} was declined in scope '{ScopeName}'; quarantining it until {QuarantineUntilUtc:o}.",
+            "{Address} was declined by {ClientIdentifier} in scope '{ScopeName}'; quarantining it until {QuarantineUntilUtc:o}.",
             declinedAddress,
+            clientKey,
             scope.Name,
             lease.LeaseExpiresAtUtc
         );
+        return true;
     }
 
     /// <inheritdoc />

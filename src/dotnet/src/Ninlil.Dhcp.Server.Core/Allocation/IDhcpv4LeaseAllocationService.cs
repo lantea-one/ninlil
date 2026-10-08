@@ -67,7 +67,8 @@ public interface IDhcpv4LeaseAllocationService
     /// <summary>
     ///     This method withholds an address a client reported as already in use (RFC 2131
     ///     Section 4.3.3, DHCPDECLINE) for <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" />,
-    ///     by marking the lease row for that address <c>Expired</c> with a future expiry.
+    ///     by marking the lease row for that address <c>Expired</c> with a future expiry. Only the
+    ///     declining client's own row is marked; with no row, or another client's, nothing changes.
     /// </summary>
     /// <param name="scope">The scope <paramref name="declinedAddress" /> belongs to.</param>
     /// <param name="request">The client's DECLINE message.</param>
