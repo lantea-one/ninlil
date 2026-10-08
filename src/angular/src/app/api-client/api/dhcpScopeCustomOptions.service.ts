@@ -338,7 +338,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action adds a custom option to a scope. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, and 404 for an unknown scope. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action adds a custom option to a scope. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over 255 bytes, and 404 for an unknown scope. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint post /api/dhcp-scopes/{scopeId}/custom-options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

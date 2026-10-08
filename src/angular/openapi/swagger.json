@@ -9841,7 +9841,7 @@
         "tags": [
           "DhcpScopeCustomOptions"
         ],
-        "summary": "This action adds a custom option to a scope. The value is stored as uppercase hex.\nReturns 400 for a value that is not even-length hex, or a missing value when the source\nis `Custom`, and 404 for an unknown scope. Requires `dhcpscopes:write`.",
+        "summary": "This action adds a custom option to a scope. The value is stored as uppercase hex.\nReturns 400 for a value that is not even-length hex, or a missing value when the source\nis `Custom`, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over\n255 bytes, and 404 for an unknown scope. Requires `dhcpscopes:write`.",
         "parameters": [
           {
             "name": "scopeId",
@@ -12204,7 +12204,7 @@
         "tags": [
           "DhcpTagRuleOptions"
         ],
-        "summary": "This action adds an option to a tag rule. The value is stored as uppercase hex. Returns\n400 for a value that is not even-length hex, or a missing value when the source is\n`Custom`, and 404 for an unknown rule. Requires `dhcptagrules:write`.",
+        "summary": "This action adds an option to a tag rule. The value is stored as uppercase hex. Returns\n400 for a value that is not even-length hex, or a missing value when the source is\n`Custom`, for a global or DHCPv4-scope rule a reserved tag (0, 52, 53, 82, 255) or\na value over 255 bytes, for a DHCPv6-scope rule tag 0 or a value over 65 535 bytes, and\n404 for an unknown rule. Requires `dhcptagrules:write`.",
         "parameters": [
           {
             "name": "tagRuleId",
@@ -40372,7 +40372,7 @@
         "properties": {
           "optionTag": {
             "type": "integer",
-            "description": "The option's numeric tag. Use 1 to 254: 0 (Pad) and 255 (End) are reserved markers.",
+            "description": "The option's numeric tag. Use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)\nand 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and\n255 (End) are reserved markers. The value is at most 255 bytes.",
             "format": "int32"
           },
           "valueHex": {
@@ -40854,7 +40854,7 @@
         "properties": {
           "optionTag": {
             "type": "integer",
-            "description": "The option's numeric tag, as in Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest.OptionTag.",
+            "description": "The option's numeric tag, as in Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest.OptionTag.\nThose limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6\nscope only rejects tag 0 and values over 65 535 bytes.",
             "format": "int32"
           },
           "valueHex": {

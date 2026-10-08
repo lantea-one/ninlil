@@ -15,7 +15,7 @@ import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
  */
 export interface DhcpScopeCustomOptionWriteRequest { 
     /**
-     * The option\'s numeric tag. Use 1 to 254: 0 (Pad) and 255 (End) are reserved markers.
+     * The option\'s numeric tag. Use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type) and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and 255 (End) are reserved markers. The value is at most 255 bytes.
      */
     optionTag?: number;
     /**

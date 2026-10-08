@@ -84,7 +84,7 @@ export interface DhcpTagRuleOptionsServiceInterface {
     apiDhcpTagRulesTagRuleIdOptionsIdPut(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds an option to a tag rule. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, and 404 for an unknown rule. Requires &#x60;dhcptagrules:write&#x60;.
+     * This action adds an option to a tag rule. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, for a global or DHCPv4-scope rule a reserved tag (0, 52, 53, 82, 255) or a value over 255 bytes, for a DHCPv6-scope rule tag 0 or a value over 65 535 bytes, and 404 for an unknown rule. Requires &#x60;dhcptagrules:write&#x60;.
      * 
      * @endpoint post /api/dhcp-tag-rules/{tagRuleId}/options
 * @param requestParameters
