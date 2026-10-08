@@ -146,13 +146,14 @@ public sealed class FramedDnsStreamSessionTests
     [Fact]
     public async Task AnIdleConnectionWithAQueryInFlight_StillDeliversTheAnswer_ThenCloses()
     {
-        await using Harness harness = await Harness.StartAsync(TimeSpan.FromMilliseconds(200));
+        await using Harness harness = await Harness.StartAsync(TimeSpan.FromMilliseconds(600));
 
         await harness.SendFrameAsync(1, 8);
         ReceivedQuery query = await harness.ReceiveAsync();
 
-        // Several idle timeouts pass; the outstanding query keeps the connection open.
-        await Task.Delay(TimeSpan.FromMilliseconds(800));
+        // The read side goes idle after 600 ms, and the drain bound ends 600 ms after that; the
+        // answer arrives between the two, so the outstanding query keeps the connection open.
+        await Task.Delay(TimeSpan.FromMilliseconds(900));
         Assert.False(harness.RunTask.IsCompleted);
 
         await query.Respond([9, 9]);
@@ -160,6 +161,28 @@ public sealed class FramedDnsStreamSessionTests
         await harness.RunTask.WaitAsync(SafetyTimeout);
 
         // The server closed the connection: the client reads the end of the stream.
+        Assert.Null(await harness.ReadFrameOrEndAsync());
+    }
+
+    [Fact]
+    public async Task AQueryThatNeverAnswers_DoesNotHoldTheConnectionPastTheDrainBound()
+    {
+        await using Harness harness = await Harness.StartAsync(TimeSpan.FromMilliseconds(300));
+
+        await harness.SendFrameAsync(1, 8);
+        await harness.SendFrameAsync(2, 8);
+        await harness.ReceiveAsync();
+        await harness.ReceiveAsync();
+        Assert.Equal(2, harness.Session.InFlightQueries);
+
+        // The client is gone, and the pipeline never reports either query.
+        harness.Client.Client.Shutdown(SocketShutdown.Send);
+
+        // The session gives up after the idle timeout instead of waiting until shutdown.
+        await harness.RunTask.WaitAsync(SafetyTimeout);
+
+        Assert.True(harness.Session.Lifetime.IsCancellationRequested);
+        Assert.Equal(0, harness.Session.InFlightQueries);
         Assert.Null(await harness.ReadFrameOrEndAsync());
     }
 

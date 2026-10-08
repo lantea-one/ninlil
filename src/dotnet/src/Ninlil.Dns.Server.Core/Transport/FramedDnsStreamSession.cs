@@ -363,14 +363,35 @@ public sealed class FramedDnsStreamSession
     }
 
     /// <summary>
-    ///     This method waits until no query is in flight, by taking every slot. Each reply is
-    ///     bounded by the write deadline, so the wait is too, unless the pipeline never reports
-    ///     a query (it always reports one).
+    ///     This method waits until no query is in flight, by taking every slot, but for no longer
+    ///     than the idle timeout. A reply is bounded by the write deadline once it exists, but a
+    ///     query that hangs in the pipeline never produces one, and without this bound it would
+    ///     hold the connection and its connection-limiter slot until shutdown. When the bound
+    ///     passes, the session is aborted as a missed write deadline does: queued frames are
+    ///     discarded and the remaining slots are released by the teardown.
     /// </summary>
     private async Task WaitForInFlightQueriesAsync()
     {
-        for (int taken = 0; taken < MaxInFlightQueriesPerConnection; taken++)
-            await _slots.WaitAsync(Lifetime);
+        using CancellationTokenSource drainCts = CancellationTokenSource.CreateLinkedTokenSource(
+            Lifetime
+        );
+        drainCts.CancelAfter(_idleTimeout);
+
+        try
+        {
+            for (int taken = 0; taken < MaxInFlightQueriesPerConnection; taken++)
+                await _slots.WaitAsync(drainCts.Token);
+        }
+        catch (OperationCanceledException) when (!Lifetime.IsCancellationRequested)
+        {
+            _logger.LogDebug(
+                "Closing the connection from {Endpoint}: {Count} queries were still unanswered {Timeout} after it went idle.",
+                _remoteAddress,
+                InFlightQueries,
+                _idleTimeout
+            );
+            Abort();
+        }
     }
 
     /// <summary>
