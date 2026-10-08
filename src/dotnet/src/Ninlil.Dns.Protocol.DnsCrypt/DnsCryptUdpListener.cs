@@ -17,6 +17,8 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///     per datagram, as in <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>. Each datagram goes
 ///     through <see cref="DnsCryptQueryHandler" />, which tells a plaintext certificate discovery
 ///     query from an encrypted client query, since DNSCrypt carries both on the same port.
+///     An encrypted reply is never larger than its query: a longer answer is truncated (TC) so
+///     the client retries over TCP.
 /// </summary>
 /// <param name="pipeline">The pipeline every decrypted query is enqueued onto.</param>
 /// <param name="store">The store the tracked certificates are read from.</param>
@@ -152,6 +154,7 @@ public sealed class DnsCryptUdpListener(
                 datagram,
                 senderEndpoint.Address,
                 DnsTransportProtocolEnum.DnsCrypt,
+                isDatagram: true,
                 providerCertificateName,
                 pipeline,
                 store,

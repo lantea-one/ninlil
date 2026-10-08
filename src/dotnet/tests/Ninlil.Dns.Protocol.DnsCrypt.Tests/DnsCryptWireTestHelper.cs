@@ -46,13 +46,39 @@ internal static class DnsCryptWireTestHelper
     }
 
     /// <summary>
+    ///     This method builds a plain A query for <paramref name="name" />. When
+    ///     <paramref name="ednsPayloadSize" /> is set, the query carries an OPT record that
+    ///     advertises it; without one the client accepts only 512 bytes over UDP.
+    /// </summary>
+    public static DnsMessage BuildQuery(ushort id, DnsName name, ushort? ednsPayloadSize = null)
+    {
+        DnsMessage query = new()
+        {
+            Id = id,
+            Opcode = DnsOpcodeEnum.Query,
+            RecursionDesired = true,
+        };
+        query.Questions.Add(
+            new DnsQuestion(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet)
+        );
+
+        if (ednsPayloadSize is { } payloadSize)
+            query.Edns = new DnsEdnsOptions(0, payloadSize, false, []);
+
+        return query;
+    }
+
+    /// <summary>
     ///     This method builds an encrypted DNSCrypt client query packet, following the spec's
     ///     <c>&lt;client-magic&gt; &lt;client-pk&gt; &lt;client-nonce&gt; &lt;encrypted-query&gt;</c>
-    ///     structure.
+    ///     structure. <paramref name="minimumPaddedLength" /> makes the client pad the plaintext
+    ///     to at least that many bytes, as a client does to signal that it accepts a large
+    ///     response; the packet is then that length plus 68 bytes of envelope and MAC.
     /// </summary>
     public static (byte[] Packet, ClientQuerySession Session) BuildEncryptedQueryPacket(
         DnsCryptCertificateEntry certificateEntry,
-        DnsMessage query
+        DnsMessage query,
+        int minimumPaddedLength = 0
     )
     {
         DnsCryptEsVersion esVersion = certificateEntry.Certificate.EsVersion;
@@ -67,6 +93,11 @@ internal static class DnsCryptWireTestHelper
         clientNonceHalf.CopyTo(queryNonce, 0);
 
         byte[] paddedQuery = DnsCryptPadding.PadToBlockSize(DnsMessageWriter.Write(query), 64);
+
+        // Zero bytes after the padding marker are still valid ISO/IEC 7816-4 padding.
+        if (paddedQuery.Length < minimumPaddedLength)
+            Array.Resize(ref paddedQuery, minimumPaddedLength);
+
         byte[] encryptedQuery = DnsCryptCryptoBox.Encrypt(
             esVersion,
             paddedQuery,

@@ -139,6 +139,114 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
     }
 
     [Fact]
+    public async Task Udp_ASmallQueryWithALargeAnswerGetsAnEncryptedTruncatedReplyNoLargerThanTheQuery()
+    {
+        DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[
+            DnsCryptEsVersion.XChaCha20Poly1305
+        ];
+        DnsMessage query = DnsCryptWireTestHelper.BuildQuery(11, EchoResolver.LargeQuestionName);
+
+        // 192 bytes of padded plaintext make a 260-byte packet.
+        (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
+            DnsCryptWireTestHelper.BuildEncryptedQueryPacket(
+                certificateEntry,
+                query,
+                minimumPaddedLength: 192
+            );
+        Assert.Equal(260, packet.Length);
+
+        using UdpClient client = new();
+        client.Connect(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
+        await client.SendAsync(packet);
+        byte[] responsePacket = await ReceiveWithTimeoutAsync(client);
+
+        Assert.True(responsePacket.Length <= packet.Length);
+
+        DnsMessage response = DnsCryptWireTestHelper.DecryptResponsePacket(
+            certificateEntry,
+            session,
+            responsePacket,
+            out _,
+            out _
+        );
+
+        Assert.Equal(query.Id, response.Id);
+        Assert.True(response.IsTruncated);
+        Assert.Empty(response.Answers);
+    }
+
+    [Fact]
+    public async Task Udp_ALargePaddedQueryGetsTheFullAnswer()
+    {
+        DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[
+            DnsCryptEsVersion.XSalsa20Poly1305
+        ];
+        DnsMessage query = DnsCryptWireTestHelper.BuildQuery(
+            12,
+            EchoResolver.MediumQuestionName,
+            ednsPayloadSize: 4096
+        );
+
+        // The client pads the query so the 1092-byte packet leaves room for the answer.
+        (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
+            DnsCryptWireTestHelper.BuildEncryptedQueryPacket(
+                certificateEntry,
+                query,
+                minimumPaddedLength: 1024
+            );
+
+        using UdpClient client = new();
+        client.Connect(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
+        await client.SendAsync(packet);
+        byte[] responsePacket = await ReceiveWithTimeoutAsync(client);
+
+        Assert.True(responsePacket.Length <= packet.Length);
+
+        DnsMessage response = DnsCryptWireTestHelper.DecryptResponsePacket(
+            certificateEntry,
+            session,
+            responsePacket,
+            out _,
+            out _
+        );
+
+        Assert.False(response.IsTruncated);
+        Assert.Equal(50, response.Answers.Count);
+    }
+
+    [Fact]
+    public async Task Tcp_ALargeAnswerIsNotLimitedToTheQuerySize()
+    {
+        DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[
+            DnsCryptEsVersion.XChaCha20Poly1305
+        ];
+        (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
+            DnsCryptWireTestHelper.BuildEncryptedQueryPacket(
+                certificateEntry,
+                DnsCryptWireTestHelper.BuildQuery(13, EchoResolver.LargeQuestionName)
+            );
+
+        using TcpClient client = new();
+        await client.ConnectAsync(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
+        using NetworkStream stream = client.GetStream();
+
+        await WriteFramedAsync(stream, packet);
+        byte[] responsePacket = await ReadFramedAsync(stream);
+
+        DnsMessage response = DnsCryptWireTestHelper.DecryptResponsePacket(
+            certificateEntry,
+            session,
+            responsePacket,
+            out _,
+            out _
+        );
+
+        Assert.True(responsePacket.Length > packet.Length);
+        Assert.False(response.IsTruncated);
+        Assert.Equal(150, response.Answers.Count);
+    }
+
+    [Fact]
     public async Task Tcp_AnswersTwoSequentialQueriesOnOneConnection()
     {
         DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[

@@ -185,6 +185,7 @@ public sealed class DnsCryptTcpListener(
                         packetBuffer,
                         remoteEndpoint.Address,
                         DnsTransportProtocolEnum.DnsCrypt,
+                        isDatagram: false,
                         providerCertificateName,
                         pipeline,
                         store,

@@ -22,6 +22,11 @@
     />
   </ItemGroup>
 
+  <!-- The tests check the response-size arithmetic in DnsCryptQueryHandler directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Protocol.DnsCrypt.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
