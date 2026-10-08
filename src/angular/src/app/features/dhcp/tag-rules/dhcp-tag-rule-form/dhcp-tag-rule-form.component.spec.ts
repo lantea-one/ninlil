@@ -407,6 +407,34 @@ describe('DhcpTagRuleFormComponent', () => {
       });
     });
 
+    it('marks tag 0, 255 and the server-owned tags invalid', async () => {
+      const fixture = await createComponent(null);
+      fixture.componentInstance.addOptionRow();
+      const tagControl = fixture.componentInstance.options.at(0).controls.optionTag;
+
+      for (const tag of [0, 255, 52, 53, 82]) {
+        tagControl.setValue(tag);
+        expect(tagControl.invalid).toBeTrue();
+      }
+      tagControl.setValue(67);
+      expect(tagControl.valid).toBeTrue();
+    });
+
+    it('blocks save with a row-identifying message when a value is over 255 bytes', async () => {
+      const fixture = await createComponent(null);
+
+      fixture.componentInstance.form.patchValue({ name: 'pxe' });
+      fixture.componentInstance.addOptionRow();
+      fixture.componentInstance.options.at(0).controls.optionTag.setValue(200);
+      fixture.componentInstance.options.at(0).controls.value.setValue('AA'.repeat(256));
+
+      await fixture.componentInstance.save();
+
+      expect(tagRulesApiSpy.apiDhcpTagRulesPost).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.errorMessage()).toContain('Option row 1');
+      expect(fixture.componentInstance.errorMessage()).toContain('255');
+    });
+
     it('reconciles an edited existing option as a PUT and a removed one as a DELETE', async () => {
       const fixture = await createComponent('rule-1', () => {
         tagRulesApiSpy.apiDhcpTagRulesIdGet.and.returnValue(

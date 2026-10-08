@@ -4,6 +4,7 @@ import {
   FormGroup,
   NonNullableFormBuilder,
   ReactiveFormsModule,
+  ValidatorFn,
   Validators,
 } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -44,6 +45,10 @@ import {
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { planDhcpOptionReconciliation } from '../../shared/dhcp-option-reconcile.util';
+import {
+  assertDhcpv4OptionValueLength,
+  dhcpv4OptionTagValidator,
+} from '../../shared/dhcp-option-rules.util';
 import { decodeDhcpOptionValue, encodeDhcpOptionValue } from '../../shared/dhcp-option-value.util';
 import { joinLines, splitLines } from './dhcp-scope-form.model';
 
@@ -209,9 +214,22 @@ export class DhcpScopeFormComponent implements OnInit {
     () => this.showKindField() && this.selectedKind() === DhcpScopeKindEnum.PrefixDelegation,
   );
 
+  /**
+   * This validator applies the DHCPv4 tag limits (1 to 254, no server-owned tag) to an option
+   * row when the scope is IPv4, and the plain 0 to 255 range otherwise, since the server checks
+   * custom options of an IPv6 scope only for being a byte.
+   */
+  private readonly optionTagValidator: ValidatorFn = (control) =>
+    this.selectedProtocolVersion() === InternetProtocolVersionEnum.Ipv4
+      ? dhcpv4OptionTagValidator(control)
+      : (Validators.min(0)(control) ?? Validators.max(255)(control));
+
   constructor() {
     this.form.controls.protocolVersion.valueChanges.subscribe((protocolVersion) => {
       this.selectedProtocolVersion.set(protocolVersion);
+
+      // The tag limits depend on the protocol, so every row is checked again.
+      this.options.controls.forEach((row) => row.controls.optionTag.updateValueAndValidity());
 
       // Prefix Delegation exists only for IPv6, so a non-IPv6 scope is reset to AddressAssignment.
       if (
@@ -430,7 +448,7 @@ export class DhcpScopeFormComponent implements OnInit {
     return this.formBuilder.group({
       id: [existing?.id ?? (null as string | null)],
       catalogSelection: [catalogSelection],
-      optionTag: [optionTag, [Validators.required, Validators.min(0), Validators.max(255)]],
+      optionTag: [optionTag, [Validators.required, this.optionTagValidator]],
       valueSource: [valueSource],
       value: [displayValue],
       isDisabled: [existing?.isDisabled ?? false],
@@ -452,6 +470,9 @@ export class DhcpScopeFormComponent implements OnInit {
       if (!isServerAddress) {
         try {
           valueHex = encodeDhcpOptionValue(entry?.valueType ?? null, raw.value);
+          if (this.selectedProtocolVersion() === InternetProtocolVersionEnum.Ipv4) {
+            assertDhcpv4OptionValueLength(valueHex);
+          }
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           throw new Error(`Option row ${index + 1} (tag ${raw.optionTag}): ${reason}`, {

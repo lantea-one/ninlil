@@ -44,6 +44,10 @@ import {
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { planDhcpOptionReconciliation } from '../../shared/dhcp-option-reconcile.util';
+import {
+  assertDhcpv4OptionValueLength,
+  dhcpv4OptionTagValidator,
+} from '../../shared/dhcp-option-rules.util';
 import { decodeDhcpOptionValue, encodeDhcpOptionValue } from '../../shared/dhcp-option-value.util';
 
 /**
@@ -392,7 +396,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     return this.formBuilder.group({
       id: [existing?.id ?? (null as string | null)],
       catalogSelection: [catalogSelection],
-      optionTag: [optionTag, [Validators.required, Validators.min(0), Validators.max(255)]],
+      optionTag: [optionTag, [Validators.required, dhcpv4OptionTagValidator]],
       valueSource: [valueSource],
       value: [displayValue],
     });
@@ -411,6 +415,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
       if (!isServerAddress) {
         try {
           valueHex = encodeDhcpOptionValue(combined?.entry.valueType ?? null, raw.value);
+          assertDhcpv4OptionValueLength(valueHex);
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           throw new Error(`Option row ${index + 1} (tag ${raw.optionTag}): ${reason}`, {
