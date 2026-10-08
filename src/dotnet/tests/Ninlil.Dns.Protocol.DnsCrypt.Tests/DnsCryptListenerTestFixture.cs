@@ -136,7 +136,7 @@ public sealed class DnsCryptListenerTestFixture : IAsyncLifetime
             await _pipeline.StopAsync(CancellationToken.None);
     }
 
-    private static DnsCryptCertificateEntry BuildSignedCertificate(
+    internal static DnsCryptCertificateEntry BuildSignedCertificate(
         IDnssecSigningAlgorithm algorithm,
         DnssecKeyPair providerKeyPair,
         DnsCryptEsVersion esVersion

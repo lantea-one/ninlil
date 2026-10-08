@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.RateLimiting;
 using Ninlil.Dns.Server.Core.Transport;
 using Ninlil.Dns.Server.DnsCrypt;
 
@@ -17,8 +18,9 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///     per datagram, as in <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>. Each datagram goes
 ///     through <see cref="DnsCryptQueryHandler" />, which tells a plaintext certificate discovery
 ///     query from an encrypted client query, since DNSCrypt carries both on the same port.
-///     An encrypted reply is never larger than its query: a longer answer is truncated (TC) so
-///     the client retries over TCP.
+///     An encrypted reply is never larger than its query, and a discovery reply never exceeds
+///     the pipeline's response-to-query ceiling: a longer answer is truncated (TC) so the client
+///     retries over TCP.
 /// </summary>
 /// <param name="pipeline">The pipeline every decrypted query is enqueued onto.</param>
 /// <param name="store">The store the tracked certificates are read from.</param>
@@ -29,11 +31,21 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>).
 /// </param>
 /// <param name="logger">The logger this listener records unexpected socket failures to.</param>
+/// <param name="rateLimiter">
+///     The limiter a certificate discovery query passes, as every pipeline query does. When it is
+///     <see langword="null" />, discovery is not limited.
+/// </param>
+/// <param name="pipelineOptions">
+///     The pipeline settings the discovery answer's size ceiling is read from; defaults apply
+///     when it is <see langword="null" />.
+/// </param>
 public sealed class DnsCryptUdpListener(
     DnsQueryProcessingPipeline pipeline,
     IDnsCryptCertificateStore store,
     IOptionsMonitor<DnsCryptOptions> options,
-    ILogger<DnsCryptUdpListener> logger
+    ILogger<DnsCryptUdpListener> logger,
+    IDnsRateLimiter rateLimiter = null,
+    IOptionsMonitor<DnsQueryProcessingPipelineOptions> pipelineOptions = null
 ) : BackgroundService
 {
     /// <summary>
@@ -161,7 +173,9 @@ public sealed class DnsCryptUdpListener(
                 logger,
                 (responseBytes, sendToken) =>
                     SendResponseAsync(socket, responseBytes, senderEndpoint, sendToken),
-                stoppingToken
+                stoppingToken,
+                rateLimiter: rateLimiter,
+                pipelineOptions: pipelineOptions?.CurrentValue
             );
         }
     }

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.RateLimiting;
 using Ninlil.Dns.Server.DnsCrypt;
 
 // Define our namespace.
@@ -24,18 +25,23 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///         would not fit and the encrypted reply is never larger than the query, as the DNSCrypt
 ///         spec requires. A stream query has no cap.
 ///     </para>
+///     <para>
+///         The certificate discovery answer is plaintext and unauthenticated, so it passes the
+///         same rate limits as a pipeline query and, over a datagram, the same response-to-query
+///         size ceiling.
+///     </para>
 /// </summary>
 internal static class DnsCryptQueryHandler
 {
     /// <summary>
-    ///     This method routes one received packet. A certificate discovery query is answered at
-    ///     once. Anything else is treated as an encrypted client query: it is decrypted with the
-    ///     tracked certificate its client-magic names and, if that succeeds, enqueued onto
-    ///     <paramref name="pipeline" /> with a response delegate that encrypts the answer before
-    ///     passing it to <paramref name="sendAsync" />. A packet that is neither is dropped
-    ///     without a reply: a malformed plaintext query or a query that cannot be decrypted (an
-    ///     unknown client-magic, corrupted or forged ciphertext) has no reliable ID to answer, and
-    ///     answering unknown senders would help reflection attacks.
+    ///     This method routes one received packet. A certificate discovery query is rate limited
+    ///     and answered at once. Anything else is treated as an encrypted client query: it is
+    ///     decrypted with the tracked certificate its client-magic names and, if that succeeds,
+    ///     enqueued onto <paramref name="pipeline" /> with a response delegate that encrypts the
+    ///     answer before passing it to <paramref name="sendAsync" />. A packet that is neither is
+    ///     dropped without a reply: a malformed plaintext query or a query that cannot be
+    ///     decrypted (an unknown client-magic, corrupted or forged ciphertext) has no reliable ID
+    ///     to answer, and answering unknown senders would help reflection attacks.
     ///     <para>
     ///         A stream listener that limits queries in flight passes
     ///         <paramref name="queryResponder" /> and <paramref name="onDropped" />: the encrypted
@@ -62,19 +68,36 @@ internal static class DnsCryptQueryHandler
         Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> sendAsync,
         CancellationToken stoppingToken,
         DnsResponseSenderAsync queryResponder = null,
-        DnsQueryDropNotifier onDropped = null
+        DnsQueryDropNotifier onDropped = null,
+        IDnsRateLimiter rateLimiter = null,
+        DnsQueryProcessingPipelineOptions pipelineOptions = null
     )
     {
         if (
-            TryHandleCertificateDiscovery(
+            TryReadCertificateDiscovery(
                 packet,
                 providerCertificateName,
                 store,
-                out byte[] discoveryResponse
+                out DnsMessage discoveryRequest,
+                out DnsMessage discoveryResponse
             )
         )
         {
-            await sendAsync(discoveryResponse, stoppingToken);
+            byte[] discoveryBytes = await BuildLimitedDiscoveryReplyAsync(
+                discoveryRequest,
+                discoveryResponse,
+                packet.Length,
+                remoteAddress,
+                isDatagram,
+                rateLimiter,
+                pipelineOptions ?? new DnsQueryProcessingPipelineOptions(),
+                logger,
+                stoppingToken
+            );
+
+            if (discoveryBytes is not null)
+                await sendAsync(discoveryBytes, stoppingToken);
+
             return false;
         }
 
@@ -185,17 +208,16 @@ internal static class DnsCryptQueryHandler
 
     /// <summary>
     ///     This method tries to decode a packet as a plaintext certificate discovery query and, if
-    ///     it is one, builds the encoded response.
+    ///     it is one, builds the response message.
     /// </summary>
-    private static bool TryHandleCertificateDiscovery(
+    private static bool TryReadCertificateDiscovery(
         ReadOnlyMemory<byte> packet,
         DnsName providerCertificateName,
         IDnsCryptCertificateStore store,
-        out byte[] response
+        out DnsMessage request,
+        out DnsMessage response
     )
     {
-        DnsMessage request;
-
         try
         {
             request = DnsMessageReader.Read(packet.Span);
@@ -204,25 +226,104 @@ internal static class DnsCryptQueryHandler
         {
             // Not a plaintext DNS message, so most likely an encrypted client query, which the
             // caller tries next.
+            request = null;
             response = null;
             return false;
         }
 
-        if (
-            !DnsCryptCertificateDiscoveryResponder.TryBuildResponse(
-                request,
-                providerCertificateName,
-                store,
-                out DnsMessage responseMessage
-            )
-        )
+        return DnsCryptCertificateDiscoveryResponder.TryBuildResponse(
+            request,
+            providerCertificateName,
+            store,
+            out response
+        );
+    }
+
+    /// <summary>
+    ///     This method applies the rate limits and the datagram size ceiling to a discovery
+    ///     answer. The answer is plaintext and about 7 to 10 times the size of the query, so
+    ///     without the limits a spoofed source could use it to amplify traffic.
+    /// </summary>
+    /// <returns>
+    ///     The encoded reply, or <see langword="null" /> when the query is dropped without a
+    ///     reply. A reply over the ceiling, or one the subnet limit asks to truncate, is an empty
+    ///     TC=1 message, so the client retries over TCP.
+    /// </returns>
+    private static async Task<byte[]> BuildLimitedDiscoveryReplyAsync(
+        DnsMessage request,
+        DnsMessage response,
+        int requestLength,
+        IPAddress remoteAddress,
+        bool isDatagram,
+        IDnsRateLimiter rateLimiter,
+        DnsQueryProcessingPipelineOptions pipelineOptions,
+        ILogger logger,
+        CancellationToken stoppingToken
+    )
+    {
+        if (rateLimiter is not null)
         {
-            response = null;
-            return false;
+            if (!await rateLimiter.TryAcquireAsync(remoteAddress, stoppingToken))
+            {
+                logger.LogDebug(
+                    "Rate-limiting a DNSCrypt certificate discovery query from {RemoteAddress}: token budget exhausted.",
+                    remoteAddress
+                );
+                return null;
+            }
+
+            DnsSubnetRateLimitDecisionEnum subnetDecision = await rateLimiter.CheckSubnetLimitAsync(
+                remoteAddress,
+                isDatagram,
+                stoppingToken
+            );
+
+            if (subnetDecision == DnsSubnetRateLimitDecisionEnum.Drop)
+            {
+                logger.LogDebug(
+                    "Rate-limiting a DNSCrypt certificate discovery query from {RemoteAddress}: its subnet's budget is exhausted.",
+                    remoteAddress
+                );
+                return null;
+            }
+
+            if (subnetDecision == DnsSubnetRateLimitDecisionEnum.RespondTruncated)
+                return BuildTruncatedReply(request);
         }
 
-        response = DnsMessageWriter.Write(responseMessage);
-        return true;
+        byte[] responseBytes = DnsMessageWriter.Write(response);
+
+        if (!isDatagram)
+            return responseBytes;
+
+        // The same ceiling the pipeline applies to a UDP answer, so a small spoofed query cannot
+        // reflect much more traffic than it costs the spoofer to send.
+        int amplificationCeiling = Math.Max(
+            pipelineOptions.MinUdpAmplificationFloorSizeOctets,
+            (int)(requestLength * pipelineOptions.MaxUdpAmplificationFactor)
+        );
+
+        return responseBytes.Length > amplificationCeiling
+            ? BuildTruncatedReply(request)
+            : responseBytes;
+    }
+
+    /// <summary>
+    ///     This method builds an empty response with TC set, from the question of the request.
+    /// </summary>
+    private static byte[] BuildTruncatedReply(DnsMessage request)
+    {
+        DnsMessage truncated = new()
+        {
+            Id = request.Id,
+            IsResponse = true,
+            Opcode = DnsOpcodeEnum.Query,
+            IsTruncated = true,
+            ResponseCode = DnsResponseCodeEnum.NoError,
+        };
+        truncated.Questions.AddRange(request.Questions);
+
+        return DnsMessageWriter.Write(truncated);
     }
 
     /// <summary>

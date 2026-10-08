@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.RateLimiting;
 using Ninlil.Dns.Server.Core.Transport;
 using Ninlil.Dns.Server.DnsCrypt;
 
@@ -30,11 +31,16 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>).
 /// </param>
 /// <param name="logger">The logger this listener records connection-level failures to.</param>
+/// <param name="rateLimiter">
+///     The limiter a certificate discovery query passes, as every pipeline query does. When it is
+///     <see langword="null" />, discovery is not limited.
+/// </param>
 public sealed class DnsCryptTcpListener(
     DnsQueryProcessingPipeline pipeline,
     IDnsCryptCertificateStore store,
     IOptionsMonitor<DnsCryptOptions> options,
-    ILogger<DnsCryptTcpListener> logger
+    ILogger<DnsCryptTcpListener> logger,
+    IDnsRateLimiter rateLimiter = null
 ) : BackgroundService
 {
     /// <summary>
@@ -195,7 +201,8 @@ public sealed class DnsCryptTcpListener(
                         (responseBytes, sendToken) => session.SendAsync(responseBytes, sendToken),
                         sessionToken,
                         session.CreateResponder(),
-                        session.CreateDropNotifier()
+                        session.CreateDropNotifier(),
+                        rateLimiter
                     )
                         ? FrameOutcomeEnum.Enqueued
                         : FrameOutcomeEnum.Handled

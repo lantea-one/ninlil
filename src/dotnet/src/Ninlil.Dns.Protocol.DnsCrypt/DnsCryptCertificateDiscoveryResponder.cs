@@ -11,8 +11,9 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///     client finds the resolver's valid certificates (public keys, ciphers, and the client-magic
 ///     to tag its encrypted queries with). No zone holds this name, so
 ///     <see cref="DnsCryptQueryHandler" /> answers it here rather than sending it through
-///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" />; it therefore
-///     skips the pipeline's checks, rate limiting included.
+///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" />. The handler
+///     applies the rate limits and, over UDP, the size ceiling to the answer built here; the
+///     pipeline's other checks (access control, filtering) do not run for discovery.
 /// </summary>
 internal static class DnsCryptCertificateDiscoveryResponder
 {
