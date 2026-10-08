@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.DependencyInjection;
@@ -146,9 +145,13 @@ public sealed class TcpDnsListener(
     }
 
     /// <summary>
-    ///     This method serves one accepted connection: it reads each length-prefixed query,
-    ///     answers it, and closes the connection when <see cref="PlainProtocolOptions.TcpIdleTimeout" />
-    ///     passes, the client disconnects, or a zone transfer on it completes.
+    ///     This method serves one accepted connection through a
+    ///     <see cref="FramedDnsStreamSession" />, which reads each length-prefixed query and
+    ///     closes the connection when <see cref="PlainProtocolOptions.TcpIdleTimeout" /> passes
+    ///     with no complete message, the client disconnects, a write to the client misses that
+    ///     same timeout, or a zone transfer on it completes. The session owns the per-connection
+    ///     limits (16 queries in flight, one writer task); a query still outstanding when the
+    ///     connection goes idle is answered first.
     ///     <para>
     ///         Closing after a transfer is required, although RFC 7766 would allow further pipelined
     ///         queries: the pull client in
@@ -157,49 +160,26 @@ public sealed class TcpDnsListener(
     ///         the end of the transfer, so a connection left open would make it wait until its
     ///         read timeout. An ordinary query leaves the connection open for pipelining.
     ///     </para>
-    ///     <para>
-    ///         The timeout is restarted for each message and also covers handling it, so a zone
-    ///         transfer that takes longer than <see cref="PlainProtocolOptions.TcpIdleTimeout" /> is
-    ///         cancelled.
-    ///     </para>
     /// </summary>
     private async Task HandleConnectionAsync(Socket connection, CancellationToken stoppingToken)
     {
         IPEndPoint remoteEndpoint = (IPEndPoint)connection.RemoteEndPoint;
-        SemaphoreSlim writeLock = new(1, 1);
 
         try
         {
-            using CancellationTokenSource idleCts = CancellationTokenSource.CreateLinkedTokenSource(
+            using NetworkStream stream = new(connection, ownsSocket: false);
+            FramedDnsStreamSession session = new(
+                stream,
+                remoteEndpoint.Address,
+                _settings.TcpIdleTimeout,
+                logger,
                 stoppingToken
             );
 
-            while (true)
-            {
-                idleCts.CancelAfter(_settings.TcpIdleTimeout);
-
-                byte[] lengthPrefix = new byte[2];
-
-                if (!await ReadExactAsync(connection, lengthPrefix, idleCts.Token))
-                    break;
-
-                ushort messageLength = BinaryPrimitives.ReadUInt16BigEndian(lengthPrefix);
-                byte[] messageBuffer = new byte[messageLength];
-
-                if (!await ReadExactAsync(connection, messageBuffer, idleCts.Token))
-                    break;
-
-                bool wasZoneTransfer = await HandleMessageAsync(
-                    messageBuffer,
-                    remoteEndpoint.Address,
-                    connection,
-                    writeLock,
-                    idleCts.Token
-                );
-
-                if (wasZoneTransfer)
-                    break;
-            }
+            await session.RunAsync(
+                (messageBytes, _, sessionToken) =>
+                    HandleMessageAsync(messageBytes, remoteEndpoint.Address, session, sessionToken)
+            );
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -220,19 +200,20 @@ public sealed class TcpDnsListener(
     ///     This method decodes one TCP-framed message and routes it: an AXFR or IXFR query is
     ///     answered here, as a sequence of messages, through <see cref="IZoneTransferService" />;
     ///     every other query is enqueued onto <see cref="DnsQueryProcessingPipeline" />, like a UDP
-    ///     query. A message that does not decode is logged and dropped.
+    ///     query, with the session's reply and drop callbacks. A message that does not decode is
+    ///     logged and dropped.
     /// </summary>
     /// <returns>
-    ///     <see langword="true" /> if the connection just served a zone transfer and should be
-    ///     closed (see <see cref="HandleConnectionAsync" /> for why); <see langword="false" /> for
-    ///     any other message, which leaves the connection open.
+    ///     <see cref="FrameOutcomeEnum.CloseAfterDrain" /> if the connection just served a zone
+    ///     transfer (see <see cref="HandleConnectionAsync" /> for why it closes),
+    ///     <see cref="FrameOutcomeEnum.Enqueued" /> for a query handed to the pipeline, and
+    ///     <see cref="FrameOutcomeEnum.Handled" /> for a message that was discarded.
     /// </returns>
-    private async Task<bool> HandleMessageAsync(
+    private async Task<FrameOutcomeEnum> HandleMessageAsync(
         byte[] messageBytes,
         IPAddress remoteAddress,
-        Socket connection,
-        SemaphoreSlim writeLock,
-        CancellationToken stoppingToken
+        FramedDnsStreamSession session,
+        CancellationToken sessionToken
     )
     {
         DnsMessage request;
@@ -245,13 +226,13 @@ public sealed class TcpDnsListener(
         catch (FormatException exception)
         {
             // A malformed message has no reliable ID to answer with, so it is not answered, as in
-            // DnsQueryProcessingPipeline.
-            logger.LogWarning(
+            // DnsQueryProcessingPipeline. Debug level: a client can send these as fast as it likes.
+            logger.LogDebug(
                 exception,
                 "Discarding a malformed TCP DNS message from {RemoteAddress}.",
                 remoteAddress
             );
-            return false;
+            return FrameOutcomeEnum.Handled;
         }
 
         DnsResourceRecordTypeEnum? questionType =
@@ -265,11 +246,10 @@ public sealed class TcpDnsListener(
                 tsigRecordStartOffset,
                 remoteAddress,
                 questionType.Value,
-                connection,
-                writeLock,
-                stoppingToken
+                session,
+                sessionToken
             );
-            return true;
+            return FrameOutcomeEnum.CloseAfterDrain;
         }
 
         await pipeline.EnqueueAsync(
@@ -277,18 +257,25 @@ public sealed class TcpDnsListener(
                 messageBytes,
                 DnsTransportProtocolEnum.Tcp,
                 remoteAddress,
-                (responseBytes, sendToken) =>
-                    WriteFramedAsync(connection, writeLock, responseBytes, sendToken)
-            ),
-            stoppingToken
+                session.CreateResponder()
+            )
+            {
+                OnDropped = session.CreateDropNotifier(),
+
+                // A frame carries at most 65 535 octets; a larger reply is dropped, never cut.
+                MaxResponseOctets = ushort.MaxValue,
+            },
+            sessionToken
         );
 
-        return false;
+        return FrameOutcomeEnum.Enqueued;
     }
 
     /// <summary>
     ///     This method streams an AXFR or IXFR response back, one length-prefixed message at a
-    ///     time, in the order <see cref="IZoneTransferService" /> yields them.
+    ///     time, in the order <see cref="IZoneTransferService" /> yields them. The messages go
+    ///     through <see cref="FramedDnsStreamSession.SendAsync" />, so a secondary that stops
+    ///     reading is cut by the session's write deadline.
     /// </summary>
     private async Task HandleZoneTransferAsync(
         DnsMessage request,
@@ -296,9 +283,8 @@ public sealed class TcpDnsListener(
         int tsigRecordStartOffset,
         IPAddress remoteAddress,
         DnsResourceRecordTypeEnum questionType,
-        Socket connection,
-        SemaphoreSlim writeLock,
-        CancellationToken stoppingToken
+        FramedDnsStreamSession session,
+        CancellationToken transferToken
     )
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
@@ -316,82 +302,11 @@ public sealed class TcpDnsListener(
 
         IAsyncEnumerable<DnsMessage> responses =
             questionType == DnsResourceRecordTypeEnum.Axfr
-                ? transferService.CreateAxfrResponseAsync(context, stoppingToken)
-                : transferService.CreateIxfrResponseAsync(context, stoppingToken);
+                ? transferService.CreateAxfrResponseAsync(context, transferToken)
+                : transferService.CreateIxfrResponseAsync(context, transferToken);
 
-        await foreach (DnsMessage responseMessage in responses.WithCancellation(stoppingToken))
-            await WriteFramedAsync(
-                connection,
-                writeLock,
-                DnsMessageWriter.Write(responseMessage),
-                stoppingToken
-            );
-    }
-
-    /// <summary>
-    ///     This method writes one length-prefixed message to a connection, one writer at a time:
-    ///     <see cref="DnsQueryProcessingPipeline" /> may finish two pipelined queries on the same
-    ///     connection at once, and interleaved writes would corrupt the framing of both.
-    /// </summary>
-    private static async ValueTask WriteFramedAsync(
-        Socket connection,
-        SemaphoreSlim writeLock,
-        ReadOnlyMemory<byte> messageBytes,
-        CancellationToken stoppingToken
-    )
-    {
-        await writeLock.WaitAsync(stoppingToken);
-
-        try
-        {
-            byte[] lengthPrefix = new byte[2];
-            BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)messageBytes.Length);
-
-            await connection.SendAsync(lengthPrefix, stoppingToken);
-            await connection.SendAsync(messageBytes, stoppingToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
-    }
-
-    /// <summary>
-    ///     This method fills a buffer completely from a socket, or reports a clean disconnect.
-    /// </summary>
-    /// <returns>
-    ///     <see langword="true" /> once <paramref name="buffer" /> is completely filled, or
-    ///     <see langword="false" /> if the connection closed before the first byte of this read
-    ///     arrived (a clean disconnect between messages, not a truncated one).
-    /// </returns>
-    /// <exception cref="IOException">
-    ///     Thrown when the connection closes partway through a read that has started: a truncated
-    ///     stream rather than an ordinary disconnect between messages.
-    /// </exception>
-    private static async ValueTask<bool> ReadExactAsync(
-        Socket connection,
-        byte[] buffer,
-        CancellationToken stoppingToken
-    )
-    {
-        int totalRead = 0;
-
-        while (totalRead < buffer.Length)
-        {
-            int read = await connection.ReceiveAsync(buffer.AsMemory(totalRead), stoppingToken);
-
-            if (read == 0)
-            {
-                if (totalRead == 0)
-                    return false;
-
-                throw new IOException("The connection closed partway through a DNS message.");
-            }
-
-            totalRead += read;
-        }
-
-        return true;
+        await foreach (DnsMessage responseMessage in responses.WithCancellation(transferToken))
+            await session.SendAsync(DnsMessageWriter.Write(responseMessage), transferToken);
     }
 
     /// <inheritdoc />
