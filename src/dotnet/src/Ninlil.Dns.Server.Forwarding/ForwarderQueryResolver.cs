@@ -144,6 +144,12 @@ public sealed class ForwarderQueryResolver(
             ? context.Request
             : EdnsClientSubnetService.AttachToRequest(context.Request, clientSubnetOption);
 
+        // The client's TSIG belongs to the hop between the client and this server: its MAC covers
+        // the request ID and this server's key, which the upstream cannot check, and forwarding it
+        // would leak the key name. The ECS copy above never carries it.
+        if (outboundRequest.Tsig is not null)
+            outboundRequest = WithoutTsig(outboundRequest);
+
         bool validationEnabled = recursiveOptions.CurrentValue.EnableDnssecValidation;
 
         // Only a plain, single-question QUERY is cached: that is all a stub resolver ever sends,
@@ -407,6 +413,31 @@ public sealed class ForwarderQueryResolver(
 
         return validation.State;
     }
+
+    /// <summary>
+    ///     This method copies a request without its TSIG record. The shared
+    ///     <c>DnsQueryContext.Request</c> must keep it, because the pipeline signs the reply from it.
+    /// </summary>
+    private static DnsMessage WithoutTsig(DnsMessage original) =>
+        new()
+        {
+            Id = original.Id,
+            IsResponse = original.IsResponse,
+            Opcode = original.Opcode,
+            IsAuthoritativeAnswer = original.IsAuthoritativeAnswer,
+            IsTruncated = original.IsTruncated,
+            RecursionDesired = original.RecursionDesired,
+            RecursionAvailable = original.RecursionAvailable,
+            AuthenticData = original.AuthenticData,
+            CheckingDisabled = original.CheckingDisabled,
+            ResponseCode = original.ResponseCode,
+            Questions = [.. original.Questions],
+            Answers = [.. original.Answers],
+            AuthorityRecords = [.. original.AuthorityRecords],
+            AdditionalRecords = [.. original.AdditionalRecords],
+            Edns = original.Edns,
+            Tsig = null,
+        };
 
     /// <summary>
     ///     This method builds the negative-answer shape <see cref="IDnssecValidator" /> expects

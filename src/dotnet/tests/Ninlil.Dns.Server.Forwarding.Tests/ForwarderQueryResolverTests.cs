@@ -724,6 +724,42 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
     }
 
     /// <summary>
+    ///     This test checks that a signed client query reaches the upstream without its TSIG record:
+    ///     the signature belongs to the client-to-server hop. The client's own request keeps it,
+    ///     because the pipeline signs the reply from it.
+    /// </summary>
+    [Fact]
+    public async Task TryResolveAsync_WithASignedClientQuery_ForwardsItWithoutTheTsigRecord()
+    {
+        using FakeUdpUpstream upstream = FakeUdpUpstream.Start(
+            BuildPositiveResponse(IPAddress.Parse("192.0.2.10"))
+        );
+        await SeedForwarderAsync($"127.0.0.1:{upstream.Port}");
+        ForwarderQueryResolver resolver = CreateResolver();
+
+        DnsMessage request = BuildQuery(43, "example.com.");
+        request.Tsig = new DnsTsigOptions(
+            DnsName.Parse("client-key.example."),
+            DnsTsigOptions.HmacSha256AlgorithmName,
+            1,
+            300,
+            new byte[32],
+            43,
+            DnsResponseCodeEnum.NoError,
+            []
+        );
+
+        DnsQueryResolution resolution = await resolver.TryResolveAsync(BuildContext(request));
+
+        Assert.True(resolution.IsHandled);
+        Assert.NotNull(upstream.LastQuery);
+        DnsMessage forwarded = DnsMessageReader.Read(upstream.LastQuery);
+        Assert.Null(forwarded.Tsig);
+        Assert.Equal(request.Questions[0].Name, forwarded.Questions[0].Name);
+        Assert.NotNull(request.Tsig);
+    }
+
+    /// <summary>
     ///     This class is a minimal fake upstream DNS server: a UDP socket on an ephemeral loopback
     ///     port that answers every datagram with the same canned response, whatever was asked.
     ///     That is enough to exercise <see cref="PlainForwarderClient" /> and
@@ -736,6 +772,7 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         private readonly Task _loop;
 
         private int _queryCount;
+        private byte[] _lastQuery;
 
         private FakeUdpUpstream(Socket socket, byte[] responseBytes)
         {
@@ -750,6 +787,12 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         ///     cache tests use to show a cached answer never went upstream.
         /// </summary>
         public int QueryCount => Volatile.Read(ref _queryCount);
+
+        /// <summary>
+        ///     This property contains the bytes of the latest query received, or
+        ///     <see langword="null" /> before the first one.
+        /// </summary>
+        public byte[] LastQuery => Volatile.Read(ref _lastQuery);
 
         public static FakeUdpUpstream Start(byte[] responseBytes)
         {
@@ -773,6 +816,7 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                         stoppingToken
                     );
 
+                    Volatile.Write(ref _lastQuery, buffer[..received.ReceivedBytes]);
                     Interlocked.Increment(ref _queryCount);
 
                     // Copy the query's transaction ID (the header's first two octets, RFC 1035
