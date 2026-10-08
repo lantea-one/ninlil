@@ -1364,7 +1364,7 @@
         "tags": [
           "Backup"
         ],
-        "summary": "This action builds a complete backup archive and returns it as a file download\n(`application/octet-stream`, `ninlil-backup-*.ltbk`), not JSON. With\nNinlil.Web.Models.BackupCreateRequest.Passphrase the archive is encrypted with AES-256-GCM;\nwithout one it is unencrypted and marked as such in its header. Returns 400 when the\npassphrase is too short. Requires `backup:read`.",
+        "summary": "This action builds a complete backup archive and returns it as a file download\n(`application/octet-stream`, `ninlil-backup-*.ltbk`), not JSON. With\nNinlil.Web.Models.BackupCreateRequest.Passphrase the archive is encrypted with AES-256-GCM;\nwithout one it is unencrypted and marked as such in its header. Returns 400 when the\npassphrase is only whitespace or too short. Requires `backup:read`.",
         "requestBody": {
           "description": "The passphrase to encrypt the archive with; omit it for no encryption.",
           "content": {
@@ -38066,7 +38066,7 @@
         "properties": {
           "passphrase": {
             "type": "string",
-            "description": "The passphrase to encrypt the archive with, or null or blank for an unencrypted archive\nwhose header marks it as such (no weak or derived default key is used). The server never\nstores the passphrase, so losing it means the archive can never be decrypted.",
+            "description": "The passphrase to encrypt the archive with, or null or empty for an unencrypted archive\nwhose header marks it as such (no weak or derived default key is used). A passphrase of\nonly whitespace is rejected. The server never\nstores the passphrase, so losing it means the archive can never be decrypted.",
             "nullable": true
           }
         },

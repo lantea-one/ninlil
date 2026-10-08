@@ -14,7 +14,7 @@
  */
 export interface BackupCreateRequest { 
     /**
-     * The passphrase to encrypt the archive with, or null or blank for an unencrypted archive whose header marks it as such (no weak or derived default key is used). The server never stores the passphrase, so losing it means the archive can never be decrypted.
+     * The passphrase to encrypt the archive with, or null or empty for an unencrypted archive whose header marks it as such (no weak or derived default key is used). A passphrase of only whitespace is rejected. The server never stores the passphrase, so losing it means the archive can never be decrypted.
      */
     passphrase?: string | null;
 }
