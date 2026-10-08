@@ -10,8 +10,8 @@ public sealed class RaAdvertisedPrefixOptions
 {
     /// <summary>
     ///     This property contains the prefix as an IPv6 address (for example <c>2001:db8:1::</c>).
-    ///     A value that does not parse skips the prefix. Bits beyond <see cref="PrefixLength" /> are
-    ///     neither checked nor cleared; they are sent as written.
+    ///     A value that is not IPv6, or is multicast or link-local, skips the prefix. Bits beyond
+    ///     <see cref="PrefixLength" /> are cleared before sending.
     /// </summary>
     public string Prefix { get; set; }
 

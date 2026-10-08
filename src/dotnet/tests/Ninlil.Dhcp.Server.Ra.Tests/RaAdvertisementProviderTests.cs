@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire.Ra;
@@ -500,6 +501,94 @@ public class RaAdvertisementProviderTests
         RaAdvertisementProvider provider = NewProvider(options);
 
         Assert.NotNull(provider.BuildCurrentAdvertisement());
+    }
+
+    [Fact]
+    public void BuildCurrentAdvertisement_WithEveryKindOfBadValue_BuildsAnEncodableMessageOfTheValidEntries()
+    {
+        RaOptions options = new()
+        {
+            RouterLifetime = TimeSpan.FromDays(1),
+            ReachableTime = TimeSpan.FromHours(2),
+            LinkMtu = 1000,
+            RecursiveDnsServers = ["192.0.2.1", "2001:db8::53"],
+            Prefixes =
+            [
+                new RaAdvertisedPrefixOptions { Prefix = "192.0.2.0", PrefixLength = 24 },
+                new RaAdvertisedPrefixOptions { Prefix = "2001:db8:1::", PrefixLength = 200 },
+                new RaAdvertisedPrefixOptions { Prefix = "2001:db8:2::7", PrefixLength = 64 },
+            ],
+            Routes =
+            [
+                new RaAdvertisedRouteOptions { Prefix = "192.0.2.0", PrefixLength = 24 },
+                new RaAdvertisedRouteOptions { Prefix = "2001:db8:3::9", PrefixLength = 48 },
+            ],
+        };
+        RaAdvertisementProvider provider = NewProvider(options);
+
+        RouterAdvertisementMessage advertisement = provider.BuildCurrentAdvertisement();
+
+        Assert.NotNull(advertisement);
+        Assert.Equal(TimeSpan.FromSeconds(65535), advertisement.RouterLifetime);
+        Assert.Equal(TimeSpan.FromHours(1), advertisement.ReachableTime);
+        Assert.False(advertisement.TryGetMtu(out _));
+
+        Assert.True(
+            advertisement.TryGetRecursiveDnsServers(out _, out IReadOnlyList<IPAddress> dns)
+        );
+        Assert.Equal([IPAddress.Parse("2001:db8::53")], dns);
+
+        Assert.True(advertisement.TryGetPrefixInformationOptions(out var prefixes));
+        RaPrefixInformationOption prefix = Assert.Single(prefixes);
+        Assert.Equal(IPAddress.Parse("2001:db8:2::"), prefix.Prefix);
+
+        Assert.True(advertisement.TryGetRouteInformationOptions(out var routes));
+        RaRouteInformationOption route = Assert.Single(routes);
+        Assert.Equal(IPAddress.Parse("2001:db8:3::"), route.Prefix);
+
+        // The message must encode; this is what threw before the values were checked.
+        Assert.NotEmpty(RaMessageWriter.WriteRouterAdvertisement(advertisement));
+    }
+
+    [Fact]
+    public void BuildCurrentAdvertisement_WithTheSameBadValuesTwice_LogsOneWarning()
+    {
+        CapturingLogger logger = new();
+        RaAdvertisementProvider provider = new(
+            new FixedOptionsMonitor(
+                new RaOptions { RouterLifetime = TimeSpan.FromDays(1), LinkMtu = 1000 }
+            ),
+            logger
+        );
+
+        provider.BuildCurrentAdvertisement();
+        provider.BuildCurrentAdvertisement();
+
+        Assert.Equal(1, logger.Warnings);
+    }
+
+    /// <summary>
+    ///     This class is an <see cref="ILogger{TCategoryName}" /> fake that counts Warning entries.
+    /// </summary>
+    private sealed class CapturingLogger : ILogger<RaAdvertisementProvider>
+    {
+        public int Warnings { get; private set; }
+
+        public IDisposable BeginScope<TState>(TState state) => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter
+        )
+        {
+            if (logLevel == LogLevel.Warning)
+                Warnings++;
+        }
     }
 
     /// <summary>

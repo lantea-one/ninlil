@@ -36,7 +36,7 @@ public sealed class RaOptions
     ///     4861 Section 6.2.1 "AdvDefaultLifetime"). The default, <see cref="TimeSpan.Zero" />,
     ///     means it is not a default router and advertises prefixes only for on-link use and
     ///     SLAAC; set it for this host to act as the gateway. The wire field holds at most 65535
-    ///     seconds.
+    ///     seconds: the settings API rejects a larger value and the provider sends 65535.
     /// </summary>
     public TimeSpan RouterLifetime { get; set; } = TimeSpan.Zero;
 
@@ -51,6 +51,7 @@ public sealed class RaOptions
     ///     This property contains how long a neighbor is assumed reachable after a confirmation
     ///     (RFC 4861 Section 4.2 "Reachable Time", sent in milliseconds). The default,
     ///     <see cref="TimeSpan.Zero" />, means no recommendation, so hosts keep their own default.
+    ///     The maximum is one hour (RFC 4861 Section 6.2.1).
     /// </summary>
     public TimeSpan ReachableTime { get; set; } = TimeSpan.Zero;
 
@@ -64,7 +65,8 @@ public sealed class RaOptions
     /// <summary>
     ///     This property contains the link MTU for the RFC 4861 Section 4.6.4 MTU option, or
     ///     <see langword="null" /> (the default) to send none, which suits an Ethernet link where
-    ///     all hosts already agree on the MTU.
+    ///     all hosts already agree on the MTU. A value under 1280 (RFC 8200 Section 5) is rejected
+    ///     by the settings API and omitted by the provider.
     /// </summary>
     public uint? LinkMtu { get; set; }
 
@@ -79,8 +81,8 @@ public sealed class RaOptions
     ///     This property contains the DNS resolver addresses for the RFC 8106 Section 5.1 RDNSS
     ///     option, which gives SLAAC hosts DNS servers (SLAAC itself carries none). Empty (the
     ///     default) sends no RDNSS option, for example when <see cref="OtherConfiguration" /> sends
-    ///     hosts to DHCPv6 instead. Entries that do not parse are skipped; an IPv4 address makes
-    ///     building the advertisement throw.
+    ///     hosts to DHCPv6 instead. The settings API accepts IPv6 addresses only (at most 127); the
+    ///     provider skips any other entry (see <see cref="RaContentRules" />).
     /// </summary>
     public List<string> RecursiveDnsServers { get; set; } = [];
 

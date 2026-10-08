@@ -739,6 +739,9 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
+        TimeSpan effectiveMin = raProtocolOptions.Value.MinRouterAdvertisementInterval;
+        TimeSpan effectiveMax = raProtocolOptions.Value.MaxRouterAdvertisementInterval;
+        bool intervalPatched = false;
 
         if (patch.TryGetMergePatchField("enable", out JsonElement enable))
             settings.Add(
@@ -759,6 +762,9 @@ public class DhcpSettingsController(
             if (!TryParsePositiveTimeSpan(minInterval, out TimeSpan parsed, out string error))
                 throw new ValidationException(error);
 
+            effectiveMin = parsed;
+            intervalPatched = true;
+
             settings.Add(
                 new PresetConfigurationSetting(
                     RaProtocolOptions.SectionName,
@@ -778,6 +784,9 @@ public class DhcpSettingsController(
             if (!TryParsePositiveTimeSpan(maxInterval, out TimeSpan parsed, out string error))
                 throw new ValidationException(error);
 
+            effectiveMax = parsed;
+            intervalPatched = true;
+
             settings.Add(
                 new PresetConfigurationSetting(
                     RaProtocolOptions.SectionName,
@@ -786,6 +795,13 @@ public class DhcpSettingsController(
                 )
             );
         }
+
+        // A field left out of the patch is compared at its current value.
+        if (
+            intervalPatched
+            && RaContentRules.CheckIntervals(effectiveMin, effectiveMax) is { } intervalError
+        )
+            throw new ValidationException(intervalError);
 
         return await ApplyAsync(settings);
     }
@@ -886,6 +902,9 @@ public class DhcpSettingsController(
             if (!TryParseNonNegativeTimeSpan(routerLifetime, out TimeSpan parsed, out string error))
                 throw new ValidationException(error);
 
+            if (RaContentRules.CheckRouterLifetime(parsed) is { } rangeError)
+                throw new ValidationException(rangeError);
+
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
@@ -917,6 +936,9 @@ public class DhcpSettingsController(
             if (!TryParseNonNegativeTimeSpan(reachableTime, out TimeSpan parsed, out string error))
                 throw new ValidationException(error);
 
+            if (RaContentRules.CheckReachableTime(parsed) is { } rangeError)
+                throw new ValidationException(rangeError);
+
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
@@ -931,6 +953,9 @@ public class DhcpSettingsController(
             if (!TryParseNonNegativeTimeSpan(retransTimer, out TimeSpan parsed, out string error))
                 throw new ValidationException(error);
 
+            if (RaContentRules.CheckRetransTimer(parsed) is { } rangeError)
+                throw new ValidationException(rangeError);
+
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
@@ -941,15 +966,21 @@ public class DhcpSettingsController(
         }
 
         if (patch.TryGetMergePatchField("linkMtu", out JsonElement linkMtuElement))
+        {
+            uint? linkMtu =
+                linkMtuElement.ValueKind == JsonValueKind.Null ? null : linkMtuElement.GetUInt32();
+
+            if (RaContentRules.CheckLinkMtu(linkMtu) is { } mtuError)
+                throw new ValidationException(mtuError);
+
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.LinkMtu),
-                    linkMtuElement.ValueKind == JsonValueKind.Null
-                        ? null
-                        : linkMtuElement.GetUInt32()
+                    linkMtu
                 )
             );
+        }
 
         if (patch.TryGetMergePatchField("recursiveDnsServers", out JsonElement recursiveDnsServers))
         {
@@ -962,11 +993,14 @@ public class DhcpSettingsController(
             foreach (JsonElement item in recursiveDnsServers.EnumerateArray())
             {
                 string address = item.GetString();
-                if (!IPAddress.TryParse(address, out _))
-                    throw new ValidationException($"'{address}' is not a valid IP address.");
+                if (RaContentRules.CheckRecursiveDnsServer(address) is { } addressError)
+                    throw new ValidationException(addressError);
 
                 addresses.Add(address);
             }
+
+            if (RaContentRules.CheckRecursiveDnsServerCount(addresses.Count) is { } countError)
+                throw new ValidationException(countError);
 
             settings.Add(
                 new PresetConfigurationSetting(
@@ -1092,11 +1126,8 @@ public class DhcpSettingsController(
 
                 // A prefix length of 0 advertises only a route preference with no prefix, the one
                 // case a route has no address to check.
-                if (
-                    prefixLength > 0
-                    && (string.IsNullOrWhiteSpace(prefix) || !IPAddress.TryParse(prefix, out _))
-                )
-                    throw new ValidationException($"'{prefix}' is not a valid IP address.");
+                if (RaContentRules.CheckRoutePrefix(prefix, prefixLength) is { } prefixError)
+                    throw new ValidationException(prefixError);
 
                 string preferenceText =
                     routeElement.TryGetProperty("preference", out JsonElement preferenceElement)
@@ -1224,6 +1255,13 @@ public class DhcpSettingsController(
         )
             throw new ValidationException($"'{interfaceName}': {routerLifetimeError}");
 
+        if (
+            routerLifetime is { } routerLifetimeValue
+            && RaContentRules.CheckRouterLifetime(routerLifetimeValue)
+                is { } routerLifetimeRangeError
+        )
+            throw new ValidationException($"'{interfaceName}': {routerLifetimeRangeError}");
+
         byte? currentHopLimit = null;
         if (
             overrideElement.TryGetProperty(
@@ -1253,6 +1291,12 @@ public class DhcpSettingsController(
             throw new ValidationException($"'{interfaceName}': {reachableTimeError}");
 
         if (
+            reachableTime is { } reachableTimeValue
+            && RaContentRules.CheckReachableTime(reachableTimeValue) is { } reachableTimeRangeError
+        )
+            throw new ValidationException($"'{interfaceName}': {reachableTimeRangeError}");
+
+        if (
             !TryParseOptionalNonNegativeTimeSpan(
                 overrideElement,
                 "retransTimer",
@@ -1262,12 +1306,21 @@ public class DhcpSettingsController(
         )
             throw new ValidationException($"'{interfaceName}': {retransTimerError}");
 
+        if (
+            retransTimer is { } retransTimerValue
+            && RaContentRules.CheckRetransTimer(retransTimerValue) is { } retransTimerRangeError
+        )
+            throw new ValidationException($"'{interfaceName}': {retransTimerRangeError}");
+
         uint? linkMtu = null;
         if (
             overrideElement.TryGetProperty("linkMtu", out JsonElement linkMtuElement)
             && linkMtuElement.ValueKind != JsonValueKind.Null
         )
             linkMtu = linkMtuElement.GetUInt32();
+
+        if (RaContentRules.CheckLinkMtu(linkMtu) is { } linkMtuError)
+            throw new ValidationException($"'{interfaceName}': {linkMtuError}");
 
         List<string> recursiveDnsServers = null;
         if (
@@ -1288,13 +1341,17 @@ public class DhcpSettingsController(
             foreach (JsonElement item in recursiveDnsServersElement.EnumerateArray())
             {
                 string address = item.GetString();
-                if (!IPAddress.TryParse(address, out _))
-                    throw new ValidationException(
-                        $"'{interfaceName}': '{address}' is not a valid IP address."
-                    );
+                if (RaContentRules.CheckRecursiveDnsServer(address) is { } addressError)
+                    throw new ValidationException($"'{interfaceName}': {addressError}");
 
                 recursiveDnsServers.Add(address);
             }
+
+            if (
+                RaContentRules.CheckRecursiveDnsServerCount(recursiveDnsServers.Count) is
+                { } countError
+            )
+                throw new ValidationException($"'{interfaceName}': {countError}");
         }
 
         if (

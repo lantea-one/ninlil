@@ -14,8 +14,8 @@ public sealed class RaAdvertisedRouteOptions
     /// <summary>
     ///     This property contains the route's prefix as an IPv6 address (for example
     ///     <c>2001:db8:5::</c>). It is ignored when <see cref="PrefixLength" /> is <c>0</c>, which
-    ///     sets only a preference for the default route. A value that does not parse skips the
-    ///     route.
+    ///     sets only a preference for the default route. A value that is not IPv6 or is multicast
+    ///     skips the route. Bits beyond <see cref="PrefixLength" /> are cleared before sending.
     /// </summary>
     public string Prefix { get; set; }
 

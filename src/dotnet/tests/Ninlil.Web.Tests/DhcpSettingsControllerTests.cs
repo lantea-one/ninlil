@@ -415,6 +415,144 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(1, 2)]
+    [InlineData(500, 600)]
+    public async Task PatchRaProtocol_WithAnIntervalPairOutsideTheRfcRules_ReturnsBadRequest(
+        int minSeconds,
+        int maxSeconds
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        // The 500/600 pair breaks "minimum at most 0.75 times maximum". A patch that sets only
+        // the minimum is compared with the stored maximum (600 s by default).
+        object body =
+            minSeconds == 500
+                ? new
+                {
+                    minRouterAdvertisementInterval = TimeSpan.FromSeconds(minSeconds).ToString(),
+                }
+                : new
+                {
+                    minRouterAdvertisementInterval = TimeSpan.FromSeconds(minSeconds).ToString(),
+                    maxRouterAdvertisementInterval = TimeSpan.FromSeconds(maxSeconds).ToString(),
+                };
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/ra-protocol", body)
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchRaProtocol_WithAValidIntervalPair_Succeeds()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/ra-protocol",
+                new
+                {
+                    minRouterAdvertisementInterval = "00:03:20",
+                    maxRouterAdvertisementInterval = "00:10:00",
+                }
+            )
+        );
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Theory]
+    [InlineData("routerLifetime", "1.00:00:00")]
+    [InlineData("reachableTime", "02:00:00")]
+    [InlineData("recursiveDnsServers", new[] { "192.0.2.1" })]
+    [InlineData("linkMtu", 1000)]
+    public async Task PatchRa_WithAValueTheAdvertisementCannotCarry_ReturnsBadRequest(
+        string field,
+        object value
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/ra",
+                new Dictionary<string, object> { [field] = value }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchRa_WithAnIpv4RoutePrefix_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/ra",
+                new { routes = new object[] { new { prefix = "192.0.2.0", prefixLength = 24 } } }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchRa_WithAnOverrideHoldingAnIpv4RdnssAddress_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/ra",
+                new
+                {
+                    interfaceOverrides = new object[]
+                    {
+                        new { interfaceName = "eth7", recursiveDnsServers = new[] { "192.0.2.1" } },
+                    },
+                }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchRa_WithValuesInsideTheLimits_Succeeds()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/ra",
+                new
+                {
+                    routerLifetime = "18:12:15",
+                    reachableTime = "01:00:00",
+                    linkMtu = 1280,
+                    recursiveDnsServers = new[] { "2001:db8::53" },
+                    routes = new object[] { new { prefix = "fe80::", prefixLength = 10 } },
+                    interfaceOverrides = new object[]
+                    {
+                        new
+                        {
+                            interfaceName = "eth8",
+                            recursiveDnsServers = new[] { "2001:db8::54" },
+                        },
+                    },
+                }
+            )
+        );
+
+        response.EnsureSuccessStatusCode();
+    }
+
     [Fact]
     public async Task GetRa_ReturnsTheCompiledInDefaults()
     {

@@ -28,14 +28,15 @@ public sealed class RaProtocolOptions
     ///     an interface (RFC 4861 Section 6.2.1's "MinRtrAdvInterval"). Each interval is chosen at
     ///     random between this and <see cref="MaxRouterAdvertisementInterval" /> (Section 6.2.4) so
     ///     routers on a link do not synchronize. The default, 198 seconds, is the RFC default of a
-    ///     third of the maximum.
+    ///     third of the maximum. The settings API requires at least 3 seconds and at most 0.75
+    ///     times the maximum.
     /// </summary>
     public TimeSpan MinRouterAdvertisementInterval { get; set; } = TimeSpan.FromSeconds(198);
 
     /// <summary>
     ///     This property contains the longest interval between two unsolicited advertisements on
     ///     an interface (RFC 4861 Section 6.2.1's "MaxRtrAdvInterval"). The default, 600 seconds,
-    ///     is the RFC default.
+    ///     is the RFC default. The settings API requires 4 to 65535 seconds.
     /// </summary>
     public TimeSpan MaxRouterAdvertisementInterval { get; set; } = TimeSpan.FromSeconds(600);
 }
