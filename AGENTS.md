@@ -181,8 +181,9 @@ page](./README.md#frontend-adding-a-feature-page).
 - C#: file-scoped namespace preceded by the line `// Define our namespace.`; `using` directives at
   the top, outside it; nullable reference types off.
 - Cancellation tokens are named `stoppingToken`.
-- Private fields are camelCase without a leading underscore; explicit types unless the type is
-  apparent (`.editorconfig`).
+- Private fields are usually camelCase without a leading underscore, but about 100 files use
+  `_camelCase`; match the file you are editing. Explicit types unless the type is apparent
+  (`.editorconfig`).
 - Options classes, controllers and tests follow the shape of an existing sibling; copy it rather
   than invent a new one.
 - Every type and public member has an XML doc comment (`///`); TypeScript uses TSDoc/JSDoc
