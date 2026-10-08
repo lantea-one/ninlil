@@ -342,6 +342,57 @@ public class RecursiveCacheTests
     }
 
     [Fact]
+    public void TryGetStaleSetsTheTtlOfEveryRecordToThirtySeconds()
+    {
+        RecursiveCache cache = CreateCache();
+        DnsName name = DnsName.Parse("example.com");
+
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 0)],
+            [BuildARecord(name, 0)]
+        );
+
+        RecursiveCacheEntry stale = cache.TryGetStale(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            TimeSpan.FromHours(1)
+        );
+
+        Assert.All(stale.Records, record => Assert.Equal(30u, record.TimeToLive));
+        Assert.All(stale.DnssecRecords, record => Assert.Equal(30u, record.TimeToLive));
+    }
+
+    [Fact]
+    public void TryGetStaleSetsTheSoaTtlOfANegativeEntryToThirtySeconds()
+    {
+        RecursiveCache cache = CreateCache();
+        DnsName name = DnsName.Parse("missing.example.com");
+
+        cache.StoreNegative(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            DnsResponseCodeEnum.NxDomain,
+            BuildSoaRecord(DnsName.Parse("example.com"), 0),
+            []
+        );
+
+        RecursiveCacheEntry stale = cache.TryGetStale(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            TimeSpan.FromHours(1)
+        );
+
+        Assert.NotNull(stale);
+        Assert.Equal(30u, stale.Soa.TimeToLive);
+    }
+
+    [Fact]
     public void TryGetStaleReturnsNullOnceAnEntryHasAgedPastMaxStaleAge()
     {
         RecursiveCache cache = CreateCache();

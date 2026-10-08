@@ -544,10 +544,10 @@ public class IterativeResolutionEngineTests
     }
 
     [Fact]
-    public async Task ResolveAsyncReturnsServFailWithoutOverflowingWhenNoNameServerAddressIsCached()
+    public async Task ResolveAsyncReturnsServFailWithoutOverflowingWhenAnUnprimedCacheMeetsRootServersThatDoNotAnswer()
     {
-        // An unprimed cache: the engine falls back to the root hint names, and every root
-        // server's address lookup needs the root servers again.
+        // An unprimed cache: the engine falls back to the root hints, with their addresses, and
+        // asks them. None answers, so the resolution ends in SERVFAIL without recursing.
         RecursiveServerOptions options = new() { EnableQnameMinimization = false };
         StaticOptionsMonitor<RecursiveServerOptions> optionsMonitor = new(options);
         RecursiveCache cache = new(optionsMonitor, new RecordingEventPublisher());
@@ -562,7 +562,7 @@ public class IterativeResolutionEngineTests
         );
 
         Assert.Equal(RecursiveResolutionStatusEnum.ServFail, result.Status);
-        Assert.Equal(0, client.QueryCount);
+        Assert.Equal(RootHints.Servers.Sum(server => server.Addresses.Count), client.QueryCount);
     }
 
     /// <summary>
