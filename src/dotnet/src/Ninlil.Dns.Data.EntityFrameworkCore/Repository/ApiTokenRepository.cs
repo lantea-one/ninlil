@@ -19,4 +19,19 @@ public class ApiTokenRepository(NinlilDnsContext context)
         string tokenHash,
         CancellationToken stoppingToken = default
     ) => Set.FirstOrDefaultAsync(token => token.TokenHash == tokenHash, stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<bool> TryConsumeAsync(
+        Guid tokenId,
+        DateTimeOffset consumedAtUtc,
+        CancellationToken stoppingToken = default
+    ) =>
+        // A single conditional UPDATE: the database serializes concurrent writers, so only one
+        // sees ConsumedAtUtc still null and reports one affected row. Every supported provider
+        // evaluates the WHERE and the SET in the same statement.
+        await Set.Where(token => token.Id == tokenId && token.ConsumedAtUtc == null)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(token => token.ConsumedAtUtc, consumedAtUtc),
+                stoppingToken
+            ) == 1;
 }

@@ -14,8 +14,8 @@ namespace Ninlil.Dns.Identity.Authentication;
 
 /// <summary>
 ///     This class authenticates a request that presents an API token instead of a JWT, for
-///     example <c>Authorization: ApiToken 7f2e...</c>. It validates (and, for a one-time token,
-///     consumes) the token through <see cref="IApiTokenService" />, then builds the same claims a
+///     example <c>Authorization: ApiToken 7f2e...</c>. It validates the token and, once the owning
+///     account is accepted, consumes a one-time token through <see cref="IApiTokenService" />, then builds the same claims a
 ///     JWT request carries through <see cref="IUserClaimsBuilder" />, so authorization does not
 ///     depend on which credential was used.
 /// </summary>
@@ -60,10 +60,19 @@ public class ApiTokenAuthenticationHandler(
 
         UserEntity user = await userRepository.GetByIdAsync(token.UserId);
 
-        if (user is null or { IsDisabled: true })
+        if (
+            user is null
+            || user.IsDisabled
+            || (user.LockoutEnabled && user.LockoutEndUtc > DateTimeOffset.UtcNow)
+        )
             return AuthenticateResult.Fail(
-                "The API token's owning account no longer exists or is disabled."
+                "The API token's owning account no longer exists, is disabled or is locked out."
             );
+
+        // Consume only now that the account is accepted, so a rejected request leaves a one-time
+        // token usable. A lost race with another request presenting the same token fails here.
+        if (!await apiTokenService.ConsumeAsync(token))
+            return AuthenticateResult.Fail("The API token is invalid, expired, or revoked.");
 
         ClaimsIdentity identity = new(await claimsBuilder.BuildClaimsAsync(user), Scheme.Name);
         ClaimsPrincipal principal = new(identity);

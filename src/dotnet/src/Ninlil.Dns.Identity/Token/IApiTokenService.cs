@@ -32,7 +32,7 @@ public interface IApiTokenService
 
     /// <summary>
     ///     This method issues a one-time API token, which is consumed the first time
-    ///     <see cref="ValidateAsync" /> accepts it.
+    ///     <see cref="ConsumeAsync" /> accepts it.
     /// </summary>
     /// <param name="userId">The identifier of the user the token authenticates as.</param>
     /// <param name="name">A name describing what the token is for.</param>
@@ -50,8 +50,9 @@ public interface IApiTokenService
     );
 
     /// <summary>
-    ///     This method validates an API token and, for a one-time token, consumes it in the same
-    ///     operation.
+    ///     This method checks an API token without consuming it. A caller that accepts the request
+    ///     must then call <see cref="ConsumeAsync" />, after validating the owning account, because
+    ///     a one-time token is spent only by <see cref="ConsumeAsync" />.
     /// </summary>
     /// <param name="rawToken">The raw token value presented by the caller.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -60,6 +61,18 @@ public interface IApiTokenService
     ///     match or the token is expired, revoked or (for a one-time token) already consumed.
     /// </returns>
     Task<ApiTokenEntity> ValidateAsync(string rawToken, CancellationToken stoppingToken = default);
+
+    /// <summary>
+    ///     This method spends a validated token. A one-time token is marked consumed atomically;
+    ///     a static token is unaffected.
+    /// </summary>
+    /// <param name="token">The token <see cref="ValidateAsync" /> returned.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>
+    ///     <see langword="false" /> if a concurrent request consumed the one-time token first, in
+    ///     which case the caller must reject the request; otherwise <see langword="true" />.
+    /// </returns>
+    Task<bool> ConsumeAsync(ApiTokenEntity token, CancellationToken stoppingToken = default);
 
     /// <summary>
     ///     This method revokes an API token, so it can no longer be used to authenticate.

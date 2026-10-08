@@ -81,18 +81,23 @@ public class ApiTokenService(IApiTokenRepository apiTokenRepository, IUnitOfWork
         if (token.ExpiresAtUtc is { } expiresAtUtc && expiresAtUtc <= DateTimeOffset.UtcNow)
             return null;
 
-        if (token.Type == ApiTokenTypeEnum.OneTime)
-        {
-            if (token.ConsumedAtUtc is not null)
-                return null;
-
-            // Validating a one-time token consumes it.
-            token.ConsumedAtUtc = DateTimeOffset.UtcNow;
-            apiTokenRepository.Update(token);
-            await unitOfWork.SaveChangesAsync(stoppingToken);
-        }
+        // Validation does not consume a one-time token: the caller checks the owning account
+        // first and then calls ConsumeAsync, so a request rejected for account reasons leaves the
+        // token usable.
+        if (token.Type == ApiTokenTypeEnum.OneTime && token.ConsumedAtUtc is not null)
+            return null;
 
         return token;
+    }
+
+    /// <inheritdoc />
+    public Task<bool> ConsumeAsync(ApiTokenEntity token, CancellationToken stoppingToken = default)
+    {
+        if (token.Type != ApiTokenTypeEnum.OneTime)
+            return Task.FromResult(true);
+
+        // The repository makes this atomic, so two racing requests cannot both succeed.
+        return apiTokenRepository.TryConsumeAsync(token.Id, DateTimeOffset.UtcNow, stoppingToken);
     }
 
     /// <inheritdoc />

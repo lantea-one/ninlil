@@ -20,4 +20,22 @@ public class ApiTokenMongoRepository(
         string tokenHash,
         CancellationToken stoppingToken = default
     ) => Collection.Find(token => token.TokenHash == tokenHash).FirstOrDefaultAsync(stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<bool> TryConsumeAsync(
+        Guid tokenId,
+        DateTimeOffset consumedAtUtc,
+        CancellationToken stoppingToken = default
+    )
+    {
+        // FindOneAndUpdate is atomic per document: of several callers, only one matches the
+        // ConsumedAtUtc == null filter and gets a document back.
+        ApiTokenEntity consumed = await Collection.FindOneAndUpdateAsync(
+            token => token.Id == tokenId && token.ConsumedAtUtc == null,
+            Builders<ApiTokenEntity>.Update.Set(token => token.ConsumedAtUtc, consumedAtUtc),
+            cancellationToken: stoppingToken
+        );
+
+        return consumed is not null;
+    }
 }
