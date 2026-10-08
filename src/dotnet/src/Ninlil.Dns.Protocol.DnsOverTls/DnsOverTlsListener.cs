@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -94,6 +93,13 @@ public sealed class DnsOverTlsListener(
     ///     plus a margin. It is fixed rather than configurable.
     /// </summary>
     private static readonly TimeSpan ProxyProtocolHeaderTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    ///     This field contains the longest a client may take to complete the TLS handshake. It is
+    ///     Kestrel's default <c>HandshakeTimeout</c>; a shorter idle timeout lowers it (see
+    ///     <see cref="HandshakeTimeoutFor" />).
+    /// </summary>
+    private static readonly TimeSpan MaxHandshakeTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
     ///     This field contains the individual addresses trusted to send a PROXY protocol header,
@@ -192,15 +198,19 @@ public sealed class DnsOverTlsListener(
     /// <summary>
     ///     This method serves one accepted connection: it reads a PROXY protocol header if the peer
     ///     is trusted to send one (see <see cref="TryReadProxyProtocolHeaderAsync" />), completes the
-    ///     TLS handshake, then reads and answers each length-prefixed query until the idle timeout
-    ///     passes, the client disconnects, or a zone transfer completes. The handshake itself has
-    ///     no timeout of its own; only the host's stopping token ends it.
+    ///     TLS handshake within <see cref="HandshakeTimeoutFor" />, then hands the encrypted stream
+    ///     to a <see cref="FramedDnsStreamSession" />. The session reads each length-prefixed query
+    ///     and closes the connection when <see cref="DnsOverTlsOptions.IdleTimeout" /> passes with
+    ///     no complete message, the client disconnects, a write to the client misses that same
+    ///     timeout, or a zone transfer on it completes. It owns the per-connection limits (16
+    ///     queries in flight, one writer task); a query still outstanding when the connection goes
+    ///     idle is answered first. A client that connects and never completes the handshake would
+    ///     otherwise hold a connection slot until shutdown, so the handshake has its own deadline.
     /// </summary>
     private async Task HandleConnectionAsync(Socket connection, CancellationToken stoppingToken)
     {
         IPEndPoint remoteEndpoint = (IPEndPoint)connection.RemoteEndPoint;
         IPAddress remoteAddress = remoteEndpoint.Address;
-        SemaphoreSlim writeLock = new(1, 1);
         NetworkStream networkStream = new(connection, ownsSocket: true);
         SslStream sslStream = null;
 
@@ -219,49 +229,52 @@ public sealed class DnsOverTlsListener(
                 return;
 
             sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
+            TimeSpan idleTimeout = options.CurrentValue.IdleTimeout;
 
-            await sslStream.AuthenticateAsServerAsync(
-                new SslServerAuthenticationOptions
-                {
-                    ServerCertificateSelectionCallback = (_, _) => _certificateProvider.Current,
-                    ClientCertificateRequired = false,
-                    EnabledSslProtocols = options.CurrentValue.Certificate.AllowedProtocols,
-                },
-                stoppingToken
-            );
-
-            using CancellationTokenSource idleCts = CancellationTokenSource.CreateLinkedTokenSource(
-                stoppingToken
-            );
-
-            while (true)
+            using (
+                CancellationTokenSource handshakeCts =
+                    CancellationTokenSource.CreateLinkedTokenSource(stoppingToken)
+            )
             {
-                idleCts.CancelAfter(options.CurrentValue.IdleTimeout);
+                handshakeCts.CancelAfter(HandshakeTimeoutFor(idleTimeout));
 
-                byte[] lengthPrefix = new byte[2];
-
-                if (!await ReadExactAsync(sslStream, lengthPrefix, idleCts.Token))
-                    break;
-
-                ushort messageLength = BinaryPrimitives.ReadUInt16BigEndian(lengthPrefix);
-                byte[] messageBuffer = new byte[messageLength];
-
-                if (!await ReadExactAsync(sslStream, messageBuffer, idleCts.Token))
-                    break;
-
-                bool wasZoneTransfer = await HandleMessageAsync(
-                    messageBuffer,
-                    remoteAddress,
-                    sslStream,
-                    writeLock,
-                    idleCts.Token
-                );
-
-                // A completed zone transfer closes the connection; see
-                // Ninlil.Dns.Protocol.Plain.TcpDnsListener.HandleConnectionAsync for why.
-                if (wasZoneTransfer)
-                    break;
+                try
+                {
+                    await sslStream.AuthenticateAsServerAsync(
+                        new SslServerAuthenticationOptions
+                        {
+                            ServerCertificateSelectionCallback = (_, _) =>
+                                _certificateProvider.Current,
+                            ClientCertificateRequired = false,
+                            EnabledSslProtocols = options.CurrentValue.Certificate.AllowedProtocols,
+                        },
+                        handshakeCts.Token
+                    );
+                }
+                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogDebug(
+                        "Closing a DNS-over-TLS connection from {Endpoint}: the TLS handshake did not finish in time.",
+                        remoteEndpoint
+                    );
+                    return;
+                }
             }
+
+            FramedDnsStreamSession session = new(
+                sslStream,
+                remoteAddress,
+                idleTimeout,
+                logger,
+                stoppingToken
+            );
+
+            // A completed zone transfer closes the connection; see
+            // Ninlil.Dns.Protocol.Plain.TcpDnsListener.HandleConnectionAsync for why.
+            await session.RunAsync(
+                (messageBytes, _, sessionToken) =>
+                    HandleMessageAsync(messageBytes, remoteAddress, session, sessionToken)
+            );
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -283,23 +296,31 @@ public sealed class DnsOverTlsListener(
     }
 
     /// <summary>
+    ///     This method gives the time a client has to complete the TLS handshake: the smaller of
+    ///     <see cref="MaxHandshakeTimeout" /> and the idle timeout, so the handshake is never
+    ///     allowed longer than a silent connection would be.
+    /// </summary>
+    private static TimeSpan HandshakeTimeoutFor(TimeSpan idleTimeout) =>
+        idleTimeout < MaxHandshakeTimeout ? idleTimeout : MaxHandshakeTimeout;
+
+    /// <summary>
     ///     This method decodes one framed message and routes it: an AXFR or IXFR query is answered
     ///     here, as a sequence of messages, through <see cref="IZoneTransferService" />; every other
     ///     query is enqueued onto <see cref="DnsQueryProcessingPipeline" />, as in
-    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>. A message that does not decode is
-    ///     logged and dropped.
+    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>, with the session's reply and drop
+    ///     callbacks. A message that does not decode is logged and dropped.
     /// </summary>
     /// <returns>
-    ///     <see langword="true" /> if the connection just served a zone transfer and should be
-    ///     closed (see <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener.HandleConnectionAsync</c> for
-    ///     why).
+    ///     <see cref="FrameOutcomeEnum.CloseAfterDrain" /> if the connection just served a zone
+    ///     transfer (see <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener.HandleConnectionAsync</c> for
+    ///     why it closes), <see cref="FrameOutcomeEnum.Enqueued" /> for a query handed to the
+    ///     pipeline, and <see cref="FrameOutcomeEnum.Handled" /> for a message that was discarded.
     /// </returns>
-    private async Task<bool> HandleMessageAsync(
+    private async Task<FrameOutcomeEnum> HandleMessageAsync(
         byte[] messageBytes,
         IPAddress remoteAddress,
-        SslStream sslStream,
-        SemaphoreSlim writeLock,
-        CancellationToken stoppingToken
+        FramedDnsStreamSession session,
+        CancellationToken sessionToken
     )
     {
         DnsMessage request;
@@ -312,13 +333,13 @@ public sealed class DnsOverTlsListener(
         catch (FormatException exception)
         {
             // A malformed message has no reliable ID to answer with, so it is not answered, as in
-            // DnsQueryProcessingPipeline.
-            logger.LogWarning(
+            // DnsQueryProcessingPipeline. Debug level: a client can send these as fast as it likes.
+            logger.LogDebug(
                 exception,
                 "Discarding a malformed DNS-over-TLS message from {RemoteAddress}.",
                 remoteAddress
             );
-            return false;
+            return FrameOutcomeEnum.Handled;
         }
 
         DnsResourceRecordTypeEnum? questionType =
@@ -332,11 +353,9 @@ public sealed class DnsOverTlsListener(
                 tsigRecordStartOffset,
                 remoteAddress,
                 questionType.Value,
-                sslStream,
-                writeLock,
-                stoppingToken
+                session
             );
-            return true;
+            return FrameOutcomeEnum.CloseAfterDrain;
         }
 
         await pipeline.EnqueueAsync(
@@ -344,20 +363,28 @@ public sealed class DnsOverTlsListener(
                 messageBytes,
                 DnsTransportProtocolEnum.Tls,
                 remoteAddress,
-                (responseBytes, sendToken) =>
-                    WriteFramedAsync(sslStream, writeLock, responseBytes, sendToken)
-            ),
-            stoppingToken
+                session.CreateResponder()
+            )
+            {
+                OnDropped = session.CreateDropNotifier(),
+
+                // A frame carries at most 65 535 octets; a larger reply is dropped, never cut.
+                MaxResponseOctets = ushort.MaxValue,
+            },
+            sessionToken
         );
 
-        return false;
+        return FrameOutcomeEnum.Enqueued;
     }
 
     /// <summary>
-    ///     This method streams an AXFR or IXFR response back over the <see cref="SslStream" />, one
+    ///     This method streams an AXFR or IXFR response back over the TLS session, one
     ///     length-prefixed message at a time, in the order <see cref="IZoneTransferService" /> yields
     ///     them. It is the XFR-over-TLS (RFC 9103) counterpart of the method of the same name in
-    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>.
+    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>: the messages go through
+    ///     <see cref="FramedDnsStreamSession.SendAsync" />, so a secondary that stops reading is cut
+    ///     by the session's write deadline, and the transfer is limited to
+    ///     <see cref="FramedDnsStreamSession.MaxTransferDuration" /> rather than the idle timeout.
     /// </summary>
     private async Task HandleZoneTransferAsync(
         DnsMessage request,
@@ -365,11 +392,15 @@ public sealed class DnsOverTlsListener(
         int tsigRecordStartOffset,
         IPAddress remoteAddress,
         DnsResourceRecordTypeEnum questionType,
-        SslStream sslStream,
-        SemaphoreSlim writeLock,
-        CancellationToken stoppingToken
+        FramedDnsStreamSession session
     )
     {
+        // A transfer is bounded by its own two-hour limit, not by the read-idle timeout.
+        using CancellationTokenSource transferCts = session.CreateTransferTokenSource(
+            FramedDnsStreamSession.MaxTransferDuration
+        );
+        CancellationToken transferToken = transferCts.Token;
+
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneTransferService transferService =
             scope.ServiceProvider.GetRequiredService<IZoneTransferService>();
@@ -385,16 +416,11 @@ public sealed class DnsOverTlsListener(
 
         IAsyncEnumerable<DnsMessage> responses =
             questionType == DnsResourceRecordTypeEnum.Axfr
-                ? transferService.CreateAxfrResponseAsync(context, stoppingToken)
-                : transferService.CreateIxfrResponseAsync(context, stoppingToken);
+                ? transferService.CreateAxfrResponseAsync(context, transferToken)
+                : transferService.CreateIxfrResponseAsync(context, transferToken);
 
-        await foreach (DnsMessage responseMessage in responses.WithCancellation(stoppingToken))
-            await WriteFramedAsync(
-                sslStream,
-                writeLock,
-                DnsMessageWriter.Write(responseMessage),
-                stoppingToken
-            );
+        await foreach (DnsMessage responseMessage in responses.WithCancellation(transferToken))
+            await session.SendAsync(DnsMessageWriter.Write(responseMessage), transferToken);
     }
 
     /// <summary>
@@ -467,71 +493,6 @@ public sealed class DnsOverTlsListener(
 
         if (headerResult.ClaimedSourceAddress is not null)
             applyClaimedAddress(headerResult.ClaimedSourceAddress);
-
-        return true;
-    }
-
-    /// <summary>
-    ///     This method writes one length-prefixed message to a connection, one writer at a time:
-    ///     <see cref="DnsQueryProcessingPipeline" /> may finish two pipelined queries on the same
-    ///     connection at once, and interleaved writes would corrupt the framing of both.
-    /// </summary>
-    private static async ValueTask WriteFramedAsync(
-        Stream stream,
-        SemaphoreSlim writeLock,
-        ReadOnlyMemory<byte> messageBytes,
-        CancellationToken stoppingToken
-    )
-    {
-        await writeLock.WaitAsync(stoppingToken);
-
-        try
-        {
-            byte[] lengthPrefix = new byte[2];
-            BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)messageBytes.Length);
-
-            await stream.WriteAsync(lengthPrefix, stoppingToken);
-            await stream.WriteAsync(messageBytes, stoppingToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
-    }
-
-    /// <summary>
-    ///     This method fills a buffer completely from a stream, or reports a clean disconnect.
-    /// </summary>
-    /// <returns>
-    ///     <see langword="true" /> once <paramref name="buffer" /> is completely filled, or
-    ///     <see langword="false" /> if the connection closed before the first byte of this read
-    ///     arrived (a clean disconnect between messages, not a truncated one).
-    /// </returns>
-    /// <exception cref="IOException">
-    ///     Thrown when the connection closes partway through a read that has started.
-    /// </exception>
-    private static async ValueTask<bool> ReadExactAsync(
-        Stream stream,
-        byte[] buffer,
-        CancellationToken stoppingToken
-    )
-    {
-        int totalRead = 0;
-
-        while (totalRead < buffer.Length)
-        {
-            int read = await stream.ReadAsync(buffer.AsMemory(totalRead), stoppingToken);
-
-            if (read == 0)
-            {
-                if (totalRead == 0)
-                    return false;
-
-                throw new IOException("The connection closed partway through a DNS message.");
-            }
-
-            totalRead += read;
-        }
 
         return true;
     }
