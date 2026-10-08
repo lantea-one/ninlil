@@ -46,7 +46,7 @@ public sealed class AcmeDnsChallengeResponder(
         CancellationToken stoppingToken = default
     )
     {
-        DnsName challengeName = DnsName.Parse($"_acme-challenge.{domain}");
+        DnsName challengeName = DnsName.Parse(domain).PrependLabels("_acme-challenge");
         CachedZone zone = zoneCache.FindZone(challengeName, DnsResourceRecordTypeEnum.Txt);
 
         if (zone is null)
@@ -86,7 +86,7 @@ public sealed class AcmeDnsChallengeResponder(
     /// </summary>
     public async Task RemoveChallengeAsync(string domain, CancellationToken stoppingToken = default)
     {
-        DnsName challengeName = DnsName.Parse($"_acme-challenge.{domain}");
+        DnsName challengeName = DnsName.Parse(domain).PrependLabels("_acme-challenge");
         CachedZone zone = zoneCache.FindZone(challengeName, DnsResourceRecordTypeEnum.Txt);
 
         if (zone is null)

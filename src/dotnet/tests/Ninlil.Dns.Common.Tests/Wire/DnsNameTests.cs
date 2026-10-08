@@ -87,4 +87,28 @@ public class DnsNameTests
             ])
         );
     }
+
+    [Fact]
+    public void PrependLabelsPutsTheRelativeLabelsInFrontOfTheName()
+    {
+        DnsName name = DnsName.Parse("example.com").PrependLabels("_acme-challenge.www");
+
+        Assert.Equal(DnsName.Parse("_acme-challenge.www.example.com"), name);
+    }
+
+    [Fact]
+    public void PrependLabelsOnTheRootGivesASingleLabelNameRatherThanAnEmptyLabel()
+    {
+        DnsName wildcard = DnsName.Root.PrependLabels("*");
+
+        Assert.Equal(DnsName.Parse("*."), wildcard);
+    }
+
+    [Fact]
+    public void PrependLabelsRejectsAResultLongerThan255Octets()
+    {
+        DnsName parent = DnsName.Parse(string.Join('.', Enumerable.Repeat(new string('a', 63), 3)));
+
+        Assert.Throws<FormatException>(() => parent.PrependLabels(new string('b', 63)));
+    }
 }

@@ -52,7 +52,7 @@ public static class DenialOfExistenceValidator
         if (closestEncloser is null)
             return false;
 
-        DnsName wildcard = DnsName.Parse($"*.{closestEncloser}");
+        DnsName wildcard = closestEncloser.PrependLabels("*");
 
         return FindCoveringNsec(wildcard, nsecs) is not null;
     }
@@ -148,7 +148,7 @@ public static class DenialOfExistenceValidator
         if (!nsec3s.Any(entry => CoversHash(entry, nextCloserHash)))
             return false;
 
-        DnsName wildcard = DnsName.Parse($"*.{closestEncloser}");
+        DnsName wildcard = closestEncloser.PrependLabels("*");
         byte[] wildcardHash = Nsec3Hasher.ComputeHash(
             parameters.HashAlgorithm,
             wildcard,

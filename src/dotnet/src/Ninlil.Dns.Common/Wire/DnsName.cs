@@ -345,6 +345,39 @@ public sealed class DnsName : IEquatable<DnsName>
     }
 
     /// <summary>
+    ///     This method returns this name with the labels of <paramref name="relativeName" /> in
+    ///     front of it, for example <c>"_acme-challenge"</c> before <c>example.com</c>. Building a
+    ///     child name this way, rather than by joining presentation text, keeps the root (".")
+    ///     working: <c>"*." + "."</c> would be <c>"*.."</c>, which has an empty label.
+    /// </summary>
+    /// <param name="relativeName">
+    ///     One or more labels in presentation format, without a trailing dot.
+    /// </param>
+    /// <returns>The longer name.</returns>
+    /// <exception cref="FormatException">
+    ///     <paramref name="relativeName" /> is not a valid name, or the result is longer than 255
+    ///     octets.
+    /// </exception>
+    public DnsName PrependLabels(string relativeName)
+    {
+        DnsName relative = Parse(relativeName);
+
+        // The constructor enforces the 255-octet limit with an ArgumentException; callers of a
+        // parse-style method expect a FormatException.
+        try
+        {
+            return new DnsName([.. relative.Labels, .. Labels]);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new FormatException(
+                $"'{relativeName}' in front of '{this}' is not a valid name: {exception.Message}",
+                exception
+            );
+        }
+    }
+
+    /// <summary>
     ///     This method returns this name with ASCII uppercase letters converted to lowercase, the
     ///     DNSSEC canonical form of RFC 4034 §6.1 and §6.2. Owner names, and names inside the RDATA
     ///     of the types §6.2 lists, are hashed and signed in this form so that

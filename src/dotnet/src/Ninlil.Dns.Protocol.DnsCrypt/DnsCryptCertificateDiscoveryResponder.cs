@@ -35,7 +35,7 @@ internal static class DnsCryptCertificateDiscoveryResponder
     ///     This method builds the certificate discovery name for a configured provider name.
     /// </summary>
     public static DnsName BuildProviderCertificateName(string providerName) =>
-        DnsName.Parse($"{ProtocolMajorVersion}.dnscrypt-cert.{providerName}");
+        DnsName.Parse(providerName).PrependLabels($"{ProtocolMajorVersion}.dnscrypt-cert");
 
     /// <summary>
     ///     This method checks whether a decoded plaintext query is a certificate discovery request

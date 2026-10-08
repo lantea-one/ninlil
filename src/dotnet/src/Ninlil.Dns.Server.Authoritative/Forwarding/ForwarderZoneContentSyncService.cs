@@ -168,7 +168,7 @@ public class ForwarderZoneContentSyncService(
                 typeof(SoaRecordData),
                 new SoaRecordData(
                     DnsName.Parse(zone.Name),
-                    DnsName.Parse($"hostmaster.{zone.Name}"),
+                    DnsName.Parse(zone.Name).PrependLabels("hostmaster"),
                     1,
                     DefaultSoaRefreshSeconds,
                     DefaultSoaRetrySeconds,

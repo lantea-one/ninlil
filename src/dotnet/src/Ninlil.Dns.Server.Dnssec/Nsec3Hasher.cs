@@ -93,13 +93,14 @@ public static class Nsec3Hasher
 
     /// <summary>
     ///     This method builds the owner name a hash is published under: the base32hex hash as one
-    ///     label in front of the zone apex.
+    ///     label in front of the zone apex. The labels are joined directly rather than through
+    ///     presentation text, so a root apex (".") does not produce an empty label.
     /// </summary>
     /// <param name="hash">The hash to encode as the leftmost label.</param>
     /// <param name="apexName">The zone's apex name.</param>
     /// <returns>The full owner name.</returns>
     public static DnsName ToOwnerName(byte[] hash, DnsName apexName) =>
-        DnsName.Parse($"{ToBase32Hex(hash)}.{apexName}");
+        new([Encoding.ASCII.GetBytes(ToBase32Hex(hash)), .. apexName.Labels]);
 
     /// <summary>
     ///     This method decodes base32hex text back into bytes, the reverse of
