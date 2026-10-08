@@ -34,6 +34,9 @@ namespace Ninlil.Web.Controllers;
 ///     <c>ZoneId</c> only, and MongoDB has no cascade delete, so the keys are removed explicitly,
 ///     like the records.
 /// </param>
+/// <param name="tsigKeyRepository">
+///     Checks that a zone's <c>TsigKeyName</c> does not name a cluster key.
+/// </param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
 ///     Publishes <see cref="DnsZoneChangedEvent" /> after a change is saved, so
@@ -59,6 +62,7 @@ public class ZonesController(
     IZoneRepository zoneRepository,
     IRecordRepository recordRepository,
     IDnssecKeyRepository dnssecKeyRepository,
+    ITsigKeyRepository tsigKeyRepository,
     IUnitOfWork unitOfWork,
     IDnsServerEventPublisher eventPublisher,
     CatalogZoneMembershipService catalogZoneMembershipService,
@@ -109,8 +113,8 @@ public class ZonesController(
 
     /// <summary>
     ///     This action creates a zone with no records, not even an SOA; add them through
-    ///     <see cref="RecordsController" />. Returns 400 for an invalid zone name or PTR prefix
-    ///     length and 409 when the name is taken. Requires <c>zones:write</c>.
+    ///     <see cref="RecordsController" />. Returns 400 for an invalid zone name, a PTR prefix
+    ///     length or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -129,6 +133,7 @@ public class ZonesController(
 
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
+        await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
 
         ZoneEntity zone = new() { Id = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow };
         ApplyWrite(zone, request);
@@ -172,6 +177,7 @@ public class ZonesController(
 
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
+        await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
 
         ApplyWrite(zone, request);
         zone.UpdatedAtUtc = DateTimeOffset.UtcNow;
@@ -275,8 +281,12 @@ public class ZonesController(
             ];
 
         if (patch.TryGetMergePatchField("tsigKeyName", out JsonElement tsigKeyName))
-            zone.TsigKeyName =
+        {
+            string newTsigKeyName =
                 tsigKeyName.ValueKind == JsonValueKind.Null ? null : tsigKeyName.GetString();
+            await ValidateTsigKeyNameAsync(newTsigKeyName, stoppingToken);
+            zone.TsigKeyName = newTsigKeyName;
+        }
 
         if (
             patch.TryGetMergePatchField(
@@ -561,6 +571,31 @@ public class ZonesController(
         if (prefixLength is int value && (value % 4 != 0 || value < 16 || value > 124))
             throw new ValidationException(
                 $"'{value}' is not a valid PTR IPv6 prefix length -- it must be a multiple of 4 between 16 and 124 inclusive."
+            );
+    }
+
+    /// <summary>
+    ///     This method rejects a TSIG key name that names a cluster key. A key clustering created
+    ///     never signs or verifies zone transfers or updates (<c>TsigService</c> treats it as
+    ///     unknown), so a zone pointing at one could never transfer. A name that matches no key
+    ///     is allowed, because a zone may be set up before its key.
+    /// </summary>
+    /// <exception cref="ValidationException">The name is a cluster key's.</exception>
+    private async Task ValidateTsigKeyNameAsync(string tsigKeyName, CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(tsigKeyName))
+            return;
+
+        // Key names are stored in lowercase, so look that spelling up first (the lookup
+        // TsigService makes), then the text as given for a row stored before the rule.
+        string exact = tsigKeyName.TrimEnd('.');
+        TsigKeyEntity key =
+            await tsigKeyRepository.FindByNameAsync(exact.ToLowerInvariant(), stoppingToken)
+            ?? await tsigKeyRepository.FindByNameAsync(exact, stoppingToken);
+
+        if (key is { ClusterNodeId: not null } or { ClusterInviteExpiresAtUtc: not null })
+            throw new ValidationException(
+                $"'{tsigKeyName}' is a cluster key, managed by clustering; choose a TSIG key created for zone transfers."
             );
     }
 

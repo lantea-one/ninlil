@@ -194,7 +194,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
             new
             {
                 name = $"error-response-{Guid.NewGuid():N}.example.com",
-                algorithmName = "hmac-sha512",
+                algorithmName = "hmac-md5",
             }
         );
 

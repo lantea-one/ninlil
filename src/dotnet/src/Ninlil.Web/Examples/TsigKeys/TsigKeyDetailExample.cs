@@ -20,6 +20,7 @@ public class TsigKeyDetailExample : IExamplesProvider<TsigKeyDetail>
             "secondary-transfer-key",
             "hmac-sha256",
             false,
+            false,
             "Used by branch-office.example.com to authenticate its own zone transfer.",
             DateTimeOffset.Parse("2026-08-01T09:10:00+00:00"),
             null

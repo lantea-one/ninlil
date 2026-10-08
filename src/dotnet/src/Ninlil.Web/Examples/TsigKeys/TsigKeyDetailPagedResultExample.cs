@@ -11,7 +11,7 @@ namespace Ninlil.Web.Examples.TsigKeys;
 public class TsigKeyDetailPagedResultExample : IExamplesProvider<PagedResult<TsigKeyDetail>>
 {
     /// <summary>
-    ///     This method returns an active key and a disabled one.
+    ///     This method returns an active key, a disabled one and a cluster channel key.
     /// </summary>
     public PagedResult<TsigKeyDetail> GetExamples() =>
         new(
@@ -21,6 +21,7 @@ public class TsigKeyDetailPagedResultExample : IExamplesProvider<PagedResult<Tsi
                     "secondary-transfer-key",
                     "hmac-sha256",
                     false,
+                    false,
                     "Used by branch-office.example.com to authenticate its own zone transfer.",
                     DateTimeOffset.Parse("2026-08-01T09:10:00+00:00"),
                     null
@@ -28,15 +29,26 @@ public class TsigKeyDetailPagedResultExample : IExamplesProvider<PagedResult<Tsi
                 new TsigKeyDetail(
                     Guid.Parse("3c4d5e6f-7081-492a-a3b4-c5d6e7f80912"),
                     "retired-migration-key",
-                    "hmac-sha256",
+                    "hmac-sha512",
                     true,
+                    false,
                     "No longer used since the old secondary was decommissioned.",
                     DateTimeOffset.Parse("2026-06-10T08:00:00+00:00"),
                     DateTimeOffset.Parse("2026-08-20T11:00:00+00:00")
                 ),
+                new TsigKeyDetail(
+                    Guid.Parse("4d5e6f70-8192-4a3b-b4c5-d6e7f8091223"),
+                    "cluster-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                    "hmac-sha256",
+                    false,
+                    true,
+                    "Cluster channel key for the peer ns2.",
+                    DateTimeOffset.Parse("2026-08-05T12:00:00+00:00"),
+                    null
+                ),
             ],
             0,
             50,
-            2
+            3
         );
 }

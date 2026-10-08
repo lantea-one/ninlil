@@ -3,6 +3,10 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Tsig;
 using Ninlil.Web.Models;
 
 // Define our namespace.
@@ -12,7 +16,10 @@ namespace Ninlil.Web.Tests;
 ///     This class covers the TSIG key endpoints over HTTP on the shared in-process host, signed in
 ///     as the bootstrap administrator: creating a key with a generated or a supplied secret, the
 ///     secret being returned once on creation and left out of every later response, editing with
-///     PUT and PATCH, deleting, and rejecting an unsupported algorithm or an invalid name.
+///     PUT and PATCH, deleting, rejecting an unsupported algorithm or an invalid name, storing
+///     names in lowercase, the four algorithms, and the rules for a cluster key (listed with
+///     <c>isClusterKey</c>, no rename or delete, still disableable). Cluster keys are saved
+///     directly through the repository, since a full cluster join needs two processes.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class TsigKeyCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -191,5 +198,197 @@ public class TsigKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpResponseMessage response = await client.GetAsync("/api/tsig-keys");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     This method saves a key that clustering would own: linked to a peer, or an unused invite
+    ///     key.
+    /// </summary>
+    private async Task<TsigKeyEntity> SeedClusterKeyAsync(bool unusedInvite)
+    {
+        using IServiceScope scope = factory.Services.CreateScope();
+        ITsigKeyRepository repository =
+            scope.ServiceProvider.GetRequiredService<ITsigKeyRepository>();
+        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        TsigKeyEntity key = new()
+        {
+            Id = Guid.NewGuid(),
+            Name = $"cluster-{Guid.NewGuid():N}",
+            AlgorithmName = "hmac-sha256",
+            SecretEncrypted = scope
+                .ServiceProvider.GetRequiredService<TsigSecretProtector>()
+                .Protect("a-shared-cluster-channel-secret!"u8.ToArray()),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ClusterNodeId = unusedInvite ? null : Guid.NewGuid(),
+            ClusterInviteExpiresAtUtc = unusedInvite ? DateTimeOffset.UtcNow.AddHours(1) : null,
+        };
+        await repository.AddAsync(key);
+        await unitOfWork.SaveChangesAsync();
+
+        return key;
+    }
+
+    [Fact]
+    public async Task CreateTsigKey_WithAMixedCaseName_StoresAndListsItLowercase()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string suffix = Guid.NewGuid().ToString("N");
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/tsig-keys",
+            new { name = $"Ops.Key-{suffix}.Example.COM." }
+        );
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        TsigKeyCreateResponse created =
+            await response.Content.ReadFromJsonAsync<TsigKeyCreateResponse>();
+        Assert.Equal($"ops.key-{suffix}.example.com", created.Key.Name);
+        Assert.False(created.Key.IsClusterKey);
+
+        TsigKeyDetail fetched = await client.GetFromJsonAsync<TsigKeyDetail>(
+            $"/api/tsig-keys/{created.Key.Id}"
+        );
+        Assert.Equal($"ops.key-{suffix}.example.com", fetched.Name);
+
+        // The same name in another case is the same key.
+        HttpResponseMessage duplicate = await client.PostAsJsonAsync(
+            "/api/tsig-keys",
+            new { name = $"OPS.KEY-{suffix}.example.com" }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("hmac-sha1", 20)]
+    [InlineData("HMAC-SHA256.", 32)]
+    [InlineData("hmac-sha384", 48)]
+    [InlineData("hmac-sha512", 64)]
+    public async Task CreateTsigKey_WithASupportedAlgorithm_StoresItsCanonicalNameAndSizesTheSecret(
+        string requested,
+        int expectedSecretBytes
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/tsig-keys",
+            new { name = $"algo-{Guid.NewGuid():N}.example.com", algorithmName = requested }
+        );
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        TsigKeyCreateResponse created =
+            await response.Content.ReadFromJsonAsync<TsigKeyCreateResponse>();
+
+        Assert.Equal(requested.TrimEnd('.').ToLowerInvariant(), created.Key.AlgorithmName);
+        Assert.Equal(expectedSecretBytes, Convert.FromBase64String(created.Secret).Length);
+    }
+
+    [Theory]
+    [InlineData("hmac-md5")]
+    [InlineData("hmac-sha224")]
+    [InlineData("hmac-sha256-128")]
+    public async Task CreateTsigKey_WithAnUnsupportedAlgorithm_Returns400NamingTheSupportedOnes(
+        string requested
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/tsig-keys",
+            new { name = $"algo-{Guid.NewGuid():N}.example.com", algorithmName = requested }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("hmac-sha512", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReplaceTsigKey_ToAnotherSupportedAlgorithm_StoresIt()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/tsig-keys",
+            new { name = $"switch-{Guid.NewGuid():N}.example.com" }
+        );
+        TsigKeyCreateResponse created =
+            await createResponse.Content.ReadFromJsonAsync<TsigKeyCreateResponse>();
+
+        HttpResponseMessage replace = await client.PutAsJsonAsync(
+            $"/api/tsig-keys/{created.Key.Id}",
+            new { name = created.Key.Name, algorithmName = "hmac-sha512" }
+        );
+        Assert.Equal(HttpStatusCode.NoContent, replace.StatusCode);
+
+        TsigKeyDetail fetched = await client.GetFromJsonAsync<TsigKeyDetail>(
+            $"/api/tsig-keys/{created.Key.Id}"
+        );
+        Assert.Equal("hmac-sha512", fetched.AlgorithmName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ClusterKey_IsListedAsAClusterKey_AndCannotBeRenamedOrDeleted(
+        bool unusedInvite
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        TsigKeyEntity key = await SeedClusterKeyAsync(unusedInvite);
+
+        TsigKeyDetail fetched = await client.GetFromJsonAsync<TsigKeyDetail>(
+            $"/api/tsig-keys/{key.Id}"
+        );
+        Assert.True(fetched.IsClusterKey);
+
+        HttpResponseMessage rename = await client.SendAsync(
+            PatchRequest($"/api/tsig-keys/{key.Id}", new { name = $"renamed-{key.Name}" })
+        );
+        Assert.Equal(HttpStatusCode.Conflict, rename.StatusCode);
+
+        HttpResponseMessage replace = await client.PutAsJsonAsync(
+            $"/api/tsig-keys/{key.Id}",
+            new { name = $"renamed-{key.Name}", algorithmName = "hmac-sha256" }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, replace.StatusCode);
+
+        HttpResponseMessage delete = await client.DeleteAsync($"/api/tsig-keys/{key.Id}");
+        Assert.Equal(HttpStatusCode.Conflict, delete.StatusCode);
+
+        // Still there, unchanged.
+        TsigKeyDetail after = await client.GetFromJsonAsync<TsigKeyDetail>(
+            $"/api/tsig-keys/{key.Id}"
+        );
+        Assert.Equal(key.Name, after.Name);
+    }
+
+    [Fact]
+    public async Task ClusterKey_CanBeDisabledAndCommented_ThroughPatchAndPut()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        TsigKeyEntity key = await SeedClusterKeyAsync(unusedInvite: false);
+
+        HttpResponseMessage patch = await client.SendAsync(
+            PatchRequest($"/api/tsig-keys/{key.Id}", new { isDisabled = true })
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patch.StatusCode);
+
+        HttpResponseMessage replace = await client.PutAsJsonAsync(
+            $"/api/tsig-keys/{key.Id}",
+            new
+            {
+                name = key.Name,
+                algorithmName = "hmac-sha256",
+                isDisabled = true,
+                comments = "emergency switch",
+            }
+        );
+        Assert.Equal(HttpStatusCode.NoContent, replace.StatusCode);
+
+        TsigKeyDetail after = await client.GetFromJsonAsync<TsigKeyDetail>(
+            $"/api/tsig-keys/{key.Id}"
+        );
+        Assert.True(after.IsDisabled);
+        Assert.True(after.IsClusterKey);
+        Assert.Equal("emergency switch", after.Comments);
     }
 }

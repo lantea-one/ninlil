@@ -37,7 +37,12 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
 - **General upstream forwarding** with health-checked failover, independent of the recursive
   resolver, supporting the full `sdns://` DNSCrypt stamp grammar, and a TTL-honouring answer cache
   (RFC 2308 negative caching, serve-stale) that operators can inspect and flush from the console.
-- **TSIG (RFC 8945)** signed transfers and dynamic updates, and an **ACME (RFC 8555) DNS-01
+- **TSIG (RFC 8945)** signed transfers and dynamic updates with HMAC-SHA1, -SHA256 (the default),
+  -SHA384 or -SHA512 keys, shown and stored with lowercase names (BIND lowercases them on the
+  wire; keys saved earlier with capitals are lowercased at startup, and two names that differ
+  only in case are left as they are with a warning in the log). The keys that clustering creates
+  for its peers are labelled as cluster keys: they can be disabled but not renamed or deleted,
+  never sign or verify zone transfers, and go away when the peer is removed. Also an **ACME (RFC 8555) DNS-01
   client** for automated certificate issuance against zones this server hosts itself, with
   optional automated CAA record and PTR/reverse-zone management (including RFC 2317 classless
   delegation).

@@ -3,6 +3,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Web.Models;
 
 // Define our namespace.
@@ -15,7 +18,9 @@ namespace Ninlil.Web.Tests;
 ///     the per-zone CAA settings, and deleting a record and the zone. A record must keep its
 ///     identifier through a PUT or PATCH, which is the contract of
 ///     <c>IZoneUpdateService.ApplyRecordEditAsync</c> that the API relies on. Changing a record's
-///     type to or from SOA through PUT or PATCH is not tested.
+///     type to or from SOA through PUT or PATCH is not tested. A zone whose <c>tsigKeyName</c>
+///     names a cluster key (saved directly through the repository) is rejected with 400 on create,
+///     PUT and PATCH, while an ordinary key's name is accepted.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -364,5 +369,101 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpResponseMessage response = await client.GetAsync("/api/zones");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Zone_WithAClusterKeyAsItsTsigKey_IsRejectedOnCreateReplaceAndPatch(
+        bool unusedInvite
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string clusterKeyName = $"cluster-{Guid.NewGuid():N}";
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            await scope
+                .ServiceProvider.GetRequiredService<ITsigKeyRepository>()
+                .AddAsync(
+                    new TsigKeyEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = clusterKeyName,
+                        AlgorithmName = "hmac-sha256",
+                        SecretEncrypted = "not-used",
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                        ClusterNodeId = unusedInvite ? null : Guid.NewGuid(),
+                        ClusterInviteExpiresAtUtc = unusedInvite
+                            ? DateTimeOffset.UtcNow.AddHours(1)
+                            : null,
+                    }
+                );
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        string zoneName = $"cluster-key-{Guid.NewGuid():N}.example.com";
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = zoneName,
+                type = "Secondary",
+                tsigKeyName = clusterKeyName,
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
+
+        // The upper-case spelling names the same key.
+        HttpResponseMessage createUpper = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = zoneName,
+                type = "Secondary",
+                tsigKeyName = clusterKeyName.ToUpperInvariant(),
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, createUpper.StatusCode);
+
+        // An ordinary zone can be created, then neither PUT nor PATCH may point it at the key.
+        HttpResponseMessage plain = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = zoneName, type = "Primary" }
+        );
+        plain.EnsureSuccessStatusCode();
+        ZoneDetail zone = await plain.Content.ReadFromJsonAsync<ZoneDetail>();
+
+        HttpResponseMessage replace = await client.PutAsJsonAsync(
+            $"/api/zones/{zone.Id}",
+            new
+            {
+                name = zoneName,
+                type = "Primary",
+                tsigKeyName = clusterKeyName,
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, replace.StatusCode);
+
+        HttpResponseMessage patch = await client.SendAsync(
+            PatchRequest($"/api/zones/{zone.Id}", new { tsigKeyName = clusterKeyName })
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patch.StatusCode);
+
+        // An operator key, or a name that matches no key yet, is accepted.
+        HttpResponseMessage keyResponse = await client.PostAsJsonAsync(
+            "/api/tsig-keys",
+            new { name = $"zone-key-{Guid.NewGuid():N}" }
+        );
+        keyResponse.EnsureSuccessStatusCode();
+        TsigKeyCreateResponse operatorKey =
+            await keyResponse.Content.ReadFromJsonAsync<TsigKeyCreateResponse>();
+        HttpResponseMessage patchOk = await client.SendAsync(
+            PatchRequest($"/api/zones/{zone.Id}", new { tsigKeyName = operatorKey.Key.Name })
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patchOk.StatusCode);
+        HttpResponseMessage patchUnknown = await client.SendAsync(
+            PatchRequest($"/api/zones/{zone.Id}", new { tsigKeyName = "not-created-yet" })
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patchUnknown.StatusCode);
     }
 }

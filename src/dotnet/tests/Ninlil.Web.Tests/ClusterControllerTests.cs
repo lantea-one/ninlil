@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Cluster.Invite;
 using Ninlil.Web.Controllers;
@@ -20,7 +21,8 @@ namespace Ninlil.Web.Tests;
 ///     reaches the live options. They cover the invite's advertised-host check and encoding and
 ///     the join's invite decoding; a full join or cross-node round trip needs two separately
 ///     configured processes and is not tested here. The class also covers editing and deleting
-///     a peer saved directly through the repository, and the dashboard row for this node.
+///     a peer saved directly through the repository (including that removing a peer removes its
+///     linked TSIG key and nothing else), and the dashboard row for this node.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -188,6 +190,76 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
             $"/api/cluster/nodes/{node.Id}"
         );
         Assert.Equal(HttpStatusCode.NotFound, getAfterDeleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task RemoveNode_RemovesThePeersLinkedKey_AndLeavesOtherKeysAlone()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        using IServiceScope scope = factory.Services.CreateScope();
+        IClusterNodeRepository clusterNodeRepository =
+            scope.ServiceProvider.GetRequiredService<IClusterNodeRepository>();
+        ITsigKeyRepository tsigKeyRepository =
+            scope.ServiceProvider.GetRequiredService<ITsigKeyRepository>();
+        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        string prefix = $"cluster-{Guid.NewGuid():N}";
+        Guid nodeId = Guid.NewGuid();
+        await clusterNodeRepository.AddAsync(
+            new ClusterNodeEntity
+            {
+                Id = nodeId,
+                Name = "peer-with-key",
+                RemoteNodeId = Guid.NewGuid(),
+                Host = "192.168.1.51",
+                Port = 443,
+                TsigKeyName = prefix,
+                TlsCertificateThumbprint = new string('a', 64),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        TsigKeyEntity linked = NewKey(prefix, nodeId);
+        TsigKeyEntity sameNamePrefix = NewKey($"{prefix}-ops", null);
+        await tsigKeyRepository.AddAsync(linked);
+        await tsigKeyRepository.AddAsync(sameNamePrefix);
+
+        // A second peer names a key that is not linked to it (an operator's key of that name).
+        Guid otherNodeId = Guid.NewGuid();
+        await clusterNodeRepository.AddAsync(
+            new ClusterNodeEntity
+            {
+                Id = otherNodeId,
+                Name = "peer-with-unlinked-key",
+                RemoteNodeId = Guid.NewGuid(),
+                Host = "192.168.1.52",
+                Port = 443,
+                TsigKeyName = sameNamePrefix.Name,
+                TlsCertificateThumbprint = new string('b', 64),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        await unitOfWork.SaveChangesAsync();
+
+        (await client.DeleteAsync($"/api/cluster/nodes/{nodeId}")).EnsureSuccessStatusCode();
+        (await client.DeleteAsync($"/api/cluster/nodes/{otherNodeId}")).EnsureSuccessStatusCode();
+
+        using IServiceScope checkScope = factory.Services.CreateScope();
+        ITsigKeyRepository check =
+            checkScope.ServiceProvider.GetRequiredService<ITsigKeyRepository>();
+        Assert.Null(await check.FindByNameAsync(prefix));
+        Assert.NotNull(await check.FindByNameAsync(sameNamePrefix.Name));
+
+        static TsigKeyEntity NewKey(string name, Guid? clusterNodeId) =>
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                AlgorithmName = "hmac-sha256",
+                SecretEncrypted = "not-used",
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                ClusterNodeId = clusterNodeId,
+            };
     }
 
     [Fact]

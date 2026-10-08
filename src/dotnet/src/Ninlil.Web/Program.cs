@@ -31,6 +31,7 @@ using Ninlil.Dhcp.Server.Tftp.Extension;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Data.Abstractions.Options;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Data.MongoDb;
@@ -860,6 +861,20 @@ else
             "Linked {Count} existing cluster peer keys to their peers.",
             linkedClusterKeys
         );
+}
+
+// TSIG key names are stored in lowercase; lowercase any row written with capitals (see
+// TsigKeyNameNormalizer). It runs on every engine through the repository, after the schema is
+// ready, and does nothing once every name is lowercase.
+{
+    await using AsyncServiceScope tsigNormalizerScope = app.Services.CreateAsyncScope();
+    int normalizedTsigKeys = await TsigKeyNameNormalizer.RunAsync(
+        tsigNormalizerScope.ServiceProvider.GetRequiredService<ITsigKeyRepository>(),
+        tsigNormalizerScope.ServiceProvider.GetRequiredService<IUnitOfWork>(),
+        app.Logger
+    );
+    if (normalizedTsigKeys > 0)
+        app.Logger.LogInformation("Lowercased the names of {Count} TSIG keys.", normalizedTsigKeys);
 }
 
 await AdministratorBootstrapper.EnsureBootstrapAdministratorAsync(app.Services, app.Configuration);

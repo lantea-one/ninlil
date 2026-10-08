@@ -25,6 +25,9 @@ namespace Ninlil.Web.Controllers;
 ///     <c>clusternodes:read</c> and changes need <c>clusternodes:write</c>.
 /// </summary>
 /// <param name="clusterNodeRepository">Reads and writes peer rows.</param>
+/// <param name="tsigKeyRepository">
+///     Finds and removes a removed peer's channel key (see <see cref="RemoveNode" />).
+/// </param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="inviteService">Creates invites.</param>
 /// <param name="joinService">Completes a join with an invite code.</param>
@@ -38,6 +41,7 @@ namespace Ninlil.Web.Controllers;
 [Route("api/cluster/nodes")]
 public class ClusterController(
     IClusterNodeRepository clusterNodeRepository,
+    ITsigKeyRepository tsigKeyRepository,
     IUnitOfWork unitOfWork,
     ClusterInviteService inviteService,
     ClusterJoinService joinService,
@@ -124,7 +128,10 @@ public class ClusterController(
     /// <summary>
     ///     This action removes a peer from this node's registry only. The peer is not told and
     ///     keeps its own entry for this node, so a clean two-sided break means removing the
-    ///     relationship on both nodes. Returns 404 for an unknown id. Requires
+    ///     relationship on both nodes. The peer's channel TSIG key goes with it, in the same save,
+    ///     so the peer can no longer authenticate; the key API refuses to delete a cluster key
+    ///     any other way. A key of the same name that is not linked to this peer is left alone.
+    ///     Returns 404 for an unknown id. Requires
     ///     <c>clusternodes:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
@@ -134,6 +141,13 @@ public class ClusterController(
         ClusterNodeEntity node = await clusterNodeRepository.GetByIdAsync(id, stoppingToken);
         if (node is null)
             throw new NotFoundException("ClusterNode", id.ToString());
+
+        TsigKeyEntity peerKey = await tsigKeyRepository.FindByNameAsync(
+            node.TsigKeyName,
+            stoppingToken
+        );
+        if (peerKey is not null && peerKey.ClusterNodeId == node.Id)
+            tsigKeyRepository.Remove(peerKey);
 
         clusterNodeRepository.Remove(node);
         await unitOfWork.SaveChangesAsync(stoppingToken);

@@ -19,9 +19,13 @@ namespace Ninlil.Web.Controllers;
 ///     This controller manages TSIG keys (RFC 8945), the shared secrets that zone transfers and
 ///     dynamic updates authenticate with. A key belongs to no single zone; a zone refers to one by
 ///     name through its <c>TsigKeyName</c> (see <see cref="ZonesController" />), with no foreign
-///     key. The cluster channel's keys are listed here too, but a key created here never
-///     authenticates a peer (see <c>TsigKeyEntity.ClusterNodeId</c>). Secrets are encrypted at rest and returned only
-///     when created. Reads need <c>tsigkeys:read</c> and changes need <c>tsigkeys:write</c>.
+///     key. The cluster channel's keys are listed here too, flagged <c>isClusterKey</c>: a key
+///     created here never authenticates a peer (see <c>TsigKeyEntity.ClusterNodeId</c>), and a
+///     cluster key can be disabled or commented but not renamed, re-keyed to another algorithm or
+///     deleted (clustering owns it;
+///     removing the peer removes its key). Key names are stored in lowercase. Secrets are
+///     encrypted at rest and returned only when created. Reads need <c>tsigkeys:read</c> and
+///     changes need <c>tsigkeys:write</c>.
 /// </summary>
 /// <param name="tsigKeyRepository">Reads and writes keys.</param>
 /// <param name="unitOfWork">Commits staged changes.</param>
@@ -38,18 +42,18 @@ public class TsigKeysController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This constant contains the length, in bytes, of a generated shared secret: 256 bits, the
-    ///     HMAC-SHA256 output size. HMAC-SHA256 is the only algorithm Ninlil implements.
+    ///     This property contains the algorithm a new key gets when the request names none:
+    ///     HMAC-SHA256, the RFC 8945 §6 mandatory algorithm that BIND also defaults to.
     /// </summary>
-    private const int GeneratedSecretLengthBytes = 32;
+    private static readonly TsigAlgorithm DefaultAlgorithm = TsigAlgorithm.Find(
+        DnsTsigOptions.HmacSha256AlgorithmName
+    );
 
     /// <summary>
-    ///     This property contains the presentation form, without the trailing dot, of the only MAC
-    ///     algorithm Ninlil implements, derived from <c>DnsTsigOptions.HmacSha256AlgorithmName</c>.
+    ///     This constant contains the conflict message for a rename or delete of a cluster key.
     /// </summary>
-    private static readonly string HmacSha256AlgorithmName = DnsTsigOptions
-        .HmacSha256AlgorithmName.ToString()
-        .TrimEnd('.');
+    private const string ClusterKeyMessage =
+        "This TSIG key is managed by clustering; remove the peer, or let the invite expire.";
 
     /// <summary>
     ///     This action lists TSIG keys, one page at a time, without their secrets. Requires
@@ -97,7 +101,8 @@ public class TsigKeysController(
 
     /// <summary>
     ///     This action creates a TSIG key. Without <see cref="TsigKeyCreateRequest.Secret" />, a
-    ///     random 32-byte secret is generated; without an algorithm, <c>hmac-sha256</c> is used.
+    ///     random secret as long as the algorithm's MAC (32 bytes for the default) is generated; without an
+    ///     algorithm, <c>hmac-sha256</c> is used. The name is stored in lowercase.
     ///     The base64 secret is returned in this response only. Returns 400 for an invalid name, an
     ///     unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is
     ///     taken. Requires <c>tsigkeys:write</c>.
@@ -111,25 +116,31 @@ public class TsigKeysController(
         CancellationToken stoppingToken
     )
     {
-        if (!DnsName.TryParse(request?.Name, out DnsName _))
-            throw new ValidationException($"'{request?.Name}' is not a valid TSIG key name.");
-
-        string name = request.Name.TrimEnd('.');
+        string name = ParseName(request?.Name);
 
         if (await tsigKeyRepository.FindByNameAsync(name, stoppingToken) is not null)
             throw new ConflictException($"A TSIG key named '{name}' already exists.");
 
         if (
-            !TryResolveAlgorithmName(
+            !TryResolveAlgorithm(
                 request.AlgorithmName,
                 allowDefault: true,
-                out string algorithmName,
+                out TsigAlgorithm algorithm,
                 out string algorithmError
             )
         )
             throw new ValidationException(algorithmError);
 
-        if (!TryResolveSecret(request.Secret, out byte[] secretBytes, out string secretError))
+        string algorithmName = FormatAlgorithmName(algorithm);
+
+        if (
+            !TryResolveSecret(
+                request.Secret,
+                algorithm,
+                out byte[] secretBytes,
+                out string secretError
+            )
+        )
             throw new ValidationException(secretError);
 
         TsigKeyEntity key = new()
@@ -156,7 +167,8 @@ public class TsigKeysController(
     /// <summary>
     ///     This action replaces a TSIG key's name, algorithm, disabled flag and comments. The
     ///     secret is left unchanged (see <see cref="TsigKeyWriteRequest" />). Returns 400 for an
-    ///     invalid name or algorithm, 404 for an unknown id and 409 when the name is taken.
+    ///     invalid name or algorithm, 404 for an unknown id, and 409 when the name is taken or when a
+    ///     cluster key would be renamed or change algorithm.
     ///     Requires <c>tsigkeys:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
@@ -172,27 +184,35 @@ public class TsigKeysController(
         if (key is null)
             throw new NotFoundException("TsigKey", id.ToString());
 
-        if (!DnsName.TryParse(request?.Name, out DnsName _))
-            throw new ValidationException($"'{request?.Name}' is not a valid TSIG key name.");
+        string name = ParseName(request?.Name);
 
-        string name = request.Name.TrimEnd('.');
+        // A key's own spelling may differ from the lowercase form (rows are normalised at
+        // startup, but a restored backup can bring old spellings back), so only a different
+        // lowercase name counts as a rename.
+        bool isRename = !string.Equals(key.Name, name, StringComparison.Ordinal);
+        if (isRename && IsClusterKey(key))
+            throw new ConflictException(ClusterKeyMessage);
 
         TsigKeyEntity existingByName = await tsigKeyRepository.FindByNameAsync(name, stoppingToken);
         if (existingByName is not null && existingByName.Id != id)
             throw new ConflictException($"A TSIG key named '{name}' already exists.");
 
         if (
-            !TryResolveAlgorithmName(
+            !TryResolveAlgorithm(
                 request.AlgorithmName,
                 allowDefault: false,
-                out string algorithmName,
+                out TsigAlgorithm algorithm,
                 out string algorithmError
             )
         )
             throw new ValidationException(algorithmError);
 
+        // The cluster channel signs with the algorithm clustering chose, so it stays fixed too.
+        if (IsClusterKey(key) && TsigAlgorithm.Find(key.AlgorithmName) != algorithm)
+            throw new ConflictException(ClusterKeyMessage);
+
         key.Name = name;
-        key.AlgorithmName = algorithmName;
+        key.AlgorithmName = FormatAlgorithmName(algorithm);
         key.IsDisabled = request.IsDisabled;
         key.Comments = request.Comments;
         key.UpdatedAtUtc = DateTimeOffset.UtcNow;
@@ -224,11 +244,10 @@ public class TsigKeysController(
 
         if (patch.TryGetMergePatchField("name", out JsonElement nameElement))
         {
-            string newName = nameElement.GetString();
-            if (!DnsName.TryParse(newName, out DnsName _))
-                throw new ValidationException($"'{newName}' is not a valid TSIG key name.");
+            string newName = ParseName(nameElement.GetString());
+            if (!string.Equals(key.Name, newName, StringComparison.Ordinal) && IsClusterKey(key))
+                throw new ConflictException(ClusterKeyMessage);
 
-            newName = newName.TrimEnd('.');
             TsigKeyEntity existingByName = await tsigKeyRepository.FindByNameAsync(
                 newName,
                 stoppingToken
@@ -242,16 +261,19 @@ public class TsigKeysController(
         if (patch.TryGetMergePatchField("algorithmName", out JsonElement algorithmNameElement))
         {
             if (
-                !TryResolveAlgorithmName(
+                !TryResolveAlgorithm(
                     algorithmNameElement.GetString(),
                     allowDefault: false,
-                    out string algorithmName,
+                    out TsigAlgorithm algorithm,
                     out string algorithmError
                 )
             )
                 throw new ValidationException(algorithmError);
 
-            key.AlgorithmName = algorithmName;
+            if (IsClusterKey(key) && TsigAlgorithm.Find(key.AlgorithmName) != algorithm)
+                throw new ConflictException(ClusterKeyMessage);
+
+            key.AlgorithmName = FormatAlgorithmName(algorithm);
         }
 
         if (patch.TryGetMergePatchField("isDisabled", out JsonElement isDisabled))
@@ -270,7 +292,7 @@ public class TsigKeysController(
     /// <summary>
     ///     This action deletes a TSIG key. Zones that still refer to it by name are not checked or
     ///     blocked; they simply can no longer sign or verify with it. Returns 404 for an unknown
-    ///     id. Requires <c>tsigkeys:write</c>.
+    ///     id and 409 for a cluster key (see the class summary). Requires <c>tsigkeys:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("tsigkeys:write")]
@@ -280,6 +302,9 @@ public class TsigKeysController(
         if (key is null)
             throw new NotFoundException("TsigKey", id.ToString());
 
+        if (IsClusterKey(key))
+            throw new ConflictException(ClusterKeyMessage);
+
         tsigKeyRepository.Remove(key);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
@@ -287,17 +312,52 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This method checks an algorithm name against the only algorithm Ninlil implements,
-    ///     defaulting to it when none is given and <paramref name="allowDefault" /> is set.
+    ///     This method validates a key name and returns its stored form: the canonical lowercase
+    ///     presentation without the trailing dot. DNS names compare without case (RFC 4343), and
+    ///     BIND lowercases a key name on the wire, so a mixed-case stored name would never match a
+    ///     BIND client's signature.
     /// </summary>
-    private static bool TryResolveAlgorithmName(
+    /// <exception cref="ValidationException">The name is not a valid, non-root domain name.</exception>
+    private static string ParseName(string requestedName)
+    {
+        if (!DnsName.TryParse(requestedName, out DnsName parsed))
+            throw new ValidationException($"'{requestedName}' is not a valid TSIG key name.");
+
+        string name = parsed.ToCanonicalLower().ToString().TrimEnd('.');
+        if (name.Length == 0)
+            throw new ValidationException($"'{requestedName}' is not a valid TSIG key name.");
+
+        return name;
+    }
+
+    /// <summary>
+    ///     This method tells whether clustering owns a key: a peer's channel key, or an invite key
+    ///     not used up yet. This is the same test <c>TsigService</c> uses to keep such keys away
+    ///     from DNS messages.
+    /// </summary>
+    private static bool IsClusterKey(TsigKeyEntity key) =>
+        key.ClusterNodeId is not null || key.ClusterInviteExpiresAtUtc is not null;
+
+    /// <summary>
+    ///     This method returns the stored spelling of an algorithm: its name without the trailing
+    ///     dot (<c>hmac-sha256</c>).
+    /// </summary>
+    private static string FormatAlgorithmName(TsigAlgorithm algorithm) =>
+        algorithm.Name.ToString().TrimEnd('.');
+
+    /// <summary>
+    ///     This method resolves an algorithm name to a supported algorithm, defaulting to
+    ///     HMAC-SHA256 when none is given and <paramref name="allowDefault" /> is set. Names
+    ///     compare without case and with or without the trailing dot.
+    /// </summary>
+    private static bool TryResolveAlgorithm(
         string requestedAlgorithmName,
         bool allowDefault,
-        out string algorithmName,
+        out TsigAlgorithm algorithm,
         out string error
     )
     {
-        algorithmName = null;
+        algorithm = null;
         error = null;
 
         if (string.IsNullOrWhiteSpace(requestedAlgorithmName))
@@ -308,31 +368,33 @@ public class TsigKeysController(
                 return false;
             }
 
-            algorithmName = HmacSha256AlgorithmName;
+            algorithm = DefaultAlgorithm;
             return true;
         }
 
-        if (
-            !requestedAlgorithmName
-                .TrimEnd('.')
-                .Equals(HmacSha256AlgorithmName, StringComparison.OrdinalIgnoreCase)
-        )
+        algorithm = TsigAlgorithm.Find(requestedAlgorithmName);
+        if (algorithm is null)
         {
+            string supported = string.Join(
+                ", ",
+                TsigAlgorithm.Supported.Select(FormatAlgorithmName)
+            );
             error =
-                $"'{requestedAlgorithmName}' is not a supported TSIG algorithm; only '{HmacSha256AlgorithmName}' is implemented.";
+                $"'{requestedAlgorithmName}' is not a supported TSIG algorithm; use one of {supported}.";
             return false;
         }
 
-        algorithmName = HmacSha256AlgorithmName;
         return true;
     }
 
     /// <summary>
     ///     This method resolves a new key's secret: the caller's base64-encoded secret if given,
-    ///     otherwise a new random one.
+    ///     otherwise a new random one as long as the algorithm's MAC (RFC 2104 §3 recommends a key
+    ///     at least that long).
     /// </summary>
     private static bool TryResolveSecret(
         string requestedSecret,
+        TsigAlgorithm algorithm,
         out byte[] secret,
         out string error
     )
@@ -341,7 +403,7 @@ public class TsigKeysController(
 
         if (string.IsNullOrWhiteSpace(requestedSecret))
         {
-            secret = RandomNumberGenerator.GetBytes(GeneratedSecretLengthBytes);
+            secret = RandomNumberGenerator.GetBytes(algorithm.DigestLength);
             return true;
         }
 
@@ -375,6 +437,7 @@ public class TsigKeysController(
             key.Name,
             key.AlgorithmName,
             key.IsDisabled,
+            IsClusterKey(key),
             key.Comments,
             key.CreatedAtUtc,
             key.UpdatedAtUtc
