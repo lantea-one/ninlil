@@ -356,8 +356,8 @@ public record DhcpProtocolSettingsDetail(bool Enable, int ServerPort, int Client
 ///     The IPv4 address the relay puts in <c>giaddr</c>, or <see langword="null" /> to detect it
 ///     at startup.
 /// </param>
-/// <param name="RelayAgentCircuitId">The Agent Circuit ID text added to every forwarded request, or <see langword="null" /> for none.</param>
-/// <param name="RelayAgentRemoteId">The Agent Remote ID text added to every forwarded request, or <see langword="null" /> for none.</param>
+/// <param name="RelayAgentCircuitId">The Agent Circuit ID text added to every forwarded request, or <see langword="null" /> for none. Printable ASCII, at most 253 characters, and at most 251 together with the Remote ID.</param>
+/// <param name="RelayAgentRemoteId">The Agent Remote ID text added to every forwarded request, or <see langword="null" /> for none. Printable ASCII, at most 253 characters, and at most 251 together with the Circuit ID.</param>
 public record DhcpRelaySettingsDetail(
     bool Enable,
     IReadOnlyList<string> UpstreamServerAddresses,

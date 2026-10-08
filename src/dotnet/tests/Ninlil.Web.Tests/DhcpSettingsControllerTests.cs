@@ -189,6 +189,89 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("circuit254")]
+    [InlineData("nonAscii")]
+    [InlineData("combined252")]
+    public async Task PatchRelay_WithInvalidRelayAgentIds_ReturnsBadRequest(string kind)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        object body = kind switch
+        {
+            "circuit254" => new { relayAgentCircuitId = new string('a', 254) },
+            "nonAscii" => new { relayAgentRemoteId = "r\u00e9mote" },
+            _ => new
+            {
+                relayAgentCircuitId = new string('a', 126),
+                relayAgentRemoteId = new string('b', 126),
+            },
+        };
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/relay", body)
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchRelay_WithValidRelayAgentIds_ReturnsOk()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/relay",
+                new
+                {
+                    relayAgentCircuitId = new string('a', 125),
+                    relayAgentRemoteId = new string('b', 126),
+                }
+            )
+        );
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task PatchRelay_WithAnIpv6UpstreamOrRelayAddress_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage upstream = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/relay",
+                new { upstreamServerAddresses = new[] { "2001:db8::1" } }
+            )
+        );
+        HttpResponseMessage address = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/relay", new { relayAgentAddress = "2001:db8::1" })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, upstream.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, address.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchDhcpv6Relay_WithAnIpv4UpstreamOrLinkAddress_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage upstream = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/dhcpv6-relay",
+                new { upstreamServerAddresses = new[] { "192.0.2.1" } }
+            )
+        );
+        HttpResponseMessage link = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/dhcpv6-relay", new { relayLinkAddress = "192.0.2.1" })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, upstream.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, link.StatusCode);
+    }
+
     [Fact]
     public async Task GetDhcpv6Protocol_ReturnsTheCompiledInDefaults()
     {

@@ -57,6 +57,16 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
     /// </summary>
     private readonly Socket _outboundSocket;
 
+    /// <summary>
+    ///     These fields cache the encoded IDs (see <see cref="GetRelayAgentIds" />). Concurrent
+    ///     first requests may both compute them; the result is identical, so the race is benign
+    ///     apart from a possible second error log line.
+    /// </summary>
+    private volatile bool _relayAgentIdsResolved;
+
+    private byte[] _encodedCircuitId;
+    private byte[] _encodedRemoteId;
+
     /// <param name="relayOptions">The upstream servers and Relay Agent Information settings.</param>
     /// <param name="protocolOptions">The transport options, read for the client port relayed replies go to.</param>
     /// <param name="addressProvider">The relay's <c>giaddr</c> address.</param>
@@ -136,6 +146,20 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
             return;
         }
 
+        // RFC 3046 Section 2.1.1: a request with no giaddr reached this relay straight from a
+        // client, and a client must not send Relay Agent Information. Drop it as forged, whether
+        // or not this relay adds IDs of its own.
+        if (
+            request.RelayAgentIpAddress.Equals(IPAddress.Any)
+            && request.TryGetRawOption((byte)Dhcpv4OptionTagEnum.RelayAgentInformation, out _)
+        )
+        {
+            _logger.LogDebug(
+                "Dropping a DHCPv4 request from a client that carries Relay Agent Information (RFC 3046 Section 2.1.1)."
+            );
+            return;
+        }
+
         // Every relay on the path increments "hops" (RFC 2131 Section 2).
         request.Hops = (byte)(request.Hops + 1);
 
@@ -146,24 +170,26 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
 
         // RFC 3046 Section 1: the Relay Agent Information option is added by "the relay agent
         // closest to the DHCP client". With a Circuit ID or Remote ID configured, set the option,
-        // replacing any value already present (a client has no reason to send one, so it may be
-        // forged). With neither, leave the option as received.
-        if (
-            !string.IsNullOrEmpty(_relayOptions.Value.RelayAgentCircuitId)
-            || !string.IsNullOrEmpty(_relayOptions.Value.RelayAgentRemoteId)
-        )
-        {
-            byte[] circuitId = string.IsNullOrEmpty(_relayOptions.Value.RelayAgentCircuitId)
-                ? null
-                : Encoding.ASCII.GetBytes(_relayOptions.Value.RelayAgentCircuitId);
-            byte[] remoteId = string.IsNullOrEmpty(_relayOptions.Value.RelayAgentRemoteId)
-                ? null
-                : Encoding.ASCII.GetBytes(_relayOptions.Value.RelayAgentRemoteId);
+        // replacing any value already present. A request that carries the option and has no
+        // giaddr came straight from a client, which must not send one, was dropped above.
+        byte[] wireBytes;
 
-            request.SetRelayAgentInformation(circuitId, remoteId);
+        try
+        {
+            if (GetRelayAgentIds(out byte[] circuitId, out byte[] remoteId))
+                request.SetRelayAgentInformation(circuitId, remoteId);
+
+            wireBytes = Dhcpv4MessageWriter.Write(request);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Dropping a DHCPv4 request that cannot be encoded for the upstream servers."
+            );
+            return;
         }
 
-        byte[] wireBytes = Dhcpv4MessageWriter.Write(request);
         int upstreamPort = _relayOptions.Value.UpstreamServerPort;
 
         // Send to every upstream server (see Dhcpv4RelayOptions.UpstreamServerAddresses).
@@ -195,6 +221,54 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
                 );
             }
         }
+    }
+
+    /// <summary>
+    ///     This method encodes the configured Circuit ID and Remote ID, once, on the first request.
+    ///     The options are fixed until a restart, so one validation serves every request. Invalid
+    ///     IDs (a hand-edited file; the settings API rejects them) are logged as an error once
+    ///     and requests are then forwarded without the option rather than dropped, so a bad ID
+    ///     does not stop DHCP for the whole relayed subnet.
+    /// </summary>
+    /// <returns>True when the relay adds Relay Agent Information to forwarded requests.</returns>
+    private bool GetRelayAgentIds(out byte[] circuitId, out byte[] remoteId)
+    {
+        if (!_relayAgentIdsResolved)
+        {
+            string circuitText = _relayOptions.Value.RelayAgentCircuitId;
+            string remoteText = _relayOptions.Value.RelayAgentRemoteId;
+
+            if (
+                !Dhcpv4RelayOptions.TryValidateRelayAgentIds(
+                    circuitText,
+                    remoteText,
+                    out string error
+                )
+            )
+            {
+                _logger.LogError(
+                    "The configured Circuit ID or Remote ID is invalid ({Reason}); requests are forwarded without Relay Agent Information.",
+                    error
+                );
+                _encodedCircuitId = null;
+                _encodedRemoteId = null;
+            }
+            else
+            {
+                _encodedCircuitId = string.IsNullOrEmpty(circuitText)
+                    ? null
+                    : Encoding.ASCII.GetBytes(circuitText);
+                _encodedRemoteId = string.IsNullOrEmpty(remoteText)
+                    ? null
+                    : Encoding.ASCII.GetBytes(remoteText);
+            }
+
+            _relayAgentIdsResolved = true;
+        }
+
+        circuitId = _encodedCircuitId;
+        remoteId = _encodedRemoteId;
+        return circuitId != null || remoteId != null;
     }
 
     /// <summary>
@@ -259,17 +333,16 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
             destination = new IPEndPoint(IPAddress.Broadcast, clientPort);
         }
 
-        byte[] wireBytes = Dhcpv4MessageWriter.Write(reply);
-
         try
         {
+            byte[] wireBytes = Dhcpv4MessageWriter.Write(reply);
             await _outboundSocket.SendToAsync(wireBytes, destination, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogWarning(
                 exception,
-                "Error relaying a DHCPv4 reply down to {Destination}.",
+                "Error encoding or relaying a DHCPv4 reply down to {Destination}.",
                 destination
             );
         }

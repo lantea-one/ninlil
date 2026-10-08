@@ -291,4 +291,49 @@ public class Dhcpv4MessageCodecTests
         Assert.Equal("boot-server", decoded.ServerHostName);
         Assert.Equal("pxelinux.0", decoded.BootFileName);
     }
+
+    [Fact]
+    public void SetRelayAgentInformation_WithA256ByteId_Throws()
+    {
+        Dhcpv4Message message = BuildDiscover();
+
+        Assert.Throws<ArgumentException>(() =>
+            message.SetRelayAgentInformation(circuitId: new byte[256])
+        );
+        Assert.Throws<ArgumentException>(() =>
+            message.SetRelayAgentInformation(remoteId: new byte[256])
+        );
+    }
+
+    [Fact]
+    public void SetRelayAgentInformation_WithIdsThatOverflowTheOption_Throws()
+    {
+        Dhcpv4Message message = BuildDiscover();
+
+        // 2 + 200 + 2 + 60 is 264 bytes, over the 255-byte option limit.
+        Assert.Throws<ArgumentException>(() =>
+            message.SetRelayAgentInformation(new byte[200], new byte[60])
+        );
+    }
+
+    [Fact]
+    public void SetRelayAgentInformation_WithIdsThatExactlyFit_EncodesAndReadsBack()
+    {
+        Dhcpv4Message message = BuildDiscover();
+
+        // 2 + 200 + 2 + 51 is exactly 255 bytes.
+        message.SetRelayAgentInformation(new byte[200], new byte[51]);
+
+        Assert.True(
+            Dhcpv4MessageReader.TryRead(
+                Dhcpv4MessageWriter.Write(message),
+                out Dhcpv4Message decoded,
+                out _
+            )
+        );
+        Assert.True(decoded.TryGetRelayAgentCircuitId(out byte[] circuitId));
+        Assert.Equal(200, circuitId.Length);
+        Assert.True(decoded.TryGetRelayAgentRemoteId(out byte[] remoteId));
+        Assert.Equal(51, remoteId.Length);
+    }
 }

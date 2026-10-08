@@ -497,15 +497,43 @@ public static class Dhcpv4MessageOptionExtensions
     ///     This method sets the Relay Agent Information option (tag 82) from an Agent Circuit ID,
     ///     an Agent Remote ID, or both; at least one must be non-empty. The relay agent
     ///     (<c>Ninlil.Dhcp.Server.Relay</c>) uses it to add its configured IDs to forwarded
-    ///     requests, and tests use it to build relayed requests. Each value must fit a one-byte
-    ///     length; a longer value is not rejected and produces a malformed sub-option.
+    ///     requests, and tests use it to build relayed requests. Each sub-option must fit a
+    ///     one-byte length and the whole option must fit the 255-byte option limit (RFC 3046
+    ///     Section 2.0).
     /// </summary>
+    /// <exception cref="ArgumentException">
+    ///     Thrown when a value is longer than 255 bytes, the sub-options together are longer than
+    ///     255 bytes, or both values are empty.
+    /// </exception>
     public static void SetRelayAgentInformation(
         this Dhcpv4Message message,
         byte[] circuitId = null,
         byte[] remoteId = null
     )
     {
+        if (circuitId is { Length: > byte.MaxValue })
+            throw new ArgumentException(
+                "A circuit ID must be at most 255 bytes long.",
+                nameof(circuitId)
+            );
+
+        if (remoteId is { Length: > byte.MaxValue })
+            throw new ArgumentException(
+                "A remote ID must be at most 255 bytes long.",
+                nameof(remoteId)
+            );
+
+        // Each sub-option adds a 2-byte header; together they must fit one 255-byte option.
+        int total =
+            (circuitId is { Length: > 0 } ? 2 + circuitId.Length : 0)
+            + (remoteId is { Length: > 0 } ? 2 + remoteId.Length : 0);
+
+        if (total > byte.MaxValue)
+            throw new ArgumentException(
+                "The circuit ID and remote ID, with their sub-option headers, must fit in 255 bytes.",
+                nameof(circuitId)
+            );
+
         using MemoryStream buffer = new();
 
         if (circuitId is { Length: > 0 })

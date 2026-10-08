@@ -64,8 +64,10 @@ public sealed class Dhcpv4RelayOptions
     ///     on. With it or <see cref="RelayAgentRemoteId" /> set, the relay puts a Relay Agent
     ///     Information option (tag 82) on every request it forwards, replacing any already there
     ///     (see <see cref="Common.Wire.Dhcpv4MessageOptionExtensions.SetRelayAgentInformation" />);
-    ///     with neither set, the option is left as received. The value must be at most 255 bytes;
-    ///     length is not checked.
+    ///     with neither set, the option is left as received. The value must be printable ASCII
+    ///     and at most 253 bytes, and the two IDs together at most 251 bytes
+    ///     (see <see cref="TryValidateRelayAgentIds" />). With an invalid value the relay logs an
+    ///     error once and forwards requests without the option.
     /// </summary>
     public string RelayAgentCircuitId { get; set; }
 
@@ -76,4 +78,76 @@ public sealed class Dhcpv4RelayOptions
     ///     added; see <see cref="RelayAgentCircuitId" /> for how the two combine.
     /// </summary>
     public string RelayAgentRemoteId { get; set; }
+
+    /// <summary>
+    ///     This constant is the longest Circuit ID or Remote ID in bytes: a sub-option holds at
+    ///     most 255 bytes (RFC 3046 Section 2.0) and a 2-byte header comes first, so a lone ID
+    ///     could reach 253. The option holds 255 bytes, so two IDs together are limited by
+    ///     <see cref="MaxCombinedRelayAgentIdLength" />.
+    /// </summary>
+    public const int MaxRelayAgentIdLength = 253;
+
+    /// <summary>
+    ///     This constant is the longest sum of the Circuit ID and Remote ID lengths when both are
+    ///     set: two 2-byte sub-option headers leave 251 of the option's 255 bytes.
+    /// </summary>
+    public const int MaxCombinedRelayAgentIdLength = 251;
+
+    /// <summary>
+    ///     This method checks a Circuit ID and Remote ID against the limits of the Relay Agent
+    ///     Information option: printable ASCII only (0x20 to 0x7E), each at most
+    ///     <see cref="MaxRelayAgentIdLength" /> bytes and, when both are set, together at most
+    ///     <see cref="MaxCombinedRelayAgentIdLength" />. Null and empty values are valid.
+    ///     The settings API and <see cref="Dhcpv4RelayAgent" /> both use it.
+    /// </summary>
+    /// <param name="circuitId">The Circuit ID text, or null.</param>
+    /// <param name="remoteId">The Remote ID text, or null.</param>
+    /// <param name="error">The reason when the IDs are invalid, otherwise null.</param>
+    /// <returns>True when both IDs can be encoded.</returns>
+    public static bool TryValidateRelayAgentIds(string circuitId, string remoteId, out string error)
+    {
+        circuitId ??= string.Empty;
+        remoteId ??= string.Empty;
+
+        if (!IsPrintableAscii(circuitId) || !IsPrintableAscii(remoteId))
+        {
+            error = "The circuit ID and remote ID must contain printable ASCII characters only.";
+            return false;
+        }
+
+        if (circuitId.Length > MaxRelayAgentIdLength || remoteId.Length > MaxRelayAgentIdLength)
+        {
+            error =
+                $"The circuit ID and remote ID must each be at most {MaxRelayAgentIdLength} characters.";
+            return false;
+        }
+
+        if (
+            circuitId.Length > 0
+            && remoteId.Length > 0
+            && circuitId.Length + remoteId.Length > MaxCombinedRelayAgentIdLength
+        )
+        {
+            error =
+                $"The circuit ID and remote ID must be at most {MaxCombinedRelayAgentIdLength} characters together.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    ///     This method says whether every character is printable ASCII (0x20 to 0x7E).
+    /// </summary>
+    private static bool IsPrintableAscii(string text)
+    {
+        foreach (char character in text)
+        {
+            if (character < 0x20 || character > 0x7E)
+                return false;
+        }
+
+        return true;
+    }
 }

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -386,8 +387,11 @@ public class DhcpSettingsController(
             foreach (JsonElement item in upstreamServerAddresses.EnumerateArray())
             {
                 string address = item.GetString();
-                if (!IPAddress.TryParse(address, out _))
-                    throw new ValidationException($"'{address}' is not a valid IP address.");
+                if (
+                    !IPAddress.TryParse(address, out IPAddress parsedAddress)
+                    || parsedAddress.AddressFamily != AddressFamily.InterNetwork
+                )
+                    throw new ValidationException($"'{address}' is not a valid IPv4 address.");
 
                 addresses.Add(address);
             }
@@ -429,9 +433,14 @@ public class DhcpSettingsController(
 
             if (
                 !string.IsNullOrWhiteSpace(relayAgentAddress)
-                && !IPAddress.TryParse(relayAgentAddress, out _)
+                && (
+                    !IPAddress.TryParse(relayAgentAddress, out IPAddress parsedRelayAddress)
+                    || parsedRelayAddress.AddressFamily != AddressFamily.InterNetwork
+                )
             )
-                throw new ValidationException($"'{relayAgentAddress}' is not a valid IP address.");
+                throw new ValidationException(
+                    $"'{relayAgentAddress}' is not a valid IPv4 address."
+                );
 
             settings.Add(
                 new PresetConfigurationSetting(
@@ -442,37 +451,61 @@ public class DhcpSettingsController(
             );
         }
 
-        if (
-            patch.TryGetMergePatchField(
-                "relayAgentCircuitId",
-                out JsonElement relayAgentCircuitIdElement
-            )
-        )
-            settings.Add(
-                new PresetConfigurationSetting(
-                    Dhcpv4RelayOptions.SectionName,
-                    nameof(Dhcpv4RelayOptions.RelayAgentCircuitId),
+        // Validate the IDs as the relay will see them: a field left out of the patch keeps its
+        // current value, and the combined length limit covers both.
+        bool circuitIdPatched = patch.TryGetMergePatchField(
+            "relayAgentCircuitId",
+            out JsonElement relayAgentCircuitIdElement
+        );
+        bool remoteIdPatched = patch.TryGetMergePatchField(
+            "relayAgentRemoteId",
+            out JsonElement relayAgentRemoteIdElement
+        );
+
+        if (circuitIdPatched || remoteIdPatched)
+        {
+            string circuitId = circuitIdPatched
+                ? (
                     relayAgentCircuitIdElement.ValueKind == JsonValueKind.Null
                         ? null
                         : relayAgentCircuitIdElement.GetString()
                 )
-            );
-
-        if (
-            patch.TryGetMergePatchField(
-                "relayAgentRemoteId",
-                out JsonElement relayAgentRemoteIdElement
-            )
-        )
-            settings.Add(
-                new PresetConfigurationSetting(
-                    Dhcpv4RelayOptions.SectionName,
-                    nameof(Dhcpv4RelayOptions.RelayAgentRemoteId),
+                : relayOptions.Value.RelayAgentCircuitId;
+            string remoteId = remoteIdPatched
+                ? (
                     relayAgentRemoteIdElement.ValueKind == JsonValueKind.Null
                         ? null
                         : relayAgentRemoteIdElement.GetString()
                 )
-            );
+                : relayOptions.Value.RelayAgentRemoteId;
+
+            if (
+                !Dhcpv4RelayOptions.TryValidateRelayAgentIds(
+                    circuitId,
+                    remoteId,
+                    out string idError
+                )
+            )
+                throw new ValidationException(idError);
+
+            if (circuitIdPatched)
+                settings.Add(
+                    new PresetConfigurationSetting(
+                        Dhcpv4RelayOptions.SectionName,
+                        nameof(Dhcpv4RelayOptions.RelayAgentCircuitId),
+                        circuitId
+                    )
+                );
+
+            if (remoteIdPatched)
+                settings.Add(
+                    new PresetConfigurationSetting(
+                        Dhcpv4RelayOptions.SectionName,
+                        nameof(Dhcpv4RelayOptions.RelayAgentRemoteId),
+                        remoteId
+                    )
+                );
+        }
 
         return await ApplyAsync(settings);
     }
@@ -535,8 +568,11 @@ public class DhcpSettingsController(
             foreach (JsonElement item in upstreamServerAddresses.EnumerateArray())
             {
                 string address = item.GetString();
-                if (!IPAddress.TryParse(address, out _))
-                    throw new ValidationException($"'{address}' is not a valid IP address.");
+                if (
+                    !IPAddress.TryParse(address, out IPAddress parsedAddress)
+                    || parsedAddress.AddressFamily != AddressFamily.InterNetworkV6
+                )
+                    throw new ValidationException($"'{address}' is not a valid IPv6 address.");
 
                 addresses.Add(address);
             }
@@ -575,9 +611,12 @@ public class DhcpSettingsController(
 
             if (
                 !string.IsNullOrWhiteSpace(relayLinkAddress)
-                && !IPAddress.TryParse(relayLinkAddress, out _)
+                && (
+                    !IPAddress.TryParse(relayLinkAddress, out IPAddress parsedLinkAddress)
+                    || parsedLinkAddress.AddressFamily != AddressFamily.InterNetworkV6
+                )
             )
-                throw new ValidationException($"'{relayLinkAddress}' is not a valid IP address.");
+                throw new ValidationException($"'{relayLinkAddress}' is not a valid IPv6 address.");
 
             settings.Add(
                 new PresetConfigurationSetting(

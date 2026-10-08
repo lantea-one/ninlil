@@ -441,8 +441,8 @@ Advertisement content, and the PXE-boot TFTP server. Every DHCP-family transport
 | `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV6_CLIENT_PORT` | The DHCPv6 client-side UDP port. | `546` |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV4_ENABLE` | Whether the DHCPv4 relay-agent engine is active instead of the local engine (mutually exclusive with it). | `false` |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV4_RELAY_AGENT_ADDRESS` | The `giaddr` address this relay agent inserts into forwarded requests. | *(none)* |
-| `NINLIL_DHCP_SERVER_RELAY_DHCPV4_RELAY_AGENT_CIRCUIT_ID` | The RFC 3046 Relay Agent Information Circuit ID this relay inserts. | *(none)* |
-| `NINLIL_DHCP_SERVER_RELAY_DHCPV4_RELAY_AGENT_REMOTE_ID` | The RFC 3046 Relay Agent Information Remote ID this relay inserts. | *(none)* |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV4_RELAY_AGENT_CIRCUIT_ID` | The RFC 3046 Relay Agent Information Circuit ID this relay inserts: printable ASCII, at most 253 characters each and 251 together (invalid values are logged and the option is left out). | *(none)* |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV4_RELAY_AGENT_REMOTE_ID` | The RFC 3046 Relay Agent Information Remote ID this relay inserts: printable ASCII, at most 253 characters each and 251 together (invalid values are logged and the option is left out). | *(none)* |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV4_UPSTREAM_SERVER_PORT` | The port the upstream real DHCPv4 server is reached on. | `67` |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_ENABLE` | Whether the raw-socket Router Advertisement/Solicitation transport is active. | `false` |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_MIN_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's minimum interval between unsolicited periodic advertisements. | `00:03:18` |
