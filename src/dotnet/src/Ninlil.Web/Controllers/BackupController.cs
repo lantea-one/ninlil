@@ -25,7 +25,9 @@ namespace Ninlil.Web.Controllers;
 ///         controller translates them, and the service's <see cref="ArgumentException" />, into a
 ///         <see cref="Ninlil.Dns.Common.Exceptions.ValidationException" /> (400) with the same
 ///         message, as <c>RecordsController.TranslateZoneUpdateFailure</c> does for
-///         <c>IZoneUpdateService</c>.
+///         <c>IZoneUpdateService</c>. A <see cref="BackupRestoreInProgressException" /> becomes a
+///         <see cref="ConflictException" /> (409) here, and only here: the storage engine switch
+///         also restores through the service and must see the original exception.
 ///     </para>
 /// </summary>
 /// <param name="backupService">Creates and restores archives.</param>
@@ -80,9 +82,12 @@ public class BackupController(IBackupService backupService, ILogger<BackupContro
     /// <summary>
     ///     This action restores the database, Data Protection key ring, TLS certificate and runtime
     ///     configuration file from an archive, encrypted or not. All stored data is wiped and
-    ///     replaced; there is no partial or merge restore. The archive is decrypted and checked
-    ///     before anything is written, so a wrong or missing passphrase or a corrupted, tampered or
-    ///     unrecognized archive returns 400 and leaves the server's data untouched. The server must
+    ///     replaced; there is no partial or merge restore. The archive is decrypted, checked and
+    ///     parsed before anything is written, so a wrong or missing passphrase or a corrupted,
+    ///     tampered or unrecognized archive returns 400 and leaves the server's data untouched.
+    ///     Returns 409 when another restore is already running (nothing is changed; try again when
+    ///     it has finished). On a relational storage engine the wipe and import are one
+    ///     transaction, so a database failure also leaves the data as it was. The server must
     ///     be restarted afterwards to pick up the restored key ring, certificate and settings.
     ///     Requires <c>backup:write</c>.
     /// </summary>
@@ -125,6 +130,11 @@ public class BackupController(IBackupService backupService, ILogger<BackupContro
         catch (ArgumentException exception)
         {
             throw new ValidationException(exception.Message);
+        }
+        catch (BackupRestoreInProgressException exception)
+        {
+            logger.LogWarning("Rejected a restore attempt: {Reason}", exception.Message);
+            throw new ConflictException(exception.Message);
         }
         catch (BackupDecryptionFailedException exception)
         {
