@@ -5,6 +5,7 @@ using Certes.Acme.Resource;
 using Certes.Pkcs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Server.Acme.Caa;
 
 // Define our namespace.
@@ -50,13 +51,40 @@ public sealed class AcmeCertificateIssuer(
     private static readonly TimeSpan ChallengePollInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    ///     This method returns the PFX file name for <paramref name="domain" />. A DNS name can
+    ///     carry escaped characters such as <c>\</c>, <c>/</c> or a leading dot, so a name that
+    ///     is not a plain file name is rejected before it can point outside the certificate
+    ///     directory.
+    /// </summary>
+    /// <param name="domain">The domain the certificate is issued for.</param>
+    /// <exception cref="InvalidOperationException">The domain does not make a plain file name.</exception>
+    public static string BuildPfxFileName(string domain)
+    {
+        string fileName = $"{domain}.pfx";
+
+        if (
+            string.IsNullOrWhiteSpace(domain)
+            || domain.StartsWith('.')
+            || fileName != Path.GetFileName(fileName)
+            || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || fileName.IndexOfAny(['\\', '/']) >= 0
+        )
+            throw new InvalidOperationException(
+                $"'{domain}' cannot be used as a certificate file name."
+            );
+
+        return fileName;
+    }
+
+    /// <summary>
     ///     This method issues (or renews) the certificate for one domain. The challenge record is
     ///     removed afterwards whether or not issuance succeeded. A CAA reconciliation failure is
     ///     logged and does not fail the issuance.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     ///     Thrown when <paramref name="domain" /> is not a zone this server hosts, or the CA
-    ///     reports the DNS-01 challenge as invalid.
+    ///     reports the DNS-01 challenge as invalid, or the domain does not make a plain file name
+    ///     (see <see cref="BuildPfxFileName" />).
     /// </exception>
     /// <exception cref="TimeoutException">
     ///     Thrown when the challenge does not reach a final status within
@@ -67,6 +95,9 @@ public sealed class AcmeCertificateIssuer(
         CancellationToken stoppingToken = default
     )
     {
+        // Checked first, so a domain that cannot be stored never costs a CA order.
+        string pfxFileName = BuildPfxFileName(domain);
+
         AcmeContext acme = await CreateContextAsync(stoppingToken);
 
         IOrderContext order = await acme.NewOrder([domain]);
@@ -109,12 +140,18 @@ public sealed class AcmeCertificateIssuer(
             PfxBuilder pfxBuilder = certificateChain.ToPfx(certificateKey);
             byte[] pfxBytes = pfxBuilder.Build(domain, "");
 
-            System.IO.Directory.CreateDirectory(options.CurrentValue.CertificateDirectoryPath);
             string pfxPath = Path.Combine(
                 options.CurrentValue.CertificateDirectoryPath,
-                $"{domain}.pfx"
+                pfxFileName
             );
-            await File.WriteAllBytesAsync(pfxPath, pfxBytes, stoppingToken);
+
+            // The PFX has an empty password, so it is created owner-only from the start.
+            await AtomicFile.WriteAllBytesAsync(
+                pfxPath,
+                pfxBytes,
+                AtomicFilePermissions.OwnerOnly,
+                stoppingToken
+            );
 
             // Read the expiry from the issued certificate instead of assuming the Let's Encrypt
             // 90-day lifetime, since other CAs differ.

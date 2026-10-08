@@ -10,7 +10,8 @@ namespace Ninlil.Dns.Server.Acme.Tests;
 /// <summary>
 ///     This class tests <see cref="FileAcmeAccountStore" /> with a state file in a temporary
 ///     directory: what is saved is reloaded by a new instance, the file is encrypted, and an
-///     unreadable file starts an empty state. Writer and reader share one
+///     unreadable or damaged file is moved aside and starts an empty state, and the file is
+///     owner-only. Writer and reader share one
 ///     <see cref="IDataProtectionProvider" />, because each
 ///     <see cref="EphemeralDataProtectionProvider" /> has its own random key.
 /// </summary>
@@ -25,6 +26,14 @@ public sealed class FileAcmeAccountStoreTests : IDisposable
     {
         if (File.Exists(_statePath))
             File.Delete(_statePath);
+
+        foreach (
+            string aside in Directory.GetFiles(
+                Path.GetTempPath(),
+                $"{Path.GetFileName(_statePath)}.corrupt-*"
+            )
+        )
+            File.Delete(aside);
     }
 
     private FileAcmeAccountStore CreateStore(IDataProtectionProvider provider) =>
@@ -107,5 +116,45 @@ public sealed class FileAcmeAccountStoreTests : IDisposable
         );
 
         Assert.Null(otherProviderStore.AccountKeyPem);
+    }
+
+    [Theory]
+    [InlineData("not json at all")]
+    [InlineData("{}")]
+    [InlineData("null")]
+    public void ADecryptableButUnusableFileIsMovedAsideAndStartsAFreshState(string plaintext)
+    {
+        IDataProtectionProvider provider = new EphemeralDataProtectionProvider();
+        File.WriteAllText(
+            _statePath,
+            provider.CreateProtector("Ninlil.Dns.Server.Acme.AccountState").Protect(plaintext)
+        );
+
+        FileAcmeAccountStore store = CreateStore(provider);
+
+        Assert.Null(store.AccountKeyPem);
+        Assert.Empty(store.DomainStates);
+        Assert.Empty(store.Failures);
+        Assert.Single(
+            Directory.GetFiles(Path.GetTempPath(), $"{Path.GetFileName(_statePath)}.corrupt-*")
+        );
+        Assert.False(File.Exists(_statePath));
+    }
+
+    [Fact]
+    public void ASavedStateFileIsOwnerOnlyAndLeavesNoTemporaryFile()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        CreateStore(new EphemeralDataProtectionProvider()).SaveAccountKey("some-key");
+
+        Assert.Equal(
+            UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            File.GetUnixFileMode(_statePath)
+        );
+        Assert.Empty(
+            Directory.GetFiles(Path.GetTempPath(), $".{Path.GetFileName(_statePath)}.*.tmp")
+        );
     }
 }
