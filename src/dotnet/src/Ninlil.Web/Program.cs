@@ -673,6 +673,7 @@ builder.Services.AddSingleton<IManagedServiceRegistry>(serviceProvider =>
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<PendingTwoFactorSignInCache>();
 builder.Services.AddSingleton<TwoFactorCodeAttemptLimiter>();
+builder.Services.AddSingleton<TwoFactorEmailCodeCooldown>();
 
 // Scoped, like IEmailSender and UserManager<TUser>. Used by the EmailLink mode of
 // UsersController.ResetPassword and by AuthController.ForgotPassword.

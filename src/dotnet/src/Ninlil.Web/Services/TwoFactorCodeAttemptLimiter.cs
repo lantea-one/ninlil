@@ -122,7 +122,24 @@ public sealed class TwoFactorCodeAttemptLimiter(TimeProvider timeProvider = null
     /// </summary>
     /// <param name="controller">The controller answering the request.</param>
     /// <param name="retryAfter">The wait that <see cref="IsBlocked" /> reported.</param>
-    public static ObjectResult TooManyRequests(ControllerBase controller, TimeSpan retryAfter)
+    public static ObjectResult TooManyRequests(ControllerBase controller, TimeSpan retryAfter) =>
+        TooManyRequests(controller, retryAfter, "Too many wrong codes", "Too many wrong codes.");
+
+    /// <summary>
+    ///     This method builds the same 429 answer with its own title and opening sentence, so
+    ///     every 429 in the sign-in flow has one shape: a ProblemDetails body saying how many
+    ///     minutes to wait, and a <c>Retry-After</c> header in whole seconds, rounded up.
+    /// </summary>
+    /// <param name="controller">The controller answering the request.</param>
+    /// <param name="retryAfter">The wait to report.</param>
+    /// <param name="title">The ProblemDetails title.</param>
+    /// <param name="reason">The first sentence of the detail, ending in a full stop.</param>
+    public static ObjectResult TooManyRequests(
+        ControllerBase controller,
+        TimeSpan retryAfter,
+        string title,
+        string reason
+    )
     {
         int seconds = (int)Math.Ceiling(retryAfter.TotalSeconds);
         int minutes = (int)Math.Ceiling(retryAfter.TotalMinutes);
@@ -131,8 +148,8 @@ public sealed class TwoFactorCodeAttemptLimiter(TimeProvider timeProvider = null
         );
 
         return controller.Problem(
-            title: "Too many wrong codes",
-            detail: $"Too many wrong codes. Try again in {minutes} minute{(minutes == 1 ? "" : "s")}.",
+            title: title,
+            detail: $"{reason} Try again in {minutes} minute{(minutes == 1 ? "" : "s")}.",
             statusCode: StatusCodes.Status429TooManyRequests
         );
     }

@@ -61,6 +61,9 @@ namespace Ninlil.Web.Controllers;
 ///     Limits wrong second-factor codes per user, across every client address, on top of the
 ///     per-IP rate limit.
 /// </param>
+/// <param name="emailCodeCooldown">
+///     Limits how often <see cref="SendTwoFactorEmailCode" /> can e-mail a code to one user.
+/// </param>
 /// <param name="passwordResetLinkSender">
 ///     Builds and sends the reset e-mail for <see cref="ForgotPassword" />. The <c>EmailLink</c>
 ///     mode of <c>UsersController.ResetPassword</c> uses it too.
@@ -97,6 +100,7 @@ public class AuthController(
     IJwtTokenService jwtTokenService,
     PendingTwoFactorSignInCache pendingTwoFactor,
     TwoFactorCodeAttemptLimiter attemptLimiter,
+    TwoFactorEmailCodeCooldown emailCodeCooldown,
     PasswordResetLinkSender passwordResetLinkSender,
     IEmailSender emailSender,
     IOptionsMonitor<EmailSenderOptions> emailOptions,
@@ -290,8 +294,11 @@ public class AuthController(
     ///     <see cref="TwoFactorLogin" />. The pending-sign-in token from <see cref="Login" />
     ///     authorizes it (the caller has no session yet) and stays valid, so the code can be
     ///     submitted afterwards. Returns 202 on success; 401 for an unknown, expired or used
-    ///     token; 400 when the account has no confirmed e-mail address. Allows anonymous callers
-    ///     and is rate limited like the other sign-in actions.
+    ///     token; 400 when the account has no confirmed e-mail address. Returns 429 with a
+    ///     <c>Retry-After</c> header when a code was sent to the account in the last 60 seconds
+    ///     (by this action or by <see cref="TwoFactorController.SendEmailCode" />) or when this
+    ///     pending sign-in has already asked for 3 codes. Allows anonymous callers and is rate
+    ///     limited like the other sign-in actions.
     /// </summary>
     [HttpPost("login/two-factor/email-code")]
     [AllowAnonymous]
@@ -314,6 +321,14 @@ public class AuthController(
         if (!user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email))
             throw new ValidationException(
                 "This account has no confirmed e-mail address to send a code to."
+            );
+
+        if (!emailCodeCooldown.TryAcquire(user.Id, request.MfaToken, out TimeSpan retryAfter))
+            return TwoFactorCodeAttemptLimiter.TooManyRequests(
+                this,
+                retryAfter,
+                "A code was sent recently",
+                "A code was sent recently."
             );
 
         string code = await userManager.GenerateTwoFactorTokenAsync(

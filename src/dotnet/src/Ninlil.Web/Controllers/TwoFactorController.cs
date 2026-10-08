@@ -33,6 +33,10 @@ namespace Ninlil.Web.Controllers;
 ///     Limits wrong authenticator codes per user, so a stolen access token cannot be used to
 ///     guess the code.
 /// </param>
+/// <param name="emailCodeCooldown">
+///     Limits how often an e-mailed code can be requested per user, shared with the sign-in step,
+///     so a stolen access token cannot be used to flood the owner's inbox.
+/// </param>
 [ApiController]
 [Route("api/auth/two-factor")]
 [Authorize]
@@ -40,7 +44,8 @@ public class TwoFactorController(
     UserManager<UserEntity> userManager,
     IEmailSender emailSender,
     IDnsServerEventPublisher eventPublisher,
-    TwoFactorCodeAttemptLimiter attemptLimiter
+    TwoFactorCodeAttemptLimiter attemptLimiter,
+    TwoFactorEmailCodeCooldown emailCodeCooldown
 ) : ControllerBase
 {
     /// <summary>
@@ -218,7 +223,8 @@ public class TwoFactorController(
     /// <summary>
     ///     This action e-mails the caller a short-lived verification code from the e-mail token
     ///     provider and returns 202. The account must have a confirmed e-mail address, otherwise
-    ///     this returns 400. Because it needs a signed-in caller, it cannot be called during the
+    ///     this returns 400. Returns 429 with a <c>Retry-After</c> header when a code was sent to
+    ///     the account in the last 60 seconds, by this action or by the sign-in step. Because it needs a signed-in caller, it cannot be called during the
     ///     two-factor step of a sign-in; <see cref="AuthController.SendTwoFactorEmailCode" /> does
     ///     that.
     /// </summary>
@@ -232,6 +238,14 @@ public class TwoFactorController(
         if (!user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email))
             throw new ValidationException(
                 "This account has no confirmed e-mail address to send a code to."
+            );
+
+        if (!emailCodeCooldown.TryAcquire(user.Id, null, out TimeSpan retryAfter))
+            return TwoFactorCodeAttemptLimiter.TooManyRequests(
+                this,
+                retryAfter,
+                "A code was sent recently",
+                "A code was sent recently."
             );
 
         string code = await userManager.GenerateTwoFactorTokenAsync(

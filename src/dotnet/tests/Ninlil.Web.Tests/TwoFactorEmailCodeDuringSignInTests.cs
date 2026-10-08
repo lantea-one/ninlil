@@ -187,12 +187,14 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
         string mfaToken = cache.Create(user.Id);
         RecordingEmailSender emailSender = new();
         StaticOptionsMonitor<EmailSenderOptions> emailOptions = new(new EmailSenderOptions());
+        TwoFactorEmailCodeCooldown cooldown = new();
         AuthController controller = new(
             userManager,
             services.GetRequiredService<SignInManager<UserEntity>>(),
             services.GetRequiredService<IJwtTokenService>(),
             cache,
             new TwoFactorCodeAttemptLimiter(),
+            cooldown,
             new PasswordResetLinkSender(userManager, emailSender, emailOptions),
             emailSender,
             emailOptions,
@@ -236,5 +238,143 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
             ServiceCollectionAdminLoginRateLimitingExtension.AuthenticationEndpointPolicyName,
             attribute.PolicyName
         );
+    }
+
+    [Fact]
+    public async Task ASecondCodeRightAwayAnswers429AndSendsNothingMore()
+    {
+        (AuthController controller, RecordingEmailSender sender, string mfaToken, _, _) =
+            await BuildDirectAsync();
+
+        Assert.IsType<AcceptedResult>(
+            await controller.SendTwoFactorEmailCode(
+                new TwoFactorEmailCodeRequest(mfaToken),
+                CancellationToken.None
+            )
+        );
+        IActionResult second = await controller.SendTwoFactorEmailCode(
+            new TwoFactorEmailCodeRequest(mfaToken),
+            CancellationToken.None
+        );
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, ((ObjectResult)second).StatusCode);
+        Assert.True(int.Parse(controller.Response.Headers.RetryAfter.ToString()) is > 0 and <= 60);
+        Assert.Single(sender.Sent);
+    }
+
+    [Fact]
+    public async Task TheSignedInSendRightAfterThePendingSendAnswers429()
+    {
+        (
+            AuthController controller,
+            RecordingEmailSender sender,
+            string mfaToken,
+            UserEntity user,
+            TwoFactorController signedIn
+        ) = await BuildDirectAsync();
+
+        Assert.IsType<AcceptedResult>(
+            await controller.SendTwoFactorEmailCode(
+                new TwoFactorEmailCodeRequest(mfaToken),
+                CancellationToken.None
+            )
+        );
+        IActionResult result = await signedIn.SendEmailCode();
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, ((ObjectResult)result).StatusCode);
+        Assert.False(string.IsNullOrEmpty(signedIn.Response.Headers.RetryAfter.ToString()));
+        Assert.Single(sender.Sent);
+        Assert.Equal(user.Email, sender.Sent[0].To);
+    }
+
+    [Fact]
+    public async Task TheSignedInSendIsAcceptedOnceThenLimited()
+    {
+        (_, RecordingEmailSender sender, _, _, TwoFactorController signedIn) =
+            await BuildDirectAsync();
+
+        Assert.IsType<AcceptedResult>(await signedIn.SendEmailCode());
+        IActionResult second = await signedIn.SendEmailCode();
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, ((ObjectResult)second).StatusCode);
+        Assert.Single(sender.Sent);
+    }
+
+    /// <summary>
+    ///     This method builds a user with a confirmed e-mail address, a pending sign-in, and an
+    ///     <see cref="AuthController" /> and a <see cref="TwoFactorController" /> that share one
+    ///     recording sender and one cooldown.
+    /// </summary>
+    private async Task<(
+        AuthController Auth,
+        RecordingEmailSender Sender,
+        string MfaToken,
+        UserEntity User,
+        TwoFactorController SignedIn
+    )> BuildDirectAsync()
+    {
+        IServiceProvider services = factory.Services.CreateAsyncScope().ServiceProvider;
+        UserManager<UserEntity> userManager = services.GetRequiredService<
+            UserManager<UserEntity>
+        >();
+        string userName = $"pending-email-cooldown-{Guid.NewGuid():N}";
+        UserEntity user = new()
+        {
+            Id = Guid.NewGuid(),
+            UserName = userName,
+            Email = $"{userName}@localhost.local",
+            EmailConfirmed = true,
+        };
+        Assert.True((await userManager.CreateAsync(user, "Direct-Password-1234!")).Succeeded);
+
+        PendingTwoFactorSignInCache cache =
+            services.GetRequiredService<PendingTwoFactorSignInCache>();
+        string mfaToken = cache.Create(user.Id);
+        RecordingEmailSender emailSender = new();
+        StaticOptionsMonitor<EmailSenderOptions> emailOptions = new(new EmailSenderOptions());
+        TwoFactorEmailCodeCooldown cooldown = new();
+        AuthController auth = new(
+            userManager,
+            services.GetRequiredService<SignInManager<UserEntity>>(),
+            services.GetRequiredService<IJwtTokenService>(),
+            cache,
+            new TwoFactorCodeAttemptLimiter(),
+            cooldown,
+            new PasswordResetLinkSender(userManager, emailSender, emailOptions),
+            emailSender,
+            emailOptions,
+            services.GetRequiredService<IDnsServerEventPublisher>(),
+            services.GetRequiredService<IOptionsMonitor<ClusterOptions>>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<AuthController>.Instance
+        )
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+        TwoFactorController signedIn = new(
+            userManager,
+            emailSender,
+            services.GetRequiredService<IDnsServerEventPublisher>(),
+            new TwoFactorCodeAttemptLimiter(),
+            cooldown
+        )
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new System.Security.Claims.ClaimsPrincipal(
+                        new System.Security.Claims.ClaimsIdentity([
+                            new System.Security.Claims.Claim(
+                                System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub,
+                                user.Id.ToString()
+                            ),
+                        ])
+                    ),
+                },
+            },
+        };
+
+        return (auth, emailSender, mfaToken, user, signedIn);
     }
 }
