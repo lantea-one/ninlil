@@ -472,6 +472,74 @@ describe('ZoneFormComponent', () => {
     });
   });
 
+  it('key lists: ticking keys is submitted as updateTsigKeyNames and transferTsigKeyNames', async () => {
+    const fixture = await createComponent(null, () => {
+      tsigKeysApiSpy.apiTsigKeysGet.and.returnValue(
+        of({
+          items: [
+            { id: 'key-1', name: 'update-key' },
+            { id: 'key-2', name: 'transfer-key' },
+          ],
+          skip: 0,
+          take: 500,
+          totalCount: 2,
+        }),
+      );
+      zonesApiSpy.apiZonesPost.and.returnValue(of({ id: 'new-zone' }));
+    });
+
+    fixture.componentInstance.form.patchValue({ name: 'example.com' });
+    fixture.componentInstance.toggleBoundKey('update', 'update-key', true);
+    fixture.componentInstance.toggleBoundKey('transfer', 'transfer-key', true);
+    fixture.componentInstance.toggleBoundKey('transfer', 'update-key', true);
+    fixture.componentInstance.toggleBoundKey('transfer', 'update-key', false);
+    await fixture.componentInstance.save();
+
+    expect(zonesApiSpy.apiZonesPost).toHaveBeenCalledWith({
+      zoneWriteRequest: jasmine.objectContaining({
+        updateTsigKeyNames: ['update-key'],
+        transferTsigKeyNames: ['transfer-key'],
+      }),
+    });
+  });
+
+  it('key lists: edit mode loads the bound names and keeps one the session cannot list', async () => {
+    const fixture = await createComponent('zone-1', () => {
+      tsigKeysApiSpy.apiTsigKeysGet.and.returnValue(
+        of({ items: [{ id: 'key-1', name: 'listed-key' }], skip: 0, take: 500, totalCount: 1 }),
+      );
+      zonesApiSpy.apiZonesIdGet.and.returnValue(
+        of({
+          id: 'zone-1',
+          name: 'example.com',
+          type: ZoneTypeEnum.Primary,
+          isDnssecSigned: false,
+          isDisabled: false,
+          dynamicUpdateEnabled: true,
+          updateTsigKeyNames: ['listed-key'],
+          transferTsigKeyNames: ['hidden-key'],
+          cloudSyncInterval: '00:05:00',
+        }),
+      );
+      zonesApiSpy.apiZonesIdPut.and.returnValue(of(undefined));
+    });
+
+    expect(fixture.componentInstance.updateKeyNames()).toEqual(['listed-key']);
+    expect(
+      fixture.componentInstance.keyChoices(fixture.componentInstance.transferKeyNames()),
+    ).toEqual(['listed-key', 'hidden-key']);
+
+    await fixture.componentInstance.save();
+
+    expect(zonesApiSpy.apiZonesIdPut).toHaveBeenCalledWith({
+      id: 'zone-1',
+      zoneWriteRequest: jasmine.objectContaining({
+        updateTsigKeyNames: ['listed-key'],
+        transferTsigKeyNames: ['hidden-key'],
+      }),
+    });
+  });
+
   it('save() submits a custom-entered TSIG key name', async () => {
     const fixture = await createComponent(null, () => {
       zonesApiSpy.apiZonesPost.and.returnValue(of({ id: 'new-zone' }));

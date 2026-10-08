@@ -243,6 +243,32 @@ export class ZoneFormComponent implements OnInit {
     () => this.tsigKeySelection() === CUSTOM_TSIG_KEY_OPTION,
   );
 
+  /** The TSIG key names allowed to send dynamic updates to this zone (`updateTsigKeyNames`). */
+  readonly updateKeyNames = signal<string[]>([]);
+
+  /** The TSIG key names allowed to transfer this zone (`transferTsigKeyNames`). */
+  readonly transferKeyNames = signal<string[]>([]);
+
+  /**
+   * This method returns the names to offer as checkboxes for one key list: every non-cluster key
+   * the session can see, plus any name the zone already lists that is not among them (a key this
+   * session cannot list, or one not created yet), so saving the form does not drop it.
+   */
+  keyChoices(selected: string[]): string[] {
+    const names = this.tsigKeys()
+      .map((key) => key.name)
+      .filter((name): name is string => !!name);
+    return [...names, ...selected.filter((name) => !names.includes(name))];
+  }
+
+  /** This method ticks or unticks one key in the update or transfer list. */
+  toggleBoundKey(list: 'update' | 'transfer', name: string, checked: boolean): void {
+    const target = list === 'update' ? this.updateKeyNames : this.transferKeyNames;
+    target.update((names) =>
+      checked ? (names.includes(name) ? names : [...names, name]) : names.filter((n) => n !== name),
+    );
+  }
+
   /** The cloud credential select's current value, mirrored like {@link tsigKeySelection}. */
   readonly cloudCredentialSelection = signal<string>('');
   readonly showCustomCloudCredentialField = computed(
@@ -416,6 +442,8 @@ export class ZoneFormComponent implements OnInit {
       notifyAddresses: splitAddressLines(value.notifyAddressesText),
       tsigKeyName: value.tsigKeyName.trim().length > 0 ? value.tsigKeyName : null,
       dynamicUpdateEnabled: value.dynamicUpdateEnabled,
+      updateTsigKeyNames: this.updateKeyNames(),
+      transferTsigKeyNames: this.transferKeyNames(),
       isDnssecSigned: value.isDnssecSigned,
       // Omitted when the zone is not signed; the PUT then stores no algorithm.
       dnssecAlgorithm: value.isDnssecSigned ? value.dnssecAlgorithm : undefined,
@@ -479,6 +507,9 @@ export class ZoneFormComponent implements OnInit {
         : this.cloudCredentials().some((credential) => credential.id === cloudProviderCredentialId)
           ? cloudProviderCredentialId
           : CUSTOM_CLOUD_CREDENTIAL_OPTION;
+
+    this.updateKeyNames.set(zone.updateTsigKeyNames ?? []);
+    this.transferKeyNames.set(zone.transferTsigKeyNames ?? []);
 
     this.form.patchValue({
       name: zone.name ?? '',

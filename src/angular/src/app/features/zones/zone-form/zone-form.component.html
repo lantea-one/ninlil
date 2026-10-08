@@ -378,6 +378,44 @@
                     ></textarea>
                   </div>
                 </section>
+                <fieldset class="field full-width mb-3" id="zone-update-keys">
+                  <legend class="form-label">Keys allowed to send dynamic updates</legend>
+                  @for (name of keyChoices(updateKeyNames()); track name) {
+                    <c-form-check>
+                      <input
+                        cFormCheckInput
+                        type="checkbox"
+                        [id]="'zone-update-key-' + name"
+                        [checked]="updateKeyNames().includes(name)"
+                        (change)="toggleBoundKey('update', name, $any($event.target).checked)"
+                      />
+                      <label cFormCheckLabel [for]="'zone-update-key-' + name">{{ name }}</label>
+                    </c-form-check>
+                  } @empty {
+                    <p class="hint">No TSIG keys to choose from.</p>
+                  }
+                  <p class="hint">With none ticked, no key can update this zone.</p>
+                </fieldset>
+                <fieldset class="field full-width mb-3" id="zone-transfer-keys">
+                  <legend class="form-label">
+                    Keys allowed to transfer this zone (AXFR and IXFR)
+                  </legend>
+                  @for (name of keyChoices(transferKeyNames()); track name) {
+                    <c-form-check>
+                      <input
+                        cFormCheckInput
+                        type="checkbox"
+                        [id]="'zone-transfer-key-' + name"
+                        [checked]="transferKeyNames().includes(name)"
+                        (change)="toggleBoundKey('transfer', name, $any($event.target).checked)"
+                      />
+                      <label cFormCheckLabel [for]="'zone-transfer-key-' + name">{{ name }}</label>
+                    </c-form-check>
+                  } @empty {
+                    <p class="hint">No TSIG keys to choose from.</p>
+                  }
+                  <p class="hint">With none ticked, no key can transfer this zone.</p>
+                </fieldset>
               </div>
             }
           </section>
