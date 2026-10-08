@@ -362,6 +362,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
                 Type = ZoneTypeEnum.Forwarder,
                 ForwarderAddresses = [.. ConfiguredForwarderAddresses],
                 TsigKeyName = TsigKeyName,
+                TransferTsigKeyNames = [TsigKeyName],
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             }
         );

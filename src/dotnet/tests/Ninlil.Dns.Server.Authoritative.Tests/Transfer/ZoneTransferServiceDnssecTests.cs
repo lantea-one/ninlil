@@ -76,6 +76,7 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
             seedScope.ServiceProvider.GetRequiredService<IDataProtectionProvider>();
 
         _zoneId = Guid.NewGuid();
+        _keyName = $"transfer-test-key-{Guid.NewGuid()}";
 
         await zoneRepository.AddAsync(
             new ZoneEntity
@@ -86,6 +87,7 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
                 IsDnssecSigned = true,
                 DnssecAlgorithm = DnssecAlgorithmEnum.Ed25519,
                 DenialOfExistenceMode = DnssecDenialOfExistenceModeEnum.Nsec,
+                TransferTsigKeyNames = [_keyName],
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             }
         );
@@ -154,7 +156,6 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
         );
         byte[] rawSecret = new byte[32];
         Random.Shared.NextBytes(rawSecret);
-        _keyName = $"transfer-test-key-{Guid.NewGuid()}";
 
         await tsigKeyRepository.AddAsync(
             new TsigKeyEntity

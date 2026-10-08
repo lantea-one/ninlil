@@ -363,7 +363,8 @@ public class ZoneTransferService(
 
     /// <summary>
     ///     This method runs the checks AXFR and IXFR share: the request came over TCP, TLS or QUIC,
-    ///     carries a TSIG that verifies, and names a hosted zone's apex.
+    ///     carries a TSIG that verifies, names a hosted zone's apex and uses a key listed in the
+    ///     zone's <see cref="ZoneEntity.TransferTsigKeyNames" />.
     /// </summary>
     /// <returns>
     ///     On success, the zone and TSIG result with a <see langword="null" /> error; on failure,
@@ -422,8 +423,14 @@ public class ZoneTransferService(
         // A transfer must name the zone apex, not a name inside the zone.
         CachedZone zone = zoneCache.FindZone(question.Name);
 
-        return zone is null || zone.ApexName != question.Name
-            ? (
+        if (
+            zone is null
+            || zone.ApexName != question.Name
+            // The key must also be bound to this zone (ZoneEntity.TransferTsigKeyNames); an empty
+            // list accepts no key. Both refusals are signed, since the signature verified.
+            || !ZoneTsigKeyBinding.IsAllowed(zone.Zone.TransferTsigKeyNames, tsigResult.Key.Name)
+        )
+            return (
                 null,
                 null,
                 await SignedErrorResponseAsync(
@@ -432,8 +439,9 @@ public class ZoneTransferService(
                     tsigResult.Key.Name,
                     stoppingToken
                 )
-            )
-            : (zone, tsigResult, null);
+            );
+
+        return (zone, tsigResult, null);
     }
 
     /// <summary>

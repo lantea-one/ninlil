@@ -46,7 +46,9 @@ public class ZoneWriteRequestExample : IMultipleExamplesProvider<ZoneWriteReques
                     CaaIssuerDomain: "letsencrypt.org",
                     AutoManagePtrRecords: true,
                     PtrIpv4PrefixLength: null,
-                    PtrIpv6PrefixLength: null
+                    PtrIpv6PrefixLength: null,
+                    UpdateTsigKeyNames: ["example-update-key"],
+                    TransferTsigKeyNames: ["secondary-transfer-key"]
                 ),
             },
             new()
@@ -75,7 +77,9 @@ public class ZoneWriteRequestExample : IMultipleExamplesProvider<ZoneWriteReques
                     CaaIssuerDomain: null,
                     AutoManagePtrRecords: null,
                     PtrIpv4PrefixLength: null,
-                    PtrIpv6PrefixLength: null
+                    PtrIpv6PrefixLength: null,
+                    UpdateTsigKeyNames: null,
+                    TransferTsigKeyNames: null
                 ),
             },
         ];

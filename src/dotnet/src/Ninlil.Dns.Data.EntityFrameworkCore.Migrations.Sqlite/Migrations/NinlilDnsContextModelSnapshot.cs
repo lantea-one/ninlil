@@ -1980,6 +1980,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
                     b.Property<int>("TransferTransport")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TransferTsigKeyNames")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TsigKeyName")
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
@@ -1987,6 +1990,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdateTsigKeyNames")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")

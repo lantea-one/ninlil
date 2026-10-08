@@ -136,9 +136,19 @@ public class ZonesController(
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
         await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
+        List<string> updateTsigKeyNames = await NormalizeBoundKeyNamesAsync(
+            request.UpdateTsigKeyNames,
+            "updateTsigKeyNames",
+            stoppingToken
+        );
+        List<string> transferTsigKeyNames = await NormalizeBoundKeyNamesAsync(
+            request.TransferTsigKeyNames,
+            "transferTsigKeyNames",
+            stoppingToken
+        );
 
         ZoneEntity zone = new() { Id = Guid.NewGuid(), CreatedAtUtc = DateTimeOffset.UtcNow };
-        ApplyWrite(zone, request);
+        ApplyWrite(zone, request, updateTsigKeyNames, transferTsigKeyNames);
 
         await zoneRepository.AddAsync(zone, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
@@ -181,8 +191,18 @@ public class ZonesController(
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
         await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
+        List<string> updateTsigKeyNames = await NormalizeBoundKeyNamesAsync(
+            request.UpdateTsigKeyNames,
+            "updateTsigKeyNames",
+            stoppingToken
+        );
+        List<string> transferTsigKeyNames = await NormalizeBoundKeyNamesAsync(
+            request.TransferTsigKeyNames,
+            "transferTsigKeyNames",
+            stoppingToken
+        );
 
-        ApplyWrite(zone, request);
+        ApplyWrite(zone, request, updateTsigKeyNames, transferTsigKeyNames);
         zone.UpdatedAtUtc = DateTimeOffset.UtcNow;
         zoneRepository.Update(zone);
         await unitOfWork.SaveChangesAsync(stoppingToken);
@@ -301,6 +321,25 @@ public class ZonesController(
             )
         )
             zone.DynamicUpdateEnabled = dynamicUpdateEnabled.GetBoolean();
+
+        if (patch.TryGetMergePatchField("updateTsigKeyNames", out JsonElement updateTsigKeyNames))
+            zone.UpdateTsigKeyNames = await NormalizeBoundKeyNamesAsync(
+                ReadStringList(updateTsigKeyNames),
+                "updateTsigKeyNames",
+                stoppingToken
+            );
+
+        if (
+            patch.TryGetMergePatchField(
+                "transferTsigKeyNames",
+                out JsonElement transferTsigKeyNames
+            )
+        )
+            zone.TransferTsigKeyNames = await NormalizeBoundKeyNamesAsync(
+                ReadStringList(transferTsigKeyNames),
+                "transferTsigKeyNames",
+                stoppingToken
+            );
 
         if (patch.TryGetMergePatchField("comments", out JsonElement comments))
             zone.Comments = comments.ValueKind == JsonValueKind.Null ? null : comments.GetString();
@@ -619,10 +658,60 @@ public class ZonesController(
     }
 
     /// <summary>
+    ///     This method reads a merge-patch JSON array of strings; <c>null</c> reads as an empty
+    ///     list.
+    /// </summary>
+    private static List<string> ReadStringList(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Null
+            ? []
+            : [.. element.EnumerateArray().Select(item => item.GetString())];
+
+    /// <summary>
+    ///     This method validates and canonicalizes a zone's list of bound TSIG key names
+    ///     (<c>UpdateTsigKeyNames</c> or <c>TransferTsigKeyNames</c>). Each name must parse as a DNS
+    ///     name and must not name a cluster key (same rule as <c>TsigKeyName</c>, which
+    ///     <see cref="ValidateTsigKeyNameAsync" /> applies). A name that matches no key is
+    ///     accepted, because a zone may be set up before its key. Names are stored lowercase
+    ///     without a trailing dot, as TSIG key names are, and duplicates are dropped.
+    /// </summary>
+    /// <exception cref="ValidationException">A name is invalid or is a cluster key's.</exception>
+    private async Task<List<string>> NormalizeBoundKeyNamesAsync(
+        IReadOnlyList<string> keyNames,
+        string fieldName,
+        CancellationToken stoppingToken
+    )
+    {
+        List<string> normalized = [];
+
+        foreach (string keyName in keyNames ?? [])
+        {
+            if (
+                !DnsName.TryParse(keyName, out DnsName parsed) || string.IsNullOrWhiteSpace(keyName)
+            )
+                throw new ValidationException(
+                    $"'{keyName}' in {fieldName} is not a valid TSIG key name."
+                );
+
+            string canonical = parsed.ToCanonicalLower().ToString().TrimEnd('.');
+            await ValidateTsigKeyNameAsync(canonical, stoppingToken);
+
+            if (!normalized.Contains(canonical))
+                normalized.Add(canonical);
+        }
+
+        return normalized;
+    }
+
+    /// <summary>
     ///     This method copies every writable field from a write request onto a zone entity. A
     ///     missing <c>CloudSyncInterval</c> defaults to five minutes.
     /// </summary>
-    private static void ApplyWrite(ZoneEntity zone, ZoneWriteRequest request)
+    private static void ApplyWrite(
+        ZoneEntity zone,
+        ZoneWriteRequest request,
+        List<string> updateTsigKeyNames,
+        List<string> transferTsigKeyNames
+    )
     {
         zone.Name = request.Name;
         zone.Type = request.Type;
@@ -637,6 +726,8 @@ public class ZonesController(
         zone.NotifyAddresses = [.. request.NotifyAddresses ?? []];
         zone.TsigKeyName = request.TsigKeyName;
         zone.DynamicUpdateEnabled = request.DynamicUpdateEnabled;
+        zone.UpdateTsigKeyNames = updateTsigKeyNames;
+        zone.TransferTsigKeyNames = transferTsigKeyNames;
         zone.Comments = request.Comments;
         zone.CloudProviderCredentialId = request.CloudProviderCredentialId;
         zone.CloudProviderZoneId = request.CloudProviderZoneId;
@@ -668,6 +759,8 @@ public class ZonesController(
             zone.NotifyAddresses,
             zone.TsigKeyName,
             zone.DynamicUpdateEnabled,
+            zone.UpdateTsigKeyNames,
+            zone.TransferTsigKeyNames,
             zone.Comments,
             zone.CloudProviderCredentialId,
             zone.CloudProviderZoneId,

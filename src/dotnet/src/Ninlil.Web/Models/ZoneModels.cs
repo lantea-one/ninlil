@@ -24,6 +24,13 @@ namespace Ninlil.Web.Models;
 /// <param name="NotifyAddresses">The secondaries the zone sends NOTIFY messages to.</param>
 /// <param name="TsigKeyName">The TSIG key the zone signs its transfer requests with.</param>
 /// <param name="DynamicUpdateEnabled">Whether the zone accepts RFC 2136 dynamic updates.</param>
+/// <param name="UpdateTsigKeyNames">
+///     The TSIG keys allowed to send dynamic updates to the zone (lowercase, no trailing dot). An
+///     empty list accepts no key.
+/// </param>
+/// <param name="TransferTsigKeyNames">
+///     The TSIG keys allowed to transfer the zone (AXFR and IXFR). An empty list accepts no key.
+/// </param>
 /// <param name="Comments">Free-form operator notes about the zone.</param>
 /// <param name="CloudProviderCredentialId">The credential a cloud zone syncs with.</param>
 /// <param name="CloudProviderZoneId">The zone's identifier at its cloud provider.</param>
@@ -84,7 +91,9 @@ public record ZoneWriteRequest(
     bool? AutoManagePtrRecords = null,
     int? PtrIpv4PrefixLength = null,
     int? PtrIpv6PrefixLength = null,
-    ZoneTransferTransportEnum TransferTransport = ZoneTransferTransportEnum.Plain
+    ZoneTransferTransportEnum TransferTransport = ZoneTransferTransportEnum.Plain,
+    IReadOnlyList<string> UpdateTsigKeyNames = null,
+    IReadOnlyList<string> TransferTsigKeyNames = null
 );
 
 /// <summary>
@@ -105,6 +114,13 @@ public record ZoneWriteRequest(
 /// <param name="NotifyAddresses">The secondaries the zone sends NOTIFY messages to.</param>
 /// <param name="TsigKeyName">The TSIG key the zone signs its transfer requests with.</param>
 /// <param name="DynamicUpdateEnabled">Whether the zone accepts RFC 2136 dynamic updates.</param>
+/// <param name="UpdateTsigKeyNames">
+///     The TSIG keys allowed to send dynamic updates to the zone (lowercase, no trailing dot). An
+///     empty list accepts no key.
+/// </param>
+/// <param name="TransferTsigKeyNames">
+///     The TSIG keys allowed to transfer the zone (AXFR and IXFR). An empty list accepts no key.
+/// </param>
 /// <param name="Comments">Free-form operator notes about the zone.</param>
 /// <param name="CloudProviderCredentialId">The credential a cloud zone syncs with.</param>
 /// <param name="CloudProviderZoneId">The zone's identifier at its cloud provider.</param>
@@ -152,6 +168,8 @@ public record ZoneDetail(
     IReadOnlyList<string> NotifyAddresses,
     string TsigKeyName,
     bool DynamicUpdateEnabled,
+    IReadOnlyList<string> UpdateTsigKeyNames,
+    IReadOnlyList<string> TransferTsigKeyNames,
     string Comments,
     Guid? CloudProviderCredentialId,
     string CloudProviderZoneId,

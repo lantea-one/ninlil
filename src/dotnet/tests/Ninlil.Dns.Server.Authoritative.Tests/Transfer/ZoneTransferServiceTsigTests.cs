@@ -114,4 +114,83 @@ public class ZoneTransferServiceTsigTests(TsigTransferFixture fixture)
 
         Assert.True(result.IsValid, $"The REFUSED reply's TSIG failed with {result.Error}.");
     }
+
+    [Theory]
+    [InlineData(DnsResourceRecordTypeEnum.Axfr)]
+    [InlineData(DnsResourceRecordTypeEnum.Ixfr)]
+    public async Task CreateTransferResponseAsync_AValidKeyNotListedForTheZone_YieldsASignedRefused(
+        DnsResourceRecordTypeEnum type
+    )
+    {
+        string key = await _host.AddKeyAsync(bindTransfer: false);
+        (DnsMessage request, byte[] raw, int offset) = await _host.SignedQueryAsync(
+            TsigTransferHost.ZoneName,
+            type,
+            key
+        );
+
+        List<DnsMessage> messages = await _host.TransferAsync(request, raw, offset);
+
+        await AssertSignedRefusedAsync(messages, request, key);
+    }
+
+    [Fact]
+    public async Task CreateAxfrResponseAsync_AZoneWithEmptyKeyLists_RefusesEveryKey()
+    {
+        string key = await _host.AddKeyAsync();
+        (DnsMessage request, byte[] raw, int offset) = await _host.SignedQueryAsync(
+            TsigTransferHost.UnboundZoneName,
+            DnsResourceRecordTypeEnum.Axfr,
+            key
+        );
+
+        List<DnsMessage> messages = await _host.TransferAsync(request, raw, offset);
+
+        await AssertSignedRefusedAsync(messages, request, key);
+    }
+
+    [Fact]
+    public async Task CreateAxfrResponseAsync_AKeyListedForTheZone_Transfers()
+    {
+        string key = await _host.AddKeyAsync();
+        (DnsMessage request, byte[] raw, int offset) = await _host.SignedQueryAsync(
+            TsigTransferHost.ZoneName,
+            DnsResourceRecordTypeEnum.Axfr,
+            key
+        );
+
+        List<DnsMessage> messages = await _host.TransferAsync(request, raw, offset);
+
+        Assert.True(messages.Count > 1);
+        Assert.All(
+            messages,
+            message => Assert.Equal(DnsResponseCodeEnum.NoError, message.ResponseCode)
+        );
+    }
+
+    private async Task AssertSignedRefusedAsync(
+        List<DnsMessage> messages,
+        DnsMessage request,
+        string key
+    )
+    {
+        DnsMessage reply = Assert.Single(messages);
+        Assert.Equal(DnsResponseCodeEnum.Refused, reply.ResponseCode);
+        Assert.NotNull(reply.Tsig);
+        Assert.Equal(DnsResponseCodeEnum.NoError, reply.Tsig.Error);
+
+        byte[] replyBytes = DnsMessageWriter.Write(reply);
+        DnsMessage reparsed = DnsMessageReader.Read(replyBytes, out int replyOffset);
+        TsigVerificationResult result = await _host.WithTsigAsync(tsigService =>
+            tsigService.VerifyResponseAsync(
+                replyBytes,
+                replyOffset,
+                reparsed,
+                request.Tsig.Mac,
+                key
+            )
+        );
+
+        Assert.True(result.IsValid, $"The REFUSED reply's TSIG failed with {result.Error}.");
+    }
 }

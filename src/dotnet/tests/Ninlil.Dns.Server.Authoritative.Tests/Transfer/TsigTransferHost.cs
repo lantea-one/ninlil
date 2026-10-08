@@ -9,6 +9,7 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
+using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.Extension;
 using Ninlil.Dns.Server.Authoritative.Transfer;
 using Ninlil.Dns.Server.Core.Extension;
@@ -34,6 +35,12 @@ public sealed class TsigTransferHost : IAsyncDisposable
     ///     This constant contains the name of the one hosted zone.
     /// </summary>
     public const string ZoneName = "xfer-tsig.example.com";
+
+    /// <summary>
+    ///     This constant contains the name of a second hosted zone whose key lists are empty, so
+    ///     no key may transfer it.
+    /// </summary>
+    public const string UnboundZoneName = "xfer-unbound.example.com";
 
     private readonly string _databasePath = Path.Combine(
         Path.GetTempPath(),
@@ -126,6 +133,34 @@ public sealed class TsigTransferHost : IAsyncDisposable
                 )
             );
 
+        Guid unboundZoneId = Guid.NewGuid();
+        await zoneRepository.AddAsync(
+            new ZoneEntity
+            {
+                Id = unboundZoneId,
+                Name = UnboundZoneName,
+                Type = ZoneTypeEnum.Primary,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        await recordRepository.AddAsync(
+            NewRecord(
+                unboundZoneId,
+                UnboundZoneName,
+                DnsResourceRecordTypeEnum.Soa,
+                typeof(SoaRecordData),
+                new SoaRecordData(
+                    DnsName.Parse($"ns1.{UnboundZoneName}"),
+                    DnsName.Parse($"admin.{UnboundZoneName}"),
+                    1,
+                    3600,
+                    900,
+                    604800,
+                    3600
+                )
+            )
+        );
+
         await unitOfWork.SaveChangesAsync();
         await _host.StartAsync();
     }
@@ -154,7 +189,11 @@ public sealed class TsigTransferHost : IAsyncDisposable
     ///     per call, so tests do not collide.
     /// </summary>
     /// <param name="isClusterKey">Whether the key belongs to a cluster peer (TSIG refuses those).</param>
-    public async Task<string> AddKeyAsync(bool isClusterKey = false)
+    /// <param name="bindTransfer">
+    ///     Whether to list the key in the zone's <see cref="ZoneEntity.TransferTsigKeyNames" />.
+    ///     A key that is not listed verifies but may not transfer the zone.
+    /// </param>
+    public async Task<string> AddKeyAsync(bool isClusterKey = false, bool bindTransfer = true)
     {
         await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
         ITsigKeyRepository keyRepository =
@@ -181,6 +220,19 @@ public sealed class TsigTransferHost : IAsyncDisposable
             }
         );
         await unitOfWork.SaveChangesAsync();
+
+        if (bindTransfer)
+        {
+            IZoneRepository zoneRepository =
+                scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+            ZoneEntity zone = await zoneRepository.FindByNameAsync(ZoneName);
+            zone.TransferTsigKeyNames = [.. zone.TransferTsigKeyNames, name];
+            zoneRepository.Update(zone);
+            await unitOfWork.SaveChangesAsync();
+            await _host
+                .Services.GetRequiredService<AuthoritativeZoneCache>()
+                .ReloadZoneAsync(zone.Id);
+        }
 
         return name;
     }

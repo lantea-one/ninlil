@@ -21,7 +21,10 @@ namespace Ninlil.Web.Tests;
 ///     <c>IZoneUpdateService.ApplyRecordEditAsync</c> that the API relies on. Changing a record's
 ///     type to or from SOA through PUT or PATCH is not tested. A zone whose <c>tsigKeyName</c>
 ///     names a cluster key (saved directly through the repository) is rejected with 400 on create,
-///     PUT and PATCH, while an ordinary key's name is accepted.
+///     PUT and PATCH, while an ordinary key's name is accepted. The per-zone
+///     <c>updateTsigKeyNames</c> and <c>transferTsigKeyNames</c> lists round-trip through create,
+///     GET, PUT and PATCH, are stored lowercase without duplicates, and reject a cluster key or a
+///     malformed name with 400; a name that matches no key is accepted.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -516,6 +519,129 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, patchOk.StatusCode);
         HttpResponseMessage patchUnknown = await client.SendAsync(
             PatchRequest($"/api/zones/{zone.Id}", new { tsigKeyName = "not-created-yet" })
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patchUnknown.StatusCode);
+    }
+
+    [Fact]
+    public async Task Zone_KeyBindingLists_RoundTripThroughCreateReplaceAndPatch()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"bound-{Guid.NewGuid():N}.example.com";
+
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = zoneName,
+                type = "Primary",
+                updateTsigKeyNames = new[] { "Update-Key.", "update-key", "other-update" },
+                transferTsigKeyNames = new[] { "Xfer-Key" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        ZoneDetail created = await create.Content.ReadFromJsonAsync<ZoneDetail>();
+        Assert.Equal(["update-key", "other-update"], created.UpdateTsigKeyNames);
+        Assert.Equal(["xfer-key"], created.TransferTsigKeyNames);
+
+        ZoneDetail fetched = await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{created.Id}");
+        Assert.Equal(created.UpdateTsigKeyNames, fetched.UpdateTsigKeyNames);
+        Assert.Equal(created.TransferTsigKeyNames, fetched.TransferTsigKeyNames);
+
+        // A PATCH changes only the field it names.
+        HttpResponseMessage patch = await client.SendAsync(
+            PatchRequest(
+                $"/api/zones/{created.Id}",
+                new { transferTsigKeyNames = new[] { "B", "C" } }
+            )
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patch.StatusCode);
+        fetched = await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{created.Id}");
+        Assert.Equal(["update-key", "other-update"], fetched.UpdateTsigKeyNames);
+        Assert.Equal(["b", "c"], fetched.TransferTsigKeyNames);
+
+        // A PUT without the lists clears them: an empty list accepts no key.
+        HttpResponseMessage replace = await client.PutAsJsonAsync(
+            $"/api/zones/{created.Id}",
+            new { name = zoneName, type = "Primary" }
+        );
+        Assert.Equal(HttpStatusCode.NoContent, replace.StatusCode);
+        fetched = await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{created.Id}");
+        Assert.Empty(fetched.UpdateTsigKeyNames);
+        Assert.Empty(fetched.TransferTsigKeyNames);
+    }
+
+    [Fact]
+    public async Task Zone_KeyBindingLists_RejectAClusterKeyAndAMalformedName()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string clusterKeyName = $"cluster-bind-{Guid.NewGuid():N}";
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            await scope
+                .ServiceProvider.GetRequiredService<ITsigKeyRepository>()
+                .AddAsync(
+                    new TsigKeyEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = clusterKeyName,
+                        AlgorithmName = "hmac-sha256",
+                        SecretEncrypted = "not-used",
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                        ClusterNodeId = Guid.NewGuid(),
+                    }
+                );
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        string zoneName = $"bound-bad-{Guid.NewGuid():N}.example.com";
+
+        foreach (string field in new[] { "updateTsigKeyNames", "transferTsigKeyNames" })
+        {
+            Dictionary<string, object> clusterBody = new()
+            {
+                ["name"] = zoneName,
+                ["type"] = "Primary",
+                [field] = new[] { clusterKeyName.ToUpperInvariant() },
+            };
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (await client.PostAsJsonAsync("/api/zones", clusterBody)).StatusCode
+            );
+
+            Dictionary<string, object> malformedBody = new()
+            {
+                ["name"] = zoneName,
+                ["type"] = "Primary",
+                [field] = new[] { "bad..name" },
+            };
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (await client.PostAsJsonAsync("/api/zones", malformedBody)).StatusCode
+            );
+        }
+
+        HttpResponseMessage plain = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = zoneName, type = "Primary" }
+        );
+        plain.EnsureSuccessStatusCode();
+        ZoneDetail zone = await plain.Content.ReadFromJsonAsync<ZoneDetail>();
+
+        HttpResponseMessage patchCluster = await client.SendAsync(
+            PatchRequest(
+                $"/api/zones/{zone.Id}",
+                new { updateTsigKeyNames = new[] { clusterKeyName } }
+            )
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patchCluster.StatusCode);
+
+        // A name that matches no key yet is accepted, as for tsigKeyName.
+        HttpResponseMessage patchUnknown = await client.SendAsync(
+            PatchRequest(
+                $"/api/zones/{zone.Id}",
+                new { updateTsigKeyNames = new[] { "not-created-yet" } }
+            )
         );
         Assert.Equal(HttpStatusCode.NoContent, patchUnknown.StatusCode);
     }

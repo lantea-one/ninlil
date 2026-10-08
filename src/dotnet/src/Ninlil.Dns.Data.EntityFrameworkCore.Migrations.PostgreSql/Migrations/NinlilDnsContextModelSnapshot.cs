@@ -1985,6 +1985,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
                     b.Property<int>("TransferTransport")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TransferTsigKeyNames")
+                        .HasColumnType("text");
+
                     b.Property<string>("TsigKeyName")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
@@ -1993,6 +1996,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<string>("UpdateTsigKeyNames")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");

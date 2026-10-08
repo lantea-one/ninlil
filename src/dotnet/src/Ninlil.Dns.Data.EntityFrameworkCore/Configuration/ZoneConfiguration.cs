@@ -52,5 +52,13 @@ public class ZoneConfiguration : IEntityTypeConfiguration<ZoneEntity>
         builder
             .Property(zone => zone.NotifyAddresses)
             .HasConversion(new JsonStringListValueConverter(), new JsonStringListValueComparer());
+
+        builder
+            .Property(zone => zone.UpdateTsigKeyNames)
+            .HasConversion(new JsonStringListValueConverter(), new JsonStringListValueComparer());
+
+        builder
+            .Property(zone => zone.TransferTsigKeyNames)
+            .HasConversion(new JsonStringListValueConverter(), new JsonStringListValueComparer());
     }
 }

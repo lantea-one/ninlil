@@ -103,6 +103,22 @@ public class ZoneEntity : AuditableEntityBase
     public bool DynamicUpdateEnabled { get; set; }
 
     /// <summary>
+    ///     This property contains the names of the TSIG keys allowed to send RFC 2136 dynamic
+    ///     updates to this zone. Names are stored lowercase without a trailing dot and compared
+    ///     case-insensitively. An empty list accepts no key, so a verified key that is not listed
+    ///     is refused. Cluster keys cannot be listed.
+    /// </summary>
+    public List<string> UpdateTsigKeyNames { get; set; } = [];
+
+    /// <summary>
+    ///     This property contains the names of the TSIG keys allowed to transfer this zone
+    ///     (AXFR and IXFR). Names are stored lowercase without a trailing dot and compared
+    ///     case-insensitively. An empty list accepts no key, so a verified key that is not listed
+    ///     is refused. Cluster keys cannot be listed.
+    /// </summary>
+    public List<string> TransferTsigKeyNames { get; set; } = [];
+
+    /// <summary>
     ///     This property contains free-form operator notes about the zone.
     /// </summary>
     public string Comments { get; set; }

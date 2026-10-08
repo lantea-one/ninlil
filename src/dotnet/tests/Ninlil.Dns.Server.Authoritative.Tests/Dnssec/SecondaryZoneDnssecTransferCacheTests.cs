@@ -219,6 +219,7 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
                 IsDnssecSigned = true,
                 DnssecAlgorithm = DnssecAlgorithmEnum.Ed25519,
                 DenialOfExistenceMode = DnssecDenialOfExistenceModeEnum.Nsec,
+                TransferTsigKeyNames = [_keyName],
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             }
         );

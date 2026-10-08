@@ -1985,6 +1985,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations
                     b.Property<int>("TransferTransport")
                         .HasColumnType("int");
 
+                    b.Property<string>("TransferTsigKeyNames")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("TsigKeyName")
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
@@ -1993,6 +1996,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)");
+
+                    b.Property<string>("UpdateTsigKeyNames")
+                        .HasColumnType("longtext");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("datetime(6)");

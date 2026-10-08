@@ -32,6 +32,9 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
 {
     private const string ZoneName = "signed-update.example.com";
 
+    // Updates are enabled, but no key is listed, so no key may update it.
+    private const string UnboundZoneName = "unbound-update.example.com";
+
     private readonly string _databasePath = Path.Combine(
         Path.GetTempPath(),
         $"ninlil-dns-signed-pipeline-tests-{Guid.NewGuid()}.sqlite3"
@@ -42,6 +45,7 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
     private IHost _host;
     private Guid _zoneId;
     private string _keyName;
+    private string _unlistedKeyName;
 
     /// <summary>
     ///     This clock reads the system time plus a settable offset, so a test can sign a request
@@ -86,11 +90,23 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
             seedScope.ServiceProvider.GetRequiredService<IDataProtectionProvider>();
 
         _zoneId = Guid.NewGuid();
+        _keyName = $"pipeline-test-key-{Guid.NewGuid()}";
         await zoneRepository.AddAsync(
             new ZoneEntity
             {
                 Id = _zoneId,
                 Name = ZoneName,
+                Type = ZoneTypeEnum.Primary,
+                DynamicUpdateEnabled = true,
+                UpdateTsigKeyNames = [_keyName.ToUpperInvariant()],
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        await zoneRepository.AddAsync(
+            new ZoneEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = UnboundZoneName,
                 Type = ZoneTypeEnum.Primary,
                 DynamicUpdateEnabled = true,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
@@ -128,19 +144,21 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
         );
         byte[] rawSecret = new byte[32];
         Random.Shared.NextBytes(rawSecret);
-        _keyName = $"pipeline-test-key-{Guid.NewGuid()}";
 
-        await tsigKeyRepository.AddAsync(
-            new TsigKeyEntity
-            {
-                Id = Guid.NewGuid(),
-                Name = _keyName,
-                AlgorithmName = "hmac-sha256",
-                SecretEncrypted = protector.Protect(Convert.ToBase64String(rawSecret)),
-                IsDisabled = false,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-            }
-        );
+        _unlistedKeyName = $"pipeline-unlisted-key-{Guid.NewGuid()}";
+
+        foreach (string name in new[] { _keyName, _unlistedKeyName })
+            await tsigKeyRepository.AddAsync(
+                new TsigKeyEntity
+                {
+                    Id = Guid.NewGuid(),
+                    Name = name,
+                    AlgorithmName = "hmac-sha256",
+                    SecretEncrypted = protector.Protect(Convert.ToBase64String(rawSecret)),
+                    IsDisabled = false,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                }
+            );
         await unitOfWork.SaveChangesAsync();
 
         // Starts the zone cache and the pipeline's workers (the pipeline is a hosted service).
@@ -185,12 +203,12 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
         return await reply.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
-    private async Task<DnsMessage> SignAsync(DnsMessage request)
+    private async Task<DnsMessage> SignAsync(DnsMessage request, string keyName = null)
     {
         await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
         ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
 
-        return await tsigService.SignAsync(request, _keyName, request.Id);
+        return await tsigService.SignAsync(request, keyName ?? _keyName, request.Id);
     }
 
     /// <summary>
@@ -214,12 +232,16 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
         Assert.True(result.IsValid, $"The reply's TSIG failed with {result.Error}.");
     }
 
-    private static DnsMessage BuildUpdate(string hostName, byte lastOctet) =>
+    private static DnsMessage BuildUpdate(
+        string hostName,
+        byte lastOctet,
+        string zoneName = ZoneName
+    ) =>
         new()
         {
             Id = 501,
             Opcode = DnsOpcodeEnum.Update,
-            Questions = { SoaQuestion(ZoneName) },
+            Questions = { SoaQuestion(zoneName) },
             AuthorityRecords =
             {
                 new DnsResourceRecord(
@@ -388,5 +410,48 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
 
         Assert.Equal(DnsResponseCodeEnum.Refused, reply.ResponseCode);
         Assert.Null(reply.Tsig);
+    }
+
+    [Fact]
+    public async Task SignedUpdateWithAValidKeyNotListedForTheZone_GetsASignedRefusedAndChangesNothing()
+    {
+        DnsMessage signed = await SignAsync(
+            BuildUpdate($"unlisted.{ZoneName}", 60),
+            _unlistedKeyName
+        );
+
+        byte[] replyBytes = await SendAsync(DnsMessageWriter.Write(signed));
+
+        Assert.Equal(DnsResponseCodeEnum.Refused, DnsMessageReader.Read(replyBytes).ResponseCode);
+        await AssertSignedReplyAsync(signed, replyBytes);
+
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IReadOnlyList<RecordEntity> records = await scope
+            .ServiceProvider.GetRequiredService<IRecordRepository>()
+            .ListByZoneIdAsync(_zoneId);
+        Assert.DoesNotContain(
+            records,
+            record => record.Name.StartsWith("unlisted.", StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    [Fact]
+    public async Task SignedUpdateForAZoneWithAnEmptyKeyList_GetsASignedRefusedForEveryKey()
+    {
+        foreach (string key in new[] { _keyName, _unlistedKeyName })
+        {
+            DnsMessage signed = await SignAsync(
+                BuildUpdate($"x.{UnboundZoneName}", 61, UnboundZoneName),
+                key
+            );
+
+            byte[] replyBytes = await SendAsync(DnsMessageWriter.Write(signed));
+
+            Assert.Equal(
+                DnsResponseCodeEnum.Refused,
+                DnsMessageReader.Read(replyBytes).ResponseCode
+            );
+            await AssertSignedReplyAsync(signed, replyBytes);
+        }
     }
 }

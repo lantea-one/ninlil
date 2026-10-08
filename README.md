@@ -43,7 +43,11 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   wire; keys saved earlier with capitals are lowercased at startup, and two names that differ
   only in case are left as they are with a warning in the log). The keys that clustering creates
   for its peers are labelled as cluster keys: they can be disabled but not renamed or deleted,
-  never sign or verify zone transfers, and go away when the peer is removed. Also an **ACME (RFC 8555) DNS-01
+  never sign or verify zone transfers, and go away when the peer is removed. A key is
+  not server-wide: each zone lists the keys allowed to update it and the keys allowed to transfer
+  it (AXFR and IXFR), and an empty list accepts no key, so a verified key that is not listed gets
+  a signed REFUSED. Bind keys on the zone form after creating them; a zone you upgrade from an
+  earlier setup where any key worked needs its lists filled in. Also an **ACME (RFC 8555) DNS-01
   client** for automated certificate issuance against zones this server hosts itself, with
   optional automated CAA record and PTR/reverse-zone management (including RFC 2317 classless
   delegation).

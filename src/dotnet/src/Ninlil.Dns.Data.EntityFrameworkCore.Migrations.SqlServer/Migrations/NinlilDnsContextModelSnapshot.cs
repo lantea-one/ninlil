@@ -1986,6 +1986,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations
                     b.Property<int>("TransferTransport")
                         .HasColumnType("int");
 
+                    b.Property<string>("TransferTsigKeyNames")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TsigKeyName")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
@@ -1994,6 +1997,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("UpdateTsigKeyNames")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("datetimeoffset");

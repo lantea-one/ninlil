@@ -16,7 +16,8 @@ namespace Ninlil.Dns.Server.Authoritative.Update;
 ///     when this server does not host that zone or the name is not its apex, and REFUSED unless
 ///     the zone is a Primary with <see cref="ZoneEntity.DynamicUpdateEnabled" /> and the request
 ///     carries a TSIG signature that the pipeline verified
-///     (<see cref="DnsQueryContext.TransactionSignature" />). It then checks the prerequisites
+///     (<see cref="DnsQueryContext.TransactionSignature" />) with a key listed in
+///     <see cref="ZoneEntity.UpdateTsigKeyNames" />. It then checks the prerequisites
 ///     and prescans the update section with <see cref="DynamicUpdateProcessor" /> and applies
 ///     the result through <see cref="IZoneUpdateService" />.
 ///     <para>
@@ -90,6 +91,16 @@ public class DynamicUpdateQueryResolver(
         // checks permission after the prerequisites; this check comes first on purpose, so a
         // sender without a valid key learns nothing about the zone from prerequisite results.
         if (request.Tsig is null || context.TransactionSignature is not { IsVerified: true })
+            return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
+
+        // The key must also be bound to this zone. The pipeline signs this REFUSED, because the
+        // request's signature verified.
+        if (
+            !ZoneTsigKeyBinding.IsAllowed(
+                zone.Zone.UpdateTsigKeyNames,
+                context.TransactionSignature.KeyName
+            )
+        )
             return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
