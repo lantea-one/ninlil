@@ -60,6 +60,10 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
         instance.AddDbContext<NinlilDnsContext>(builder => builder.UseNinlilDnsStorage(options));
 
         instance.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
+        instance.AddScoped<
+            IUnitOfWorkTransactionFactory,
+            EntityFrameworkUnitOfWorkTransactionFactory
+        >();
         instance.AddScoped<IUserRepository, UserRepository>();
         instance.AddScoped<IRoleRepository, RoleRepository>();
         instance.AddScoped<ISessionRepository, SessionRepository>();

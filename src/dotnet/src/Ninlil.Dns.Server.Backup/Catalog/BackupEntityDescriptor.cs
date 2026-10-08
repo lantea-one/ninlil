@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -19,12 +20,18 @@ namespace Ninlil.Dns.Server.Backup.Catalog;
 ///     key in <see cref="Model.BackupManifest.EntityCounts" />.
 /// </param>
 /// <param name="ExportJsonAsync">Exports every row of this entity type as a JSON array.</param>
-/// <param name="ImportJsonAsync">Adds the rows in a JSON array of this entity type (the caller saves), returning how many.</param>
+/// <param name="Parse">
+///     Reads a JSON array of this entity type without touching the database, so a restore can
+///     check every file before it wipes anything. It throws <see cref="System.Text.Json.JsonException" />
+///     for malformed JSON or a null element.
+/// </param>
+/// <param name="ImportAsync">Adds already parsed rows (the caller saves), returning how many.</param>
 /// <param name="WipeAsync">Marks every existing row of this entity type for removal (the caller saves), returning how many.</param>
 public sealed record BackupEntityDescriptor(
     string Name,
     Func<IServiceProvider, CancellationToken, Task<string>> ExportJsonAsync,
-    Func<IServiceProvider, string, CancellationToken, Task<int>> ImportJsonAsync,
+    Func<string, IReadOnlyList<EntityBase>> Parse,
+    Func<IServiceProvider, IReadOnlyList<EntityBase>, CancellationToken, Task<int>> ImportAsync,
     Func<IServiceProvider, CancellationToken, Task<int>> WipeAsync
 )
 {
@@ -51,16 +58,24 @@ public sealed record BackupEntityDescriptor(
                 // Serialize as the concrete TEntity so the full entity shape is written.
                 return Ninlil.Common.Serializer.JsonSerializer.Serialize(entities.ToList());
             },
-            async (services, json, stoppingToken) =>
+            json =>
             {
-                TRepository repository = services.GetRequiredService<TRepository>();
                 List<TEntity> entities =
                     Ninlil.Common.Serializer.JsonSerializer.Deserialize<List<TEntity>>(json) ?? [];
 
-                foreach (TEntity entity in entities)
+                if (entities.Any(entity => entity is null))
+                    throw new JsonException("The array holds a null element.");
+
+                return entities;
+            },
+            async (services, parsed, stoppingToken) =>
+            {
+                TRepository repository = services.GetRequiredService<TRepository>();
+
+                foreach (TEntity entity in parsed.Cast<TEntity>())
                     await repository.AddAsync(entity, stoppingToken);
 
-                return entities.Count;
+                return parsed.Count;
             },
             async (services, stoppingToken) =>
             {

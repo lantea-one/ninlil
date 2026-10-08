@@ -35,12 +35,16 @@ namespace Ninlil.Dns.Server.Backup;
 ///         tampered archive, a missing entry, an unexpected key ring entry, a second
 ///         certificate or configuration entry, a configuration that is not a JSON object or
 ///         more decompressed data than <see cref="BackupOptions.MaximumRestoredPayloadBytes" />
-///         is rejected before anything is written. The bundled files are then staged next to
-///         their targets, and only after the database import are they renamed into place. The
-///         Data Protection key ring is merged: the archive's keys are added and no existing key
-///         is deleted. The entity JSON is still parsed during the import, and each entity type
-///         is committed separately, so a failure at that stage (malformed entity JSON, a
-///         database error) leaves a partly restored database, but no file has been replaced.
+///         is rejected before anything is written, and so is entity JSON that does not parse.
+///         The bundled files are then staged next to their
+///         targets. The existing rows are wiped and the archive's rows imported inside one
+///         database transaction (<see cref="IUnitOfWorkTransactionFactory" />), and only after
+///         that transaction commits are the staged files renamed into place, so a failure rolls
+///         the database back and leaves every file as it was. The Data Protection key ring is
+///         merged: the archive's keys are added and no existing key is deleted. On a storage
+///         engine without a transaction factory (MongoDB for now) the restore logs a warning and
+///         is not atomic: a database error after the wipe leaves a partly restored database,
+///         though no file has been replaced.
 ///         Only one restore runs at a time; a second one is refused with
 ///         <see cref="BackupRestoreInProgressException" />.
 ///     </para>
@@ -258,9 +262,44 @@ public sealed partial class SystemBackupService(
 
         RestoredFiles files = ReadAndValidateFiles(archive, budget);
 
+        // Every entity file is parsed now, before anything is wiped, so malformed JSON aborts the
+        // restore with nothing changed.
+        Dictionary<string, IReadOnlyList<EntityBase>> parsedByName = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+        foreach (BackupEntityDescriptor descriptor in BackupEntityCatalog.Entries)
+            parsedByName[descriptor.Name] = ParseOrThrow(
+                $"database/{descriptor.Name}.json",
+                () => descriptor.Parse(entityJsonByName[descriptor.Name])
+            );
+
+        BackupIdentityRelationships identityRelationships = ParseOrThrow(
+            IdentityRelationshipsEntryName,
+            () =>
+            {
+                BackupIdentityRelationships bundle =
+                    Ninlil.Common.Serializer.JsonSerializer.Deserialize<BackupIdentityRelationships>(
+                        identityRelationshipsJson
+                    ) ?? new BackupIdentityRelationships([], [], []);
+
+                if (
+                    bundle.UserRoles is null
+                    || bundle.UserClaims is null
+                    || bundle.RoleClaims is null
+                    || bundle.UserRoles.Any(item => item is null)
+                    || bundle.UserClaims.Any(item => item is null)
+                    || bundle.RoleClaims.Any(item => item is null)
+                )
+                    throw new JsonException("A list is missing or holds a null element.");
+
+                return bundle;
+            }
+        );
+
         // Every required entry is present and valid. The files are staged next to their targets
         // first, so a full disk or a permission error aborts here with nothing changed; the
-        // database is changed next; the files are renamed into place last.
+        // database is changed next, in one transaction where the engine supports it; the files
+        // are renamed into place last, only after that transaction commits.
         string configurationPath = backupOptions.Value.RuntimeConfigurationFilePath;
         bool restoresConfiguration =
             files.Configuration is not null && !string.IsNullOrWhiteSpace(configurationPath);
@@ -285,6 +324,23 @@ public sealed partial class SystemBackupService(
             using IServiceScope scope = scopeFactory.CreateScope();
             IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
+            // Optional: the relational engines register it. Without it (MongoDB for now) the
+            // restore still works but a failure after the wipe leaves a partly restored database.
+            IUnitOfWorkTransactionFactory transactionFactory =
+                scope.ServiceProvider.GetService<IUnitOfWorkTransactionFactory>();
+            if (transactionFactory is null)
+                logger.LogWarning(
+                    "The storage engine has no transaction support for restores, so this restore "
+                        + "is not atomic: a failure after the existing data is removed leaves a "
+                        + "partly restored database."
+                );
+
+            // Declared after the scope so it is disposed (rolled back, if not committed) first.
+            // A null resource is allowed.
+            await using IUnitOfWorkTransaction transaction = transactionFactory is null
+                ? null
+                : await transactionFactory.BeginAsync(stoppingToken);
+
             // Role memberships and claims are removed before users and roles, so no relationship is
             // left pointing at a deleted row (see WipeIdentityRelationshipsAsync).
             await WipeIdentityRelationshipsAsync(scope.ServiceProvider, stoppingToken);
@@ -304,9 +360,9 @@ public sealed partial class SystemBackupService(
             Dictionary<string, int> importedCounts = new(StringComparer.OrdinalIgnoreCase);
             foreach (BackupEntityDescriptor descriptor in BackupEntityCatalog.Entries)
             {
-                int imported = await descriptor.ImportJsonAsync(
+                int imported = await descriptor.ImportAsync(
                     scope.ServiceProvider,
-                    entityJsonByName[descriptor.Name],
+                    parsedByName[descriptor.Name],
                     stoppingToken
                 );
                 importedCounts[descriptor.Name] = imported;
@@ -317,11 +373,17 @@ public sealed partial class SystemBackupService(
             // its original identifier.
             await ImportIdentityRelationshipsAsync(
                 scope.ServiceProvider,
-                identityRelationshipsJson,
+                identityRelationships,
                 stoppingToken
             );
             await unitOfWork.SaveChangesAsync(stoppingToken);
 
+            // The point of no return. Cancellation is not observed here: once the commit has
+            // started, the caller must not be told the restore failed.
+            if (transaction is not null)
+                await transaction.CommitAsync(CancellationToken.None);
+
+            // Only now are the files replaced: a rollback above leaves the disk untouched.
             CommitStagedFiles(stagedFiles);
 
             logger.LogInformation(
@@ -340,6 +402,25 @@ public sealed partial class SystemBackupService(
 
             if (configurationLocked)
                 configurationLock.Release();
+        }
+    }
+
+    /// <summary>
+    ///     This method runs <paramref name="parse" /> and turns a <see cref="JsonException" /> into
+    ///     a <see cref="BackupArchiveInvalidException" /> naming the archive entry, so malformed
+    ///     data is reported as a bad archive (before anything is changed) and not as a server error.
+    /// </summary>
+    private static T ParseOrThrow<T>(string entryName, Func<T> parse)
+    {
+        try
+        {
+            return parse();
+        }
+        catch (JsonException exception)
+        {
+            throw new BackupArchiveInvalidException(
+                $"The archive entry '{entryName}' is not valid: {exception.Message}"
+            );
         }
     }
 
@@ -525,14 +606,10 @@ public sealed partial class SystemBackupService(
     /// </summary>
     private static async Task ImportIdentityRelationshipsAsync(
         IServiceProvider services,
-        string json,
+        BackupIdentityRelationships bundle,
         CancellationToken stoppingToken
     )
     {
-        BackupIdentityRelationships bundle =
-            Ninlil.Common.Serializer.JsonSerializer.Deserialize<BackupIdentityRelationships>(json)
-            ?? new BackupIdentityRelationships([], [], []);
-
         IUserRepository userRepository = services.GetRequiredService<IUserRepository>();
         IRoleRepository roleRepository = services.GetRequiredService<IRoleRepository>();
 
