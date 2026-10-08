@@ -18,11 +18,11 @@ export interface ClientSubnetSettingsDetail {
      */
     enable?: boolean;
     /**
-     * How many leading bits of an IPv4 address are sent upstream. Defaults to 24.
+     * How many leading bits of an IPv4 address are sent upstream; also caps an ECS option a client sends. Defaults to 24.
      */
     sourcePrefixLengthIPv4?: number;
     /**
-     * How many leading bits of an IPv6 address are sent upstream. Defaults to 56.
+     * How many leading bits of an IPv6 address are sent upstream; also caps an ECS option a client sends. Defaults to 56.
      */
     sourcePrefixLengthIPv6?: number;
     /**

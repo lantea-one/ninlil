@@ -39088,12 +39088,12 @@
           },
           "sourcePrefixLengthIPv4": {
             "type": "integer",
-            "description": "How many leading bits of an IPv4 address are sent upstream. Defaults to 24.",
+            "description": "How many leading bits of an IPv4 address are sent upstream; also caps an ECS option a client sends. Defaults to 24.",
             "format": "int32"
           },
           "sourcePrefixLengthIPv6": {
             "type": "integer",
-            "description": "How many leading bits of an IPv6 address are sent upstream. Defaults to 56.",
+            "description": "How many leading bits of an IPv6 address are sent upstream; also caps an ECS option a client sends. Defaults to 56.",
             "format": "int32"
           },
           "overrideAddress": {
