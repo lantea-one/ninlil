@@ -1406,7 +1406,7 @@
         "tags": [
           "Backup"
         ],
-        "summary": "This action restores the database, Data Protection key ring, TLS certificate and runtime\nconfiguration file from an archive, encrypted or not. All stored data is wiped and\nreplaced; there is no partial or merge restore. The archive is decrypted and checked\nbefore anything is written, so a wrong or missing passphrase or a corrupted, tampered or\nunrecognized archive returns 400 and leaves the server's data untouched. The server must\nbe restarted afterwards to pick up the restored key ring, certificate and settings.\nRequires `backup:write`.",
+        "summary": "This action restores the database, Data Protection key ring, TLS certificate and runtime\nconfiguration file from an archive, encrypted or not. All stored data is wiped and\nreplaced; there is no partial or merge restore. The archive is decrypted, checked and\nparsed before anything is written, so a wrong or missing passphrase or a corrupted,\ntampered or unrecognized archive returns 400 and leaves the server's data untouched.\nReturns 409 when another restore is already running (nothing is changed; try again when\nit has finished). On a relational storage engine the wipe and import are one\ntransaction, so a database failure also leaves the data as it was. The server must\nbe restarted afterwards to pick up the restored key ring, certificate and settings.\nRequires `backup:write`.",
         "requestBody": {
           "content": {
             "multipart/form-data": {

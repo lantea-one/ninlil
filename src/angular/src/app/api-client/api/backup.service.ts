@@ -111,7 +111,7 @@ export class BackupService extends BaseService implements BackupServiceInterface
     }
 
     /**
-     * This action restores the database, Data Protection key ring, TLS certificate and runtime configuration file from an archive, encrypted or not. All stored data is wiped and replaced; there is no partial or merge restore. The archive is decrypted and checked before anything is written, so a wrong or missing passphrase or a corrupted, tampered or unrecognized archive returns 400 and leaves the server\&#39;s data untouched. The server must be restarted afterwards to pick up the restored key ring, certificate and settings. Requires &#x60;backup:write&#x60;.
+     * This action restores the database, Data Protection key ring, TLS certificate and runtime configuration file from an archive, encrypted or not. All stored data is wiped and replaced; there is no partial or merge restore. The archive is decrypted, checked and parsed before anything is written, so a wrong or missing passphrase or a corrupted, tampered or unrecognized archive returns 400 and leaves the server\&#39;s data untouched. Returns 409 when another restore is already running (nothing is changed; try again when it has finished). On a relational storage engine the wipe and import are one transaction, so a database failure also leaves the data as it was. The server must be restarted afterwards to pick up the restored key ring, certificate and settings. Requires &#x60;backup:write&#x60;.
      * @endpoint post /api/backup/restore
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
