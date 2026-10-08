@@ -224,7 +224,9 @@ public class AuthController(
     ///     This action checks a username and password. It returns the tokens of a completed sign-in
     ///     or, for an account with two-factor authentication, a challenge token to submit to
     ///     <see cref="TwoFactorLogin" />. Returns 401 for a wrong password or a disabled or unknown
-    ///     account and 423 while the account is locked out. Allows anonymous callers and is rate
+    ///     account and 423 while the account is locked out. Wrong passwords do not lock an account,
+    ///     because that would let anyone who knows a username lock it out; the per-address rate
+    ///     limit slows guessing instead. Only an administrator's or the system's lockout gives 423. Allows anonymous callers and is rate
     ///     limited.
     /// </summary>
     [HttpPost("login")]
@@ -243,10 +245,13 @@ public class AuthController(
         if (user is null || user.IsDisabled)
             return Unauthorized();
 
+        // lockoutOnFailure stays false: a wrong password must not count toward Identity lockout,
+        // or anyone who knows a username could lock that account out. The per-IP login rate limit
+        // bounds guessing. An existing lockout is still checked and refused.
         SignInResult result = await signInManager.CheckPasswordSignInAsync(
             user,
             request.Password,
-            lockoutOnFailure: true
+            lockoutOnFailure: false
         );
 
         if (result.IsLockedOut)
