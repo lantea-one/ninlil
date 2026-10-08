@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
 import { OutboundQuerySettingsService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { OutboundQuerySettingsComponent } from './outbound-query-settings.component';
@@ -29,7 +29,7 @@ describe('OutboundQuerySettingsComponent', () => {
 
     apiSpy.apiOutboundQuerySettingsGet.and.returnValue(
       of({
-        enableSourcePortPool: true,
+        enableSourcePortPool: false,
         poolSizePerAddressFamily: 128,
         excludedSourcePorts: [51820],
       }),
@@ -55,9 +55,17 @@ describe('OutboundQuerySettingsComponent', () => {
     const fixture = await createComponent();
 
     expect(apiSpy.apiOutboundQuerySettingsGet).toHaveBeenCalled();
-    expect(fixture.componentInstance.form.controls.enableSourcePortPool.value).toBeTrue();
+    expect(fixture.componentInstance.form.controls.enableSourcePortPool.value).toBeFalse();
     expect(fixture.componentInstance.form.controls.excludedSourcePortsText.value).toBe('51820');
     expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  it('defaults the source-port pool to off until settings load', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiOutboundQuerySettingsGet.and.returnValue(NEVER);
+    });
+
+    expect(fixture.componentInstance.form.controls.enableSourcePortPool.value).toBeFalse();
   });
 
   it('save() splits the excluded-ports textarea into a trimmed, numeric array', async () => {

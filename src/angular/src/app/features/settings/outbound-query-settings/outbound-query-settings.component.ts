@@ -61,7 +61,7 @@ export class OutboundQuerySettingsComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
 
   readonly form = this.formBuilder.group({
-    enableSourcePortPool: [true],
+    enableSourcePortPool: [false],
     poolSizePerAddressFamily: [128, [Validators.required, Validators.min(1)]],
     excludedSourcePortsText: [''],
   });
@@ -106,7 +106,7 @@ export class OutboundQuerySettingsComponent implements OnInit {
     try {
       const settings = await firstValueFrom(this.outboundQueryApi.apiOutboundQuerySettingsGet());
       this.form.patchValue({
-        enableSourcePortPool: settings.enableSourcePortPool ?? true,
+        enableSourcePortPool: settings.enableSourcePortPool ?? false,
         poolSizePerAddressFamily: settings.poolSizePerAddressFamily ?? 128,
         excludedSourcePortsText: (settings.excludedSourcePorts ?? []).join('\n'),
       });

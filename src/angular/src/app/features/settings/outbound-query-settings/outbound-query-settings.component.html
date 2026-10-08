@@ -20,14 +20,15 @@
             formControlName="enableSourcePortPool"
           />
           <label cFormCheckLabel for="outbound-query-pool-enable"
-            >Randomize the source port of this server's own outbound queries</label
+            >Reuse a fixed pool of source ports for this server's own outbound queries</label
           >
         </c-form-check>
 
         <div cFormText class="override-note">
-          A pooled, unpredictable source port hardens this server's own recursive/forwarded queries
-          against off-path response spoofing -- a pure hardening improvement with no new attack
-          surface, on by default.
+          Off by default: every outbound query then gets a new socket and a fresh random source port
+          from the operating system, which is the strongest protection against off-path response
+          spoofing. Turn this on only when binding a socket per query costs too much. Changing the
+          pool size needs a restart.
         </div>
 
         <div class="field">
