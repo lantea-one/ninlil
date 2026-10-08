@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -31,12 +32,14 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     on every signing call. <see cref="IOptions{TOptions}" /> caches its value for the life of
 ///     the process, even for a scoped service, and would miss configuration changes.
 /// </param>
+/// <param name="logger">The logger that reports keys skipped because their algorithm is prohibited.</param>
 public class ZoneSigningService(
     IZoneRepository zoneRepository,
     IRecordRepository recordRepository,
     IDnssecKeyRepository keyRepository,
     IDnssecKeyManagementService keyManagement,
-    IOptionsMonitor<ZoneSigningOptions> options
+    IOptionsMonitor<ZoneSigningOptions> options,
+    ILogger<ZoneSigningService> logger = null
 ) : IZoneSigningService
 {
     /// <summary>
@@ -77,11 +80,29 @@ public class ZoneSigningService(
                 $"Zone '{zone.Name}' is marked signed but has no active DNSSEC key."
             );
 
-        // Only Active and DoubleSignature keys sign.
+        // Only Active and DoubleSignature keys sign, and never with a prohibited algorithm. Such
+        // a key can exist when it was created before the prohibition; it stays in the DNSKEY
+        // RRset but makes no signatures.
         static bool Signs(DnssecKeyEntity key) =>
             key.LifecycleState
                 is DnssecKeyLifecycleStateEnum.Active
-                    or DnssecKeyLifecycleStateEnum.DoubleSignature;
+                    or DnssecKeyLifecycleStateEnum.DoubleSignature
+            && !DnssecAlgorithmRegistry.IsSigningProhibited(key.Algorithm);
+
+        foreach (
+            DnssecKeyEntity skipped in activeKeys.Where(key =>
+                key.LifecycleState
+                    is DnssecKeyLifecycleStateEnum.Active
+                        or DnssecKeyLifecycleStateEnum.DoubleSignature
+                && DnssecAlgorithmRegistry.IsSigningProhibited(key.Algorithm)
+            )
+        )
+            logger?.LogWarning(
+                "Zone {Zone}: DNSSEC key {KeyTag} uses algorithm {Algorithm}, which is prohibited for signing (RFC 8624 §3.1); it signs nothing. Roll the key over to a current algorithm.",
+                zone.Name,
+                skipped.KeyTag,
+                skipped.Algorithm
+            );
 
         List<DnssecKeyEntity> activeKsks =
         [

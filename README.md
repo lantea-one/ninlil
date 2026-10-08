@@ -25,7 +25,8 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   RFC 8945 §5.3.1 multi-message TSIG chaining) over plain TCP, TLS, or QUIC.
 - **Recursive & validating resolution**: a full RFC 1035 §7 iterative walk with RFC 9156 QNAME
   minimization, RFC 8767 serve-stale, prefetch, EDNS Client Subnet, and DNS64.
-- **DNSSEC**: RSA/DSA/ECDSA/EdDSA signing and validation, NSEC/NSEC3 (with RFC 5155 opt-out),
+- **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA, MD5 and GOST algorithms
+  are validated but never signed with, per RFC 8624), NSEC/NSEC3 (with RFC 5155 opt-out),
   automated proactive re-signing, and a full RFC 6781 automated key-rollover state machine
   (Pre-Publish for ZSKs, Double-Signature for KSKs, with automatic DS cutover when the parent zone
   is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side.

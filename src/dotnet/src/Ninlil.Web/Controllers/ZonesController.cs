@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Acme.Caa;
 using Ninlil.Dns.Server.Authoritative.CatalogSync;
 using Ninlil.Dns.Server.Authoritative.Ptr;
 using Ninlil.Dns.Server.Core.Events;
+using Ninlil.Dns.Server.Dnssec.Algorithms;
 using Ninlil.Web.Examples.Zones;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
@@ -131,6 +132,7 @@ public class ZonesController(
         if (await zoneRepository.FindByNameAsync(request.Name, stoppingToken) is not null)
             throw new ConflictException($"A zone named '{request.Name}' already exists.");
 
+        ValidateDnssecAlgorithm(request.DnssecAlgorithm);
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
         await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
@@ -175,6 +177,7 @@ public class ZonesController(
         if (existingByName is not null && existingByName.Id != id)
             throw new ConflictException($"A zone named '{request.Name}' already exists.");
 
+        ValidateDnssecAlgorithm(request.DnssecAlgorithm);
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
         await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
@@ -231,10 +234,13 @@ public class ZonesController(
             zone.IsDnssecSigned = isDnssecSigned.GetBoolean();
 
         if (patch.TryGetMergePatchField("dnssecAlgorithm", out JsonElement dnssecAlgorithm))
+        {
             zone.DnssecAlgorithm =
                 dnssecAlgorithm.ValueKind == JsonValueKind.Null
                     ? null
                     : JsonSerializer.Deserialize<DnssecAlgorithmEnum>(dnssecAlgorithm.GetRawText());
+            ValidateDnssecAlgorithm(zone.DnssecAlgorithm);
+        }
 
         if (
             patch.TryGetMergePatchField(
@@ -545,6 +551,19 @@ public class ZonesController(
                 result.SkipReason
             )
         );
+    }
+
+    /// <summary>
+    ///     This method rejects a zone signing algorithm this server never signs with
+    ///     (<see cref="DnssecAlgorithmRegistry.IsSigningProhibited" />). Null passes.
+    /// </summary>
+    /// <exception cref="ValidationException">The algorithm is prohibited for signing.</exception>
+    private static void ValidateDnssecAlgorithm(DnssecAlgorithmEnum? algorithm)
+    {
+        if (algorithm is { } value && DnssecAlgorithmRegistry.IsSigningProhibited(value))
+            throw new ValidationException(
+                $"DNSSEC algorithm '{value}' is prohibited for signing (RFC 8624 §3.1)."
+            );
     }
 
     /// <summary>

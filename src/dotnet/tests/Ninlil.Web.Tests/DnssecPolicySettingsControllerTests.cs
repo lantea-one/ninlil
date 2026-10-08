@@ -127,6 +127,26 @@ public class DnssecPolicySettingsControllerTests(NinlilDnsWebApplicationFactory 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("RSAMD5")]
+    [InlineData("DSA")]
+    [InlineData("RSASHA1")]
+    [InlineData("DSA-NSEC3-SHA1")]
+    [InlineData("RSASHA1-NSEC3-SHA1")]
+    public async Task Patch_WithAnAlgorithmProhibitedForSigning_ReturnsBadRequest(string algorithm)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dnssec-policy-settings",
+                new { allowedAlgorithms = new[] { "ECDSAP256SHA256", algorithm } }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task Patch_WithAnEmptyBody_ReturnsOkWithoutWritingAnything()
     {

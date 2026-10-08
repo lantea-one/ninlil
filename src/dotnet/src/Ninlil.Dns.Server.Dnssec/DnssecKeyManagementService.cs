@@ -51,7 +51,15 @@ public class DnssecKeyManagementService(
         CancellationToken stoppingToken = default
     )
     {
-        // Check the policy first so a disallowed algorithm gets the policy message rather than
+        // Prohibited algorithms come first: no policy, not even an empty one, can allow them.
+        // Rollover calls this method, so it is covered too.
+        if (DnssecAlgorithmRegistry.IsSigningProhibited(algorithm))
+            throw new ValidationException(
+                $"DNSSEC algorithm '{algorithm}' is prohibited for signing (RFC 8624 §3.1). "
+                    + "Use ECDSAP256SHA256, ED25519 or another current algorithm."
+            );
+
+        // Check the policy next so a disallowed algorithm gets the policy message rather than
         // the generic "not supported" one.
         List<DnssecAlgorithmEnum> allowedAlgorithms = algorithmPolicy
             ?.CurrentValue

@@ -114,8 +114,8 @@ public class DnssecKeysController(
 
     /// <summary>
     ///     This action generates a new DNSSEC key for the zone, active at once, and has the zone
-    ///     re-signed. Returns 400 for an algorithm the server's policy disallows or cannot sign
-    ///     with, and 404 for an unknown zone. Requires <c>zones:write</c>.
+    ///     re-signed. Returns 400 for an algorithm the server's policy disallows, cannot sign
+    ///     with or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST), and 404 for an unknown zone. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -132,7 +132,7 @@ public class DnssecKeysController(
             throw new NotFoundException("Zone", zoneId.ToString());
 
         // GenerateKeyAsync throws ValidationException itself for an algorithm the configured policy
-        // disallows or that has no signing implementation; the shared exception handler turns it
+        // disallows, that is prohibited for signing or that has no signing implementation; the shared exception handler turns it
         // into a 400.
         DnssecKeyEntity key = await dnssecKeyManagementService.GenerateKeyAsync(
             zoneId,

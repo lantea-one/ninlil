@@ -95,7 +95,7 @@ public record ZoneWriteRequest(
 /// <param name="Name">The zone's fully-qualified name, without a trailing dot.</param>
 /// <param name="Type">The role this server plays for the zone.</param>
 /// <param name="IsDnssecSigned">Whether the zone is signed with DNSSEC.</param>
-/// <param name="DnssecAlgorithm">The algorithm used to sign the zone, if signed.</param>
+/// <param name="DnssecAlgorithm">The algorithm used to sign the zone, if signed. An algorithm prohibited for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST) is rejected with 400.</param>
 /// <param name="DenialOfExistenceMode">Which denial-of-existence mechanism a signed zone uses.</param>
 /// <param name="Nsec3Iterations">How many additional times a signed zone's NSEC3 chain hashes.</param>
 /// <param name="Nsec3SaltHex">A signed zone's NSEC3 salt, as hexadecimal text.</param>

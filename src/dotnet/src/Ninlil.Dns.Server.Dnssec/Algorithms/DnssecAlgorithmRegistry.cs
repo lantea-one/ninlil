@@ -82,4 +82,23 @@ public static class DnssecAlgorithmRegistry
         DnssecAlgorithmEnum algorithmNumber,
         out IDnssecSigningAlgorithm algorithm
     ) => Algorithms.TryGetValue(algorithmNumber, out algorithm);
+
+    /// <summary>
+    ///     This method says whether this server refuses to sign with an algorithm. It is true for
+    ///     RSAMD5 (1), DSA (3), DSA-NSEC3-SHA1 (6) and ECC-GOST (12), which RFC 8624 §3.1 says
+    ///     MUST NOT be used for signing, and for RSASHA1 (5) and RSASHA1-NSEC3-SHA1 (7), which
+    ///     that section marks NOT RECOMMENDED. This server also refuses 5 and 7, because SHA-1
+    ///     signatures are no longer sound. Validation is not affected: signatures made with
+    ///     these algorithms are still checked.
+    /// </summary>
+    /// <param name="algorithm">The algorithm to check.</param>
+    /// <returns>A <see langword="bool" /> that is true when signing with it is prohibited.</returns>
+    public static bool IsSigningProhibited(DnssecAlgorithmEnum algorithm) =>
+        algorithm
+            is DnssecAlgorithmEnum.RsaMd5
+                or DnssecAlgorithmEnum.Dsa
+                or DnssecAlgorithmEnum.RsaSha1
+                or DnssecAlgorithmEnum.DsaNsec3Sha1
+                or DnssecAlgorithmEnum.RsaSha1Nsec3Sha1
+                or DnssecAlgorithmEnum.EccGost;
 }

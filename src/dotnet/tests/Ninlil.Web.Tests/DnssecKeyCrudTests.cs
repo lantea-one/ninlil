@@ -244,6 +244,31 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Null(zsk.DsDigest);
     }
 
+    [Theory]
+    [InlineData("RSAMD5")]
+    [InlineData("DSA")]
+    [InlineData("RSASHA1")]
+    [InlineData("DSA-NSEC3-SHA1")]
+    [InlineData("RSASHA1-NSEC3-SHA1")]
+    public async Task CreateDnssecKey_WithAnAlgorithmProhibitedForSigning_ReturnsBadRequest(
+        string algorithm
+    )
+    {
+        (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys",
+            new { role = "ZSK", algorithm }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            "prohibited",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal
+        );
+    }
+
     [Fact]
     public async Task CreateDnssecKey_ForANonExistentZone_ReturnsNotFound()
     {

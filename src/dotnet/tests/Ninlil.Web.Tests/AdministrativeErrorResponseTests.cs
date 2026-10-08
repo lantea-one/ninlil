@@ -262,8 +262,9 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
     {
         (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
 
-        // Algorithm 12 (ECC-GOST) is IANA-registered but left out of DnssecAlgorithmRegistry
-        // (see its summary), so DnssecKeyManagementService rejects it with a ValidationException.
+        // Algorithm 12 (ECC-GOST) is IANA-registered, prohibited for signing and left out of
+        // DnssecAlgorithmRegistry (see its summary), so DnssecKeyManagementService rejects it
+        // with a ValidationException.
         HttpResponseMessage response = await client.PostAsJsonAsync(
             $"/api/zones/{zone.Id}/dnssec-keys",
             new { role = "KSK", algorithm = "ECC-GOST" }
@@ -275,7 +276,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         JsonElement body = await ParseBodyAsync(response);
         Assert.Equal(400, body.GetProperty("status").GetInt32());
         Assert.Contains(
-            "not supported for signing",
+            "prohibited for signing",
             body.GetProperty("detail").GetString(),
             StringComparison.Ordinal
         );

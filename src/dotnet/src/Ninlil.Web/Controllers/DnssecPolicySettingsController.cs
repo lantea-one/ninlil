@@ -5,6 +5,7 @@ using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Dnssec;
+using Ninlil.Dns.Server.Dnssec.Algorithms;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.Examples.DnssecPolicySettings;
 using Ninlil.Web.Examples.Settings;
@@ -123,6 +124,12 @@ public class DnssecPolicySettingsController(
             // name. Enum.IsDefined rejects it.
             if (!Enum.IsDefined(algorithm))
                 throw new ValidationException($"'{item}' is not a valid DNSSEC algorithm name.");
+
+            // A policy cannot allow what the server never signs with.
+            if (DnssecAlgorithmRegistry.IsSigningProhibited(algorithm))
+                throw new ValidationException(
+                    $"DNSSEC algorithm '{item}' is prohibited for signing (RFC 8624 §3.1) and cannot be allowed."
+                );
 
             parsed.Add(algorithm.ToString());
         }

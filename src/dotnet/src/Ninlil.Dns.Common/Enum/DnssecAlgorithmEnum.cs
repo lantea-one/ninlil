@@ -9,7 +9,8 @@ namespace Ninlil.Dns.Common.Enum;
 ///     System Security (DNSSEC) Algorithm Numbers" registry. RFC 8624 sorts them into algorithms
 ///     an implementation <b>must</b> support, ones it <b>should</b>, and broken ones that
 ///     <b>must not</b> be used for signing. The broken ones are listed so older signed zones can
-///     still be parsed and reported on. Which algorithms may be used for a new key is set by
+///     still be parsed, reported on and validated. This server never signs with algorithms 1, 3,
+///     5, 6, 7 and 12. Which of the others may be used for a new key is set by
 ///     <c>DnssecAlgorithmPolicyOptions.AllowedAlgorithms</c>.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnssecAlgorithmEnum>>]
@@ -30,7 +31,7 @@ public enum DnssecAlgorithmEnum : byte
 
     /// <summary>
     ///     RSA/SHA-1, defined by RFC 3110. RFC 8624 permits validating existing signatures but
-    ///     recommends against signing new zones with it.
+    ///     recommends against signing new zones with it. This server does not sign with it.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "RSASHA1")]
     RsaSha1 = 5,
@@ -44,7 +45,7 @@ public enum DnssecAlgorithmEnum : byte
 
     /// <summary>
     ///     RSA/SHA-1 using NSEC3-aware key identifiers, defined by RFC 5155. Carries the same
-    ///     RFC 8624 guidance as <see cref="RsaSha1" />.
+    ///     RFC 8624 guidance as <see cref="RsaSha1" />, and this server does not sign with it.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "RSASHA1-NSEC3-SHA1")]
     RsaSha1Nsec3Sha1 = 7,

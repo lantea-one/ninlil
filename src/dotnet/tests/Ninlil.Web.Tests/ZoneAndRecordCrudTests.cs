@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Web.Models;
@@ -359,6 +360,58 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Zone_WithADnssecAlgorithmProhibitedForSigning_IsRejectedOnCreateReplaceAndPatch()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"prohibited-{Guid.NewGuid():N}.example.com";
+
+        HttpResponseMessage rejectedCreate = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = zoneName,
+                type = "Primary",
+                dnssecAlgorithm = "DSA",
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, rejectedCreate.StatusCode);
+
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = zoneName,
+                type = "Primary",
+                dnssecAlgorithm = "ECDSAP256SHA256",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        ZoneDetail zone = await create.Content.ReadFromJsonAsync<ZoneDetail>();
+
+        HttpResponseMessage rejectedReplace = await client.PutAsJsonAsync(
+            $"/api/zones/{zone.Id}",
+            new
+            {
+                name = zoneName,
+                type = "Primary",
+                dnssecAlgorithm = "RSASHA1",
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, rejectedReplace.StatusCode);
+
+        HttpResponseMessage rejectedPatch = await client.SendAsync(
+            PatchRequest($"/api/zones/{zone.Id}", new { dnssecAlgorithm = "DSA" })
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, rejectedPatch.StatusCode);
+
+        // The refused writes changed nothing.
+        ZoneDetail after = await (
+            await client.GetAsync($"/api/zones/{zone.Id}")
+        ).Content.ReadFromJsonAsync<ZoneDetail>();
+        Assert.Equal(DnssecAlgorithmEnum.EcdsaP256Sha256, after.DnssecAlgorithm);
     }
 
     [Fact]

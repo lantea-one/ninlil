@@ -9,7 +9,7 @@ namespace Ninlil.Web.Models;
 ///     server; an externally generated private key cannot be imported.
 /// </summary>
 /// <param name="Role">Which role the key plays (ZSK or KSK).</param>
-/// <param name="Algorithm">The key's signing algorithm.</param>
+/// <param name="Algorithm">The key's signing algorithm. Algorithms prohibited for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST) are rejected with 400.</param>
 /// <param name="KeySizeBits">
 ///     The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default)
 ///     means 2048; ignored by every other algorithm.
@@ -105,7 +105,8 @@ public record DnssecKeyDetail(
 /// </summary>
 /// <param name="Algorithm">
 ///     The new key's signing algorithm. <see langword="null" /> (the default) keeps the current
-///     key's algorithm; a different value also changes the algorithm in the same rollover.
+///     key's algorithm, which is rejected with 400 when the current key uses an algorithm
+///     prohibited for signing; a different value also changes the algorithm in the same rollover.
 /// </param>
 /// <param name="KeySizeBits">
 ///     The new key's size, in bits. Used only by the RSA algorithms, where 0 (the default) means

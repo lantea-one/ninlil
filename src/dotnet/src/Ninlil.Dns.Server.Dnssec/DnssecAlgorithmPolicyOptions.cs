@@ -19,8 +19,9 @@ public sealed class DnssecAlgorithmPolicyOptions
     /// <summary>
     ///     This property contains the only algorithms <see cref="DnssecKeyManagementService.GenerateKeyAsync" />
     ///     will generate a new key for. Empty (the default) means every algorithm in
-    ///     <see cref="Algorithms.DnssecAlgorithmRegistry" /> is allowed, including ones RFC 8624
-    ///     says must not be used for signing. The <c>FIPS</c> preset sets a FIPS-approved subset.
+    ///     <see cref="Algorithms.DnssecAlgorithmRegistry" /> is allowed except the ones
+    ///     <see cref="Algorithms.DnssecAlgorithmRegistry.IsSigningProhibited" /> names (1, 3, 5, 6,
+    ///     7 and 12), which no policy can allow. The <c>FIPS</c> preset sets a FIPS-approved subset.
     ///     <para>
     ///         This limits key generation only. It does not affect validation of zones signed
     ///         elsewhere, whose algorithm this server does not choose.
