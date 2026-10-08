@@ -65,4 +65,14 @@ public interface IJwtTokenService
     /// <param name="session">The session to revoke.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task RevokeRefreshTokenAsync(SessionEntity session, CancellationToken stoppingToken = default);
+
+    /// <summary>
+    ///     This method revokes every active session of a user, so none of their refresh tokens
+    ///     works again. A password change or reset calls it, so a stolen refresh token does not
+    ///     survive the password change that was meant to lock the thief out. Access tokens already
+    ///     issued stay valid until they expire.
+    /// </summary>
+    /// <param name="userId">The identifier of the user whose sessions to revoke.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    Task RevokeAllRefreshTokensAsync(Guid userId, CancellationToken stoppingToken = default);
 }

@@ -20,7 +20,7 @@ namespace Ninlil.Web.Tests;
 ///     bootstrap administrator), and the token-based confirm action the "set new password" page
 ///     submits to (<see cref="AuthController.ResetPassword" />). A changed password is checked by
 ///     signing in with it and failing to sign in with the old one, not by the status code alone.
-///     Whether existing refresh tokens stop working after a change is not tested.
+///     Each flow also checks that a refresh token issued before the change is rejected afterwards.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
@@ -100,6 +100,83 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
         HttpResponseMessage response = await CreateClient()
             .PostAsJsonAsync("/api/auth/login", new LoginRequest(userName, password));
         return response.StatusCode == HttpStatusCode.OK;
+    }
+
+    /// <summary>
+    ///     This method signs in and returns the refresh token the sign-in issued (delivered in the
+    ///     response body).
+    /// </summary>
+    private async Task<string> SignInForRefreshTokenAsync(string userName, string password)
+    {
+        HttpResponseMessage response = await CreateClient()
+            .PostAsJsonAsync("/api/auth/login", new LoginRequest(userName, password));
+        response.EnsureSuccessStatusCode();
+        LoginResponse login = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+        return login.RefreshToken;
+    }
+
+    private async Task<HttpStatusCode> RefreshAsync(string refreshToken) =>
+        (
+            await CreateClient()
+                .PostAsJsonAsync("/api/auth/refresh", new RefreshRequest(refreshToken))
+        ).StatusCode;
+
+    [Fact]
+    public async Task ChangeMyPassword_RevokesRefreshTokensIssuedBeforeTheChange()
+    {
+        (HttpClient client, _, string userName, string password) =
+            await CreateOrdinaryUserClientAsync(Guid.NewGuid().ToString("N"));
+        string refreshToken = await SignInForRefreshTokenAsync(userName, password);
+        Assert.NotEqual(HttpStatusCode.Unauthorized, await RefreshAsync(refreshToken));
+
+        // Refreshing rotates the token, so take a new one to test against.
+        refreshToken = await SignInForRefreshTokenAsync(userName, password);
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/users/me/change-password",
+            new ChangePasswordRequest(password, "Brand-New-Password-5678!")
+        );
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await RefreshAsync(refreshToken));
+    }
+
+    [Fact]
+    public async Task AdminResetPassword_RevokesRefreshTokensIssuedBeforeTheReset()
+    {
+        (_, Guid id, string userName, string password) = await CreateOrdinaryUserClientAsync(
+            Guid.NewGuid().ToString("N")
+        );
+        string refreshToken = await SignInForRefreshTokenAsync(userName, password);
+        HttpClient adminClient = await CreateAuthenticatedAdminClientAsync();
+
+        HttpResponseMessage response = await adminClient.PostAsJsonAsync(
+            $"/api/users/{id}/reset-password",
+            new AdminResetPasswordRequest(AdminPasswordResetMode.AutoGenerate)
+        );
+        response.EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await RefreshAsync(refreshToken));
+    }
+
+    [Fact]
+    public async Task ConfirmPasswordReset_RevokesRefreshTokensIssuedBeforeTheReset()
+    {
+        (_, Guid id, string userName, string password) = await CreateOrdinaryUserClientAsync(
+            Guid.NewGuid().ToString("N")
+        );
+        string refreshToken = await SignInForRefreshTokenAsync(userName, password);
+        string encodedToken = await GenerateEncodedResetTokenAsync(id);
+
+        HttpResponseMessage response = await CreateClient()
+            .PostAsJsonAsync(
+                "/api/auth/reset-password",
+                new ConfirmPasswordResetRequest(id, encodedToken, "Confirmed-Reset-Password-9999!")
+            );
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await RefreshAsync(refreshToken));
     }
 
     [Fact]

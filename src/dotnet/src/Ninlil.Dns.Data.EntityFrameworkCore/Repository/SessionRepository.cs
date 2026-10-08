@@ -32,11 +32,13 @@ public class SessionRepository(NinlilDnsContext context)
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        return await Set.Where(session =>
-                session.UserId == userId
-                && session.RevokedAtUtc == null
-                && session.ExpiresAtUtc > now
+        // The SQLite provider cannot translate a DateTimeOffset comparison, so the expiry check
+        // runs in memory. A user has few unrevoked sessions, so the filtered list stays small.
+        List<SessionEntity> unrevoked = await Set.Where(session =>
+                session.UserId == userId && session.RevokedAtUtc == null
             )
             .ToListAsync(stoppingToken);
+
+        return unrevoked.Where(session => session.ExpiresAtUtc > now).ToList();
     }
 }

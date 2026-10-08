@@ -10,6 +10,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Identity.Options;
+using Ninlil.Dns.Identity.Token;
 using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Dns.Server.Core.Events;
@@ -42,6 +43,10 @@ namespace Ninlil.Web.Controllers;
 ///     Reads a role's permissions, so <see cref="AddToRole" /> can refuse a role that carries
 ///     permissions the caller does not hold.
 /// </param>
+/// <param name="jwtTokenService">
+///     Revokes the account's refresh tokens when its password changes (see
+///     <see cref="ChangeMyPassword" /> and <see cref="ResetPassword" />).
+/// </param>
 /// <param name="userRepository">
 ///     Lists user accounts; <see cref="UserManager{TUser}.Users" /> is unavailable because
 ///     <c>NinlilDnsUserStore</c> does not implement <c>IQueryableUserStore</c>.
@@ -73,6 +78,7 @@ namespace Ninlil.Web.Controllers;
 public class UsersController(
     UserManager<UserEntity> userManager,
     RoleManager<RoleEntity> roleManager,
+    IJwtTokenService jwtTokenService,
     IUserRepository userRepository,
     IOptionsMonitor<EmailSenderOptions> emailOptions,
     PasswordResetLinkSender passwordResetLinkSender,
@@ -397,13 +403,19 @@ public class UsersController(
 
     /// <summary>
     ///     This action changes the caller's password. It requires the current password; a wrong one
-    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. Requires only a signed-in
-    ///     caller.
+    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. A successful change revokes
+    ///     every refresh token of the account, including the caller's own session: the request
+    ///     does not say which session it belongs to, so the caller's access token works until it
+    ///     expires and the caller then signs in again with the new password. Requires only a
+    ///     signed-in caller.
     /// </summary>
     [HttpPost("me/change-password")]
     [Authorize]
     [SwaggerRequestExample(typeof(ChangePasswordRequest), typeof(ChangePasswordRequestExample))]
-    public async Task<IActionResult> ChangeMyPassword(ChangePasswordRequest request)
+    public async Task<IActionResult> ChangeMyPassword(
+        ChangePasswordRequest request,
+        CancellationToken stoppingToken
+    )
     {
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
@@ -415,6 +427,8 @@ public class UsersController(
             request.NewPassword
         );
         result.ThrowIfFailed();
+
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
 
         user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
         await userManager.UpdateAsync(user);
@@ -434,7 +448,8 @@ public class UsersController(
     ///             <see cref="AdminPasswordResetMode.AutoGenerate" /> sets a generated strong
     ///             password at once, through a reset token and
     ///             <see cref="UserManager{TUser}.ResetPasswordAsync" /> so Identity's usual
-    ///             validation and hashing apply, and returns it in this response only.
+    ///             validation and hashing apply, and returns it in this response only. It also revokes
+    ///             every refresh token of the account.
     ///         </item>
     ///         <item>
     ///             <see cref="AdminPasswordResetMode.EmailLink" /> e-mails the account a link to
@@ -476,6 +491,8 @@ public class UsersController(
                 newPassword
             );
             result.ThrowIfFailed();
+
+            await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
 
             user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
             await userManager.UpdateAsync(user);

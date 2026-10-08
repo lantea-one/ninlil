@@ -441,7 +441,8 @@ public class AuthController(
     ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
     ///     <see cref="UserManager{TUser}.ResetPasswordAsync" /> rejects a wrong, expired or used
     ///     token. An unknown account and an undecodable token return the same 400 message, so the
-    ///     response does not reveal whether an account exists.
+    ///     response does not reveal whether an account exists. A successful reset revokes every
+    ///     refresh token of the account.
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
@@ -449,7 +450,10 @@ public class AuthController(
         typeof(ConfirmPasswordResetRequest),
         typeof(ConfirmPasswordResetRequestExample)
     )]
-    public async Task<IActionResult> ResetPassword(ConfirmPasswordResetRequest request)
+    public async Task<IActionResult> ResetPassword(
+        ConfirmPasswordResetRequest request,
+        CancellationToken stoppingToken
+    )
     {
         UserEntity user = await userManager.FindByIdAsync(request.UserId.ToString());
 
@@ -472,6 +476,10 @@ public class AuthController(
             request.NewPassword
         );
         result.ThrowIfFailed();
+
+        // Whoever held a session before the reset (possibly the person the reset locks out) must
+        // sign in again with the new password.
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
 
         user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
         await userManager.UpdateAsync(user);

@@ -133,4 +133,27 @@ public class JwtTokenService(
         sessionRepository.Update(session);
         await unitOfWork.SaveChangesAsync(stoppingToken);
     }
+
+    /// <inheritdoc />
+    public async Task RevokeAllRefreshTokensAsync(
+        Guid userId,
+        CancellationToken stoppingToken = default
+    )
+    {
+        IReadOnlyList<SessionEntity> sessions = await sessionRepository.ListActiveByUserIdAsync(
+            userId,
+            stoppingToken
+        );
+        if (sessions.Count == 0)
+            return;
+
+        DateTimeOffset revokedAtUtc = DateTimeOffset.UtcNow;
+        foreach (SessionEntity session in sessions)
+        {
+            session.RevokedAtUtc = revokedAtUtc;
+            sessionRepository.Update(session);
+        }
+
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+    }
 }
