@@ -283,6 +283,24 @@ describe('ZoneFormComponent', () => {
     ]);
   });
 
+  it('TSIG key dropdown: leaves cluster keys out of the options', async () => {
+    const fixture = await createComponent(null, () => {
+      tsigKeysApiSpy.apiTsigKeysGet.and.returnValue(
+        of({
+          items: [
+            { id: 'key-1', name: 'transfer-key', isClusterKey: false },
+            { id: 'key-2', name: 'cluster-abc', isClusterKey: true },
+          ],
+          skip: 0,
+          take: 500,
+          totalCount: 2,
+        }),
+      );
+    });
+
+    expect(fixture.componentInstance.tsigKeys().map((key) => key.name)).toEqual(['transfer-key']);
+  });
+
   it('TSIG key dropdown: selecting a known key writes its name into tsigKeyName and hides the custom field', async () => {
     const fixture = await createComponent(null, () => {
       tsigKeysApiSpy.apiTsigKeysGet.and.returnValue(

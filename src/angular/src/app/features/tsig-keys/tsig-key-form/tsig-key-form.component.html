@@ -45,10 +45,9 @@
           </div>
         </section>
         <p class="hint">
-          Ninlil implements HMAC-SHA256 (RFC 8945) as its only TSIG algorithm, so there's currently
-          one option here. Older secondary servers or provisioning systems sometimes default to
-          HMAC-MD5 or HMAC-SHA1 for interop with legacy deployments -- neither is implemented, so a
-          client that insists on one of them can't authenticate against a key created here.
+          HMAC-SHA256 is the default and suits most clients. Pick the algorithm the other end is
+          configured with (BIND's <code>key</code> statement names it): HMAC-SHA1, HMAC-SHA384 and
+          HMAC-SHA512 are supported too. HMAC-MD5 is not. Key names are stored in lowercase.
         </p>
 
         @if (!isEditMode) {
@@ -62,9 +61,10 @@
             />
           </div>
           <p class="hint">
-            Leave this blank to have Ninlil generate a cryptographically random 32-byte secret,
-            matching HMAC-SHA256's own 256-bit output. Either way, the secret is shown exactly once,
-            immediately after you save -- it can never be retrieved again through this UI.
+            Leave this blank to have Ninlil generate a cryptographically random secret as long as
+            the algorithm's output (32 bytes for HMAC-SHA256). Either way, the secret is shown
+            exactly once, immediately after you save -- it can never be retrieved again through this
+            UI.
           </p>
         }
 

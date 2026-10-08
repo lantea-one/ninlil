@@ -62,6 +62,17 @@ describe('TsigKeyFormComponent', () => {
     return fixture;
   }
 
+  it('offers the four HMAC-SHA algorithms', async () => {
+    const fixture = await createComponent(null);
+
+    expect(fixture.componentInstance.algorithmOptions).toEqual([
+      'hmac-sha1',
+      'hmac-sha256',
+      'hmac-sha384',
+      'hmac-sha512',
+    ]);
+  });
+
   it('create mode: has no owning key to load, and defaults the algorithm to hmac-sha256', async () => {
     const fixture = await createComponent(null);
 

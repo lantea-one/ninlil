@@ -25,7 +25,7 @@ import {
   RevealSecretDialogComponent,
   RevealSecretDialogData,
 } from '../../../shared/reveal-secret-dialog/reveal-secret-dialog.component';
-import { TSIG_ALGORITHM_OPTIONS } from '../tsig-key.model';
+import { DEFAULT_TSIG_ALGORITHM, TSIG_ALGORITHM_OPTIONS } from '../tsig-key.model';
 
 /**
  * This component is the create and edit page for a TSIG key (`/tsig-keys/new` and
@@ -91,7 +91,7 @@ export class TsigKeyFormComponent implements OnInit {
 
   readonly form = this.formBuilder.group({
     name: ['', [Validators.required]],
-    algorithmName: [TSIG_ALGORITHM_OPTIONS[0], [Validators.required]],
+    algorithmName: [DEFAULT_TSIG_ALGORITHM, [Validators.required]],
     secret: [''],
     isDisabled: [false],
     comments: [''],
@@ -168,7 +168,7 @@ export class TsigKeyFormComponent implements OnInit {
 
       this.form.patchValue({
         name: key.name ?? '',
-        algorithmName: key.algorithmName ?? TSIG_ALGORITHM_OPTIONS[0],
+        algorithmName: key.algorithmName ?? DEFAULT_TSIG_ALGORITHM,
         isDisabled: key.isDisabled ?? false,
         comments: key.comments ?? '',
       });

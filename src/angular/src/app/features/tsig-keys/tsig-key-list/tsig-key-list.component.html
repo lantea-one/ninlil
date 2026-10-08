@@ -28,7 +28,17 @@
     <table cdk-table cTable hover responsive [dataSource]="keys()" class="key-table">
       <ng-container cdkColumnDef="name">
         <th cdk-header-cell *cdkHeaderCellDef>Name</th>
-        <td cdk-cell *cdkCellDef="let key">{{ key.name }}</td>
+        <td cdk-cell *cdkCellDef="let key">
+          {{ key.name }}
+          @if (key.isClusterKey) {
+            <c-badge
+              color="info"
+              class="cluster-badge"
+              cTooltip="Managed by clustering: remove the peer, or let the invite expire, to remove this key."
+              >Cluster</c-badge
+            >
+          }
+        </td>
       </ng-container>
 
       <ng-container cdkColumnDef="algorithmName">
@@ -56,30 +66,32 @@
       <ng-container cdkColumnDef="actions">
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let key" class="actions-cell">
-          <a
-            *appIfPermission="'tsigkeys:write'"
-            cButton
-            size="sm"
-            variant="ghost"
-            color="secondary"
-            [routerLink]="['/tsig-keys', key.id, 'edit']"
-            cTooltip="Edit key"
-            aria-label="Edit key"
-          >
-            <svg cIcon name="cilPencil" size="sm"></svg>
-          </a>
-          <button
-            *appIfPermission="'tsigkeys:write'"
-            cButton
-            size="sm"
-            variant="ghost"
-            color="danger"
-            cTooltip="Delete key"
-            aria-label="Delete key"
-            (click)="deleteKey(key)"
-          >
-            <svg cIcon name="cilTrash" size="sm"></svg>
-          </button>
+          @if (!key.isClusterKey) {
+            <a
+              *appIfPermission="'tsigkeys:write'"
+              cButton
+              size="sm"
+              variant="ghost"
+              color="secondary"
+              [routerLink]="['/tsig-keys', key.id, 'edit']"
+              cTooltip="Edit key"
+              aria-label="Edit key"
+            >
+              <svg cIcon name="cilPencil" size="sm"></svg>
+            </a>
+            <button
+              *appIfPermission="'tsigkeys:write'"
+              cButton
+              size="sm"
+              variant="ghost"
+              color="danger"
+              cTooltip="Delete key"
+              aria-label="Delete key"
+              (click)="deleteKey(key)"
+            >
+              <svg cIcon name="cilTrash" size="sm"></svg>
+            </button>
+          }
         </td>
       </ng-container>
 

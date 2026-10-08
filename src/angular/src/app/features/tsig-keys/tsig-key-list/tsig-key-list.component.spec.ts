@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { TsigKeysService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { TsigKeyListComponent } from './tsig-key-list.component';
 
@@ -12,7 +13,9 @@ function flushMicrotasks(): Promise<void> {
 
 /**
  * These tests cover the TSIG key list: loading and paging, the toggle and delete with its
- * confirmation. TestBed with spy-backed `TsigKeysService` and `NotificationService`.
+ * confirmation, and the cluster-key rows (a badge, no edit or delete button, a working toggle).
+ * TestBed with spy-backed `TsigKeysService` and `NotificationService` and a stubbed
+ * `AuthService.hasPermission` that grants every permission.
  */
 describe('TsigKeyListComponent', () => {
   // A hand-written spy type rather than `jasmine.SpyObj<TsigKeysService>`; the AuthService spec
@@ -36,10 +39,17 @@ describe('TsigKeyListComponent', () => {
       of({
         items: [
           { id: 'key-1', name: 'secondary1', algorithmName: 'hmac-sha256', isDisabled: false },
+          {
+            id: 'key-2',
+            name: 'cluster-abc',
+            algorithmName: 'hmac-sha256',
+            isDisabled: false,
+            isClusterKey: true,
+          },
         ],
         skip: 0,
         take: 25,
-        totalCount: 1,
+        totalCount: 2,
       }),
     );
 
@@ -52,6 +62,7 @@ describe('TsigKeyListComponent', () => {
       ],
     }).compileComponents();
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(TsigKeyListComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -63,9 +74,25 @@ describe('TsigKeyListComponent', () => {
     const fixture = await createComponent();
 
     expect(tsigKeysApiSpy.apiTsigKeysGet).toHaveBeenCalledWith({ skip: 0, take: 25 });
-    expect(fixture.componentInstance.keys().length).toBe(1);
-    expect(fixture.componentInstance.totalCount()).toBe(1);
+    expect(fixture.componentInstance.keys().length).toBe(2);
+    expect(fixture.componentInstance.totalCount()).toBe(2);
     expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  it('shows a Cluster badge and no edit or delete button for a cluster key only', async () => {
+    const fixture = await createComponent();
+    const rows = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('tr[cdk-row]'));
+
+    const [ordinaryRow, clusterRow] = rows;
+    expect(ordinaryRow.querySelector('c-badge')).toBeNull();
+    expect(ordinaryRow.querySelector('[aria-label="Edit key"]')).not.toBeNull();
+    expect(ordinaryRow.querySelector('[aria-label="Delete key"]')).not.toBeNull();
+
+    expect(clusterRow.querySelector('c-badge')?.textContent).toContain('Cluster');
+    expect(clusterRow.querySelector('[aria-label="Edit key"]')).toBeNull();
+    expect(clusterRow.querySelector('[aria-label="Delete key"]')).toBeNull();
+    // The enable/disable toggle stays, as an emergency switch.
+    expect(clusterRow.textContent).toContain('Enabled');
   });
 
   it('onPageChange() requests the correctly offset skip/take, per the chosen page size', async () => {

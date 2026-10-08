@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CdkTableModule } from '@angular/cdk/table';
 import { RouterLink } from '@angular/router';
 import {
+  BadgeComponent,
   ButtonDirective,
   SpinnerComponent,
   TableDirective,
@@ -32,7 +33,9 @@ const DEFAULT_PAGE_SIZE = 25;
  * time from `GET /api/tsig-keys`; the response never includes the secret, which is shown only once
  * when a key is created. With `tsigkeys:write` it offers create, edit (name, algorithm, disabled
  * flag and comments, not the secret), delete and an enable/disable toggle (`PATCH`); without it
- * the toggle is disabled and the rest hidden.
+ * the toggle is disabled and the rest hidden. A key clustering created (`isClusterKey`) shows a
+ * "Cluster" badge and has no edit or delete button, because the API refuses to rename or delete
+ * it; the toggle still works, as an emergency switch.
  */
 @Component({
   selector: 'app-tsig-key-list',
@@ -41,6 +44,7 @@ const DEFAULT_PAGE_SIZE = 25;
     HasPermissionPipe,
     RouterLink,
     CdkTableModule,
+    BadgeComponent,
     ButtonDirective,
     SpinnerComponent,
     TableDirective,

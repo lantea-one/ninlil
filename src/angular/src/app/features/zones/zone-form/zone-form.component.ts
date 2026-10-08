@@ -359,7 +359,9 @@ export class ZoneFormComponent implements OnInit {
           : Promise.resolve(null),
       ]);
 
-      this.tsigKeys.set(tsigKeys ?? []);
+      // A cluster key never signs or verifies zone transfers and the API rejects it for a zone,
+      // so the picker leaves it out.
+      this.tsigKeys.set((tsigKeys ?? []).filter((key) => !key.isClusterKey));
       this.tsigKeysUnavailable.set(tsigKeys === null);
       this.cloudCredentials.set(cloudCredentials ?? []);
       this.cloudCredentialsUnavailable.set(cloudCredentials === null);
