@@ -14,7 +14,7 @@
  */
 export interface OutboundQuerySettingsDetail { 
     /**
-     * Whether outbound UDP queries reuse a fixed pool of sockets rather than a new socket on a random port each time. Defaults to true.
+     * Whether outbound UDP queries reuse a fixed pool of sockets rather than a new socket on a random port each time. Defaults to false because a new socket per query gets a fresh random source port.
      */
     enableSourcePortPool?: boolean;
     /**
