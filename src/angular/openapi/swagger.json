@@ -32275,7 +32275,7 @@
         "tags": [
           "SmtpSettings"
         ],
-        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never\nshows. The password is stored in plain text in the configuration file. Every field takes\neffect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a\nmalformed from-address or a `publicBaseUrl` that is not an absolute http or https\nURL. Requires `smtpsettings:write`.",
+        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never\nshows. A password is encrypted before it is written to the configuration file, and a blank\none clears it. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a\nmalformed from-address or a `publicBaseUrl` that is not an absolute http or https\nURL. Requires `smtpsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -44026,7 +44026,7 @@
           },
           "passwordConfigured": {
             "type": "boolean",
-            "description": "Whether `EmailSenderOptions.Password` has a value. The password itself is never\nreturned, as with every other secret."
+            "description": "Whether a password is stored (encrypted) or supplied through the environment. The\npassword itself is never returned, as with every other secret."
           },
           "fromAddress": {
             "type": "string",

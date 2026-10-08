@@ -30,7 +30,7 @@ export interface SmtpSettingsDetail {
      */
     username?: string | null;
     /**
-     * Whether `EmailSenderOptions.Password` has a value. The password itself is never returned, as with every other secret.
+     * Whether a password is stored (encrypted) or supplied through the environment. The password itself is never returned, as with every other secret.
      */
     passwordConfigured?: boolean;
     /**
