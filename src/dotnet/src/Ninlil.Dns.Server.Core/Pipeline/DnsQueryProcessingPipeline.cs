@@ -23,6 +23,14 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///     (<see cref="DnsQueryProcessingPipelineOptions.WorkerCount" />) drains the bounded queue, so a
 ///     burst of queries or one slow query does not stop a transport from reading the next one.
 ///     <para>
+///         <b>Every query is answered or reported.</b> For each message a worker takes off the
+///         queue, the pipeline calls exactly one of <see cref="DnsInboundMessage.RespondAsync" /> and
+///         <see cref="DnsInboundMessage.OnDropped" />. A step that ends the query without a reply
+///         passes a <see cref="DnsQueryDropReasonEnum" />, and an exception or a shutdown in the
+///         middle of processing reports <see cref="DnsQueryDropReasonEnum.Failed" />. A transport
+///         that holds a request open (DNS-over-HTTPS) relies on this so it never waits forever.
+///     </para>
+///     <para>
 ///         Each query goes through these steps, and any step can end it:
 ///         <list type="number">
 ///             <item>Per-IP and per-subnet rate limiting (<see cref="IDnsRateLimiter" />), before
@@ -43,8 +51,9 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///             (<see cref="IDnsFilterEngine.EvaluateResponseAsync" />) on any answer that was not
 ///             already a denial, including rewrite answers.</item>
 ///             <item>Attaching a fresh server cookie, publishing
-///             <see cref="DnsQueryAnsweredEvent" />, truncating an oversized UDP reply, and
-///             sending it.</item>
+///             <see cref="DnsQueryAnsweredEvent" />, truncating an oversized datagram reply
+///             (<see cref="DnsInboundMessage.IsDatagram" />), and sending it. A reply still larger
+///             than <see cref="DnsInboundMessage.MaxResponseOctets" /> is dropped instead.</item>
 ///         </list>
 ///     </para>
 ///     <para>
@@ -219,13 +228,39 @@ public sealed class DnsQueryProcessingPipeline(
     {
         try
         {
-            await foreach (DnsInboundMessage message in channel.Reader.ReadAllAsync(stoppingToken))
+            await foreach (DnsInboundMessage queued in channel.Reader.ReadAllAsync(stoppingToken))
             {
+                // Wrap the message so the pipeline knows whether a step already replied or
+                // reported a drop. The catch blocks below then report Failed only when nothing
+                // else has, which keeps the "exactly one" rule of the class summary.
+                bool settled = false;
+                DnsInboundMessage message = queued with
+                {
+                    RespondAsync = (responseBytes, token) =>
+                    {
+                        settled = true;
+                        return queued.RespondAsync(responseBytes, token);
+                    },
+                    OnDropped = reason =>
+                    {
+                        settled = true;
+                        NotifyDropped(queued, reason);
+                    },
+                };
+
                 try
                 {
                     await ProcessSingleMessageAsync(message, stoppingToken);
                 }
-                catch (Exception exception) when (exception is not OperationCanceledException)
+                catch (OperationCanceledException)
+                {
+                    // Shutdown in the middle of a query: tell the transport, then stop the worker.
+                    if (!settled)
+                        NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
+
+                    throw;
+                }
+                catch (Exception exception)
                 {
                     // One failing query must not stop the worker that serves the rest of the queue.
                     logger.LogError(
@@ -233,6 +268,9 @@ public sealed class DnsQueryProcessingPipeline(
                         "Unhandled exception while processing a DNS query from {RemoteAddress}.",
                         message.RemoteAddress
                     );
+
+                    if (!settled)
+                        NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
                 }
             }
         }
@@ -243,7 +281,28 @@ public sealed class DnsQueryProcessingPipeline(
     }
 
     /// <summary>
-    ///     This method runs one query through the steps listed in the class summary.
+    ///     This method calls the transport's drop notifier. A notifier that throws must not stop
+    ///     the worker, so the exception is logged and swallowed.
+    /// </summary>
+    private void NotifyDropped(DnsInboundMessage message, DnsQueryDropReasonEnum reason)
+    {
+        try
+        {
+            message.OnDropped?.Invoke(reason);
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(
+                exception,
+                "The drop notifier for a query from {RemoteAddress} threw.",
+                message.RemoteAddress
+            );
+        }
+    }
+
+    /// <summary>
+    ///     This method runs one query through the steps listed in the class summary. Every path
+    ///     out of it replies or reports a drop through <paramref name="message" />.
     /// </summary>
     private async Task ProcessSingleMessageAsync(
         DnsInboundMessage message,
@@ -261,6 +320,7 @@ public sealed class DnsQueryProcessingPipeline(
                 "Rate-limiting a query from {RemoteAddress}: token budget exhausted.",
                 message.RemoteAddress
             );
+            message.OnDropped?.Invoke(DnsQueryDropReasonEnum.RateLimited);
             return;
         }
 
@@ -271,7 +331,7 @@ public sealed class DnsQueryProcessingPipeline(
         {
             DnsSubnetRateLimitDecisionEnum subnetDecision = await rateLimiter.CheckSubnetLimitAsync(
                 message.RemoteAddress,
-                message.Protocol == DnsTransportProtocolEnum.Udp,
+                message.IsDatagram,
                 stoppingToken
             );
 
@@ -281,6 +341,7 @@ public sealed class DnsQueryProcessingPipeline(
                     "Rate-limiting a query from {RemoteAddress}: its own subnet's budget is exhausted.",
                     message.RemoteAddress
                 );
+                message.OnDropped?.Invoke(DnsQueryDropReasonEnum.SubnetRateLimited);
                 return;
             }
 
@@ -326,6 +387,7 @@ public sealed class DnsQueryProcessingPipeline(
                     message.RemoteAddress,
                     clientDecision.Reason
                 );
+                message.OnDropped?.Invoke(DnsQueryDropReasonEnum.ClientDenied);
                 return;
             }
         }
@@ -339,12 +401,15 @@ public sealed class DnsQueryProcessingPipeline(
         }
         catch (FormatException exception)
         {
-            // A malformed message has no reliable ID to answer with, so it is not answered.
-            logger.LogWarning(
+            // A malformed message has no reliable ID to answer with, so it is not answered. Debug
+            // level, because a spoofed sender can produce these at line rate, and a Warning with a
+            // stack trace per message would flood the log.
+            logger.LogDebug(
                 exception,
                 "Discarding a malformed DNS message from {RemoteAddress}.",
                 message.RemoteAddress
             );
+            message.OnDropped?.Invoke(DnsQueryDropReasonEnum.Malformed);
             return;
         }
 
@@ -523,10 +588,10 @@ public sealed class DnsQueryProcessingPipeline(
 
         byte[] responseBytes = DnsMessageWriter.Write(response);
 
-        // RFC 1035 §4.2.1: a UDP response that is too large is truncated (all records dropped,
-        // TC set) so the client retries over TCP (§4.2.2). The other transports carry large
-        // responses and skip this.
-        if (message.Protocol == DnsTransportProtocolEnum.Udp)
+        // RFC 1035 §4.2.1: a datagram response that is too large is truncated (all records
+        // dropped, TC set) so the client retries over TCP (§4.2.2). The other transports carry
+        // large responses and skip this.
+        if (message.IsDatagram)
         {
             int effectiveMaxSize = Math.Min(
                 request.Edns is { RequestorPayloadSize: > 0 } edns
@@ -543,6 +608,11 @@ public sealed class DnsQueryProcessingPipeline(
             );
             effectiveMaxSize = Math.Min(effectiveMaxSize, amplificationCeiling);
 
+            // The transport's own limit (for example an encrypted envelope's padding budget)
+            // applies on top of the client's.
+            if (message.MaxResponseOctets is { } transportLimit)
+                effectiveMaxSize = Math.Min(effectiveMaxSize, transportLimit);
+
             if (responseBytes.Length > effectiveMaxSize)
             {
                 response.Answers.Clear();
@@ -551,6 +621,23 @@ public sealed class DnsQueryProcessingPipeline(
                 response.IsTruncated = true;
                 responseBytes = DnsMessageWriter.Write(response);
             }
+        }
+
+        // Even the truncated reply may not fit the transport (or a stream transport has a cap
+        // but no truncation). Sending it anyway would fail on the wire, so report the drop.
+        if (
+            message.MaxResponseOctets is { } maxResponseOctets
+            && responseBytes.Length > maxResponseOctets
+        )
+        {
+            logger.LogDebug(
+                "Dropping a {Size}-octet response to {RemoteAddress}: the transport carries at most {Max}.",
+                responseBytes.Length,
+                message.RemoteAddress,
+                maxResponseOctets
+            );
+            message.OnDropped?.Invoke(DnsQueryDropReasonEnum.ResponseTooLarge);
+            return;
         }
 
         await message.RespondAsync(responseBytes, stoppingToken);

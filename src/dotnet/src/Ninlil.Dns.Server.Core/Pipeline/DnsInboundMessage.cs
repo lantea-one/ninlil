@@ -20,7 +20,10 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///     copies, means no transport and no later stage has to unmap. The listeners keep the raw
 ///     endpoint to send the reply.
 /// </param>
-/// <param name="RespondAsync">The delegate used to send the eventual response back.</param>
+/// <param name="RespondAsync">
+///     The delegate used to send the eventual response back. The pipeline calls it, or
+///     <see cref="OnDropped" />, exactly once per query.
+/// </param>
 /// <param name="ClientId">
 ///     The client identifier the query carried, or <see langword="null" />. Only DNS-over-HTTPS
 ///     sets it, from the <c>/dns-query/{clientid}</c> path; the filter engine uses it to pick
@@ -44,4 +47,30 @@ public sealed record DnsInboundMessage(
         get;
         init => field = ClientAddress.Normalize(value);
     } = ClientAddress.Normalize(RemoteAddress);
+
+    /// <summary>
+    ///     This property contains the delegate the pipeline calls instead of
+    ///     <see cref="RespondAsync" /> when it ends the query without a reply (see
+    ///     <see cref="DnsQueryDropReasonEnum" />). It is <see langword="null" /> for transports
+    ///     that need no signal, such as UDP, where a missing reply is the answer.
+    /// </summary>
+    public DnsQueryDropNotifier OnDropped { get; init; }
+
+    /// <summary>
+    ///     This property is <see langword="true" /> when the query arrived in a single datagram.
+    ///     The pipeline then applies the UDP size rules to the reply: truncation to the client's
+    ///     EDNS payload size, the amplification ceiling and the subnet limiter's UDP mode. It
+    ///     defaults to <see langword="true" /> for <see cref="DnsTransportProtocolEnum.Udp" />. A
+    ///     transport that carries datagrams under another protocol value (DNSCrypt over UDP) sets
+    ///     it explicitly.
+    /// </summary>
+    public bool IsDatagram { get; init; } = Protocol == DnsTransportProtocolEnum.Udp;
+
+    /// <summary>
+    ///     This property contains the largest reply the transport can carry, in octets, or
+    ///     <see langword="null" /> for no transport limit. The pipeline truncates a datagram reply
+    ///     to fit it, and drops the query with <see cref="DnsQueryDropReasonEnum.ResponseTooLarge" />
+    ///     rather than send a reply that is still larger.
+    /// </summary>
+    public int? MaxResponseOctets { get; init; }
 }
