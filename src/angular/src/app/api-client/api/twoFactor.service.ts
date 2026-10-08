@@ -48,7 +48,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action confirms authenticator setup by checking a code from the app, and only then makes a second factor required at sign-in. Returns 400 for a wrong code.
+     * This action confirms authenticator setup by checking a code from the app, and only then makes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a &#x60;Retry-After&#x60; header, after 5 wrong codes in 15 minutes.
      * @endpoint post /api/auth/two-factor/authenticator/enable
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -116,7 +116,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action generates a new TOTP shared secret for the caller and returns it with an &#x60;otpauth://&#x60; URI for an authenticator app. M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must confirm it before two-factor sign-in becomes required.  While two-factor sign-in is on with an authenticator secret, the request must carry     a valid current authenticator code or an unused recovery code (which this call     uses up) in the body; otherwise this returns 400 and the secret is unchanged. A     stolen access token alone then cannot swap in an attacker\&#39;s secret. First-time     setup, or setup while two-factor sign-in is off, needs no body.
+     * This action generates a new TOTP shared secret for the caller and returns it with an &#x60;otpauth://&#x60; URI for an authenticator app. M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must confirm it before two-factor sign-in becomes required.  While two-factor sign-in is on with an authenticator secret, the request must carry     a valid current authenticator code or an unused recovery code (which this call     uses up) in the body; otherwise this returns 400 and the secret is unchanged. After     5 wrong codes in 15 minutes (shared with the other code checks of this controller     and the sign-in) it returns 429 with a &#x60;Retry-After&#x60; header, without checking     the code. A     stolen access token alone then cannot swap in an attacker\&#39;s secret. First-time     setup, or setup while two-factor sign-in is off, needs no body.
      * @endpoint post /api/auth/two-factor/authenticator/setup
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -187,7 +187,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action stops requiring a second factor at sign-in. It needs a valid authenticator code as well as the access token. Returns 400 for a wrong code.
+     * This action stops requiring a second factor at sign-in. It needs a valid authenticator code as well as the access token. Returns 400 for a wrong code and 429, with a &#x60;Retry-After&#x60; header, after 5 wrong codes in 15 minutes.
      * @endpoint post /api/auth/two-factor/disable
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

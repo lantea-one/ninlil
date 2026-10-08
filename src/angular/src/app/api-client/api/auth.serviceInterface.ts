@@ -67,7 +67,7 @@ export interface AuthServiceInterface {
     apiAuthForgotPasswordPost(requestParameters: ApiAuthForgotPasswordPostRequestParams, extraHttpRequestParams?: any): Observable<ForgotPasswordResult>;
 
     /**
-     * This action checks a username and password. It returns the tokens of a completed sign-in or, for an account with two-factor authentication, a challenge token to submit to M:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). Returns 401 for a wrong password or a disabled or unknown account and 423 while the account is locked out. Allows anonymous callers and is rate limited.
+     * This action checks a username and password. It returns the tokens of a completed sign-in or, for an account with two-factor authentication, a challenge token to submit to M:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). Returns 401 for a wrong password or a disabled or unknown account and 423 while the account is locked out. Wrong passwords do not lock an account, because that would let anyone who knows a username lock it out; the per-address rate limit slows guessing instead. Only an administrator\&#39;s or the system\&#39;s lockout gives 423. Allows anonymous callers and is rate limited.
      * 
      * @endpoint post /api/auth/login
 * @param requestParameters
@@ -83,7 +83,7 @@ export interface AuthServiceInterface {
     apiAuthLoginTwoFactorEmailCodePost(requestParameters: ApiAuthLoginTwoFactorEmailCodePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action completes a sign-in that M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) marked as needing a second factor, checking an authenticator code, an e-mailed code or a recovery code against the pending sign-in\&#39;s account. Each challenge token can be used once. Returns 401 for an unknown or used challenge token or a wrong code. Allows anonymous callers and is rate limited.
+     * This action completes a sign-in that M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) marked as needing a second factor, checking an authenticator code, an e-mailed code or a recovery code against the pending sign-in\&#39;s account. A challenge token that reaches the code check is spent whether or not the code is right. Returns 401 for an unknown or used challenge token or a wrong code. After 5 wrong codes in 15 minutes for the account (counted across all client addresses and shared with Ninlil.Web.Controllers.TwoFactorController) it returns 429 with a &#x60;Retry-After&#x60; header, without checking the code and without spending the challenge token. Allows anonymous callers and is rate limited per client address.
      * 
      * @endpoint post /api/auth/login/two-factor
 * @param requestParameters

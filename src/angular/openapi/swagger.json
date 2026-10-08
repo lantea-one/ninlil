@@ -992,7 +992,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action checks a username and password. It returns the tokens of a completed sign-in\nor, for an account with two-factor authentication, a challenge token to submit to\nM:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). Returns 401 for a wrong password or a disabled or unknown\naccount and 423 while the account is locked out. Allows anonymous callers and is rate\nlimited.",
+        "summary": "This action checks a username and password. It returns the tokens of a completed sign-in\nor, for an account with two-factor authentication, a challenge token to submit to\nM:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). Returns 401 for a wrong password or a disabled or unknown\naccount and 423 while the account is locked out. Wrong passwords do not lock an account,\nbecause that would let anyone who knows a username lock it out; the per-address rate\nlimit slows guessing instead. Only an administrator's or the system's lockout gives 423. Allows anonymous callers and is rate\nlimited.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1112,7 +1112,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action completes a sign-in that M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) marked as needing a second\nfactor, checking an authenticator code, an e-mailed code or a recovery code against the\npending sign-in's account. Each challenge token can be used once. Returns 401 for an\nunknown or used challenge token or a wrong code. Allows anonymous callers and is rate\nlimited.",
+        "summary": "This action completes a sign-in that M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) marked as needing a second\nfactor, checking an authenticator code, an e-mailed code or a recovery code against the\npending sign-in's account. A challenge token that reaches the code check is spent\nwhether or not the code is right. Returns 401 for an unknown or used challenge token or\na wrong code. After 5 wrong codes in 15 minutes for the account (counted across all\nclient addresses and shared with Ninlil.Web.Controllers.TwoFactorController) it returns 429\nwith a `Retry-After` header, without checking the code and without spending the\nchallenge token. Allows anonymous callers and is rate limited per client address.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33819,7 +33819,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action generates a new TOTP shared secret for the caller and returns it with an\n`otpauth://` URI for an authenticator app. M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must\nconfirm it before two-factor sign-in becomes required.\n\nWhile two-factor sign-in is on with an authenticator secret, the request must carry\n    a valid current authenticator code or an unused recovery code (which this call\n    uses up) in the body; otherwise this returns 400 and the secret is unchanged. A\n    stolen access token alone then cannot swap in an attacker's secret. First-time\n    setup, or setup while two-factor sign-in is off, needs no body.",
+        "summary": "This action generates a new TOTP shared secret for the caller and returns it with an\n`otpauth://` URI for an authenticator app. M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must\nconfirm it before two-factor sign-in becomes required.\n\nWhile two-factor sign-in is on with an authenticator secret, the request must carry\n    a valid current authenticator code or an unused recovery code (which this call\n    uses up) in the body; otherwise this returns 400 and the secret is unchanged. After\n    5 wrong codes in 15 minutes (shared with the other code checks of this controller\n    and the sign-in) it returns 429 with a `Retry-After` header, without checking\n    the code. A\n    stolen access token alone then cannot swap in an attacker's secret. First-time\n    setup, or setup while two-factor sign-in is off, needs no body.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33889,7 +33889,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action confirms authenticator setup by checking a code from the app, and only then\nmakes a second factor required at sign-in. Returns 400 for a wrong code.",
+        "summary": "This action confirms authenticator setup by checking a code from the app, and only then\nmakes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a\n`Retry-After` header, after 5 wrong codes in 15 minutes.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33930,7 +33930,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action stops requiring a second factor at sign-in. It needs a valid authenticator\ncode as well as the access token. Returns 400 for a wrong code.",
+        "summary": "This action stops requiring a second factor at sign-in. It needs a valid authenticator\ncode as well as the access token. Returns 400 for a wrong code and 429, with a\n`Retry-After` header, after 5 wrong codes in 15 minutes.",
         "requestBody": {
           "content": {
             "application/json": {
