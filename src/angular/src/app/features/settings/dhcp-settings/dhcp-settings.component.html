@@ -453,6 +453,21 @@
               formControlName="maxRetransmissions"
             />
           </div>
+          <div class="field">
+            <label cLabel for="dhcp-tftp-max-concurrent-transfers">
+              Max concurrent transfers
+            </label>
+            <input
+              cFormControl
+              id="dhcp-tftp-max-concurrent-transfers"
+              type="number"
+              min="1"
+              formControlName="maxConcurrentTransfers"
+            />
+            <div cFormText>
+              At most 4 per client. A request over the limit is dropped without a reply.
+            </div>
+          </div>
         </div>
         <div cFormText class="restart-note">Every field here needs this server to restart.</div>
       </form>

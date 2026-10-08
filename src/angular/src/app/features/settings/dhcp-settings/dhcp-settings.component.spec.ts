@@ -95,6 +95,7 @@ describe('DhcpSettingsComponent', () => {
         rootDirectory: null,
         retransmitTimeoutSeconds: 2,
         maxRetransmissions: 5,
+        maxConcurrentTransfers: 50,
       }),
     );
     dhcpSettingsApiSpy.apiDhcpSettingsRaProtocolGet.and.returnValue(
@@ -152,6 +153,7 @@ describe('DhcpSettingsComponent', () => {
     expect(fixture.componentInstance.protocolForm.controls.serverPort.value).toBe(67);
     expect(fixture.componentInstance.dhcpv6ProtocolForm.controls.serverPort.value).toBe(547);
     expect(fixture.componentInstance.tftpForm.controls.port.value).toBe(69);
+    expect(fixture.componentInstance.tftpForm.controls.maxConcurrentTransfers.value).toBe(50);
     expect(
       fixture.componentInstance.raProtocolForm.controls.minRouterAdvertisementInterval.value,
     ).toBe('00:03:18');
@@ -257,6 +259,24 @@ describe('DhcpSettingsComponent', () => {
     );
     expect(notificationSpy.success).toHaveBeenCalledWith(
       'Saved. A restart is required for this change to take effect.',
+    );
+  });
+
+  it('saveTftp() sends maxConcurrentTransfers and the form rejects 0', async () => {
+    const fixture = await createComponent();
+    dhcpSettingsApiSpy.apiDhcpSettingsTftpPatch.and.returnValue(of({ note: 'Saved.' }));
+
+    fixture.componentInstance.tftpForm.patchValue({ maxConcurrentTransfers: 0 });
+    expect(fixture.componentInstance.tftpForm.controls.maxConcurrentTransfers.valid).toBeFalse();
+    await fixture.componentInstance.saveTftp();
+    expect(dhcpSettingsApiSpy.apiDhcpSettingsTftpPatch).not.toHaveBeenCalled();
+
+    fixture.componentInstance.tftpForm.patchValue({ maxConcurrentTransfers: 10 });
+    await fixture.componentInstance.saveTftp();
+    expect(dhcpSettingsApiSpy.apiDhcpSettingsTftpPatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        body: jasmine.objectContaining({ maxConcurrentTransfers: 10 }),
+      }),
     );
   });
 

@@ -202,6 +202,7 @@ export class DhcpSettingsComponent implements OnInit {
     rootDirectory: [''],
     retransmitTimeoutSeconds: [2, [Validators.required, Validators.min(0.1)]],
     maxRetransmissions: [5, [Validators.required, Validators.min(1)]],
+    maxConcurrentTransfers: [50, [Validators.required, Validators.min(1)]],
   });
 
   readonly raProtocolForm = this.formBuilder.group({
@@ -603,6 +604,7 @@ export class DhcpSettingsComponent implements OnInit {
         rootDirectory: tftp.rootDirectory ?? '',
         retransmitTimeoutSeconds: tftp.retransmitTimeoutSeconds ?? 2,
         maxRetransmissions: tftp.maxRetransmissions ?? 5,
+        maxConcurrentTransfers: tftp.maxConcurrentTransfers ?? 50,
       });
 
       this.raProtocolForm.patchValue({
