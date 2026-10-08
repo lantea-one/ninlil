@@ -40179,12 +40179,12 @@
           },
           "relayAgentCircuitId": {
             "type": "string",
-            "description": "The Agent Circuit ID text added to every forwarded request, or null for none.",
+            "description": "The Agent Circuit ID text added to every forwarded request, or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Remote ID.",
             "nullable": true
           },
           "relayAgentRemoteId": {
             "type": "string",
-            "description": "The Agent Remote ID text added to every forwarded request, or null for none.",
+            "description": "The Agent Remote ID text added to every forwarded request, or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Circuit ID.",
             "nullable": true
           }
         },

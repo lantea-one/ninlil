@@ -30,11 +30,11 @@ export interface DhcpRelaySettingsDetail {
      */
     relayAgentAddress?: string | null;
     /**
-     * The Agent Circuit ID text added to every forwarded request, or null for none.
+     * The Agent Circuit ID text added to every forwarded request, or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Remote ID.
      */
     relayAgentCircuitId?: string | null;
     /**
-     * The Agent Remote ID text added to every forwarded request, or null for none.
+     * The Agent Remote ID text added to every forwarded request, or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Circuit ID.
      */
     relayAgentRemoteId?: string | null;
 }
