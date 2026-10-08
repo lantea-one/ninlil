@@ -255,7 +255,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action e-mails the caller a short-lived verification code from the e-mail token provider and returns 202. The account must have a confirmed e-mail address, otherwise this returns 400. Because it needs a signed-in caller, it cannot be called during the two-factor step of a sign-in; M:Ninlil.Web.Controllers.AuthController.SendTwoFactorEmailCode(Ninlil.Web.Models.TwoFactorEmailCodeRequest,System.Threading.CancellationToken) does that.
+     * This action e-mails the caller a short-lived verification code from the e-mail token provider and returns 202. The account must have a confirmed e-mail address, otherwise this returns 400. Returns 429 with a &#x60;Retry-After&#x60; header when a code was sent to the account in the last 60 seconds, by this action or by the sign-in step. Because it needs a signed-in caller, it cannot be called during the two-factor step of a sign-in; M:Ninlil.Web.Controllers.AuthController.SendTwoFactorEmailCode(Ninlil.Web.Models.TwoFactorEmailCodeRequest,System.Threading.CancellationToken) does that.
      * @endpoint post /api/auth/two-factor/email/send
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

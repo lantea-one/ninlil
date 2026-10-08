@@ -1080,7 +1080,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action e-mails the account a short-lived verification code during the pending\nsecond-factor step of a sign-in, for the `\"Email\"` provider of\nM:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). The pending-sign-in token from M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken)\nauthorizes it (the caller has no session yet) and stays valid, so the code can be\nsubmitted afterwards. Returns 202 on success; 401 for an unknown, expired or used\ntoken; 400 when the account has no confirmed e-mail address. Allows anonymous callers\nand is rate limited like the other sign-in actions.",
+        "summary": "This action e-mails the account a short-lived verification code during the pending\nsecond-factor step of a sign-in, for the `\"Email\"` provider of\nM:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). The pending-sign-in token from M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken)\nauthorizes it (the caller has no session yet) and stays valid, so the code can be\nsubmitted afterwards. Returns 202 on success; 401 for an unknown, expired or used\ntoken; 400 when the account has no confirmed e-mail address. Returns 429 with a\n`Retry-After` header when a code was sent to the account in the last 60 seconds\n(by this action or by M:Ninlil.Web.Controllers.TwoFactorController.SendEmailCode) or when this\npending sign-in has already asked for 3 codes. Allows anonymous callers and is rate\nlimited like the other sign-in actions.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33971,7 +33971,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action e-mails the caller a short-lived verification code from the e-mail token\nprovider and returns 202. The account must have a confirmed e-mail address, otherwise\nthis returns 400. Because it needs a signed-in caller, it cannot be called during the\ntwo-factor step of a sign-in; M:Ninlil.Web.Controllers.AuthController.SendTwoFactorEmailCode(Ninlil.Web.Models.TwoFactorEmailCodeRequest,System.Threading.CancellationToken) does\nthat.",
+        "summary": "This action e-mails the caller a short-lived verification code from the e-mail token\nprovider and returns 202. The account must have a confirmed e-mail address, otherwise\nthis returns 400. Returns 429 with a `Retry-After` header when a code was sent to\nthe account in the last 60 seconds, by this action or by the sign-in step. Because it needs a signed-in caller, it cannot be called during the\ntwo-factor step of a sign-in; M:Ninlil.Web.Controllers.AuthController.SendTwoFactorEmailCode(Ninlil.Web.Models.TwoFactorEmailCodeRequest,System.Threading.CancellationToken) does\nthat.",
         "responses": {
           "200": {
             "description": "OK"
