@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
 using Ninlil.Dhcp.Data.EntityFrameworkCore.Extension;
@@ -610,6 +611,47 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
 
         Assert.True(summary.TotalEntitiesImported > 0);
         Assert.Equal(1, summary.EntityCounts["Zones"]);
+    }
+
+    [Fact]
+    public async Task RestoreWithRestoreFilesFalse_LeavesTheConfigurationFileAndKeyRingUntouched()
+    {
+        await SeedOneZoneAsync();
+
+        // Writing into the options singleton's value points the service at a configuration file
+        // for this test only; the host is private to this test instance.
+        string configurationPath = Path.Combine(_keyRingDirectory, "runtime-settings.json");
+        _host
+            .Services.GetRequiredService<IOptions<BackupOptions>>()
+            .Value.RuntimeConfigurationFilePath = configurationPath;
+        await File.WriteAllTextAsync(configurationPath, "{\"Storage\":{\"Engine\":\"Sqlite\"}}");
+        CreateSecretProtector().Protect("make sure a key ring file exists");
+
+        IBackupService backupService = _host.Services.GetRequiredService<IBackupService>();
+        byte[] archive = await backupService.CreateBackupAsync(null);
+
+        // After the backup the file changes and a key ring file disappears.
+        const string changedConfiguration = "{\"Storage\":{\"Engine\":\"PostgreSql\"}}";
+        await File.WriteAllTextAsync(configurationPath, changedConfiguration);
+        string[] keyFilesBefore = Directory.GetFiles(_keyRingDirectory, "key-*.xml");
+        Assert.NotEmpty(keyFilesBefore);
+        foreach (string keyFile in keyFilesBefore)
+            File.Delete(keyFile);
+
+        BackupRestoreSummary summary = await backupService.RestoreBackupAsync(
+            new MemoryStream(archive),
+            null,
+            restoreFiles: false
+        );
+
+        Assert.Equal(1, summary.EntityCounts["Zones"]);
+        Assert.Equal(changedConfiguration, await File.ReadAllTextAsync(configurationPath));
+        Assert.Empty(Directory.GetFiles(_keyRingDirectory, "key-*.xml"));
+
+        // The default restores the files again, which proves the test would notice a leak.
+        await backupService.RestoreBackupAsync(new MemoryStream(archive), null);
+        Assert.Contains("\"Sqlite\"", await File.ReadAllTextAsync(configurationPath));
+        Assert.NotEmpty(Directory.GetFiles(_keyRingDirectory, "key-*.xml"));
     }
 
     [Fact]

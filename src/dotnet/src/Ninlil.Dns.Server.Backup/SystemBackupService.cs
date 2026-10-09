@@ -190,7 +190,8 @@ public sealed partial class SystemBackupService(
     public async Task<BackupRestoreSummary> RestoreBackupAsync(
         Stream archiveStream,
         string passphrase,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        bool restoreFiles = true
     )
     {
         ArgumentNullException.ThrowIfNull(archiveStream);
@@ -202,7 +203,7 @@ public sealed partial class SystemBackupService(
 
         try
         {
-            return await RestoreCoreAsync(archiveStream, passphrase, stoppingToken);
+            return await RestoreCoreAsync(archiveStream, passphrase, restoreFiles, stoppingToken);
         }
         finally
         {
@@ -217,6 +218,7 @@ public sealed partial class SystemBackupService(
     private async Task<BackupRestoreSummary> RestoreCoreAsync(
         Stream archiveStream,
         string passphrase,
+        bool restoreFiles,
         CancellationToken stoppingToken
     )
     {
@@ -262,7 +264,11 @@ public sealed partial class SystemBackupService(
             budget
         );
 
+        // The archive's files are always validated, so a bad archive is refused the same way
+        // either way; with restoreFiles false none of them is staged or replaced.
         RestoredFiles files = ReadAndValidateFiles(archive, budget);
+        if (!restoreFiles)
+            files = new RestoredFiles([], null, null);
 
         // Every entity file is parsed now, before anything is wiped, so malformed JSON aborts the
         // restore with nothing changed.

@@ -71,7 +71,8 @@ public class BackupControllerTests
         public Task<BackupRestoreSummary> RestoreBackupAsync(
             Stream archiveStream,
             string passphrase,
-            CancellationToken stoppingToken = default
+            CancellationToken stoppingToken = default,
+            bool restoreFiles = true
         ) => throw restoreFailure;
     }
 }

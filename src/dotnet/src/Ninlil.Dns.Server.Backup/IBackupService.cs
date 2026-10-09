@@ -55,6 +55,12 @@ public interface IBackupService
     ///     for an unencrypted archive; required (and validated as such) for an encrypted one.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <param name="restoreFiles">
+    ///     True (the default) also replaces the key ring, certificate and runtime configuration
+    ///     file. False restores the database only and leaves those files alone. The storage
+    ///     switch passes false: it copies data inside one installation, and restoring the
+    ///     configuration file would bring back the engine it is leaving.
+    /// </param>
     /// <returns>A summary of what was imported.</returns>
     /// <exception cref="ArgumentException">
     ///     Thrown when <paramref name="archiveStream" /> is an encrypted archive and
@@ -79,6 +85,7 @@ public interface IBackupService
     Task<BackupRestoreSummary> RestoreBackupAsync(
         Stream archiveStream,
         string passphrase,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        bool restoreFiles = true
     );
 }
