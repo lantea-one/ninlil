@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Benchmarks.Seeding;
 using Ninlil.Dns.Common.Enum;
@@ -49,7 +50,8 @@ public abstract class StorageBenchmarkBase
         Database = await EngineHost.BuildDatabaseAsync(
             Engine,
             BenchmarkEnvironment.ConnectionString(Engine),
-            createSchema: false
+            createSchema: false,
+            ConfigureServices
         );
         await OnSetupAsync();
     }
@@ -63,6 +65,15 @@ public abstract class StorageBenchmarkBase
         await OnCleanupAsync();
         await Database.DisposeAsync();
     }
+
+    /// <summary>
+    ///     This method lets a benchmark class add services to the provider, after the storage
+    ///     wiring. The DNS-path benchmarks add the engines they measure here.
+    /// </summary>
+    protected virtual void ConfigureServices(
+        IServiceCollection services,
+        IConfiguration configuration
+    ) { }
 
     /// <summary>
     ///     This method lets a benchmark class look up what it needs from the seeded data.

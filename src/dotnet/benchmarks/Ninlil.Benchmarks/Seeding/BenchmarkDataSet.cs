@@ -33,7 +33,7 @@ public static class BenchmarkDataSet
     ///     This constant contains the version of the generator; it is part of the database name
     ///     and of the marker zone name.
     /// </summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>
     ///     This constant contains the seed of the random generator.
@@ -152,6 +152,13 @@ public static class BenchmarkDataSet
     ///     This method returns the name of ordinary zone <paramref name="index" />.
     /// </summary>
     public static string ZoneName(int index) => $"zone{index:D4}.bench.";
+
+    /// <summary>
+    ///     This method returns the name of forwarder zone <paramref name="index" />, without a
+    ///     trailing dot: <c>ForwarderQueryResolver</c> trims the dot from the names it looks up,
+    ///     so a zone stored with one is never found.
+    /// </summary>
+    public static string ForwarderZoneName(int index) => $"forward{index}.corp.test";
 
     /// <summary>
     ///     This method returns the name of subscribed filter list <paramref name="index" />.
@@ -636,7 +643,7 @@ public static class BenchmarkDataSet
                 .Range(0, shape.ForwarderZones)
                 .Select(i =>
                 {
-                    ZoneEntity zone = NewZone($"forward{i}.corp.test.", now);
+                    ZoneEntity zone = NewZone(ForwarderZoneName(i), now);
                     zone.Type = ZoneTypeEnum.Forwarder;
                     zone.ForwarderAddresses = [$"192.0.2.{i + 50}"];
                     return zone;

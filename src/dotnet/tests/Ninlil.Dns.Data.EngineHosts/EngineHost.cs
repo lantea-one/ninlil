@@ -101,10 +101,16 @@ public abstract class EngineHost : IAsyncDisposable
     /// <param name="engine">The storage engine of the server.</param>
     /// <param name="connectionString">The connection string, including the database.</param>
     /// <param name="createSchema">Whether to create the schema from the entity model.</param>
+    /// <param name="configureServices">
+    ///     An optional callback that adds services after the storage wiring, for example the DNS
+    ///     engines the DNS-path benchmarks measure. It receives the same configuration the
+    ///     storage extensions read.
+    /// </param>
     public static async Task<EngineDatabase> BuildDatabaseAsync(
         StorageEngineEnum engine,
         string connectionString,
-        bool createSchema
+        bool createSchema,
+        Action<IServiceCollection, IConfiguration> configureServices = null
     )
     {
         IConfiguration configuration = new ConfigurationBuilder()
@@ -130,6 +136,8 @@ public abstract class EngineHost : IAsyncDisposable
             services.AddNinlilDnsEntityFrameworkCore(configuration);
             services.AddNinlilDhcpEntityFrameworkCore();
         }
+
+        configureServices?.Invoke(services, configuration);
 
         ServiceProvider provider = services.BuildServiceProvider();
         EngineDatabase database = new(provider, connectionString);
