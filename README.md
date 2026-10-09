@@ -30,6 +30,11 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   automated proactive re-signing, and a full RFC 6781 automated key-rollover state machine
   (Pre-Publish for ZSKs, Double-Signature for KSKs, with automatic DS cutover when the parent zone
   is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side.
+  The validator builds the chain of trust from the root trust anchor and keeps the zones it has
+  proven in the `dnssec` cache (listed, and flushable, with the other caches). With a trust anchor
+  configured, a DS or DNSKEY lookup that fails or does not verify makes the answer bogus, so the
+  client gets SERVFAIL unless it set the CD bit; a network that blocks DNSSEC data needs
+  `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION=false`.
 - **Every major DNS transport**: plain UDP/TCP (on by default — this is a DNS server, after all),
   DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, and DNSCrypt v2. Every transport beyond plain DNS is
   off by default; see [Enabling additional transports](#enabling-additional-transports). Each one,
