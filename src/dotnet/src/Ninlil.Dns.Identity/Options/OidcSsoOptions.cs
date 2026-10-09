@@ -59,7 +59,7 @@ public sealed class OidcSsoOptions
     ///     This property contains the OAuth 2.0 client secret in plaintext, for the environment
     ///     variable <c>NINLIL_IDENTITY_SSO_CLIENT_SECRET</c> and secret stores. Blank by default.
     ///     A non-empty value overrides <see cref="ClientSecretEncrypted" />
-    ///     (see <see cref="Sso.OidcClientSecretProtector.ResolveClientSecret" />). The admin console
+    ///     (see <see cref="Sso.OidcClientSecretProtector.ResolveClientSecret(OidcSsoOptions)" />). The admin console
     ///     never writes it. <c>Web.Startup.OidcClientSecretMigrationService</c> encrypts a value
     ///     found in the configuration file; a value from the environment is never written to disk.
     /// </summary>
