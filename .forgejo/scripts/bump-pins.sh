@@ -4,7 +4,9 @@
 #
 # What is pinned, and how:
 #   - Container images are written as `name:tag@sha256:<index digest>` in the Dockerfile,
-#     docker/ci.Dockerfile, docker-compose.yml and QueryLogPostgreSqlTestHost.cs. The tag is for
+#     docker/ci.Dockerfile (which includes the nFPM image the packages toolchain copies nfpm
+#     from), docker-compose.yml, QueryLogPostgreSqlTestHost.cs and linux-packages-smoke.sh (the
+#     distribution images the Deb and RPM packages are install-tested in). The tag is for
 #     readers; the digest decides what is pulled. This script re-resolves the tag and rewrites
 #     the digest. It uses the multi-architecture index digest (never a single-architecture
 #     manifest), because the pipeline builds for amd64 and arm64 from the same line, and it fails
@@ -62,6 +64,7 @@ image_files=(
     Dockerfile
     docker/ci.Dockerfile
     docker-compose.yml
+    .forgejo/scripts/linux-packages-smoke.sh
     src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests/QueryLogPostgreSqlTestHost.cs
 )
 workflow_files=(.forgejo/workflows/*.yml)

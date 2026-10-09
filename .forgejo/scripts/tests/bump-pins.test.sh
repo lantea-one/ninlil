@@ -28,7 +28,7 @@ trap 'rm -rf "${work}"' EXIT
 tree="${work}/tree"
 digests="${work}/digests"
 mirror="${work}/mirror"
-mkdir -p "${tree}/docker" "${tree}/.forgejo/workflows" "${tree}/src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests" "${digests}" "${work}/bin"
+mkdir -p "${tree}/docker" "${tree}/.forgejo/workflows" "${tree}/.forgejo/scripts" "${tree}/src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests" "${digests}" "${work}/bin"
 
 hex() { printf '%064d' "$1" | tr '0' "$2"; }
 old_a="sha256:$(hex 1 a)"
@@ -92,6 +92,7 @@ ARG MICROSOFT_REPOSITORY_DEB_SHA256=${deb_sum}
 DOCKERFILE
     printf 'amd64\tlibnuma1\t1.0\n' > "${tree}/docker/native-libraries.lock"
     printf 'amd64\tlibnuma1\t1.0\n' > "${work}/lock-answer"
+    printf 'images=(example.test/runtime:1.0@%s)\n' "${old_a}" > "${tree}/.forgejo/scripts/linux-packages-smoke.sh"
     printf '    image: example.test/fetch:2@%s\n    image: other\n' "${old_b}" > "${tree}/docker-compose.yml"
     printf 'new PostgreSqlBuilder("example.test/fetch:2@%s")\n' "${old_b}" \
         > "${tree}/src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests/QueryLogPostgreSqlTestHost.cs"
@@ -131,7 +132,7 @@ assert_eq 'bump: dry run edits no file' "${before}" "$(checksum)"
 # --- Real run ----------------------------------------------------------------------------------
 run_bump
 assert_eq 'bump: real run exits 0' 0 "${status}"
-assert_eq 'bump: both files holding the moved image are rewritten' 2 "$(grep -rlF "example.test/runtime:1.0@${new_a}" "${tree}" | wc -l)"
+assert_eq 'bump: every file holding the moved image is rewritten (including the smoke script)' 3 "$(grep -rlF "example.test/runtime:1.0@${new_a}" "${tree}" | wc -l)"
 assert_eq 'bump: the old digest of the moved image is gone' 0 "$(grep -rlF "${old_a}" "${tree}" | wc -l)"
 assert_eq 'bump: the unchanged image keeps its digest in all three files' 3 "$(grep -rlF "example.test/fetch:2@${old_b}" "${tree}" | wc -l)"
 assert_eq 'bump: both workflows move to the annotated tag peeled commit' 2 "$(grep -rlF "actions/checkout@${commit_new}' # v7.0.1" "${tree}/.forgejo" | wc -l)"
