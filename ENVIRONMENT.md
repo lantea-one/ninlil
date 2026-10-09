@@ -32,9 +32,9 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **296 individual settings** across 57 bound configuration classes, plus **2 standalone**
+Total: **300 individual settings** across 58 bound configuration classes, plus **2 standalone**
 bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **305 environment variables
+variables that redirect onto .NET's own real, unprefixed equivalents — **309 environment variables
 in total**.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
@@ -446,6 +446,10 @@ Advertisement content, and the PXE-boot TFTP server. Every DHCP-family transport
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV4_RELAY_AGENT_CIRCUIT_ID` | The RFC 3046 Relay Agent Information Circuit ID this relay inserts: printable ASCII, at most 253 characters each and 251 together (invalid values are logged and the option is left out). | *(none)* |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV4_RELAY_AGENT_REMOTE_ID` | The RFC 3046 Relay Agent Information Remote ID this relay inserts: printable ASCII, at most 253 characters each and 251 together (invalid values are logged and the option is left out). | *(none)* |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV4_UPSTREAM_SERVER_PORT` | The port the upstream real DHCPv4 server is reached on. | `67` |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_ENABLE` | Whether the DHCPv6 relay-agent engine is active instead of the local engine (mutually exclusive with it). | `false` |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_UPSTREAM_SERVER_PORT` | The port the upstream real DHCPv6 server is reached on. | `547` |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_RELAY_LINK_ADDRESS` | The RFC 8415 `link-address` this relay inserts into RELAY-FORW messages; a global or unique-local address on the client-facing link. When unset, the first IPv6 address that is neither loopback nor link-local is detected at startup. | *(none)* |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_INTERFACE_ID` | The RFC 8415 Section 21.18 Interface-ID, as ASCII text, added to every RELAY-FORW; when unset, no Interface-ID option is added. | *(none)* |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_ENABLE` | Whether the raw-socket Router Advertisement/Solicitation transport is active. | `false` |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_MIN_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's minimum interval between unsolicited periodic advertisements. | `00:03:18` |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_MAX_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's maximum interval between unsolicited periodic advertisements. | `00:10:00` |
