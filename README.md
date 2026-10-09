@@ -525,7 +525,9 @@ The pipeline runs exactly these checks, each in a throwaway container of the mat
 runs their self-tests; run the same check locally, before pushing a change under `.forgejo/`,
 `docker/` or `src/script/`, with `./.forgejo/scripts/in-container.sh lint ./.forgejo/scripts/lint.sh`.
 A few .NET tests start their own database
-containers through Testcontainers, so the .NET suite needs Docker running. Every test listener,
+containers through Testcontainers, so the .NET suite needs Docker running; they carry the
+`RequiresDocker` test category, which the pull-request build excludes (see
+[The pipeline](#the-pipeline)). Every test listener,
 Karma's included, takes a port the operating system reports as free, never a fixed or well-known
 one, and neither suite needs root, so both can run on a machine that already hosts DNS, DHCP,
 web, or database services.
@@ -622,12 +624,36 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
 | `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages and the multi-architecture image from the Linux binaries; and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
+| `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout commit (below) and opens a pull request into `develop` (by hand, any branch) |
 
 A build publishes nothing until lint and every test have passed, and its release stays an invisible draft
 until every binary, both Arch Linux packages, the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
 on the repository.
+
+**Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
+reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and
+runs with `--filter "Category!=RequiresDocker"`, which skips the PostgreSQL query-log tests. A
+same-repo branch is pushed before its pull request, and that push build runs them with the socket.
+Mark any new test that starts a container with `[Trait("Category", "RequiresDocker")]`.
+
+**Fork pull requests (set before the repository goes public).** The runners run steps on the host
+as a user in the Docker group, and a pull request from a fork runs its own copy of every workflow,
+so the rule above cannot stop a malicious fork by itself. Before going public, enable the Forgejo
+setting that makes workflow runs from fork pull requests wait for a maintainer's approval (or
+disable Actions for forks), and read the diff of `.forgejo/` and every script it runs before
+approving a run.
+
+**Pins.** Every base image is `name:tag@sha256:<multi-architecture index digest>` (the
+[`Dockerfile`](./Dockerfile), [`docker/ci.Dockerfile`](./docker/ci.Dockerfile),
+[`docker-compose.yml`](./docker-compose.yml) and the PostgreSQL test host), and every
+`actions/checkout` is a commit with its tag in a comment. The tag is for readers; the digest or
+commit decides what runs. `bump-pins.yml` runs
+[`.forgejo/scripts/bump-pins.sh`](./.forgejo/scripts/bump-pins.sh) weekly and
+[`open-bump-pr.sh`](./.forgejo/scripts/open-bump-pr.sh) opens a pull request when something moved,
+so a bump goes through the normal build before it is merged. To bump by hand, run
+`.forgejo/scripts/bump-pins.sh --dry-run` to see what would change, then without the flag.
 
 ## Contributing: adding a feature
 

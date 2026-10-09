@@ -1,0 +1,68 @@
+name: 'Bump Pins'
+##
+## Moves every digest-pinned base image and the pinned actions/checkout commit to the newest
+## upstream version and opens a pull request with the result (bump-pins.sh and open-bump-pr.sh
+## in .forgejo/scripts). Runs weekly on Monday at 05:23 UTC, or by hand ("Run workflow") with
+## the branch the pull request targets: develop by default, or main while there is no
+## develop-to-main flow yet. The pull request runs the verify build and its branch push runs the
+## full pipeline, so a bad bump is visible before anyone merges it. It needs only the CI token
+## (secrets.NINLIL_CI_TOKEN) the pipeline already uses.
+##
+## Fork pull requests: before this repository goes public, enable the Forgejo setting that makes
+## workflow runs from fork pull requests wait for a maintainer's approval (or disable Actions
+## for forks). The runners execute steps on the host as a user in the Docker group, and a fork
+## pull request runs its own copy of every workflow, so the pipeline's "no Docker socket for
+## pull requests" rule cannot stop a malicious fork by itself. Treat every approval as "I read
+## the diff of .forgejo/ and every script it runs". This is owner decision OD-B9-a.
+##
+on:
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      ##
+      ## Hand-started runs only; the scheduled run always targets develop.
+      ##
+      base:
+        default: 'develop'
+        description: 'Branch to bump and to open the pull request into.'
+        required: false
+        type: string
+##
+## Two runs never bump at the same time.
+##
+concurrency:
+  group: 'bump-pins'
+  cancel-in-progress: false
+jobs:
+  ##
+  ## Runs on the runner itself: bump-pins.sh needs docker (buildx), git and jq.
+  ##
+  bump:
+    name: 'Bump Pins'
+    runs-on: 'archlinux'
+    env:
+      BASE_BRANCH: '${{ inputs.base || ''develop'' }}'
+    steps:
+      ##
+      ## No stored credentials: open-bump-pr.sh pushes with the CI token, whose push (unlike the
+      ## job token's) starts the branch's build.
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' # v7.0.1
+        with:
+          clean: true
+          persist-credentials: false
+          ref: '${{ inputs.base || ''develop'' }}'
+      ##
+      - name: 'Refresh the Pins'
+        run: |-
+          ./.forgejo/scripts/bump-pins.sh
+        shell: 'bash'
+      ##
+      - name: 'Open the Pull Request'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+        run: |-
+          ./.forgejo/scripts/open-bump-pr.sh
+        shell: 'bash'
