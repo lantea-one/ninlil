@@ -352,6 +352,9 @@ builder.Services.AddSingleton(runtimeConfigurationOptions);
 // Encrypts an SMTP password that an earlier version stored in plaintext in that file.
 builder.Services.AddHostedService<SmtpPasswordMigrationService>();
 
+// The same for an SSO client secret typed into that file in plaintext.
+builder.Services.AddHostedService<OidcClientSecretMigrationService>();
+
 // The default appearance (palette and mode). AppearanceSettingsController reads it through
 // IOptionsMonitor, so a write to the runtime configuration file takes effect at once (see
 // AppearanceOptions for why that is safe here).
