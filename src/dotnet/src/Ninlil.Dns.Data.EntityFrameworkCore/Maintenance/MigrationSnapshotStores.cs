@@ -13,7 +13,7 @@ public static class MigrationSnapshotStores
     /// <summary>
     ///     This method returns the store for the engine of <paramref name="context" />, or null
     ///     when the engine or the database has no snapshot support (an in-memory SQLite database,
-    ///     or an engine whose store does not exist yet). The caller then migrates without a
+    ///     or MongoDB, which has its own safety net). The caller then migrates without a
     ///     snapshot.
     /// </summary>
     /// <param name="engine">The configured storage engine.</param>
@@ -27,6 +27,9 @@ public static class MigrationSnapshotStores
             StorageEngineEnum.Sqlite => SqliteMigrationSnapshotStore.TryCreate(
                 context.Database.GetConnectionString()
             ),
+            StorageEngineEnum.PostgreSql => new PostgreSqlMigrationSnapshotStore(context),
+            StorageEngineEnum.MySql => new MySqlMigrationSnapshotStore(context),
+            StorageEngineEnum.SqlServer => new SqlServerMigrationSnapshotStore(context),
             _ => null,
         };
 }
