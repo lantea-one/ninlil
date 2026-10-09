@@ -31,27 +31,35 @@ public class DnsQueryLogEntryConfiguration : IEntityTypeConfiguration<DnsQueryLo
                 value => new DateTimeOffset(value, TimeSpan.Zero)
             );
 
-        // Every search orders by this column and every retention sweep filters on it, so it is the
-        // most important index.
+        // Every unfiltered search orders by this column and every retention sweep filters and
+        // orders on it, so it is the most important index. The composite indexes below start with
+        // a filter column and end with this one, so a filtered newest-first page and its count
+        // are an index range walk instead of a sort over every match.
         builder.HasIndex(entry => entry.OccurredAtUtc);
 
         builder.Property(entry => entry.ClientAddress).HasMaxLength(45);
-        builder.HasIndex(entry => entry.ClientAddress);
 
+        // Serves the client-address filter with the newest-first order and its count.
+        builder.HasIndex(entry => new { entry.ClientAddress, entry.OccurredAtUtc });
+
+        // No index on this column on purpose: the only name filter is an unanchored,
+        // case-insensitive substring match (LIKE '%term%'), which no B-tree can seek.
         builder.Property(entry => entry.QueriedName).HasMaxLength(255);
-        builder.HasIndex(entry => entry.QueriedName);
 
         builder.Property(entry => entry.Protocol).HasConversion<string>().HasMaxLength(32);
 
         builder.Property(entry => entry.QueriedType).HasConversion<string>().HasMaxLength(32);
 
         builder.Property(entry => entry.ResponseCode).HasConversion<string>().HasMaxLength(32);
-        builder.HasIndex(entry => entry.ResponseCode);
+
+        // Serves the response-code filter with the newest-first order and its count.
+        builder.HasIndex(entry => new { entry.ResponseCode, entry.OccurredAtUtc });
 
         builder.Property(entry => entry.ClientIdentifier).HasMaxLength(256);
 
-        // The per-client activity view (ClientActivityController) searches by this column.
-        builder.HasIndex(entry => entry.ClientIdentifier);
+        // The per-client activity view (ClientActivityController) searches by this column, newest
+        // first.
+        builder.HasIndex(entry => new { entry.ClientIdentifier, entry.OccurredAtUtc });
 
         builder
             .Property(entry => entry.ClientProtocolVersion)

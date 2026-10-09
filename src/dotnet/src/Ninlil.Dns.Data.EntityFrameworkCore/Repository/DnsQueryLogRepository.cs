@@ -25,7 +25,7 @@ public class DnsQueryLogRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await ApplyFilters(Set, criteria)
+        await ApplyFilters(Set.AsNoTracking(), criteria)
             .OrderByDescending(entry => entry.OccurredAtUtc)
             .Skip(skip)
             .Take(take)

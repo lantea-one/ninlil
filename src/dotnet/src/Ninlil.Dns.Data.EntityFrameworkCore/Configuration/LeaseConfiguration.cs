@@ -53,5 +53,9 @@ public class LeaseConfiguration : IEntityTypeConfiguration<LeaseEntity>
         // ILeaseRepository.FindActiveByIpAddressAsync, which client identity resolution uses
         // because a DNS query's source address says nothing about the scope.
         builder.HasIndex(lease => lease.IpAddress);
+
+        // The expiry sweep and the active-lease snapshot filter on the state and compare the
+        // expiry time, so they read a range of this index instead of the whole table.
+        builder.HasIndex(lease => new { lease.State, lease.LeaseExpiresAtUtc });
     }
 }

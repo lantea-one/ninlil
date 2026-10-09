@@ -381,6 +381,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.HasIndex("ScopeName", "IpAddress")
                     .IsUnique();
 
+                b.HasIndex("State", "LeaseExpiresAtUtc");
+
                 b.ToTable("NinlilDhcpLeases", (string)null);
             });
 
@@ -1174,15 +1176,13 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
 
                 b.HasKey("Id");
 
-                b.HasIndex("ClientAddress");
-
-                b.HasIndex("ClientIdentifier");
-
                 b.HasIndex("OccurredAtUtc");
 
-                b.HasIndex("QueriedName");
+                b.HasIndex("ClientAddress", "OccurredAtUtc");
 
-                b.HasIndex("ResponseCode");
+                b.HasIndex("ClientIdentifier", "OccurredAtUtc");
+
+                b.HasIndex("ResponseCode", "OccurredAtUtc");
 
                 b.ToTable("NinlilDnsQueryLogEntries", (string)null);
             });
@@ -1422,6 +1422,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasColumnType("uuid");
 
                 b.HasKey("Id");
+
+                b.HasIndex("ManagedByFeature", "Type");
 
                 b.HasIndex("ZoneId", "Name", "Type");
 

@@ -45,6 +45,9 @@ public class RecordConfiguration : IEntityTypeConfiguration<RecordEntity>
             record.Type,
         });
 
+        // PtrSyncService finds the records one feature manages, of one type, across all zones.
+        builder.HasIndex(record => new { record.ManagedByFeature, record.Type });
+
         // Deleting a zone deletes its records.
         builder
             .HasOne<ZoneEntity>()
