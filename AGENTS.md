@@ -94,11 +94,12 @@ dotnet test Ninlil.slnx                                               # everythi
 
 | Side | Format | Check (CI gate) |
 |---|---|---|
-| C# | `dotnet csharpier format <changed files or folders>` | `dotnet csharpier check .` |
+| C# | `dotnet csharpier format <changed files or folders>`, or `dotnet csharpier format .` | `dotnet csharpier check .` |
 | Angular | `npm run format` (in `src/angular/`) | `npm run format:check`, `npm run lint` |
 
-- Format only the C# files you changed. Running CSharpier on the whole tree reformats the
-  generated EF migration files, which must stay exactly as `dotnet ef` wrote them.
+- Formatting the whole tree is safe: `.csharpierignore` skips the generated EF migration folders
+  (`Migrations/` in each `Ninlil.Dns.Data.EntityFrameworkCore.Migrations.*` project), which must
+  stay exactly as `dotnet ef` wrote them. Never remove that entry or format those files by hand.
 - `.editorconfig` enforces file-scoped namespaces and `using` directives outside the namespace as
   errors.
 
@@ -235,8 +236,9 @@ Every comment is for a reader opening the file cold, today.
       `Ninlil.Web.Tests` if the host, API or DI wiring changed. If you changed a shared library
       (`Ninlil.Common.*`, `Ninlil.Dns.Common`, `Ninlil.Dhcp.Common`, `Ninlil.Dns.Server.Core`),
       run the whole solution: `dotnet test Ninlil.slnx -p:NinlilSkipAngularBuild=true`.
-- [ ] `dotnet csharpier format` run on the C# files you changed only; `npm run lint` and
-      `npm run format:check` clean for Angular changes, and `npm test` for UI logic.
+- [ ] `dotnet csharpier format` run on the C# files you changed (`dotnet csharpier check .`
+      passes); `npm run lint` and `npm run format:check`
+      clean for Angular changes, and `npm test` for UI logic.
 - [ ] API changed: OpenAPI snapshot regenerated and `npm run generate:api` run, both committed.
 - [ ] Schema changed: one migration per relational provider, MongoDB repository updated.
 - [ ] Option added or changed: `OptionsEnvironmentVariableRegistry` (new class) and
