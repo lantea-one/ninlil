@@ -13,9 +13,9 @@ namespace Ninlil.Benchmarks.Storage;
 ///     cleanup service every interval) on the full table with a limit of nine tenths of its
 ///     rows. Each iteration deletes a tenth of the table, so <c>[IterationSetup]</c> inserts it
 ///     again outside the measurement. It runs three monitored iterations of one invocation each,
-///     because one delete changes what the next one finds. On MongoDB at the large scale the
-///     delete fails today (the <c>$nin</c> list passes the command size limit); BenchmarkDotNet
-///     reports that as the result.
+///     because one delete changes what the next one finds. The delete finds the timestamp of the
+///     first row to drop and deletes by that boundary, so most of the measured time is the
+///     removal of the rows themselves.
 /// </summary>
 [Config(typeof(MonitoredConfig))]
 public class QueryLogRetentionBenchmarks : StorageBenchmarkBase

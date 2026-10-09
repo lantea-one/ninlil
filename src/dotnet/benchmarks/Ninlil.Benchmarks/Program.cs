@@ -159,6 +159,7 @@ public static class Program
                 BenchmarkEnvironment.ScaleVariable,
                 scale.ToString()
             );
+            Environment.SetEnvironmentVariable(StorageConfig.JobVariable, job);
 
             return Run([.. remaining]);
         }
