@@ -180,4 +180,197 @@ public class DnssecCanonicalizationTests
 
         Assert.Equal(expected, signingInput);
     }
+
+    [Fact]
+    public void ToCanonicalRdataLeavesAnNsecNextDomainNameInItsOriginalCase()
+    {
+        // RFC 6840 §5.1: the NSEC Next Domain Name is not lower-cased in canonical form.
+        byte[] rdata =
+        [
+            .. DnsName.Parse("B.Example.").ToUncompressedWireBytes(),
+            0,
+            6,
+            0x40,
+            0,
+            0,
+            0,
+            0,
+            3,
+        ];
+
+        byte[] canonicalRdata = DnssecCanonicalization.ToCanonicalRdata(
+            DnsResourceRecordTypeEnum.Nsec,
+            rdata
+        );
+
+        Assert.Equal(rdata, canonicalRdata);
+    }
+
+    [Fact]
+    public void BuildSigningInputWritesTheSignerNameInLowerCase()
+    {
+        DnsName owner = DnsName.Parse("www.example.com");
+        DnsResourceRecord aRecord = new(
+            owner,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            300,
+            [192, 0, 2, 1]
+        );
+        RrSigRecordData mixedCase = new(
+            DnsResourceRecordTypeEnum.A,
+            DnssecAlgorithmEnum.EcdsaP256Sha256,
+            3,
+            300,
+            2000000000,
+            1900000000,
+            9999,
+            DnsName.Parse("Example.COM."),
+            []
+        );
+        RrSigRecordData lowerCase = new(
+            mixedCase.TypeCovered,
+            mixedCase.Algorithm,
+            mixedCase.Labels,
+            mixedCase.OriginalTimeToLiveSeconds,
+            mixedCase.SignatureExpiration,
+            mixedCase.SignatureInception,
+            mixedCase.KeyTag,
+            DnsName.Parse("example.com."),
+            []
+        );
+
+        Assert.Equal(
+            DnssecCanonicalization.BuildSigningInput(
+                lowerCase,
+                owner,
+                DnsClassEnum.Internet,
+                [aRecord]
+            ),
+            DnssecCanonicalization.BuildSigningInput(
+                mixedCase,
+                owner,
+                DnsClassEnum.Internet,
+                [aRecord]
+            )
+        );
+    }
+
+    [Fact]
+    public void ReconstructSignedOwnerRebuildsAWildcardFromTheRightmostLabels()
+    {
+        Assert.Equal(
+            DnsName.Parse("*.example."),
+            DnssecCanonicalization.ReconstructSignedOwner(DnsName.Parse("foo.bar.example."), 1)
+        );
+    }
+
+    [Fact]
+    public void ReconstructSignedOwnerKeepsAWildcardOwnerWhoseLabelsExcludeTheAsterisk()
+    {
+        Assert.Equal(
+            DnsName.Parse("*.example."),
+            DnssecCanonicalization.ReconstructSignedOwner(DnsName.Parse("*.example."), 1)
+        );
+    }
+
+    [Fact]
+    public void ReconstructSignedOwnerKeepsTheOwnerWhenLabelsMatchItsLabelCount()
+    {
+        DnsName owner = DnsName.Parse("www.example.com.");
+
+        Assert.Equal(owner, DnssecCanonicalization.ReconstructSignedOwner(owner, 3));
+    }
+
+    [Fact]
+    public void ReconstructSignedOwnerReturnsNullWhenLabelsExceedTheLabelCount()
+    {
+        Assert.Null(DnssecCanonicalization.ReconstructSignedOwner(DnsName.Parse("example."), 2));
+    }
+
+    [Fact]
+    public void ReconstructSignedOwnerOfALabelsValueOfZeroIsTheRootWildcard()
+    {
+        Assert.Equal(
+            DnsName.Parse("*."),
+            DnssecCanonicalization.ReconstructSignedOwner(DnsName.Parse("a.b."), 0)
+        );
+    }
+
+    [Fact]
+    public void BuildSigningInputForAWildcardExpansionUsesTheWildcardOwner()
+    {
+        RrSigRecordData metadata = new(
+            DnsResourceRecordTypeEnum.A,
+            DnssecAlgorithmEnum.EcdsaP256Sha256,
+            2,
+            300,
+            2000000000,
+            1900000000,
+            9999,
+            DnsName.Parse("example.com"),
+            []
+        );
+        DnsResourceRecord expanded = new(
+            DnsName.Parse("X.y.example.com"),
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            300,
+            [192, 0, 2, 1]
+        );
+        DnsResourceRecord atWildcard = new(
+            DnsName.Parse("*.example.com"),
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            300,
+            [192, 0, 2, 1]
+        );
+
+        Assert.Equal(
+            DnssecCanonicalization.BuildSigningInput(
+                metadata,
+                atWildcard.Name,
+                DnsClassEnum.Internet,
+                [atWildcard]
+            ),
+            DnssecCanonicalization.BuildSigningInput(
+                metadata,
+                expanded.Name,
+                DnsClassEnum.Internet,
+                [expanded]
+            )
+        );
+    }
+
+    [Fact]
+    public void BuildSigningInputThrowsWhenLabelsExceedTheOwnerLabelCount()
+    {
+        RrSigRecordData metadata = new(
+            DnsResourceRecordTypeEnum.A,
+            DnssecAlgorithmEnum.EcdsaP256Sha256,
+            5,
+            300,
+            2000000000,
+            1900000000,
+            9999,
+            DnsName.Parse("example.com"),
+            []
+        );
+        DnsResourceRecord record = new(
+            DnsName.Parse("example.com"),
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            300,
+            [192, 0, 2, 1]
+        );
+
+        Assert.Throws<ArgumentException>(() =>
+            DnssecCanonicalization.BuildSigningInput(
+                metadata,
+                record.Name,
+                DnsClassEnum.Internet,
+                [record]
+            )
+        );
+    }
 }

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "nsec-mixed-case-next",
+    "source": "dnspython 2.8.0",
+    "ownerName": "a.example.",
+    "type": "NSEC",
+    "rdataHex": [
+      "0142074578616d706c65000006400000000003"
+    ],
+    "rrsigHex": "002f0f0200000e106b49d2006553f100e620076578616d706c6500290977afe7cacb86d508290f69e3b7f5d812539f0f5601d8ec06c2a7f0ffb173d271545a735c357223a13807cc44c4f1494ca4f19d882567be0bb1a81db9f50e",
+    "dnskeyHex": "0101030faa8d475fe29ce82a5b146b05711618b65926519fa6e1814ab0257b0aa4123341",
+    "now": 1750000000
+  },
+  {
+    "id": "signer-mixed-case",
+    "source": "dnspython 2.8.0",
+    "ownerName": "www.example.com.",
+    "type": "A",
+    "rdataHex": [
+      "c0000201"
+    ],
+    "rrsigHex": "00010f0300000e106b49d2006553f100e620074578616d706c6503434f4d006b95e38af9c1cfc7e71a1b3c6f33e58606c622c33e768ba292577bc894ad246f7a78ca4ff7793bf8d79ebbfd390fc3435099ea6954820c7fc09688dccca8eb0c",
+    "dnskeyHex": "0101030faa8d475fe29ce82a5b146b05711618b65926519fa6e1814ab0257b0aa4123341",
+    "now": 1750000000
+  },
+  {
+    "id": "wildcard-expansion",
+    "source": "dnspython 2.8.0",
+    "ownerName": "x.y.example.com.",
+    "type": "A",
+    "rdataHex": [
+      "c0000207"
+    ],
+    "rrsigHex": "00010f0200000e106b49d2006553f100e620076578616d706c6503636f6d0028f3a431b2fb131dcb931a151dbb4cae8bd9b3ccbbd1fbba5db78cbaff772625eb91851e08821df0da62227b386d7351c9d16cabbba2f5884e8e4ca0774b590c",
+    "dnskeyHex": "0101030faa8d475fe29ce82a5b146b05711618b65926519fa6e1814ab0257b0aa4123341",
+    "now": 1750000000
+  }
+]
