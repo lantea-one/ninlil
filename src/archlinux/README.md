@@ -13,7 +13,8 @@ the executable comes from:
 
 Both AUR packages provide and conflict with `ninlil`, so only one of the three is ever installed.
 [`common/`](./common/) holds the systemd unit, the `sysusers.d` entry, and the default environment
-file they all install.
+file they all install. The Deb and RPM packages (built from [`../linux-packages/`](../linux-packages/))
+install the same three files from here, so a change to them reaches every Linux package.
 
 ## `ninlil`
 

@@ -1,3 +1,5 @@
 # The system user and group the ninlil service runs as, with /var/lib/ninlil as its home.
-# Installed as /usr/lib/sysusers.d/ninlil.conf; systemd-sysusers creates it on install.
+# Installed as /usr/lib/sysusers.d/ninlil.conf by the Arch Linux, Deb and RPM packages;
+# systemd-sysusers creates it on install (the Deb and RPM install scripts fall back to useradd
+# where systemd-sysusers is missing).
 u ninlil - "Ninlil DNS/DHCP server" /var/lib/ninlil

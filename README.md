@@ -264,6 +264,88 @@ sudo systemctl enable --now ninlil
 commit). All three install a `ninlil` systemd service running as an unprivileged user with its
 state in `/var/lib/ninlil`.
 
+### Debian, Ubuntu, Fedora, RHEL and Rocky Linux
+
+Every release carries a `.deb` (Debian, Ubuntu) and an `.rpm` (Fedora, RHEL, Rocky Linux,
+AlmaLinux) for `amd64`/`x86_64` and `arm64`/`aarch64`. They install the same layout as the Arch
+Linux package: the server in `/usr/lib/ninlil/`, a `ninlil` systemd service that runs as an
+unprivileged `ninlil` user, all state in `/var/lib/ninlil`, and the settings in
+`/etc/ninlil/ninlil.env`. Installing never starts the service; you do that in step 4.
+
+Each package is install-tested on every build, on `amd64`, on Debian 12, Ubuntu 22.04, Ubuntu 24.04,
+Rocky Linux 9 and Fedora 41. The `arm64` packages are built from the same files but not run by the
+pipeline. The package manager installs the libraries the server needs (the C++ runtime, OpenSSL and
+ICU) from your distribution. DNS-over-QUIC needs `libmsquic`, which the package only suggests; see
+[Microsoft's package repository](https://learn.microsoft.com/en-us/linux/packages) if you want it.
+
+1. Open the [releases page](https://git.lantea.one/Lantea.One/ninlil/releases), pick a release
+   and copy the link of the package for your distribution and CPU (`uname -m` prints `x86_64` or
+   `aarch64`). The file names are:
+
+   | Distribution | CPU | File |
+   |---|---|---|
+   | Debian, Ubuntu | x86-64 | `ninlil_<version>_amd64.deb` |
+   | Debian, Ubuntu | ARM64 | `ninlil_<version>_arm64.deb` |
+   | Fedora, RHEL, Rocky Linux, AlmaLinux | x86-64 | `ninlil-<version>-1.x86_64.rpm` |
+   | Fedora, RHEL, Rocky Linux, AlmaLinux | ARM64 | `ninlil-<version>-1.aarch64.rpm` |
+
+   `<version>` is the date version, such as `2026.10.09.1`. A branch build is a pre-release and its
+   version carries the branch and commit (`2026.10.09.3~develop.a1b2c3d` for a Deb,
+   `2026.10.09.3-0.develop.a1b2c3d` for an RPM); it sorts below the release it precedes.
+
+2. Download the package and the checksum list, then check the download. Replace `<tag>` with the
+   release's tag and the file name with yours:
+
+   ```bash
+   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil_<version>_amd64.deb
+   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/SHA256SUMS
+   sha256sum --check --ignore-missing SHA256SUMS
+   ```
+
+   The last command must print `OK` for your file. The packages are not signed; the checksums
+   are your check that the file is the one the pipeline built.
+
+3. Install it. The `./` in front of the file name is required, it tells the package manager to use
+   the local file:
+
+   ```bash
+   sudo apt install ./ninlil_<version>_amd64.deb        # Debian, Ubuntu
+   sudo dnf install ./ninlil-<version>-1.x86_64.rpm     # Fedora, RHEL, Rocky Linux, AlmaLinux
+   ```
+
+4. Start it now and at every boot, then look at the log for the one-time administrator password:
+
+   ```bash
+   sudo systemctl enable --now ninlil
+   sudo journalctl -u ninlil
+   ```
+
+   Open `http://<this host>/` and sign in as `admin` (see [First run](#first-run)).
+   To choose the password yourself, set `NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD` in
+   `/etc/ninlil/ninlil.env` before the first start. That file takes every `NINLIL_*` setting listed in
+   [`ENVIRONMENT.md`](./ENVIRONMENT.md); run `sudo systemctl restart ninlil` after editing it.
+
+Day-to-day:
+
+- **Upgrade:** install the newer package the same way (`apt install ./newer.deb`,
+  `dnf install ./newer.rpm`), then `sudo systemctl restart ninlil`. Your edits to
+  `/etc/ninlil/ninlil.env` and everything in `/var/lib/ninlil` are kept.
+- **Remove:** `sudo apt remove ninlil` or `sudo dnf remove ninlil` stops the service and removes the
+  program. It keeps `/var/lib/ninlil` (your database, keys and certificates) and the `ninlil` user.
+  Your edited settings stay as `/etc/ninlil/ninlil.env` on Debian and Ubuntu, and are saved as
+  `/etc/ninlil/ninlil.env.rpmsave` on Fedora and RHEL.
+- **Remove everything:** after `sudo apt purge ninlil` (Debian and Ubuntu; it also deletes the
+  settings file) or `dnf remove`, delete the data yourself with `sudo rm -r /var/lib/ninlil` and
+  the user with `sudo userdel ninlil`. The package never deletes your data.
+
+The package definition is [`src/linux-packages/nfpm.yaml`](./src/linux-packages/nfpm.yaml); the
+pipeline builds it with [nFPM](https://nfpm.goreleaser.com/) through
+[`linux-packages.sh`](./.forgejo/scripts/linux-packages.sh) and tests it with
+[`linux-packages-smoke.sh`](./.forgejo/scripts/linux-packages-smoke.sh). To run that test on your
+machine, build the packages with `in-container.sh packages` (it needs a `dist/` folder holding
+`ninlil-linux-amd64` and `ninlil-linux-arm64` and the `DEB_VERSION`, `RPM_VERSION` and `RPM_RELEASE`
+variables) and run `.forgejo/scripts/linux-packages-smoke.sh dist`.
+
 ### Run the container image
 
 A hardened, multi-architecture (`linux/amd64`, `linux/arm64`) image is published to the Forgejo
@@ -671,7 +753,7 @@ The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on 
 `archlinux` Forgejo runners, which need only Docker with buildx, `git`, `curl`, and `jq`. Every
 build and test step runs in a throwaway container of one of the toolchains in
 [`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and Chromium;
-`makepkg`; shellcheck and actionlint) with just the checkout mounted, through
+`makepkg`; shellcheck and actionlint; nFPM) with just the checkout mounted, through
 [`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). One job, the Windows
 smoke test, runs on a Windows runner labelled `windows-latest` instead (the project's runner
 `lofnheim`; if it registers only under that name, change the job's `runs-on`). It runs
@@ -687,12 +769,13 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages and the multi-architecture image from the Linux binaries; the Windows smoke test; and finally publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 | `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout commit (below) and opens a pull request into `develop` (by hand, any branch) |
 
 A build publishes nothing until lint and every test have passed, and its release stays an invisible draft
-until every binary (and the Windows smoke test), both Arch Linux packages, the multi-architecture image, and every NuGet
+until every binary (and the Windows smoke test), both Arch Linux packages, the Deb and RPM packages (after they
+installed and started in Debian, Ubuntu, Rocky Linux and Fedora containers), the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
 on the repository.
@@ -883,6 +966,7 @@ docker/                 Build-time helper scripts for the container image
 docker-compose.yml      Example deployment: Ninlil + PostgreSQL, with a host-networking DHCP/RA variant
 .forgejo/               CI/CD workflows and the scripts they run (versioning, releases, cleanup)
 src/archlinux/          The ninlil, ninlil-git-stable, and ninlil-git-next Arch Linux packages
+src/linux-packages/     The Deb and RPM package definition (nFPM) and its install scripts
 src/script/             Operational scripts: database helpers and a systemd unit
 src/terraform/          Reusable Terraform modules for packaging and publishing
 ```

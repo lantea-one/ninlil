@@ -1,6 +1,7 @@
-# systemd unit for the Arch Linux packages (ninlil, ninlil-git-stable, and ninlil-git-next),
-# installed as /usr/lib/systemd/system/ninlil.service. The ninlil user comes from ninlil.sysusers,
-# the executable lives in /usr/lib/ninlil and the optional environment file in /etc/ninlil.
+# systemd unit for the Arch Linux packages (ninlil, ninlil-git-stable, and ninlil-git-next) and the
+# Deb and RPM packages (src/linux-packages), installed as /usr/lib/systemd/system/ninlil.service.
+# The ninlil user comes from ninlil.sysusers, the executable lives in /usr/lib/ninlil and the
+# optional environment file in /etc/ninlil.
 [Unit]
 Description=Ninlil DNS, DHCP and Router Advertisement server
 Documentation=https://git.lantea.one/Lantea.One/ninlil
