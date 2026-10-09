@@ -50,20 +50,51 @@ public class DnsQueryLogRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Load only the identifiers to keep (at most maxRetainedEntries, whatever the table
-        // size), then delete everything else in one statement. If the table has no more rows
-        // than that, every row is kept and nothing is deleted.
-        List<Guid> idsToKeep = await Set.OrderByDescending(entry => entry.OccurredAtUtc)
-            .ThenByDescending(entry => entry.Id)
-            .Take(maxRetainedEntries)
+        // A limit of zero or less means "no limit" and deletes nothing, as the cleanup service
+        // treats it.
+        if (maxRetainedEntries <= 0)
+            return 0;
+
+        // The newest maxRetainedEntries rows are the rows at or after the timestamp of the row at
+        // position maxRetainedEntries (0-based) in newest-first order. Finding that timestamp is
+        // a walk over the OccurredAtUtc index and loads one value, never a list of identifiers
+        // (a NOT IN list of a million identifiers is slow or rejected on some engines).
+        List<DateTimeOffset> cutoffs = await Set.OrderByDescending(entry => entry.OccurredAtUtc)
+            .Skip(maxRetainedEntries)
+            .Take(1)
+            .Select(entry => entry.OccurredAtUtc)
+            .ToListAsync(stoppingToken);
+
+        // Fewer rows than the limit (or exactly the limit): nothing to remove.
+        if (cutoffs.Count == 0)
+            return 0;
+
+        DateTimeOffset cutoff = cutoffs[0];
+
+        // Every row older than the cutoff is beyond the limit.
+        int deleted = await Set.Where(entry => entry.OccurredAtUtc < cutoff)
+            .ExecuteDeleteAsync(stoppingToken);
+
+        // Rows that share the cutoff timestamp are split by identifier, newest identifier first,
+        // so exactly the limit remains. Only these tied rows are listed.
+        int newerThanCutoff = await Set.CountAsync(
+            entry => entry.OccurredAtUtc > cutoff,
+            stoppingToken
+        );
+        int keepAtCutoff = maxRetainedEntries - newerThanCutoff;
+        List<Guid> tiedIdsToDelete = await Set.Where(entry => entry.OccurredAtUtc == cutoff)
+            .OrderByDescending(entry => entry.Id)
+            .Skip(keepAtCutoff)
             .Select(entry => entry.Id)
             .ToListAsync(stoppingToken);
 
-        if (idsToKeep.Count == 0)
-            return 0;
+        // Delete in slices so a pathological number of identical timestamps stays below the
+        // parameter limits of the engines.
+        foreach (Guid[] slice in tiedIdsToDelete.Chunk(1000))
+            deleted += await Set.Where(entry => slice.Contains(entry.Id))
+                .ExecuteDeleteAsync(stoppingToken);
 
-        return await Set.Where(entry => !idsToKeep.Contains(entry.Id))
-            .ExecuteDeleteAsync(stoppingToken);
+        return deleted;
     }
 
     /// <inheritdoc />

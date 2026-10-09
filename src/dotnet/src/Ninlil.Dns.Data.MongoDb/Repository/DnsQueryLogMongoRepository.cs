@@ -82,29 +82,56 @@ public class DnsQueryLogMongoRepository
         CancellationToken stoppingToken = default
     )
     {
-        SortDefinition<DnsQueryLogEntryEntity> newestFirst =
-            Builders<DnsQueryLogEntryEntity>.Sort.Combine(
-                Builders<DnsQueryLogEntryEntity>.Sort.Descending(entry => entry.OccurredAtUtc),
-                Builders<DnsQueryLogEntryEntity>.Sort.Descending(entry => entry.Id)
-            );
+        // A limit of zero or less means "no limit" and deletes nothing, as the cleanup service
+        // treats it.
+        if (maxRetainedEntries <= 0)
+            return 0;
 
-        // As in the relational implementation, only the identifiers to keep are loaded, at most
-        // maxRetainedEntries whatever the collection size.
-        List<Guid> idsToKeep = await Collection
+        // The newest maxRetainedEntries documents are those at or after the timestamp of the
+        // document at position maxRetainedEntries (0-based) in newest-first order. Finding it
+        // loads one value, never a list of identifiers (a $nin list of hundreds of thousands of
+        // identifiers passes the 16 MB command size limit).
+        List<DateTimeOffset> cutoffs = await Collection
             .Find(FilterDefinition<DnsQueryLogEntryEntity>.Empty)
-            .Sort(newestFirst)
-            .Limit(maxRetainedEntries)
+            .Sort(Builders<DnsQueryLogEntryEntity>.Sort.Descending(entry => entry.OccurredAtUtc))
+            .Skip(maxRetainedEntries)
+            .Limit(1)
+            .Project(entry => entry.OccurredAtUtc)
+            .ToListAsync(stoppingToken);
+
+        // Fewer documents than the limit (or exactly the limit): nothing to remove.
+        if (cutoffs.Count == 0)
+            return 0;
+
+        DateTimeOffset cutoff = cutoffs[0];
+
+        // Every document older than the cutoff is beyond the limit.
+        long deleted = (
+            await Collection.DeleteManyAsync(entry => entry.OccurredAtUtc < cutoff, stoppingToken)
+        ).DeletedCount;
+
+        // Documents that share the cutoff timestamp are split by identifier, newest identifier
+        // first, so exactly the limit remains. Only these tied documents are listed.
+        long newerThanCutoff = await Collection.CountDocumentsAsync(
+            entry => entry.OccurredAtUtc > cutoff,
+            cancellationToken: stoppingToken
+        );
+        int keepAtCutoff = (int)(maxRetainedEntries - newerThanCutoff);
+        List<Guid> tiedIdsToDelete = await Collection
+            .Find(entry => entry.OccurredAtUtc == cutoff)
+            .Sort(Builders<DnsQueryLogEntryEntity>.Sort.Descending(entry => entry.Id))
+            .Skip(keepAtCutoff)
             .Project(entry => entry.Id)
             .ToListAsync(stoppingToken);
 
-        if (idsToKeep.Count == 0)
-            return 0;
+        // Delete in slices so a pathological number of identical timestamps stays below the
+        // command size limit.
+        foreach (Guid[] slice in tiedIdsToDelete.Chunk(1000))
+            deleted += (
+                await Collection.DeleteManyAsync(entry => slice.Contains(entry.Id), stoppingToken)
+            ).DeletedCount;
 
-        DeleteResult result = await Collection.DeleteManyAsync(
-            entry => !idsToKeep.Contains(entry.Id),
-            stoppingToken
-        );
-        return (int)result.DeletedCount;
+        return (int)deleted;
     }
 
     /// <inheritdoc />

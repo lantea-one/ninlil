@@ -57,10 +57,15 @@ public interface IDnsQueryLogRepository : IRepository<DnsQueryLogEntryEntity>
     ///     This method deletes every entry beyond the <paramref name="maxRetainedEntries" /> newest.
     ///     It is a size cap alongside the age-based <see cref="DeleteOlderThanAsync" />, because a
     ///     server with very high query volume could otherwise grow the log without bound within one
-    ///     retention window.
+    ///     retention window. Newest means the greatest <c>OccurredAtUtc</c>; entries with the same
+    ///     timestamp are ranked by the greatest <c>Id</c>. Implementations find the timestamp of
+    ///     the first entry to drop and delete by that boundary, so the cost does not grow with the
+    ///     number of entries kept and no list of identifiers is sent to the database (only the
+    ///     entries tied at the boundary are listed).
     /// </summary>
     /// <param name="maxRetainedEntries">
-    ///     The number of newest entries to keep; older entries beyond this count are removed.
+    ///     The number of newest entries to keep; older entries beyond this count are removed. A
+    ///     value of zero or less removes nothing.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of entries removed.</returns>
