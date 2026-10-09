@@ -57,8 +57,36 @@ public abstract class EngineFixtureBase : IAsyncLifetime
     /// </param>
     public async Task<EngineDatabase> CreateDatabaseAsync(bool createSchema = true)
     {
-        string connectionString = BuildConnectionString($"ninlil_{Guid.NewGuid():N}");
+        return await BuildDatabaseAsync(
+            BuildConnectionString($"ninlil_{Guid.NewGuid():N}"),
+            createSchema
+        );
+    }
 
+    /// <summary>
+    ///     This method creates a new database with a login that holds only the privileges the
+    ///     scripts in <c>src/script/database/*/init.sql</c> give the application account
+    ///     (PostgreSQL: owner of its database; MySQL: all privileges on its database; SQL Server:
+    ///     <c>db_owner</c> in its database), not the container's superuser, and returns a service
+    ///     provider that connects as that login. The database exists and is empty; the schema is
+    ///     created from the entity model only when <paramref name="createSchema" /> is true.
+    ///     Tests of the migration snapshots use it, because a snapshot must work with the
+    ///     documented account.
+    /// </summary>
+    /// <param name="createSchema">Whether to create the schema from the entity model.</param>
+    public virtual Task<EngineDatabase> CreateLeastPrivilegeDatabaseAsync(
+        bool createSchema = false
+    ) => throw new NotSupportedException($"{Engine} has no least-privilege account.");
+
+    /// <summary>
+    ///     This method builds the service provider for <paramref name="connectionString" /> and,
+    ///     on a relational engine, creates the schema when asked.
+    /// </summary>
+    protected async Task<EngineDatabase> BuildDatabaseAsync(
+        string connectionString,
+        bool createSchema
+    )
+    {
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(
                 new Dictionary<string, string>

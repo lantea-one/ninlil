@@ -34,4 +34,44 @@ public sealed class SqlServerEngineFixture : EngineFixtureBase
         {
             InitialCatalog = databaseName,
         }.ConnectionString;
+
+    /// <inheritdoc />
+    public override async Task<EngineDatabase> CreateLeastPrivilegeDatabaseAsync(
+        bool createSchema = false
+    )
+    {
+        // The statements follow src/script/database/sqlserver/init.sql: a login that is
+        // db_owner in its own database only.
+        string name = $"ninlil_{Guid.NewGuid():N}";
+        string password = $"Pw-{Guid.NewGuid():N}-1!";
+        await using (SqlConnection admin = new(BuildConnectionString("master")))
+        {
+            await admin.OpenAsync();
+            await Execute(admin, $"CREATE DATABASE [{name}]");
+            await Execute(
+                admin,
+                $"CREATE LOGIN [{name}] WITH PASSWORD = N'{password}', CHECK_POLICY = ON"
+            );
+        }
+
+        await using (SqlConnection inDatabase = new(BuildConnectionString(name)))
+        {
+            await inDatabase.OpenAsync();
+            await Execute(inDatabase, $"CREATE USER [{name}] FOR LOGIN [{name}]");
+            await Execute(inDatabase, $"ALTER ROLE [db_owner] ADD MEMBER [{name}]");
+        }
+
+        string connectionString = new SqlConnectionStringBuilder(BuildConnectionString(name))
+        {
+            UserID = name,
+            Password = password,
+        }.ConnectionString;
+        return await BuildDatabaseAsync(connectionString, createSchema);
+    }
+
+    private static async Task Execute(SqlConnection connection, string sql)
+    {
+        await using SqlCommand command = new(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
 }

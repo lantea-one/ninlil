@@ -33,4 +33,37 @@ public sealed class PostgreSqlEngineFixture : EngineFixtureBase
         {
             Database = databaseName,
         }.ConnectionString;
+
+    /// <inheritdoc />
+    public override async Task<EngineDatabase> CreateLeastPrivilegeDatabaseAsync(
+        bool createSchema = false
+    )
+    {
+        // The statements follow src/script/database/postgresql/init.sql: a login that cannot
+        // create databases or roles, owning its own database.
+        string name = $"ninlil_{Guid.NewGuid():N}";
+        string password = $"pw-{Guid.NewGuid():N}";
+        await using (NpgsqlConnection admin = new(BuildConnectionString("postgres")))
+        {
+            await admin.OpenAsync();
+            await Execute(admin, $"CREATE ROLE \"{name}\" WITH LOGIN PASSWORD '{password}'");
+            await Execute(
+                admin,
+                $"CREATE DATABASE \"{name}\" WITH OWNER = \"{name}\" ENCODING = 'UTF8'"
+            );
+        }
+
+        string connectionString = new NpgsqlConnectionStringBuilder(BuildConnectionString(name))
+        {
+            Username = name,
+            Password = password,
+        }.ConnectionString;
+        return await BuildDatabaseAsync(connectionString, createSchema);
+    }
+
+    private static async Task Execute(NpgsqlConnection connection, string sql)
+    {
+        await using NpgsqlCommand command = new(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
 }

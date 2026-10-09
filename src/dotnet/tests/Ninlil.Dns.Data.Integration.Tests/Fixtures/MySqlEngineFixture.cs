@@ -45,4 +45,42 @@ public sealed class MySqlEngineFixture : EngineFixtureBase
         {
             Pooling = false,
         }.ConnectionString;
+
+    /// <inheritdoc />
+    public override async Task<EngineDatabase> CreateLeastPrivilegeDatabaseAsync(
+        bool createSchema = false
+    )
+    {
+        // The statements follow src/script/database/mysql/init.sql: a login with all
+        // privileges on its own database only.
+        string name = $"ninlil_{Guid.NewGuid():N}";
+        string user = name[..30];
+        string password = $"pw-{Guid.NewGuid():N}";
+        await using (MySqlConnection admin = new(BuildConnectionString("mysql")))
+        {
+            await admin.OpenAsync();
+            await Execute(
+                admin,
+                $"CREATE DATABASE `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            );
+            await Execute(admin, $"CREATE USER '{user}'@'%' IDENTIFIED BY '{password}'");
+            await Execute(
+                admin,
+                $"GRANT ALL PRIVILEGES ON `{name.Replace("_", "\\_")}`.* TO '{user}'@'%'"
+            );
+        }
+
+        string connectionString = new MySqlConnectionStringBuilder(BuildConnectionString(name))
+        {
+            UserID = user,
+            Password = password,
+        }.ConnectionString;
+        return await BuildDatabaseAsync(connectionString, createSchema);
+    }
+
+    private static async Task Execute(MySqlConnection connection, string sql)
+    {
+        await using MySqlCommand command = new(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
 }
