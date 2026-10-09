@@ -2,12 +2,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 
 // Define our namespace.
-namespace Ninlil.Dns.Data.Integration.Tests.Fixtures;
+namespace Ninlil.Dns.Data.EngineHosts;
 
 /// <summary>
-///     This class is one empty, per-test database on a container started by an
-///     <see cref="EngineFixtureBase" />, together with the service provider that talks to it. A
-///     test creates one with <see cref="EngineFixtureBase.CreateDatabaseAsync" />, uses
+///     This class is one database on a container started by an
+///     <see cref="EngineHost" />, together with the service provider that talks to it. A
+///     caller creates one with <see cref="EngineHost.CreateDatabaseAsync" />, uses
 ///     <see cref="Services" /> (or <see cref="CreateContext" /> on a relational engine) and
 ///     disposes it, which disposes every scope handed out.
 /// </summary>

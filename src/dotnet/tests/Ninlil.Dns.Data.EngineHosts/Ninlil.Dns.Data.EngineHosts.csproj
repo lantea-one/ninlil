@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+      This library holds the database hosts (containers and files) that the integration tests
+      and the benchmarks share. It references no test SDK, so "dotnet test" skips it.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <PackageReference Include="Testcontainers.MySql" Version="4.14.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.14.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="4.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dhcp.Data.EntityFrameworkCore\Ninlil.Dhcp.Data.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dhcp.Data.MongoDb\Ninlil.Dhcp.Data.MongoDb.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,49 +1,40 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Ninlil.Dhcp.Data.EntityFrameworkCore.Extension;
-using Ninlil.Dhcp.Data.MongoDb.Extension;
 using Ninlil.Dns.Common.Enum;
-using Ninlil.Dns.Data.Abstractions.Options;
-using Ninlil.Dns.Data.EntityFrameworkCore;
-using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
-using Ninlil.Dns.Data.MongoDb.Extension;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.Integration.Tests.Fixtures;
 
 /// <summary>
 ///     This class is the base of the per-engine xUnit collection fixtures of this project. A
-///     fixture starts one Docker container for its engine (once per test run, shared by every
-///     test class in its collection) and hands each test its own empty database through
-///     <see cref="CreateDatabaseAsync" />, so tests never see each other's rows. Every container
-///     is published on a random free host port and pinned by image digest. All tests that use a
-///     fixture need a working Docker daemon and carry <c>[Trait("Category", "RequiresDocker")]</c>
-///     (the pull-request pipeline skips that category).
+///     fixture wraps one <see cref="EngineHost" /> (the host starts the Docker container for its
+///     engine once per test run, shared by every test class in its collection) and hands each
+///     test its own empty database through <see cref="CreateDatabaseAsync" />, so tests never
+///     see each other's rows. The hosts live in <c>Ninlil.Dns.Data.EngineHosts</c>, shared with
+///     the benchmarks. All tests that use a container fixture need a working Docker daemon and
+///     carry <c>[Trait("Category", "RequiresDocker")]</c> (the pull-request pipeline skips that
+///     category).
 /// </summary>
-public abstract class EngineFixtureBase : IAsyncLifetime
+/// <param name="host">The host this fixture starts and stops.</param>
+public abstract class EngineFixtureBase(EngineHost host) : IAsyncLifetime
 {
+    /// <summary>
+    ///     This property contains the host this fixture wraps.
+    /// </summary>
+    protected EngineHost Host => host;
+
     /// <summary>
     ///     This property contains the storage engine this fixture provides.
     /// </summary>
-    public abstract StorageEngineEnum Engine { get; }
+    public StorageEngineEnum Engine => host.Engine;
 
     /// <summary>
     ///     This method starts the engine's container.
     /// </summary>
-    public abstract Task InitializeAsync();
+    public Task InitializeAsync() => host.StartAsync();
 
     /// <summary>
     ///     This method stops and removes the engine's container.
     /// </summary>
-    public abstract Task DisposeAsync();
-
-    /// <summary>
-    ///     This method returns a connection string for the database called
-    ///     <paramref name="databaseName" /> on the running container. The database need not exist
-    ///     yet: EF Core's <c>EnsureCreatedAsync</c> creates it on the relational engines and
-    ///     MongoDB creates it on the first write.
-    /// </summary>
-    protected abstract string BuildConnectionString(string databaseName);
+    public Task DisposeAsync() => host.DisposeAsync().AsTask();
 
     /// <summary>
     ///     This method creates a new, empty database with a unique name and a service provider
@@ -55,68 +46,14 @@ public abstract class EngineFixtureBase : IAsyncLifetime
     /// <param name="createSchema">
     ///     Whether to create the schema from the entity model. Ignored on MongoDB.
     /// </param>
-    public async Task<EngineDatabase> CreateDatabaseAsync(bool createSchema = true)
-    {
-        return await BuildDatabaseAsync(
-            BuildConnectionString($"ninlil_{Guid.NewGuid():N}"),
-            createSchema
-        );
-    }
+    public Task<EngineDatabase> CreateDatabaseAsync(bool createSchema = true) =>
+        host.CreateDatabaseAsync(createSchema: createSchema);
 
     /// <summary>
-    ///     This method creates a new database with a login that holds only the privileges the
-    ///     scripts in <c>src/script/database/*/init.sql</c> give the application account
-    ///     (PostgreSQL: owner of its database; MySQL: all privileges on its database; SQL Server:
-    ///     <c>db_owner</c> in its database), not the container's superuser, and returns a service
-    ///     provider that connects as that login. The database exists and is empty; the schema is
-    ///     created from the entity model only when <paramref name="createSchema" /> is true.
-    ///     Tests of the migration snapshots use it, because a snapshot must work with the
-    ///     documented account.
+    ///     This method creates a new database with the least-privilege login of the engine; see
+    ///     <see cref="EngineHost.CreateLeastPrivilegeDatabaseAsync" />.
     /// </summary>
     /// <param name="createSchema">Whether to create the schema from the entity model.</param>
-    public virtual Task<EngineDatabase> CreateLeastPrivilegeDatabaseAsync(
-        bool createSchema = false
-    ) => throw new NotSupportedException($"{Engine} has no least-privilege account.");
-
-    /// <summary>
-    ///     This method builds the service provider for <paramref name="connectionString" /> and,
-    ///     on a relational engine, creates the schema when asked.
-    /// </summary>
-    protected async Task<EngineDatabase> BuildDatabaseAsync(
-        string connectionString,
-        bool createSchema
-    )
-    {
-        IConfiguration configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string>
-                {
-                    [$"{StorageOptions.SectionName}:Engine"] = Engine.ToString(),
-                    [$"{StorageOptions.SectionName}:ConnectionString"] = connectionString,
-                }
-            )
-            .Build();
-
-        ServiceCollection services = new();
-        services.AddLogging();
-
-        if (Engine == StorageEngineEnum.MongoDb)
-        {
-            services.AddNinlilDnsMongoDb(configuration);
-            services.AddNinlilDhcpMongoDb();
-        }
-        else
-        {
-            services.AddNinlilDnsEntityFrameworkCore(configuration);
-            services.AddNinlilDhcpEntityFrameworkCore();
-        }
-
-        ServiceProvider provider = services.BuildServiceProvider();
-        EngineDatabase database = new(provider, connectionString);
-
-        if (createSchema && Engine != StorageEngineEnum.MongoDb)
-            await database.CreateContext().Database.EnsureCreatedAsync();
-
-        return database;
-    }
+    public Task<EngineDatabase> CreateLeastPrivilegeDatabaseAsync(bool createSchema = false) =>
+        host.CreateLeastPrivilegeDatabaseAsync(createSchema);
 }
