@@ -236,16 +236,42 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.OidcSsoSettingsController.Patch" />
-    ///     returns for every write. <c>OidcSsoOptions</c> is read through
-    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so the next
-    ///     <c>GET</c> shows the write, but the OpenID Connect authentication scheme is registered
-    ///     once while the dependency injection container is built. A restart is needed before the
-    ///     scheme reflects the change, as with choosing the event broker transport.
+    ///     returns when a write touched any field except <c>displayName</c>. <c>OidcSsoOptions</c>
+    ///     is read through <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so
+    ///     the next <c>GET</c> shows the write, but the OpenID Connect authentication scheme reads
+    ///     <c>enable</c>, <c>authority</c>, <c>clientId</c>, <c>clientSecret</c> and <c>scopes</c>
+    ///     once, while the dependency injection container is built. A restart is needed before the
+    ///     scheme reflects a change to them. <c>displayName</c> is read per request by
+    ///     <c>SsoController</c>, so a write that touched only it returns <see cref="HotReloadedNote" />.
     /// </summary>
     public const string SsoRestartRequiredNote =
-        "Written to the configuration file. This setting takes effect on the very next read of "
-        + "OidcSsoOptions, but the OpenID Connect authentication scheme itself is only ever "
-        + "registered once, while the application is starting up -- a restart is required before "
-        + "a change to 'enable'/'authority'/'clientId' actually changes whether admin sign-in "
-        + "through your identity provider is available.";
+        "Written to the configuration file. The OpenID Connect authentication scheme reads "
+        + "'enable', 'authority', 'clientId', 'clientSecret' and 'scopes' only once, while the "
+        + "application is starting up -- a restart is required before a change to any of them "
+        + "changes how admin sign-in through your identity provider works. 'displayName' applies "
+        + "at once.";
+
+    /// <summary>
+    ///     This constant contains the note
+    ///     <see cref="Controllers.TransportSettingsController.PatchDnsOverHttps" /> returns when a
+    ///     write changed <c>path</c> or <c>maxMessageSizeBytes</c> and not <c>enable</c>. The
+    ///     route mapping captures both once, when the web host maps its routes, so only a full
+    ///     process restart applies them. Restarting the <c>dns-over-https</c> service does not.
+    /// </summary>
+    public const string DnsOverHttpsRestartRequiredNote =
+        "Written to the configuration file. 'path' and 'maxMessageSizeBytes' are read once, when "
+        + "the web host maps its routes at startup, so a full process restart is needed for "
+        + "this change to take effect. Restarting the dns-over-https service does not apply it.";
+
+    /// <summary>
+    ///     This constant contains the note
+    ///     <see cref="Controllers.TransportSettingsController.PatchDnsOverHttps" /> returns when
+    ///     one write changed <c>enable</c> (applied at once) together with <c>path</c> or
+    ///     <c>maxMessageSizeBytes</c> (see <see cref="DnsOverHttpsRestartRequiredNote" />).
+    /// </summary>
+    public const string DnsOverHttpsMixedReloadNote =
+        "Written to the configuration file. The enabled/disabled state took effect immediately, "
+        + "no restart required; 'path' and 'maxMessageSizeBytes' in this same write are read "
+        + "once, when the web host maps its routes at startup, so a full process restart is "
+        + "needed for them. Restarting the dns-over-https service does not apply them.";
 }

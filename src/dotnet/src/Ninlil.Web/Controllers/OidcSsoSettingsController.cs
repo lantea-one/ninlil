@@ -26,7 +26,8 @@ namespace Ninlil.Web.Controllers;
 ///         effect without a restart.</b> The OpenID Connect scheme is registered once at startup
 ///         from the settings as they were then, so <c>enable</c>, <c>authority</c>,
 ///         <c>clientId</c>, <c>clientSecret</c> and <c>scopes</c> apply after a restart (see
-///         <see cref="RuntimeSettingsWriteResult.SsoRestartRequiredNote" />).
+///         <see cref="RuntimeSettingsWriteResult.SsoRestartRequiredNote" />). A write of only
+///         <c>displayName</c> returns <see cref="RuntimeSettingsWriteResult.HotReloadedNote" />.
 ///     </para>
 ///     <para>
 ///         The client secret is accepted in plain text, encrypted with
@@ -175,8 +176,18 @@ public class OidcSsoSettingsController(
             runtimeConfigurationOptions.ConfigurationFilePath
         );
 
+        // displayName is read per request (SsoController), so a write of only that field needs no
+        // restart; every other field is captured when the authentication scheme is registered.
+        bool onlyDisplayName = settings.All(setting =>
+            setting.Key == nameof(OidcSsoOptions.DisplayName)
+        );
+
         return Ok(
-            new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.SsoRestartRequiredNote)
+            new RuntimeSettingsWriteResult(
+                onlyDisplayName
+                    ? RuntimeSettingsWriteResult.HotReloadedNote
+                    : RuntimeSettingsWriteResult.SsoRestartRequiredNote
+            )
         );
     }
 
