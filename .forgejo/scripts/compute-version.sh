@@ -79,9 +79,22 @@ case "${BUILD_KIND}" in
         prerelease="false"
 
         # A release version is published once. Refuse to build it again from another commit,
-        # which would overwrite its container tag and collide with its NuGet packages.
-        existing="$(git ls-remote --tags origin "refs/tags/v${year}.${month}.${day}.${increment}R*" | grep -v -- '\^{}$' || true)"
-        if [[ -n "${existing}" && "${existing}" != *"refs/tags/${version}" ]]; then
+        # which would overwrite its container tag and collide with its NuGet packages. The glob
+        # also matches pre-release tags (v<date>.<n>R<branch>+<sha>), so the exact release
+        # shape is filtered here. A failed listing must stop the build: treating it as "no tags"
+        # would let a published release be rebuilt.
+        if ! listing="$(git ls-remote --tags origin "refs/tags/v${year}.${month}.${day}.${increment}R*")"; then
+            echo "Cannot list tags on origin to check whether the release was already published." >&2
+            exit 1
+        fi
+        existing=""
+        while read -r _ ref; do
+            if [[ "${ref}" =~ ^refs/tags/v${year}\.${month}\.${day}\.${increment}R[0-9a-f]{7,}$ \
+                && "${ref}" != "refs/tags/${version}" ]]; then
+                existing+="${ref}"$'\n'
+            fi
+        done <<< "${listing}"
+        if [[ -n "${existing}" ]]; then
             echo "Release v${year}.${month}.${day}.${increment} was already published:" >&2
             echo "${existing}" >&2
             exit 1
@@ -102,8 +115,13 @@ case "${BUILD_KIND}" in
         day="$(date -u +%d)"
 
         # The highest increment already tagged today for this branch, plus one.
+        # The listing must succeed: a failed one would hand out an increment that is already taken.
+        if ! listing="$(git ls-remote --tags origin "refs/tags/v${year}.${month}.${day}.*")"; then
+            echo "Cannot list tags on origin to find the next increment." >&2
+            exit 1
+        fi
         highest=0
-        while read -r ref; do
+        while read -r _ ref; do
             [[ -z "${ref}" ]] && continue
             if [[ "${ref}" =~ ^refs/tags/v${year}\.${month}\.${day}\.([0-9]+)R${branch}\+[0-9a-f]+$ ]]; then
                 candidate="$((10#${BASH_REMATCH[1]}))"
@@ -111,7 +129,7 @@ case "${BUILD_KIND}" in
                     highest="${candidate}"
                 fi
             fi
-        done < <(git ls-remote --tags origin "refs/tags/v${year}.${month}.${day}.*" | awk '{print $2}' | grep -v -- '\^{}$' || true)
+        done <<< "${listing}"
         increment="$((highest + 1))"
 
         version="v${year}.${month}.${day}.${increment}R${branch}+${short_sha}"
