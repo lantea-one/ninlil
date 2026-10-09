@@ -58,6 +58,12 @@ run_version release "v${today}.1"
 assert_eq "release ignores a same-day pre-release tag: exit code" 0 "${status}"
 assert_contains "release ignores a same-day pre-release tag: version" "${output}" "version=v${today}.1R1234567"
 
+new_repo
+run_version release "v${today}.1"
+assert_contains "release deb version: plain date version" "${output}" "deb-version=${today}.1"
+assert_contains "release rpm version: plain date version" "${output}" "rpm-version=${today}.1"
+assert_contains "release rpm release: 1" "${output}" "rpm-release=1"
+
 new_repo "v${today}.1R7654321"
 run_version release "v${today}.1"
 assert_eq "release already published from another commit: exit code" 1 "${status}"
@@ -98,8 +104,15 @@ git -C "${repo}" remote set-url origin ../missing.git
 run_version prerelease develop
 assert_eq "pre-release with an unreachable origin fails: exit code" 1 "${status}"
 
+new_repo "v${today}.2Rdevelop+aaaaaaa"
+run_version prerelease develop
+assert_contains "pre-release deb version: tilde suffix" "${output}" "deb-version=${today}.3~develop.1234567"
+assert_contains "pre-release rpm version: plain date version" "${output}" "rpm-version=${today}.3"
+assert_contains "pre-release rpm release: zero-prefixed" "${output}" "rpm-release=0.develop.1234567"
+
 new_repo
 run_version prerelease "Feature/DoT_tuning"
+assert_contains "pre-release rpm release: hyphens become underscores" "${output}" "rpm-release=0.feature_dot_tuning.1234567"
 assert_eq "pre-release branch label: exit code" 0 "${status}"
 assert_contains "pre-release branch label: image version" "${output}" "image-version=${today}.1-feature-dot-tuning-1234567"
 

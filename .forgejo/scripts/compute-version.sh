@@ -24,6 +24,13 @@
 #   arch-version      the Arch Linux pkgver, which allows neither "-" nor "+": a release is its
 #                     plain date version (2026.09.24.1), a branch build appends its branch (with
 #                     "-" turned into "_") and commit as further segments (2026.09.24.3.develop.a1b2c3d)
+#   deb-version       the Debian package version: a release is its plain date version
+#                     (2026.09.24.1); a branch build appends "~<branch>.<short-sha>"
+#                     (2026.09.24.3~develop.a1b2c3d). "~" sorts before the end of the string in
+#                     Debian ordering, so a branch build sorts below the release it precedes
+#   rpm-version       the RPM version, always the plain date version (2026.09.24.1)
+#   rpm-release       the RPM release: 1 for a release; for a branch build
+#                     0.<branch with "-" turned into "_">.<short-sha>, which sorts below 1
 #   prerelease        true for branch builds, false for release builds
 #
 # Branch names are reduced to lower-case letters, digits, and hyphens ("feature/DoT-tuning"
@@ -76,6 +83,8 @@ case "${BUILD_KIND}" in
         package_suffix=""
         image_suffix=""
         arch_suffix=""
+        deb_suffix=""
+        rpm_release="1"
         prerelease="false"
 
         # A release version is published once. Refuse to build it again from another commit,
@@ -136,6 +145,8 @@ case "${BUILD_KIND}" in
         package_suffix="-${branch}"
         image_suffix="-${branch}-${short_sha}"
         arch_suffix=".${branch//-/_}.${short_sha}"
+        deb_suffix="~${branch}.${short_sha}"
+        rpm_release="0.${branch//-/_}.${short_sha}"
         prerelease="true"
         ;;
 
@@ -157,5 +168,8 @@ emit assembly-version "${numeric}"
 emit package-version "${numeric}${package_suffix}+${short_sha}"
 emit image-version "${year}.${month}.${day}.${increment}${image_suffix}"
 emit arch-version "${year}.${month}.${day}.${increment}${arch_suffix}"
+emit deb-version "${year}.${month}.${day}.${increment}${deb_suffix}"
+emit rpm-version "${year}.${month}.${day}.${increment}"
+emit rpm-release "${rpm_release}"
 emit prerelease "${prerelease}"
 emit short-sha "${short_sha}"
