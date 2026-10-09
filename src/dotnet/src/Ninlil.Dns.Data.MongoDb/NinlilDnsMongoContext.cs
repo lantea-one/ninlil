@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -278,4 +279,12 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
     /// </summary>
     public IMongoCollection<ClusterSyncTombstoneEntity> ClusterSyncTombstones =>
         Database.GetCollection<ClusterSyncTombstoneEntity>("NinlilDnsClusterSyncTombstones");
+
+    /// <summary>
+    ///     This property contains one raw document per applied schema step (see
+    ///     <see cref="Maintenance.MongoSchemaSteps" />), keyed by the step name. Startup compares
+    ///     it with the steps this build knows to detect a database a newer version has upgraded.
+    /// </summary>
+    public IMongoCollection<BsonDocument> SchemaSteps =>
+        Database.GetCollection<BsonDocument>("NinlilDnsSchemaSteps");
 }

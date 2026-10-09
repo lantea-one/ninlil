@@ -873,30 +873,33 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
 }
 else
 {
-    // MongoDB has no migrations, so the one reshaping a relational migration does for known
-    // clients (moving each older device's single identifier into its own address document) runs
-    // here instead, on every startup, and does nothing once done (see
-    // DnsClientAddressLegacyBackfill).
+    // MongoDB has no migrations. The guard refuses a database a newer version has upgraded,
+    // then runs the idempotent backfills and records them (see MongoStartupGuard).
     await using AsyncServiceScope backfillScope = app.Services.CreateAsyncScope();
-    int backfilledClients = await DnsClientAddressLegacyBackfill.RunAsync(
-        backfillScope.ServiceProvider.GetRequiredService<NinlilDnsMongoContext>()
-    );
-    if (backfilledClients > 0)
-        app.Logger.LogInformation(
-            "Moved {Count} legacy known-client identifiers into their own address documents.",
-            backfilledClients
+    ILogger mongoGuardLogger = app
+        .Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger(typeof(MongoStartupGuard).FullName);
+    try
+    {
+        await MongoStartupGuard.RunAsync(
+            backfillScope.ServiceProvider.GetRequiredService<NinlilDnsMongoContext>(),
+            mongoGuardLogger,
+            app.Lifetime.ApplicationStopping
         );
-
-    // The same for the link from each cluster peer's key to its peer (see
-    // ClusterKeyLinkLegacyBackfill), without which upgraded peers could not authenticate.
-    int linkedClusterKeys = await ClusterKeyLinkLegacyBackfill.RunAsync(
-        backfillScope.ServiceProvider.GetRequiredService<NinlilDnsMongoContext>()
-    );
-    if (linkedClusterKeys > 0)
-        app.Logger.LogInformation(
-            "Linked {Count} existing cluster peer keys to their peers.",
-            linkedClusterKeys
+    }
+    catch (DatabaseStartupRefusedException refusal)
+    {
+        // Same exit path as the relational guard: 78 stops the systemd restart loop.
+        mongoGuardLogger.LogCritical(
+            refusal.InnerException,
+            "Startup refused: {Message}",
+            refusal.Message
         );
+        await backfillScope.DisposeAsync();
+        await app.DisposeAsync();
+        Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
+        return;
+    }
 }
 
 // TSIG key names are stored in lowercase; lowercase any row written with capitals (see
