@@ -86,6 +86,20 @@ public class DhcpSettingsController(
 ) : ControllerBase
 {
     /// <summary>
+    ///     This field is the shortest accepted duration for a field that must be positive (one
+    ///     millisecond, the finest unit the typed readers resolve).
+    /// </summary>
+    private static readonly TimeSpan PositiveDurationMinimum = TimeSpan.FromMilliseconds(1);
+
+    /// <summary>
+    ///     This field is the longest accepted duration (100 years). The DHCP durations are lease,
+    ///     hold and lifetime values added to timestamps or sent as 32-bit second counts, so the
+    ///     bound only keeps that arithmetic inside range; the protocol limits are checked by
+    ///     <see cref="RaContentRules" /> and the options validators.
+    /// </summary>
+    private static readonly TimeSpan DurationMaximum = TimeSpan.FromDays(36500);
+
+    /// <summary>
     ///     This action returns the settings shared by the local DHCP engines. Requires
     ///     <c>dhcpsettings:read</c>.
     /// </summary>
@@ -116,19 +130,14 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchString(
                 "serverIdentifierAddress",
-                out JsonElement serverIdentifierAddressElement
+                out string serverIdentifierAddress,
+                allowNull: true
             )
         )
         {
-            string serverIdentifierAddress =
-                serverIdentifierAddressElement.ValueKind == JsonValueKind.Null
-                    ? null
-                    : serverIdentifierAddressElement.GetString();
-
             if (
                 !string.IsNullOrWhiteSpace(serverIdentifierAddress)
                 && !IPAddress.TryParse(serverIdentifierAddress, out _)
@@ -146,44 +155,37 @@ public class DhcpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("offerHoldDuration", out JsonElement offerHoldDuration))
-        {
-            if (!TryParsePositiveTimeSpan(offerHoldDuration, out TimeSpan parsed, out string error))
-                throw new ValidationException(error);
-
+        if (
+            patch.TryGetMergePatchDuration(
+                "offerHoldDuration",
+                out TimeSpan offerHoldDuration,
+                PositiveDurationMinimum,
+                DurationMaximum
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     DhcpServerOptions.SectionName,
                     nameof(DhcpServerOptions.OfferHoldDuration),
-                    parsed.ToString()
+                    offerHoldDuration.ToString()
                 )
             );
-        }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "declinedAddressQuarantineDuration",
-                out JsonElement declinedAddressQuarantineDuration
+                out TimeSpan declinedAddressQuarantineDuration,
+                PositiveDurationMinimum,
+                DurationMaximum
             )
         )
-        {
-            if (
-                !TryParsePositiveTimeSpan(
-                    declinedAddressQuarantineDuration,
-                    out TimeSpan parsed,
-                    out string error
-                )
-            )
-                throw new ValidationException(error);
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DhcpServerOptions.SectionName,
                     nameof(DhcpServerOptions.DeclinedAddressQuarantineDuration),
-                    parsed.ToString()
+                    declinedAddressQuarantineDuration.ToString()
                 )
             );
-        }
 
         return await ApplyAsync(settings);
     }
@@ -217,43 +219,32 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv4ProtocolOptions.SectionName,
                     nameof(Dhcpv4ProtocolOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("serverPort", out JsonElement serverPort))
-        {
-            if (!TryParsePort(serverPort, out int parsed, out string error))
-                throw new ValidationException(error);
-
+        if (patch.TryGetMergePatchInt32("serverPort", out int serverPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv4ProtocolOptions.SectionName,
                     nameof(Dhcpv4ProtocolOptions.ServerPort),
-                    parsed
+                    serverPort
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("clientPort", out JsonElement clientPort))
-        {
-            if (!TryParsePort(clientPort, out int parsed, out string error))
-                throw new ValidationException(error);
-
+        if (patch.TryGetMergePatchInt32("clientPort", out int clientPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv4ProtocolOptions.SectionName,
                     nameof(Dhcpv4ProtocolOptions.ClientPort),
-                    parsed
+                    clientPort
                 )
             );
-        }
 
         return await ApplyAsync(settings);
     }
@@ -287,43 +278,32 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv6ProtocolOptions.SectionName,
                     nameof(Dhcpv6ProtocolOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("serverPort", out JsonElement serverPort))
-        {
-            if (!TryParsePort(serverPort, out int parsed, out string error))
-                throw new ValidationException(error);
-
+        if (patch.TryGetMergePatchInt32("serverPort", out int serverPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv6ProtocolOptions.SectionName,
                     nameof(Dhcpv6ProtocolOptions.ServerPort),
-                    parsed
+                    serverPort
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("clientPort", out JsonElement clientPort))
-        {
-            if (!TryParsePort(clientPort, out int parsed, out string error))
-                throw new ValidationException(error);
-
+        if (patch.TryGetMergePatchInt32("clientPort", out int clientPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv6ProtocolOptions.SectionName,
                     nameof(Dhcpv6ProtocolOptions.ClientPort),
-                    parsed
+                    clientPort
                 )
             );
-        }
 
         return await ApplyAsync(settings);
     }
@@ -361,39 +341,30 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv4RelayOptions.SectionName,
                     nameof(Dhcpv4RelayOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchStringList(
                 "upstreamServerAddresses",
-                out JsonElement upstreamServerAddresses
+                out List<string> addresses,
+                allowNull: false
             )
         )
         {
-            if (upstreamServerAddresses.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    "'upstreamServerAddresses' must be a JSON array of IP address strings."
-                );
-
-            List<string> addresses = [];
-            foreach (JsonElement item in upstreamServerAddresses.EnumerateArray())
+            foreach (string address in addresses)
             {
-                string address = item.GetString();
                 if (
                     !IPAddress.TryParse(address, out IPAddress parsedAddress)
                     || parsedAddress.AddressFamily != AddressFamily.InterNetwork
                 )
                     throw new ValidationException($"'{address}' is not a valid IPv4 address.");
-
-                addresses.Add(address);
             }
 
             settings.Add(
@@ -405,32 +376,23 @@ public class DhcpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("upstreamServerPort", out JsonElement upstreamServerPort))
-        {
-            if (!TryParsePort(upstreamServerPort, out int parsed, out string error))
-                throw new ValidationException(error);
-
+        if (patch.TryGetMergePatchInt32("upstreamServerPort", out int upstreamServerPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv4RelayOptions.SectionName,
                     nameof(Dhcpv4RelayOptions.UpstreamServerPort),
-                    parsed
+                    upstreamServerPort
                 )
             );
-        }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchString(
                 "relayAgentAddress",
-                out JsonElement relayAgentAddressElement
+                out string relayAgentAddress,
+                allowNull: true
             )
         )
         {
-            string relayAgentAddress =
-                relayAgentAddressElement.ValueKind == JsonValueKind.Null
-                    ? null
-                    : relayAgentAddressElement.GetString();
-
             if (
                 !string.IsNullOrWhiteSpace(relayAgentAddress)
                 && (
@@ -453,30 +415,24 @@ public class DhcpSettingsController(
 
         // Validate the IDs as the relay will see them: a field left out of the patch keeps its
         // current value, and the combined length limit covers both.
-        bool circuitIdPatched = patch.TryGetMergePatchField(
+        bool circuitIdPatched = patch.TryGetMergePatchString(
             "relayAgentCircuitId",
-            out JsonElement relayAgentCircuitIdElement
+            out string patchedCircuitId,
+            allowNull: true
         );
-        bool remoteIdPatched = patch.TryGetMergePatchField(
+        bool remoteIdPatched = patch.TryGetMergePatchString(
             "relayAgentRemoteId",
-            out JsonElement relayAgentRemoteIdElement
+            out string patchedRemoteId,
+            allowNull: true
         );
 
         if (circuitIdPatched || remoteIdPatched)
         {
             string circuitId = circuitIdPatched
-                ? (
-                    relayAgentCircuitIdElement.ValueKind == JsonValueKind.Null
-                        ? null
-                        : relayAgentCircuitIdElement.GetString()
-                )
+                ? patchedCircuitId
                 : relayOptions.Value.RelayAgentCircuitId;
             string remoteId = remoteIdPatched
-                ? (
-                    relayAgentRemoteIdElement.ValueKind == JsonValueKind.Null
-                        ? null
-                        : relayAgentRemoteIdElement.GetString()
-                )
+                ? patchedRemoteId
                 : relayOptions.Value.RelayAgentRemoteId;
 
             if (
@@ -542,39 +498,30 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv6RelayOptions.SectionName,
                     nameof(Dhcpv6RelayOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchStringList(
                 "upstreamServerAddresses",
-                out JsonElement upstreamServerAddresses
+                out List<string> addresses,
+                allowNull: false
             )
         )
         {
-            if (upstreamServerAddresses.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    "'upstreamServerAddresses' must be a JSON array of IP address strings."
-                );
-
-            List<string> addresses = [];
-            foreach (JsonElement item in upstreamServerAddresses.EnumerateArray())
+            foreach (string address in addresses)
             {
-                string address = item.GetString();
                 if (
                     !IPAddress.TryParse(address, out IPAddress parsedAddress)
                     || parsedAddress.AddressFamily != AddressFamily.InterNetworkV6
                 )
                     throw new ValidationException($"'{address}' is not a valid IPv6 address.");
-
-                addresses.Add(address);
             }
 
             settings.Add(
@@ -586,29 +533,23 @@ public class DhcpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("upstreamServerPort", out JsonElement upstreamServerPort))
-        {
-            if (!TryParsePort(upstreamServerPort, out int parsed, out string error))
-                throw new ValidationException(error);
-
+        if (patch.TryGetMergePatchInt32("upstreamServerPort", out int upstreamServerPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv6RelayOptions.SectionName,
                     nameof(Dhcpv6RelayOptions.UpstreamServerPort),
-                    parsed
+                    upstreamServerPort
                 )
             );
-        }
 
         if (
-            patch.TryGetMergePatchField("relayLinkAddress", out JsonElement relayLinkAddressElement)
+            patch.TryGetMergePatchString(
+                "relayLinkAddress",
+                out string relayLinkAddress,
+                allowNull: true
+            )
         )
         {
-            string relayLinkAddress =
-                relayLinkAddressElement.ValueKind == JsonValueKind.Null
-                    ? null
-                    : relayLinkAddressElement.GetString();
-
             if (
                 !string.IsNullOrWhiteSpace(relayLinkAddress)
                 && (
@@ -627,14 +568,12 @@ public class DhcpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("interfaceId", out JsonElement interfaceIdElement))
+        if (patch.TryGetMergePatchString("interfaceId", out string interfaceId, allowNull: true))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dhcpv6RelayOptions.SectionName,
                     nameof(Dhcpv6RelayOptions.InterfaceId),
-                    interfaceIdElement.ValueKind == JsonValueKind.Null
-                        ? null
-                        : interfaceIdElement.GetString()
+                    interfaceId
                 )
             );
 
@@ -674,97 +613,84 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     TftpServerOptions.SectionName,
                     nameof(TftpServerOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("port", out JsonElement port))
-        {
-            if (!TryParsePort(port, out int parsed, out string error))
-                throw new ValidationException(error);
-
+        if (patch.TryGetMergePatchInt32("port", out int port, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     TftpServerOptions.SectionName,
                     nameof(TftpServerOptions.Port),
-                    parsed
+                    port
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("rootDirectory", out JsonElement rootDirectoryElement))
+        // An empty root directory means "no file serving root"; null clears it the same way.
+        if (
+            patch.TryGetMergePatchString("rootDirectory", out string rootDirectory, allowNull: true)
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     TftpServerOptions.SectionName,
                     nameof(TftpServerOptions.RootDirectory),
-                    rootDirectoryElement.ValueKind == JsonValueKind.Null
-                        ? string.Empty
-                        : rootDirectoryElement.GetString()
+                    rootDirectory ?? string.Empty
                 )
             );
 
+        // The timeout is applied as a receive wait, so it is capped at the timer limit.
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDouble(
                 "retransmitTimeoutSeconds",
-                out JsonElement retransmitTimeoutSeconds
+                out double retransmitTimeoutSeconds,
+                0.001,
+                JsonElementMergePatchExtension.TimerMaximum.TotalSeconds
             )
         )
-        {
-            double seconds = retransmitTimeoutSeconds.GetDouble();
-            if (seconds <= 0)
-                throw new ValidationException(
-                    "'retransmitTimeoutSeconds' must be a positive number of seconds."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     TftpServerOptions.SectionName,
                     nameof(TftpServerOptions.RetransmitTimeout),
-                    TimeSpan.FromSeconds(seconds).ToString()
+                    TimeSpan.FromSeconds(retransmitTimeoutSeconds).ToString()
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("maxRetransmissions", out JsonElement maxRetransmissions))
-        {
-            int parsed = maxRetransmissions.GetInt32();
-            if (parsed < 1)
-                throw new ValidationException("'maxRetransmissions' must be at least 1.");
-
+        if (
+            patch.TryGetMergePatchInt32(
+                "maxRetransmissions",
+                out int maxRetransmissions,
+                1,
+                int.MaxValue
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     TftpServerOptions.SectionName,
                     nameof(TftpServerOptions.MaxRetransmissions),
-                    parsed
+                    maxRetransmissions
                 )
             );
-        }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxConcurrentTransfers",
-                out JsonElement maxConcurrentTransfers
+                out int maxConcurrentTransfers,
+                1,
+                int.MaxValue
             )
         )
-        {
-            int parsed = maxConcurrentTransfers.GetInt32();
-            if (parsed < 1)
-                throw new ValidationException("'maxConcurrentTransfers' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     TftpServerOptions.SectionName,
                     nameof(TftpServerOptions.MaxConcurrentTransfers),
-                    parsed
+                    maxConcurrentTransfers
                 )
             );
-        }
 
         return await ApplyAsync(settings);
     }
@@ -803,55 +729,53 @@ public class DhcpSettingsController(
         TimeSpan effectiveMax = raProtocolOptions.Value.MaxRouterAdvertisementInterval;
         bool intervalPatched = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     RaProtocolOptions.SectionName,
                     nameof(RaProtocolOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "minRouterAdvertisementInterval",
-                out JsonElement minInterval
+                out TimeSpan minInterval,
+                PositiveDurationMinimum,
+                DurationMaximum
             )
         )
         {
-            if (!TryParsePositiveTimeSpan(minInterval, out TimeSpan parsed, out string error))
-                throw new ValidationException(error);
-
-            effectiveMin = parsed;
+            effectiveMin = minInterval;
             intervalPatched = true;
 
             settings.Add(
                 new PresetConfigurationSetting(
                     RaProtocolOptions.SectionName,
                     nameof(RaProtocolOptions.MinRouterAdvertisementInterval),
-                    parsed.ToString()
+                    minInterval.ToString()
                 )
             );
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "maxRouterAdvertisementInterval",
-                out JsonElement maxInterval
+                out TimeSpan maxInterval,
+                PositiveDurationMinimum,
+                DurationMaximum
             )
         )
         {
-            if (!TryParsePositiveTimeSpan(maxInterval, out TimeSpan parsed, out string error))
-                throw new ValidationException(error);
-
-            effectiveMax = parsed;
+            effectiveMax = maxInterval;
             intervalPatched = true;
 
             settings.Add(
                 new PresetConfigurationSetting(
                     RaProtocolOptions.SectionName,
                     nameof(RaProtocolOptions.MaxRouterAdvertisementInterval),
-                    parsed.ToString()
+                    maxInterval.ToString()
                 )
             );
         }
@@ -933,103 +857,112 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchBoolean(
                 "managedAddressConfiguration",
-                out JsonElement managedAddressConfiguration
+                out bool managedAddressConfiguration
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.ManagedAddressConfiguration),
-                    managedAddressConfiguration.GetBoolean()
+                    managedAddressConfiguration
                 )
             );
 
-        if (patch.TryGetMergePatchField("otherConfiguration", out JsonElement otherConfiguration))
+        if (patch.TryGetMergePatchBoolean("otherConfiguration", out bool otherConfiguration))
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.OtherConfiguration),
-                    otherConfiguration.GetBoolean()
+                    otherConfiguration
                 )
             );
 
-        if (patch.TryGetMergePatchField("routerLifetime", out JsonElement routerLifetime))
+        // Zero is valid for the next five fields: "not a default router" or "no recommendation".
+        // RaContentRules then applies the protocol's own upper bound for each.
+        if (
+            patch.TryGetMergePatchDuration(
+                "routerLifetime",
+                out TimeSpan routerLifetime,
+                TimeSpan.Zero,
+                DurationMaximum
+            )
+        )
         {
-            if (!TryParseNonNegativeTimeSpan(routerLifetime, out TimeSpan parsed, out string error))
-                throw new ValidationException(error);
-
-            if (RaContentRules.CheckRouterLifetime(parsed) is { } rangeError)
+            if (RaContentRules.CheckRouterLifetime(routerLifetime) is { } rangeError)
                 throw new ValidationException(rangeError);
 
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.RouterLifetime),
-                    parsed.ToString()
+                    routerLifetime.ToString()
                 )
             );
         }
 
-        if (patch.TryGetMergePatchField("currentHopLimit", out JsonElement currentHopLimit))
-        {
-            int parsed = currentHopLimit.GetInt32();
-            if (parsed is < 0 or > byte.MaxValue)
-                throw new ValidationException(
-                    $"'currentHopLimit' must be between 0 and {byte.MaxValue}."
-                );
-
+        if (
+            patch.TryGetMergePatchInt32(
+                "currentHopLimit",
+                out int currentHopLimit,
+                0,
+                byte.MaxValue
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.CurrentHopLimit),
-                    (byte)parsed
+                    (byte)currentHopLimit
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("reachableTime", out JsonElement reachableTime))
+        if (
+            patch.TryGetMergePatchDuration(
+                "reachableTime",
+                out TimeSpan reachableTime,
+                TimeSpan.Zero,
+                DurationMaximum
+            )
+        )
         {
-            if (!TryParseNonNegativeTimeSpan(reachableTime, out TimeSpan parsed, out string error))
-                throw new ValidationException(error);
-
-            if (RaContentRules.CheckReachableTime(parsed) is { } rangeError)
+            if (RaContentRules.CheckReachableTime(reachableTime) is { } rangeError)
                 throw new ValidationException(rangeError);
 
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.ReachableTime),
-                    parsed.ToString()
+                    reachableTime.ToString()
                 )
             );
         }
 
-        if (patch.TryGetMergePatchField("retransTimer", out JsonElement retransTimer))
+        if (
+            patch.TryGetMergePatchDuration(
+                "retransTimer",
+                out TimeSpan retransTimer,
+                TimeSpan.Zero,
+                DurationMaximum
+            )
+        )
         {
-            if (!TryParseNonNegativeTimeSpan(retransTimer, out TimeSpan parsed, out string error))
-                throw new ValidationException(error);
-
-            if (RaContentRules.CheckRetransTimer(parsed) is { } rangeError)
+            if (RaContentRules.CheckRetransTimer(retransTimer) is { } rangeError)
                 throw new ValidationException(rangeError);
 
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.RetransTimer),
-                    parsed.ToString()
+                    retransTimer.ToString()
                 )
             );
         }
 
-        if (patch.TryGetMergePatchField("linkMtu", out JsonElement linkMtuElement))
+        if (TryReadLinkMtu(patch, "linkMtu", "linkMtu", out uint? linkMtu))
         {
-            uint? linkMtu =
-                linkMtuElement.ValueKind == JsonValueKind.Null ? null : linkMtuElement.GetUInt32();
-
             if (RaContentRules.CheckLinkMtu(linkMtu) is { } mtuError)
                 throw new ValidationException(mtuError);
 
@@ -1042,21 +975,18 @@ public class DhcpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("recursiveDnsServers", out JsonElement recursiveDnsServers))
+        if (
+            patch.TryGetMergePatchStringList(
+                "recursiveDnsServers",
+                out List<string> addresses,
+                allowNull: false
+            )
+        )
         {
-            if (recursiveDnsServers.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    "'recursiveDnsServers' must be a JSON array of IPv6 address strings."
-                );
-
-            List<string> addresses = [];
-            foreach (JsonElement item in recursiveDnsServers.EnumerateArray())
+            foreach (string address in addresses)
             {
-                string address = item.GetString();
                 if (RaContentRules.CheckRecursiveDnsServer(address) is { } addressError)
                     throw new ValidationException(addressError);
-
-                addresses.Add(address);
             }
 
             if (RaContentRules.CheckRecursiveDnsServerCount(addresses.Count) is { } countError)
@@ -1072,52 +1002,35 @@ public class DhcpSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "recursiveDnsServerLifetime",
-                out JsonElement recursiveDnsServerLifetime
+                out TimeSpan recursiveDnsServerLifetime,
+                TimeSpan.Zero,
+                DurationMaximum
             )
         )
-        {
-            if (
-                !TryParseNonNegativeTimeSpan(
-                    recursiveDnsServerLifetime,
-                    out TimeSpan parsed,
-                    out string error
-                )
-            )
-                throw new ValidationException(error);
-
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.RecursiveDnsServerLifetime),
-                    parsed.ToString()
+                    recursiveDnsServerLifetime.ToString()
                 )
             );
-        }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchStringList(
                 "dnsSearchListDomains",
-                out JsonElement dnsSearchListDomains
+                out List<string> domainNames,
+                allowNull: false
             )
         )
         {
-            if (dnsSearchListDomains.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    "'dnsSearchListDomains' must be a JSON array of domain name strings."
-                );
-
-            List<string> domainNames = [];
-            foreach (JsonElement item in dnsSearchListDomains.EnumerateArray())
+            foreach (string domainName in domainNames)
             {
-                string domainName = item.GetString();
                 if (!RaDnsSearchListOption.IsValidDomainName(domainName))
                     throw new ValidationException(
                         $"'{domainName}' is not a valid DNS Search List domain suffix."
                     );
-
-                domainNames.Add(domainName);
             }
 
             settings.Add(
@@ -1130,29 +1043,20 @@ public class DhcpSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "dnsSearchListLifetime",
-                out JsonElement dnsSearchListLifetime
+                out TimeSpan dnsSearchListLifetime,
+                TimeSpan.Zero,
+                DurationMaximum
             )
         )
-        {
-            if (
-                !TryParseNonNegativeTimeSpan(
-                    dnsSearchListLifetime,
-                    out TimeSpan parsed,
-                    out string error
-                )
-            )
-                throw new ValidationException(error);
-
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
                     nameof(RaOptions.DnsSearchListLifetime),
-                    parsed.ToString()
+                    dnsSearchListLifetime.ToString()
                 )
             );
-        }
 
         if (patch.TryGetMergePatchField("routes", out JsonElement routesElement))
         {
@@ -1162,80 +1066,7 @@ public class DhcpSettingsController(
             List<RaRouteConfigurationEntry> routeEntries = [];
 
             foreach (JsonElement routeElement in routesElement.EnumerateArray())
-            {
-                if (
-                    !routeElement.TryGetProperty(
-                        "prefixLength",
-                        out JsonElement prefixLengthElement
-                    )
-                )
-                    throw new ValidationException("Every route requires a 'prefixLength'.");
-
-                int prefixLength = prefixLengthElement.GetInt32();
-                if (prefixLength is < 0 or > 128)
-                    throw new ValidationException(
-                        $"'{prefixLength}' is not a valid prefix length -- it must be between 0 "
-                            + "and 128."
-                    );
-
-                string prefix =
-                    routeElement.TryGetProperty("prefix", out JsonElement prefixElement)
-                    && prefixElement.ValueKind != JsonValueKind.Null
-                        ? prefixElement.GetString()
-                        : null;
-
-                // A prefix length of 0 advertises only a route preference with no prefix, the one
-                // case a route has no address to check.
-                if (RaContentRules.CheckRoutePrefix(prefix, prefixLength) is { } prefixError)
-                    throw new ValidationException(prefixError);
-
-                string preferenceText =
-                    routeElement.TryGetProperty("preference", out JsonElement preferenceElement)
-                    && preferenceElement.ValueKind != JsonValueKind.Null
-                        ? preferenceElement.GetString()
-                        : nameof(RaRoutePreferenceEnum.Medium);
-
-                if (
-                    !System.Enum.TryParse(
-                        preferenceText,
-                        ignoreCase: true,
-                        out RaRoutePreferenceEnum preference
-                    )
-                )
-                    throw new ValidationException(
-                        $"'{preferenceText}' is not a valid route preference -- it must be "
-                            + "'High', 'Medium', or 'Low'."
-                    );
-
-                TimeSpan routeLifetime = TimeSpan.FromSeconds(1800);
-                if (
-                    routeElement.TryGetProperty(
-                        "routeLifetime",
-                        out JsonElement routeLifetimeElement
-                    )
-                    && routeLifetimeElement.ValueKind != JsonValueKind.Null
-                )
-                {
-                    string routeLifetimeText = routeLifetimeElement.GetString();
-                    if (
-                        !TimeSpan.TryParse(routeLifetimeText, out routeLifetime)
-                        || routeLifetime < TimeSpan.Zero
-                    )
-                        throw new ValidationException(
-                            $"'{routeLifetimeText}' must be a valid, non-negative TimeSpan (for "
-                                + "example \"00:30:00\")."
-                        );
-                }
-
-                routeEntries.Add(
-                    new RaRouteConfigurationEntry(
-                        prefix,
-                        prefixLength,
-                        preference.ToString(),
-                        routeLifetime.ToString()
-                    )
-                );
-            }
+                routeEntries.Add(ParseRouteEntry(routeElement, routeEntries.Count));
 
             settings.Add(
                 new PresetConfigurationSetting(
@@ -1261,7 +1092,9 @@ public class DhcpSettingsController(
             List<RaInterfaceOverrideConfigurationEntry> overrideEntries = [];
 
             foreach (JsonElement overrideElement in interfaceOverridesElement.EnumerateArray())
-                overrideEntries.Add(ParseInterfaceOverrideEntry(overrideElement));
+                overrideEntries.Add(
+                    ParseInterfaceOverrideEntry(overrideElement, overrideEntries.Count)
+                );
 
             settings.Add(
                 new PresetConfigurationSetting(
@@ -1276,45 +1109,114 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method parses and checks one element of the <c>interfaceOverrides</c> array in a
-    ///     <c>PATCH ra</c> body (see <see cref="DhcpRaInterfaceOverrideDetail" /> for the fields an
-    ///     override carries and the two nested lists it does not).
+    ///     This method parses and checks one element of the <c>routes</c> array in a
+    ///     <c>PATCH ra</c> body. Messages name the field as <c>routes[index].field</c>.
     /// </summary>
-    private static RaInterfaceOverrideConfigurationEntry ParseInterfaceOverrideEntry(
-        JsonElement overrideElement
-    )
+    /// <param name="routeElement">The array element.</param>
+    /// <param name="index">The element's position in the array, for messages.</param>
+    private static RaRouteConfigurationEntry ParseRouteEntry(JsonElement routeElement, int index)
     {
-        if (
-            !overrideElement.TryGetProperty("interfaceName", out JsonElement interfaceNameElement)
-            || interfaceNameElement.ValueKind != JsonValueKind.String
-            || string.IsNullOrWhiteSpace(interfaceNameElement.GetString())
-        )
-            throw new ValidationException(
-                "Every interface override requires a non-empty 'interfaceName'."
-            );
+        string path = $"routes[{index}]";
 
-        string interfaceName = interfaceNameElement.GetString();
-
-        bool exclude =
-            overrideElement.TryGetProperty("exclude", out JsonElement excludeElement)
-            && excludeElement.ValueKind == JsonValueKind.True;
-
-        bool? managedAddressConfiguration = TryGetOptionalBoolean(
-            overrideElement,
-            "managedAddressConfiguration"
-        );
-        bool? otherConfiguration = TryGetOptionalBoolean(overrideElement, "otherConfiguration");
+        if (routeElement.ValueKind != JsonValueKind.Object)
+            throw new ValidationException($"'{path}' must be a JSON object.");
 
         if (
-            !TryParseOptionalNonNegativeTimeSpan(
-                overrideElement,
-                "routerLifetime",
-                out TimeSpan? routerLifetime,
-                out string routerLifetimeError
+            !routeElement.TryGetMergePatchInt32(
+                "prefixLength",
+                out int prefixLength,
+                0,
+                128,
+                $"{path}.prefixLength"
             )
         )
-            throw new ValidationException($"'{interfaceName}': {routerLifetimeError}");
+            throw new ValidationException($"Every route requires a 'prefixLength' ('{path}').");
 
+        routeElement.TryGetMergePatchString("prefix", out string prefix, true, $"{path}.prefix");
+
+        // A prefix length of 0 advertises only a route preference with no prefix, the one case a
+        // route has no address to check.
+        if (RaContentRules.CheckRoutePrefix(prefix, prefixLength) is { } prefixError)
+            throw new ValidationException(prefixError);
+
+        // A missing or null preference means Medium, the neutral value of RFC 4191 §2.1.
+        RaRoutePreferenceEnum preference = RaRoutePreferenceEnum.Medium;
+        if (
+            !IsNull(routeElement, "preference")
+            && routeElement.TryGetMergePatchEnum(
+                "preference",
+                out RaRoutePreferenceEnum parsedPreference,
+                $"{path}.preference"
+            )
+        )
+            preference = parsedPreference;
+
+        TimeSpan routeLifetime = TimeSpan.FromSeconds(1800);
+        if (
+            !IsNull(routeElement, "routeLifetime")
+            && routeElement.TryGetMergePatchDuration(
+                "routeLifetime",
+                out TimeSpan parsedLifetime,
+                TimeSpan.Zero,
+                DurationMaximum,
+                $"{path}.routeLifetime"
+            )
+        )
+            routeLifetime = parsedLifetime;
+
+        return new RaRouteConfigurationEntry(
+            prefix,
+            prefixLength,
+            preference.ToString(),
+            routeLifetime.ToString()
+        );
+    }
+
+    /// <summary>
+    ///     This method parses and checks one element of the <c>interfaceOverrides</c> array in a
+    ///     <c>PATCH ra</c> body (see <see cref="DhcpRaInterfaceOverrideDetail" /> for the fields an
+    ///     override carries and the two nested lists it does not). Messages name the field as
+    ///     <c>interfaceOverrides[index].field</c>.
+    /// </summary>
+    /// <param name="overrideElement">The array element.</param>
+    /// <param name="index">The element's position in the array, for messages.</param>
+    private static RaInterfaceOverrideConfigurationEntry ParseInterfaceOverrideEntry(
+        JsonElement overrideElement,
+        int index
+    )
+    {
+        string path = $"interfaceOverrides[{index}]";
+
+        if (overrideElement.ValueKind != JsonValueKind.Object)
+            throw new ValidationException($"'{path}' must be a JSON object.");
+
+        if (
+            !overrideElement.TryGetMergePatchString(
+                "interfaceName",
+                out string interfaceName,
+                false,
+                $"{path}.interfaceName"
+            ) || string.IsNullOrWhiteSpace(interfaceName)
+        )
+            throw new ValidationException(
+                $"Every interface override requires a non-empty 'interfaceName' ('{path}')."
+            );
+
+        bool exclude =
+            overrideElement.TryGetMergePatchBoolean(
+                "exclude",
+                out bool excludeValue,
+                $"{path}.exclude"
+            ) && excludeValue;
+
+        bool? managedAddressConfiguration = ReadOptionalBoolean(
+            overrideElement,
+            "managedAddressConfiguration",
+            path
+        );
+        bool? otherConfiguration = ReadOptionalBoolean(overrideElement, "otherConfiguration", path);
+
+        TimeSpan? routerLifetime = ReadOptionalDuration(overrideElement, "routerLifetime", path);
         if (
             routerLifetime is { } routerLifetimeValue
             && RaContentRules.CheckRouterLifetime(routerLifetimeValue)
@@ -1324,144 +1226,92 @@ public class DhcpSettingsController(
 
         byte? currentHopLimit = null;
         if (
-            overrideElement.TryGetProperty(
+            !IsNull(overrideElement, "currentHopLimit")
+            && overrideElement.TryGetMergePatchInt32(
                 "currentHopLimit",
-                out JsonElement currentHopLimitElement
+                out int parsedHopLimit,
+                0,
+                byte.MaxValue,
+                $"{path}.currentHopLimit"
             )
-            && currentHopLimitElement.ValueKind != JsonValueKind.Null
         )
-        {
-            int parsedHopLimit = currentHopLimitElement.GetInt32();
-            if (parsedHopLimit is < 0 or > byte.MaxValue)
-                throw new ValidationException(
-                    $"'{interfaceName}': 'currentHopLimit' must be between 0 and {byte.MaxValue}."
-                );
-
             currentHopLimit = (byte)parsedHopLimit;
-        }
 
-        if (
-            !TryParseOptionalNonNegativeTimeSpan(
-                overrideElement,
-                "reachableTime",
-                out TimeSpan? reachableTime,
-                out string reachableTimeError
-            )
-        )
-            throw new ValidationException($"'{interfaceName}': {reachableTimeError}");
-
+        TimeSpan? reachableTime = ReadOptionalDuration(overrideElement, "reachableTime", path);
         if (
             reachableTime is { } reachableTimeValue
             && RaContentRules.CheckReachableTime(reachableTimeValue) is { } reachableTimeRangeError
         )
             throw new ValidationException($"'{interfaceName}': {reachableTimeRangeError}");
 
-        if (
-            !TryParseOptionalNonNegativeTimeSpan(
-                overrideElement,
-                "retransTimer",
-                out TimeSpan? retransTimer,
-                out string retransTimerError
-            )
-        )
-            throw new ValidationException($"'{interfaceName}': {retransTimerError}");
-
+        TimeSpan? retransTimer = ReadOptionalDuration(overrideElement, "retransTimer", path);
         if (
             retransTimer is { } retransTimerValue
             && RaContentRules.CheckRetransTimer(retransTimerValue) is { } retransTimerRangeError
         )
             throw new ValidationException($"'{interfaceName}': {retransTimerRangeError}");
 
-        uint? linkMtu = null;
-        if (
-            overrideElement.TryGetProperty("linkMtu", out JsonElement linkMtuElement)
-            && linkMtuElement.ValueKind != JsonValueKind.Null
-        )
-            linkMtu = linkMtuElement.GetUInt32();
-
+        TryReadLinkMtu(overrideElement, "linkMtu", $"{path}.linkMtu", out uint? linkMtu);
         if (RaContentRules.CheckLinkMtu(linkMtu) is { } linkMtuError)
             throw new ValidationException($"'{interfaceName}': {linkMtuError}");
 
         List<string> recursiveDnsServers = null;
         if (
-            overrideElement.TryGetProperty(
+            !IsNull(overrideElement, "recursiveDnsServers")
+            && overrideElement.TryGetMergePatchStringList(
                 "recursiveDnsServers",
-                out JsonElement recursiveDnsServersElement
+                out List<string> parsedServers,
+                false,
+                $"{path}.recursiveDnsServers"
             )
-            && recursiveDnsServersElement.ValueKind != JsonValueKind.Null
         )
         {
-            if (recursiveDnsServersElement.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    $"'{interfaceName}': 'recursiveDnsServers' must be a JSON array of IPv6 "
-                        + "address strings."
-                );
-
-            recursiveDnsServers = [];
-            foreach (JsonElement item in recursiveDnsServersElement.EnumerateArray())
+            foreach (string address in parsedServers)
             {
-                string address = item.GetString();
                 if (RaContentRules.CheckRecursiveDnsServer(address) is { } addressError)
                     throw new ValidationException($"'{interfaceName}': {addressError}");
-
-                recursiveDnsServers.Add(address);
             }
 
-            if (
-                RaContentRules.CheckRecursiveDnsServerCount(recursiveDnsServers.Count) is
-                { } countError
-            )
+            if (RaContentRules.CheckRecursiveDnsServerCount(parsedServers.Count) is { } countError)
                 throw new ValidationException($"'{interfaceName}': {countError}");
+
+            recursiveDnsServers = parsedServers;
         }
 
-        if (
-            !TryParseOptionalNonNegativeTimeSpan(
-                overrideElement,
-                "recursiveDnsServerLifetime",
-                out TimeSpan? recursiveDnsServerLifetime,
-                out string recursiveDnsServerLifetimeError
-            )
-        )
-            throw new ValidationException($"'{interfaceName}': {recursiveDnsServerLifetimeError}");
+        TimeSpan? recursiveDnsServerLifetime = ReadOptionalDuration(
+            overrideElement,
+            "recursiveDnsServerLifetime",
+            path
+        );
 
         List<string> dnsSearchListDomains = null;
         if (
-            overrideElement.TryGetProperty(
+            !IsNull(overrideElement, "dnsSearchListDomains")
+            && overrideElement.TryGetMergePatchStringList(
                 "dnsSearchListDomains",
-                out JsonElement dnsSearchListDomainsElement
+                out List<string> parsedDomains,
+                false,
+                $"{path}.dnsSearchListDomains"
             )
-            && dnsSearchListDomainsElement.ValueKind != JsonValueKind.Null
         )
         {
-            if (dnsSearchListDomainsElement.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    $"'{interfaceName}': 'dnsSearchListDomains' must be a JSON array of domain "
-                        + "name strings."
-                );
-
-            dnsSearchListDomains = [];
-            foreach (JsonElement item in dnsSearchListDomainsElement.EnumerateArray())
+            foreach (string domainName in parsedDomains)
             {
-                string domainName = item.GetString();
                 if (!RaDnsSearchListOption.IsValidDomainName(domainName))
                     throw new ValidationException(
                         $"'{interfaceName}': '{domainName}' is not a valid DNS Search List domain "
                             + "suffix."
                     );
-
-                dnsSearchListDomains.Add(domainName);
             }
+
+            dnsSearchListDomains = parsedDomains;
         }
 
-        if (
-            !TryParseOptionalNonNegativeTimeSpan(
-                overrideElement,
-                "dnsSearchListLifetime",
-                out TimeSpan? dnsSearchListLifetime,
-                out string dnsSearchListLifetimeError
-            )
-        )
-            throw new ValidationException($"'{interfaceName}': {dnsSearchListLifetimeError}");
+        TimeSpan? dnsSearchListLifetime = ReadOptionalDuration(
+            overrideElement,
+            "dnsSearchListLifetime",
+            path
+        );
 
         return new RaInterfaceOverrideConfigurationEntry(
             interfaceName,
@@ -1481,47 +1331,69 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method reads an optional boolean field, returning <see langword="null" /> when it
-    ///     is absent or JSON <see langword="null" />, which for an interface override means "use
-    ///     the global value".
+    ///     This method reports whether <paramref name="parent" /> has the field set to JSON
+    ///     <c>null</c>, which for an optional field of a route or interface override means "use
+    ///     the default" and skips the typed reader.
     /// </summary>
-    private static bool? TryGetOptionalBoolean(JsonElement parent, string propertyName) =>
-        parent.TryGetProperty(propertyName, out JsonElement element)
-        && element.ValueKind != JsonValueKind.Null
-            ? element.GetBoolean()
+    private static bool IsNull(JsonElement parent, string name) =>
+        parent.TryGetMergePatchField(name, out JsonElement element)
+        && element.ValueKind == JsonValueKind.Null;
+
+    /// <summary>
+    ///     This method reads an optional boolean field of an interface override, returning
+    ///     <see langword="null" /> when it is absent or JSON <c>null</c>, which means "use the
+    ///     global value". Any other kind is a 400.
+    /// </summary>
+    private static bool? ReadOptionalBoolean(JsonElement parent, string name, string path) =>
+        !IsNull(parent, name)
+        && parent.TryGetMergePatchBoolean(name, out bool value, $"{path}.{name}")
+            ? value
             : null;
 
     /// <summary>
-    ///     This method parses an optional, non-negative TimeSpan field. Absent or JSON
-    ///     <see langword="null" /> gives <see langword="null" /> ("use the global value" for an
-    ///     interface override) rather than an error; it is the nullable form of
-    ///     <see cref="TryParseNonNegativeTimeSpan" />.
+    ///     This method reads an optional, non-negative duration field of an interface override,
+    ///     returning <see langword="null" /> when it is absent or JSON <c>null</c> ("use the
+    ///     global value"). Zero is valid: several Router Advertisement fields use it for "no
+    ///     recommendation" or "not a default router". The protocol's upper bound for each field
+    ///     is checked by <see cref="RaContentRules" /> afterwards.
     /// </summary>
-    private static bool TryParseOptionalNonNegativeTimeSpan(
+    private static TimeSpan? ReadOptionalDuration(JsonElement parent, string name, string path) =>
+        !IsNull(parent, name)
+        && parent.TryGetMergePatchDuration(
+            name,
+            out TimeSpan value,
+            TimeSpan.Zero,
+            DurationMaximum,
+            $"{path}.{name}"
+        )
+            ? value
+            : null;
+
+    /// <summary>
+    ///     This method reads a link MTU field: absent or JSON <c>null</c> gives
+    ///     <see langword="null" /> ("do not advertise an MTU" or "use the global value"); a
+    ///     number must be a whole number that fits a signed 32-bit integer. The lower bound is
+    ///     checked by <see cref="RaContentRules.CheckLinkMtu" />.
+    /// </summary>
+    /// <returns>Whether the field is present.</returns>
+    private static bool TryReadLinkMtu(
         JsonElement parent,
-        string propertyName,
-        out TimeSpan? parsed,
-        out string error
+        string name,
+        string fieldPath,
+        out uint? value
     )
     {
-        parsed = null;
-        error = null;
+        value = null;
 
-        if (
-            !parent.TryGetProperty(propertyName, out JsonElement element)
-            || element.ValueKind == JsonValueKind.Null
-        )
+        if (!parent.TryGetMergePatchField(name, out JsonElement element))
+            return false;
+
+        if (element.ValueKind == JsonValueKind.Null)
             return true;
 
-        if (!TimeSpan.TryParse(element.GetString(), out TimeSpan value) || value < TimeSpan.Zero)
-        {
-            error =
-                $"'{element.GetString()}' must be a valid, non-negative TimeSpan (for example "
-                + "\"00:30:00\").";
-            return false;
-        }
+        if (parent.TryGetMergePatchInt32(name, out int mtu, 0, int.MaxValue, fieldPath))
+            value = (uint)mtu;
 
-        parsed = value;
         return true;
     }
 
@@ -1543,73 +1415,6 @@ public class DhcpSettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.RestartRequiredNote));
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch TimeSpan field that must be strictly positive.
-    /// </summary>
-    private static bool TryParsePositiveTimeSpan(
-        JsonElement element,
-        out TimeSpan parsed,
-        out string error
-    )
-    {
-        parsed = default;
-        error = null;
-
-        if (!TimeSpan.TryParse(element.GetString(), out parsed) || parsed <= TimeSpan.Zero)
-        {
-            error =
-                $"'{element.GetString()}' must be a valid, positive TimeSpan (for example "
-                + "\"00:00:30\").";
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch TimeSpan field that may be zero. Several Router
-    ///     Advertisement fields (<see cref="RaOptions.RouterLifetime" />,
-    ///     <see cref="RaOptions.ReachableTime" />, <see cref="RaOptions.RetransTimer" />) use
-    ///     <see cref="TimeSpan.Zero" /> to mean "no recommendation" or "not a default router",
-    ///     unlike the fields <see cref="TryParsePositiveTimeSpan" /> handles.
-    /// </summary>
-    private static bool TryParseNonNegativeTimeSpan(
-        JsonElement element,
-        out TimeSpan parsed,
-        out string error
-    )
-    {
-        parsed = default;
-        error = null;
-
-        if (!TimeSpan.TryParse(element.GetString(), out parsed) || parsed < TimeSpan.Zero)
-        {
-            error =
-                $"'{element.GetString()}' must be a valid, non-negative TimeSpan (for example "
-                + "\"00:30:00\").";
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch UDP port field.
-    /// </summary>
-    private static bool TryParsePort(JsonElement element, out int parsed, out string error)
-    {
-        parsed = element.GetInt32();
-        error = null;
-
-        if (parsed is < 1 or > 65535)
-        {
-            error = $"'{parsed}' is not a valid port number -- it must be between 1 and 65535.";
-            return false;
-        }
-
-        return true;
     }
 
     /// <summary>

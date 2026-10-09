@@ -9,12 +9,13 @@ namespace Ninlil.Web.Tests;
 
 /// <summary>
 ///     This class covers the range and type checks of the settings controllers (every
-///     <c>*SettingsController</c> except DHCP, which has its own class), over HTTP on the shared
+///     <c>*SettingsController</c>, including the eight DHCP sections of
+///     <c>DhcpSettingsController</c>), over HTTP on the shared
 ///     in-process host, signed in as the bootstrap administrator. The first group (cluster,
 ///     forwarding, client subnet, rate limiting, query logging, DNS cookies, event broker,
 ///     identity, recursive, transport and web listen) holds fields that reach a timer, a socket or
-///     a bucket; the second group holds the remaining controllers, where each gets at least one
-///     wrong-JSON-type row.
+///     a bucket; the second group holds the remaining DNS-side controllers and the third the DHCP
+///     sections, where each gets at least one wrong-JSON-type row.
 ///     <para>
 ///         A rejected value must give 400 naming the field, and the runtime settings file
 ///         (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) must be
@@ -1271,5 +1272,386 @@ public class SettingsRangeCheckTests(NinlilDnsWebApplicationFactory factory)
     [InlineData(SelfUpdate, "{\"releaseFeedUrl\":null}")]
     [InlineData(SelfUpdate, "{\"checkInterval\":\"36500.00:00:00\"}")]
     public async Task Patch_OnSelfUpdateSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    private const string DhcpCore = "/api/dhcp-settings/core";
+    private const string DhcpProtocol = "/api/dhcp-settings/protocol";
+    private const string DhcpV6Protocol = "/api/dhcp-settings/dhcpv6-protocol";
+    private const string DhcpRelay = "/api/dhcp-settings/relay";
+    private const string DhcpV6Relay = "/api/dhcp-settings/dhcpv6-relay";
+    private const string DhcpTftp = "/api/dhcp-settings/tftp";
+    private const string DhcpRaProtocol = "/api/dhcp-settings/ra-protocol";
+    private const string DhcpRa = "/api/dhcp-settings/ra";
+
+    [Theory]
+    [InlineData(DhcpCore, "{\"serverIdentifierAddress\":5}", "serverIdentifierAddress")]
+    [InlineData(DhcpCore, "{\"serverIdentifierAddress\":\"nope\"}", "not a valid IP address")]
+    [InlineData(DhcpCore, "{\"offerHoldDuration\":\"00:00:00\"}", "offerHoldDuration")]
+    [InlineData(DhcpCore, "{\"offerHoldDuration\":\"-00:00:01\"}", "offerHoldDuration")]
+    [InlineData(DhcpCore, "{\"offerHoldDuration\":\"36500.00:00:01\"}", "offerHoldDuration")]
+    [InlineData(DhcpCore, "{\"offerHoldDuration\":30}", "offerHoldDuration")]
+    [InlineData(
+        DhcpCore,
+        "{\"declinedAddressQuarantineDuration\":\"00:00:00\"}",
+        "declinedAddressQuarantineDuration"
+    )]
+    [InlineData(
+        DhcpCore,
+        "{\"declinedAddressQuarantineDuration\":true}",
+        "declinedAddressQuarantineDuration"
+    )]
+    public async Task Patch_OnDhcpCoreSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DhcpCore, "{\"serverIdentifierAddress\":null}")]
+    [InlineData(DhcpCore, "{\"offerHoldDuration\":\"00:00:00.001\"}")]
+    [InlineData(DhcpCore, "{\"declinedAddressQuarantineDuration\":\"36500.00:00:00\"}")]
+    public async Task Patch_OnDhcpCoreSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DhcpProtocol, "{\"serverPort\":0}", "serverPort")]
+    [InlineData(DhcpProtocol, "{\"serverPort\":65536}", "serverPort")]
+    [InlineData(DhcpProtocol, "{\"serverPort\":\"67\"}", "serverPort")]
+    [InlineData(DhcpProtocol, "{\"clientPort\":0}", "clientPort")]
+    [InlineData(DhcpProtocol, "{\"clientPort\":1.5}", "clientPort")]
+    [InlineData(DhcpProtocol, "{\"enable\":\"yes\"}", "enable")]
+    public async Task Patch_OnDhcpProtocolSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DhcpProtocol, "{\"serverPort\":1}")]
+    [InlineData(DhcpProtocol, "{\"serverPort\":65535}")]
+    [InlineData(DhcpProtocol, "{\"clientPort\":65535}")]
+    public async Task Patch_OnDhcpProtocolSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DhcpV6Protocol, "{\"serverPort\":0}", "serverPort")]
+    [InlineData(DhcpV6Protocol, "{\"serverPort\":65536}", "serverPort")]
+    [InlineData(DhcpV6Protocol, "{\"serverPort\":\"67\"}", "serverPort")]
+    [InlineData(DhcpV6Protocol, "{\"clientPort\":0}", "clientPort")]
+    [InlineData(DhcpV6Protocol, "{\"clientPort\":1.5}", "clientPort")]
+    [InlineData(DhcpV6Protocol, "{\"enable\":\"yes\"}", "enable")]
+    public async Task Patch_OnDhcpV6ProtocolSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DhcpV6Protocol, "{\"serverPort\":1}")]
+    [InlineData(DhcpV6Protocol, "{\"serverPort\":65535}")]
+    [InlineData(DhcpV6Protocol, "{\"clientPort\":1}")]
+    public async Task Patch_OnDhcpV6ProtocolSettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DhcpRelay, "{\"enable\":1}", "enable")]
+    [InlineData(DhcpRelay, "{\"upstreamServerAddresses\":\"10.0.0.1\"}", "upstreamServerAddresses")]
+    [InlineData(DhcpRelay, "{\"upstreamServerAddresses\":[5]}", "upstreamServerAddresses")]
+    [InlineData(DhcpRelay, "{\"upstreamServerAddresses\":null}", "upstreamServerAddresses")]
+    [InlineData(DhcpRelay, "{\"upstreamServerAddresses\":[\"::1\"]}", "IPv4 address")]
+    [InlineData(DhcpRelay, "{\"upstreamServerPort\":0}", "upstreamServerPort")]
+    [InlineData(DhcpRelay, "{\"upstreamServerPort\":65536}", "upstreamServerPort")]
+    [InlineData(DhcpRelay, "{\"relayAgentAddress\":5}", "relayAgentAddress")]
+    [InlineData(DhcpRelay, "{\"relayAgentAddress\":\"::1\"}", "IPv4 address")]
+    [InlineData(DhcpRelay, "{\"relayAgentCircuitId\":5}", "relayAgentCircuitId")]
+    [InlineData(DhcpRelay, "{\"relayAgentRemoteId\":true}", "relayAgentRemoteId")]
+    public async Task Patch_OnDhcpRelaySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DhcpRelay, "{\"upstreamServerAddresses\":[]}")]
+    [InlineData(DhcpRelay, "{\"upstreamServerPort\":1}")]
+    [InlineData(DhcpRelay, "{\"upstreamServerPort\":65535}")]
+    [InlineData(DhcpRelay, "{\"relayAgentAddress\":null}")]
+    public async Task Patch_OnDhcpRelaySettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DhcpV6Relay, "{\"enable\":1}", "enable")]
+    [InlineData(DhcpV6Relay, "{\"upstreamServerAddresses\":\"::1\"}", "upstreamServerAddresses")]
+    [InlineData(DhcpV6Relay, "{\"upstreamServerAddresses\":[5]}", "upstreamServerAddresses")]
+    [InlineData(DhcpV6Relay, "{\"upstreamServerAddresses\":[\"10.0.0.1\"]}", "IPv6 address")]
+    [InlineData(DhcpV6Relay, "{\"upstreamServerPort\":0}", "upstreamServerPort")]
+    [InlineData(DhcpV6Relay, "{\"upstreamServerPort\":\"547\"}", "upstreamServerPort")]
+    [InlineData(DhcpV6Relay, "{\"relayLinkAddress\":5}", "relayLinkAddress")]
+    [InlineData(DhcpV6Relay, "{\"relayLinkAddress\":\"10.0.0.1\"}", "IPv6 address")]
+    [InlineData(DhcpV6Relay, "{\"interfaceId\":5}", "interfaceId")]
+    public async Task Patch_OnDhcpV6RelaySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DhcpV6Relay, "{\"upstreamServerAddresses\":[]}")]
+    [InlineData(DhcpV6Relay, "{\"upstreamServerPort\":65535}")]
+    [InlineData(DhcpV6Relay, "{\"relayLinkAddress\":null}")]
+    [InlineData(DhcpV6Relay, "{\"interfaceId\":null}")]
+    public async Task Patch_OnDhcpV6RelaySettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DhcpTftp, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(DhcpTftp, "{\"port\":0}", "port")]
+    [InlineData(DhcpTftp, "{\"port\":65536}", "port")]
+    [InlineData(DhcpTftp, "{\"rootDirectory\":5}", "rootDirectory")]
+    [InlineData(DhcpTftp, "{\"retransmitTimeoutSeconds\":0}", "retransmitTimeoutSeconds")]
+    [InlineData(DhcpTftp, "{\"retransmitTimeoutSeconds\":-1}", "retransmitTimeoutSeconds")]
+    [InlineData(DhcpTftp, "{\"retransmitTimeoutSeconds\":\"5\"}", "retransmitTimeoutSeconds")]
+    [InlineData(DhcpTftp, "{\"retransmitTimeoutSeconds\":4294967.295}", "retransmitTimeoutSeconds")]
+    [InlineData(DhcpTftp, "{\"maxRetransmissions\":0}", "maxRetransmissions")]
+    [InlineData(DhcpTftp, "{\"maxRetransmissions\":\"3\"}", "maxRetransmissions")]
+    [InlineData(DhcpTftp, "{\"maxConcurrentTransfers\":0}", "maxConcurrentTransfers")]
+    public async Task Patch_OnDhcpTftpSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DhcpTftp, "{\"port\":1}")]
+    [InlineData(DhcpTftp, "{\"port\":65535}")]
+    [InlineData(DhcpTftp, "{\"rootDirectory\":null}")]
+    [InlineData(DhcpTftp, "{\"retransmitTimeoutSeconds\":0.001}")]
+    [InlineData(DhcpTftp, "{\"retransmitTimeoutSeconds\":4294967.294}")]
+    [InlineData(DhcpTftp, "{\"maxRetransmissions\":1}")]
+    [InlineData(DhcpTftp, "{\"maxConcurrentTransfers\":1}")]
+    public async Task Patch_OnDhcpTftpSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DhcpRaProtocol, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"minRouterAdvertisementInterval\":\"00:00:00\"}",
+        "minRouterAdvertisementInterval"
+    )]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"minRouterAdvertisementInterval\":\"36500.00:00:01\"}",
+        "minRouterAdvertisementInterval"
+    )]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"minRouterAdvertisementInterval\":3}",
+        "minRouterAdvertisementInterval"
+    )]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"minRouterAdvertisementInterval\":\"00:00:02\"}",
+        "minRouterAdvertisementInterval"
+    )]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"maxRouterAdvertisementInterval\":\"00:00:03\"}",
+        "maxRouterAdvertisementInterval"
+    )]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"maxRouterAdvertisementInterval\":\"18:12:16\"}",
+        "maxRouterAdvertisementInterval"
+    )]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"maxRouterAdvertisementInterval\":null}",
+        "maxRouterAdvertisementInterval"
+    )]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"minRouterAdvertisementInterval\":\"00:09:00\"}",
+        "minRouterAdvertisementInterval"
+    )]
+    public async Task Patch_OnDhcpRaProtocolSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(
+        DhcpRaProtocol,
+        "{\"minRouterAdvertisementInterval\":\"00:00:03\",\"maxRouterAdvertisementInterval\":\"00:00:04\"}"
+    )]
+    [InlineData(DhcpRaProtocol, "{\"maxRouterAdvertisementInterval\":\"18:12:15\"}")]
+    public async Task Patch_OnDhcpRaProtocolSettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DhcpRa, "{\"managedAddressConfiguration\":1}", "managedAddressConfiguration")]
+    [InlineData(DhcpRa, "{\"otherConfiguration\":\"x\"}", "otherConfiguration")]
+    [InlineData(DhcpRa, "{\"routerLifetime\":\"-00:00:01\"}", "routerLifetime")]
+    [InlineData(DhcpRa, "{\"routerLifetime\":\"18:12:16\"}", "routerLifetime")]
+    [InlineData(DhcpRa, "{\"routerLifetime\":5}", "routerLifetime")]
+    [InlineData(DhcpRa, "{\"currentHopLimit\":-1}", "currentHopLimit")]
+    [InlineData(DhcpRa, "{\"currentHopLimit\":256}", "currentHopLimit")]
+    [InlineData(DhcpRa, "{\"currentHopLimit\":\"64\"}", "currentHopLimit")]
+    [InlineData(DhcpRa, "{\"reachableTime\":\"01:00:00.001\"}", "reachableTime")]
+    [InlineData(DhcpRa, "{\"reachableTime\":false}", "reachableTime")]
+    [InlineData(DhcpRa, "{\"retransTimer\":\"49.17:02:47.296\"}", "retransTimer")]
+    [InlineData(DhcpRa, "{\"retransTimer\":\"-00:00:01\"}", "retransTimer")]
+    [InlineData(DhcpRa, "{\"linkMtu\":1279}", "linkMtu")]
+    [InlineData(DhcpRa, "{\"linkMtu\":\"1500\"}", "linkMtu")]
+    [InlineData(DhcpRa, "{\"linkMtu\":1.5}", "linkMtu")]
+    [InlineData(DhcpRa, "{\"recursiveDnsServers\":\"2001:db8::1\"}", "recursiveDnsServers")]
+    [InlineData(DhcpRa, "{\"recursiveDnsServers\":[5]}", "recursiveDnsServers")]
+    [InlineData(DhcpRa, "{\"recursiveDnsServers\":[\"10.0.0.1\"]}", "10.0.0.1")]
+    [InlineData(DhcpRa, "{\"recursiveDnsServers\":null}", "recursiveDnsServers")]
+    [InlineData(
+        DhcpRa,
+        "{\"recursiveDnsServerLifetime\":\"-00:00:01\"}",
+        "recursiveDnsServerLifetime"
+    )]
+    [InlineData(DhcpRa, "{\"recursiveDnsServerLifetime\":1800}", "recursiveDnsServerLifetime")]
+    [InlineData(DhcpRa, "{\"dnsSearchListDomains\":[5]}", "dnsSearchListDomains")]
+    [InlineData(DhcpRa, "{\"dnsSearchListDomains\":\"example.com\"}", "dnsSearchListDomains")]
+    [InlineData(DhcpRa, "{\"dnsSearchListLifetime\":\"36500.00:00:01\"}", "dnsSearchListLifetime")]
+    [InlineData(DhcpRa, "{\"routes\":{}}", "routes")]
+    [InlineData(DhcpRa, "{\"routes\":[5]}", "routes[0]")]
+    [InlineData(DhcpRa, "{\"routes\":[{}]}", "prefixLength")]
+    [InlineData(DhcpRa, "{\"routes\":[{\"prefixLength\":129}]}", "routes[0].prefixLength")]
+    [InlineData(DhcpRa, "{\"routes\":[{\"prefixLength\":\"64\"}]}", "routes[0].prefixLength")]
+    [InlineData(DhcpRa, "{\"routes\":[{\"prefixLength\":64,\"prefix\":5}]}", "routes[0].prefix")]
+    [InlineData(
+        DhcpRa,
+        "{\"routes\":[{\"prefixLength\":0,\"preference\":5}]}",
+        "routes[0].preference"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"routes\":[{\"prefixLength\":0,\"preference\":\"Urgent\"}]}",
+        "routes[0].preference"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"routes\":[{\"prefixLength\":0,\"routeLifetime\":5}]}",
+        "routes[0].routeLifetime"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"routes\":[{\"prefixLength\":0,\"routeLifetime\":\"-00:00:01\"}]}",
+        "routes[0].routeLifetime"
+    )]
+    [InlineData(DhcpRa, "{\"interfaceOverrides\":{}}", "interfaceOverrides")]
+    [InlineData(DhcpRa, "{\"interfaceOverrides\":[5]}", "interfaceOverrides[0]")]
+    [InlineData(DhcpRa, "{\"interfaceOverrides\":[{}]}", "interfaceName")]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":5}]}",
+        "interfaceOverrides[0].interfaceName"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"exclude\":\"yes\"}]}",
+        "interfaceOverrides[0].exclude"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"managedAddressConfiguration\":1}]}",
+        "interfaceOverrides[0].managedAddressConfiguration"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"routerLifetime\":5}]}",
+        "interfaceOverrides[0].routerLifetime"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"routerLifetime\":\"18:12:16\"}]}",
+        "routerLifetime"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"currentHopLimit\":256}]}",
+        "interfaceOverrides[0].currentHopLimit"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"currentHopLimit\":\"1\"}]}",
+        "interfaceOverrides[0].currentHopLimit"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"linkMtu\":100}]}",
+        "linkMtu"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"linkMtu\":\"1500\"}]}",
+        "interfaceOverrides[0].linkMtu"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"recursiveDnsServers\":\"x\"}]}",
+        "interfaceOverrides[0].recursiveDnsServers"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"recursiveDnsServers\":[5]}]}",
+        "interfaceOverrides[0].recursiveDnsServers"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"dnsSearchListDomains\":[5]}]}",
+        "interfaceOverrides[0].dnsSearchListDomains"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"dnsSearchListLifetime\":false}]}",
+        "interfaceOverrides[0].dnsSearchListLifetime"
+    )]
+    public async Task Patch_OnDhcpRaSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DhcpRa, "{\"routerLifetime\":\"00:00:00\"}")]
+    [InlineData(DhcpRa, "{\"routerLifetime\":\"18:12:15\"}")]
+    [InlineData(DhcpRa, "{\"currentHopLimit\":0}")]
+    [InlineData(DhcpRa, "{\"currentHopLimit\":255}")]
+    [InlineData(DhcpRa, "{\"reachableTime\":\"00:00:00\"}")]
+    [InlineData(DhcpRa, "{\"reachableTime\":\"01:00:00\"}")]
+    [InlineData(DhcpRa, "{\"retransTimer\":\"49.17:02:47.295\"}")]
+    [InlineData(DhcpRa, "{\"linkMtu\":1280}")]
+    [InlineData(DhcpRa, "{\"linkMtu\":null}")]
+    [InlineData(DhcpRa, "{\"recursiveDnsServers\":[]}")]
+    [InlineData(DhcpRa, "{\"recursiveDnsServerLifetime\":\"36500.00:00:00\"}")]
+    [InlineData(DhcpRa, "{\"dnsSearchListDomains\":[]}")]
+    [InlineData(DhcpRa, "{\"dnsSearchListLifetime\":\"00:00:00\"}")]
+    [InlineData(DhcpRa, "{\"routes\":[]}")]
+    [InlineData(DhcpRa, "{\"routes\":[{\"prefixLength\":0}]}")]
+    [InlineData(
+        DhcpRa,
+        "{\"routes\":[{\"prefixLength\":128,\"prefix\":\"2001:db8::1\",\"preference\":\"low\",\"routeLifetime\":\"00:00:00\"}]}"
+    )]
+    [InlineData(
+        DhcpRa,
+        "{\"routes\":[{\"prefixLength\":0,\"preference\":null,\"routeLifetime\":null}]}"
+    )]
+    [InlineData(DhcpRa, "{\"interfaceOverrides\":[]}")]
+    [InlineData(DhcpRa, "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"exclude\":true}]}")]
+    [InlineData(
+        DhcpRa,
+        "{\"interfaceOverrides\":[{\"interfaceName\":\"eth0\",\"routerLifetime\":null,\"currentHopLimit\":null,\"linkMtu\":1280,\"managedAddressConfiguration\":false}]}"
+    )]
+    public async Task Patch_OnDhcpRaSettingsAtABoundary_IsAccepted(string url, string body) =>
         await AssertAcceptedAsync(url, body);
 }
