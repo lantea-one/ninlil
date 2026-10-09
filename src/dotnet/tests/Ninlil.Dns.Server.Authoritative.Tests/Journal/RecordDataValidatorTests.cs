@@ -98,4 +98,18 @@ public sealed class RecordDataValidatorTests
 
         Assert.Contains("target.example.com", dataJson, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData("""{"target":"a..b."}""")]
+    [InlineData(
+        """{"target":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example."}"""
+    )]
+    public void EncodeDataFromJsonOrThrow_WithAMalformedDnsName_ThrowsValidationException(
+        string json
+    )
+    {
+        Assert.Throws<ValidationException>(() =>
+            RecordDataValidator.EncodeDataFromJsonOrThrow(DnsResourceRecordTypeEnum.Cname, json)
+        );
+    }
 }

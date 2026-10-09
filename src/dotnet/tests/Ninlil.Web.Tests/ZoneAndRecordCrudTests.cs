@@ -426,6 +426,57 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task CreateRecord_WithACnameTargetThatHasAnEmptyLabel_ReturnsBadRequestAndStoresNothing()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"badname-{Guid.NewGuid():N}.example.com";
+        HttpResponseMessage createZoneResponse = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = zoneName, type = "Primary" }
+        );
+        Assert.Equal(HttpStatusCode.Created, createZoneResponse.StatusCode);
+        ZoneDetail zone = await createZoneResponse.Content.ReadFromJsonAsync<ZoneDetail>();
+        HttpResponseMessage soaResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/records",
+            new
+            {
+                name = zoneName,
+                type = "SOA",
+                timeToLiveSeconds = 3600,
+                data = new
+                {
+                    primaryNameServer = $"ns1.{zoneName}",
+                    responsiblePersonMailbox = $"admin.{zoneName}",
+                    serial = 1,
+                    refreshSeconds = 3600,
+                    retrySeconds = 600,
+                    expireSeconds = 604800,
+                    minimumTtlSeconds = 300,
+                },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, soaResponse.StatusCode);
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/records",
+            new
+            {
+                name = $"alias.{zoneName}",
+                type = "CNAME",
+                timeToLiveSeconds = 300,
+                data = new { target = "a..b." },
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        PagedResult<RecordDetail> page = await (
+            await client.GetAsync($"/api/zones/{zone.Id}/records")
+        ).Content.ReadFromJsonAsync<PagedResult<RecordDetail>>();
+        // Only the SOA exists.
+        Assert.Equal(1, page.TotalCount);
+    }
+
+    [Fact]
     public async Task CreateZone_WithAnInvalidName_ReturnsBadRequest()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();

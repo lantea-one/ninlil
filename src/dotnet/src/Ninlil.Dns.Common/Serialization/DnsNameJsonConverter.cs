@@ -19,7 +19,16 @@ public class DnsNameJsonConverter : JsonConverter<DnsName>
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
-    ) => DnsName.TryParse(reader.GetString(), out DnsName name) ? name : null;
+    )
+    {
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException("A DNS name must be a JSON string.");
+
+        if (!DnsName.TryParse(reader.GetString(), out DnsName name, out string error))
+            throw new JsonException(error);
+
+        return name;
+    }
 
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, DnsName value, JsonSerializerOptions options)
