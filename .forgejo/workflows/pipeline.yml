@@ -16,9 +16,11 @@ name: 'Ninlil Pipeline'
 ## test listener (Karma's included) also takes a port the operating system reports as free, so
 ## two copies of the suite never meet.
 ##
-## Job graph (the tests start alongside version; 'verify' runs only the two test jobs):
+## Job graph (the tests and lint start alongside version; 'verify' runs only test-dotnet,
+## test-admin-console and lint):
 ##
 ##   version ────────────┐
+##   lint ───────────────┤
 ##   test-dotnet ────────┼─ draft ── binaries (×4) ─┬─ arch-packages ─┬─ publish
 ##   test-admin-console ─┤                          └─ image ─────────┤
 ##                       └─ packages (×4) ────────────────────────────┘
@@ -185,7 +187,27 @@ jobs:
           '
         shell: 'bash'
   ##
-  ## Creates the draft release the later jobs attach to, once both test jobs pass.
+  ## Lints the shell scripts (shellcheck) and the workflows (actionlint), then runs the script
+  ## self-tests (.forgejo/scripts/lint.sh). Runs for every kind, with no dependencies; draft and
+  ## packages wait for it, so nothing is published while it fails.
+  ##
+  lint:
+    name: 'Lint and Script Tests'
+    runs-on: 'archlinux'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Run Lint and the Script Self-Tests'
+        run: |-
+          ./.forgejo/scripts/in-container.sh lint ./.forgejo/scripts/lint.sh
+        shell: 'bash'
+  ##
+  ## Creates the draft release the later jobs attach to, once both test jobs and lint pass.
   ##
   draft:
     name: 'Stage Draft Release'
@@ -193,6 +215,7 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
+      - 'lint'
       - 'test-dotnet'
       - 'test-admin-console'
     runs-on: 'archlinux'
@@ -373,7 +396,7 @@ jobs:
         shell: 'bash'
   ##
   ## NuGet packages for the libraries, one matrix job per family, pushed to the Forgejo NuGet
-  ## registry. Runs alongside the draft, binaries and image jobs once the tests pass.
+  ## registry. Runs alongside the draft, binaries and image jobs once the tests and lint pass.
   ##
   packages:
     name: 'Pack and Push NuGet Packages (${{ matrix.family }})'
@@ -381,6 +404,7 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
+      - 'lint'
       - 'test-dotnet'
       - 'test-admin-console'
     runs-on: 'archlinux'

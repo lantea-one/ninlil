@@ -521,7 +521,10 @@ Before considering a change done, both sides of the codebase have the same shape
 2. For Angular: `npm run lint` / `npm run format:check` / `npm run build` / `npm test`, all clean.
 
 The pipeline runs exactly these checks, each in a throwaway container of the matching toolchain
-(see [The pipeline](#the-pipeline)). A few .NET tests start their own database
+(see [The pipeline](#the-pipeline)). The pipeline also lints its own scripts and workflows and
+runs their self-tests; run the same check locally, before pushing a change under `.forgejo/`,
+`docker/` or `src/script/`, with `./.forgejo/scripts/in-container.sh lint ./.forgejo/scripts/lint.sh`.
+A few .NET tests start their own database
 containers through Testcontainers, so the .NET suite needs Docker running. Every test listener,
 Karma's included, takes a port the operating system reports as free, never a fixed or well-known
 one, and neither suite needs root, so both can run on a machine that already hosts DNS, DHCP,
@@ -607,7 +610,7 @@ The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on 
 `archlinux` Forgejo runners, which need only Docker with buildx, `git`, `curl`, and `jq`. Every
 build and test step runs in a throwaway container of one of the toolchains in
 [`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and Chromium;
-`makepkg`) with just the checkout mounted, through
+`makepkg`; shellcheck and actionlint) with just the checkout mounted, through
 [`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). The Arch Linux toolchain
 exists for amd64 only, so an arm64 runner runs it under emulation, which must be registered for
 containers and at every boot: `qemu-user-static-binfmt`, or
@@ -617,10 +620,10 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages and the multi-architecture image from the Linux binaries; and finally publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages and the multi-architecture image from the Linux binaries; and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 
-A build publishes nothing until every test has passed, and its release stays an invisible draft
+A build publishes nothing until lint and every test have passed, and its release stays an invisible draft
 until every binary, both Arch Linux packages, the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
