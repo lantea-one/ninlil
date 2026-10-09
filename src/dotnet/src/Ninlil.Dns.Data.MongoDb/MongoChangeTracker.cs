@@ -1,3 +1,5 @@
+using MongoDB.Driver;
+
 // Define our namespace.
 namespace Ninlil.Dns.Data.MongoDb;
 
@@ -7,37 +9,98 @@ namespace Ninlil.Dns.Data.MongoDb;
 ///     immediately, so a Mongo repository's <c>Add</c>, <c>Update</c> and <c>Remove</c> do not
 ///     touch the server: they hand this class a function that performs the write, and
 ///     <see cref="MongoUnitOfWork.SaveChangesAsync" /> later runs everything staged, in order.
-///     The writes are not wrapped in a transaction. It is registered as scoped, so all
-///     repositories serving one request share the same pending writes.
+///     When <see cref="MongoTransactionSupport" /> reports a replica set or sharded cluster, the
+///     transactional writes run in one multi-document transaction, so a failure leaves none of
+///     them behind. On a standalone server they run one by one without a transaction. It is
+///     registered as scoped, so all repositories serving one request share the same pending
+///     writes.
 /// </summary>
-public class MongoChangeTracker
+/// <param name="client">The MongoDB client used to start the transaction session.</param>
+/// <param name="transactionSupport">Tells whether the deployment can run transactions.</param>
+public class MongoChangeTracker(IMongoClient client, MongoTransactionSupport transactionSupport)
 {
     /// <summary>
     ///     This property contains every write staged so far, waiting to be flushed.
     /// </summary>
-    private readonly List<Func<CancellationToken, Task>> _pendingOperations = [];
+    private readonly List<PendingOperation> _pendingOperations = [];
+
+    /// <summary>
+    ///     This type pairs a staged write with whether it belongs inside the transaction.
+    /// </summary>
+    /// <param name="Operation">The write to perform.</param>
+    /// <param name="Transactional">Whether the write runs inside the transaction.</param>
+    private readonly record struct PendingOperation(
+        Func<IClientSessionHandle, CancellationToken, Task> Operation,
+        bool Transactional
+    );
 
     /// <summary>
     ///     This method stages a single write to be performed the next time
     ///     <see cref="FlushAsync" /> runs.
     /// </summary>
-    /// <param name="operation">The write to perform, given the cancellation token to observe.</param>
-    public void Stage(Func<CancellationToken, Task> operation) => _pendingOperations.Add(operation);
+    /// <param name="operation">
+    ///     The write to perform, given the session of the running transaction (<see langword="null" />
+    ///     when no transaction is used; see <see cref="MongoSessionWrites" />) and the cancellation
+    ///     token to observe. The driver can run it more than once when it retries a transient
+    ///     transaction error, so it must be safe to repeat after an aborted attempt.
+    /// </param>
+    /// <param name="transactional">
+    ///     <see langword="true" /> to run the write inside the transaction. <see langword="false" />
+    ///     runs it after the transaction has committed, for writes too large for MongoDB's
+    ///     transaction limits (a transaction lives 60 seconds by default).
+    /// </param>
+    public void Stage(
+        Func<IClientSessionHandle, CancellationToken, Task> operation,
+        bool transactional = true
+    ) => _pendingOperations.Add(new PendingOperation(operation, transactional));
 
     /// <summary>
     ///     This method performs every write staged so far, in the order it was staged, and then
-    ///     forgets them.
+    ///     forgets them. Transactional writes run first, together in one transaction when the
+    ///     deployment supports it; the non-transactional writes follow in order.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of writes that were performed.</returns>
     public async Task<int> FlushAsync(CancellationToken stoppingToken = default)
     {
         // Snapshot and clear the list first, so a write staged while flushing is not run twice.
-        Func<CancellationToken, Task>[] operations = [.. _pendingOperations];
+        PendingOperation[] operations = [.. _pendingOperations];
         _pendingOperations.Clear();
 
-        foreach (Func<CancellationToken, Task> operation in operations)
-            await operation(stoppingToken);
+        if (operations.Length == 0)
+            return 0;
+
+        PendingOperation[] transactional = operations.Where(item => item.Transactional).ToArray();
+        PendingOperation[] afterCommit = operations.Where(item => !item.Transactional).ToArray();
+
+        if (transactional.Length > 0)
+        {
+            if (await transactionSupport.DetectAsync(stoppingToken))
+            {
+                using IClientSessionHandle session = await client.StartSessionAsync(
+                    cancellationToken: stoppingToken
+                );
+
+                await session.WithTransactionAsync(
+                    async (transactionSession, token) =>
+                    {
+                        foreach (PendingOperation item in transactional)
+                            await item.Operation(transactionSession, token);
+
+                        return true;
+                    },
+                    cancellationToken: stoppingToken
+                );
+            }
+            else
+            {
+                foreach (PendingOperation item in transactional)
+                    await item.Operation(null, stoppingToken);
+            }
+        }
+
+        foreach (PendingOperation item in afterCommit)
+            await item.Operation(null, stoppingToken);
 
         return operations.Length;
     }

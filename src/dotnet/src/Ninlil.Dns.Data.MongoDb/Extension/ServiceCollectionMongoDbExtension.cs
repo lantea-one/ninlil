@@ -69,6 +69,9 @@ public static class ServiceCollectionMongoDbExtension
             databaseName
         ));
 
+        // One answer per process: can this deployment run transactions?
+        instance.AddSingleton<MongoTransactionSupport>();
+
         // Scoped, so every repository in one request shares the same pending writes.
         instance.AddScoped<MongoChangeTracker>();
         instance.AddScoped<IUnitOfWork, MongoUnitOfWork>();

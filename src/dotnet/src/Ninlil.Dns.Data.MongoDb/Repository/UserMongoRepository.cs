@@ -73,11 +73,13 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     /// <inheritdoc />
     public Task AddToRoleAsync(Guid userId, Guid roleId, CancellationToken stoppingToken = default)
     {
-        ChangeTracker.Stage(token =>
-            context.UserRoles.InsertOneAsync(
-                new UserRoleEntity { UserId = userId, RoleId = roleId },
-                cancellationToken: token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                context.UserRoles.InsertOneWithSessionAsync(
+                    session,
+                    new UserRoleEntity { UserId = userId, RoleId = roleId },
+                    token
+                )
         );
 
         return Task.CompletedTask;
@@ -90,11 +92,13 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        ChangeTracker.Stage(token =>
-            context.UserRoles.DeleteOneAsync(
-                userRole => userRole.UserId == userId && userRole.RoleId == roleId,
-                token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                context.UserRoles.DeleteOneWithSessionAsync(
+                    session,
+                    userRole => userRole.UserId == userId && userRole.RoleId == roleId,
+                    token
+                )
         );
 
         return Task.CompletedTask;
@@ -107,17 +111,19 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        ChangeTracker.Stage(token =>
-            context.UserClaims.InsertManyAsync(
-                claims.Select(claim => new UserClaimEntity
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    ClaimType = claim.ClaimType,
-                    ClaimValue = claim.ClaimValue,
-                }),
-                cancellationToken: token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                context.UserClaims.InsertManyWithSessionAsync(
+                    session,
+                    claims.Select(claim => new UserClaimEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = userId,
+                        ClaimType = claim.ClaimType,
+                        ClaimValue = claim.ClaimValue,
+                    }),
+                    token
+                )
         );
 
         return Task.CompletedTask;
@@ -134,15 +140,17 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         // enumerable.
         (string ClaimType, string ClaimValue)[] requested = [.. claims];
 
-        ChangeTracker.Stage(token =>
-            context.UserClaims.DeleteManyAsync(
-                claim =>
-                    claim.UserId == userId
-                    && requested.Any(r =>
-                        r.ClaimType == claim.ClaimType && r.ClaimValue == claim.ClaimValue
-                    ),
-                token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                context.UserClaims.DeleteManyWithSessionAsync(
+                    session,
+                    claim =>
+                        claim.UserId == userId
+                        && requested.Any(r =>
+                            r.ClaimType == claim.ClaimType && r.ClaimValue == claim.ClaimValue
+                        ),
+                    token
+                )
         );
 
         return Task.CompletedTask;
@@ -158,17 +166,19 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        ChangeTracker.Stage(token =>
-            context.UserClaims.UpdateManyAsync(
-                claim =>
-                    claim.UserId == userId
-                    && claim.ClaimType == currentClaimType
-                    && claim.ClaimValue == currentClaimValue,
-                Builders<UserClaimEntity>
-                    .Update.Set(claim => claim.ClaimType, newClaimType)
-                    .Set(claim => claim.ClaimValue, newClaimValue),
-                cancellationToken: token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                context.UserClaims.UpdateManyWithSessionAsync(
+                    session,
+                    claim =>
+                        claim.UserId == userId
+                        && claim.ClaimType == currentClaimType
+                        && claim.ClaimValue == currentClaimValue,
+                    Builders<UserClaimEntity>
+                        .Update.Set(claim => claim.ClaimType, newClaimType)
+                        .Set(claim => claim.ClaimValue, newClaimValue),
+                    token
+                )
         );
 
         return Task.CompletedTask;

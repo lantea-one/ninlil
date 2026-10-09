@@ -48,24 +48,33 @@ public abstract class MongoRepositoryBase<TEntity>(
     public virtual Task AddAsync(TEntity entity, CancellationToken stoppingToken = default)
     {
         // Staged, so it is written only when IUnitOfWork.SaveChangesAsync runs.
-        ChangeTracker.Stage(token => Collection.InsertOneAsync(entity, cancellationToken: token));
+        ChangeTracker.Stage(
+            (session, token) => Collection.InsertOneWithSessionAsync(session, entity, token)
+        );
 
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
     public virtual void Update(TEntity entity) =>
-        ChangeTracker.Stage(token =>
-            Collection.ReplaceOneAsync(
-                existing => existing.Id == entity.Id,
-                entity,
-                cancellationToken: token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                Collection.ReplaceOneWithSessionAsync(
+                    session,
+                    existing => existing.Id == entity.Id,
+                    entity,
+                    token
+                )
         );
 
     /// <inheritdoc />
     public virtual void Remove(TEntity entity) =>
-        ChangeTracker.Stage(token =>
-            Collection.DeleteOneAsync(existing => existing.Id == entity.Id, token)
+        ChangeTracker.Stage(
+            (session, token) =>
+                Collection.DeleteOneWithSessionAsync(
+                    session,
+                    existing => existing.Id == entity.Id,
+                    token
+                )
         );
 }

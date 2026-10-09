@@ -900,6 +900,17 @@ else
         Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
         return;
     }
+
+    // Multi-document transactions need a replica set; say so once when the server has none.
+    if (
+        !await app
+            .Services.GetRequiredService<MongoTransactionSupport>()
+            .DetectAsync(app.Lifetime.ApplicationStopping)
+    )
+        mongoGuardLogger.LogWarning(
+            "MongoDB is a standalone server, so a save that writes several documents is not atomic; "
+                + "run a replica set (a single-node one is enough) for all-or-nothing saves."
+        );
 }
 
 // TSIG key names are stored in lowercase; lowercase any row written with capitals (see

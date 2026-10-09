@@ -37,17 +37,19 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        ChangeTracker.Stage(token =>
-            context.RoleClaims.InsertOneAsync(
-                new RoleClaimEntity
-                {
-                    Id = Guid.NewGuid(),
-                    RoleId = roleId,
-                    ClaimType = claimType,
-                    ClaimValue = claimValue,
-                },
-                cancellationToken: token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                context.RoleClaims.InsertOneWithSessionAsync(
+                    session,
+                    new RoleClaimEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        RoleId = roleId,
+                        ClaimType = claimType,
+                        ClaimValue = claimValue,
+                    },
+                    token
+                )
         );
 
         return Task.CompletedTask;
@@ -62,14 +64,16 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     )
     {
         // The same claim can have been granted more than once, so remove every match.
-        ChangeTracker.Stage(token =>
-            context.RoleClaims.DeleteManyAsync(
-                claim =>
-                    claim.RoleId == roleId
-                    && claim.ClaimType == claimType
-                    && claim.ClaimValue == claimValue,
-                token
-            )
+        ChangeTracker.Stage(
+            (session, token) =>
+                context.RoleClaims.DeleteManyWithSessionAsync(
+                    session,
+                    claim =>
+                        claim.RoleId == roleId
+                        && claim.ClaimType == claimType
+                        && claim.ClaimValue == claimValue,
+                    token
+                )
         );
 
         return Task.CompletedTask;
