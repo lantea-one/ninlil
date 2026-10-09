@@ -44,6 +44,19 @@ public class IdentitySettingsController(
 ) : ControllerBase
 {
     /// <summary>
+    ///     This constant contains the largest accepted <c>requiredLength</c>. Generated passwords
+    ///     (<see cref="Services.PasswordGenerator" />) grow to the policy, so the cap keeps them
+    ///     a sensible size.
+    /// </summary>
+    public const int MaximumRequiredLength = 128;
+
+    /// <summary>
+    ///     This constant contains the largest accepted <c>requiredUniqueChars</c>. The password
+    ///     generator draws from a 68-character alphabet and must be able to fill the count.
+    /// </summary>
+    public const int MaximumRequiredUniqueChars = 64;
+
+    /// <summary>
     ///     This constant contains the configuration section path
     ///     <see cref="IdentityOptions.Password" /> binds from.
     /// </summary>
@@ -88,7 +101,7 @@ public class IdentitySettingsController(
     ///     <c>Identity:Lockout</c> as an RFC 7396 merge patch, through
     ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect on the next
     ///     request. Returns 400 for a field of the wrong JSON type, a length or attempt count below
-    ///     1, or a lockout duration that is negative or longer than 100 years. Requires <c>identitysettings:write</c>.
+    ///     1, a length above 128, a unique-character count above 64 or above the length, or a lockout duration that is negative or longer than 100 years. Requires <c>identitysettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("identitysettings:write")]
@@ -98,7 +111,14 @@ public class IdentitySettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchInt32("requiredLength", out int requiredLength, 1, int.MaxValue))
+        if (
+            patch.TryGetMergePatchInt32(
+                "requiredLength",
+                out int requiredLength,
+                1,
+                MaximumRequiredLength
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     PasswordSectionPath,
@@ -112,7 +132,7 @@ public class IdentitySettingsController(
                 "requiredUniqueChars",
                 out int requiredUniqueChars,
                 1,
-                int.MaxValue
+                MaximumRequiredUniqueChars
             )
         )
             settings.Add(
@@ -121,6 +141,20 @@ public class IdentitySettingsController(
                     nameof(PasswordOptions.RequiredUniqueChars),
                     requiredUniqueChars
                 )
+            );
+
+        // A unique-character count above the length makes every password impossible. Compare the
+        // patched value against the stored one when only one of the two is in the patch.
+        PasswordOptions currentPassword = identityOptions.CurrentValue.Password;
+        int effectiveLength = patch.TryGetMergePatchField("requiredLength", out _)
+            ? requiredLength
+            : currentPassword.RequiredLength;
+        int effectiveUnique = patch.TryGetMergePatchField("requiredUniqueChars", out _)
+            ? requiredUniqueChars
+            : currentPassword.RequiredUniqueChars;
+        if (effectiveUnique > effectiveLength)
+            throw new ValidationException(
+                $"'requiredUniqueChars' ({effectiveUnique}) must not exceed 'requiredLength' ({effectiveLength})."
             );
 
         if (patch.TryGetMergePatchBoolean("requireDigit", out bool requireDigit))

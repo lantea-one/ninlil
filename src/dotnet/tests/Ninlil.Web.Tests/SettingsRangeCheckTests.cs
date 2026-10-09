@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Ninlil.Web.Models;
 
 // Define our namespace.
@@ -379,6 +382,15 @@ public class SettingsRangeCheckTests(NinlilDnsWebApplicationFactory factory)
     [InlineData(Identity, "{\"defaultLockoutTimeSpan\":900}", "defaultLockoutTimeSpan")]
     [InlineData(Identity, "{\"maxFailedAccessAttempts\":0}", "maxFailedAccessAttempts")]
     [InlineData(Identity, "{\"requiredLength\":0}", "requiredLength")]
+    [InlineData(Identity, "{\"requiredLength\":129}", "requiredLength")]
+    [InlineData(Identity, "{\"requiredUniqueChars\":65}", "requiredUniqueChars")]
+    [InlineData(Identity, "{\"requiredUniqueChars\":0}", "requiredUniqueChars")]
+    [InlineData(
+        Identity,
+        "{\"requiredLength\":5,\"requiredUniqueChars\":6}",
+        "requiredUniqueChars"
+    )]
+    [InlineData(Identity, "{\"requiredUniqueChars\":64}", "requiredLength")]
     [InlineData(Identity, "{\"requireDigit\":\"yes\"}", "requireDigit")]
     [InlineData(Identity, "{\"allowedForNewUsers\":1}", "allowedForNewUsers")]
     public async Task Patch_OnIdentitySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
@@ -391,8 +403,37 @@ public class SettingsRangeCheckTests(NinlilDnsWebApplicationFactory factory)
     [InlineData(Identity, "{\"defaultLockoutTimeSpan\":\"00:00:00\"}")]
     [InlineData(Identity, "{\"defaultLockoutTimeSpan\":\"36500.00:00:00\"}")]
     [InlineData(Identity, "{\"maxFailedAccessAttempts\":1}")]
+    [InlineData(Identity, "{\"requiredLength\":128}")]
+    [InlineData(Identity, "{\"requiredLength\":128,\"requiredUniqueChars\":64}")]
+    [InlineData(Identity, "{\"requiredLength\":1,\"requiredUniqueChars\":1}")]
     public async Task Patch_OnIdentitySettingsAtABoundary_IsAccepted(string url, string body) =>
         await AssertAcceptedAsync(url, body);
+
+    [Fact]
+    public async Task Patch_OnIdentitySettingsWithALengthBelowTheLiveUniqueChars_ReturnsBadRequestAndWritesNothing()
+    {
+        // The runtime settings file is not a configuration source of the test host, so the live
+        // policy is set on the cached options instance (see LiveClusterOptionsScope) and put back
+        // afterwards. The tests in the collection run one at a time.
+        PasswordOptions live = factory
+            .Services.GetRequiredService<IOptionsMonitor<IdentityOptions>>()
+            .CurrentValue.Password;
+        int previousLength = live.RequiredLength;
+        int previousUnique = live.RequiredUniqueChars;
+
+        try
+        {
+            live.RequiredLength = 24;
+            live.RequiredUniqueChars = 20;
+
+            await AssertRejectedAsync(Identity, "{\"requiredLength\":10}", "requiredLength");
+        }
+        finally
+        {
+            live.RequiredLength = previousLength;
+            live.RequiredUniqueChars = previousUnique;
+        }
+    }
 
     [Theory]
     [InlineData(Recursive, "{\"upstreamQueryTimeout\":\"00:00:00\"}", "upstreamQueryTimeout")]
