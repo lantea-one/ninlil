@@ -85,6 +85,7 @@
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.Webhooks.Tests\Ninlil.Dns.Server.Webhooks.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.Rewrites.Tests\Ninlil.Dns.Server.Rewrites.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.QueryLog.Tests\Ninlil.Dns.Server.QueryLog.Tests.csproj" />
+    <Project Path="src\dotnet\tests\Ninlil.Dns.Data.Integration.Tests\Ninlil.Dns.Data.Integration.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.Backup.Tests\Ninlil.Dns.Server.Backup.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.SelfUpdate.Tests\Ninlil.Dns.Server.SelfUpdate.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.Cluster.Tests\Ninlil.Dns.Server.Cluster.Tests.csproj" />
