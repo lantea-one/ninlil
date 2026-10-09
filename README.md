@@ -45,9 +45,11 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   set only for an answer this server validated (never copied from the upstream) and only for a
   client that set DO or AD, a client without DO gets no RRSIG, NSEC or NSEC3 records, and no
   upstream EDNS option reaches a client. A bogus forwarded answer makes the forwarder count as
-  failed unless the client set CD. The DS and DNSKEY records for the chain of trust are still
-  looked up by iteration from the root hints, so a network that blocks outbound DNS to the
-  internet needs `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION=false` to forward.
+  failed unless the client set CD. The DS and DNSKEY records for the chain of trust are asked of the
+  same forwarders, in the same order and with the same per-forwarder timeout, and cached, so a
+  network that only reaches its forwarders still validates without iterating to the internet. A
+  failed DS or DNSKEY lookup under a trust anchor makes the answer bogus. A cached forwarded answer
+  never outlives its shortest RRSIG Original TTL or its earliest RRSIG expiration.
 - **Every major DNS transport**: plain UDP/TCP (on by default — this is a DNS server, after all),
   DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, and DNSCrypt v2. Every transport beyond plain DNS is
   off by default; see [Enabling additional transports](#enabling-additional-transports). Each one,
