@@ -26,6 +26,7 @@ For installation, operation and the release pipeline, see [`README.md`](./README
 | `src/angular/openapi/swagger.json` | Committed OpenAPI snapshot the API client is generated from |
 | `src/angular/src/app/api-client/` | Generated TypeScript client. Never edit by hand |
 | `src/archlinux/` | Arch Linux packages ([README](./src/archlinux/README.md)) |
+| `src/linux-packages/` | Deb and RPM package definition for nFPM and its install scripts (README: [Debian, Ubuntu, Fedora, RHEL and Rocky Linux](./README.md#debian-ubuntu-fedora-rhel-and-rocky-linux)) |
 | `src/script/` | Operational scripts: per-engine database helpers, a systemd unit and installer |
 | `src/terraform/` | Terraform modules for packaging and publishing |
 | `Dockerfile`, `docker/`, `docker-compose.yml` | Container image, CI toolchain images, example deployment |
