@@ -19,6 +19,11 @@
       runs perfectly well on the net10.0 runtime; only the package's own build target lags
       behind. This pin should be revisited once Pomelo ships an EF Core 10 build.
     -->
+  <!-- LikePatternEscaper is internal; its unit test lives in the query-log test project. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.QueryLog.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.19" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.19" />

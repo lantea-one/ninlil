@@ -95,18 +95,29 @@ public class DnsQueryLogRepository(NinlilDnsContext context)
 
         if (!string.IsNullOrWhiteSpace(criteria.DomainContains))
         {
-            string pattern = $"%{criteria.DomainContains}%";
+            string pattern = LikePatternEscaper.Contains(criteria.DomainContains);
 
             // LIKE is case-insensitive by default on SQLite, MySQL and SQL Server but
             // case-sensitive on PostgreSQL. ILike (ILIKE) makes PostgreSQL match the others and
             // the case-insensitive MongoDB search. It only translates on Npgsql, so it is used
-            // only there.
+            // only there. The term is matched literally: the pattern is escaped and the escape
+            // character is passed to both functions.
             query = Context.Database.IsNpgsql()
                 ? query.Where(entry =>
-                    entry.QueriedName != null && EF.Functions.ILike(entry.QueriedName, pattern)
+                    entry.QueriedName != null
+                    && EF.Functions.ILike(
+                        entry.QueriedName,
+                        pattern,
+                        LikePatternEscaper.EscapeCharacter
+                    )
                 )
                 : query.Where(entry =>
-                    entry.QueriedName != null && EF.Functions.Like(entry.QueriedName, pattern)
+                    entry.QueriedName != null
+                    && EF.Functions.Like(
+                        entry.QueriedName,
+                        pattern,
+                        LikePatternEscaper.EscapeCharacter
+                    )
                 );
         }
 

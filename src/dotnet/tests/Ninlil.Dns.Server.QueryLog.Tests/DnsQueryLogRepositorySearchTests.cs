@@ -133,6 +133,62 @@ public sealed class DnsQueryLogRepositorySearchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SearchAsync_DomainTermWithWildcardCharacters_MatchesThemLiterally()
+    {
+        await using AsyncServiceScope scope = _testHost.Host.Services.CreateAsyncScope();
+        IDnsQueryLogRepository repository =
+            scope.ServiceProvider.GetRequiredService<IDnsQueryLogRepository>();
+        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        DateTimeOffset baseTime = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        string[] names =
+        [
+            "_dmarc.example.com",
+            "xdmarc.example.com",
+            "100%.example",
+            "a[b].example",
+            "b.example",
+        ];
+
+        for (int index = 0; index < names.Length; index++)
+            await repository.AddAsync(
+                NewEntry(
+                    baseTime.AddMinutes(index),
+                    "203.0.113.10",
+                    names[index],
+                    DnsResourceRecordTypeEnum.A,
+                    DnsResponseCodeEnum.NoError
+                )
+            );
+
+        await unitOfWork.SaveChangesAsync();
+
+        // Each term would also match another seeded name if it were treated as a wildcard.
+        // "_DMARC" also shows the match still ignores case.
+        foreach (
+            (string term, string expected) in new[]
+            {
+                ("_dmarc", "_dmarc.example.com"),
+                ("_DMARC", "_dmarc.example.com"),
+                ("%", "100%.example"),
+                ("[b]", "a[b].example"),
+            }
+        )
+        {
+            DnsQueryLogSearchCriteria criteria = new(DomainContains: term);
+
+            IReadOnlyList<DnsQueryLogEntryEntity> results = await repository.SearchAsync(
+                criteria,
+                skip: 0,
+                take: 50
+            );
+
+            Assert.Equal([expected], results.Select(entry => entry.QueriedName).ToList());
+            Assert.Equal(1, await repository.CountAsync(criteria));
+        }
+    }
+
+    [Fact]
     public async Task SearchAsync_FilteredByDomainSubstring_MatchesCaseInsensitively()
     {
         await SeedAsync();
