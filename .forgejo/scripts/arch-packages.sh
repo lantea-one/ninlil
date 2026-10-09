@@ -21,6 +21,7 @@
 # <binaries-directory>. Exits non-zero when a placeholder is left unfilled or makepkg fails.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 : "${RELEASE_TAG:?RELEASE_TAG is required}"
 binaries="$1"
@@ -44,16 +45,25 @@ cp "${repository_root}/LICENSE" "${package}/"
 # The tag goes into a download URL path, where "+" must be percent-encoded.
 tag_path="${RELEASE_TAG//+/%2B}"
 
+# Each sum is computed on its own line: a failing sha256sum inside a sed argument would not stop
+# the script and would leave an empty sum behind.
+sha_service="$(sha "${package}/ninlil.service")"
+sha_sysusers="$(sha "${package}/ninlil.sysusers")"
+sha_env="$(sha "${package}/ninlil.env")"
+sha_license="$(sha "${package}/LICENSE")"
+sha_x86_64="$(sha "${binaries}/ninlil-linux-amd64")"
+sha_aarch64="$(sha "${binaries}/ninlil-linux-arm64")"
+
 sed \
     -e "s|@VERSION@|${RELEASE_TAG}|g" \
     -e "s|@PKGVER@|${pkgver}|g" \
     -e "s|@TAG_PATH@|${tag_path}|g" \
-    -e "s|@SHA256_SERVICE@|$(sha "${package}/ninlil.service")|g" \
-    -e "s|@SHA256_SYSUSERS@|$(sha "${package}/ninlil.sysusers")|g" \
-    -e "s|@SHA256_ENV@|$(sha "${package}/ninlil.env")|g" \
-    -e "s|@SHA256_LICENSE@|$(sha "${package}/LICENSE")|g" \
-    -e "s|@SHA256_X86_64@|$(sha "${binaries}/ninlil-linux-amd64")|g" \
-    -e "s|@SHA256_AARCH64@|$(sha "${binaries}/ninlil-linux-arm64")|g" \
+    -e "s|@SHA256_SERVICE@|${sha_service}|g" \
+    -e "s|@SHA256_SYSUSERS@|${sha_sysusers}|g" \
+    -e "s|@SHA256_ENV@|${sha_env}|g" \
+    -e "s|@SHA256_LICENSE@|${sha_license}|g" \
+    -e "s|@SHA256_X86_64@|${sha_x86_64}|g" \
+    -e "s|@SHA256_AARCH64@|${sha_aarch64}|g" \
     "${template}" > "${package}/PKGBUILD"
 
 if grep -n '@[A-Z0-9_]*@' "${package}/PKGBUILD"; then
