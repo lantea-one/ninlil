@@ -87,8 +87,8 @@ public class IdentitySettingsController(
     ///     This action merges a partial update into <c>Identity:Password</c> and
     ///     <c>Identity:Lockout</c> as an RFC 7396 merge patch, through
     ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect on the next
-    ///     request. Returns 400 when a length or attempt count is below 1 or the lockout duration
-    ///     is not a valid TimeSpan. Requires <c>identitysettings:write</c>.
+    ///     request. Returns 400 for a field of the wrong JSON type, a length or attempt count below
+    ///     1, or a lockout duration that is negative or longer than 100 years. Requires <c>identitysettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("identitysettings:write")]
@@ -98,127 +98,109 @@ public class IdentitySettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("requiredLength", out JsonElement requiredLength))
-        {
-            int value = requiredLength.GetInt32();
-
-            if (value < 1)
-                throw new ValidationException("'requiredLength' must be at least 1.");
-
+        if (patch.TryGetMergePatchInt32("requiredLength", out int requiredLength, 1, int.MaxValue))
             settings.Add(
                 new PresetConfigurationSetting(
                     PasswordSectionPath,
                     nameof(PasswordOptions.RequiredLength),
-                    value
-                )
-            );
-        }
-
-        if (patch.TryGetMergePatchField("requiredUniqueChars", out JsonElement requiredUniqueChars))
-        {
-            int value = requiredUniqueChars.GetInt32();
-
-            if (value < 1)
-                throw new ValidationException("'requiredUniqueChars' must be at least 1.");
-
-            settings.Add(
-                new PresetConfigurationSetting(
-                    PasswordSectionPath,
-                    nameof(PasswordOptions.RequiredUniqueChars),
-                    value
-                )
-            );
-        }
-
-        if (patch.TryGetMergePatchField("requireDigit", out JsonElement requireDigit))
-            settings.Add(
-                new PresetConfigurationSetting(
-                    PasswordSectionPath,
-                    nameof(PasswordOptions.RequireDigit),
-                    requireDigit.GetBoolean()
-                )
-            );
-
-        if (patch.TryGetMergePatchField("requireLowercase", out JsonElement requireLowercase))
-            settings.Add(
-                new PresetConfigurationSetting(
-                    PasswordSectionPath,
-                    nameof(PasswordOptions.RequireLowercase),
-                    requireLowercase.GetBoolean()
-                )
-            );
-
-        if (patch.TryGetMergePatchField("requireUppercase", out JsonElement requireUppercase))
-            settings.Add(
-                new PresetConfigurationSetting(
-                    PasswordSectionPath,
-                    nameof(PasswordOptions.RequireUppercase),
-                    requireUppercase.GetBoolean()
+                    requiredLength
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
-                "requireNonAlphanumeric",
-                out JsonElement requireNonAlphanumeric
+            patch.TryGetMergePatchInt32(
+                "requiredUniqueChars",
+                out int requiredUniqueChars,
+                1,
+                int.MaxValue
             )
+        )
+            settings.Add(
+                new PresetConfigurationSetting(
+                    PasswordSectionPath,
+                    nameof(PasswordOptions.RequiredUniqueChars),
+                    requiredUniqueChars
+                )
+            );
+
+        if (patch.TryGetMergePatchBoolean("requireDigit", out bool requireDigit))
+            settings.Add(
+                new PresetConfigurationSetting(
+                    PasswordSectionPath,
+                    nameof(PasswordOptions.RequireDigit),
+                    requireDigit
+                )
+            );
+
+        if (patch.TryGetMergePatchBoolean("requireLowercase", out bool requireLowercase))
+            settings.Add(
+                new PresetConfigurationSetting(
+                    PasswordSectionPath,
+                    nameof(PasswordOptions.RequireLowercase),
+                    requireLowercase
+                )
+            );
+
+        if (patch.TryGetMergePatchBoolean("requireUppercase", out bool requireUppercase))
+            settings.Add(
+                new PresetConfigurationSetting(
+                    PasswordSectionPath,
+                    nameof(PasswordOptions.RequireUppercase),
+                    requireUppercase
+                )
+            );
+
+        if (
+            patch.TryGetMergePatchBoolean("requireNonAlphanumeric", out bool requireNonAlphanumeric)
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     PasswordSectionPath,
                     nameof(PasswordOptions.RequireNonAlphanumeric),
-                    requireNonAlphanumeric.GetBoolean()
+                    requireNonAlphanumeric
                 )
             );
 
+        // Identity accepts a zero lockout duration. The upper bound keeps "now plus lockout"
+        // inside the range of DateTimeOffset.
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "defaultLockoutTimeSpan",
-                out JsonElement defaultLockoutTimeSpan
+                out TimeSpan defaultLockoutTimeSpan,
+                TimeSpan.Zero,
+                TimeSpan.FromDays(36500)
             )
         )
-        {
-            if (!TimeSpan.TryParse(defaultLockoutTimeSpan.GetString(), out TimeSpan parsed))
-                throw new ValidationException(
-                    "'defaultLockoutTimeSpan' must be a valid TimeSpan (for example \"00:15:00\")."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     LockoutSectionPath,
                     nameof(LockoutOptions.DefaultLockoutTimeSpan),
-                    parsed.ToString()
+                    defaultLockoutTimeSpan.ToString()
                 )
             );
-        }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxFailedAccessAttempts",
-                out JsonElement maxFailedAccessAttempts
+                out int maxFailedAccessAttempts,
+                1,
+                int.MaxValue
             )
         )
-        {
-            int value = maxFailedAccessAttempts.GetInt32();
-
-            if (value < 1)
-                throw new ValidationException("'maxFailedAccessAttempts' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     LockoutSectionPath,
                     nameof(LockoutOptions.MaxFailedAccessAttempts),
-                    value
+                    maxFailedAccessAttempts
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("allowedForNewUsers", out JsonElement allowedForNewUsers))
+        if (patch.TryGetMergePatchBoolean("allowedForNewUsers", out bool allowedForNewUsers))
             settings.Add(
                 new PresetConfigurationSetting(
                     LockoutSectionPath,
                     nameof(LockoutOptions.AllowedForNewUsers),
-                    allowedForNewUsers.GetBoolean()
+                    allowedForNewUsers
                 )
             );
 

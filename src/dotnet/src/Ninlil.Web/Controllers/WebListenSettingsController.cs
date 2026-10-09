@@ -68,8 +68,9 @@ public class WebListenSettingsController(
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Web</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change is written to
-    ///     the file and applied only after a full restart. Returns 400 for a port outside 1-65535,
-    ///     an invalid listen address, a malformed duration or an unknown TLS protocol name.
+    ///     the file and applied only after a full restart. Returns 400 for a field of the wrong JSON
+    ///     type, a port outside 1-65535, an invalid listen address, a certificate poll interval
+    ///     that is not positive or exceeds the timer limit, or an unknown TLS protocol name.
     ///     Requires <c>weblistensettings:write</c>.
     /// </summary>
     [HttpPatch]
@@ -80,13 +81,7 @@ public class WebListenSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("httpPort", out JsonElement httpPortElement))
-        {
-            int httpPort = httpPortElement.GetInt32();
-
-            if (httpPort is < 1 or > 65535)
-                throw new ValidationException("'httpPort' must be between 1 and 65535.");
-
+        if (patch.TryGetMergePatchInt32("httpPort", out int httpPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     WebListenOptions.SectionName,
@@ -94,15 +89,8 @@ public class WebListenSettingsController(
                     httpPort
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("httpsPort", out JsonElement httpsPortElement))
-        {
-            int httpsPort = httpsPortElement.GetInt32();
-
-            if (httpsPort is < 1 or > 65535)
-                throw new ValidationException("'httpsPort' must be between 1 and 65535.");
-
+        if (patch.TryGetMergePatchInt32("httpsPort", out int httpsPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     WebListenOptions.SectionName,
@@ -110,7 +98,6 @@ public class WebListenSettingsController(
                     httpsPort
                 )
             );
-        }
 
         if (patch.TryGetMergePatchField("listenAddresses", out JsonElement listenAddresses))
             settings.Add(
@@ -204,65 +191,67 @@ public class WebListenSettingsController(
     {
         const string certificateSectionPath = $"{WebListenOptions.SectionName}:Certificate";
 
-        if (certificateElement.TryGetMergePatchField("pfxPath", out JsonElement pfxPath))
+        if (certificateElement.ValueKind != JsonValueKind.Object)
+            throw new ValidationException("'certificate' must be a JSON object.");
+
+        if (
+            certificateElement.TryGetMergePatchString(
+                "pfxPath",
+                out string pfxPath,
+                true,
+                "certificate.pfxPath"
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     certificateSectionPath,
                     nameof(TlsCertificateOptions.PfxPath),
-                    pfxPath.GetString() ?? string.Empty
+                    pfxPath ?? string.Empty
                 )
             );
 
-        if (certificateElement.TryGetMergePatchField("pfxPassword", out JsonElement pfxPassword))
+        if (
+            certificateElement.TryGetMergePatchString(
+                "pfxPassword",
+                out string pfxPassword,
+                true,
+                "certificate.pfxPassword"
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     certificateSectionPath,
                     nameof(TlsCertificateOptions.PfxPassword),
-                    pfxPassword.GetString() ?? string.Empty
+                    pfxPassword ?? string.Empty
                 )
             );
 
         if (
-            certificateElement.TryGetMergePatchField(
+            certificateElement.TryGetMergePatchStringList(
                 "selfSignedSubjectAlternativeNames",
-                out JsonElement subjectAlternativeNamesElement
+                out List<string> subjectAlternativeNames,
+                false,
+                "certificate.selfSignedSubjectAlternativeNames"
             )
         )
-        {
-            if (subjectAlternativeNamesElement.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    "'certificate.selfSignedSubjectAlternativeNames' must be a JSON array."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     certificateSectionPath,
                     nameof(TlsCertificateOptions.SelfSignedSubjectAlternativeNames),
-                    subjectAlternativeNamesElement
-                        .EnumerateArray()
-                        .Select(item => item.GetString())
-                        .ToList()
+                    subjectAlternativeNames
                 )
             );
-        }
 
+        // The certificate watcher passes this to Task.Delay (or a timer).
         if (
-            certificateElement.TryGetMergePatchField(
+            certificateElement.TryGetMergePatchDuration(
                 "certificateReloadPollInterval",
-                out JsonElement certificateReloadPollIntervalElement
+                out TimeSpan certificateReloadPollInterval,
+                TimeSpan.FromTicks(1),
+                JsonElementMergePatchExtension.TimerMaximum,
+                "certificate.certificateReloadPollInterval"
             )
         )
-        {
-            if (
-                !TimeSpan.TryParse(
-                    certificateReloadPollIntervalElement.GetString(),
-                    out TimeSpan certificateReloadPollInterval
-                )
-            )
-                throw new ValidationException(
-                    "'certificate.certificateReloadPollInterval' must be a valid TimeSpan (for example \"00:05:00\")."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     certificateSectionPath,
@@ -270,7 +259,6 @@ public class WebListenSettingsController(
                     certificateReloadPollInterval.ToString()
                 )
             );
-        }
 
         if (
             certificateElement.TryGetMergePatchField(
@@ -307,7 +295,7 @@ public class WebListenSettingsController(
 
         foreach (JsonElement item in element.EnumerateArray())
         {
-            string name = item.GetString();
+            string name = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
 
             if (
                 !Enum.TryParse(name, ignoreCase: true, out SslProtocols parsed)

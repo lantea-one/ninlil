@@ -104,6 +104,15 @@ public class TransportSettingsController(
 ) : ControllerBase
 {
     /// <summary>
+    ///     The shortest accepted idle timeout for any transport. A zero or negative timeout would
+    ///     drop every connection at once, or throw when the listener arms its timer.
+    /// </summary>
+    private static readonly TimeSpan IdleTimeoutMinimum = TimeSpan.FromSeconds(1);
+
+    /// <summary>The longest accepted idle timeout for any transport (one day).</summary>
+    private static readonly TimeSpan IdleTimeoutMaximum = TimeSpan.FromDays(1);
+
+    /// <summary>
     ///     This action returns the plain DNS settings. Requires <c>transportsettings:read</c>.
     /// </summary>
     [HttpGet("plain")]
@@ -114,8 +123,10 @@ public class TransportSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Protocol:Plain</c> as an RFC 7396
-    ///     merge patch. Every field needs a listener or process restart. Returns 400 for an invalid
-    ///     listen address or duration. Requires <c>transportsettings:write</c>.
+    ///     merge patch. Every field needs a listener or process restart. Returns 400 for
+    ///     a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit
+    ///     below 1, an idle timeout outside 1 second to 1 day, or an invalid listen address. Requires
+    ///     <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("plain")]
     [RequirePermission("transportsettings:write")]
@@ -127,12 +138,12 @@ public class TransportSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("port", out JsonElement port))
+        if (patch.TryGetMergePatchInt32("port", out int port, 0, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     PlainProtocolOptions.SectionName,
                     nameof(PlainProtocolOptions.Port),
-                    port.GetInt32()
+                    port
                 )
             );
 
@@ -146,11 +157,11 @@ public class TransportSettingsController(
         );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "tcpIdleTimeout",
                 out TimeSpan tcpIdleTimeout,
-                out bool tcpIdleTimeoutPresent
+                IdleTimeoutMinimum,
+                IdleTimeoutMaximum
             )
         )
             settings.Add(
@@ -160,22 +171,20 @@ public class TransportSettingsController(
                     tcpIdleTimeout.ToString()
                 )
             );
-        else if (tcpIdleTimeoutPresent)
-            throw new ValidationException(
-                "'tcpIdleTimeout' must be a valid TimeSpan (for example \"00:00:30\")."
-            );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxConcurrentTcpConnections",
-                out JsonElement maxConcurrentTcpConnections
+                out int maxConcurrentTcpConnections,
+                1,
+                int.MaxValue
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     PlainProtocolOptions.SectionName,
                     nameof(PlainProtocolOptions.MaxConcurrentTcpConnections),
-                    maxConcurrentTcpConnections.GetInt32()
+                    maxConcurrentTcpConnections
                 )
             );
 
@@ -204,8 +213,10 @@ public class TransportSettingsController(
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverTls</c> as an
     ///     RFC 7396 merge patch. <c>enable</c> starts or stops the listener at once; every other
-    ///     field needs a listener restart. The response note says which applies. Returns 400 for an
-    ///     invalid listen address, duration or TLS protocol name. Requires
+    ///     field needs a listener restart. The response note says which applies. Returns 400 for
+    ///     a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit
+    ///     below 1, an idle timeout outside 1 second to 1 day, a certificate poll interval that is not positive or exceeds the
+    ///     timer limit, or an invalid listen address or TLS protocol name. Requires
     ///     <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dns-over-tls")]
@@ -222,9 +233,8 @@ public class TransportSettingsController(
         bool enableValue = false;
         bool touchedRestartRequiringField = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out enableValue))
         {
-            enableValue = enable.GetBoolean();
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsOverTlsOptions.SectionName,
@@ -235,13 +245,13 @@ public class TransportSettingsController(
             touchedEnable = true;
         }
 
-        if (patch.TryGetMergePatchField("port", out JsonElement port))
+        if (patch.TryGetMergePatchInt32("port", out int port, 0, 65535))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsOverTlsOptions.SectionName,
                     nameof(DnsOverTlsOptions.Port),
-                    port.GetInt32()
+                    port
                 )
             );
             touchedRestartRequiringField = true;
@@ -255,11 +265,11 @@ public class TransportSettingsController(
         );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "idleTimeout",
                 out TimeSpan idleTimeout,
-                out bool idleTimeoutPresent
+                IdleTimeoutMinimum,
+                IdleTimeoutMaximum
             )
         )
         {
@@ -272,15 +282,13 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (idleTimeoutPresent)
-            throw new ValidationException(
-                "'idleTimeout' must be a valid TimeSpan (for example \"00:00:30\")."
-            );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxConcurrentConnections",
-                out JsonElement maxConcurrentConnections
+                out int maxConcurrentConnections,
+                1,
+                int.MaxValue
             )
         )
         {
@@ -288,7 +296,7 @@ public class TransportSettingsController(
                 new PresetConfigurationSetting(
                     DnsOverTlsOptions.SectionName,
                     nameof(DnsOverTlsOptions.MaxConcurrentConnections),
-                    maxConcurrentConnections.GetInt32()
+                    maxConcurrentConnections
                 )
             );
             touchedRestartRequiringField = true;
@@ -338,8 +346,9 @@ public class TransportSettingsController(
     ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverHttps</c> as an
     ///     RFC 7396 merge patch. <c>enable</c> takes effect at once; <c>path</c> and
     ///     <c>maxMessageSizeBytes</c> need a full process restart (see
-    ///     <see cref="DnsOverHttpsSettingsDetail" /> for why). Returns 400 for a path that does not
-    ///     start with <c>/</c>. Requires <c>transportsettings:write</c>.
+    ///     <see cref="DnsOverHttpsSettingsDetail" /> for why). Returns 400 for a field of the
+    ///     wrong JSON type, a path that does not start with <c>/</c>, or a
+    ///     <c>maxMessageSizeBytes</c> outside 1-65535. Requires <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dns-over-https")]
     [RequirePermission("transportsettings:write")]
@@ -355,9 +364,8 @@ public class TransportSettingsController(
         bool enableValue = false;
         bool touchedRestartRequiringField = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out enableValue))
         {
-            enableValue = enable.GetBoolean();
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsOverHttpsOptions.SectionName,
@@ -368,10 +376,8 @@ public class TransportSettingsController(
             touchedEnable = true;
         }
 
-        if (patch.TryGetMergePatchField("path", out JsonElement path))
+        if (patch.TryGetMergePatchString("path", out string pathText, false))
         {
-            string pathText = path.GetString();
-
             if (string.IsNullOrWhiteSpace(pathText) || !pathText.StartsWith('/'))
                 throw new ValidationException("'path' must be a non-empty path starting with '/'.");
 
@@ -385,13 +391,20 @@ public class TransportSettingsController(
             touchedRestartRequiringField = true;
         }
 
-        if (patch.TryGetMergePatchField("maxMessageSizeBytes", out JsonElement maxMessageSizeBytes))
+        if (
+            patch.TryGetMergePatchInt32(
+                "maxMessageSizeBytes",
+                out int maxMessageSizeBytes,
+                1,
+                65535
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsOverHttpsOptions.SectionName,
                     nameof(DnsOverHttpsOptions.MaxMessageSizeBytes),
-                    maxMessageSizeBytes.GetInt32()
+                    maxMessageSizeBytes
                 )
             );
             touchedRestartRequiringField = true;
@@ -432,8 +445,11 @@ public class TransportSettingsController(
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverQuic</c> as an
     ///     RFC 7396 merge patch. <c>enable</c> starts or stops the listener at once; every other
-    ///     field needs a listener restart. Returns 400 for an invalid listen address, duration or
-    ///     TLS protocol name. Requires <c>transportsettings:write</c>.
+    ///     field needs a listener restart. Returns 400 for
+    ///     a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit
+    ///     below 1, an idle timeout outside 1 second to 1 day, a certificate poll interval that is not positive or exceeds the
+    ///     timer limit, or an invalid listen address or TLS protocol name. Requires
+    ///     <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dns-over-quic")]
     [RequirePermission("transportsettings:write")]
@@ -449,9 +465,8 @@ public class TransportSettingsController(
         bool enableValue = false;
         bool touchedRestartRequiringField = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out enableValue))
         {
-            enableValue = enable.GetBoolean();
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsOverQuicOptions.SectionName,
@@ -462,13 +477,13 @@ public class TransportSettingsController(
             touchedEnable = true;
         }
 
-        if (patch.TryGetMergePatchField("port", out JsonElement port))
+        if (patch.TryGetMergePatchInt32("port", out int port, 0, 65535))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsOverQuicOptions.SectionName,
                     nameof(DnsOverQuicOptions.Port),
-                    port.GetInt32()
+                    port
                 )
             );
             touchedRestartRequiringField = true;
@@ -482,11 +497,11 @@ public class TransportSettingsController(
         );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "idleTimeout",
                 out TimeSpan idleTimeout,
-                out bool idleTimeoutPresent
+                IdleTimeoutMinimum,
+                IdleTimeoutMaximum
             )
         )
         {
@@ -499,15 +514,13 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (idleTimeoutPresent)
-            throw new ValidationException(
-                "'idleTimeout' must be a valid TimeSpan (for example \"00:00:30\")."
-            );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxConcurrentBidirectionalStreams",
-                out JsonElement maxConcurrentBidirectionalStreams
+                out int maxConcurrentBidirectionalStreams,
+                1,
+                int.MaxValue
             )
         )
         {
@@ -515,24 +528,21 @@ public class TransportSettingsController(
                 new PresetConfigurationSetting(
                     DnsOverQuicOptions.SectionName,
                     nameof(DnsOverQuicOptions.MaxConcurrentBidirectionalStreams),
-                    maxConcurrentBidirectionalStreams.GetInt32()
+                    maxConcurrentBidirectionalStreams
                 )
             );
             touchedRestartRequiringField = true;
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxConcurrentConnections",
-                out JsonElement maxConcurrentConnectionsElement
+                out int maxConcurrentConnections,
+                1,
+                int.MaxValue
             )
         )
         {
-            int maxConcurrentConnections = maxConcurrentConnectionsElement.GetInt32();
-
-            if (maxConcurrentConnections < 1)
-                throw new ValidationException("'maxConcurrentConnections' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsOverQuicOptions.SectionName,
@@ -587,8 +597,12 @@ public class TransportSettingsController(
     ///     This action merges a partial update into <c>DnsServer:Protocol:DnsCrypt</c> as an
     ///     RFC 7396 merge patch. <c>enable</c> starts or stops the UDP and TCP listeners and the
     ///     certificate rotation loop at once; every other field needs a restart of those services.
-    ///     Returns 400 for an invalid listen address, duration or cipher name, or an empty cipher
-    ///     list. Requires <c>transportsettings:write</c>.
+    ///     Returns 400 for
+    ///     a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit
+    ///     below 1, an idle timeout outside 1 second to 1 day, a certificate rotation interval, validity duration or clock-skew tolerance
+    ///     beyond the timer limit (rotation and validity must also be positive, validity longer
+    ///     than rotation), an invalid listen address or cipher name, or an empty cipher list.
+    ///     Requires <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dnscrypt")]
     [RequirePermission("transportsettings:write")]
@@ -604,9 +618,8 @@ public class TransportSettingsController(
         bool enableValue = false;
         bool touchedRestartRequiringField = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out enableValue))
         {
-            enableValue = enable.GetBoolean();
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsCryptOptions.SectionName,
@@ -617,13 +630,13 @@ public class TransportSettingsController(
             touchedEnable = true;
         }
 
-        if (patch.TryGetMergePatchField("port", out JsonElement port))
+        if (patch.TryGetMergePatchInt32("port", out int port, 0, 65535))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsCryptOptions.SectionName,
                     nameof(DnsCryptOptions.Port),
-                    port.GetInt32()
+                    port
                 )
             );
             touchedRestartRequiringField = true;
@@ -636,24 +649,24 @@ public class TransportSettingsController(
             ref touchedRestartRequiringField
         );
 
-        if (patch.TryGetMergePatchField("providerName", out JsonElement providerName))
+        if (patch.TryGetMergePatchString("providerName", out string providerName, true))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsCryptOptions.SectionName,
                     nameof(DnsCryptOptions.ProviderName),
-                    providerName.GetString() ?? string.Empty
+                    providerName ?? string.Empty
                 )
             );
             touchedRestartRequiringField = true;
         }
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "tcpIdleTimeout",
                 out TimeSpan tcpIdleTimeout,
-                out bool tcpIdleTimeoutPresent
+                IdleTimeoutMinimum,
+                IdleTimeoutMaximum
             )
         )
         {
@@ -666,15 +679,13 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (tcpIdleTimeoutPresent)
-            throw new ValidationException(
-                "'tcpIdleTimeout' must be a valid TimeSpan (for example \"00:00:30\")."
-            );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxConcurrentTcpConnections",
-                out JsonElement maxConcurrentTcpConnections
+                out int maxConcurrentTcpConnections,
+                1,
+                int.MaxValue
             )
         )
         {
@@ -682,7 +693,7 @@ public class TransportSettingsController(
                 new PresetConfigurationSetting(
                     DnsCryptOptions.SectionName,
                     nameof(DnsCryptOptions.MaxConcurrentTcpConnections),
-                    maxConcurrentTcpConnections.GetInt32()
+                    maxConcurrentTcpConnections
                 )
             );
             touchedRestartRequiringField = true;
@@ -700,14 +711,45 @@ public class TransportSettingsController(
             touchedRestartRequiringField = true;
         }
 
-        if (
-            TryGetDuration(
-                patch,
-                "certificateRotationInterval",
-                out TimeSpan certificateRotationInterval,
-                out bool certificateRotationIntervalPresent
+        // A certificate must stay valid longer than the interval at which a new one is issued, or
+        // clients would hold an expired certificate between rotations. Both reach timers or
+        // certificate dates, so both are positive and no longer than a timer accepts. An absent
+        // field is compared as its current value.
+        bool hasRotationInterval = patch.TryGetMergePatchDuration(
+            "certificateRotationInterval",
+            out TimeSpan certificateRotationInterval,
+            TimeSpan.FromTicks(1),
+            JsonElementMergePatchExtension.TimerMaximum
+        );
+        bool hasValidityDuration = patch.TryGetMergePatchDuration(
+            "certificateValidityDuration",
+            out TimeSpan certificateValidityDuration,
+            TimeSpan.FromTicks(1),
+            JsonElementMergePatchExtension.TimerMaximum
+        );
+
+        if (hasRotationInterval || hasValidityDuration)
+        {
+            DnsCryptOptions current = dnsCryptOptions.CurrentValue;
+
+            if (
+                (
+                    hasValidityDuration
+                        ? certificateValidityDuration
+                        : current.CertificateValidityDuration
+                )
+                <= (
+                    hasRotationInterval
+                        ? certificateRotationInterval
+                        : current.CertificateRotationInterval
+                )
             )
-        )
+                throw new ValidationException(
+                    "'certificateValidityDuration' must be longer than 'certificateRotationInterval'."
+                );
+        }
+
+        if (hasRotationInterval)
         {
             settings.Add(
                 new PresetConfigurationSetting(
@@ -718,19 +760,8 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (certificateRotationIntervalPresent)
-            throw new ValidationException(
-                "'certificateRotationInterval' must be a valid TimeSpan (for example \"1.00:00:00\")."
-            );
 
-        if (
-            TryGetDuration(
-                patch,
-                "certificateValidityDuration",
-                out TimeSpan certificateValidityDuration,
-                out bool certificateValidityDurationPresent
-            )
-        )
+        if (hasValidityDuration)
         {
             settings.Add(
                 new PresetConfigurationSetting(
@@ -741,17 +772,13 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (certificateValidityDurationPresent)
-            throw new ValidationException(
-                "'certificateValidityDuration' must be a valid TimeSpan (for example \"2.00:00:00\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "certificateClockSkewTolerance",
                 out TimeSpan certificateClockSkewTolerance,
-                out bool certificateClockSkewTolerancePresent
+                TimeSpan.Zero,
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
         {
@@ -764,10 +791,6 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (certificateClockSkewTolerancePresent)
-            throw new ValidationException(
-                "'certificateClockSkewTolerance' must be a valid TimeSpan (for example \"00:05:00\")."
-            );
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
@@ -943,23 +966,6 @@ public class TransportSettingsController(
         [.. ListenAddressList.Split(configured)];
 
     /// <summary>
-    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
-    ///     caller both whether the field was present and whether it parsed.
-    /// </summary>
-    private static bool TryGetDuration(
-        JsonElement patch,
-        string propertyName,
-        out TimeSpan value,
-        out bool present
-    )
-    {
-        value = default;
-        present = patch.TryGetMergePatchField(propertyName, out JsonElement element);
-
-        return present && TimeSpan.TryParse(element.GetString(), out value);
-    }
-
-    /// <summary>
     ///     This method adds a setting under <paramref name="certificateSectionPath" /> for each
     ///     field present in a <c>certificate</c> sub-object. <see cref="PatchDnsOverTls" /> and
     ///     <see cref="PatchDnsOverQuic" /> share it, since both bind a
@@ -972,61 +978,73 @@ public class TransportSettingsController(
         ref bool touchedRestartRequiringField
     )
     {
-        if (certificateElement.TryGetMergePatchField("pfxPath", out JsonElement pfxPath))
+        if (certificateElement.ValueKind != JsonValueKind.Object)
+            throw new ValidationException("'certificate' must be a JSON object.");
+
+        if (
+            certificateElement.TryGetMergePatchString(
+                "pfxPath",
+                out string pfxPath,
+                true,
+                "certificate.pfxPath"
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     certificateSectionPath,
                     nameof(TlsCertificateOptions.PfxPath),
-                    pfxPath.GetString() ?? string.Empty
+                    pfxPath ?? string.Empty
                 )
             );
             touchedRestartRequiringField = true;
         }
 
-        if (certificateElement.TryGetMergePatchField("pfxPassword", out JsonElement pfxPassword))
+        if (
+            certificateElement.TryGetMergePatchString(
+                "pfxPassword",
+                out string pfxPassword,
+                true,
+                "certificate.pfxPassword"
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     certificateSectionPath,
                     nameof(TlsCertificateOptions.PfxPassword),
-                    pfxPassword.GetString() ?? string.Empty
+                    pfxPassword ?? string.Empty
                 )
             );
             touchedRestartRequiringField = true;
         }
 
         if (
-            certificateElement.TryGetMergePatchField(
+            certificateElement.TryGetMergePatchStringList(
                 "selfSignedSubjectAlternativeNames",
-                out JsonElement subjectAlternativeNamesElement
+                out List<string> subjectAlternativeNames,
+                false,
+                "certificate.selfSignedSubjectAlternativeNames"
             )
         )
         {
-            if (subjectAlternativeNamesElement.ValueKind != JsonValueKind.Array)
-                throw new ValidationException(
-                    "'certificate.selfSignedSubjectAlternativeNames' must be a JSON array."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     certificateSectionPath,
                     nameof(TlsCertificateOptions.SelfSignedSubjectAlternativeNames),
-                    subjectAlternativeNamesElement
-                        .EnumerateArray()
-                        .Select(item => item.GetString())
-                        .ToList()
+                    subjectAlternativeNames
                 )
             );
             touchedRestartRequiringField = true;
         }
 
         if (
-            TryGetDuration(
-                certificateElement,
+            certificateElement.TryGetMergePatchDuration(
                 "certificateReloadPollInterval",
                 out TimeSpan certificateReloadPollInterval,
-                out bool certificateReloadPollIntervalPresent
+                TimeSpan.FromTicks(1),
+                JsonElementMergePatchExtension.TimerMaximum,
+                "certificate.certificateReloadPollInterval"
             )
         )
         {
@@ -1039,10 +1057,6 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (certificateReloadPollIntervalPresent)
-            throw new ValidationException(
-                "'certificate.certificateReloadPollInterval' must be a valid TimeSpan (for example \"00:05:00\")."
-            );
 
         if (
             certificateElement.TryGetMergePatchField(
@@ -1083,7 +1097,7 @@ public class TransportSettingsController(
 
         foreach (JsonElement item in element.EnumerateArray())
         {
-            string name = item.GetString();
+            string name = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
 
             if (
                 !Enum.TryParse(name, ignoreCase: true, out SslProtocols parsed)
@@ -1114,7 +1128,7 @@ public class TransportSettingsController(
 
         foreach (JsonElement item in element.EnumerateArray())
         {
-            string name = item.GetString();
+            string name = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
 
             if (!Enum.TryParse(name, ignoreCase: true, out DnsCryptEsVersion _))
                 throw new ValidationException(

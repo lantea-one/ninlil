@@ -73,7 +73,8 @@ public class DnsCookieSettingsController(
     ///     This action merges a partial update into <c>DnsServer:Cookies</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value. The change needs a restart. Returns 400 for a
-    ///     malformed rotation interval. Requires <c>dnscookies:write</c>.
+    ///     field of the wrong JSON type or a rotation interval outside 1 minute to the timer
+    ///     limit (about 49 days). Requires <c>dnscookies:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("dnscookies:write")]
@@ -83,44 +84,40 @@ public class DnsCookieSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsCookieOptions.SectionName,
                     nameof(DnsCookieOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("require", out JsonElement require))
+        if (patch.TryGetMergePatchBoolean("require", out bool require))
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsCookieOptions.SectionName,
                     nameof(DnsCookieOptions.Require),
-                    require.GetBoolean()
+                    require
                 )
             );
 
+        // DnsCookieService builds a Timer from this period; a Timer throws above the timer limit.
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "secretRotationInterval",
-                out JsonElement secretRotationInterval
+                out TimeSpan secretRotationInterval,
+                TimeSpan.FromMinutes(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
-        {
-            if (!TimeSpan.TryParse(secretRotationInterval.GetString(), out TimeSpan parsed))
-                throw new ValidationException(
-                    "'secretRotationInterval' must be a valid TimeSpan (for example \"1.00:00:00\")."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsCookieOptions.SectionName,
                     nameof(DnsCookieOptions.SecretRotationInterval),
-                    parsed.ToString()
+                    secretRotationInterval.ToString()
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));

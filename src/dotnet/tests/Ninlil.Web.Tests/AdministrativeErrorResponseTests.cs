@@ -1123,7 +1123,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         JsonElement body = await ParseBodyAsync(response);
         Assert.Equal(400, body.GetProperty("status").GetInt32());
         Assert.Contains(
-            "is not a valid transport",
+            "'transport' must be one of",
             body.GetProperty("detail").GetString(),
             StringComparison.Ordinal
         );
@@ -1146,7 +1146,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         JsonElement body = await ParseBodyAsync(response);
         Assert.Equal(400, body.GetProperty("status").GetInt32());
         Assert.Contains(
-            "must be a valid TimeSpan",
+            "'rabbitMq.initialReconnectDelay' must be a duration",
             body.GetProperty("detail").GetString(),
             StringComparison.Ordinal
         );
@@ -1170,7 +1170,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         JsonElement body = await ParseBodyAsync(response);
         Assert.Equal(400, body.GetProperty("status").GetInt32());
         Assert.Contains(
-            "'trackedClientExpiry' must be a valid TimeSpan",
+            "'trackedClientExpiry' must be a duration",
             body.GetProperty("detail").GetString(),
             StringComparison.Ordinal
         );
@@ -1194,7 +1194,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         JsonElement body = await ParseBodyAsync(response);
         Assert.Equal(400, body.GetProperty("status").GetInt32());
         Assert.Contains(
-            "'secretRotationInterval' must be a valid TimeSpan",
+            "'secretRotationInterval' must be a duration",
             body.GetProperty("detail").GetString(),
             StringComparison.Ordinal
         );

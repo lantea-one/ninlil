@@ -63,13 +63,24 @@ public class RecursiveSettingsController(
         Ok(ToDetail(recursiveOptions.CurrentValue));
 
     /// <summary>
+    ///     The longest accepted age or window (100 years). These values are added to or
+    ///     subtracted from the current time, which overflows for an absurdly large span.
+    /// </summary>
+    private static readonly TimeSpan AgeMaximum = TimeSpan.FromDays(36500);
+
+    /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Recursive</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value; an override list, when present, replaces the
     ///     whole list. <c>insecureDomains</c> is the same, and also accepts <c>null</c> to restore the
     ///     built-in list. The response note says whether a restart is needed. Returns 400 for a
-    ///     malformed duration, an invalid root-hint address, a malformed trust anchor or an
-    ///     invalid domain name in <c>insecureDomains</c>. Requires
+    ///     field of the wrong JSON type, an <c>upstreamQueryTimeout</c> outside 100 milliseconds
+    ///     to 1 minute, an <c>overallQueryTimeout</c> outside 1 second to 5 minutes or shorter
+    ///     than the upstream timeout (the stored value stands in for an absent field), a count
+    ///     below 1, a refresh interval or window that is not positive, a hold-down or stale age
+    ///     that is negative, a duration beyond the timer limit or 100 years, an invalid root-hint
+    ///     address, a malformed trust anchor or an invalid domain name in
+    ///     <c>insecureDomains</c>. Requires
     ///     <c>recursivesettings:write</c>.
     /// </summary>
     [HttpPatch]
@@ -82,39 +93,36 @@ public class RecursiveSettingsController(
         bool touchedHotReloadingField = false;
         bool touchedRestartRequiringField = false;
 
-        if (patch.TryGetMergePatchField("enableRecursion", out JsonElement enableRecursion))
+        if (patch.TryGetMergePatchBoolean("enableRecursion", out bool enableRecursion))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.EnableRecursion),
-                    enableRecursion.GetBoolean()
+                    enableRecursion
                 )
             );
             touchedHotReloadingField = true;
         }
 
         if (
-            patch.TryGetMergePatchField(
-                "enableDnssecValidation",
-                out JsonElement enableDnssecValidation
-            )
+            patch.TryGetMergePatchBoolean("enableDnssecValidation", out bool enableDnssecValidation)
         )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.EnableDnssecValidation),
-                    enableDnssecValidation.GetBoolean()
+                    enableDnssecValidation
                 )
             );
             touchedHotReloadingField = true;
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchBoolean(
                 "enableQnameMinimization",
-                out JsonElement enableQnameMinimization
+                out bool enableQnameMinimization
             )
         )
         {
@@ -122,20 +130,44 @@ public class RecursiveSettingsController(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.EnableQnameMinimization),
-                    enableQnameMinimization.GetBoolean()
+                    enableQnameMinimization
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (
-            TryGetDuration(
-                patch,
-                "upstreamQueryTimeout",
-                out TimeSpan upstreamQueryTimeout,
-                out bool upstreamQueryTimeoutPresent
-            )
-        )
+        // Both timeouts are cross-checked below, once both are known, because the overall budget
+        // must cover at least one upstream attempt. The upstream timeout reaches CancelAfter.
+        bool hasUpstreamQueryTimeout = patch.TryGetMergePatchDuration(
+            "upstreamQueryTimeout",
+            out TimeSpan upstreamQueryTimeout,
+            TimeSpan.FromMilliseconds(100),
+            TimeSpan.FromMinutes(1)
+        );
+        bool hasOverallQueryTimeout = patch.TryGetMergePatchDuration(
+            "overallQueryTimeout",
+            out TimeSpan overallQueryTimeout,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMinutes(5)
+        );
+
+        if (hasUpstreamQueryTimeout || hasOverallQueryTimeout)
+        {
+            RecursiveServerOptions current = recursiveOptions.CurrentValue;
+            TimeSpan effectiveUpstream = hasUpstreamQueryTimeout
+                ? upstreamQueryTimeout
+                : current.UpstreamQueryTimeout;
+            TimeSpan effectiveOverall = hasOverallQueryTimeout
+                ? overallQueryTimeout
+                : current.OverallQueryTimeout;
+
+            if (effectiveOverall < effectiveUpstream)
+                throw new ValidationException(
+                    "'overallQueryTimeout' must not be shorter than 'upstreamQueryTimeout'."
+                );
+        }
+
+        if (hasUpstreamQueryTimeout)
         {
             settings.Add(
                 new PresetConfigurationSetting(
@@ -146,19 +178,8 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (upstreamQueryTimeoutPresent)
-            throw new ValidationException(
-                "'upstreamQueryTimeout' must be a valid TimeSpan (for example \"00:00:03\")."
-            );
 
-        if (
-            TryGetDuration(
-                patch,
-                "overallQueryTimeout",
-                out TimeSpan overallQueryTimeout,
-                out bool overallQueryTimeoutPresent
-            )
-        )
+        if (hasOverallQueryTimeout)
         {
             settings.Add(
                 new PresetConfigurationSetting(
@@ -169,54 +190,73 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (overallQueryTimeoutPresent)
-            throw new ValidationException(
-                "'overallQueryTimeout' must be a valid TimeSpan (for example \"00:00:15\")."
-            );
 
-        if (patch.TryGetMergePatchField("maxReferralDepth", out JsonElement maxReferralDepth))
+        if (
+            patch.TryGetMergePatchInt32(
+                "maxReferralDepth",
+                out int maxReferralDepth,
+                1,
+                int.MaxValue
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.MaxReferralDepth),
-                    maxReferralDepth.GetInt32()
+                    maxReferralDepth
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("maxCnameChainLength", out JsonElement maxCnameChainLength))
+        if (
+            patch.TryGetMergePatchInt32(
+                "maxCnameChainLength",
+                out int maxCnameChainLength,
+                1,
+                int.MaxValue
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.MaxCnameChainLength),
-                    maxCnameChainLength.GetInt32()
+                    maxCnameChainLength
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("maxUpstreamQueries", out JsonElement maxUpstreamQueries))
+        if (
+            patch.TryGetMergePatchInt32(
+                "maxUpstreamQueries",
+                out int maxUpstreamQueries,
+                1,
+                int.MaxValue
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.MaxUpstreamQueries),
-                    maxUpstreamQueries.GetInt32()
+                    maxUpstreamQueries
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("maxCacheEntries", out JsonElement maxCacheEntries))
+        if (
+            patch.TryGetMergePatchInt32("maxCacheEntries", out int maxCacheEntries, 1, int.MaxValue)
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.MaxCacheEntries),
-                    maxCacheEntries.GetInt32()
+                    maxCacheEntries
                 )
             );
             touchedHotReloadingField = true;
@@ -257,9 +297,9 @@ public class RecursiveSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchBoolean(
                 "enableAutomaticTrustAnchorUpdate",
-                out JsonElement enableAutomaticTrustAnchorUpdate
+                out bool enableAutomaticTrustAnchorUpdate
             )
         )
         {
@@ -267,18 +307,19 @@ public class RecursiveSettingsController(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate),
-                    enableAutomaticTrustAnchorUpdate.GetBoolean()
+                    enableAutomaticTrustAnchorUpdate
                 )
             );
             touchedHotReloadingField = true;
         }
 
+        // Ages are compared with and subtracted from the current time, so they stop at 100 years.
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "trustAnchorRefreshInterval",
                 out TimeSpan trustAnchorRefreshInterval,
-                out bool trustAnchorRefreshIntervalPresent
+                TimeSpan.FromTicks(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
         {
@@ -291,17 +332,13 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (trustAnchorRefreshIntervalPresent)
-            throw new ValidationException(
-                "'trustAnchorRefreshInterval' must be a valid TimeSpan (for example \"15.00:00:00\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "trustAnchorHoldDownDuration",
                 out TimeSpan trustAnchorHoldDownDuration,
-                out bool trustAnchorHoldDownDurationPresent
+                TimeSpan.Zero,
+                AgeMaximum
             )
         )
         {
@@ -314,17 +351,13 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (trustAnchorHoldDownDurationPresent)
-            throw new ValidationException(
-                "'trustAnchorHoldDownDuration' must be a valid TimeSpan (for example \"30.00:00:00\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "trustAnchorRemoveHoldDownDuration",
                 out TimeSpan trustAnchorRemoveHoldDownDuration,
-                out bool trustAnchorRemoveHoldDownDurationPresent
+                TimeSpan.Zero,
+                AgeMaximum
             )
         )
         {
@@ -337,29 +370,25 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (trustAnchorRemoveHoldDownDurationPresent)
-            throw new ValidationException(
-                "'trustAnchorRemoveHoldDownDuration' must be a valid TimeSpan (for example \"30.00:00:00\")."
-            );
 
-        if (patch.TryGetMergePatchField("enableServeStale", out JsonElement enableServeStale))
+        if (patch.TryGetMergePatchBoolean("enableServeStale", out bool enableServeStale))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.EnableServeStale),
-                    enableServeStale.GetBoolean()
+                    enableServeStale
                 )
             );
             touchedHotReloadingField = true;
         }
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "maxStaleServeAge",
                 out TimeSpan maxStaleServeAge,
-                out bool maxStaleServeAgePresent
+                TimeSpan.Zero,
+                AgeMaximum
             )
         )
         {
@@ -372,29 +401,25 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (maxStaleServeAgePresent)
-            throw new ValidationException(
-                "'maxStaleServeAge' must be a valid TimeSpan (for example \"1.00:00:00\")."
-            );
 
-        if (patch.TryGetMergePatchField("enablePrefetch", out JsonElement enablePrefetch))
+        if (patch.TryGetMergePatchBoolean("enablePrefetch", out bool enablePrefetch))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     RecursiveServerOptions.SectionName,
                     nameof(RecursiveServerOptions.EnablePrefetch),
-                    enablePrefetch.GetBoolean()
+                    enablePrefetch
                 )
             );
             touchedHotReloadingField = true;
         }
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "prefetchWindow",
                 out TimeSpan prefetchWindow,
-                out bool prefetchWindowPresent
+                TimeSpan.FromTicks(1),
+                AgeMaximum
             )
         )
         {
@@ -407,17 +432,13 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (prefetchWindowPresent)
-            throw new ValidationException(
-                "'prefetchWindow' must be a valid TimeSpan (for example \"00:00:10\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "prefetchRecentAccessWindow",
                 out TimeSpan prefetchRecentAccessWindow,
-                out bool prefetchRecentAccessWindowPresent
+                TimeSpan.FromTicks(1),
+                AgeMaximum
             )
         )
         {
@@ -430,10 +451,6 @@ public class RecursiveSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (prefetchRecentAccessWindowPresent)
-            throw new ValidationException(
-                "'prefetchRecentAccessWindow' must be a valid TimeSpan (for example \"00:05:00\")."
-            );
 
         if (patch.TryGetMergePatchField("insecureDomains", out JsonElement insecureDomains))
         {
@@ -475,23 +492,6 @@ public class RecursiveSettingsController(
         };
 
         return Ok(new RuntimeSettingsWriteResult(note));
-    }
-
-    /// <summary>
-    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
-    ///     caller both whether the field was present and whether it parsed.
-    /// </summary>
-    private static bool TryGetDuration(
-        JsonElement patch,
-        string propertyName,
-        out TimeSpan value,
-        out bool present
-    )
-    {
-        value = default;
-        present = patch.TryGetMergePatchField(propertyName, out JsonElement element);
-
-        return present && TimeSpan.TryParse(element.GetString(), out value);
     }
 
     /// <summary>
@@ -578,9 +578,12 @@ public class RecursiveSettingsController(
 
                 foreach (JsonElement addressElement in addressesElement.EnumerateArray())
                 {
-                    string addressText = addressElement.GetString();
+                    string addressText =
+                        addressElement.ValueKind == JsonValueKind.String
+                            ? addressElement.GetString()
+                            : null;
 
-                    if (!IPAddress.TryParse(addressText, out _))
+                    if (addressText is null || !IPAddress.TryParse(addressText, out _))
                         throw new ValidationException(
                             $"'{addressText}' is not a valid IP address."
                         );
@@ -618,6 +621,7 @@ public class RecursiveSettingsController(
 
             if (
                 !item.TryGetProperty("keyTag", out JsonElement keyTagElement)
+                || keyTagElement.ValueKind != JsonValueKind.Number
                 || !keyTagElement.TryGetUInt16(out ushort keyTag)
             )
                 throw new ValidationException(
@@ -626,6 +630,7 @@ public class RecursiveSettingsController(
 
             if (
                 !item.TryGetProperty("algorithm", out JsonElement algorithmElement)
+                || algorithmElement.ValueKind != JsonValueKind.String
                 || !Enum.TryParse(
                     algorithmElement.GetString(),
                     ignoreCase: true,
@@ -639,6 +644,7 @@ public class RecursiveSettingsController(
 
             if (
                 !item.TryGetProperty("digestType", out JsonElement digestTypeElement)
+                || digestTypeElement.ValueKind != JsonValueKind.Number
                 || !digestTypeElement.TryGetByte(out byte digestType)
             )
                 throw new ValidationException(

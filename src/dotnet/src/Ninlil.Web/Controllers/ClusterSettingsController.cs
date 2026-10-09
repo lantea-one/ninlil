@@ -79,13 +79,35 @@ public class ClusterSettingsController(
     }
 
     /// <summary>
+    ///     The shortest accepted <c>heartbeatInterval</c>. The value feeds a
+    ///     <see cref="PeriodicTimer" /> at startup, before the <c>Enable</c> check, and that
+    ///     constructor throws for zero or a negative period.
+    /// </summary>
+    private static readonly TimeSpan HeartbeatIntervalMinimum = TimeSpan.FromSeconds(1);
+
+    /// <summary>The longest accepted <c>heartbeatInterval</c> (one day).</summary>
+    private static readonly TimeSpan HeartbeatIntervalMaximum = TimeSpan.FromDays(1);
+
+    /// <summary>
+    ///     The shortest accepted <c>heartbeatTimeout</c>. The value becomes the
+    ///     <c>HttpClient.Timeout</c> of every peer call, which throws for zero or a negative
+    ///     timeout and would mark every peer unreachable.
+    /// </summary>
+    private static readonly TimeSpan HeartbeatTimeoutMinimum = TimeSpan.FromSeconds(1);
+
+    /// <summary>The longest accepted <c>heartbeatTimeout</c> (five minutes).</summary>
+    private static readonly TimeSpan HeartbeatTimeoutMaximum = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     ///     This action merges a partial update into the <c>Cluster</c> section (and, for
     ///     <c>addressReconcileInterval</c>, the <c>CatalogSync</c> section) as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. There is no <c>nodeId</c>
     ///     field. The response note says whether the change applies at once or needs a restart.
-    ///     Returns 400 for a port outside 0-65535 (0 means the shared HTTPS port), a
-    ///     missed-heartbeat threshold below 1, or a duration that is not a valid TimeSpan. Requires
-    ///     <c>clustersettings:write</c>.
+    ///     Returns 400 for a field of the wrong JSON type, a port outside 0-65535 (0 means the
+    ///     shared HTTPS port), a missed-heartbeat threshold below 1, a <c>heartbeatInterval</c>
+    ///     outside 1 second to 1 day, a <c>heartbeatTimeout</c> outside 1 second to 5 minutes, or
+    ///     an <c>addressReconcileInterval</c> that is not positive or exceeds the timer limit.
+    ///     Requires <c>clustersettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("clustersettings:write")]
@@ -97,40 +119,32 @@ public class ClusterSettingsController(
         bool touchedRestartRequiringField = false;
         bool touchedHotReloadingField = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     ClusterOptions.SectionName,
                     nameof(ClusterOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("advertisedHost", out JsonElement advertisedHostElement))
+        if (patch.TryGetMergePatchString("advertisedHost", out string advertisedHost, true))
         {
-            string advertisedHost = advertisedHostElement.GetString() ?? "";
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ClusterOptions.SectionName,
                     nameof(ClusterOptions.AdvertisedHost),
-                    advertisedHost
+                    advertisedHost ?? ""
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("advertisedPort", out JsonElement advertisedPortElement))
+        if (patch.TryGetMergePatchInt32("advertisedPort", out int advertisedPort, 0, 65535))
         {
-            int advertisedPort = advertisedPortElement.GetInt32();
-            if (advertisedPort is < 0 or > 65535)
-                throw new ValidationException(
-                    "'advertisedPort' must be between 0 (use the shared HTTPS port) and 65535."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ClusterOptions.SectionName,
@@ -142,11 +156,11 @@ public class ClusterSettingsController(
         }
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "heartbeatInterval",
                 out TimeSpan heartbeatInterval,
-                out bool heartbeatIntervalPresent
+                HeartbeatIntervalMinimum,
+                HeartbeatIntervalMaximum
             )
         )
         {
@@ -159,17 +173,13 @@ public class ClusterSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (heartbeatIntervalPresent)
-            throw new ValidationException(
-                "'heartbeatInterval' must be a valid TimeSpan (for example \"00:00:30\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "heartbeatTimeout",
                 out TimeSpan heartbeatTimeout,
-                out bool heartbeatTimeoutPresent
+                HeartbeatTimeoutMinimum,
+                HeartbeatTimeoutMaximum
             )
         )
         {
@@ -182,22 +192,16 @@ public class ClusterSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (heartbeatTimeoutPresent)
-            throw new ValidationException(
-                "'heartbeatTimeout' must be a valid TimeSpan (for example \"00:00:10\")."
-            );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "missedHeartbeatThreshold",
-                out JsonElement missedHeartbeatThresholdElement
+                out int missedHeartbeatThreshold,
+                1,
+                int.MaxValue
             )
         )
         {
-            int missedHeartbeatThreshold = missedHeartbeatThresholdElement.GetInt32();
-            if (missedHeartbeatThreshold < 1)
-                throw new ValidationException("'missedHeartbeatThreshold' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ClusterOptions.SectionName,
@@ -209,17 +213,14 @@ public class ClusterSettingsController(
         }
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "addressReconcileInterval",
                 out TimeSpan addressReconcileInterval,
-                out bool addressReconcileIntervalPresent
+                TimeSpan.FromTicks(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
         {
-            if (addressReconcileInterval <= TimeSpan.Zero)
-                throw new ValidationException("'addressReconcileInterval' must be positive.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     CatalogSyncOptions.SectionName,
@@ -229,10 +230,6 @@ public class ClusterSettingsController(
             );
             touchedRestartRequiringField = true;
         }
-        else if (addressReconcileIntervalPresent)
-            throw new ValidationException(
-                "'addressReconcileInterval' must be a valid TimeSpan (for example \"00:01:00\")."
-            );
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
@@ -250,23 +247,5 @@ public class ClusterSettingsController(
         };
 
         return Ok(new RuntimeSettingsWriteResult(note));
-    }
-
-    /// <summary>
-    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
-    ///     caller both whether the field was present and whether it parsed, as the equivalent
-    ///     helper in <see cref="RecursiveSettingsController" /> does.
-    /// </summary>
-    private static bool TryGetDuration(
-        JsonElement patch,
-        string propertyName,
-        out TimeSpan value,
-        out bool present
-    )
-    {
-        value = default;
-        present = patch.TryGetMergePatchField(propertyName, out JsonElement element);
-
-        return present && TimeSpan.TryParse(element.GetString(), out value);
     }
 }

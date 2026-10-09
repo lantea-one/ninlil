@@ -133,7 +133,10 @@ public class EventBrokerSettingsController(
     ///     field absent at the top level or within <c>rabbitMq</c> or <c>activeMq</c> keeps its
     ///     value, including <c>password</c>, so an operator can change only <c>hostName</c> without
     ///     resupplying a password <see cref="Get" /> never shows. The change needs a restart.
-    ///     Returns 400 for an unknown transport or a malformed duration. Requires
+    ///     Returns 400 for a field of the wrong JSON type (nested fields are named like
+    ///     <c>rabbitMq.port</c>), an unknown transport, a port outside 1-65535, a reconnect delay
+    ///     or publish timeout that is not positive or exceeds the timer limit, or a maximum
+    ///     reconnect delay below the initial delay in the same patch. Requires
     ///     <c>eventbroker:write</c>.
     /// </summary>
     [HttpPatch]
@@ -144,20 +147,7 @@ public class EventBrokerSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("transport", out JsonElement transportElement))
-        {
-            if (
-                !Enum.TryParse(
-                    transportElement.GetString(),
-                    ignoreCase: true,
-                    out EventTransportEnum transport
-                )
-            )
-                throw new ValidationException(
-                    $"'{transportElement.GetString()}' is not a valid transport. Expected one "
-                        + $"of: {string.Join(", ", Enum.GetNames<EventTransportEnum>())}."
-                );
-
+        if (patch.TryGetMergePatchEnum("transport", out EventTransportEnum transport))
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsServerEventPublisherOptions.SectionName,
@@ -165,131 +155,30 @@ public class EventBrokerSettingsController(
                     transport.ToString()
                 )
             );
-        }
 
         if (patch.TryGetMergePatchField("rabbitMq", out JsonElement rabbitMqElement))
         {
-            if (!TryReadTimeSpanSettings(rabbitMqElement, out string timeSpanError))
-                throw new ValidationException(timeSpanError);
-
-            AddStringField(
+            RequireObject(rabbitMqElement, "rabbitMq");
+            AddBrokerFields(
                 settings,
                 RabbitMqBrokerOptions.SectionName,
                 rabbitMqElement,
-                "hostName",
-                "HostName"
-            );
-            AddIntField(
-                settings,
-                RabbitMqBrokerOptions.SectionName,
-                rabbitMqElement,
-                "port",
-                "Port"
-            );
-            AddStringField(
-                settings,
-                RabbitMqBrokerOptions.SectionName,
-                rabbitMqElement,
-                "userName",
-                "UserName"
-            );
-            AddStringField(
-                settings,
-                RabbitMqBrokerOptions.SectionName,
-                rabbitMqElement,
-                "password",
-                "Password"
-            );
-            AddStringField(
-                settings,
-                RabbitMqBrokerOptions.SectionName,
-                rabbitMqElement,
-                "virtualHost",
-                "VirtualHost"
-            );
-            AddStringField(
-                settings,
-                RabbitMqBrokerOptions.SectionName,
-                rabbitMqElement,
-                "exchangeName",
-                "ExchangeName"
-            );
-            AddTimeSpanField(
-                settings,
-                RabbitMqBrokerOptions.SectionName,
-                rabbitMqElement,
-                "initialReconnectDelay",
-                "InitialReconnectDelay"
-            );
-            AddTimeSpanField(
-                settings,
-                RabbitMqBrokerOptions.SectionName,
-                rabbitMqElement,
-                "maxReconnectDelay",
-                "MaxReconnectDelay"
+                "rabbitMq",
+                ("exchangeName", "ExchangeName"),
+                includePublishTimeout: false
             );
         }
 
         if (patch.TryGetMergePatchField("activeMq", out JsonElement activeMqElement))
         {
-            if (!TryReadTimeSpanSettings(activeMqElement, out string timeSpanError))
-                throw new ValidationException(timeSpanError);
-
-            AddStringField(
+            RequireObject(activeMqElement, "activeMq");
+            AddBrokerFields(
                 settings,
                 ActiveMqEventBrokerOptions.SectionName,
                 activeMqElement,
-                "hostName",
-                "HostName"
-            );
-            AddIntField(
-                settings,
-                ActiveMqEventBrokerOptions.SectionName,
-                activeMqElement,
-                "port",
-                "Port"
-            );
-            AddStringField(
-                settings,
-                ActiveMqEventBrokerOptions.SectionName,
-                activeMqElement,
-                "userName",
-                "UserName"
-            );
-            AddStringField(
-                settings,
-                ActiveMqEventBrokerOptions.SectionName,
-                activeMqElement,
-                "password",
-                "Password"
-            );
-            AddStringField(
-                settings,
-                ActiveMqEventBrokerOptions.SectionName,
-                activeMqElement,
-                "topicName",
-                "TopicName"
-            );
-            AddTimeSpanField(
-                settings,
-                ActiveMqEventBrokerOptions.SectionName,
-                activeMqElement,
-                "initialReconnectDelay",
-                "InitialReconnectDelay"
-            );
-            AddTimeSpanField(
-                settings,
-                ActiveMqEventBrokerOptions.SectionName,
-                activeMqElement,
-                "maxReconnectDelay",
-                "MaxReconnectDelay"
-            );
-            AddTimeSpanField(
-                settings,
-                ActiveMqEventBrokerOptions.SectionName,
-                activeMqElement,
-                "publishTimeout",
-                "PublishTimeout"
+                "activeMq",
+                ("topicName", "TopicName"),
+                includePublishTimeout: true
             );
         }
 
@@ -311,93 +200,149 @@ public class EventBrokerSettingsController(
     }
 
     /// <summary>
-    ///     This method checks every TimeSpan field in a broker's sub-object before any of its
-    ///     settings are added, so a PATCH with one malformed duration writes nothing.
+    ///     This method rejects a broker sub-object that is not a JSON object, which the field
+    ///     lookups would otherwise treat as "no fields present".
     /// </summary>
-    private static bool TryReadTimeSpanSettings(JsonElement brokerElement, out string error)
+    private static void RequireObject(JsonElement element, string name)
     {
-        error = null;
-
-        foreach (
-            string fieldName in new[]
-            {
-                "initialReconnectDelay",
-                "maxReconnectDelay",
-                "publishTimeout",
-            }
-        )
-        {
-            if (
-                brokerElement.TryGetMergePatchField(fieldName, out JsonElement value)
-                && !TimeSpan.TryParse(value.GetString(), out _)
-            )
-            {
-                error =
-                    $"'{fieldName}' must be a valid TimeSpan (for example \"00:00:30\"), got "
-                    + $"'{value.GetString()}'.";
-                return false;
-            }
-        }
-
-        return true;
+        if (element.ValueKind != JsonValueKind.Object)
+            throw new ValidationException($"'{name}' must be a JSON object.");
     }
 
     /// <summary>
+    ///     This method reads the fields both brokers share, plus the one name field that differs
+    ///     (the RabbitMQ exchange or the ActiveMQ topic) and, for ActiveMQ, the publish timeout,
+    ///     and adds them to <paramref name="settings" />. Every field is validated while it is
+    ///     read, before the caller writes anything, so one bad field saves nothing. The reconnect
+    ///     delays and the publish timeout reach <c>Task.Delay</c> or a timeout in the broker
+    ///     transport, so each must be positive and no longer than a timer accepts. When one patch
+    ///     sets both reconnect delays, the maximum must not be below the initial delay.
+    /// </summary>
+    /// <param name="settings">Receives the settings to write.</param>
+    /// <param name="sectionPath">The configuration section of this broker.</param>
+    /// <param name="source">The broker's sub-object of the patch.</param>
+    /// <param name="objectName">The sub-object's JSON name, used to name fields in error messages.</param>
+    /// <param name="nameField">The JSON name and configuration key of the exchange or topic field.</param>
+    /// <param name="includePublishTimeout">Whether this broker has a <c>publishTimeout</c>.</param>
+    private static void AddBrokerFields(
+        List<PresetConfigurationSetting> settings,
+        string sectionPath,
+        JsonElement source,
+        string objectName,
+        (string JsonName, string Key) nameField,
+        bool includePublishTimeout
+    )
+    {
+        AddStringField(settings, sectionPath, source, objectName, "hostName", "HostName");
+
+        if (source.TryGetMergePatchInt32("port", out int port, 1, 65535, $"{objectName}.port"))
+            settings.Add(new PresetConfigurationSetting(sectionPath, "Port", port));
+
+        AddStringField(settings, sectionPath, source, objectName, "userName", "UserName");
+        AddStringField(settings, sectionPath, source, objectName, "password", "Password");
+
+        if (objectName == "rabbitMq")
+            AddStringField(settings, sectionPath, source, objectName, "virtualHost", "VirtualHost");
+
+        AddStringField(
+            settings,
+            sectionPath,
+            source,
+            objectName,
+            nameField.JsonName,
+            nameField.Key
+        );
+
+        bool hasInitial = TryReadDelay(
+            source,
+            objectName,
+            "initialReconnectDelay",
+            out TimeSpan initialReconnectDelay
+        );
+        bool hasMax = TryReadDelay(
+            source,
+            objectName,
+            "maxReconnectDelay",
+            out TimeSpan maxReconnectDelay
+        );
+
+        if (hasInitial && hasMax && maxReconnectDelay < initialReconnectDelay)
+            throw new ValidationException(
+                $"'{objectName}.maxReconnectDelay' must not be shorter than "
+                    + $"'{objectName}.initialReconnectDelay'."
+            );
+
+        if (hasInitial)
+            settings.Add(
+                new PresetConfigurationSetting(
+                    sectionPath,
+                    "InitialReconnectDelay",
+                    initialReconnectDelay.ToString()
+                )
+            );
+
+        if (hasMax)
+            settings.Add(
+                new PresetConfigurationSetting(
+                    sectionPath,
+                    "MaxReconnectDelay",
+                    maxReconnectDelay.ToString()
+                )
+            );
+
+        if (
+            includePublishTimeout
+            && TryReadDelay(source, objectName, "publishTimeout", out TimeSpan publishTimeout)
+        )
+            settings.Add(
+                new PresetConfigurationSetting(
+                    sectionPath,
+                    "PublishTimeout",
+                    publishTimeout.ToString()
+                )
+            );
+    }
+
+    /// <summary>
+    ///     This method reads one broker duration field, which must be positive and no longer than
+    ///     a timer accepts.
+    /// </summary>
+    private static bool TryReadDelay(
+        JsonElement source,
+        string objectName,
+        string jsonName,
+        out TimeSpan value
+    ) =>
+        source.TryGetMergePatchDuration(
+            jsonName,
+            out value,
+            TimeSpan.FromTicks(1),
+            JsonElementMergePatchExtension.TimerMaximum,
+            $"{objectName}.{jsonName}"
+        );
+
+    /// <summary>
     ///     This method adds a string setting to <paramref name="settings" /> when
-    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />.
+    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />. A JSON
+    ///     <c>null</c> clears the value.
     /// </summary>
     private static void AddStringField(
         List<PresetConfigurationSetting> settings,
         string sectionPath,
         JsonElement source,
+        string objectName,
         string jsonFieldName,
         string configurationKey
     )
     {
-        if (source.TryGetMergePatchField(jsonFieldName, out JsonElement value))
-            settings.Add(
-                new PresetConfigurationSetting(sectionPath, configurationKey, value.GetString())
-            );
-    }
-
-    /// <summary>
-    ///     This method adds an integer setting to <paramref name="settings" /> when
-    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />.
-    /// </summary>
-    private static void AddIntField(
-        List<PresetConfigurationSetting> settings,
-        string sectionPath,
-        JsonElement source,
-        string jsonFieldName,
-        string configurationKey
-    )
-    {
-        if (source.TryGetMergePatchField(jsonFieldName, out JsonElement value))
-            settings.Add(
-                new PresetConfigurationSetting(sectionPath, configurationKey, value.GetInt32())
-            );
-    }
-
-    /// <summary>
-    ///     This method adds a TimeSpan setting to <paramref name="settings" /> when
-    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />. The value
-    ///     must already have passed <see cref="TryReadTimeSpanSettings" />.
-    /// </summary>
-    private static void AddTimeSpanField(
-        List<PresetConfigurationSetting> settings,
-        string sectionPath,
-        JsonElement source,
-        string jsonFieldName,
-        string configurationKey
-    )
-    {
-        if (source.TryGetMergePatchField(jsonFieldName, out JsonElement value))
-            settings.Add(
-                new PresetConfigurationSetting(
-                    sectionPath,
-                    configurationKey,
-                    TimeSpan.Parse(value.GetString()).ToString()
-                )
-            );
+        if (
+            source.TryGetMergePatchString(
+                jsonFieldName,
+                out string value,
+                true,
+                $"{objectName}.{jsonFieldName}"
+            )
+        )
+            settings.Add(new PresetConfigurationSetting(sectionPath, configurationKey, value));
     }
 }

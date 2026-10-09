@@ -56,7 +56,8 @@ public class ClientSubnetSettingsController(
     ///     This action merges a partial update into <c>DnsServer:ClientSubnet</c> as an RFC 7396
     ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value; a null or blank <c>overrideAddress</c> clears
-    ///     it. Returns 400 for an override address that is not an IP address. Requires
+    ///     it. Returns 400 for a field of the wrong JSON type, a source prefix length outside 0-32
+    ///     (IPv4) or 0-128 (IPv6), or an override address that is not an IP address. Requires
     ///     <c>clientsubnetsettings:write</c>.
     /// </summary>
     [HttpPatch]
@@ -67,50 +68,51 @@ public class ClientSubnetSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     EdnsClientSubnetOptions.SectionName,
                     nameof(EdnsClientSubnetOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
+        // A prefix length of 0 is valid: RFC 7871 section 6 lets a client send a SOURCE
+        // PREFIX-LENGTH of 0 to say that no address is disclosed.
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "sourcePrefixLengthIPv4",
-                out JsonElement sourcePrefixLengthIPv4
+                out int sourcePrefixLengthIPv4,
+                0,
+                32
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     EdnsClientSubnetOptions.SectionName,
                     nameof(EdnsClientSubnetOptions.SourcePrefixLengthIPv4),
-                    (byte)sourcePrefixLengthIPv4.GetInt32()
+                    (byte)sourcePrefixLengthIPv4
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "sourcePrefixLengthIPv6",
-                out JsonElement sourcePrefixLengthIPv6
+                out int sourcePrefixLengthIPv6,
+                0,
+                128
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     EdnsClientSubnetOptions.SectionName,
                     nameof(EdnsClientSubnetOptions.SourcePrefixLengthIPv6),
-                    (byte)sourcePrefixLengthIPv6.GetInt32()
+                    (byte)sourcePrefixLengthIPv6
                 )
             );
 
-        if (patch.TryGetMergePatchField("overrideAddress", out JsonElement overrideAddressElement))
+        if (patch.TryGetMergePatchString("overrideAddress", out string overrideAddress, true))
         {
-            string overrideAddress =
-                overrideAddressElement.ValueKind == JsonValueKind.Null
-                    ? null
-                    : overrideAddressElement.GetString();
-
             if (
                 !string.IsNullOrWhiteSpace(overrideAddress)
                 && !IPAddress.TryParse(overrideAddress, out _)

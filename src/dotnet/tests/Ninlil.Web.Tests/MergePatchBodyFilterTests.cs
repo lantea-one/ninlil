@@ -81,7 +81,9 @@ public class MergePatchBodyFilterTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("wrong JSON type", await response.Content.ReadAsStringAsync());
+        // The identity controller reads the field through the typed readers, which name it. The
+        // filter's own "wrong JSON type" message is covered by the non-settings test below.
+        Assert.Contains("requiredLength", await response.Content.ReadAsStringAsync());
         Assert.Equal(before, await ReadSettingsFileAsync());
     }
 

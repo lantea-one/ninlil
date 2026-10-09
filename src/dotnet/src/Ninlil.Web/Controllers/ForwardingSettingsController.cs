@@ -54,8 +54,9 @@ public class ForwardingSettingsController(
     ///     This action merges a partial update into <c>DnsServer:Forwarding</c> as an RFC 7396
     ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value. Every field takes effect at once. Returns 400
-    ///     for an unknown failover strategy, a malformed duration or a <c>maxCacheEntries</c> below
-    ///     1. Requires <c>forwardingsettings:write</c>.
+    ///     for a field of the wrong JSON type, an unknown failover strategy, a
+    ///     <c>healthCheckInterval</c> outside 1 second to 1 day, a <c>perForwarderTimeout</c>
+    ///     outside 100 milliseconds to 1 minute, or a <c>maxCacheEntries</c> below 1. Requires <c>forwardingsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("forwardingsettings:write")]
@@ -65,32 +66,21 @@ public class ForwardingSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     ForwardingOptions.SectionName,
                     nameof(ForwardingOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
         if (
-            patch.TryGetMergePatchField("failoverStrategy", out JsonElement failoverStrategyElement)
-        )
-        {
-            if (
-                !Enum.TryParse(
-                    failoverStrategyElement.GetString(),
-                    ignoreCase: true,
-                    out ForwarderFailoverStrategyEnum failoverStrategy
-                )
+            patch.TryGetMergePatchEnum(
+                "failoverStrategy",
+                out ForwarderFailoverStrategyEnum failoverStrategy
             )
-                throw new ValidationException(
-                    $"'{failoverStrategyElement.GetString()}' is not a valid failover strategy. "
-                        + "Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<ForwarderFailoverStrategyEnum>())}."
-                );
-
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     ForwardingOptions.SectionName,
@@ -98,14 +88,15 @@ public class ForwardingSettingsController(
                     failoverStrategy.ToString()
                 )
             );
-        }
 
+        // The health tracker passes this to Task.Delay. Zero spins and a negative value throws out
+        // of the background service, which stops the host.
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "healthCheckInterval",
                 out TimeSpan healthCheckInterval,
-                out bool healthCheckIntervalPresent
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromDays(1)
             )
         )
             settings.Add(
@@ -115,17 +106,14 @@ public class ForwardingSettingsController(
                     healthCheckInterval.ToString()
                 )
             );
-        else if (healthCheckIntervalPresent)
-            throw new ValidationException(
-                "'healthCheckInterval' must be a valid TimeSpan (for example \"00:00:30\")."
-            );
 
+        // The resolver passes this to CancellationTokenSource.CancelAfter on every query.
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "perForwarderTimeout",
                 out TimeSpan perForwarderTimeout,
-                out bool perForwarderTimeoutPresent
+                TimeSpan.FromMilliseconds(100),
+                TimeSpan.FromMinutes(1)
             )
         )
             settings.Add(
@@ -135,41 +123,28 @@ public class ForwardingSettingsController(
                     perForwarderTimeout.ToString()
                 )
             );
-        else if (perForwarderTimeoutPresent)
-            throw new ValidationException(
-                "'perForwarderTimeout' must be a valid TimeSpan (for example \"00:00:03\")."
-            );
 
-        if (patch.TryGetMergePatchField("enableCache", out JsonElement enableCache))
+        if (patch.TryGetMergePatchBoolean("enableCache", out bool enableCache))
             settings.Add(
                 new PresetConfigurationSetting(
                     ForwardingOptions.SectionName,
                     nameof(ForwardingOptions.EnableCache),
-                    enableCache.GetBoolean()
+                    enableCache
                 )
             );
 
-        if (patch.TryGetMergePatchField("maxCacheEntries", out JsonElement maxCacheEntries))
-        {
-            // Zero or less would make every sweep empty the cache while it is switched on, which no
-            // operator means; "enableCache": false is the off switch.
-            if (
-                maxCacheEntries.ValueKind != JsonValueKind.Number
-                || !maxCacheEntries.TryGetInt32(out int maxCacheEntriesValue)
-                || maxCacheEntriesValue < 1
-            )
-                throw new ValidationException(
-                    "'maxCacheEntries' must be a whole number of at least 1."
-                );
-
+        // Zero or less would make every sweep empty the cache while it is switched on, which no
+        // operator means; "enableCache": false is the off switch.
+        if (
+            patch.TryGetMergePatchInt32("maxCacheEntries", out int maxCacheEntries, 1, int.MaxValue)
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     ForwardingOptions.SectionName,
                     nameof(ForwardingOptions.MaxCacheEntries),
-                    maxCacheEntriesValue
+                    maxCacheEntries
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
@@ -180,23 +155,6 @@ public class ForwardingSettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
-    }
-
-    /// <summary>
-    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
-    ///     caller both whether the field was present and whether it parsed.
-    /// </summary>
-    private static bool TryGetDuration(
-        JsonElement patch,
-        string propertyName,
-        out TimeSpan value,
-        out bool present
-    )
-    {
-        value = default;
-        present = patch.TryGetMergePatchField(propertyName, out JsonElement element);
-
-        return present && TimeSpan.TryParse(element.GetString(), out value);
     }
 
     /// <summary>

@@ -67,7 +67,9 @@ public class QueryLoggingSettingsController(
     ///     This action merges a partial update into <c>DnsServer:QueryLogging</c> as an RFC 7396
     ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value. The response note says whether a restart is
-    ///     needed. Returns 400 for a malformed duration or an unknown privacy level. Requires
+    ///     needed. Returns 400 for a field of the wrong JSON type, a negative <c>retentionPeriod</c>
+    ///     or <c>maxRetainedEntries</c> (zero turns the bound off), a <c>cleanupInterval</c> that
+    ///     is not positive or exceeds the timer limit, or an unknown privacy level. Requires
     ///     <c>querylog:write</c>.
     /// </summary>
     [HttpPatch]
@@ -80,78 +82,82 @@ public class QueryLoggingSettingsController(
         bool touchedHotReloadingField = false;
         bool touchedRestartRequiringField = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     QueryLoggingOptions.SectionName,
                     nameof(QueryLoggingOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
             touchedRestartRequiringField = true;
         }
 
-        if (patch.TryGetMergePatchField("retentionPeriod", out JsonElement retentionPeriod))
+        // Zero turns the age bound off (see QueryLoggingOptions.RetentionPeriod). The upper bound
+        // keeps "now minus retention" inside the range of DateTimeOffset.
+        if (
+            patch.TryGetMergePatchDuration(
+                "retentionPeriod",
+                out TimeSpan retentionPeriod,
+                TimeSpan.Zero,
+                TimeSpan.FromDays(36500)
+            )
+        )
         {
-            if (!TimeSpan.TryParse(retentionPeriod.GetString(), out TimeSpan parsed))
-                throw new ValidationException(
-                    "'retentionPeriod' must be a valid TimeSpan (for example \"30.00:00:00\")."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     QueryLoggingOptions.SectionName,
                     nameof(QueryLoggingOptions.RetentionPeriod),
-                    parsed.ToString()
+                    retentionPeriod.ToString()
                 )
             );
             touchedRestartRequiringField = true;
         }
 
-        if (patch.TryGetMergePatchField("maxRetainedEntries", out JsonElement maxRetainedEntries))
+        // Zero turns the count cap off (see QueryLoggingOptions.MaxRetainedEntries).
+        if (
+            patch.TryGetMergePatchInt32(
+                "maxRetainedEntries",
+                out int maxRetainedEntries,
+                0,
+                int.MaxValue
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     QueryLoggingOptions.SectionName,
                     nameof(QueryLoggingOptions.MaxRetainedEntries),
-                    maxRetainedEntries.GetInt32()
+                    maxRetainedEntries
                 )
             );
             touchedRestartRequiringField = true;
         }
 
-        if (patch.TryGetMergePatchField("cleanupInterval", out JsonElement cleanupInterval))
+        // The cleanup service passes this to Task.Delay, which throws for a negative value and
+        // above the timer limit.
+        if (
+            patch.TryGetMergePatchDuration(
+                "cleanupInterval",
+                out TimeSpan cleanupInterval,
+                TimeSpan.FromTicks(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
         {
-            if (!TimeSpan.TryParse(cleanupInterval.GetString(), out TimeSpan parsed))
-                throw new ValidationException(
-                    "'cleanupInterval' must be a valid TimeSpan (for example \"01:00:00\")."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     QueryLoggingOptions.SectionName,
                     nameof(QueryLoggingOptions.CleanupInterval),
-                    parsed.ToString()
+                    cleanupInterval.ToString()
                 )
             );
             touchedRestartRequiringField = true;
         }
 
-        if (patch.TryGetMergePatchField("privacyLevel", out JsonElement privacyLevelElement))
+        if (patch.TryGetMergePatchEnum("privacyLevel", out QueryLogPrivacyLevelEnum privacyLevel))
         {
-            if (
-                !Enum.TryParse(
-                    privacyLevelElement.GetString(),
-                    ignoreCase: true,
-                    out QueryLogPrivacyLevelEnum privacyLevel
-                )
-            )
-                throw new ValidationException(
-                    $"'{privacyLevelElement.GetString()}' is not a valid privacy level. Expected "
-                        + $"one of: {string.Join(", ", Enum.GetNames<QueryLogPrivacyLevelEnum>())}."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     QueryLoggingOptions.SectionName,
