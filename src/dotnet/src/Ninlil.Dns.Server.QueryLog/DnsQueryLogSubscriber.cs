@@ -133,7 +133,8 @@ public sealed class DnsQueryLogSubscriber(
 
         DnsQueryLogEntryEntity entry = new()
         {
-            Id = Guid.NewGuid(),
+            // Version 7 ids sort by time, so inserts land at the end of the primary-key index.
+            Id = Guid.CreateVersion7(domainEvent.OccurredAtUtc),
             CreatedAtUtc = DateTimeOffset.UtcNow,
             OccurredAtUtc = domainEvent.OccurredAtUtc,
             ClientAddress = RedactClientAddress(clientAddress, privacyLevel),

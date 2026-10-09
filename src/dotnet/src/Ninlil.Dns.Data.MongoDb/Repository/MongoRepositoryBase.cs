@@ -56,6 +56,26 @@ public abstract class MongoRepositoryBase<TEntity>(
     }
 
     /// <inheritdoc />
+    public virtual Task AddRangeAsync(
+        IReadOnlyCollection<TEntity> entities,
+        CancellationToken stoppingToken = default
+    )
+    {
+        if (entities.Count == 0)
+            return Task.CompletedTask;
+
+        // One staged ordered InsertMany instead of one InsertOne per entity. The list is copied
+        // because the driver can repeat the operation after a transient transaction error and the
+        // caller may reuse its collection.
+        TEntity[] documents = [.. entities];
+        ChangeTracker.Stage(
+            (session, token) => Collection.InsertManyWithSessionAsync(session, documents, token)
+        );
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public virtual void Update(TEntity entity) =>
         ChangeTracker.Stage(
             (session, token) =>

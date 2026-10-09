@@ -148,8 +148,7 @@ public sealed class DnsQueryLogWriterService(
                 scope.ServiceProvider.GetRequiredService<IDnsQueryLogRepository>();
             IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            foreach (DnsQueryLogEntryEntity entry in batch)
-                await repository.AddAsync(entry, stoppingToken);
+            await repository.AddRangeAsync(batch, stoppingToken);
 
             await unitOfWork.SaveChangesAsync(stoppingToken);
         }

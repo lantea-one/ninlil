@@ -9,9 +9,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Benchmarks.Storage;
 
 /// <summary>
-///     This class measures what the query-log writer does for one batch: a new scope, 500
-///     <c>AddAsync</c> calls and one save (<c>DnsQueryLogWriterService.WriteBatchAsync</c>). The
-///     rows are dated 2000-01-01 and removed again on cleanup, so the table does not grow from
+///     This class measures what the query-log writer does for one batch: a new scope, one
+///     <c>AddRangeAsync</c> of 500 entries and one save
+///     (<c>DnsQueryLogWriterService.WriteBatchAsync</c>). <c>SaveBatchOf500EachAdded</c> keeps the
+///     older shape (500 <c>AddAsync</c> calls, random ids) as the comparison. The rows are dated 2000-01-01 and removed again on cleanup, so the table does not grow from
 ///     run to run.
 /// </summary>
 [Config(typeof(StorageConfig))]
@@ -46,9 +47,9 @@ public class QueryLogWriteBenchmarks : StorageBenchmarkBase
                 .DeleteOlderThanAsync(MarkerTime.AddYears(1))
         );
 
-    /// <summary>Saves one batch of 500 entries.</summary>
+    /// <summary>Saves one batch of 500 entries with 500 <c>AddAsync</c> calls.</summary>
     [Benchmark]
-    public Task<int> SaveBatchOf500() =>
+    public Task<int> SaveBatchOf500EachAdded() =>
         InScopeAsync(async provider =>
         {
             IDnsQueryLogRepository repository =
@@ -74,6 +75,33 @@ public class QueryLogWriteBenchmarks : StorageBenchmarkBase
                     }
                 );
             }
+
+            return await provider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        });
+
+    /// <summary>Saves one batch of 500 entries with one <c>AddRangeAsync</c> and v7 ids.</summary>
+    [Benchmark]
+    public Task<int> SaveBatchOf500AsRange() =>
+        InScopeAsync(async provider =>
+        {
+            await provider
+                .GetRequiredService<IDnsQueryLogRepository>()
+                .AddRangeAsync([
+                    .. _template.Select(template => new DnsQueryLogEntryEntity
+                    {
+                        Id = Guid.CreateVersion7(MarkerTime),
+                        CreatedAtUtc = template.CreatedAtUtc,
+                        OccurredAtUtc = MarkerTime,
+                        ClientAddress = template.ClientAddress,
+                        Protocol = template.Protocol,
+                        QueriedName = template.QueriedName,
+                        QueriedType = template.QueriedType,
+                        ResponseCode = template.ResponseCode,
+                        AnswerCount = template.AnswerCount,
+                        ClientIdentifier = template.ClientIdentifier,
+                        ClientProtocolVersion = template.ClientProtocolVersion,
+                    }),
+                ]);
 
             return await provider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         });

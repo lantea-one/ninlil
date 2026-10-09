@@ -108,6 +108,8 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
 
         DnsQueryLogEntryEntity entry = Assert.Single(entries);
         Assert.Equal(domainEvent.OccurredAtUtc, entry.OccurredAtUtc);
+        // Version 7 ids sort by time, which keeps primary-key inserts at the end of the index.
+        Assert.Equal(7, entry.Id.Version);
         Assert.Equal("198.51.100.7", entry.ClientAddress);
         Assert.Equal(DnsTransportProtocolEnum.Udp, entry.Protocol);
         Assert.Equal("host.example.test", entry.QueriedName);

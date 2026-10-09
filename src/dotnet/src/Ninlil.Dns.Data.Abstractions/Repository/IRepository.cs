@@ -56,6 +56,26 @@ public interface IRepository<TEntity>
     Task AddAsync(TEntity entity, CancellationToken stoppingToken = default);
 
     /// <summary>
+    ///     This method stages many new <typeparamref name="TEntity" /> instances for insertion as
+    ///     one bulk operation. It is cheaper than calling <see cref="AddAsync" /> once per entity:
+    ///     the MongoDB implementation stages a single ordered <c>InsertMany</c>. As with
+    ///     <see cref="AddAsync" />, nothing is guaranteed to be visible to other readers until
+    ///     <see cref="IUnitOfWork.SaveChangesAsync" /> completes. The default implementation calls
+    ///     <see cref="AddAsync" /> per entity; the Entity Framework Core and MongoDB base classes
+    ///     override it.
+    /// </summary>
+    /// <param name="entities">The entities to add; an empty collection stages nothing.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    async Task AddRangeAsync(
+        IReadOnlyCollection<TEntity> entities,
+        CancellationToken stoppingToken = default
+    )
+    {
+        foreach (TEntity entity in entities)
+            await AddAsync(entity, stoppingToken);
+    }
+
+    /// <summary>
     ///     This method stages an update to an existing <typeparamref name="TEntity" />. The
     ///     update is not guaranteed to be visible to other readers until
     ///     <see cref="IUnitOfWork.SaveChangesAsync" /> completes.

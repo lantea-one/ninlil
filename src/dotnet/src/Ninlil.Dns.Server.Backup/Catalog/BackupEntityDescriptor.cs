@@ -72,8 +72,7 @@ public sealed record BackupEntityDescriptor(
             {
                 TRepository repository = services.GetRequiredService<TRepository>();
 
-                foreach (TEntity entity in parsed.Cast<TEntity>())
-                    await repository.AddAsync(entity, stoppingToken);
+                await repository.AddRangeAsync([.. parsed.Cast<TEntity>()], stoppingToken);
 
                 return parsed.Count;
             },

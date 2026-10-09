@@ -54,6 +54,12 @@ public abstract class EntityFrameworkRepositoryBase<TEntity>(NinlilDnsContext co
         await Set.AddAsync(entity, stoppingToken);
 
     /// <inheritdoc />
+    public virtual async Task AddRangeAsync(
+        IReadOnlyCollection<TEntity> entities,
+        CancellationToken stoppingToken = default
+    ) => await Set.AddRangeAsync(entities, stoppingToken);
+
+    /// <inheritdoc />
     public virtual void Update(TEntity entity) => Set.Update(entity);
 
     /// <inheritdoc />
