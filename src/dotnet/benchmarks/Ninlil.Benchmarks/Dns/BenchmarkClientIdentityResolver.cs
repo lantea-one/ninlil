@@ -36,17 +36,19 @@ public sealed class BenchmarkClientIdentityResolver : IClientIdentityResolver
     public static readonly IPAddress Scheduled = IPAddress.Parse(BenchmarkDataSet.ClientAddress(0));
 
     /// <summary>
-    ///     This constant contains the address of client 10, which has no schedule at either scale.
+    ///     This constant contains the address of client 25, which has no schedule at either
+    ///     scale (the schedules belong to the first 5 clients at the small scale and the first
+    ///     20 at the large scale).
     /// </summary>
     public static readonly IPAddress Unscheduled = IPAddress.Parse(
-        BenchmarkDataSet.ClientAddress(10)
+        BenchmarkDataSet.ClientAddress(25)
     );
 
     private static readonly Dictionary<IPAddress, ClientIdentityResolution> Map = new()
     {
         [InTwoGroups] = Resolution(2),
         [Scheduled] = Resolution(0),
-        [Unscheduled] = Resolution(10),
+        [Unscheduled] = Resolution(25),
     };
 
     /// <inheritdoc />
