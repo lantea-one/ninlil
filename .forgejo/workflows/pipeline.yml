@@ -27,6 +27,9 @@ name: 'Ninlil Pipeline'
 ## executable to it, and the Arch Linux and image jobs build from the two Linux executables they
 ## download back from it. Publish turns the draft into the visible release.
 ##
+## No run: body contains a ${{ }} expression. Every value reaches a script through env:, so a
+## branch name can never become shell text.
+##
 on:
   workflow_call:
     inputs:
@@ -74,10 +77,13 @@ jobs:
       - name: 'Require Release Commits to Come From main'
         if: >-
           inputs.kind == 'release'
+        env:
+          COMMIT_SHA: '${{ forgejo.sha }}'
+          REF_NAME: '${{ forgejo.ref_name }}'
         run: |-
           git fetch --no-tags origin main
-          if ! git merge-base --is-ancestor "${{ forgejo.sha }}" origin/main; then
-            echo "::error::Release branch ${{ forgejo.ref_name }} points at ${{ forgejo.sha }}, which is not on main. Releases can only be cut from main."
+          if ! git merge-base --is-ancestor "${COMMIT_SHA}" origin/main; then
+            echo "::error::Release branch ${REF_NAME} points at ${COMMIT_SHA}, which is not on main. Releases can only be cut from main."
             exit 1
           fi
         shell: 'bash'
@@ -246,18 +252,20 @@ jobs:
           BUILD_VERSION: '${{ needs.version.outputs.version }}'
           BUILD_PACKAGE_VERSION: '${{ needs.version.outputs.package-version }}'
           BUILD_ASSEMBLY_VERSION: '${{ needs.version.outputs.assembly-version }}'
+          BINARY: '${{ matrix.binary }}'
         run: |-
           rm -rf dist
           ./.forgejo/scripts/in-container.sh dotnet \
-            ./.forgejo/scripts/publish-binary.sh '${{ matrix.binary }}' dist
+            ./.forgejo/scripts/publish-binary.sh "${BINARY}" dist
         shell: 'bash'
       ##
       - name: 'Attach to the Draft Release'
         env:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
           RELEASE_TAG: '${{ needs.version.outputs.version }}'
+          BINARY: '${{ matrix.binary }}'
         run: |-
-          ./.forgejo/scripts/release.sh upload "dist/ninlil-${{ matrix.binary }}"
+          ./.forgejo/scripts/release.sh upload "dist/ninlil-${BINARY}"
         shell: 'bash'
   ##
   ## The ninlil Arch Linux packages, built from the two Linux executables on the draft.
@@ -334,10 +342,13 @@ jobs:
           NINLIL_CI_USER: '${{ vars.NINLIL_CI_USER }}'
           IMAGE_VERSION: '${{ needs.version.outputs.image-version }}'
           PRERELEASE: '${{ needs.version.outputs.prerelease }}'
+          BUILD_VERSION: '${{ needs.version.outputs.version }}'
+          COMMIT_SHA: '${{ forgejo.sha }}'
         run: |-
           # Registry credentials live in a throwaway configuration directory for this job only,
           # never in the runner user's ~/.docker, which every other job on this host shares.
-          export DOCKER_CONFIG="$(mktemp -d)"
+          DOCKER_CONFIG="$(mktemp -d)"
+          export DOCKER_CONFIG
           trap 'rm -rf "${DOCKER_CONFIG}"' EXIT
           printf '%s' "${NINLIL_CI_TOKEN}" \
             | docker login "${REGISTRY}" --username "${NINLIL_CI_USER}" --password-stdin
@@ -353,8 +364,8 @@ jobs:
             --platform "${PLATFORMS}" \
             --target runtime \
             --build-context binaries=dist \
-            --build-arg "BUILD_VERSION=${{ needs.version.outputs.version }}" \
-            --build-arg "BUILD_REVISION=${{ forgejo.sha }}" \
+            --build-arg "BUILD_VERSION=${BUILD_VERSION}" \
+            --build-arg "BUILD_REVISION=${COMMIT_SHA}" \
             "${tags[@]}" \
             --provenance=false \
             --push \
@@ -397,19 +408,22 @@ jobs:
           BUILD_VERSION: '${{ needs.version.outputs.version }}'
           BUILD_PACKAGE_VERSION: '${{ needs.version.outputs.package-version }}'
           BUILD_ASSEMBLY_VERSION: '${{ needs.version.outputs.assembly-version }}'
+          PROJECTS: '${{ matrix.projects }}'
         run: |-
           rm -rf packages
           ./.forgejo/scripts/in-container.sh dotnet \
-            ./.forgejo/scripts/pack-packages.sh '${{ matrix.projects }}' packages
+            ./.forgejo/scripts/pack-packages.sh "${PROJECTS}" packages
         shell: 'bash'
       ##
       - name: 'Push to the Forgejo NuGet Registry'
         env:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
           NINLIL_CI_USER: '${{ vars.NINLIL_CI_USER }}'
+          SERVER_URL: '${{ forgejo.server_url }}'
+          REPOSITORY_OWNER: '${{ forgejo.repository_owner }}'
         run: |-
           # The feed's PackagePublish endpoint (see its index.json); a trailing slash is a 404.
-          feed="${{ forgejo.server_url }}/api/packages/${{ forgejo.repository_owner }}/nuget"
+          feed="${SERVER_URL}/api/packages/${REPOSITORY_OWNER}/nuget"
           response="$(mktemp)"
           for package in packages/*.nupkg; do
             status="$(curl --silent --show-error --output "${response}" --write-out '%{http_code}' \
