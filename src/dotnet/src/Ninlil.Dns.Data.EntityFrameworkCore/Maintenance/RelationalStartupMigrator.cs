@@ -88,8 +88,10 @@ public static class RelationalStartupMigrator
         }
 
         string target = known.Count == 0 ? null : known[^1];
+        // A database with no migration history has no snapshots, and on a server engine it may
+        // not exist yet, so its catalog cannot be read.
         MigrationSnapshotManifest failedMarker = await FindFailedMigrationAsync(
-            store,
+            applied.Count == 0 ? null : store,
             target,
             stoppingToken
         );
