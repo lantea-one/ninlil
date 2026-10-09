@@ -16,7 +16,8 @@ namespace Ninlil.Web.Tests;
 ///     defaults, a patch checked by reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) with the
 ///     client secret not stored in plain text, and input validation. The secret is only checked
-///     not to be the plain text, not to decrypt back, and the note only to contain "restart".
+///     not to be the plain text, not to decrypt back, and the note is compared with the controller's note constants (restart note, or the hot-reload
+///     note for a <c>displayName</c>-only write).
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class OidcSsoSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -95,7 +96,7 @@ public class OidcSsoSettingsControllerTests(NinlilDnsWebApplicationFactory facto
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.SsoRestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -118,6 +119,46 @@ public class OidcSsoSettingsControllerTests(NinlilDnsWebApplicationFactory facto
             new[] { "openid", "profile", "email", "groups" },
             scopes.Select(scope => scope.GetValue<string>())
         );
+    }
+
+    [Fact]
+    public async Task Patch_WithOnlyADisplayName_ReportsTheHotReloadedNote()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/sso-settings", new { displayName = "Corporate login" })
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
+    }
+
+    [Theory]
+    [InlineData("clientSecret")]
+    [InlineData("scopes")]
+    [InlineData("displayNameWithEnable")]
+    public async Task Patch_WithAFieldTheSchemeReadsOnce_ReportsTheSsoRestartNote(string field)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        object body = field switch
+        {
+            "clientSecret" => new { clientSecret = "another-secret-value" },
+            "scopes" => new { scopes = new[] { "openid", "profile" } },
+            _ => new { displayName = "Corporate login", enable = false },
+        };
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/sso-settings", body)
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.SsoRestartRequiredNote, result.Note);
     }
 
     [Fact]

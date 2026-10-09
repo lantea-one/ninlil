@@ -147,7 +147,7 @@ public class BackupCrudTests(NinlilDnsWebApplicationFactory factory)
             await restoreResponse.Content.ReadFromJsonAsync<BackupRestoreResponse>();
         Assert.True(summary.TotalEntitiesImported > 0);
         Assert.True(summary.EntityCounts["DnsRewrites"] >= 1);
-        Assert.Contains("restart", summary.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(BackupRestoreResponse.RestartRequiredNote, summary.Note);
 
         // A restore replaces the whole database, refresh-token sessions included, so sign in
         // again before reading the rewrite back.

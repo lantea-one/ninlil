@@ -101,7 +101,7 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));

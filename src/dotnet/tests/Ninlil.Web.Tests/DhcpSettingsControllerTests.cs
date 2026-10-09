@@ -21,9 +21,8 @@ namespace Ninlil.Web.Tests;
 ///     signed in as the bootstrap administrator: the compiled-in defaults, patches checked by
 ///     reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
-///     returned note, and input validation. The note is only checked to contain "restart",
-///     which every note does (the hot-reload note says "no restart required"), so these
-///     assertions do not tell the restart note from the others.
+///     returned note, and input validation. The note is compared with
+///     <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -91,7 +90,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -300,7 +299,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -415,7 +414,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -504,7 +503,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -724,7 +723,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
             await patchResponse.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
         // Every DHCP setting needs a restart (see DhcpSettingsController), so the write is
         // checked in the settings file, not with a later GetRa.
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -902,7 +901,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await patchResponse.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -1084,7 +1083,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));

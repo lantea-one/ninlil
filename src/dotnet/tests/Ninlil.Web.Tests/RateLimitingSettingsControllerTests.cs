@@ -16,7 +16,7 @@ namespace Ninlil.Web.Tests;
 ///     compiled-in defaults, patches checked by reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), the cluster
 ///     sync bookkeeping a GET reports after a write, and input validation. The returned note is
-///     only checked to contain "restart", which every note does.
+///     compared with <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class RateLimitingSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -90,7 +90,7 @@ public class RateLimitingSettingsControllerTests(NinlilDnsWebApplicationFactory 
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));

@@ -399,6 +399,56 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         }
     }
 
+    [Theory]
+    [InlineData("path")]
+    [InlineData("maxMessageSizeBytes")]
+    public async Task PatchDnsOverHttps_WithAFieldReadOnceAtRouteMapping_ReportsTheProcessRestartNote(
+        string field
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        // The values equal the defaults; the shared host does not read the runtime file back, so
+        // the write changes nothing live.
+        object body = field == "path" ? new { path = "/dns-query" } : new { maxMessageSizeBytes = 65535 };
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/transport-settings/dns-over-https", body)
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.DnsOverHttpsRestartRequiredNote, result.Note);
+    }
+
+    [Fact]
+    public async Task PatchDnsOverHttps_WithEnableAndPath_ReportsTheMixedNote()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    "/api/transport-settings/dns-over-https",
+                    new { enable = false, path = "/dns-query" }
+                )
+            );
+            response.EnsureSuccessStatusCode();
+
+            RuntimeSettingsWriteResult result =
+                await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+            Assert.Equal(RuntimeSettingsWriteResult.DnsOverHttpsMixedReloadNote, result.Note);
+        }
+        finally
+        {
+            await client.SendAsync(
+                PatchRequest("/api/transport-settings/dns-over-https", new { enable = false })
+            );
+        }
+    }
+
     [Fact]
     public async Task PatchDnsCrypt_EnablingWithAProviderNameAndPort_WritesEveryFieldAndReportsTheMixedNote()
     {

@@ -17,7 +17,7 @@ namespace Ninlil.Web.Tests;
 ///     host runs with, a RabbitMQ patch checked by reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) with no
 ///     password written when none was sent, and a rejected patch that writes nothing. The
-///     returned note is only checked to contain "restart", which every note does.
+///     returned note is compared with <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class EventBrokerSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -86,7 +86,7 @@ public class EventBrokerSettingsControllerTests(NinlilDnsWebApplicationFactory f
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));

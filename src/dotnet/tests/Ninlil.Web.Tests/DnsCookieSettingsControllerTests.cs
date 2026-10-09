@@ -15,7 +15,8 @@ namespace Ninlil.Web.Tests;
 ///     HTTP on the shared in-process host, signed in as the bootstrap administrator: the
 ///     compiled-in defaults, a patch checked by reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), and a bad
-///     duration. The returned note is only checked to contain "restart", which every note does.
+///     duration. The returned note is compared with
+///     <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnsCookieSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -82,7 +83,7 @@ public class DnsCookieSettingsControllerTests(NinlilDnsWebApplicationFactory fac
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));

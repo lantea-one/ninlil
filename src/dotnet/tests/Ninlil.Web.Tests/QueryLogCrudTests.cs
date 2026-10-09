@@ -177,7 +177,7 @@ public class QueryLogCrudTests(NinlilDnsWebApplicationFactory factory)
         RuntimeSettingsWriteResult result =
             await patchResponse.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
         Assert.Contains("privacyLevel", result.Note, StringComparison.Ordinal);
-        Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RuntimeSettingsWriteResult.QueryLoggingMixedReloadNote, result.Note);
     }
 
     [Fact]
