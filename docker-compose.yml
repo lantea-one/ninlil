@@ -56,6 +56,13 @@
 #
 #   docker compose --profile host-network up --build ninlil-host-network postgres
 #
+# The host-network service runs as root, so the files it creates in the `ninlil-data` volume are
+# root-owned. The bridge service runs as uid 1654 and cannot write them. Before going back to it,
+# hand the volume over (Compose names it `<project>_ninlil-data`; the project defaults to the
+# name of this directory, so check `docker volume ls`):
+#
+#   docker run --rm -v ninlil_ninlil-data:/d alpine chown -R 1654:1654 /d
+#
 # ---------------------------------------------------------------------------------------------
 
 services:
@@ -121,9 +128,9 @@ services:
     environment:
       NINLIL_STORAGE_ENGINE: PostgreSql
       # Host networking has no Compose service-name DNS, so the database is addressed through
-      # the host's loopback. The `postgres` service below does not publish 5432, so add
-      # `ports: ["127.0.0.1:5432:5432"]` to it, or point this at another database.
-      NINLIL_STORAGE_CONNECTION_STRING: "Host=127.0.0.1;Port=5432;Database=ninlil;Username=ninlil;Password=change-me-too"
+      # the host's loopback. The `postgres` service below publishes its port on 127.0.0.1:55432
+      # only (an unusual port, so a PostgreSQL already running on the host's 5432 does not clash).
+      NINLIL_STORAGE_CONNECTION_STRING: "Host=127.0.0.1;Port=55432;Database=ninlil;Username=ninlil;Password=change-me-too"
       NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_USER_NAME: admin
       NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD: "Change-Me-Now1!"
       # Turn on the local (non-relay) DHCPv4/DHCPv6 engines and Router Advertisement, all off by
@@ -139,8 +146,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # PostgreSQL for the `ninlil` service above (and `ninlil-host-network`, once 5432 is
-  # published). The credentials are placeholders for a local trial; change them together with
+  # PostgreSQL for the `ninlil` service above and for `ninlil-host-network`, which reaches it on
+  # the published loopback port. The credentials are placeholders for a local trial; change them together with
   # `NINLIL_STORAGE_CONNECTION_STRING`.
   postgres:
     image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
@@ -148,6 +155,9 @@ services:
       POSTGRES_DB: ninlil
       POSTGRES_USER: ninlil
       POSTGRES_PASSWORD: change-me-too
+    ports:
+      # Loopback only, so the database is not exposed to the LAN.
+      - "127.0.0.1:55432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
