@@ -7,7 +7,7 @@
 #
 # Steps, in order. Every step runs even when an earlier one failed, so one run reports all
 # problems:
-#   1. shellcheck -x -S style on every *.sh under .forgejo/scripts, docker and src/script.
+#   1. shellcheck -x -S style on every *.sh under .forgejo/scripts, docker, src/script and src/linux-packages.
 #   2. actionlint on .forgejo/workflows/*.yml with .forgejo/actionlint.yaml. actionlint has no
 #      Forgejo mode, so the workflows are copied to a temporary .github/workflows with the
 #      forgejo context renamed to github, which has the same shape. It does not treat
@@ -26,7 +26,7 @@ cd "${repository_root}"
 failed=()
 
 echo '== shellcheck'
-mapfile -d '' shell_scripts < <(find .forgejo/scripts docker src/script -type f -name '*.sh' -print0 | sort -z)
+mapfile -d '' shell_scripts < <(find .forgejo/scripts docker src/script src/linux-packages -type f -name '*.sh' -print0 | sort -z)
 if [[ ${#shell_scripts[@]} -eq 0 ]]; then
     echo 'No shell scripts found; the search paths are wrong.' >&2
     failed+=('shellcheck')

@@ -10,14 +10,14 @@
 # keep two jobs on one host from extracting the same package into that cache at once, and would
 # otherwise sit in each container's /tmp, where no other container sees them.
 #
-# Usage: in-container.sh [--docker] <dotnet|node|arch|lint> <command> [argument...]
+# Usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages> <command> [argument...]
 #   --docker  Also hands the container the host's Docker socket, for the tests that start
 #             database containers (Testcontainers), and routes those containers' published ports
 #             back through the host gateway.
 #
-# BUILD_VERSION, BUILD_PACKAGE_VERSION, BUILD_ASSEMBLY_VERSION, RELEASE_TAG, and ARCH_VERSION are
-# passed through when they are set. Exits with the command's status, or 1 when the toolchain
-# image fails to build (its build log is printed then).
+# BUILD_VERSION, BUILD_PACKAGE_VERSION, BUILD_ASSEMBLY_VERSION, RELEASE_TAG, ARCH_VERSION,
+# DEB_VERSION, RPM_VERSION, and RPM_RELEASE are passed through when they are set. Exits with the
+# command's status, or 1 when the toolchain image fails to build (its build log is printed then).
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ if [[ "${1:-}" == '--docker' ]]; then
     docker_socket=true
     shift
 fi
-toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch|lint> <command> [argument...]}"
+toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages> <command> [argument...]}"
 shift
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -72,6 +72,9 @@ arguments=(
     --env BUILD_ASSEMBLY_VERSION
     --env RELEASE_TAG
     --env ARCH_VERSION
+    --env DEB_VERSION
+    --env RPM_VERSION
+    --env RPM_RELEASE
 )
 if [[ "${docker_socket}" == 'true' ]]; then
     arguments+=(
