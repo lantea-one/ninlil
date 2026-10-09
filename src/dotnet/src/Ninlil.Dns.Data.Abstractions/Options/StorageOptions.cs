@@ -28,4 +28,10 @@ public class StorageOptions
     ///     creates a database file automatically.
     /// </summary>
     public string ConnectionString { get; set; }
+
+    /// <summary>
+    ///     This property contains the settings that protect a relational database while pending
+    ///     migrations are applied at startup (snapshots, retention, restore).
+    /// </summary>
+    public StorageMigrationSafetyOptions MigrationSafety { get; set; } = new();
 }
