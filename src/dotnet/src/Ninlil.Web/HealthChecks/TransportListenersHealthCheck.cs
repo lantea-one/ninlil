@@ -15,17 +15,18 @@ namespace Ninlil.Web.HealthChecks;
 ///     This class implements the <c>transports</c> health check of <c>GET /status</c>: whether
 ///     each enabled DNS transport has its sockets bound, not just <c>Enable: true</c> in the
 ///     configuration. A transport that is not enabled is left out rather than reported as
-///     unhealthy. The <c>Enable</c> flags come from the settings loaded at startup, so a
-///     transport turned on or off since then through <c>TransportSettingsController</c> is judged
-///     by its startup setting.
+///     unhealthy. The <c>Enable</c> flags are read from <see cref="IOptionsMonitor{TOptions}" />,
+///     so a transport turned on or off through <c>TransportSettingsController</c> is judged by
+///     its current setting. A transport that is enabled in the configuration but stopped through
+///     <c>/api/services</c> reports as not listening, which is true.
 ///     <para>
 ///         Each socket listener (<see cref="UdpDnsListener" />, <see cref="TcpDnsListener" />,
 ///         <see cref="DnsOverTlsListener" />, <see cref="DnsOverQuicListener" />,
 ///         <see cref="DnsCryptUdpListener" />, <see cref="DnsCryptTcpListener" />) reports
 ///         <c>IsListening</c>, which this check reads. DNS-over-HTTPS has no socket of its own; it
-///         is mapped onto the shared Kestrel listener (see <c>MapNinlilDnsOverHttps</c>), which is
-///         listening if this request arrived, so the check uses
-///         <see cref="DnsOverHttpsOptions.Enable" /> alone and does not see its transport gate.
+///         is mapped onto the shared Kestrel listener (see <c>MapNinlilDnsOverHttps</c>), so it
+///         counts as listening when <see cref="DnsOverHttpsOptions.Enable" /> is set and
+///         <see cref="DnsOverHttpsTransportGate.IsRunning" /> is true.
 ///     </para>
 ///     <para>
 ///         A listener with configured listen addresses can be partly bound: some addresses
@@ -39,13 +40,15 @@ namespace Ninlil.Web.HealthChecks;
 /// <param name="dnsOverTlsOptions">Whether DNS-over-TLS is enabled.</param>
 /// <param name="dnsOverQuicOptions">Whether DNS-over-QUIC is enabled.</param>
 /// <param name="dnsOverHttpsOptions">Whether DNS-over-HTTPS is enabled.</param>
+/// <param name="dnsOverHttpsGate">The gate that says whether DNS-over-HTTPS is serving.</param>
 /// <param name="dnsCryptOptions">Whether DNSCrypt is enabled.</param>
 public sealed class TransportListenersHealthCheck(
     IEnumerable<IHostedService> hostedServices,
-    IOptions<DnsOverTlsOptions> dnsOverTlsOptions,
-    IOptions<DnsOverQuicOptions> dnsOverQuicOptions,
-    IOptions<DnsOverHttpsOptions> dnsOverHttpsOptions,
-    IOptions<DnsCryptOptions> dnsCryptOptions
+    IOptionsMonitor<DnsOverTlsOptions> dnsOverTlsOptions,
+    IOptionsMonitor<DnsOverQuicOptions> dnsOverQuicOptions,
+    IOptionsMonitor<DnsOverHttpsOptions> dnsOverHttpsOptions,
+    DnsOverHttpsTransportGate dnsOverHttpsGate,
+    IOptionsMonitor<DnsCryptOptions> dnsCryptOptions
 ) : IHealthCheck
 {
     /// <inheritdoc />
@@ -104,7 +107,7 @@ public sealed class TransportListenersHealthCheck(
             .FirstOrDefault();
         Evaluate(
             "DNS-over-TLS",
-            dnsOverTlsOptions.Value.Enable,
+            dnsOverTlsOptions.CurrentValue.Enable,
             dnsOverTlsListener?.IsListening ?? false,
             dnsOverTlsListener?.FailedListenAddresses
         );
@@ -114,7 +117,7 @@ public sealed class TransportListenersHealthCheck(
             .FirstOrDefault();
         Evaluate(
             "DNS-over-QUIC",
-            dnsOverQuicOptions.Value.Enable,
+            dnsOverQuicOptions.CurrentValue.Enable,
             dnsOverQuicListener?.IsListening ?? false,
             dnsOverQuicListener?.FailedListenAddresses
         );
@@ -127,21 +130,24 @@ public sealed class TransportListenersHealthCheck(
             .FirstOrDefault();
         Evaluate(
             "DNSCrypt/UDP",
-            dnsCryptOptions.Value.Enable,
+            dnsCryptOptions.CurrentValue.Enable,
             dnsCryptUdpListener?.IsListening ?? false,
             dnsCryptUdpListener?.FailedListenAddresses
         );
         Evaluate(
             "DNSCrypt/TCP",
-            dnsCryptOptions.Value.Enable,
+            dnsCryptOptions.CurrentValue.Enable,
             dnsCryptTcpListener?.IsListening ?? false,
             dnsCryptTcpListener?.FailedListenAddresses
         );
 
-        // DNS-over-HTTPS shares Kestrel, which is listening if this request arrived, so Enable is
-        // the only signal used.
-        if (dnsOverHttpsOptions.Value.Enable)
-            listening.Add("DNS-over-HTTPS (shared Kestrel)");
+        // DNS-over-HTTPS shares Kestrel, which is listening if this request arrived; the gate says
+        // whether the transport itself is serving.
+        Evaluate(
+            "DNS-over-HTTPS",
+            dnsOverHttpsOptions.CurrentValue.Enable,
+            dnsOverHttpsGate.IsRunning
+        );
 
         if (notListening.Count > 0)
             return Task.FromResult(

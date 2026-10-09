@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
 
@@ -12,16 +11,14 @@ namespace Ninlil.Web.HealthChecks;
 ///     <c>data</c> directory under <c>AppContext.BaseDirectory</c>, where the SQLite database,
 ///     Data Protection key ring, JWT signing key, self-signed TLS certificate, DNSCrypt
 ///     certificates and other state files live by default, and the volume of a SQLite database
-///     file placed elsewhere through <see cref="StorageOptions.ConnectionString" /> (but see
-///     <see cref="StorageReachabilityHealthCheck" />: the injected options hold defaults, so that
-///     second volume is never found). Below 10% free it reports Degraded, below 5% Unhealthy.
+///     file placed elsewhere through <see cref="StorageOptions.ConnectionString" />. Below 10% free it reports Degraded, below 5% Unhealthy.
 ///     <para>
 ///         Other paths an operator may have moved (the key ring, the DNSCrypt certificate store
 ///         and so on) are not checked individually.
 ///     </para>
 /// </summary>
-/// <param name="storageOptions">The storage engine and connection string.</param>
-public sealed class DiskSpaceHealthCheck(IOptions<StorageOptions> storageOptions) : IHealthCheck
+/// <param name="storageOptions">The storage engine and connection string in use, as registered by the storage extension.</param>
+public sealed class DiskSpaceHealthCheck(StorageOptions storageOptions) : IHealthCheck
 {
     /// <summary>
     ///     This constant contains the fraction of a volume's total space that must remain free
@@ -45,11 +42,8 @@ public sealed class DiskSpaceHealthCheck(IOptions<StorageOptions> storageOptions
         List<string> pathsToCheck = [Path.Combine(AppContext.BaseDirectory, "data")];
 
         if (
-            storageOptions.Value.Engine == StorageEngineEnum.Sqlite
-            && TryExtractSqliteDataSource(
-                storageOptions.Value.ConnectionString,
-                out string sqlitePath
-            )
+            storageOptions.Engine == StorageEngineEnum.Sqlite
+            && TryExtractSqliteDataSource(storageOptions.ConnectionString, out string sqlitePath)
         )
         {
             string sqliteDirectory = Path.GetDirectoryName(Path.GetFullPath(sqlitePath));
