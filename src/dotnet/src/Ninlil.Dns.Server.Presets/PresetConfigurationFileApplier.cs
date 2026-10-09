@@ -141,7 +141,9 @@ public static class PresetConfigurationFileApplier
 
     /// <summary>
     ///     This method converts a setting's value into the <see cref="JsonNode" /> it is written
-    ///     as. A <see langword="string" /> or <see langword="bool" /> becomes a scalar. Any other
+    ///     as. A <see cref="JsonElement" /> (a value that came over the cluster sync wire) is
+    ///     written as its own JSON, with a <c>null</c> element as JSON <c>null</c>. A
+    ///     <see langword="string" /> or <see langword="bool" /> becomes a scalar. Any other
     ///     enumerable (a list of algorithm names, or of objects such as Router Advertisement
     ///     routes) becomes a JSON array, converted element by element; <see langword="string" />
     ///     is itself enumerable, so it is matched first. Anything else, numbers and objects
@@ -152,6 +154,9 @@ public static class PresetConfigurationFileApplier
         value switch
         {
             null => null,
+            JsonElement element => element.ValueKind == JsonValueKind.Null
+                ? null
+                : JsonNode.Parse(element.GetRawText()),
             string text => JsonValue.Create(text),
             bool flag => JsonValue.Create(flag),
             IEnumerable items => new JsonArray([.. items.Cast<object>().Select(ToJsonNode)]),

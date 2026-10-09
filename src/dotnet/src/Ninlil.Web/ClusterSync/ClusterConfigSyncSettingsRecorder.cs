@@ -35,8 +35,9 @@ public class ClusterConfigSyncSettingsRecorder(
 {
     /// <summary>
     ///     This method records a settings write that has just been applied, with this node as its
-    ///     origin, and publishes it to the cluster. Each value is sent as its
-    ///     <see cref="object.ToString" /> text (see <see cref="SettingsSyncEntry" />).
+    ///     origin, and publishes it to the cluster. Each value is sent as a
+    ///     <see cref="JsonElement" /> (see <see cref="SettingsSyncEntry" />), so lists, numbers,
+    ///     booleans and <see langword="null" /> keep their JSON types.
     /// </summary>
     /// <param name="sectionName">
     ///     The section name, the options class's <c>SectionName</c> (for example
@@ -85,7 +86,7 @@ public class ClusterConfigSyncSettingsRecorder(
                 .Select(setting => new SettingsSyncEntry(
                     setting.SectionPath,
                     setting.Key,
-                    setting.Value?.ToString()
+                    JsonSerializer.SerializeToElement(setting.Value)
                 ))
                 .ToList()
         );

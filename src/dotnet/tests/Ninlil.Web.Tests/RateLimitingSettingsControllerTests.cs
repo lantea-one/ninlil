@@ -130,6 +130,47 @@ public class RateLimitingSettingsControllerTests(NinlilDnsWebApplicationFactory 
         Assert.NotNull(detail.OriginatingNodeId);
     }
 
+    /// <summary>
+    ///     This test checks that a list-valued write (<c>subnetBypassCidrs</c>) reaches the sync
+    ///     bookkeeping: the state row for <c>DnsServer:RateLimiting</c> exists afterwards. The
+    ///     published event itself is covered by <c>SettingsClusterSyncRoundTripTests</c>. It sets
+    ///     the list back to empty so later tests see a valid configuration.
+    /// </summary>
+    [Fact]
+    public async Task Patch_WithSubnetBypassCidrs_RecordsTheSyncStateRow()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage patchResponse = await client.SendAsync(
+                PatchRequest(
+                    "/api/rate-limiting-settings",
+                    new { subnetBypassCidrs = new[] { "192.0.2.0/24" } }
+                )
+            );
+            patchResponse.EnsureSuccessStatusCode();
+
+            RateLimitingSettingsDetail detail =
+                await client.GetFromJsonAsync<RateLimitingSettingsDetail>(
+                    "/api/rate-limiting-settings"
+                );
+            Assert.NotNull(detail.LastModifiedUtc);
+            Assert.NotNull(detail.OriginatingNodeId);
+        }
+        finally
+        {
+            (
+                await client.SendAsync(
+                    PatchRequest(
+                        "/api/rate-limiting-settings",
+                        new { subnetBypassCidrs = Array.Empty<string>() }
+                    )
+                )
+            ).EnsureSuccessStatusCode();
+        }
+    }
+
     [Fact]
     public async Task Patch_WithSubnetRateLimitingValues_WritesThemToTheConfigurationFile()
     {
