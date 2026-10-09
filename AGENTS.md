@@ -74,6 +74,9 @@ dotnet test Ninlil.slnx                                               # everythi
 - Name test projects by explicit path. In zsh an unmatched glob makes the whole command fail, so
   do not rely on wildcards such as `src/dotnet/tests/*Dhcp*`.
 - `Ninlil.Dns.Server.QueryLog.Tests` starts PostgreSQL through Testcontainers, so it needs Docker.
+  Tests that need Docker carry `[Trait("Category", "RequiresDocker")]`. Pull-request CI has no
+  Docker socket and runs with `--filter "Category!=RequiresDocker"`; add the trait to any new
+  test that starts a container.
 - Tests use OS-assigned free ports, never fixed ones, and need no root.
 - `Ninlil.Web.Tests`:
   - Every class joins `[Collection(WebTestCollection.Name)]` and shares one

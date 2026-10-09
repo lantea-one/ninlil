@@ -12,8 +12,11 @@ namespace Ninlil.Dns.Server.QueryLog.Tests;
 ///     case-insensitive on PostgreSQL, using <see cref="QueryLogPostgreSqlTestHost" />. The other
 ///     tests in this project use SQLite, whose <c>LIKE</c> ignores ASCII case, so
 ///     <see cref="DnsQueryLogRepositorySearchTests.SearchAsync_FilteredByDomainSubstring_MatchesCaseInsensitively" />
-///     alone would not catch a PostgreSQL regression. It needs a working Docker daemon.
+///     alone would not catch a PostgreSQL regression. It needs a working Docker daemon, so it
+///     carries the <c>RequiresDocker</c> category: the pull-request pipeline job has no Docker
+///     socket and runs with <c>--filter "Category!=RequiresDocker"</c>.
 /// </summary>
+[Trait("Category", "RequiresDocker")]
 public sealed class DnsQueryLogRepositoryPostgreSqlSearchTests : IAsyncLifetime
 {
     private readonly QueryLogPostgreSqlTestHost _testHost = new();

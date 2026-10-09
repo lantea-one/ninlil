@@ -131,19 +131,31 @@ jobs:
         shell: 'bash'
       ##
       - name: 'Run Every Test Project'
+        env:
+          BUILD_KIND: '${{ inputs.kind }}'
         run: |-
           # The live DNSSEC key-rollover test compresses a full rollover into two-second TTLs, so
           # it is sensitive to CPU contention while the other test projects run in parallel. It
           # runs alone, after everything else, rather than being skipped. The PostgreSQL
-          # query-log tests start a database container (Testcontainers), hence --docker.
-          ./.forgejo/scripts/in-container.sh --docker dotnet bash -c '
+          # query-log tests start a database container (Testcontainers) and carry the
+          # RequiresDocker category. Pull-request builds (verify) run code nobody has reviewed
+          # yet, so they get no Docker socket (it is root-equivalent on the runner host) and skip
+          # that category. Every other kind hands the container the socket and runs everything;
+          # a same-repo branch is pushed before its pull request, so its push build covers them.
+          docker_flag=(--docker)
+          category_filter=''
+          if [[ "${BUILD_KIND}" == 'verify' ]]; then
+              docker_flag=()
+              category_filter=' & Category!=RequiresDocker'
+          fi
+          ./.forgejo/scripts/in-container.sh "${docker_flag[@]}" dotnet bash -c '
             set -euo pipefail
             timing_sensitive="DnssecKeyRolloverZskPrePublishLiveTests"
             dotnet test Ninlil.slnx --no-build --configuration Release \
-              --filter "FullyQualifiedName!~${timing_sensitive}"
+              --filter "FullyQualifiedName!~${timing_sensitive}${1}"
             dotnet test Ninlil.slnx --no-build --configuration Release \
-              --filter "FullyQualifiedName~${timing_sensitive}"
-          '
+              --filter "FullyQualifiedName~${timing_sensitive}${1}"
+          ' _ "${category_filter}"
         shell: 'bash'
   ##
   ## Lint, format check and the Karma suite of the Angular admin console. Runs for every kind,
