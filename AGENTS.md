@@ -103,7 +103,8 @@ dotnet test Ninlil.slnx                                               # everythi
 
 `src/dotnet/benchmarks/Ninlil.Benchmarks` measures the database layer with BenchmarkDotNet. It is a
 console program, not a test project: `dotnet test` skips it and the pipeline only builds it. Its
-benchmarks live under `Storage/` (data-layer queries); DNS and DHCP path benchmarks join them later.
+benchmarks live under `Storage/` (data-layer queries), `Dns/` (what the filter, rewrite, schedule and
+forwarder lookups read from the database per query) and `Dhcp/` (the DHCPv4 offer path).
 
 ```bash
 dotnet run -c Release --project src/dotnet/benchmarks/Ninlil.Benchmarks -- \

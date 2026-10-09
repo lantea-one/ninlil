@@ -22,5 +22,11 @@
     <ProjectReference Include="..\..\src\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Filtering\Ninlil.Dns.Server.Filtering.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Rewrites\Ninlil.Dns.Server.Rewrites.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.ClientSchedule\Ninlil.Dns.Server.ClientSchedule.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj" />
   </ItemGroup>
 </Project>
