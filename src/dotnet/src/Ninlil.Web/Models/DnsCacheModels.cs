@@ -3,9 +3,10 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record describes one in-memory DNS answer cache on this node, as returned by
-///     <c>GET /api/dns-cache</c>: the forwarded-response cache (<c>forwarded</c>) or the recursive
-///     resolver's cache (<c>recursive</c>). The counts are this node's only; caches are not shared
-///     across a cluster.
+///     <c>GET /api/dns-cache</c>: the forwarded-response cache (<c>forwarded</c>), the recursive
+///     resolver's cache (<c>recursive</c>) or the DNSSEC trust cache (<c>dnssec</c>, the zones
+///     proven secure or insecure, with their keys). The counts are this node's only; caches are
+///     not shared across a cluster.
 /// </summary>
 /// <param name="Name">The cache's short name, which the flush and remove actions take as <c>cache</c> to act on it alone.</param>
 /// <param name="EntryCount">How many entries it holds right now, including expired ones kept for serve-stale.</param>

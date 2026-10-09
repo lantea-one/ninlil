@@ -19,6 +19,14 @@ public sealed class FakeUpstreamDnsClient : IUpstreamDnsClient
     public int QueryCount { get; private set; }
 
     /// <summary>
+    ///     This property holds an optional function that answers a query no canned response was
+    ///     added for, so a test can serve a whole zone hierarchy
+    ///     (<see cref="Support.SignedHierarchy" />) and still pin single answers with
+    ///     <see cref="AddResponse" />. Canned responses win; the function runs only without one.
+    /// </summary>
+    public Func<IPAddress, DnsName, DnsResourceRecordTypeEnum, DnsMessage> Responder { get; set; }
+
+    /// <summary>
     ///     This property contains every query received, in order, with its name, type and ECS
     ///     option, so tests can check QNAME minimization and ECS handling.
     /// </summary>
@@ -49,6 +57,9 @@ public sealed class FakeUpstreamDnsClient : IUpstreamDnsClient
         QueryCount++;
         Queries.Add((serverAddress, name, type, clientSubnetOption));
 
-        return Task.FromResult(_responses.GetValueOrDefault((serverAddress, name, type)));
+        if (_responses.TryGetValue((serverAddress, name, type), out DnsMessage canned))
+            return Task.FromResult(canned);
+
+        return Task.FromResult(Responder?.Invoke(serverAddress, name, type));
     }
 }

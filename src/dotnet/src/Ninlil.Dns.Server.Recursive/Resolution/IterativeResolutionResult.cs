@@ -23,8 +23,10 @@ namespace Ninlil.Dns.Server.Recursive.Resolution;
 ///     the zone's SOA record. <see langword="null" /> otherwise.
 /// </param>
 /// <param name="ZoneCutsTraversed">
-///     Every zone cut this resolution walked through, root first.
-///     <see cref="Validation.DnssecValidator" /> takes the last one as the answer's zone.
+///     Every zone cut this resolution walked through, root first. For an answer without
+///     signatures, <see cref="Validation.DnssecValidator" /> starts its walk for a delegation that
+///     proves the answer unsigned at the last one; signed answers name their zone themselves. A
+///     result built from a forwarder's answer has none, and the walk then starts at the root.
 /// </param>
 /// <param name="CnameChain">
 ///     Every CNAME hop followed to reach <see cref="Answer" />, in order, each with its zone and

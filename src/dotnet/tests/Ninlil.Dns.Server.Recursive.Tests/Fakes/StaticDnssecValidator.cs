@@ -18,6 +18,7 @@ public sealed class StaticDnssecValidator(DnssecValidationResult result) : IDnss
         DnsClassEnum recordClass,
         IterativeResolutionResult iterativeResult,
         QueryBudget budget,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        IDnssecRecordFetcher fetcher = null
     ) => Task.FromResult(result);
 }

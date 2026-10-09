@@ -148,8 +148,8 @@ public sealed class DnssecValidatorCnameChainTests
 
         DnssecValidator validator = new(
             engine,
-            new EmptyRecursiveCache(),
-            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)]),
+            ValidatorTestHelpers.CreateTrustCache()
         );
 
         IterativeResolutionResult result = new(
@@ -269,8 +269,8 @@ public sealed class DnssecValidatorCnameChainTests
 
         DnssecValidator validator = new(
             engine,
-            new EmptyRecursiveCache(),
-            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)]),
+            ValidatorTestHelpers.CreateTrustCache()
         );
 
         IterativeResolutionResult result = new(

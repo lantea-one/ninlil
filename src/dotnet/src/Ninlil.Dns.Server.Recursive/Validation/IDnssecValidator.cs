@@ -24,6 +24,11 @@ public interface IDnssecValidator
     ///     too, so validation cannot issue unbounded extra queries.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <param name="fetcher">
+    ///     Where the validator gets the DS and DNSKEY data of the chain of trust.
+    ///     <see langword="null" /> (the default) uses the iterative engine; the forwarding
+    ///     resolver passes its own so the chain comes from the same upstream servers.
+    /// </param>
     /// <returns>The validation's outcome.</returns>
     Task<DnssecValidationResult> ValidateAsync(
         DnsName queriedName,
@@ -31,6 +36,7 @@ public interface IDnssecValidator
         DnsClassEnum recordClass,
         IterativeResolutionResult result,
         QueryBudget budget,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        IDnssecRecordFetcher fetcher = null
     );
 }

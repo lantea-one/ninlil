@@ -21,7 +21,7 @@ public static class ServiceCollectionRecursiveExtension
     /// <summary>
     ///     This method binds <see cref="RecursiveServerOptions" /> and registers the cache, prefetch,
     ///     upstream client, iterative engine, root-hints priming, trust anchor store and rollover,
-    ///     DNSSEC validator, and <see cref="RecursiveQueryResolver" /> as an
+    ///     DNSSEC validator with its trust cache, and <see cref="RecursiveQueryResolver" /> as an
     ///     <see cref="IDnsQueryResolver" />. The caller must already have called
     ///     <c>AddNinlilDnsServerCore</c>, and must call this last among the resolvers (after the
     ///     authoritative and forwarding ones), because the dispatcher tries resolvers in
@@ -62,6 +62,12 @@ public static class ServiceCollectionRecursiveExtension
         instance.AddSingleton<ITrustAnchorStore, FileTrustAnchorStore>();
         instance.AddHostedService<TrustAnchorRolloverService>();
 
+        // The proven-zone cache of the validator: also an IDnsCache, named "dnssec", so the cache
+        // endpoint and the eviction sweep handle it like the other caches.
+        instance.AddSingleton<DnssecTrustCache>();
+        instance.AddSingleton<IDnsCache>(provider =>
+            provider.GetRequiredService<DnssecTrustCache>()
+        );
         instance.AddSingleton<IDnssecValidator, DnssecValidator>();
         instance.AddSingleton<IDnsQueryResolver, RecursiveQueryResolver>();
 

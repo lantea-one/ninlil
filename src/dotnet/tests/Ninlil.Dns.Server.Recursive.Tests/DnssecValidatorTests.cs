@@ -92,8 +92,8 @@ public class DnssecValidatorTests
 
         DnssecValidator validator = new(
             engine,
-            new EmptyRecursiveCache(),
-            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)]),
+            ValidatorTestHelpers.CreateTrustCache()
         );
 
         IterativeResolutionResult result = new(
@@ -209,8 +209,8 @@ public class DnssecValidatorTests
 
         DnssecValidator validator = new(
             engine,
-            new EmptyRecursiveCache(),
-            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)]),
+            ValidatorTestHelpers.CreateTrustCache()
         );
 
         IterativeResolutionResult result = new(
@@ -282,8 +282,8 @@ public class DnssecValidatorTests
 
         DnssecValidator validator = new(
             engine,
-            new EmptyRecursiveCache(),
-            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)]),
+            ValidatorTestHelpers.CreateTrustCache()
         );
 
         IterativeResolutionResult result = new(
@@ -306,15 +306,15 @@ public class DnssecValidatorTests
     }
 
     [Fact]
-    public async Task ValidateAsyncReturnsIndeterminateWhenTheRootDnsKeyCannotBeResolved()
+    public async Task ValidateAsyncReturnsBogusWhenTheRootDnsKeyCannotBeResolvedUnderATrustAnchor()
     {
         FakeIterativeResolutionEngine engine = new();
         DnssecTestFixture.ZoneKey rootKey = _fixture.GenerateZoneKey(DnsName.Root);
 
         DnssecValidator validator = new(
             engine,
-            new EmptyRecursiveCache(),
-            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)]),
+            ValidatorTestHelpers.CreateTrustCache()
         );
 
         IterativeResolutionResult result = new(
@@ -330,6 +330,34 @@ public class DnssecValidatorTests
             DnsResourceRecordTypeEnum.A,
             DnsClassEnum.Internet,
             result,
+            CreateBudget()
+        );
+
+        // Missing data that the chain of trust needs is Bogus (RFC 4035 §4.3); only the lack of a
+        // trust anchor is Indeterminate.
+        Assert.Equal(DnssecValidationStateEnum.Bogus, validation.State);
+    }
+
+    [Fact]
+    public async Task ValidateAsyncReturnsIndeterminateWhenNoTrustAnchorIsUsable()
+    {
+        DnssecValidator validator = new(
+            new FakeIterativeResolutionEngine(),
+            new FakeTrustAnchorStore([]),
+            ValidatorTestHelpers.CreateTrustCache()
+        );
+
+        DnssecValidationResult validation = await validator.ValidateAsync(
+            DnsName.Parse("www.example.com"),
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            new IterativeResolutionResult(
+                RecursiveResolutionStatusEnum.Success,
+                [],
+                [],
+                null,
+                [DnsName.Root]
+            ),
             CreateBudget()
         );
 
@@ -400,8 +428,8 @@ public class DnssecValidatorTests
 
         DnssecValidator validator = new(
             engine,
-            new EmptyRecursiveCache(),
-            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)]),
+            ValidatorTestHelpers.CreateTrustCache()
         );
 
         DnssecValidationResult validation = await validator.ValidateAsync(

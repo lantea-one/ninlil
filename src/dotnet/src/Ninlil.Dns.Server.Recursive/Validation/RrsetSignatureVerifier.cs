@@ -307,19 +307,23 @@ public static class RrsetSignatureVerifier
     }
 
     /// <summary>
-    ///     This method finds the record in a DNSKEY RRset that matches a trust anchor: the base of
-    ///     the chain of trust, where there is no parent DS.
+    ///     This method finds the records in a DNSKEY RRset that match a trust anchor: the base of
+    ///     the chain of trust, where there is no parent DS. Only a zone key (RFC 4034 §2.1.1)
+    ///     without the REVOKE bit (RFC 5011 §2.1) can match, and an anchor whose digest type this
+    ///     validator cannot compute is ignored.
     /// </summary>
     /// <param name="dnsKeyRecords">The DNSKEY RRset, normally the root's.</param>
     /// <param name="ownerName">The DNSKEY RRset's owner name.</param>
     /// <param name="anchors">The trust anchors to match.</param>
-    /// <returns>The matching DNSKEY record, or <see langword="null" /> if none matches.</returns>
-    public static DnsResourceRecord FindKeyMatchingTrustAnchor(
+    /// <returns>The matching DNSKEY records; empty if none matches.</returns>
+    public static IReadOnlyList<DnsResourceRecord> FindKeysMatchingTrustAnchor(
         IReadOnlyList<DnsResourceRecord> dnsKeyRecords,
         DnsName ownerName,
         IReadOnlyList<TrustAnchor> anchors
     )
     {
+        List<DnsResourceRecord> matches = [];
+
         foreach (DnsResourceRecord keyRecord in dnsKeyRecords)
         {
             if (keyRecord.Type != DnsResourceRecordTypeEnum.DnsKey)
@@ -327,7 +331,9 @@ public static class RrsetSignatureVerifier
 
             if (
                 DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.DnsKey, keyRecord.Data)
-                is not DnsKeyRecordData dnsKey
+                    is not DnsKeyRecordData dnsKey
+                || !dnsKey.IsZoneKey
+                || dnsKey.IsRevoked
             )
                 continue;
 
@@ -335,7 +341,11 @@ public static class RrsetSignatureVerifier
 
             foreach (TrustAnchor anchor in anchors)
             {
-                if (anchor.Algorithm != dnsKey.Algorithm || anchor.KeyTag != keyTag)
+                if (
+                    anchor.Algorithm != dnsKey.Algorithm
+                    || anchor.KeyTag != keyTag
+                    || !DsDigestCodec.IsSupported(anchor.DigestType)
+                )
                     continue;
 
                 byte[] expectedDigest = DsDigestCodec.Compute(
@@ -345,10 +355,13 @@ public static class RrsetSignatureVerifier
                 );
 
                 if (expectedDigest.AsSpan().SequenceEqual(anchor.Digest))
-                    return keyRecord;
+                {
+                    matches.Add(keyRecord);
+                    break;
+                }
             }
         }
 
-        return null;
+        return matches;
     }
 }

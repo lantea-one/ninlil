@@ -57,7 +57,7 @@ public interface IIterativeResolutionEngine
     /// <param name="forceRootStart">
     ///     Whether to start from the root name servers instead of the closest cached ancestor, for
     ///     a caller that must see every zone cut between the root and <paramref name="name" />
-    ///     (DNSSEC chain building, trust anchor rollover), which the cache would otherwise skip.
+    ///     (the trust anchor rollover check), which the cache would otherwise skip.
     /// </param>
     /// <param name="clientSubnetOption">
     ///     An RFC 7871 EDNS Client Subnet option, as for the other

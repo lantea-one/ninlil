@@ -12,10 +12,11 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller shows and trims this node's in-memory DNS answer caches: the
-///     forwarded-response cache and the recursive resolver's cache, that is, every registered
-///     <see cref="IDnsCache" />. One endpoint covers both, so an operator does not need to know
-///     which path answered a name to flush it.
+///     This controller shows and trims this node's in-memory DNS caches: the
+///     forwarded-response cache, the recursive resolver's cache and the DNSSEC trust cache, that
+///     is, every registered <see cref="IDnsCache" />. One endpoint covers them all, so an operator
+///     does not need to know which path answered a name to flush it. Flushing the trust cache
+///     makes the next validation verify the chain of trust again.
 ///     <para>
 ///         Reading needs <c>recursivesettings:read</c> and changing needs
 ///         <c>recursivesettings:write</c>, the permissions that already guard the cache size and
@@ -54,7 +55,7 @@ public class DnsCacheController(IEnumerable<IDnsCache> caches) : ControllerBase
     ///     the number of entries removed, or 404 for an unknown cache name. Requires
     ///     <c>recursivesettings:write</c>.
     /// </summary>
-    /// <param name="cache">A cache name (<c>forwarded</c> or <c>recursive</c>) to flush alone; omit to flush every cache.</param>
+    /// <param name="cache">A cache name (<c>forwarded</c>, <c>recursive</c> or <c>dnssec</c>) to flush alone; omit to flush every cache.</param>
     [HttpDelete]
     [RequirePermission("recursivesettings:write")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsCacheRemovalResultExample))]

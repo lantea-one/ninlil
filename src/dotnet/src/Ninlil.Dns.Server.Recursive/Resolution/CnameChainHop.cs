@@ -16,9 +16,9 @@ namespace Ninlil.Dns.Server.Recursive.Resolution;
 ///     or the zone is unsigned.
 /// </param>
 /// <param name="OwningZone">
-///     The zone that served this hop's CNAME RRset, to which
-///     <see cref="Validation.DnssecValidator" /> builds a chain of trust before checking the
-///     hop's signature.
+///     The zone that served this hop's CNAME RRset. <see cref="Validation.DnssecValidator" />
+///     verifies a signed hop against the zone named by the RRSIG, and starts from this zone only
+///     to decide whether an unsigned hop sits below an unsigned delegation.
 /// </param>
 public sealed record CnameChainHop(
     DnsResourceRecord CnameRecord,

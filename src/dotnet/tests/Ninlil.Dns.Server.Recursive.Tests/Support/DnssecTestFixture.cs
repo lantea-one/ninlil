@@ -71,7 +71,8 @@ public sealed class DnssecTestFixture
         DnsName signerName,
         IReadOnlyList<DnsResourceRecord> rrset,
         DateTimeOffset? inception = null,
-        DateTimeOffset? expiration = null
+        DateTimeOffset? expiration = null,
+        byte? labels = null
     )
     {
         DnsResourceRecord first = rrset[0];
@@ -84,7 +85,7 @@ public sealed class DnssecTestFixture
         RrSigRecordData unsigned = new(
             first.Type,
             DnssecAlgorithmEnum.Ed25519,
-            (byte)first.Name.Labels.Count,
+            labels ?? (byte)first.Name.Labels.Count,
             first.TimeToLive,
             (uint)actualExpiration.ToUnixTimeSeconds(),
             (uint)actualInception.ToUnixTimeSeconds(),

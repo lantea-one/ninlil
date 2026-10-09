@@ -174,8 +174,8 @@ public sealed class IterativeResolutionEngine(
 
             if (cachedCname is { IsNegative: false })
             {
-                // Recover the CNAME's zone from the cached NS sets, so DnssecValidator can build a
-                // chain of trust to it for this hop.
+                // Recover the CNAME's zone from the cached NS sets, so DnssecValidator knows where
+                // an unsigned hop sits.
                 DnsName owningZone = FindBestNameServers(
                     name,
                     DnsResourceRecordTypeEnum.Cname,

@@ -125,7 +125,7 @@ public class DnsCacheControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task List_ReportsTheForwardedAndRecursiveCaches()
+    public async Task List_ReportsTheDnssecForwardedAndRecursiveCaches()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
@@ -133,9 +133,12 @@ public class DnsCacheControllerTests(NinlilDnsWebApplicationFactory factory)
             IReadOnlyList<DnsCacheDetail>
         >("/api/dns-cache");
 
-        Assert.Equal(["forwarded", "recursive"], caches.Select(cache => cache.Name));
-        Assert.Equal(10000, caches[0].MaxEntries);
-        Assert.Equal(100000, caches[1].MaxEntries);
+        Assert.Equal(["dnssec", "forwarded", "recursive"], caches.Select(cache => cache.Name));
+
+        // The trust cache is bounded by a tenth of the recursive cache.
+        Assert.Equal(10000, caches.Single(cache => cache.Name == "dnssec").MaxEntries);
+        Assert.Equal(10000, caches.Single(cache => cache.Name == "forwarded").MaxEntries);
+        Assert.Equal(100000, caches.Single(cache => cache.Name == "recursive").MaxEntries);
     }
 
     [Fact]

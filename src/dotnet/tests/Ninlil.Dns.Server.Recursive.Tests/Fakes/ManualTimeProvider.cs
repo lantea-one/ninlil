@@ -12,6 +12,17 @@ public sealed class ManualTimeProvider : TimeProvider
     private DateTimeOffset _now = new(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
+    ///     This constructor starts the clock at the default instant (1 September 2026, noon UTC),
+    ///     or at <paramref name="start" /> when a test needs a different one, for example to match
+    ///     the validity window of signatures it built.
+    /// </summary>
+    public ManualTimeProvider(DateTimeOffset? start = null)
+    {
+        if (start is { } value)
+            _now = value;
+    }
+
+    /// <summary>
     ///     This property contains how many armed timers are waiting for the clock to advance.
     /// </summary>
     public int PendingTimerCount

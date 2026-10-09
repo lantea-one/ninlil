@@ -17,7 +17,8 @@ public sealed class UnreachableDnssecValidator : IDnssecValidator
         DnsClassEnum recordClass,
         IterativeResolutionResult result,
         QueryBudget budget,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        IDnssecRecordFetcher fetcher = null
     ) =>
         throw new InvalidOperationException(
             "This validator must never be called while DNSSEC validation is disabled."

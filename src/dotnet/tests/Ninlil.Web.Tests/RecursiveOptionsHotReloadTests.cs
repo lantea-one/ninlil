@@ -82,7 +82,8 @@ public class RecursiveOptionsHotReloadTests
             DnsClassEnum recordClass,
             IterativeResolutionResult result,
             QueryBudget budget,
-            CancellationToken stoppingToken = default
+            CancellationToken stoppingToken = default,
+            IDnssecRecordFetcher fetcher = null
         ) =>
             throw new InvalidOperationException(
                 "EnableDnssecValidation is off throughout this test; the validator should never be reached."

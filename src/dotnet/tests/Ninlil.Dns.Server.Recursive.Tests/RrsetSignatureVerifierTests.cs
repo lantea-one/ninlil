@@ -442,4 +442,73 @@ public class RrsetSignatureVerifierTests
 
         Assert.Single(matches);
     }
+
+    [Fact]
+    public void FindKeysMatchingTrustAnchor_ForAZoneKeyWithTheAnchorsDigest_ReturnsIt()
+    {
+        DnssecTestFixture.ZoneKey key = fixture.GenerateZoneKey(DnsName.Root);
+
+        IReadOnlyList<DnsResourceRecord> matches =
+            RrsetSignatureVerifier.FindKeysMatchingTrustAnchor(
+                [key.DnsKeyRecord],
+                DnsName.Root,
+                [fixture.BuildTrustAnchor(DnsName.Root, key)]
+            );
+
+        Assert.Single(matches);
+    }
+
+    [Fact]
+    public void FindKeysMatchingTrustAnchor_ForAKeyWithoutTheZoneKeyBit_ReturnsNothing()
+    {
+        DnssecTestFixture.ZoneKey key = KeyWithFlags(
+            fixture.GenerateZoneKey(DnsName.Root),
+            isZoneKey: false,
+            isRevoked: false
+        );
+
+        IReadOnlyList<DnsResourceRecord> matches =
+            RrsetSignatureVerifier.FindKeysMatchingTrustAnchor(
+                [key.DnsKeyRecord],
+                DnsName.Root,
+                [fixture.BuildTrustAnchor(DnsName.Root, key)]
+            );
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void FindKeysMatchingTrustAnchor_ForARevokedKey_ReturnsNothing()
+    {
+        DnssecTestFixture.ZoneKey key = KeyWithFlags(
+            fixture.GenerateZoneKey(DnsName.Root),
+            isZoneKey: true,
+            isRevoked: true
+        );
+
+        IReadOnlyList<DnsResourceRecord> matches =
+            RrsetSignatureVerifier.FindKeysMatchingTrustAnchor(
+                [key.DnsKeyRecord],
+                DnsName.Root,
+                [fixture.BuildTrustAnchor(DnsName.Root, key)]
+            );
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void FindKeysMatchingTrustAnchor_ForAnAnchorWithAnUnsupportedDigestType_ReturnsNothingAndDoesNotThrow()
+    {
+        DnssecTestFixture.ZoneKey key = fixture.GenerateZoneKey(DnsName.Root);
+        TrustAnchor gost = fixture.BuildTrustAnchor(DnsName.Root, key) with { DigestType = 3 };
+
+        IReadOnlyList<DnsResourceRecord> matches =
+            RrsetSignatureVerifier.FindKeysMatchingTrustAnchor(
+                [key.DnsKeyRecord],
+                DnsName.Root,
+                [gost]
+            );
+
+        Assert.Empty(matches);
+    }
 }

@@ -14,6 +14,13 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 public sealed record DnssecValidationResult(DnssecValidationStateEnum State, string Reason = null)
 {
     /// <summary>
+    ///     This property contains how many public-key signature checks the validation spent, for
+    ///     logs and tests (a validation that finds every zone in the trust cache spends one per
+    ///     RRset). It is zero on the factory results and is set by <see cref="DnssecValidator" />.
+    /// </summary>
+    public int SignatureChecksUsed { get; init; }
+
+    /// <summary>
     ///     This method builds a <see cref="DnssecValidationStateEnum.Secure" /> result.
     /// </summary>
     public static DnssecValidationResult Secure() => new(DnssecValidationStateEnum.Secure);

@@ -315,8 +315,11 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         );
         DnssecValidator realValidator = new(
             engine,
-            new EmptyRecursiveCacheStub(),
-            new FixedTrustAnchorStoreStub([trustAnchor])
+            new FixedTrustAnchorStoreStub([trustAnchor]),
+            new DnssecTrustCache(
+                new StaticOptionsMonitor<RecursiveServerOptions>(new RecursiveServerOptions()),
+                new RecordingEventPublisher()
+            )
         );
 
         // Secure case: the upstream returns the correctly signed answer.
@@ -615,50 +618,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             DnsClassEnum recordClass,
             IterativeResolutionResult result,
             QueryBudget budget,
-            CancellationToken stoppingToken = default
+            CancellationToken stoppingToken = default,
+            IDnssecRecordFetcher fetcher = null
         ) => Task.FromResult(DnssecValidationResult.Insecure());
-    }
-
-    /// <summary>This class always reports a cache miss, so <c>DnssecValidator</c>'s <c>FindOwningZone</c> falls back to the root.</summary>
-    private sealed class EmptyRecursiveCacheStub : IRecursiveCache
-    {
-        public RecursiveCacheEntry TryGet(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            DnsClassEnum recordClass
-        ) => null;
-
-        public RecursiveCacheEntry TryGetStale(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            DnsClassEnum recordClass,
-            TimeSpan maxStaleAge
-        ) => null;
-
-        public void StorePositive(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            DnsClassEnum recordClass,
-            IReadOnlyList<DnsResourceRecord> records,
-            IReadOnlyList<DnsResourceRecord> dnssecRecords
-        ) { }
-
-        public void StoreNegative(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            DnsClassEnum recordClass,
-            DnsResponseCodeEnum responseCode,
-            DnsResourceRecord soa,
-            IReadOnlyList<DnsResourceRecord> dnssecRecords
-        ) { }
-
-        public int EvictExpiredAndOverCapacity() => 0;
-
-        public IReadOnlyList<(
-            DnsName Name,
-            DnsResourceRecordTypeEnum Type,
-            DnsClassEnum Class
-        )> GetPrefetchCandidates(TimeSpan prefetchWindow, TimeSpan recentAccessWindow) => [];
     }
 
     private sealed class FixedTrustAnchorStoreStub(IReadOnlyList<TrustAnchor> anchors)
