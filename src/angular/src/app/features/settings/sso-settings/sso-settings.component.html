@@ -69,6 +69,18 @@
               placeholder="Leave blank to keep the current secret"
               autocomplete="new-password"
             />
+            @if (clientSecretFromEnvironment()) {
+              <c-alert color="info" [dismissible]="false" class="mt-2" role="status">
+                The client secret comes from NINLIL_IDENTITY_SSO_CLIENT_SECRET and overrides
+                anything saved here.
+              </c-alert>
+            }
+            @if (clientSecretUnreadable()) {
+              <c-alert color="warning" [dismissible]="false" class="mt-2" role="alert">
+                The saved client secret cannot be decrypted (the server's key ring changed). Enter
+                it again.
+              </c-alert>
+            }
             <p class="hint">
               @if (clientSecretConfigured()) {
                 A client secret is currently on file. It is never shown here -- leave this blank to

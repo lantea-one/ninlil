@@ -142,4 +142,35 @@ describe('SsoSettingsComponent', () => {
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
   });
+
+  it('shows no override or unreadable callout when neither flag is set', async () => {
+    const fixture = await createComponent();
+
+    expect(fixture.nativeElement.textContent).not.toContain('The client secret comes from N');
+    expect(fixture.nativeElement.textContent).not.toContain('cannot be decrypted');
+  });
+
+  it('shows the override callout when the secret comes from the environment', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiSsoSettingsGet.and.returnValue(
+        of({ clientSecretFromEnvironment: true, clientSecretConfigured: true }),
+      );
+    });
+
+    expect(fixture.nativeElement.textContent).toContain(
+      'The client secret comes from NINLIL_IDENTITY_SSO_CLIENT_SECRET',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('cannot be decrypted');
+  });
+
+  it('shows the warning callout when the saved secret is unreadable', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiSsoSettingsGet.and.returnValue(of({ clientSecretUnreadable: true }));
+    });
+
+    expect(fixture.nativeElement.textContent).toContain(
+      'The saved client secret cannot be decrypted',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('The client secret comes from N');
+  });
 });

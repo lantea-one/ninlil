@@ -82,6 +82,17 @@
               placeholder="Leave blank to keep the current password"
               autocomplete="new-password"
             />
+            @if (passwordFromEnvironment()) {
+              <c-alert color="info" [dismissible]="false" class="mt-2" role="status">
+                The password comes from NINLIL_EMAIL_PASSWORD and overrides anything saved here.
+              </c-alert>
+            }
+            @if (passwordUnreadable()) {
+              <c-alert color="warning" [dismissible]="false" class="mt-2" role="alert">
+                The saved password cannot be decrypted (the server's key ring changed). Enter it
+                again.
+              </c-alert>
+            }
             <p class="hint">
               @if (passwordConfigured()) {
                 A password is currently on file. It is never shown here -- leave this blank to keep

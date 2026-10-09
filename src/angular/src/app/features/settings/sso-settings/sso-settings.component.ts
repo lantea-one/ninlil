@@ -70,6 +70,18 @@ export class SsoSettingsComponent implements OnInit {
   /** Whether a client secret is stored, per the last `Get`; shown as a hint, never as a value. */
   readonly clientSecretConfigured = signal(false);
 
+  /**
+   * Whether `NINLIL_IDENTITY_SSO_CLIENT_SECRET` supplies the secret, per the last `Get`. The
+   * environment value overrides the one saved here, so the page says so.
+   */
+  readonly clientSecretFromEnvironment = signal(false);
+
+  /**
+   * Whether the saved secret cannot be decrypted with this server's key ring, per the last `Get`.
+   * The operator must enter it again.
+   */
+  readonly clientSecretUnreadable = signal(false);
+
   readonly form = this.formBuilder.group({
     enable: [false],
     displayName: ['Single Sign-On', [Validators.required]],
@@ -104,7 +116,11 @@ export class SsoSettingsComponent implements OnInit {
       const result = await firstValueFrom(this.ssoApi.apiSsoSettingsPatch({ body }));
       this.notification.success(result.note ?? 'SSO settings saved.');
 
-      if (clientSecret.trim().length > 0) this.clientSecretConfigured.set(true);
+      if (clientSecret.trim().length > 0) {
+        this.clientSecretConfigured.set(true);
+        // A freshly saved secret is readable again; an environment override still wins.
+        this.clientSecretUnreadable.set(false);
+      }
 
       // The secret is never returned; clearing the field keeps "blank means unchanged" true.
       this.form.patchValue({ clientSecret: '' });
@@ -122,6 +138,8 @@ export class SsoSettingsComponent implements OnInit {
     try {
       const settings = await firstValueFrom(this.ssoApi.apiSsoSettingsGet());
       this.clientSecretConfigured.set(settings.clientSecretConfigured ?? false);
+      this.clientSecretFromEnvironment.set(settings.clientSecretFromEnvironment ?? false);
+      this.clientSecretUnreadable.set(settings.clientSecretUnreadable ?? false);
       this.form.patchValue({
         enable: settings.enable ?? false,
         displayName: settings.displayName ?? 'Single Sign-On',

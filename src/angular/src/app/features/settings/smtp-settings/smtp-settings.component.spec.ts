@@ -145,4 +145,58 @@ describe('SmtpSettingsComponent', () => {
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
   });
+
+  it('shows no override or unreadable callout when neither flag is set', async () => {
+    const fixture = await createComponent();
+
+    expect(fixture.nativeElement.textContent).not.toContain('The password comes from NINLIL');
+    expect(fixture.nativeElement.textContent).not.toContain('cannot be decrypted');
+  });
+
+  it('shows the override callout when the secret comes from the environment', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiSmtpSettingsGet.and.returnValue(
+        of({ passwordFromEnvironment: true, passwordConfigured: true }),
+      );
+    });
+
+    expect(fixture.nativeElement.textContent).toContain(
+      'The password comes from NINLIL_EMAIL_PASSWORD',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('cannot be decrypted');
+  });
+
+  it('shows the warning callout when the saved secret is unreadable', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiSmtpSettingsGet.and.returnValue(of({ passwordUnreadable: true }));
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('The saved password cannot be decrypted');
+    expect(fixture.nativeElement.textContent).not.toContain('The password comes from NINLIL');
+  });
+
+  it('shows the 400 message when a username is saved without any password', async () => {
+    const message =
+      "SMTP username 'mailer' is set but no password is configured. Enter the password in the SMTP settings, or clear the username for a server that accepts anonymous connections.";
+    const fixture = await createComponent(() => {
+      apiSpy.apiSmtpSettingsPatch.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: { title: 'Invalid request.', detail: message },
+            }),
+        ),
+      );
+    });
+
+    fixture.componentInstance.form.patchValue({ username: 'mailer' });
+    await fixture.componentInstance.save();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.errorMessage()).toBe(message);
+    expect(fixture.nativeElement.querySelector('c-alert[color="danger"]').textContent).toContain(
+      'no password is configured',
+    );
+  });
 });

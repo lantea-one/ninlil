@@ -67,6 +67,18 @@ export class SmtpSettingsComponent implements OnInit {
   /** Whether a password is stored, per the last `Get`; shown as a hint, never as a value. */
   readonly passwordConfigured = signal(false);
 
+  /**
+   * Whether `NINLIL_EMAIL_PASSWORD` supplies the password, per the last `Get`. The environment
+   * value overrides the one saved here, so the page says so.
+   */
+  readonly passwordFromEnvironment = signal(false);
+
+  /**
+   * Whether the saved password cannot be decrypted with this server's key ring, per the last
+   * `Get`. The operator must enter it again.
+   */
+  readonly passwordUnreadable = signal(false);
+
   readonly form = this.formBuilder.group({
     smtpHost: ['', [Validators.required]],
     smtpPort: [587, [Validators.required, Validators.min(1), Validators.max(65535)]],
@@ -99,7 +111,11 @@ export class SmtpSettingsComponent implements OnInit {
       const result = await firstValueFrom(this.smtpApi.apiSmtpSettingsPatch({ body }));
       this.notification.success(result.note ?? 'SMTP settings saved.');
 
-      if (value.password.trim().length > 0) this.passwordConfigured.set(true);
+      if (value.password.trim().length > 0) {
+        this.passwordConfigured.set(true);
+        // A freshly saved password is readable again; an environment override still wins.
+        this.passwordUnreadable.set(false);
+      }
 
       // The password is never returned; clearing the field keeps "blank means unchanged" true.
       this.form.patchValue({ password: '' });
@@ -117,6 +133,8 @@ export class SmtpSettingsComponent implements OnInit {
     try {
       const settings = await firstValueFrom(this.smtpApi.apiSmtpSettingsGet());
       this.passwordConfigured.set(settings.passwordConfigured ?? false);
+      this.passwordFromEnvironment.set(settings.passwordFromEnvironment ?? false);
+      this.passwordUnreadable.set(settings.passwordUnreadable ?? false);
       this.form.patchValue({
         smtpHost: settings.smtpHost ?? '',
         smtpPort: settings.smtpPort ?? 587,
