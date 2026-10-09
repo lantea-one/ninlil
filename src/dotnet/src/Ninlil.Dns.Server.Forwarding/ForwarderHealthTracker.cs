@@ -103,6 +103,33 @@ public sealed class ForwarderHealthTracker(
         return [.. pool.Skip(start), .. pool.Take(start)];
     }
 
+    /// <summary>
+    ///     This constant is the shortest probe interval the loop uses (one second). A shorter
+    ///     configured value is raised to it so a misconfigured interval cannot make the loop spin.
+    /// </summary>
+    public static readonly TimeSpan MinimumProbeInterval = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    ///     This constant is the longest probe interval the loop uses (one day). It is far below the
+    ///     limit of <see cref="Task.Delay(TimeSpan, CancellationToken)" />, which throws above
+    ///     about 49.7 days.
+    /// </summary>
+    public static readonly TimeSpan MaximumProbeInterval = TimeSpan.FromDays(1);
+
+    /// <summary>
+    ///     This method limits a configured <see cref="ForwardingOptions.HealthCheckInterval" /> to
+    ///     the range the loop can wait for. The options reload live, and a negative value or one
+    ///     past the limit of <see cref="Task.Delay(TimeSpan, CancellationToken)" /> would throw out
+    ///     of <see cref="ExecuteAsync" /> and stop the host. <c>ForwardingSettingsController</c>
+    ///     refuses such values, so this guards a hand-edited configuration file.
+    /// </summary>
+    /// <param name="configured">The interval from the options.</param>
+    /// <returns>The interval between <see cref="MinimumProbeInterval" /> and <see cref="MaximumProbeInterval" />.</returns>
+    public static TimeSpan ClampProbeInterval(TimeSpan configured) =>
+        configured < MinimumProbeInterval ? MinimumProbeInterval
+        : configured > MaximumProbeInterval ? MaximumProbeInterval
+        : configured;
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -119,7 +146,10 @@ public sealed class ForwarderHealthTracker(
                 // ticking at the probe interval instead of exiting.
                 try
                 {
-                    await Task.Delay(options.CurrentValue.HealthCheckInterval, stoppingToken);
+                    await Task.Delay(
+                        ClampProbeInterval(options.CurrentValue.HealthCheckInterval),
+                        stoppingToken
+                    );
                 }
                 catch (OperationCanceledException)
                 {
@@ -131,7 +161,10 @@ public sealed class ForwarderHealthTracker(
 
             try
             {
-                await Task.Delay(options.CurrentValue.HealthCheckInterval, stoppingToken);
+                await Task.Delay(
+                    ClampProbeInterval(options.CurrentValue.HealthCheckInterval),
+                    stoppingToken
+                );
                 await ProbeAllAsync(stoppingToken);
             }
             catch (OperationCanceledException)
