@@ -8,1433 +8,1432 @@ using Ninlil.Dns.Data.EntityFrameworkCore;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations;
+
+[DbContext(typeof(NinlilDnsContext))]
+[Migration("20260911171240_ConvertDnsRewriteCreatedAtUtcToTicks")]
+partial class ConvertDnsRewriteCreatedAtUtcToTicks
 {
-    [DbContext(typeof(NinlilDnsContext))]
-    [Migration("20260911171240_ConvertDnsRewriteCreatedAtUtcToTicks")]
-    partial class ConvertDnsRewriteCreatedAtUtcToTicks
+    /// <inheritdoc />
+    protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
-        {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.19");
+        modelBuilder.HasAnnotation("ProductVersion", "9.0.19");
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("ConsumedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("ConsumedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("ExpiresAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("ExpiresAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("RevokedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("RevokedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                b.Property<string>("TokenHash")
+                    .IsRequired()
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("UserId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
+                b.HasIndex("TokenHash")
+                    .IsUnique();
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("NinlilDnsApiTokens", (string)null);
-                });
+                b.ToTable("NinlilDnsApiTokens", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.CloudDnsProviderCredentialEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.CloudDnsProviderCredentialEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("CredentialsEncrypted")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                b.Property<string>("CredentialsEncrypted")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ProviderType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ProviderType")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsCloudDnsProviderCredentials", (string)null);
-                });
+                b.ToTable("NinlilDnsCloudDnsProviderCredentials", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Host")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Host")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("LastHeartbeatAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("LastHeartbeatAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("MissedHeartbeatCount")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("MissedHeartbeatCount")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("Port")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("Port")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<Guid>("RemoteNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("RemoteNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("TlsCertificateThumbprint")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                b.Property<string>("TlsCertificateThumbprint")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("TsigKeyName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("TsigKeyName")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("RemoteNodeId")
-                        .IsUnique();
+                b.HasIndex("RemoteNodeId")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsClusterNodes", (string)null);
-                });
+                b.ToTable("NinlilDnsClusterNodes", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncedSettingsStateEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncedSettingsStateEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("SectionName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("SectionName")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("SectionName")
-                        .IsUnique();
+                b.HasIndex("SectionName")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsClusterSyncedSettingsStates", (string)null);
-                });
+                b.ToTable("NinlilDnsClusterSyncedSettingsStates", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("Capabilities")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("Capabilities")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Cidr")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Cidr")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.ToTable("NinlilDnsAccessControlRules", (string)null);
-                });
+                b.ToTable("NinlilDnsAccessControlRules", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDefault")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsClientGroups", (string)null);
-                });
+                b.ToTable("NinlilDnsClientGroups", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupListAssignmentEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupListAssignmentEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ClientGroupId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("ClientGroupId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ListId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("ListId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ClientGroupId");
+                b.HasIndex("ClientGroupId");
 
-                    b.HasIndex("ListId");
+                b.HasIndex("ListId");
 
-                    b.ToTable("NinlilDnsClientGroupListAssignments", (string)null);
-                });
+                b.ToTable("NinlilDnsClientGroupListAssignments", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Cidr")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Cidr")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ClientGroupId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("ClientGroupId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ClientId")
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClientId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ClientGroupId");
+                b.HasIndex("ClientGroupId");
 
-                    b.ToTable("NinlilDnsClientGroupNetworks", (string)null);
-                });
+                b.ToTable("NinlilDnsClientGroupNetworks", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Action")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Kind")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("LastFetchedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("LastFetchedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<TimeSpan?>("RefreshInterval")
-                        .HasColumnType("TEXT");
+                b.Property<TimeSpan?>("RefreshInterval")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Source")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("SubscriptionUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("TEXT");
+                b.Property<string>("SubscriptionUrl")
+                    .HasMaxLength(2048)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsFilterLists", (string)null);
-                });
+                b.ToTable("NinlilDnsFilterLists", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntryEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comment")
-                        .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comment")
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Kind")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ListId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("ListId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Value")
+                    .IsRequired()
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ListId", "Value");
+                b.HasIndex("ListId", "Value");
 
-                    b.ToTable("NinlilDnsFilterListEntries", (string)null);
-                });
+                b.ToTable("NinlilDnsFilterListEntries", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsForwarderEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsForwarderEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("DefinitionString")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("TEXT");
+                b.Property<string>("DefinitionString")
+                    .IsRequired()
+                    .HasMaxLength(2048)
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("SortOrder")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsForwarders", (string)null);
-                });
+                b.ToTable("NinlilDnsForwarders", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsQueryLogEntryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsQueryLogEntryEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("AnswerCount")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("AnswerCount")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("ClientAddress")
-                        .HasMaxLength(45)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClientAddress")
+                    .HasMaxLength(45)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<long>("OccurredAtUtc")
-                        .HasColumnType("INTEGER");
+                b.Property<long>("OccurredAtUtc")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Protocol")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Protocol")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("QueriedName")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("QueriedName")
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("QueriedType")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("QueriedType")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ResponseCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ResponseCode")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ClientAddress");
+                b.HasIndex("ClientAddress");
 
-                    b.HasIndex("OccurredAtUtc");
+                b.HasIndex("OccurredAtUtc");
 
-                    b.HasIndex("QueriedName");
+                b.HasIndex("QueriedName");
 
-                    b.HasIndex("ResponseCode");
+                b.HasIndex("ResponseCode");
 
-                    b.ToTable("NinlilDnsQueryLogEntries", (string)null);
-                });
+                b.ToTable("NinlilDnsQueryLogEntries", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsRewriteEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsRewriteEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("INTEGER");
+                b.Property<long>("CreatedAtUtc")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Domain")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Domain")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Target")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Target")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Domain");
+                b.HasIndex("Domain");
 
-                    b.ToTable("NinlilDnsRewrites", (string)null);
-                });
+                b.ToTable("NinlilDnsRewrites", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<byte>("Algorithm")
-                        .HasColumnType("INTEGER");
+                b.Property<byte>("Algorithm")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("INTEGER");
+                b.Property<long>("CreatedAtUtc")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<ushort>("KeyTag")
-                        .HasColumnType("INTEGER");
+                b.Property<ushort>("KeyTag")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<int>("LifecycleState")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("LifecycleState")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("ParentDsConfirmedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("ParentDsConfirmedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("PrivateKeyPkcs8Encrypted")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                b.Property<string>("PrivateKeyPkcs8Encrypted")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
 
-                    b.Property<byte[]>("PublicKeyWireFormat")
-                        .IsRequired()
-                        .HasColumnType("BLOB");
+                b.Property<byte[]>("PublicKeyWireFormat")
+                    .IsRequired()
+                    .HasColumnType("BLOB");
 
-                    b.Property<DateTimeOffset>("PublishedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("PublishedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("RetiredAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("RetiredAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("Role")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("Role")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ZoneId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("ZoneId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ZoneId");
+                b.HasIndex("ZoneId");
 
-                    b.ToTable("NinlilDnsDnssecKeys", (string)null);
-                });
+                b.ToTable("NinlilDnsDnssecKeys", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LeaseEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LeaseEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ClientIdentifier")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClientIdentifier")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("HostName")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("HostName")
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("IpAddress")
-                        .IsRequired()
-                        .HasMaxLength(45)
-                        .HasColumnType("TEXT");
+                b.Property<string>("IpAddress")
+                    .IsRequired()
+                    .HasMaxLength(45)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("LeaseObtainedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("LeaseObtainedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ProtocolVersion")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ProtocolVersion")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ScopeName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ScopeName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
+                b.Property<string>("State")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ScopeName", "ClientIdentifier")
-                        .IsUnique();
+                b.HasIndex("ScopeName", "ClientIdentifier")
+                    .IsUnique();
 
-                    b.HasIndex("ScopeName", "IpAddress")
-                        .IsUnique();
+                b.HasIndex("ScopeName", "IpAddress")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsLeases", (string)null);
-                });
+                b.ToTable("NinlilDnsLeases", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LogEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LogEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Category")
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Category")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Exception")
-                        .HasColumnType("TEXT");
+                b.Property<string>("Exception")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                b.Property<string>("Message")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("PropertiesJson")
-                        .HasColumnType("TEXT");
+                b.Property<string>("PropertiesJson")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Severity")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Severity")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("TimestampUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("TimestampUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("TimestampUtc", "Severity");
+                b.HasIndex("TimestampUtc", "Severity");
 
-                    b.ToTable("NinlilDnsLogs", (string)null);
-                });
+                b.ToTable("NinlilDnsLogs", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.MetricEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.MetricEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Category")
+                    .IsRequired()
+                    .HasMaxLength(128)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("DimensionsJson")
-                        .HasColumnType("TEXT");
+                b.Property<string>("DimensionsJson")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("TimestampUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("TimestampUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<double>("Value")
-                        .HasColumnType("REAL");
+                b.Property<double>("Value")
+                    .HasColumnType("REAL");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Category", "Name", "TimestampUtc");
+                b.HasIndex("Category", "Name", "TimestampUtc");
 
-                    b.ToTable("NinlilDnsMetrics", (string)null);
-                });
+                b.ToTable("NinlilDnsMetrics", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Class")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Class")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("DataJson")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                b.Property<string>("DataJson")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("ExcludeFromSync")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("ExcludeFromSync")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("ManagedByFeature")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ManagedByFeature")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<long>("TimeToLiveSeconds")
-                        .HasColumnType("INTEGER");
+                b.Property<long>("TimeToLiveSeconds")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ZoneId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("ZoneId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ZoneId", "Name", "Type");
+                b.HasIndex("ZoneId", "Name", "Type");
 
-                    b.ToTable("NinlilDnsRecords", (string)null);
-                });
+                b.ToTable("NinlilDnsRecords", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ClaimType")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClaimType")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ClaimValue")
-                        .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClaimValue")
+                    .IsRequired()
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("RoleId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("RoleId");
+                b.HasIndex("RoleId");
 
-                    b.ToTable("NinlilDnsRoleClaims", (string)null);
-                });
+                b.ToTable("NinlilDnsRoleClaims", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ClusterConflictNote")
-                        .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClusterConflictNote")
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .HasColumnType("TEXT");
+                b.Property<string>("ConcurrencyStamp")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("TEXT");
+                b.Property<string>("Description")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("NormalizedName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("NormalizedName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("NormalizedName")
-                        .IsUnique();
+                b.HasIndex("NormalizedName")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsRoles", (string)null);
-                });
+                b.ToTable("NinlilDnsRoles", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("ExpiresAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("ExpiresAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                b.Property<string>("IpAddress")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("RefreshTokenHash")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                b.Property<string>("RefreshTokenHash")
+                    .IsRequired()
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("RevokedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("RevokedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                b.Property<string>("UserAgent")
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("UserId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("RefreshTokenHash")
-                        .IsUnique();
+                b.HasIndex("RefreshTokenHash")
+                    .IsUnique();
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("NinlilDnsSessions", (string)null);
-                });
+                b.ToTable("NinlilDnsSessions", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("AlgorithmName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("AlgorithmName")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("SecretEncrypted")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                b.Property<string>("SecretEncrypted")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsTsigKeys", (string)null);
-                });
+                b.ToTable("NinlilDnsTsigKeys", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ClaimType")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClaimType")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ClaimValue")
-                        .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClaimValue")
+                    .IsRequired()
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("UserId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("NinlilDnsUserClaims", (string)null);
-                });
+                b.ToTable("NinlilDnsUserClaims", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("AccessFailedCount")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("AccessFailedCount")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("ClusterConflictNote")
-                        .HasMaxLength(1024)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ClusterConflictNote")
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .HasColumnType("TEXT");
+                b.Property<string>("ConcurrencyStamp")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("DisplayName")
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Email")
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("EmailConfirmed")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("ExternalIdentityProvider")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ExternalIdentityProvider")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("ExternalSubjectId")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("ExternalSubjectId")
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("LockoutEnabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LockoutEndUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("LockoutEndUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("NormalizedEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("NormalizedEmail")
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("NormalizedUserName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("NormalizedUserName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("PasswordHash")
-                        .HasColumnType("TEXT");
+                b.Property<string>("PasswordHash")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("PhoneNumber")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("PhoneNumberConfirmed")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("PreferredMode")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("PreferredMode")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("PreferredPalette")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("PreferredPalette")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("SecurityStamp")
-                        .HasColumnType("TEXT");
+                b.Property<string>("SecurityStamp")
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("TwoFactorEnabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("TwoFactorRecoveryCodesEncrypted")
-                        .HasColumnType("TEXT");
+                b.Property<string>("TwoFactorRecoveryCodesEncrypted")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("TwoFactorTotpSecretEncrypted")
-                        .HasColumnType("TEXT");
+                b.Property<string>("TwoFactorTotpSecretEncrypted")
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("UserName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                b.Property<string>("UserName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("NormalizedEmail");
+                b.HasIndex("NormalizedEmail");
 
-                    b.HasIndex("NormalizedUserName")
-                        .IsUnique();
+                b.HasIndex("NormalizedUserName")
+                    .IsUnique();
 
-                    b.HasIndex("ExternalIdentityProvider", "ExternalSubjectId")
-                        .IsUnique();
+                b.HasIndex("ExternalIdentityProvider", "ExternalSubjectId")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsUsers", (string)null);
-                });
+                b.ToTable("NinlilDnsUsers", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
+            {
+                b.Property<Guid>("UserId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("RoleId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("UserId", "RoleId");
+                b.HasKey("UserId", "RoleId");
 
-                    b.HasIndex("RoleId");
+                b.HasIndex("RoleId");
 
-                    b.ToTable("NinlilDnsUserRoles", (string)null);
-                });
+                b.ToTable("NinlilDnsUserRoles", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookDeliveryAttemptEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookDeliveryAttemptEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("AttemptCount")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<long?>("CompletedAtUtc")
-                        .HasColumnType("INTEGER");
+                b.Property<long?>("CompletedAtUtc")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("EventTypeName")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                b.Property<string>("EventTypeName")
+                    .HasMaxLength(128)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("LastAttemptedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("LastAttemptedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("LastErrorMessage")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("LastErrorMessage")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<int?>("LastHttpStatusCode")
-                        .HasColumnType("INTEGER");
+                b.Property<int?>("LastHttpStatusCode")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<int>("MaxAttempts")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("MaxAttempts")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<long?>("NextRetryDueUtc")
-                        .HasColumnType("INTEGER");
+                b.Property<long?>("NextRetryDueUtc")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("PayloadJson")
-                        .HasColumnType("TEXT");
+                b.Property<string>("PayloadJson")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("SubscriptionId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("SubscriptionId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("SubscriptionName")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("SubscriptionName")
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("CompletedAtUtc");
+                b.HasIndex("CompletedAtUtc");
 
-                    b.HasIndex("SubscriptionId");
+                b.HasIndex("SubscriptionId");
 
-                    b.HasIndex("Status", "NextRetryDueUtc");
+                b.HasIndex("Status", "NextRetryDueUtc");
 
-                    b.ToTable("NinlilDnsWebhookDeliveryAttempts", (string)null);
-                });
+                b.ToTable("NinlilDnsWebhookDeliveryAttempts", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookSubscriptionEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookSubscriptionEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("AuthCredentialsEncrypted")
-                        .HasColumnType("TEXT");
+                b.Property<string>("AuthCredentialsEncrypted")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("AuthMode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("AuthMode")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("EventTypeNames")
-                        .HasColumnType("TEXT");
+                b.Property<string>("EventTypeNames")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("HmacSigningSecretEncrypted")
-                        .HasColumnType("TEXT");
+                b.Property<string>("HmacSigningSecretEncrypted")
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<int>("MaxDeliveryAttempts")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("MaxDeliveryAttempts")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("TargetUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("TEXT");
+                b.Property<string>("TargetUrl")
+                    .IsRequired()
+                    .HasMaxLength(2048)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsWebhookSubscriptions", (string)null);
-                });
+                b.ToTable("NinlilDnsWebhookSubscriptions", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneChangeJournalEntryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneChangeJournalEntryEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("AddedRecordsJson")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                b.Property<string>("AddedRecordsJson")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<long>("NewSerial")
-                        .HasColumnType("INTEGER");
+                b.Property<long>("NewSerial")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<long>("OldSerial")
-                        .HasColumnType("INTEGER");
+                b.Property<long>("OldSerial")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("RemovedRecordsJson")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                b.Property<string>("RemovedRecordsJson")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ZoneId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid>("ZoneId")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ZoneId", "OldSerial");
+                b.HasIndex("ZoneId", "OldSerial");
 
-                    b.ToTable("NinlilDnsZoneChangeJournalEntries", (string)null);
-                });
+                b.ToTable("NinlilDnsZoneChangeJournalEntries", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool?>("AutoManageCaaRecords")
-                        .HasColumnType("INTEGER");
+                b.Property<bool?>("AutoManageCaaRecords")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<bool?>("AutoManagePtrRecords")
-                        .HasColumnType("INTEGER");
+                b.Property<bool?>("AutoManagePtrRecords")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("CaaIssuerDomain")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("CaaIssuerDomain")
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("CloudProviderCredentialId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("CloudProviderCredentialId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("CloudProviderZoneId")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("CloudProviderZoneId")
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<TimeSpan>("CloudSyncInterval")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
+                b.Property<TimeSpan>("CloudSyncInterval")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT")
+                    .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.Property<int>("DenialOfExistenceMode")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("DenialOfExistenceMode")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("DnssecAlgorithm")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("DnssecAlgorithm")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("DynamicUpdateEnabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("DynamicUpdateEnabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("ForwarderAddresses")
-                        .HasColumnType("TEXT");
+                b.Property<string>("ForwarderAddresses")
+                    .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<bool>("IsDnssecSigned")
-                        .HasColumnType("INTEGER");
+                b.Property<bool>("IsDnssecSigned")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<Guid?>("MemberOfCatalogZoneId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("MemberOfCatalogZoneId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("NotifyAddresses")
-                        .HasColumnType("TEXT");
+                b.Property<string>("NotifyAddresses")
+                    .HasColumnType("TEXT");
 
-                    b.Property<ushort>("Nsec3Iterations")
-                        .HasColumnType("INTEGER");
+                b.Property<ushort>("Nsec3Iterations")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("Nsec3SaltHex")
-                        .HasColumnType("TEXT");
+                b.Property<string>("Nsec3SaltHex")
+                    .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("TEXT");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("PrimaryServerAddresses")
-                        .HasColumnType("TEXT");
+                b.Property<string>("PrimaryServerAddresses")
+                    .HasColumnType("TEXT");
 
-                    b.Property<int?>("PtrIpv4PrefixLength")
-                        .HasColumnType("INTEGER");
+                b.Property<int?>("PtrIpv4PrefixLength")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<int?>("PtrIpv6PrefixLength")
-                        .HasColumnType("INTEGER");
+                b.Property<int?>("PtrIpv6PrefixLength")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<int>("TransferTransport")
-                        .HasColumnType("INTEGER");
+                b.Property<int>("TransferTransport")
+                    .HasColumnType("INTEGER");
 
-                    b.Property<string>("TsigKeyName")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
+                b.Property<string>("TsigKeyName")
+                    .HasMaxLength(255)
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsZones", (string)null);
-                });
+                b.ToTable("NinlilDnsZones", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", null)
-                        .WithMany()
-                        .HasForeignKey("ZoneId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", null)
+                    .WithMany()
+                    .HasForeignKey("ZoneId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
+                    .WithMany()
+                    .HasForeignKey("RoleId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
+                    .WithMany()
+                    .HasForeignKey("RoleId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 #pragma warning restore 612, 618
-        }
     }
 }

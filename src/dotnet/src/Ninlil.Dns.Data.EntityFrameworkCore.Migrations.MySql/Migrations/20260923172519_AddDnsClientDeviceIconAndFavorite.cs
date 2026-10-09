@@ -2,39 +2,38 @@
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations;
+
+/// <inheritdoc />
+public partial class AddDnsClientDeviceIconAndFavorite : Migration
 {
     /// <inheritdoc />
-    public partial class AddDnsClientDeviceIconAndFavorite : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder
-                .AddColumn<string>(
-                    name: "DeviceIconKey",
-                    table: "NinlilDnsClients",
-                    type: "varchar(32)",
-                    maxLength: 32,
-                    nullable: true
-                )
-                .Annotation("MySql:CharSet", "utf8mb4");
-
-            migrationBuilder.AddColumn<bool>(
-                name: "IsFavorite",
+        migrationBuilder
+            .AddColumn<string>(
+                name: "DeviceIconKey",
                 table: "NinlilDnsClients",
-                type: "tinyint(1)",
-                nullable: false,
-                defaultValue: false
-            );
-        }
+                type: "varchar(32)",
+                maxLength: 32,
+                nullable: true
+            )
+            .Annotation("MySql:CharSet", "utf8mb4");
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(name: "DeviceIconKey", table: "NinlilDnsClients");
+        migrationBuilder.AddColumn<bool>(
+            name: "IsFavorite",
+            table: "NinlilDnsClients",
+            type: "tinyint(1)",
+            nullable: false,
+            defaultValue: false
+        );
+    }
 
-            migrationBuilder.DropColumn(name: "IsFavorite", table: "NinlilDnsClients");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(name: "DeviceIconKey", table: "NinlilDnsClients");
+
+        migrationBuilder.DropColumn(name: "IsFavorite", table: "NinlilDnsClients");
     }
 }

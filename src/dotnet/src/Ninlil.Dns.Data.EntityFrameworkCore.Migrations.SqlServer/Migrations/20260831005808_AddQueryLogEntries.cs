@@ -3,86 +3,85 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations;
+
+/// <inheritdoc />
+public partial class AddQueryLogEntries : Migration
 {
     /// <inheritdoc />
-    public partial class AddQueryLogEntries : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.CreateTable(
-                name: "NinlilDnsQueryLogEntries",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    OccurredAtUtc = table.Column<long>(type: "bigint", nullable: false),
-                    ClientAddress = table.Column<string>(
-                        type: "nvarchar(45)",
-                        maxLength: 45,
-                        nullable: true
-                    ),
-                    Protocol = table.Column<string>(
-                        type: "nvarchar(32)",
-                        maxLength: 32,
-                        nullable: false
-                    ),
-                    QueriedName = table.Column<string>(
-                        type: "nvarchar(255)",
-                        maxLength: 255,
-                        nullable: true
-                    ),
-                    QueriedType = table.Column<string>(
-                        type: "nvarchar(32)",
-                        maxLength: 32,
-                        nullable: true
-                    ),
-                    ResponseCode = table.Column<string>(
-                        type: "nvarchar(32)",
-                        maxLength: 32,
-                        nullable: false
-                    ),
-                    AnswerCount = table.Column<int>(type: "int", nullable: false),
-                    CreatedAtUtc = table.Column<DateTimeOffset>(
-                        type: "datetimeoffset",
-                        nullable: false
-                    ),
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_NinlilDnsQueryLogEntries", x => x.Id);
-                }
-            );
+        migrationBuilder.CreateTable(
+            name: "NinlilDnsQueryLogEntries",
+            columns: table => new
+            {
+                Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                OccurredAtUtc = table.Column<long>(type: "bigint", nullable: false),
+                ClientAddress = table.Column<string>(
+                    type: "nvarchar(45)",
+                    maxLength: 45,
+                    nullable: true
+                ),
+                Protocol = table.Column<string>(
+                    type: "nvarchar(32)",
+                    maxLength: 32,
+                    nullable: false
+                ),
+                QueriedName = table.Column<string>(
+                    type: "nvarchar(255)",
+                    maxLength: 255,
+                    nullable: true
+                ),
+                QueriedType = table.Column<string>(
+                    type: "nvarchar(32)",
+                    maxLength: 32,
+                    nullable: true
+                ),
+                ResponseCode = table.Column<string>(
+                    type: "nvarchar(32)",
+                    maxLength: 32,
+                    nullable: false
+                ),
+                AnswerCount = table.Column<int>(type: "int", nullable: false),
+                CreatedAtUtc = table.Column<DateTimeOffset>(
+                    type: "datetimeoffset",
+                    nullable: false
+                ),
+            },
+            constraints: table =>
+            {
+                table.PrimaryKey("PK_NinlilDnsQueryLogEntries", x => x.Id);
+            }
+        );
 
-            migrationBuilder.CreateIndex(
-                name: "IX_NinlilDnsQueryLogEntries_ClientAddress",
-                table: "NinlilDnsQueryLogEntries",
-                column: "ClientAddress"
-            );
+        migrationBuilder.CreateIndex(
+            name: "IX_NinlilDnsQueryLogEntries_ClientAddress",
+            table: "NinlilDnsQueryLogEntries",
+            column: "ClientAddress"
+        );
 
-            migrationBuilder.CreateIndex(
-                name: "IX_NinlilDnsQueryLogEntries_OccurredAtUtc",
-                table: "NinlilDnsQueryLogEntries",
-                column: "OccurredAtUtc"
-            );
+        migrationBuilder.CreateIndex(
+            name: "IX_NinlilDnsQueryLogEntries_OccurredAtUtc",
+            table: "NinlilDnsQueryLogEntries",
+            column: "OccurredAtUtc"
+        );
 
-            migrationBuilder.CreateIndex(
-                name: "IX_NinlilDnsQueryLogEntries_QueriedName",
-                table: "NinlilDnsQueryLogEntries",
-                column: "QueriedName"
-            );
+        migrationBuilder.CreateIndex(
+            name: "IX_NinlilDnsQueryLogEntries_QueriedName",
+            table: "NinlilDnsQueryLogEntries",
+            column: "QueriedName"
+        );
 
-            migrationBuilder.CreateIndex(
-                name: "IX_NinlilDnsQueryLogEntries_ResponseCode",
-                table: "NinlilDnsQueryLogEntries",
-                column: "ResponseCode"
-            );
-        }
+        migrationBuilder.CreateIndex(
+            name: "IX_NinlilDnsQueryLogEntries_ResponseCode",
+            table: "NinlilDnsQueryLogEntries",
+            column: "ResponseCode"
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropTable(name: "NinlilDnsQueryLogEntries");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropTable(name: "NinlilDnsQueryLogEntries");
     }
 }

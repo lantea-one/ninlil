@@ -3,26 +3,25 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
+
+/// <inheritdoc />
+public partial class AddZoneCatalogMembership : Migration
 {
     /// <inheritdoc />
-    public partial class AddZoneCatalogMembership : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<Guid>(
-                name: "MemberOfCatalogZoneId",
-                table: "NinlilDnsZones",
-                type: "uuid",
-                nullable: true
-            );
-        }
+        migrationBuilder.AddColumn<Guid>(
+            name: "MemberOfCatalogZoneId",
+            table: "NinlilDnsZones",
+            type: "uuid",
+            nullable: true
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(name: "MemberOfCatalogZoneId", table: "NinlilDnsZones");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(name: "MemberOfCatalogZoneId", table: "NinlilDnsZones");
     }
 }

@@ -2,39 +2,38 @@
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
+
+/// <inheritdoc />
+public partial class AddDhcpOptionValueSource : Migration
 {
     /// <inheritdoc />
-    public partial class AddDhcpOptionValueSource : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "ValueSource",
-                table: "NinlilDhcpTagRuleOptions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Custom"
-            );
+        migrationBuilder.AddColumn<string>(
+            name: "ValueSource",
+            table: "NinlilDhcpTagRuleOptions",
+            type: "character varying(32)",
+            maxLength: 32,
+            nullable: false,
+            defaultValue: "Custom"
+        );
 
-            migrationBuilder.AddColumn<string>(
-                name: "ValueSource",
-                table: "NinlilDhcpScopeCustomOptions",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "Custom"
-            );
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "ValueSource",
+            table: "NinlilDhcpScopeCustomOptions",
+            type: "character varying(32)",
+            maxLength: 32,
+            nullable: false,
+            defaultValue: "Custom"
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(name: "ValueSource", table: "NinlilDhcpTagRuleOptions");
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(name: "ValueSource", table: "NinlilDhcpTagRuleOptions");
 
-            migrationBuilder.DropColumn(name: "ValueSource", table: "NinlilDhcpScopeCustomOptions");
-        }
+        migrationBuilder.DropColumn(name: "ValueSource", table: "NinlilDhcpScopeCustomOptions");
     }
 }

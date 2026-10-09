@@ -2,28 +2,27 @@
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations;
+
+/// <inheritdoc />
+public partial class AddZoneValidateDnssec : Migration
 {
     /// <inheritdoc />
-    public partial class AddZoneValidateDnssec : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<bool>(
-                name: "ValidateDnssec",
-                table: "NinlilDnsZones",
-                type: "INTEGER",
-                nullable: false,
-                defaultValue: false);
-        }
+        migrationBuilder.AddColumn<bool>(
+            name: "ValidateDnssec",
+            table: "NinlilDnsZones",
+            type: "INTEGER",
+            nullable: false,
+            defaultValue: false);
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "ValidateDnssec",
-                table: "NinlilDnsZones");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "ValidateDnssec",
+            table: "NinlilDnsZones");
     }
 }

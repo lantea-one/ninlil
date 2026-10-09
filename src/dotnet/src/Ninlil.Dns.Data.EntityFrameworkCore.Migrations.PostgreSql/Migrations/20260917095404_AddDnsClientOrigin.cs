@@ -2,28 +2,27 @@
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
+
+/// <inheritdoc />
+public partial class AddDnsClientOrigin : Migration
 {
     /// <inheritdoc />
-    public partial class AddDnsClientOrigin : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "Origin",
-                table: "NinlilDnsClients",
-                type: "character varying(16)",
-                maxLength: 16,
-                nullable: false,
-                defaultValue: "Manual"
-            );
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "Origin",
+            table: "NinlilDnsClients",
+            type: "character varying(16)",
+            maxLength: 16,
+            nullable: false,
+            defaultValue: "Manual"
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(name: "Origin", table: "NinlilDnsClients");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(name: "Origin", table: "NinlilDnsClients");
     }
 }

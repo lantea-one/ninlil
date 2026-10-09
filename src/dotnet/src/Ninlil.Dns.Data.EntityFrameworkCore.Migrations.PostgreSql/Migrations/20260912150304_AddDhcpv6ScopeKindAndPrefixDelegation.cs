@@ -2,46 +2,45 @@
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
+
+/// <inheritdoc />
+public partial class AddDhcpv6ScopeKindAndPrefixDelegation : Migration
 {
     /// <inheritdoc />
-    public partial class AddDhcpv6ScopeKindAndPrefixDelegation : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<int>(
-                name: "DelegatedPrefixLength",
-                table: "NinlilDhcpScopes",
-                type: "integer",
-                nullable: true
-            );
+        migrationBuilder.AddColumn<int>(
+            name: "DelegatedPrefixLength",
+            table: "NinlilDhcpScopes",
+            type: "integer",
+            nullable: true
+        );
 
-            migrationBuilder.AddColumn<string>(
-                name: "Kind",
-                table: "NinlilDhcpScopes",
-                type: "character varying(32)",
-                maxLength: 32,
-                nullable: false,
-                defaultValue: "AddressAssignment"
-            );
+        migrationBuilder.AddColumn<string>(
+            name: "Kind",
+            table: "NinlilDhcpScopes",
+            type: "character varying(32)",
+            maxLength: 32,
+            nullable: false,
+            defaultValue: "AddressAssignment"
+        );
 
-            migrationBuilder.AddColumn<int>(
-                name: "PrefixLength",
-                table: "NinlilDhcpLeases",
-                type: "integer",
-                nullable: true
-            );
-        }
+        migrationBuilder.AddColumn<int>(
+            name: "PrefixLength",
+            table: "NinlilDhcpLeases",
+            type: "integer",
+            nullable: true
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(name: "DelegatedPrefixLength", table: "NinlilDhcpScopes");
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(name: "DelegatedPrefixLength", table: "NinlilDhcpScopes");
 
-            migrationBuilder.DropColumn(name: "Kind", table: "NinlilDhcpScopes");
+        migrationBuilder.DropColumn(name: "Kind", table: "NinlilDhcpScopes");
 
-            migrationBuilder.DropColumn(name: "PrefixLength", table: "NinlilDhcpLeases");
-        }
+        migrationBuilder.DropColumn(name: "PrefixLength", table: "NinlilDhcpLeases");
     }
 }

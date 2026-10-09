@@ -3,35 +3,34 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
+
+/// <inheritdoc />
+public partial class AddDnsClientPause : Migration
 {
     /// <inheritdoc />
-    public partial class AddDnsClientPause : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<DateTimeOffset>(
-                name: "PausedUntilUtc",
-                table: "NinlilDnsClients",
-                type: "timestamp with time zone",
-                nullable: true
-            );
+        migrationBuilder.AddColumn<DateTimeOffset>(
+            name: "PausedUntilUtc",
+            table: "NinlilDnsClients",
+            type: "timestamp with time zone",
+            nullable: true
+        );
 
-            migrationBuilder.AddColumn<DateTimeOffset>(
-                name: "PausedUntilUtc",
-                table: "NinlilDnsClientGroups",
-                type: "timestamp with time zone",
-                nullable: true
-            );
-        }
+        migrationBuilder.AddColumn<DateTimeOffset>(
+            name: "PausedUntilUtc",
+            table: "NinlilDnsClientGroups",
+            type: "timestamp with time zone",
+            nullable: true
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(name: "PausedUntilUtc", table: "NinlilDnsClients");
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(name: "PausedUntilUtc", table: "NinlilDnsClients");
 
-            migrationBuilder.DropColumn(name: "PausedUntilUtc", table: "NinlilDnsClientGroups");
-        }
+        migrationBuilder.DropColumn(name: "PausedUntilUtc", table: "NinlilDnsClientGroups");
     }
 }

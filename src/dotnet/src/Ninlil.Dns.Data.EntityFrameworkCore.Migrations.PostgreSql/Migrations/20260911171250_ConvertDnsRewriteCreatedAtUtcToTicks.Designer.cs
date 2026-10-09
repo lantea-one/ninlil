@@ -9,1437 +9,1436 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
+
+[DbContext(typeof(NinlilDnsContext))]
+[Migration("20260911171250_ConvertDnsRewriteCreatedAtUtcToTicks")]
+partial class ConvertDnsRewriteCreatedAtUtcToTicks
 {
-    [DbContext(typeof(NinlilDnsContext))]
-    [Migration("20260911171250_ConvertDnsRewriteCreatedAtUtcToTicks")]
-    partial class ConvertDnsRewriteCreatedAtUtcToTicks
+    /// <inheritdoc />
+    protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
-        {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.19")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+        modelBuilder
+            .HasAnnotation("ProductVersion", "9.0.19")
+            .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+        NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("ConsumedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("ConsumedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("ExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("ExpiresAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<DateTimeOffset?>("RevokedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("RevokedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                b.Property<string>("TokenHash")
+                    .IsRequired()
+                    .HasMaxLength(512)
+                    .HasColumnType("character varying(512)");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("UserId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
+                b.HasIndex("TokenHash")
+                    .IsUnique();
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("NinlilDnsApiTokens", (string)null);
-                });
+                b.ToTable("NinlilDnsApiTokens", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.CloudDnsProviderCredentialEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.CloudDnsProviderCredentialEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CredentialsEncrypted")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("CredentialsEncrypted")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("ProviderType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("ProviderType")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsCloudDnsProviderCredentials", (string)null);
-                });
+                b.ToTable("NinlilDnsCloudDnsProviderCredentials", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Host")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Host")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<DateTimeOffset?>("LastHeartbeatAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("LastHeartbeatAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("MissedHeartbeatCount")
-                        .HasColumnType("integer");
+                b.Property<int>("MissedHeartbeatCount")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<int>("Port")
-                        .HasColumnType("integer");
+                b.Property<int>("Port")
+                    .HasColumnType("integer");
 
-                    b.Property<Guid>("RemoteNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("RemoteNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("TlsCertificateThumbprint")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                b.Property<string>("TlsCertificateThumbprint")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("character varying(64)");
 
-                    b.Property<string>("TsigKeyName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("TsigKeyName")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("RemoteNodeId")
-                        .IsUnique();
+                b.HasIndex("RemoteNodeId")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsClusterNodes", (string)null);
-                });
+                b.ToTable("NinlilDnsClusterNodes", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncedSettingsStateEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncedSettingsStateEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("SectionName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("SectionName")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("SectionName")
-                        .IsUnique();
+                b.HasIndex("SectionName")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsClusterSyncedSettingsStates", (string)null);
-                });
+                b.ToTable("NinlilDnsClusterSyncedSettingsStates", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<int>("Capabilities")
-                        .HasColumnType("integer");
+                b.Property<int>("Capabilities")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("Cidr")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                b.Property<string>("Cidr")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("character varying(64)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.ToTable("NinlilDnsAccessControlRules", (string)null);
-                });
+                b.ToTable("NinlilDnsAccessControlRules", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDefault")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsClientGroups", (string)null);
-                });
+                b.ToTable("NinlilDnsClientGroups", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupListAssignmentEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupListAssignmentEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<Guid>("ClientGroupId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("ClientGroupId")
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("ListId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("ListId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ClientGroupId");
+                b.HasIndex("ClientGroupId");
 
-                    b.HasIndex("ListId");
+                b.HasIndex("ListId");
 
-                    b.ToTable("NinlilDnsClientGroupListAssignments", (string)null);
-                });
+                b.ToTable("NinlilDnsClientGroupListAssignments", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Cidr")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                b.Property<string>("Cidr")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("character varying(64)");
 
-                    b.Property<Guid>("ClientGroupId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("ClientGroupId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("ClientId")
-                        .HasColumnType("text");
+                b.Property<string>("ClientId")
+                    .HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ClientGroupId");
+                b.HasIndex("ClientGroupId");
 
-                    b.ToTable("NinlilDnsClientGroupNetworks", (string)null);
-                });
+                b.ToTable("NinlilDnsClientGroupNetworks", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Action")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Kind")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<DateTimeOffset?>("LastFetchedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("LastFetchedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<TimeSpan?>("RefreshInterval")
-                        .HasColumnType("interval");
+                b.Property<TimeSpan?>("RefreshInterval")
+                    .HasColumnType("interval");
 
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Source")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("SubscriptionUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                b.Property<string>("SubscriptionUrl")
+                    .HasMaxLength(2048)
+                    .HasColumnType("character varying(2048)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsFilterLists", (string)null);
-                });
+                b.ToTable("NinlilDnsFilterLists", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntryEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Comment")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                b.Property<string>("Comment")
+                    .HasMaxLength(1024)
+                    .HasColumnType("character varying(1024)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Kind")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<Guid>("ListId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("ListId")
+                    .HasColumnType("uuid");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                b.Property<string>("Value")
+                    .IsRequired()
+                    .HasMaxLength(512)
+                    .HasColumnType("character varying(512)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ListId", "Value");
+                b.HasIndex("ListId", "Value");
 
-                    b.ToTable("NinlilDnsFilterListEntries", (string)null);
-                });
+                b.ToTable("NinlilDnsFilterListEntries", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsForwarderEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsForwarderEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("DefinitionString")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                b.Property<string>("DefinitionString")
+                    .IsRequired()
+                    .HasMaxLength(2048)
+                    .HasColumnType("character varying(2048)");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
+                b.Property<int>("SortOrder")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsForwarders", (string)null);
-                });
+                b.ToTable("NinlilDnsForwarders", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsQueryLogEntryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsQueryLogEntryEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<int>("AnswerCount")
-                        .HasColumnType("integer");
+                b.Property<int>("AnswerCount")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("ClientAddress")
-                        .HasMaxLength(45)
-                        .HasColumnType("character varying(45)");
+                b.Property<string>("ClientAddress")
+                    .HasMaxLength(45)
+                    .HasColumnType("character varying(45)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("OccurredAtUtc")
-                        .HasColumnType("bigint");
+                b.Property<long>("OccurredAtUtc")
+                    .HasColumnType("bigint");
 
-                    b.Property<string>("Protocol")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Protocol")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("QueriedName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("QueriedName")
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<string>("QueriedType")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("QueriedType")
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("ResponseCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("ResponseCode")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ClientAddress");
+                b.HasIndex("ClientAddress");
 
-                    b.HasIndex("OccurredAtUtc");
+                b.HasIndex("OccurredAtUtc");
 
-                    b.HasIndex("QueriedName");
+                b.HasIndex("QueriedName");
 
-                    b.HasIndex("ResponseCode");
+                b.HasIndex("ResponseCode");
 
-                    b.ToTable("NinlilDnsQueryLogEntries", (string)null);
-                });
+                b.ToTable("NinlilDnsQueryLogEntries", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsRewriteEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnsRewriteEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("bigint");
+                b.Property<long>("CreatedAtUtc")
+                    .HasColumnType("bigint");
 
-                    b.Property<string>("Domain")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Domain")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Target")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Target")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Domain");
+                b.HasIndex("Domain");
 
-                    b.ToTable("NinlilDnsRewrites", (string)null);
-                });
+                b.ToTable("NinlilDnsRewrites", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<byte>("Algorithm")
-                        .HasColumnType("smallint");
+                b.Property<byte>("Algorithm")
+                    .HasColumnType("smallint");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<long>("CreatedAtUtc")
-                        .HasColumnType("bigint");
+                b.Property<long>("CreatedAtUtc")
+                    .HasColumnType("bigint");
 
-                    b.Property<int>("KeyTag")
-                        .HasColumnType("integer");
+                b.Property<int>("KeyTag")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("LifecycleState")
-                        .HasColumnType("integer");
+                b.Property<int>("LifecycleState")
+                    .HasColumnType("integer");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("ParentDsConfirmedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("ParentDsConfirmedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("PrivateKeyPkcs8Encrypted")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("PrivateKeyPkcs8Encrypted")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<byte[]>("PublicKeyWireFormat")
-                        .IsRequired()
-                        .HasColumnType("bytea");
+                b.Property<byte[]>("PublicKeyWireFormat")
+                    .IsRequired()
+                    .HasColumnType("bytea");
 
-                    b.Property<DateTimeOffset>("PublishedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("PublishedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("RetiredAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("RetiredAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("Role")
-                        .HasColumnType("integer");
+                b.Property<int>("Role")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("ZoneId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("ZoneId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ZoneId");
+                b.HasIndex("ZoneId");
 
-                    b.ToTable("NinlilDnsDnssecKeys", (string)null);
-                });
+                b.ToTable("NinlilDnsDnssecKeys", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LeaseEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LeaseEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("ClientIdentifier")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("ClientIdentifier")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("HostName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("HostName")
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<string>("IpAddress")
-                        .IsRequired()
-                        .HasMaxLength(45)
-                        .HasColumnType("character varying(45)");
+                b.Property<string>("IpAddress")
+                    .IsRequired()
+                    .HasMaxLength(45)
+                    .HasColumnType("character varying(45)");
 
-                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("LeaseObtainedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("LeaseObtainedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("ProtocolVersion")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                b.Property<string>("ProtocolVersion")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("character varying(16)");
 
-                    b.Property<string>("ScopeName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("ScopeName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                b.Property<string>("State")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("character varying(16)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ScopeName", "ClientIdentifier")
-                        .IsUnique();
+                b.HasIndex("ScopeName", "ClientIdentifier")
+                    .IsUnique();
 
-                    b.HasIndex("ScopeName", "IpAddress")
-                        .IsUnique();
+                b.HasIndex("ScopeName", "IpAddress")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsLeases", (string)null);
-                });
+                b.ToTable("NinlilDnsLeases", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LogEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.LogEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Category")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                b.Property<string>("Category")
+                    .HasMaxLength(512)
+                    .HasColumnType("character varying(512)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Exception")
-                        .HasColumnType("text");
+                b.Property<string>("Exception")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("Message")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("PropertiesJson")
-                        .HasColumnType("text");
+                b.Property<string>("PropertiesJson")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Severity")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Severity")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<DateTimeOffset>("TimestampUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("TimestampUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("TimestampUtc", "Severity");
+                b.HasIndex("TimestampUtc", "Severity");
 
-                    b.ToTable("NinlilDnsLogs", (string)null);
-                });
+                b.ToTable("NinlilDnsLogs", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.MetricEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.MetricEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                b.Property<string>("Category")
+                    .IsRequired()
+                    .HasMaxLength(128)
+                    .HasColumnType("character varying(128)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("DimensionsJson")
-                        .HasColumnType("text");
+                b.Property<string>("DimensionsJson")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<DateTimeOffset>("TimestampUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("TimestampUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<double>("Value")
-                        .HasColumnType("double precision");
+                b.Property<double>("Value")
+                    .HasColumnType("double precision");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Category", "Name", "TimestampUtc");
+                b.HasIndex("Category", "Name", "TimestampUtc");
 
-                    b.ToTable("NinlilDnsMetrics", (string)null);
-                });
+                b.ToTable("NinlilDnsMetrics", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Class")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                b.Property<string>("Class")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("character varying(16)");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("DataJson")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("DataJson")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<bool>("ExcludeFromSync")
-                        .HasColumnType("boolean");
+                b.Property<bool>("ExcludeFromSync")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("ManagedByFeature")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("ManagedByFeature")
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<long>("TimeToLiveSeconds")
-                        .HasColumnType("bigint");
+                b.Property<long>("TimeToLiveSeconds")
+                    .HasColumnType("bigint");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("ZoneId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("ZoneId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ZoneId", "Name", "Type");
+                b.HasIndex("ZoneId", "Name", "Type");
 
-                    b.ToTable("NinlilDnsRecords", (string)null);
-                });
+                b.ToTable("NinlilDnsRecords", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("ClaimType")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("ClaimType")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<string>("ClaimValue")
-                        .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                b.Property<string>("ClaimValue")
+                    .IsRequired()
+                    .HasMaxLength(1024)
+                    .HasColumnType("character varying(1024)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("RoleId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("RoleId");
+                b.HasIndex("RoleId");
 
-                    b.ToTable("NinlilDnsRoleClaims", (string)null);
-                });
+                b.ToTable("NinlilDnsRoleClaims", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("ClusterConflictNote")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                b.Property<string>("ClusterConflictNote")
+                    .HasMaxLength(1024)
+                    .HasColumnType("character varying(1024)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .HasColumnType("text");
+                b.Property<string>("ConcurrencyStamp")
+                    .HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+                b.Property<string>("Description")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<string>("NormalizedName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("NormalizedName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("NormalizedName")
-                        .IsUnique();
+                b.HasIndex("NormalizedName")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsRoles", (string)null);
-                });
+                b.ToTable("NinlilDnsRoles", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset>("ExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("ExpiresAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                b.Property<string>("IpAddress")
+                    .HasMaxLength(64)
+                    .HasColumnType("character varying(64)");
 
-                    b.Property<string>("RefreshTokenHash")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                b.Property<string>("RefreshTokenHash")
+                    .IsRequired()
+                    .HasMaxLength(512)
+                    .HasColumnType("character varying(512)");
 
-                    b.Property<DateTimeOffset?>("RevokedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("RevokedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                b.Property<string>("UserAgent")
+                    .HasMaxLength(1024)
+                    .HasColumnType("character varying(1024)");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("UserId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("RefreshTokenHash")
-                        .IsUnique();
+                b.HasIndex("RefreshTokenHash")
+                    .IsUnique();
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("NinlilDnsSessions", (string)null);
-                });
+                b.ToTable("NinlilDnsSessions", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("AlgorithmName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("AlgorithmName")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("SecretEncrypted")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("SecretEncrypted")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsTsigKeys", (string)null);
-                });
+                b.ToTable("NinlilDnsTsigKeys", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("ClaimType")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("ClaimType")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<string>("ClaimValue")
-                        .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                b.Property<string>("ClaimValue")
+                    .IsRequired()
+                    .HasMaxLength(1024)
+                    .HasColumnType("character varying(1024)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("UserId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("NinlilDnsUserClaims", (string)null);
-                });
+                b.ToTable("NinlilDnsUserClaims", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<int>("AccessFailedCount")
-                        .HasColumnType("integer");
+                b.Property<int>("AccessFailedCount")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("ClusterConflictNote")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                b.Property<string>("ClusterConflictNote")
+                    .HasMaxLength(1024)
+                    .HasColumnType("character varying(1024)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .HasColumnType("text");
+                b.Property<string>("ConcurrencyStamp")
+                    .HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("DisplayName")
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("Email")
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("boolean");
+                b.Property<bool>("EmailConfirmed")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("ExternalIdentityProvider")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                b.Property<string>("ExternalIdentityProvider")
+                    .HasMaxLength(64)
+                    .HasColumnType("character varying(64)");
 
-                    b.Property<string>("ExternalSubjectId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("ExternalSubjectId")
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("LockoutEnabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<DateTimeOffset?>("LockoutEndUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("LockoutEndUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("NormalizedEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("NormalizedEmail")
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<string>("NormalizedUserName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("NormalizedUserName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("PasswordHash")
-                        .HasColumnType("text");
+                b.Property<string>("PasswordHash")
+                    .HasColumnType("text");
 
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("PhoneNumber")
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("boolean");
+                b.Property<bool>("PhoneNumberConfirmed")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("PreferredMode")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("PreferredMode")
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("PreferredPalette")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("PreferredPalette")
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("SecurityStamp")
-                        .HasColumnType("text");
+                b.Property<string>("SecurityStamp")
+                    .HasColumnType("text");
 
-                    b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("TwoFactorEnabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("TwoFactorRecoveryCodesEncrypted")
-                        .HasColumnType("text");
+                b.Property<string>("TwoFactorRecoveryCodesEncrypted")
+                    .HasColumnType("text");
 
-                    b.Property<string>("TwoFactorTotpSecretEncrypted")
-                        .HasColumnType("text");
+                b.Property<string>("TwoFactorTotpSecretEncrypted")
+                    .HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                b.Property<string>("UserName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("character varying(256)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("NormalizedEmail");
+                b.HasIndex("NormalizedEmail");
 
-                    b.HasIndex("NormalizedUserName")
-                        .IsUnique();
+                b.HasIndex("NormalizedUserName")
+                    .IsUnique();
 
-                    b.HasIndex("ExternalIdentityProvider", "ExternalSubjectId")
-                        .IsUnique();
+                b.HasIndex("ExternalIdentityProvider", "ExternalSubjectId")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsUsers", (string)null);
-                });
+                b.ToTable("NinlilDnsUsers", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
+            {
+                b.Property<Guid>("UserId")
+                    .HasColumnType("uuid");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("RoleId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("UserId", "RoleId");
+                b.HasKey("UserId", "RoleId");
 
-                    b.HasIndex("RoleId");
+                b.HasIndex("RoleId");
 
-                    b.ToTable("NinlilDnsUserRoles", (string)null);
-                });
+                b.ToTable("NinlilDnsUserRoles", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookDeliveryAttemptEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookDeliveryAttemptEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("integer");
+                b.Property<int>("AttemptCount")
+                    .HasColumnType("integer");
 
-                    b.Property<long?>("CompletedAtUtc")
-                        .HasColumnType("bigint");
+                b.Property<long?>("CompletedAtUtc")
+                    .HasColumnType("bigint");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("EventTypeName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                b.Property<string>("EventTypeName")
+                    .HasMaxLength(128)
+                    .HasColumnType("character varying(128)");
 
-                    b.Property<DateTimeOffset?>("LastAttemptedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("LastAttemptedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("LastErrorMessage")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("LastErrorMessage")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<int?>("LastHttpStatusCode")
-                        .HasColumnType("integer");
+                b.Property<int?>("LastHttpStatusCode")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("MaxAttempts")
-                        .HasColumnType("integer");
+                b.Property<int>("MaxAttempts")
+                    .HasColumnType("integer");
 
-                    b.Property<long?>("NextRetryDueUtc")
-                        .HasColumnType("bigint");
+                b.Property<long?>("NextRetryDueUtc")
+                    .HasColumnType("bigint");
 
-                    b.Property<string>("PayloadJson")
-                        .HasColumnType("text");
+                b.Property<string>("PayloadJson")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<Guid>("SubscriptionId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("SubscriptionId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("SubscriptionName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("SubscriptionName")
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("CompletedAtUtc");
+                b.HasIndex("CompletedAtUtc");
 
-                    b.HasIndex("SubscriptionId");
+                b.HasIndex("SubscriptionId");
 
-                    b.HasIndex("Status", "NextRetryDueUtc");
+                b.HasIndex("Status", "NextRetryDueUtc");
 
-                    b.ToTable("NinlilDnsWebhookDeliveryAttempts", (string)null);
-                });
+                b.ToTable("NinlilDnsWebhookDeliveryAttempts", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookSubscriptionEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.WebhookSubscriptionEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("AuthCredentialsEncrypted")
-                        .HasColumnType("text");
+                b.Property<string>("AuthCredentialsEncrypted")
+                    .HasColumnType("text");
 
-                    b.Property<string>("AuthMode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("AuthMode")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("EventTypeNames")
-                        .HasColumnType("text");
+                b.Property<string>("EventTypeNames")
+                    .HasColumnType("text");
 
-                    b.Property<string>("HmacSigningSecretEncrypted")
-                        .HasColumnType("text");
+                b.Property<string>("HmacSigningSecretEncrypted")
+                    .HasColumnType("text");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<int>("MaxDeliveryAttempts")
-                        .HasColumnType("integer");
+                b.Property<int>("MaxDeliveryAttempts")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("TargetUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                b.Property<string>("TargetUrl")
+                    .IsRequired()
+                    .HasMaxLength(2048)
+                    .HasColumnType("character varying(2048)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsWebhookSubscriptions", (string)null);
-                });
+                b.ToTable("NinlilDnsWebhookSubscriptions", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneChangeJournalEntryEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneChangeJournalEntryEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("AddedRecordsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("AddedRecordsJson")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("NewSerial")
-                        .HasColumnType("bigint");
+                b.Property<long>("NewSerial")
+                    .HasColumnType("bigint");
 
-                    b.Property<long>("OldSerial")
-                        .HasColumnType("bigint");
+                b.Property<long>("OldSerial")
+                    .HasColumnType("bigint");
 
-                    b.Property<string>("RemovedRecordsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("RemovedRecordsJson")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<Guid>("ZoneId")
-                        .HasColumnType("uuid");
+                b.Property<Guid>("ZoneId")
+                    .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ZoneId", "OldSerial");
+                b.HasIndex("ZoneId", "OldSerial");
 
-                    b.ToTable("NinlilDnsZoneChangeJournalEntries", (string)null);
-                });
+                b.ToTable("NinlilDnsZoneChangeJournalEntries", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
 
-                    b.Property<bool?>("AutoManageCaaRecords")
-                        .HasColumnType("boolean");
+                b.Property<bool?>("AutoManageCaaRecords")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool?>("AutoManagePtrRecords")
-                        .HasColumnType("boolean");
+                b.Property<bool?>("AutoManagePtrRecords")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("CaaIssuerDomain")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("CaaIssuerDomain")
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<Guid?>("CloudProviderCredentialId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("CloudProviderCredentialId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("CloudProviderZoneId")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("CloudProviderZoneId")
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<TimeSpan>("CloudSyncInterval")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("interval")
-                        .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
+                b.Property<TimeSpan>("CloudSyncInterval")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("interval")
+                    .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                b.Property<string>("Comments")
+                    .HasMaxLength(4096)
+                    .HasColumnType("character varying(4096)");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("DenialOfExistenceMode")
-                        .HasColumnType("integer");
+                b.Property<int>("DenialOfExistenceMode")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("DnssecAlgorithm")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("DnssecAlgorithm")
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<bool>("DynamicUpdateEnabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("DynamicUpdateEnabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("ForwarderAddresses")
-                        .HasColumnType("text");
+                b.Property<string>("ForwarderAddresses")
+                    .HasColumnType("text");
 
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("IsDnssecSigned")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsDnssecSigned")
+                    .HasColumnType("boolean");
 
-                    b.Property<Guid?>("MemberOfCatalogZoneId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("MemberOfCatalogZoneId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<string>("NotifyAddresses")
-                        .HasColumnType("text");
+                b.Property<string>("NotifyAddresses")
+                    .HasColumnType("text");
 
-                    b.Property<int>("Nsec3Iterations")
-                        .HasColumnType("integer");
+                b.Property<int>("Nsec3Iterations")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("Nsec3SaltHex")
-                        .HasColumnType("text");
+                b.Property<string>("Nsec3SaltHex")
+                    .HasColumnType("text");
 
-                    b.Property<Guid?>("OriginatingNodeId")
-                        .HasColumnType("uuid");
+                b.Property<Guid?>("OriginatingNodeId")
+                    .HasColumnType("uuid");
 
-                    b.Property<string>("PrimaryServerAddresses")
-                        .HasColumnType("text");
+                b.Property<string>("PrimaryServerAddresses")
+                    .HasColumnType("text");
 
-                    b.Property<int?>("PtrIpv4PrefixLength")
-                        .HasColumnType("integer");
+                b.Property<int?>("PtrIpv4PrefixLength")
+                    .HasColumnType("integer");
 
-                    b.Property<int?>("PtrIpv6PrefixLength")
-                        .HasColumnType("integer");
+                b.Property<int?>("PtrIpv6PrefixLength")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("TransferTransport")
-                        .HasColumnType("integer");
+                b.Property<int>("TransferTransport")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("TsigKeyName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                b.Property<string>("TsigKeyName")
+                    .HasMaxLength(255)
+                    .HasColumnType("character varying(255)");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("character varying(32)");
 
-                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                b.HasIndex("Name")
+                    .IsUnique();
 
-                    b.ToTable("NinlilDnsZones", (string)null);
-                });
+                b.ToTable("NinlilDnsZones", (string)null);
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ApiTokenEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", null)
-                        .WithMany()
-                        .HasForeignKey("ZoneId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RecordEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity", null)
+                    .WithMany()
+                    .HasForeignKey("ZoneId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.RoleClaimEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
+                    .WithMany()
+                    .HasForeignKey("RoleId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserClaimEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 
-            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
-                {
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.RoleEntity", null)
+                    .WithMany()
+                    .HasForeignKey("RoleId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
 #pragma warning restore 612, 618
-        }
     }
 }

@@ -2,28 +2,27 @@
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations;
+
+/// <inheritdoc />
+public partial class AddDnsClientGroupNetworkClientId : Migration
 {
     /// <inheritdoc />
-    public partial class AddDnsClientGroupNetworkClientId : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder
-                .AddColumn<string>(
-                    name: "ClientId",
-                    table: "NinlilDnsClientGroupNetworks",
-                    type: "longtext",
-                    nullable: true
-                )
-                .Annotation("MySql:CharSet", "utf8mb4");
-        }
+        migrationBuilder
+            .AddColumn<string>(
+                name: "ClientId",
+                table: "NinlilDnsClientGroupNetworks",
+                type: "longtext",
+                nullable: true
+            )
+            .Annotation("MySql:CharSet", "utf8mb4");
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(name: "ClientId", table: "NinlilDnsClientGroupNetworks");
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(name: "ClientId", table: "NinlilDnsClientGroupNetworks");
     }
 }

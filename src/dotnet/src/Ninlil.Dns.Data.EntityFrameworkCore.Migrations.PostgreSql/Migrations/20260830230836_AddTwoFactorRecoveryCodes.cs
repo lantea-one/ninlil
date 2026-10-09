@@ -2,29 +2,28 @@
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
+
+/// <inheritdoc />
+public partial class AddTwoFactorRecoveryCodes : Migration
 {
     /// <inheritdoc />
-    public partial class AddTwoFactorRecoveryCodes : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "TwoFactorRecoveryCodesEncrypted",
-                table: "NinlilDnsUsers",
-                type: "text",
-                nullable: true
-            );
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "TwoFactorRecoveryCodesEncrypted",
+            table: "NinlilDnsUsers",
+            type: "text",
+            nullable: true
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "TwoFactorRecoveryCodesEncrypted",
-                table: "NinlilDnsUsers"
-            );
-        }
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "TwoFactorRecoveryCodesEncrypted",
+            table: "NinlilDnsUsers"
+        );
     }
 }

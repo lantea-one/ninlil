@@ -3,47 +3,46 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations;
+
+/// <inheritdoc />
+public partial class LinkClusterKeysToPeers : Migration
 {
     /// <inheritdoc />
-    public partial class LinkClusterKeysToPeers : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<DateTimeOffset>(
-                name: "ClusterInviteExpiresAtUtc",
-                table: "NinlilDnsTsigKeys",
-                type: "datetimeoffset",
-                nullable: true);
+        migrationBuilder.AddColumn<DateTimeOffset>(
+            name: "ClusterInviteExpiresAtUtc",
+            table: "NinlilDnsTsigKeys",
+            type: "datetimeoffset",
+            nullable: true);
 
-            migrationBuilder.AddColumn<Guid>(
-                name: "ClusterNodeId",
-                table: "NinlilDnsTsigKeys",
-                type: "uniqueidentifier",
-                nullable: true);
+        migrationBuilder.AddColumn<Guid>(
+            name: "ClusterNodeId",
+            table: "NinlilDnsTsigKeys",
+            type: "uniqueidentifier",
+            nullable: true);
 
-            // Link every existing peer's key to its peer, which until now referred to the key
-            // only by name, so clusters keep working after the upgrade. This runs once, here:
-            // a key created later by name alone must never be linked automatically. Unused
-            // invite keys from before the upgrade stay unlinked and no longer authenticate.
-            migrationBuilder.Sql(
-                """
-                UPDATE [NinlilDnsTsigKeys] SET [ClusterNodeId] = (SELECT TOP 1 [Id] FROM [NinlilDnsClusterNodes] WHERE [NinlilDnsClusterNodes].[TsigKeyName] = [NinlilDnsTsigKeys].[Name]);
-                """
-            );
-        }
+        // Link every existing peer's key to its peer, which until now referred to the key
+        // only by name, so clusters keep working after the upgrade. This runs once, here:
+        // a key created later by name alone must never be linked automatically. Unused
+        // invite keys from before the upgrade stay unlinked and no longer authenticate.
+        migrationBuilder.Sql(
+            """
+            UPDATE [NinlilDnsTsigKeys] SET [ClusterNodeId] = (SELECT TOP 1 [Id] FROM [NinlilDnsClusterNodes] WHERE [NinlilDnsClusterNodes].[TsigKeyName] = [NinlilDnsTsigKeys].[Name]);
+            """
+        );
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "ClusterInviteExpiresAtUtc",
-                table: "NinlilDnsTsigKeys");
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "ClusterInviteExpiresAtUtc",
+            table: "NinlilDnsTsigKeys");
 
-            migrationBuilder.DropColumn(
-                name: "ClusterNodeId",
-                table: "NinlilDnsTsigKeys");
-        }
+        migrationBuilder.DropColumn(
+            name: "ClusterNodeId",
+            table: "NinlilDnsTsigKeys");
     }
 }
