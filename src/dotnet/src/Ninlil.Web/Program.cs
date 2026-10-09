@@ -38,6 +38,7 @@ using Ninlil.Dns.Data.MongoDb;
 using Ninlil.Dns.Data.MongoDb.Extension;
 using Ninlil.Dns.Data.MongoDb.Maintenance;
 using Ninlil.Dns.Identity.Extension;
+using Ninlil.Dns.Identity.Options;
 using Ninlil.Dns.Protocol.DnsCrypt.Extension;
 using Ninlil.Dns.Protocol.DnsOverHttps;
 using Ninlil.Dns.Protocol.DnsOverHttps.Extension;
@@ -72,6 +73,7 @@ using Ninlil.Dns.Server.Forwarding.Extension;
 using Ninlil.Dns.Server.Presets.Extension;
 using Ninlil.Dns.Server.QueryLog.Extension;
 using Ninlil.Dns.Server.RateLimiting.Extension;
+using Ninlil.Dns.Server.Recursive;
 using Ninlil.Dns.Server.Recursive.Extension;
 using Ninlil.Dns.Server.Rewrites.Extension;
 using Ninlil.Dns.Server.SelfUpdate.Extension;
@@ -903,6 +905,15 @@ PrivilegedPortStartupDiagnostics.WarnAboutUnbindablePrivilegedPorts(
     new SocketPrivilegedPortBindProbe(),
     app.Services.GetRequiredService<ILoggerFactory>()
         .CreateLogger("Ninlil.Web.Startup.PrivilegedPortStartupDiagnostics")
+);
+
+// Warn, without blocking startup, about setting combinations that are accepted but have no
+// effect (see ConfigurationStartupDiagnostics).
+ConfigurationStartupDiagnostics.LogWarnings(
+    app.Services.GetRequiredService<IOptions<RecursiveServerOptions>>().Value,
+    app.Services.GetRequiredService<IOptions<EmailSenderOptions>>().Value,
+    app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Ninlil.Web.Startup.ConfigurationStartupDiagnostics")
 );
 
 app.UseSwagger();
