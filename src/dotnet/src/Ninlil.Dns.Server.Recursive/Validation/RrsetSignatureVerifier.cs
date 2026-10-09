@@ -71,6 +71,11 @@ public static class RrsetSignatureVerifier
             if (now < inception || now > expiration)
                 continue;
 
+            // A Labels value above the owner's label count is invalid (RFC 4035 §5.3.1) and has no
+            // signed owner to rebuild. Other Labels checks belong to the signer-name checks.
+            if (DnssecCanonicalization.ReconstructSignedOwner(ownerName, rrsig.Labels) is null)
+                continue;
+
             if (
                 !DnssecAlgorithmRegistry.TryGetAlgorithm(
                     rrsig.Algorithm,

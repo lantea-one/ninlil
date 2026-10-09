@@ -20,7 +20,8 @@ public static class DnssecCanonicalization
     /// <summary>
     ///     This property contains the record types whose RDATA holds a domain name that RFC 4034 §6.2
     ///     requires to be lower-cased in canonical form. It is the RFC's list limited to the types
-    ///     Ninlil implements; obsolete types on the list (<c>MD</c>, <c>MF</c>, <c>MB</c>, <c>MG</c>,
+    ///     Ninlil implements, as updated by RFC 6840 §5.1: the RRSIG's Signer's Name is lower-cased,
+    ///     but the NSEC Next Domain Name is not, so <c>NSEC</c> is deliberately absent; obsolete types on the list (<c>MD</c>, <c>MF</c>, <c>MB</c>, <c>MG</c>,
     ///     <c>MR</c>, <c>MINFO</c>, <c>RT</c>, <c>PX</c>, <c>NXT</c>, <c>A6</c>) are not in
     ///     <see cref="DnsResourceRecordTypeEnum" />. <see cref="DnsResourceRecordTypeEnum.Hinfo" /> is on
     ///     the RFC's list but holds no name, so canonicalizing it changes nothing.
@@ -40,7 +41,6 @@ public static class DnssecCanonicalization
         DnsResourceRecordTypeEnum.Srv,
         DnsResourceRecordTypeEnum.Dname,
         DnsResourceRecordTypeEnum.RrSig,
-        DnsResourceRecordTypeEnum.Nsec,
     ];
 
     /// <summary>
@@ -132,10 +132,18 @@ public static class DnssecCanonicalization
     ///     The signature metadata: every <see cref="RrSigRecordData" /> field except
     ///     <see cref="RrSigRecordData.Signature" />, which is ignored.
     /// </param>
-    /// <param name="ownerName">The signed RRset's owner name.</param>
+    /// <param name="ownerName">
+    ///     The signed RRset's owner name as it appears in the message. When the RRSIG's Labels field
+    ///     is smaller than the name's label count the RRset was synthesized from a wildcard, and the
+    ///     signed owner is rebuilt with <see cref="ReconstructSignedOwner" /> (RFC 4035 §5.3.2).
+    /// </param>
     /// <param name="recordClass">The signed RRset's class.</param>
     /// <param name="rrset">The records of the signed RRset.</param>
     /// <returns>The bytes to pass to the signing algorithm.</returns>
+    /// <exception cref="ArgumentException">
+    ///     The RRSIG's Labels field is larger than the label count of <paramref name="ownerName" />,
+    ///     so no signed owner exists (RFC 4035 §5.3.1).
+    /// </exception>
     public static byte[] BuildSigningInput(
         RrSigRecordData rrsigMetadata,
         DnsName ownerName,
@@ -155,7 +163,7 @@ public static class DnssecCanonicalization
             rrsigMetadata.SignatureExpiration,
             rrsigMetadata.SignatureInception,
             rrsigMetadata.KeyTag,
-            rrsigMetadata.SignerName,
+            rrsigMetadata.SignerName.ToCanonicalLower(),
             []
         );
         WriteBytes(
@@ -166,7 +174,15 @@ public static class DnssecCanonicalization
             )
         );
 
-        DnsName canonicalOwnerName = ownerName.ToCanonicalLower();
+        // RFC 4034 §3.1.8.1: the signer's name above is in canonical (lower-case) form. The owner
+        // is the name the signer signed, which for a wildcard expansion is the wildcard itself.
+        DnsName signedOwnerName =
+            ReconstructSignedOwner(ownerName, rrsigMetadata.Labels)
+            ?? throw new ArgumentException(
+                $"The RRSIG Labels value {rrsigMetadata.Labels} exceeds the label count of '{ownerName}'.",
+                nameof(rrsigMetadata)
+            );
+        DnsName canonicalOwnerName = signedOwnerName.ToCanonicalLower();
 
         // Each record, in canonical order, adds its owner name, header and RDATA in wire form,
         // with every field canonical: lower-cased owner name, the RRSIG's original TTL instead
@@ -195,6 +211,40 @@ public static class DnssecCanonicalization
         }
 
         return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    ///     This method rebuilds the owner name that an RRSIG was computed over (RFC 4035 §5.3.2). The
+    ///     Labels field counts the owner's labels without a leading <c>*</c>. If it equals that
+    ///     count, the owner is the name itself. If it is smaller, the RRset was synthesized from a
+    ///     wildcard, and the signed owner is <c>*</c> followed by the rightmost
+    ///     <paramref name="rrsigLabels" /> labels.
+    /// </summary>
+    /// <param name="ownerName">The RRset's owner name as it appears in the message.</param>
+    /// <param name="rrsigLabels">The RRSIG's Labels field.</param>
+    /// <returns>
+    ///     The signed owner name, or <see langword="null" /> if <paramref name="rrsigLabels" /> is
+    ///     larger than the label count, which makes the RRSIG invalid.
+    /// </returns>
+    public static DnsName ReconstructSignedOwner(DnsName ownerName, byte rrsigLabels)
+    {
+        int count = ownerName.Labels.Count;
+
+        if (count > 0 && ownerName.Labels[0] is [(byte)'*'])
+            count--;
+
+        if (rrsigLabels == count)
+            return ownerName;
+
+        if (rrsigLabels > count)
+            return null;
+
+        // Build the name from labels, not text: a text join would mishandle the root and escapes.
+        DnsName closestEncloser = new([
+            .. ownerName.Labels.Skip(ownerName.Labels.Count - rrsigLabels),
+        ]);
+
+        return closestEncloser.PrependLabels("*");
     }
 
     /// <summary>
@@ -256,10 +306,6 @@ public static class DnssecCanonicalization
                 Target = ((DnameRecordData)data).Target.ToCanonicalLower(),
             },
             DnsResourceRecordTypeEnum.RrSig => LowercaseRrSigSignerName((RrSigRecordData)data),
-            DnsResourceRecordTypeEnum.Nsec => ((NsecRecordData)data) with
-            {
-                NextDomainName = ((NsecRecordData)data).NextDomainName.ToCanonicalLower(),
-            },
             _ => data,
         };
 
