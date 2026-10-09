@@ -29,10 +29,17 @@ ARG LINT_IMAGE=debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c
 # ---------------------------------------------------------------------------------------------
 FROM ${SDK_IMAGE} AS dotnet
 
+# The Microsoft repository package is a fixed URL whose content changes without notice, so its
+# SHA-256 is pinned: a change fails this build until bump-pins.sh rewrites the sum and a reviewer
+# reads the pull request. apt checks every package it installs afterwards against the key this
+# package provides.
+ARG MICROSOFT_REPOSITORY_DEB_SHA256=c13f01ac7c3001b51a9281d40dde666db5e037e05512840c319832f7852bfec4
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb \
         -o /tmp/packages-microsoft-prod.deb \
+    && echo "${MICROSOFT_REPOSITORY_DEB_SHA256}  /tmp/packages-microsoft-prod.deb" | sha256sum -c - \
     && dpkg -i /tmp/packages-microsoft-prod.deb \
     && rm /tmp/packages-microsoft-prod.deb \
     && apt-get update \

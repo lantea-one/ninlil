@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Moves every pinned base image and the checkout action to the newest upstream version, in place.
+# Moves every pinned base image, the checkout action, the native-libraries lock and the Microsoft
+# repository package sum to the newest upstream version, in place.
 #
 # What is pinned, and how:
 #   - Container images are written as `name:tag@sha256:<index digest>` in the Dockerfile,
@@ -11,6 +12,12 @@
 #   - Workflow steps use `actions/checkout@<40-hex commit> # vX.Y.Z`. This script keeps the major
 #     version in the comment and moves to the newest vX.Y.Z tag of that major, pinned by the
 #     commit the tag points at (an annotated tag is peeled to its commit).
+#
+#   - docker/native-libraries.lock (libmsquic and libnuma1 per architecture, version and SHA-256)
+#     is recomputed by refresh-native-lock.sh, which needs dpkg for Debian version ordering and so
+#     runs in the lint toolchain through in-container.sh.
+#   - docker/ci.Dockerfile pins packages-microsoft-prod.deb by SHA-256 (ARG
+#     MICROSOFT_REPOSITORY_DEB_SHA256); this script downloads the file again and rewrites the sum.
 #
 # The script only edits files in the working tree. .forgejo/workflows/bump-pins.yml runs it weekly
 # and open-bump-pr.sh turns the change into a pull request, which runs the normal verify build.
@@ -24,8 +31,13 @@
 #                       to the instance's actions mirror when Forgejo resolves actions elsewhere)
 #   BUMP_PINS_ROOT      the tree to edit (default: the repository this script is in)
 #   BUMP_PINS_DOCKER    the docker command (default docker; the self-test substitutes a fake)
+#   BUMP_PINS_LOCK_REFRESH   command that writes a fresh lock to the file named by its argument
+#                       (default: in-container.sh lint .forgejo/scripts/refresh-native-lock.sh)
+#   BUMP_PINS_MICROSOFT_DEB_URL  where packages-microsoft-prod.deb is downloaded from (default
+#                       the Ubuntu 24.04 URL in docker/ci.Dockerfile; the self-test uses file://)
 #
-# Output: one line per pin on stdout and a summary line. Needs docker with buildx, git, jq, sed.
+# Output: one line per pin on stdout and a summary line. Needs docker with buildx, git, jq, sed,
+# curl and sha256sum.
 # Exits non-zero, without editing any file, when any lookup fails.
 
 set -euo pipefail
@@ -57,6 +69,10 @@ workflow_files=(.forgejo/workflows/*.yml)
 # Each edit is "<file>\t<old text>\t<new text>"; all lookups finish before any file is touched.
 edits=()
 changed=0
+lock_changed=false
+deb_download="$(mktemp)"
+lock_candidate='docker/native-libraries.lock.new'
+trap 'rm -f "${deb_download}" "${root}/${lock_candidate}"' EXIT
 
 # Prints the multi-architecture index digest of an image reference (name:tag), or fails.
 resolve_image_digest() {
@@ -142,6 +158,44 @@ for pin in "${checkout_pins[@]}"; do
     done
 done
 
+# The native-libraries lock. The new lock is written next to the old one and compared; a copy
+# edit replaces the committed file only after every lookup has succeeded.
+lock_file='docker/native-libraries.lock'
+if [[ -f "${lock_file}" ]]; then
+    if [[ -n "${BUMP_PINS_LOCK_REFRESH:-}" ]]; then
+        read -r -a lock_refresh <<< "${BUMP_PINS_LOCK_REFRESH}"
+    else
+        lock_refresh=("${root}/.forgejo/scripts/in-container.sh" lint .forgejo/scripts/refresh-native-lock.sh)
+    fi
+    "${lock_refresh[@]}" "${lock_candidate}"
+    if cmp -s "${lock_file}" "${lock_candidate}"; then
+        echo "lock      ${lock_file}: unchanged"
+    else
+        echo "lock      ${lock_file}: changed (see the lines above)"
+        changed=$((changed + 1))
+        lock_changed=true
+    fi
+fi
+
+# The Microsoft repository package sum in ci.Dockerfile.
+sum_pattern='MICROSOFT_REPOSITORY_DEB_SHA256=[0-9a-f]{64}'
+if grep -qE "${sum_pattern}" docker/ci.Dockerfile; then
+    old_sum="$(grep -oE "${sum_pattern}" docker/ci.Dockerfile | head -n 1)"
+    old_sum="${old_sum#*=}"
+    deb_url="${BUMP_PINS_MICROSOFT_DEB_URL:-https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb}"
+    # Not a pipe into sha256sum: a failed download must stop the script.
+    curl --fail --silent --show-error --location "${deb_url}" -o "${deb_download}"
+    new_sum="$(sha256sum "${deb_download}")"
+    new_sum="${new_sum%% *}"
+    if [[ "${new_sum}" == "${old_sum}" ]]; then
+        echo "microsoft packages-microsoft-prod.deb: unchanged (${old_sum})"
+    else
+        echo "microsoft packages-microsoft-prod.deb: ${old_sum} -> ${new_sum}"
+        changed=$((changed + 1))
+        edits+=("docker/ci.Dockerfile"$'\t'"MICROSOFT_REPOSITORY_DEB_SHA256=${old_sum}"$'\t'"MICROSOFT_REPOSITORY_DEB_SHA256=${new_sum}")
+    fi
+fi
+
 if [[ "${changed}" -eq 0 ]]; then
     echo "Nothing to bump."
     exit 0
@@ -149,6 +203,10 @@ fi
 if [[ "${dry_run}" == 'true' ]]; then
     echo "${changed} pin(s) would change (dry run, nothing edited)."
     exit 0
+fi
+
+if [[ "${lock_changed}" == 'true' ]]; then
+    mv "${lock_candidate}" "${lock_file}"
 fi
 
 # Literal replacement: the old text is escaped for sed (the dot is the only special character a

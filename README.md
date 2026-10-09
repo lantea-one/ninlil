@@ -655,6 +655,16 @@ commit decides what runs. `bump-pins.yml` runs
 so a bump goes through the normal build before it is merged. To bump by hand, run
 `.forgejo/scripts/bump-pins.sh --dry-run` to see what would change, then without the flag.
 
+**Native libraries.** The container image's `libmsquic` (DNS-over-QUIC) and `libnuma1` come from
+[`docker/native-libraries.lock`](./docker/native-libraries.lock): per architecture, the exact
+package version, file and SHA-256. The image build downloads only those files and fails when a
+sum differs, so the reviewed lock, not the package server, is the trust anchor. The same weekly
+bump rewrites the lock with
+[`refresh-native-lock.sh`](./.forgejo/scripts/refresh-native-lock.sh), which picks the highest
+Debian version from Ubuntu `noble`, `noble-updates` and `noble-security` (and Microsoft's
+`noble` repository for `libmsquic`). The Microsoft repository package that the CI toolchain image
+installs is pinned by SHA-256 in `docker/ci.Dockerfile` and bumped the same way.
+
 ## Contributing: adding a feature
 
 ### Branches

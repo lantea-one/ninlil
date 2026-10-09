@@ -8,10 +8,12 @@
 # line alone; a second run finds nothing to bump; an image that resolves to a single-architecture
 # manifest, or a lookup that fails, exits non-zero without editing any file; the checkout pin
 # moves to the newest tag of its major version, resolves an annotated tag to its commit, and
-# ignores tags of other majors and pre-release tags.
+# ignores tags of other majors and pre-release tags; the native-libraries lock is replaced only
+# when the refresh command's result differs (a failing refresh edits nothing), and the Microsoft
+# repository package sum in ci.Dockerfile follows the downloaded file.
 #
 # Usage: .forgejo/scripts/tests/bump-pins.test.sh
-# Needs: bash, git, jq, sed. Never contacts a real registry or server.
+# Needs: bash, git, jq, sed, curl, sha256sum. Never contacts a real registry or server.
 # Exit status: 0 when every assertion passes, 1 otherwise.
 
 set -uo pipefail
@@ -33,6 +35,20 @@ old_a="sha256:$(hex 1 a)"
 old_b="sha256:$(hex 1 b)"
 new_a="sha256:$(hex 1 c)"
 new_b="sha256:$(hex 1 d)"
+
+# The Microsoft repository package: a local file the script downloads through file://.
+printf 'first deb' > "${work}/microsoft.deb"
+deb_sum="$(sha256sum "${work}/microsoft.deb")"
+deb_sum="${deb_sum%% *}"
+
+# The lock refresh command: copies ${work}/lock-answer to the file named by its argument, or fails
+# when ${work}/lock-fails exists.
+cat > "${work}/bin/refresh" <<'REFRESH'
+#!/usr/bin/env bash
+[[ -f "${LOCK_FAILS}" ]] && { echo 'refresh failed' >&2; exit 1; }
+cp "${LOCK_ANSWER}" "$1"
+REFRESH
+chmod +x "${work}/bin/refresh"
 
 # The fake docker prints the JSON stored for the reference ("/" and ":" become "_").
 cat > "${work}/bin/docker" <<'DOCKER'
@@ -72,7 +88,10 @@ FROM \${RUNTIME_IMAGE} AS runtime
 DOCKERFILE
     cat > "${tree}/docker/ci.Dockerfile" <<DOCKERFILE
 ARG SDK_IMAGE=example.test/runtime:1.0@${old_a}
+ARG MICROSOFT_REPOSITORY_DEB_SHA256=${deb_sum}
 DOCKERFILE
+    printf 'amd64\tlibnuma1\t1.0\n' > "${tree}/docker/native-libraries.lock"
+    printf 'amd64\tlibnuma1\t1.0\n' > "${work}/lock-answer"
     printf '    image: example.test/fetch:2@%s\n    image: other\n' "${old_b}" > "${tree}/docker-compose.yml"
     printf 'new PostgreSqlBuilder("example.test/fetch:2@%s")\n' "${old_b}" \
         > "${tree}/src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests/QueryLogPostgreSqlTestHost.cs"
@@ -87,7 +106,9 @@ YAML
 # Runs bump-pins.sh on the tree. Output goes to $output, the exit code to $status.
 run_bump() {
     output="$(env PATH="${work}/bin:${PATH}" BUMP_PINS_ROOT="${tree}" BUMP_PINS_DOCKER="${work}/bin/docker" \
-        FAKE_DIGESTS="${digests}" ACTIONS_MIRROR_URL="${mirror}" bash "${scripts}/bump-pins.sh" "$@" 2>&1)"
+        FAKE_DIGESTS="${digests}" LOCK_ANSWER="${work}/lock-answer" LOCK_FAILS="${work}/lock-fails" \
+        BUMP_PINS_LOCK_REFRESH="${work}/bin/refresh" BUMP_PINS_MICROSOFT_DEB_URL="file://${work}/microsoft.deb" \
+        ACTIONS_MIRROR_URL="${mirror}" bash "${scripts}/bump-pins.sh" "$@" 2>&1)"
     status=$?
 }
 
@@ -142,5 +163,48 @@ rm "${digests}/example.test_fetch_2"
 run_bump
 assert_eq 'bump: an unresolvable image exits 1' 1 "${status}"
 assert_eq 'bump: a failed lookup edits no file' "${before}" "$(checksum)"
+
+# --- The native-libraries lock and the Microsoft repository sum ------------------------------------
+write_tree
+set_image example.test/runtime:1.0 "${old_a}" "${index}"
+set_image example.test/fetch:2 "${old_b}" "${index}"
+git -C "${work}/seed" tag -d v7.0.10 > /dev/null
+rm -rf "${mirror}/actions/checkout"
+git clone -q --bare "${work}/seed" "${mirror}/actions/checkout"
+# Pin the checkout to the newest tag so only the lock and the sum can move.
+sed -i "s/actions\/checkout@${commit_old}' # v7.0.0/actions\/checkout@${commit_new}' # v7.0.1/" "${tree}/.forgejo/workflows/"*.yml
+run_bump
+assert_contains 'bump: an identical lock is unchanged' "${output}" 'docker/native-libraries.lock: unchanged'
+assert_contains 'bump: an identical sum is unchanged' "${output}" 'packages-microsoft-prod.deb: unchanged'
+assert_contains 'bump: with nothing moved the run ends cleanly' "${output}" 'Nothing to bump.'
+assert_eq 'bump: no candidate lock is left behind' 0 "$(find "${tree}" -name '*.lock.new' | wc -l)"
+
+printf 'amd64\tlibnuma1\t2.0\n' > "${work}/lock-answer"
+printf 'second deb' > "${work}/microsoft.deb"
+new_deb_sum="$(sha256sum "${work}/microsoft.deb")"
+new_deb_sum="${new_deb_sum%% *}"
+before="$(checksum)"
+run_bump --dry-run
+assert_contains 'bump: dry run reports the changed lock' "${output}" 'docker/native-libraries.lock: changed'
+assert_contains 'bump: dry run reports the sum move' "${output}" "${deb_sum} -> ${new_deb_sum}"
+assert_eq 'bump: dry run edits neither the lock nor the sum' "${before}" "$(checksum)"
+run_bump
+assert_eq 'bump: a lock and sum bump exits 0' 0 "${status}"
+assert_eq 'bump: the lock is replaced by the refreshed one' "$(cat "${work}/lock-answer")" "$(cat "${tree}/docker/native-libraries.lock")"
+assert_eq 'bump: ci.Dockerfile carries the new sum' 1 "$(grep -cF "MICROSOFT_REPOSITORY_DEB_SHA256=${new_deb_sum}" "${tree}/docker/ci.Dockerfile")"
+assert_eq 'bump: the old sum is gone' 0 "$(grep -cF "${deb_sum}" "${tree}/docker/ci.Dockerfile")"
+
+printf 'amd64\tlibnuma1\t3.0\n' > "${work}/lock-answer"
+touch "${work}/lock-fails"
+before="$(checksum)"
+run_bump
+assert_eq 'bump: a failing lock refresh exits non-zero' 1 "${status}"
+assert_eq 'bump: a failing lock refresh edits no file' "${before}" "$(checksum)"
+rm "${work}/lock-fails"
+rm "${work}/microsoft.deb"
+before="$(checksum)"
+run_bump
+assert_eq 'bump: a failing download exits non-zero' nonzero "$([[ "${status}" -ne 0 ]] && echo nonzero || echo zero)"
+assert_eq 'bump: a failing download edits no file' "${before}" "$(checksum)"
 
 finish
