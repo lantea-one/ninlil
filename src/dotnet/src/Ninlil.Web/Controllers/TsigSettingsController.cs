@@ -60,19 +60,13 @@ public class TsigSettingsController(
         List<PresetConfigurationSetting> settings = [];
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "defaultFudgeSeconds",
-                out JsonElement defaultFudgeSecondsElement
+                out int defaultFudgeSeconds,
+                0,
+                ushort.MaxValue
             )
         )
-        {
-            int defaultFudgeSeconds = defaultFudgeSecondsElement.GetInt32();
-
-            if (defaultFudgeSeconds is < 0 or > ushort.MaxValue)
-                throw new ValidationException(
-                    $"'defaultFudgeSeconds' must be between 0 and {ushort.MaxValue}."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     TsigServiceOptions.SectionName,
@@ -80,7 +74,6 @@ public class TsigSettingsController(
                     (ushort)defaultFudgeSeconds
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));

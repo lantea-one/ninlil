@@ -115,135 +115,147 @@ public class ReverseProxySettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     ReverseProxyOptions.SectionName,
                     nameof(ReverseProxyOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("knownProxies", out JsonElement knownProxiesElement))
-        {
-            if (
-                !TryReadValidatedAddressList(
-                    knownProxiesElement,
-                    out List<string> knownProxies,
-                    out string error
-                )
+        if (
+            patch.TryGetMergePatchStringList(
+                "knownProxies",
+                out List<string> knownProxiesRaw,
+                allowNull: false
             )
-                throw new ValidationException(error);
+        )
+        {
+            if (!TryValidateAddressList(knownProxiesRaw, out string knownProxiesError))
+                throw new ValidationException(knownProxiesError);
 
             settings.Add(
                 new PresetConfigurationSetting(
                     ReverseProxyOptions.SectionName,
                     nameof(ReverseProxyOptions.KnownProxies),
-                    knownProxies
-                )
-            );
-        }
-
-        if (patch.TryGetMergePatchField("knownNetworks", out JsonElement knownNetworksElement))
-        {
-            if (
-                !TryReadValidatedNetworkList(
-                    knownNetworksElement,
-                    out List<string> knownNetworks,
-                    out string error
-                )
-            )
-                throw new ValidationException(error);
-
-            settings.Add(
-                new PresetConfigurationSetting(
-                    ReverseProxyOptions.SectionName,
-                    nameof(ReverseProxyOptions.KnownNetworks),
-                    knownNetworks
+                    knownProxiesRaw
                 )
             );
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchStringList(
+                "knownNetworks",
+                out List<string> knownNetworksRaw,
+                allowNull: false
+            )
+        )
+        {
+            if (!TryValidateNetworkList(knownNetworksRaw, out string knownNetworksError))
+                throw new ValidationException(knownNetworksError);
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    ReverseProxyOptions.SectionName,
+                    nameof(ReverseProxyOptions.KnownNetworks),
+                    knownNetworksRaw
+                )
+            );
+        }
+
+        if (
+            patch.TryGetMergePatchString(
                 "sharedSecretHeaderName",
-                out JsonElement sharedSecretHeaderName
+                out string sharedSecretHeaderName,
+                allowNull: true
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     ReverseProxyOptions.SectionName,
                     nameof(ReverseProxyOptions.SharedSecretHeaderName),
-                    sharedSecretHeaderName.GetString()
+                    sharedSecretHeaderName
                 )
             );
 
-        if (patch.TryGetMergePatchField("sharedSecret", out JsonElement sharedSecret))
+        if (patch.TryGetMergePatchString("sharedSecret", out string sharedSecret, allowNull: true))
             settings.Add(
                 new PresetConfigurationSetting(
                     ReverseProxyOptions.SectionName,
                     nameof(ReverseProxyOptions.SharedSecret),
-                    sharedSecret.GetString()
+                    sharedSecret
                 )
             );
 
         if (patch.TryGetMergePatchField("dnsOverTls", out JsonElement dnsOverTlsElement))
         {
-            if (dnsOverTlsElement.TryGetMergePatchField("enable", out JsonElement dnsOverTlsEnable))
+            if (dnsOverTlsElement.ValueKind != JsonValueKind.Object)
+                throw new ValidationException("'dnsOverTls' must be a JSON object.");
+
+            if (
+                dnsOverTlsElement.TryGetMergePatchBoolean(
+                    "enable",
+                    out bool dnsOverTlsEnable,
+                    "dnsOverTls.enable"
+                )
+            )
                 settings.Add(
                     new PresetConfigurationSetting(
                         ProxyProtocolOptions.SectionName,
                         nameof(ProxyProtocolOptions.Enable),
-                        dnsOverTlsEnable.GetBoolean()
+                        dnsOverTlsEnable
                     )
                 );
 
             if (
-                dnsOverTlsElement.TryGetMergePatchField(
+                dnsOverTlsElement.TryGetMergePatchStringList(
                     "knownProxies",
-                    out JsonElement dnsOverTlsKnownProxiesElement
+                    out List<string> dnsOverTlsKnownProxiesRaw,
+                    allowNull: false,
+                    "dnsOverTls.knownProxies"
                 )
             )
             {
                 if (
-                    !TryReadValidatedAddressList(
-                        dnsOverTlsKnownProxiesElement,
-                        out List<string> dnsOverTlsKnownProxies,
-                        out string dnsOverTlsKnownProxiesError
+                    !TryValidateAddressList(
+                        dnsOverTlsKnownProxiesRaw,
+                        out string dnsOverTlsknownProxiesError
                     )
                 )
-                    throw new ValidationException(dnsOverTlsKnownProxiesError);
+                    throw new ValidationException(dnsOverTlsknownProxiesError);
 
                 settings.Add(
                     new PresetConfigurationSetting(
                         ProxyProtocolOptions.SectionName,
                         nameof(ProxyProtocolOptions.KnownProxies),
-                        dnsOverTlsKnownProxies
+                        dnsOverTlsKnownProxiesRaw
                     )
                 );
             }
 
             if (
-                dnsOverTlsElement.TryGetMergePatchField(
+                dnsOverTlsElement.TryGetMergePatchStringList(
                     "knownNetworks",
-                    out JsonElement dnsOverTlsKnownNetworksElement
+                    out List<string> dnsOverTlsKnownNetworksRaw,
+                    allowNull: false,
+                    "dnsOverTls.knownNetworks"
                 )
             )
             {
                 if (
-                    !TryReadValidatedNetworkList(
-                        dnsOverTlsKnownNetworksElement,
-                        out List<string> dnsOverTlsKnownNetworks,
-                        out string dnsOverTlsKnownNetworksError
+                    !TryValidateNetworkList(
+                        dnsOverTlsKnownNetworksRaw,
+                        out string dnsOverTlsknownNetworksError
                     )
                 )
-                    throw new ValidationException(dnsOverTlsKnownNetworksError);
+                    throw new ValidationException(dnsOverTlsknownNetworksError);
 
                 settings.Add(
                     new PresetConfigurationSetting(
                         ProxyProtocolOptions.SectionName,
                         nameof(ProxyProtocolOptions.KnownNetworks),
-                        dnsOverTlsKnownNetworks
+                        dnsOverTlsKnownNetworksRaw
                     )
                 );
             }
@@ -270,26 +282,17 @@ public class ReverseProxySettingsController(
     ///     This method checks each entry of a <c>knownProxies</c> array with
     ///     <see cref="IPAddress.TryParse(string, out IPAddress)" /> before anything is saved.
     /// </summary>
-    private static bool TryReadValidatedAddressList(
-        JsonElement arrayElement,
-        out List<string> values,
-        out string error
-    )
+    private static bool TryValidateAddressList(List<string> values, out string error)
     {
-        values = [];
         error = null;
 
-        foreach (JsonElement entry in arrayElement.EnumerateArray())
+        foreach (string raw in values)
         {
-            string raw = entry.GetString();
-
             if (!IPAddress.TryParse(raw, out _))
             {
                 error = $"'{raw}' is not a valid IP address.";
                 return false;
             }
-
-            values.Add(raw);
         }
 
         return true;
@@ -300,26 +303,17 @@ public class ReverseProxySettingsController(
     ///     <see cref="IPNetwork.TryParse(string, out IPNetwork)" />, the parser
     ///     <c>ClientGroupNetworksController</c> also uses, before anything is saved.
     /// </summary>
-    private static bool TryReadValidatedNetworkList(
-        JsonElement arrayElement,
-        out List<string> values,
-        out string error
-    )
+    private static bool TryValidateNetworkList(List<string> values, out string error)
     {
-        values = [];
         error = null;
 
-        foreach (JsonElement entry in arrayElement.EnumerateArray())
+        foreach (string raw in values)
         {
-            string raw = entry.GetString();
-
             if (!IPNetwork.TryParse(raw, out _))
             {
                 error = $"'{raw}' is not a valid CIDR network (for example \"10.0.0.0/24\").";
                 return false;
             }
-
-            values.Add(raw);
         }
 
         return true;

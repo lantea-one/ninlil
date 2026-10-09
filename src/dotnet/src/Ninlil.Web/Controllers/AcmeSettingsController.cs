@@ -84,22 +84,26 @@ public class AcmeSettingsController(
         bool touchedHotReloadingField = false;
         bool touchedRestartRequiringField = false;
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     AcmeOptions.SectionName,
                     nameof(AcmeOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("directoryUri", out JsonElement directoryUri))
+        if (
+            patch.TryGetMergePatchString(
+                "directoryUri",
+                out string directoryUriText,
+                allowNull: false
+            )
+        )
         {
-            string directoryUriText = directoryUri.GetString();
-
             if (
                 string.IsNullOrWhiteSpace(directoryUriText)
                 || !Uri.TryCreate(directoryUriText, UriKind.Absolute, out Uri parsedDirectoryUri)
@@ -122,42 +126,46 @@ public class AcmeSettingsController(
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("contactEmails", out JsonElement contactEmails))
+        if (
+            patch.TryGetMergePatchStringList(
+                "contactEmails",
+                out List<string> contactEmails,
+                allowNull: false
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     AcmeOptions.SectionName,
                     nameof(AcmeOptions.ContactEmails),
-                    ParseStringArray(contactEmails, "contactEmails", ValidateContactEmail)
+                    ValidateEntries(contactEmails, ValidateContactEmail)
                 )
             );
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("domains", out JsonElement domains))
+        if (patch.TryGetMergePatchStringList("domains", out List<string> domains, allowNull: false))
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     AcmeOptions.SectionName,
                     nameof(AcmeOptions.Domains),
-                    ParseStringArray(domains, "domains", ValidateDomain)
+                    ValidateEntries(domains, ValidateDomain)
                 )
             );
             touchedHotReloadingField = true;
         }
 
+        // The renewal margin is subtracted from a timestamp; the poll interval feeds a timer.
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "renewBeforeExpiration",
                 out TimeSpan renewBeforeExpiration,
-                out bool renewBeforeExpirationPresent
+                TimeSpan.FromMilliseconds(1),
+                TimeSpan.FromDays(36500)
             )
         )
         {
-            if (renewBeforeExpiration <= TimeSpan.Zero)
-                throw new ValidationException("'renewBeforeExpiration' must be greater than zero.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     AcmeOptions.SectionName,
@@ -167,23 +175,16 @@ public class AcmeSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (renewBeforeExpirationPresent)
-            throw new ValidationException(
-                "'renewBeforeExpiration' must be a valid TimeSpan (for example \"30.00:00:00\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "pollInterval",
                 out TimeSpan pollInterval,
-                out bool pollIntervalPresent
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
         {
-            if (pollInterval <= TimeSpan.Zero)
-                throw new ValidationException("'pollInterval' must be greater than zero.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     AcmeOptions.SectionName,
@@ -193,20 +194,15 @@ public class AcmeSettingsController(
             );
             touchedHotReloadingField = true;
         }
-        else if (pollIntervalPresent)
-            throw new ValidationException(
-                "'pollInterval' must be a valid TimeSpan (for example \"12:00:00\")."
-            );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchString(
                 "accountStateFilePath",
-                out JsonElement accountStateFilePath
+                out string accountStateFilePathText,
+                allowNull: false
             )
         )
         {
-            string accountStateFilePathText = accountStateFilePath.GetString();
-
             if (string.IsNullOrWhiteSpace(accountStateFilePathText))
                 throw new ValidationException("'accountStateFilePath' must not be empty.");
 
@@ -221,14 +217,13 @@ public class AcmeSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchString(
                 "certificateDirectoryPath",
-                out JsonElement certificateDirectoryPath
+                out string certificateDirectoryPathText,
+                allowNull: false
             )
         )
         {
-            string certificateDirectoryPathText = certificateDirectoryPath.GetString();
-
             if (string.IsNullOrWhiteSpace(certificateDirectoryPathText))
                 throw new ValidationException("'certificateDirectoryPath' must not be empty.");
 
@@ -242,10 +237,14 @@ public class AcmeSettingsController(
             touchedHotReloadingField = true;
         }
 
-        if (patch.TryGetMergePatchField("csrOrganization", out JsonElement csrOrganization))
+        if (
+            patch.TryGetMergePatchString(
+                "csrOrganization",
+                out string csrOrganizationText,
+                allowNull: false
+            )
+        )
         {
-            string csrOrganizationText = csrOrganization.GetString();
-
             if (string.IsNullOrWhiteSpace(csrOrganizationText))
                 throw new ValidationException("'csrOrganization' must not be empty.");
 
@@ -265,9 +264,10 @@ public class AcmeSettingsController(
                 throw new ValidationException("'caaAutoManagement' must be a JSON object.");
 
             if (
-                caaAutoManagement.TryGetMergePatchField(
+                caaAutoManagement.TryGetMergePatchBoolean(
                     "defaultEnabled",
-                    out JsonElement defaultEnabled
+                    out bool defaultEnabled,
+                    "caaAutoManagement.defaultEnabled"
                 )
             )
             {
@@ -275,16 +275,18 @@ public class AcmeSettingsController(
                     new PresetConfigurationSetting(
                         CaaAutoManagementOptions.SectionName,
                         nameof(CaaAutoManagementOptions.DefaultEnabled),
-                        defaultEnabled.GetBoolean()
+                        defaultEnabled
                     )
                 );
                 touchedHotReloadingField = true;
             }
 
             if (
-                caaAutoManagement.TryGetMergePatchField(
+                caaAutoManagement.TryGetMergePatchString(
                     "defaultIssuerDomain",
-                    out JsonElement defaultIssuerDomain
+                    out string defaultIssuerDomain,
+                    allowNull: true,
+                    "caaAutoManagement.defaultIssuerDomain"
                 )
             )
             {
@@ -292,7 +294,7 @@ public class AcmeSettingsController(
                     new PresetConfigurationSetting(
                         CaaAutoManagementOptions.SectionName,
                         nameof(CaaAutoManagementOptions.DefaultIssuerDomain),
-                        defaultIssuerDomain.GetString() ?? string.Empty
+                        defaultIssuerDomain ?? string.Empty
                     )
                 );
                 touchedHotReloadingField = true;
@@ -371,48 +373,15 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
-    ///     caller both whether the field was present and whether it parsed.
+    ///     This method checks each entry of a string array field with
+    ///     <paramref name="validateEntry" /> and returns the same list.
     /// </summary>
-    private static bool TryGetDuration(
-        JsonElement patch,
-        string propertyName,
-        out TimeSpan value,
-        out bool present
-    )
+    private static List<string> ValidateEntries(List<string> values, Action<string> validateEntry)
     {
-        value = default;
-        present = patch.TryGetMergePatchField(propertyName, out JsonElement element);
-
-        return present && TimeSpan.TryParse(element.GetString(), out value);
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch field that must hold a JSON array of strings, checking
-    ///     each entry with <paramref name="validateEntry" />.
-    /// </summary>
-    private static List<string> ParseStringArray(
-        JsonElement element,
-        string fieldName,
-        Action<string> validateEntry
-    )
-    {
-        if (element.ValueKind != JsonValueKind.Array)
-            throw new ValidationException($"'{fieldName}' must be a JSON array of strings.");
-
-        List<string> parsed = [];
-
-        foreach (JsonElement item in element.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.String)
-                throw new ValidationException($"Each '{fieldName}' entry must be a string.");
-
-            string value = item.GetString();
+        foreach (string value in values)
             validateEntry(value);
-            parsed.Add(value);
-        }
 
-        return parsed;
+        return values;
     }
 
     /// <summary>

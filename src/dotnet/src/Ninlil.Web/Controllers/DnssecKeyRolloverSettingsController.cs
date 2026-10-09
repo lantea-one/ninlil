@@ -83,18 +83,16 @@ public class DnssecKeyRolloverSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
+        // Zero is a valid propagation delay (no wait). Both TTL-like values are added to
+        // timestamps, so the upper bound keeps the sums inside DateTimeOffset.
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "propagationDelay",
                 out TimeSpan propagationDelay,
-                out bool propagationDelayPresent
+                TimeSpan.Zero,
+                TimeSpan.FromDays(36500)
             )
         )
-        {
-            if (propagationDelay < TimeSpan.Zero)
-                throw new ValidationException("'propagationDelay' must not be negative.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnssecKeyRolloverOptions.SectionName,
@@ -102,24 +100,15 @@ public class DnssecKeyRolloverSettingsController(
                     propagationDelay.ToString()
                 )
             );
-        }
-        else if (propagationDelayPresent)
-            throw new ValidationException(
-                "'propagationDelay' must be a valid TimeSpan (for example \"01:00:00\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "externalParentDsTtl",
                 out TimeSpan externalParentDsTtl,
-                out bool externalParentDsTtlPresent
+                TimeSpan.FromMilliseconds(1),
+                TimeSpan.FromDays(36500)
             )
         )
-        {
-            if (externalParentDsTtl <= TimeSpan.Zero)
-                throw new ValidationException("'externalParentDsTtl' must be positive.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnssecKeyRolloverOptions.SectionName,
@@ -127,35 +116,22 @@ public class DnssecKeyRolloverSettingsController(
                     externalParentDsTtl.ToString()
                 )
             );
-        }
-        else if (externalParentDsTtlPresent)
-            throw new ValidationException(
-                "'externalParentDsTtl' must be a valid TimeSpan (for example \"1.00:00:00\")."
-            );
 
+        // The poll interval feeds a timer.
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "pollInterval",
                 out TimeSpan pollInterval,
-                out bool pollIntervalPresent
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
-        {
-            if (pollInterval <= TimeSpan.Zero)
-                throw new ValidationException("'pollInterval' must be positive.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnssecKeyRolloverOptions.SectionName,
                     nameof(DnssecKeyRolloverOptions.PollInterval),
                     pollInterval.ToString()
                 )
-            );
-        }
-        else if (pollIntervalPresent)
-            throw new ValidationException(
-                "'pollInterval' must be a valid TimeSpan (for example \"00:15:00\")."
             );
 
         if (settings.Count == 0)
@@ -167,22 +143,5 @@ public class DnssecKeyRolloverSettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
-    }
-
-    /// <summary>
-    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
-    ///     caller both whether the field was present and whether it parsed.
-    /// </summary>
-    private static bool TryGetDuration(
-        JsonElement patch,
-        string propertyName,
-        out TimeSpan value,
-        out bool present
-    )
-    {
-        value = default;
-        present = patch.TryGetMergePatchField(propertyName, out JsonElement element);
-
-        return present && TimeSpan.TryParse(element.GetString(), out value);
     }
 }

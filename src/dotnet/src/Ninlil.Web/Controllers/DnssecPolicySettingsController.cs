@@ -64,16 +64,17 @@ public class DnssecPolicySettingsController(
         List<PresetConfigurationSetting> settings = [];
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchStringList(
                 "allowedAlgorithms",
-                out JsonElement allowedAlgorithmsElement
+                out List<string> allowedAlgorithms,
+                allowNull: false
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     DnssecAlgorithmPolicyOptions.SectionName,
                     nameof(DnssecAlgorithmPolicyOptions.AllowedAlgorithms),
-                    ParseAllowedAlgorithms(allowedAlgorithmsElement)
+                    ParseAllowedAlgorithms(allowedAlgorithms)
                 )
             );
 
@@ -95,24 +96,19 @@ public class DnssecPolicySettingsController(
     ///     <see cref="DnssecAlgorithmPolicyOptions.AllowedAlgorithms" />
     ///     binds from.
     /// </summary>
-    private static List<string> ParseAllowedAlgorithms(JsonElement element)
+    private static List<string> ParseAllowedAlgorithms(List<string> names)
     {
-        if (element.ValueKind != JsonValueKind.Array)
-            throw new ValidationException(
-                "'allowedAlgorithms' must be a JSON array of DNSSEC algorithm names (for "
-                    + "example [\"ECDSAP256SHA256\", \"ED25519\"]), or an empty array to allow "
-                    + "every algorithm this server supports."
-            );
-
         List<string> parsed = [];
 
-        foreach (JsonElement item in element.EnumerateArray())
+        foreach (string item in names)
         {
             DnssecAlgorithmEnum algorithm;
 
             try
             {
-                algorithm = JsonSerializer.Deserialize<DnssecAlgorithmEnum>(item.GetRawText());
+                algorithm = JsonSerializer.Deserialize<DnssecAlgorithmEnum>(
+                    JsonSerializer.Serialize(item)
+                );
             }
             catch (JsonException)
             {

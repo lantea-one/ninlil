@@ -75,20 +75,7 @@ public class AppearanceSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("palette", out JsonElement paletteElement))
-        {
-            if (
-                !Enum.TryParse(
-                    paletteElement.GetString(),
-                    ignoreCase: true,
-                    out UiThemePaletteEnum palette
-                )
-            )
-                throw new ValidationException(
-                    $"'{paletteElement.GetString()}' is not a valid palette. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<UiThemePaletteEnum>())}."
-                );
-
+        if (patch.TryGetMergePatchEnum("palette", out UiThemePaletteEnum palette))
             settings.Add(
                 new PresetConfigurationSetting(
                     AppearanceOptions.SectionName,
@@ -96,16 +83,8 @@ public class AppearanceSettingsController(
                     palette.ToString()
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("mode", out JsonElement modeElement))
-        {
-            if (!Enum.TryParse(modeElement.GetString(), ignoreCase: true, out UiThemeModeEnum mode))
-                throw new ValidationException(
-                    $"'{modeElement.GetString()}' is not a valid mode. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<UiThemeModeEnum>())}."
-                );
-
+        if (patch.TryGetMergePatchEnum("mode", out UiThemeModeEnum mode))
             settings.Add(
                 new PresetConfigurationSetting(
                     AppearanceOptions.SectionName,
@@ -113,7 +92,6 @@ public class AppearanceSettingsController(
                     mode.ToString()
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
@@ -166,43 +144,22 @@ public class AppearanceSettingsController(
         if (user is null)
             return Unauthorized();
 
-        if (patch.TryGetMergePatchField("palette", out JsonElement paletteElement))
-        {
-            if (paletteElement.ValueKind == JsonValueKind.Null)
-            {
-                user.PreferredPalette = null;
-            }
-            else if (
-                !Enum.TryParse(
-                    paletteElement.GetString(),
-                    ignoreCase: true,
-                    out UiThemePaletteEnum palette
-                )
-            )
-                throw new ValidationException(
-                    $"'{paletteElement.GetString()}' is not a valid palette. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<UiThemePaletteEnum>())}."
-                );
-            else
-                user.PreferredPalette = palette;
-        }
+        // A JSON null removes the override; any other value must name a palette or mode.
+        if (
+            patch.TryGetMergePatchField("palette", out JsonElement paletteElement)
+            && paletteElement.ValueKind == JsonValueKind.Null
+        )
+            user.PreferredPalette = null;
+        else if (patch.TryGetMergePatchEnum("palette", out UiThemePaletteEnum palette))
+            user.PreferredPalette = palette;
 
-        if (patch.TryGetMergePatchField("mode", out JsonElement modeElement))
-        {
-            if (modeElement.ValueKind == JsonValueKind.Null)
-            {
-                user.PreferredMode = null;
-            }
-            else if (
-                !Enum.TryParse(modeElement.GetString(), ignoreCase: true, out UiThemeModeEnum mode)
-            )
-                throw new ValidationException(
-                    $"'{modeElement.GetString()}' is not a valid mode. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<UiThemeModeEnum>())}."
-                );
-            else
-                user.PreferredMode = mode;
-        }
+        if (
+            patch.TryGetMergePatchField("mode", out JsonElement modeElement)
+            && modeElement.ValueKind == JsonValueKind.Null
+        )
+            user.PreferredMode = null;
+        else if (patch.TryGetMergePatchEnum("mode", out UiThemeModeEnum mode))
+            user.PreferredMode = mode;
 
         IdentityResult result = await userManager.UpdateAsync(user);
         result.ThrowIfFailed();

@@ -64,13 +64,7 @@ public class NotifySettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("maxAttempts", out JsonElement maxAttemptsElement))
-        {
-            int maxAttempts = maxAttemptsElement.GetInt32();
-
-            if (maxAttempts < 1)
-                throw new ValidationException("'maxAttempts' must be at least 1.");
-
+        if (patch.TryGetMergePatchInt32("maxAttempts", out int maxAttempts, 1, int.MaxValue))
             settings.Add(
                 new PresetConfigurationSetting(
                     NotifyOptions.SectionName,
@@ -78,33 +72,41 @@ public class NotifySettingsController(
                     maxAttempts
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("responseTimeout", out JsonElement responseTimeoutElement))
+        // The response timeout and the retry delay feed CancelAfter and Task.Delay.
+        if (
+            patch.TryGetMergePatchDuration(
+                "responseTimeout",
+                out TimeSpan responseTimeout,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     NotifyOptions.SectionName,
                     nameof(NotifyOptions.ResponseTimeout),
-                    ParsePositiveTimeSpan(responseTimeoutElement, "responseTimeout").ToString()
+                    responseTimeout.ToString()
                 )
             );
 
-        if (patch.TryGetMergePatchField("retryDelay", out JsonElement retryDelayElement))
+        if (
+            patch.TryGetMergePatchDuration(
+                "retryDelay",
+                out TimeSpan retryDelay,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     NotifyOptions.SectionName,
                     nameof(NotifyOptions.RetryDelay),
-                    ParsePositiveTimeSpan(retryDelayElement, "retryDelay").ToString()
+                    retryDelay.ToString()
                 )
             );
 
-        if (patch.TryGetMergePatchField("secondaryPort", out JsonElement secondaryPortElement))
-        {
-            int secondaryPort = secondaryPortElement.GetInt32();
-
-            if (secondaryPort is < 1 or > 65535)
-                throw new ValidationException("'secondaryPort' must be between 1 and 65535.");
-
+        if (patch.TryGetMergePatchInt32("secondaryPort", out int secondaryPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     NotifyOptions.SectionName,
@@ -112,7 +114,6 @@ public class NotifySettingsController(
                     secondaryPort
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
@@ -123,19 +124,5 @@ public class NotifySettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
-    ///     <see cref="ValidationException" /> naming the field.
-    /// </summary>
-    private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
-    {
-        if (!TimeSpan.TryParse(element.GetString(), out TimeSpan parsed) || parsed <= TimeSpan.Zero)
-            throw new ValidationException(
-                $"'{fieldName}' must be a valid, positive TimeSpan (for example \"00:00:03\")."
-            );
-
-        return parsed;
     }
 }

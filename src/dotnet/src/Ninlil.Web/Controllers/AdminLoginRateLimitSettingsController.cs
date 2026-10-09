@@ -78,48 +78,40 @@ public class AdminLoginRateLimitSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     AdminLoginRateLimitOptions.SectionName,
                     nameof(AdminLoginRateLimitOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("permitLimit", out JsonElement permitLimit))
-        {
-            int parsed = permitLimit.GetInt32();
-            if (parsed < 1)
-                throw new ValidationException("'permitLimit' must be at least 1.");
-
+        if (patch.TryGetMergePatchInt32("permitLimit", out int permitLimit, 1, int.MaxValue))
             settings.Add(
                 new PresetConfigurationSetting(
                     AdminLoginRateLimitOptions.SectionName,
                     nameof(AdminLoginRateLimitOptions.PermitLimit),
-                    parsed
+                    permitLimit
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("window", out JsonElement window))
-        {
-            if (
-                !TimeSpan.TryParse(window.GetString(), out TimeSpan parsed)
-                || parsed <= TimeSpan.Zero
+        // The rate limiter's window is a timer period, so it is capped at the timer limit.
+        if (
+            patch.TryGetMergePatchDuration(
+                "window",
+                out TimeSpan window,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
-                throw new ValidationException(
-                    "'window' must be a valid, positive TimeSpan (for example \"00:05:00\")."
-                );
-
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     AdminLoginRateLimitOptions.SectionName,
                     nameof(AdminLoginRateLimitOptions.Window),
-                    parsed.ToString()
+                    window.ToString()
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));

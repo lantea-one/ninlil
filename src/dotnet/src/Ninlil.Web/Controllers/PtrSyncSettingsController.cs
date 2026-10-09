@@ -65,55 +65,51 @@ public class PtrSyncSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("defaultEnabled", out JsonElement defaultEnabled))
+        if (patch.TryGetMergePatchBoolean("defaultEnabled", out bool defaultEnabled))
             settings.Add(
                 new PresetConfigurationSetting(
                     PtrSyncOptions.SectionName,
                     nameof(PtrSyncOptions.DefaultEnabled),
-                    defaultEnabled.GetBoolean()
+                    defaultEnabled
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "defaultIpv4ReverseZonePrefixBits",
-                out JsonElement defaultIpv4ReverseZonePrefixBits
+                out int ipv4PrefixBits,
+                24,
+                30
             )
         )
-        {
-            int value = defaultIpv4ReverseZonePrefixBits.GetInt32();
-            if (value < 24 || value > 30)
-                throw new ValidationException(
-                    $"'{value}' is not a valid default IPv4 prefix length -- it must be between 24 and 30 inclusive."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     PtrSyncOptions.SectionName,
                     nameof(PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits),
-                    value
+                    ipv4PrefixBits
                 )
             );
-        }
 
+        // Reverse zones for IPv6 split on nibble boundaries, so the length is a multiple of 4.
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "defaultIpv6ReverseZonePrefixBits",
-                out JsonElement defaultIpv6ReverseZonePrefixBits
+                out int ipv6PrefixBits,
+                16,
+                124
             )
         )
         {
-            int value = defaultIpv6ReverseZonePrefixBits.GetInt32();
-            if (value % 4 != 0 || value < 16 || value > 124)
+            if (ipv6PrefixBits % 4 != 0)
                 throw new ValidationException(
-                    $"'{value}' is not a valid default IPv6 prefix length -- it must be a multiple of 4 between 16 and 124 inclusive."
+                    $"'defaultIpv6ReverseZonePrefixBits' must be a multiple of 4 between 16 and 124, not {ipv6PrefixBits}."
                 );
 
             settings.Add(
                 new PresetConfigurationSetting(
                     PtrSyncOptions.SectionName,
                     nameof(PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits),
-                    value
+                    ipv6PrefixBits
                 )
             );
         }

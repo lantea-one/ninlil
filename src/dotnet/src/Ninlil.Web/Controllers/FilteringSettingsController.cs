@@ -65,35 +65,21 @@ public class FilteringSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsFilterOptions.SectionName,
                     nameof(DnsFilterOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchEnum(
                 "blockResponseMode",
-                out JsonElement blockResponseModeElement
+                out DnsFilterBlockResponseModeEnum blockResponseMode
             )
         )
-        {
-            if (
-                !Enum.TryParse(
-                    blockResponseModeElement.GetString(),
-                    ignoreCase: true,
-                    out DnsFilterBlockResponseModeEnum blockResponseMode
-                )
-            )
-                throw new ValidationException(
-                    $"'{blockResponseModeElement.GetString()}' is not a valid block response "
-                        + "mode. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<DnsFilterBlockResponseModeEnum>())}."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsFilterOptions.SectionName,
@@ -101,17 +87,15 @@ public class FilteringSettingsController(
                     blockResponseMode.ToString()
                 )
             );
-        }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchString(
                 "sinkholeAddressV4",
-                out JsonElement sinkholeAddressV4Element
+                out string sinkholeAddressV4,
+                allowNull: false
             )
         )
         {
-            string sinkholeAddressV4 = sinkholeAddressV4Element.GetString();
-
             if (
                 !IPAddress.TryParse(sinkholeAddressV4, out IPAddress parsedV4)
                 || parsedV4.AddressFamily != AddressFamily.InterNetwork
@@ -130,14 +114,13 @@ public class FilteringSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchString(
                 "sinkholeAddressV6",
-                out JsonElement sinkholeAddressV6Element
+                out string sinkholeAddressV6,
+                allowNull: false
             )
         )
         {
-            string sinkholeAddressV6 = sinkholeAddressV6Element.GetString();
-
             if (
                 !IPAddress.TryParse(sinkholeAddressV6, out IPAddress parsedV6)
                 || parsedV6.AddressFamily != AddressFamily.InterNetworkV6
@@ -155,34 +138,24 @@ public class FilteringSettingsController(
             );
         }
 
+        // RFC 2181 §8: a TTL is at most 2^31 - 1.
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "sinkholeTimeToLiveSeconds",
-                out JsonElement sinkholeTimeToLiveSeconds
+                out int sinkholeTimeToLiveSeconds,
+                0,
+                int.MaxValue
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsFilterOptions.SectionName,
                     nameof(DnsFilterOptions.SinkholeTimeToLiveSeconds),
-                    sinkholeTimeToLiveSeconds.GetUInt32()
+                    (uint)sinkholeTimeToLiveSeconds
                 )
             );
 
-        if (patch.TryGetMergePatchField("precedence", out JsonElement precedenceElement))
-        {
-            if (
-                !Enum.TryParse(
-                    precedenceElement.GetString(),
-                    ignoreCase: true,
-                    out DnsFilterListPrecedenceEnum precedence
-                )
-            )
-                throw new ValidationException(
-                    $"'{precedenceElement.GetString()}' is not a valid precedence. Expected one "
-                        + $"of: {string.Join(", ", Enum.GetNames<DnsFilterListPrecedenceEnum>())}."
-                );
-
+        if (patch.TryGetMergePatchEnum("precedence", out DnsFilterListPrecedenceEnum precedence))
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsFilterOptions.SectionName,
@@ -190,14 +163,13 @@ public class FilteringSettingsController(
                     precedence.ToString()
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("blockCnameCloaking", out JsonElement blockCnameCloaking))
+        if (patch.TryGetMergePatchBoolean("blockCnameCloaking", out bool blockCnameCloaking))
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsFilterOptions.SectionName,
                     nameof(DnsFilterOptions.BlockCnameCloaking),
-                    blockCnameCloaking.GetBoolean()
+                    blockCnameCloaking
                 )
             );
 

@@ -73,13 +73,7 @@ public class ZoneTransferClientSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("primaryPort", out JsonElement primaryPortElement))
-        {
-            int primaryPort = primaryPortElement.GetInt32();
-
-            if (primaryPort is < 1 or > 65535)
-                throw new ValidationException("'primaryPort' must be between 1 and 65535.");
-
+        if (patch.TryGetMergePatchInt32("primaryPort", out int primaryPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneTransferClientOptions.SectionName,
@@ -87,32 +81,53 @@ public class ZoneTransferClientSettingsController(
                     primaryPort
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("connectTimeout", out JsonElement connectTimeoutElement))
+        // The timeouts feed CancelAfter and socket waits, so they are capped at the timer limit.
+        if (
+            patch.TryGetMergePatchDuration(
+                "connectTimeout",
+                out TimeSpan connectTimeout,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneTransferClientOptions.SectionName,
                     nameof(ZoneTransferClientOptions.ConnectTimeout),
-                    ParsePositiveTimeSpan(connectTimeoutElement, "connectTimeout").ToString()
+                    connectTimeout.ToString()
                 )
             );
 
-        if (patch.TryGetMergePatchField("readTimeout", out JsonElement readTimeoutElement))
+        if (
+            patch.TryGetMergePatchDuration(
+                "readTimeout",
+                out TimeSpan readTimeout,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneTransferClientOptions.SectionName,
                     nameof(ZoneTransferClientOptions.ReadTimeout),
-                    ParsePositiveTimeSpan(readTimeoutElement, "readTimeout").ToString()
+                    readTimeout.ToString()
                 )
             );
 
-        if (patch.TryGetMergePatchField("soaQueryTimeout", out JsonElement soaQueryTimeoutElement))
+        if (
+            patch.TryGetMergePatchDuration(
+                "soaQueryTimeout",
+                out TimeSpan soaQueryTimeout,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneTransferClientOptions.SectionName,
                     nameof(ZoneTransferClientOptions.SoaQueryTimeout),
-                    ParsePositiveTimeSpan(soaQueryTimeoutElement, "soaQueryTimeout").ToString()
+                    soaQueryTimeout.ToString()
                 )
             );
 
@@ -125,19 +140,5 @@ public class ZoneTransferClientSettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
-    ///     <see cref="ValidationException" /> naming the field.
-    /// </summary>
-    private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
-    {
-        if (!TimeSpan.TryParse(element.GetString(), out TimeSpan parsed) || parsed <= TimeSpan.Zero)
-            throw new ValidationException(
-                $"'{fieldName}' must be a valid, positive TimeSpan (for example \"00:00:03\")."
-            );
-
-        return parsed;
     }
 }

@@ -80,13 +80,8 @@ public class DnsPipelineSettingsController(
         bool touchedRestartRequiredField = false;
         bool touchedHotReloadedField = false;
 
-        if (patch.TryGetMergePatchField("workerCount", out JsonElement workerCountElement))
+        if (patch.TryGetMergePatchInt32("workerCount", out int workerCount, 1, int.MaxValue))
         {
-            int workerCount = workerCountElement.GetInt32();
-
-            if (workerCount < 1)
-                throw new ValidationException("'workerCount' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsQueryProcessingPipelineOptions.SectionName,
@@ -98,17 +93,14 @@ public class DnsPipelineSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxConcurrentQueries",
-                out JsonElement maxConcurrentQueriesElement
+                out int maxConcurrentQueries,
+                1,
+                int.MaxValue
             )
         )
         {
-            int maxConcurrentQueries = maxConcurrentQueriesElement.GetInt32();
-
-            if (maxConcurrentQueries < 1)
-                throw new ValidationException("'maxConcurrentQueries' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsQueryProcessingPipelineOptions.SectionName,
@@ -119,13 +111,10 @@ public class DnsPipelineSettingsController(
             touchedRestartRequiredField = true;
         }
 
-        if (patch.TryGetMergePatchField("channelCapacity", out JsonElement channelCapacityElement))
+        if (
+            patch.TryGetMergePatchInt32("channelCapacity", out int channelCapacity, 1, int.MaxValue)
+        )
         {
-            int channelCapacity = channelCapacityElement.GetInt32();
-
-            if (channelCapacity < 1)
-                throw new ValidationException("'channelCapacity' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsQueryProcessingPipelineOptions.SectionName,
@@ -137,19 +126,14 @@ public class DnsPipelineSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "maxUdpPayloadSizeOctets",
-                out JsonElement maxUdpPayloadSizeOctetsElement
+                out int maxUdpPayloadSizeOctets,
+                1,
+                65535
             )
         )
         {
-            int maxUdpPayloadSizeOctets = maxUdpPayloadSizeOctetsElement.GetInt32();
-
-            if (maxUdpPayloadSizeOctets is < 1 or > 65535)
-                throw new ValidationException(
-                    "'maxUdpPayloadSizeOctets' must be between 1 and 65535."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsQueryProcessingPipelineOptions.SectionName,
@@ -161,19 +145,14 @@ public class DnsPipelineSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDouble(
                 "maxUdpAmplificationFactor",
-                out JsonElement maxUdpAmplificationFactorElement
+                out double maxUdpAmplificationFactor,
+                double.Epsilon,
+                double.MaxValue
             )
         )
         {
-            double maxUdpAmplificationFactor = maxUdpAmplificationFactorElement.GetDouble();
-
-            if (maxUdpAmplificationFactor <= 0)
-                throw new ValidationException(
-                    "'maxUdpAmplificationFactor' must be greater than 0."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsQueryProcessingPipelineOptions.SectionName,
@@ -185,20 +164,14 @@ public class DnsPipelineSettingsController(
         }
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "minUdpAmplificationFloorSizeOctets",
-                out JsonElement minUdpAmplificationFloorSizeOctetsElement
+                out int minUdpAmplificationFloorSizeOctets,
+                1,
+                65535
             )
         )
         {
-            int minUdpAmplificationFloorSizeOctets =
-                minUdpAmplificationFloorSizeOctetsElement.GetInt32();
-
-            if (minUdpAmplificationFloorSizeOctets is < 1 or > 65535)
-                throw new ValidationException(
-                    "'minUdpAmplificationFloorSizeOctets' must be between 1 and 65535."
-                );
-
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsQueryProcessingPipelineOptions.SectionName,

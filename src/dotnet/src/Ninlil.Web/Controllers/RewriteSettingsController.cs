@@ -57,21 +57,29 @@ public class RewriteSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsRewriteOptions.SectionName,
                     nameof(DnsRewriteOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("timeToLiveSeconds", out JsonElement timeToLiveSeconds))
+        // RFC 2181 §8: a TTL is at most 2^31 - 1.
+        if (
+            patch.TryGetMergePatchInt32(
+                "timeToLiveSeconds",
+                out int timeToLiveSeconds,
+                0,
+                int.MaxValue
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsRewriteOptions.SectionName,
                     nameof(DnsRewriteOptions.TimeToLiveSeconds),
-                    timeToLiveSeconds.GetUInt32()
+                    (uint)timeToLiveSeconds
                 )
             );
 

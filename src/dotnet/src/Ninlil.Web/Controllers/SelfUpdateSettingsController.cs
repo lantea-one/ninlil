@@ -68,23 +68,24 @@ public class SelfUpdateSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (
-            patch.TryGetMergePatchField(
-                "enableAutomaticCheck",
-                out JsonElement enableAutomaticCheck
-            )
-        )
+        if (patch.TryGetMergePatchBoolean("enableAutomaticCheck", out bool enableAutomaticCheck))
             settings.Add(
                 new PresetConfigurationSetting(
                     SelfUpdateOptions.SectionName,
                     nameof(SelfUpdateOptions.EnableAutomaticCheck),
-                    enableAutomaticCheck.GetBoolean()
+                    enableAutomaticCheck
                 )
             );
 
-        if (patch.TryGetMergePatchField("releaseFeedUrl", out JsonElement releaseFeedUrlElement))
+        if (
+            patch.TryGetMergePatchString(
+                "releaseFeedUrl",
+                out string releaseFeedUrlText,
+                allowNull: true
+            )
+        )
         {
-            string releaseFeedUrl = releaseFeedUrlElement.GetString() ?? string.Empty;
+            string releaseFeedUrl = releaseFeedUrlText ?? string.Empty;
 
             if (
                 releaseFeedUrl.Length > 0
@@ -106,16 +107,16 @@ public class SelfUpdateSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("checkInterval", out JsonElement checkIntervalElement))
-        {
-            if (
-                !TimeSpan.TryParse(checkIntervalElement.GetString(), out TimeSpan checkInterval)
-                || checkInterval <= TimeSpan.Zero
+        // The service compares the time since the last check with this interval, so the upper
+        // bound only keeps that arithmetic inside the TimeSpan and DateTimeOffset range.
+        if (
+            patch.TryGetMergePatchDuration(
+                "checkInterval",
+                out TimeSpan checkInterval,
+                TimeSpan.FromMilliseconds(1),
+                TimeSpan.FromDays(36500)
             )
-                throw new ValidationException(
-                    "'checkInterval' must be a valid, positive TimeSpan (for example \"1.00:00:00\")."
-                );
-
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     SelfUpdateOptions.SectionName,
@@ -123,7 +124,6 @@ public class SelfUpdateSettingsController(
                     checkInterval.ToString()
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));

@@ -75,10 +75,8 @@ public class SmtpSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("smtpHost", out JsonElement smtpHostElement))
+        if (patch.TryGetMergePatchString("smtpHost", out string smtpHost, allowNull: false))
         {
-            string smtpHost = smtpHostElement.GetString();
-
             if (string.IsNullOrWhiteSpace(smtpHost))
                 throw new ValidationException("'smtpHost' must not be blank.");
 
@@ -91,13 +89,7 @@ public class SmtpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("smtpPort", out JsonElement smtpPortElement))
-        {
-            int smtpPort = smtpPortElement.GetInt32();
-
-            if (smtpPort is < 1 or > 65535)
-                throw new ValidationException("'smtpPort' must be between 1 and 65535.");
-
+        if (patch.TryGetMergePatchInt32("smtpPort", out int smtpPort, 1, 65535))
             settings.Add(
                 new PresetConfigurationSetting(
                     EmailSenderOptions.SectionName,
@@ -105,23 +97,22 @@ public class SmtpSettingsController(
                     smtpPort
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("useTls", out JsonElement useTlsElement))
+        if (patch.TryGetMergePatchBoolean("useTls", out bool useTls))
             settings.Add(
                 new PresetConfigurationSetting(
                     EmailSenderOptions.SectionName,
                     nameof(EmailSenderOptions.UseTls),
-                    useTlsElement.GetBoolean()
+                    useTls
                 )
             );
 
-        if (patch.TryGetMergePatchField("username", out JsonElement usernameElement))
+        if (patch.TryGetMergePatchString("username", out string username, allowNull: true))
             settings.Add(
                 new PresetConfigurationSetting(
                     EmailSenderOptions.SectionName,
                     nameof(EmailSenderOptions.Username),
-                    usernameElement.GetString()
+                    username
                 )
             );
 
@@ -129,9 +120,9 @@ public class SmtpSettingsController(
         // blank 'username' means connecting without authentication. The plaintext 'Password' key
         // is always blanked too, so a value an earlier version left in the file cannot outlive
         // this write.
-        if (patch.TryGetMergePatchField("password", out JsonElement passwordElement))
+        if (patch.TryGetMergePatchString("password", out string passwordText, allowNull: true))
         {
-            string password = passwordElement.GetString() ?? string.Empty;
+            string password = passwordText ?? string.Empty;
             string passwordEncrypted = string.IsNullOrEmpty(password)
                 ? string.Empty
                 : new SmtpPasswordProtector(dataProtectionProvider).Protect(password);
@@ -152,9 +143,8 @@ public class SmtpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("fromAddress", out JsonElement fromAddressElement))
+        if (patch.TryGetMergePatchString("fromAddress", out string fromAddress, allowNull: false))
         {
-            string fromAddress = fromAddressElement.GetString();
             ValidateEmailAddress(fromAddress, "fromAddress");
 
             settings.Add(
@@ -166,10 +156,14 @@ public class SmtpSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("fromDisplayName", out JsonElement fromDisplayNameElement))
+        if (
+            patch.TryGetMergePatchString(
+                "fromDisplayName",
+                out string fromDisplayName,
+                allowNull: false
+            )
+        )
         {
-            string fromDisplayName = fromDisplayNameElement.GetString();
-
             if (string.IsNullOrWhiteSpace(fromDisplayName))
                 throw new ValidationException("'fromDisplayName' must not be blank.");
 
@@ -183,9 +177,15 @@ public class SmtpSettingsController(
         }
 
         // A blank value is accepted and clears the setting, which stops reset links being sent.
-        if (patch.TryGetMergePatchField("publicBaseUrl", out JsonElement publicBaseUrlElement))
+        if (
+            patch.TryGetMergePatchString(
+                "publicBaseUrl",
+                out string publicBaseUrlText,
+                allowNull: true
+            )
+        )
         {
-            string publicBaseUrl = publicBaseUrlElement.GetString()?.Trim() ?? "";
+            string publicBaseUrl = publicBaseUrlText?.Trim() ?? "";
 
             if (
                 publicBaseUrl.Length > 0

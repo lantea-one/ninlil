@@ -64,19 +64,23 @@ public class Dns64SettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     Dns64Options.SectionName,
                     nameof(Dns64Options.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("synthesisPrefix", out JsonElement synthesisPrefixElement))
+        if (
+            patch.TryGetMergePatchString(
+                "synthesisPrefix",
+                out string synthesisPrefix,
+                allowNull: false
+            )
+        )
         {
-            string synthesisPrefix = synthesisPrefixElement.GetString();
-
             if (!Dns64SynthesisService.TryParsePrefix(synthesisPrefix, out _, out _))
                 throw new ValidationException(
                     $"'{synthesisPrefix}' is not a legal RFC 6052 §2.2 DNS64 prefix -- it must be "

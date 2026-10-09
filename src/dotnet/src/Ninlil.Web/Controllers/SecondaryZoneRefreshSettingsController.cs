@@ -72,27 +72,36 @@ public class SecondaryZoneRefreshSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("pollInterval", out JsonElement pollIntervalElement))
+        // Both intervals feed timers and delays, so they are capped at the timer limit.
+        if (
+            patch.TryGetMergePatchDuration(
+                "pollInterval",
+                out TimeSpan pollInterval,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     SecondaryZoneRefreshOptions.SectionName,
                     nameof(SecondaryZoneRefreshOptions.PollInterval),
-                    ParsePositiveTimeSpan(pollIntervalElement, "pollInterval").ToString()
+                    pollInterval.ToString()
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "defaultRetryInterval",
-                out JsonElement defaultRetryIntervalElement
+                out TimeSpan defaultRetryInterval,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     SecondaryZoneRefreshOptions.SectionName,
                     nameof(SecondaryZoneRefreshOptions.DefaultRetryInterval),
-                    ParsePositiveTimeSpan(defaultRetryIntervalElement, "defaultRetryInterval")
-                        .ToString()
+                    defaultRetryInterval.ToString()
                 )
             );
 
@@ -105,19 +114,5 @@ public class SecondaryZoneRefreshSettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
-    ///     <see cref="ValidationException" /> naming the field.
-    /// </summary>
-    private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
-    {
-        if (!TimeSpan.TryParse(element.GetString(), out TimeSpan parsed) || parsed <= TimeSpan.Zero)
-            throw new ValidationException(
-                $"'{fieldName}' must be a valid, positive TimeSpan (for example \"00:00:15\")."
-            );
-
-        return parsed;
     }
 }

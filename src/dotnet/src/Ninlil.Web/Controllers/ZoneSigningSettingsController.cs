@@ -72,18 +72,16 @@ public class ZoneSigningSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
+        // The signing times are added to timestamps, so their upper bound keeps the sums inside
+        // DateTimeOffset. Zero is a valid inception offset (signatures valid from now).
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "signatureValidityPeriod",
                 out TimeSpan signatureValidityPeriod,
-                out bool signatureValidityPeriodPresent
+                TimeSpan.FromMilliseconds(1),
+                TimeSpan.FromDays(36500)
             )
         )
-        {
-            if (signatureValidityPeriod <= TimeSpan.Zero)
-                throw new ValidationException("'signatureValidityPeriod' must be positive.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneSigningOptions.SectionName,
@@ -91,24 +89,15 @@ public class ZoneSigningSettingsController(
                     signatureValidityPeriod.ToString()
                 )
             );
-        }
-        else if (signatureValidityPeriodPresent)
-            throw new ValidationException(
-                "'signatureValidityPeriod' must be a valid TimeSpan (for example \"30.00:00:00\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "inceptionOffset",
                 out TimeSpan inceptionOffset,
-                out bool inceptionOffsetPresent
+                TimeSpan.Zero,
+                TimeSpan.FromDays(36500)
             )
         )
-        {
-            if (inceptionOffset < TimeSpan.Zero)
-                throw new ValidationException("'inceptionOffset' must not be negative.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneSigningOptions.SectionName,
@@ -116,24 +105,15 @@ public class ZoneSigningSettingsController(
                     inceptionOffset.ToString()
                 )
             );
-        }
-        else if (inceptionOffsetPresent)
-            throw new ValidationException(
-                "'inceptionOffset' must be a valid TimeSpan (for example \"01:00:00\")."
-            );
 
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "refreshBeforeExpiration",
                 out TimeSpan refreshBeforeExpiration,
-                out bool refreshBeforeExpirationPresent
+                TimeSpan.FromMilliseconds(1),
+                TimeSpan.FromDays(36500)
             )
         )
-        {
-            if (refreshBeforeExpiration <= TimeSpan.Zero)
-                throw new ValidationException("'refreshBeforeExpiration' must be positive.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneSigningOptions.SectionName,
@@ -141,35 +121,22 @@ public class ZoneSigningSettingsController(
                     refreshBeforeExpiration.ToString()
                 )
             );
-        }
-        else if (refreshBeforeExpirationPresent)
-            throw new ValidationException(
-                "'refreshBeforeExpiration' must be a valid TimeSpan (for example \"5.00:00:00\")."
-            );
 
+        // The poll interval feeds a timer.
         if (
-            TryGetDuration(
-                patch,
+            patch.TryGetMergePatchDuration(
                 "pollInterval",
                 out TimeSpan pollInterval,
-                out bool pollIntervalPresent
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
-        {
-            if (pollInterval <= TimeSpan.Zero)
-                throw new ValidationException("'pollInterval' must be positive.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneSigningOptions.SectionName,
                     nameof(ZoneSigningOptions.PollInterval),
                     pollInterval.ToString()
                 )
-            );
-        }
-        else if (pollIntervalPresent)
-            throw new ValidationException(
-                "'pollInterval' must be a valid TimeSpan (for example \"06:00:00\")."
             );
 
         if (settings.Count == 0)
@@ -181,22 +148,5 @@ public class ZoneSigningSettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
-    }
-
-    /// <summary>
-    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
-    ///     caller both whether the field was present and whether it parsed.
-    /// </summary>
-    private static bool TryGetDuration(
-        JsonElement patch,
-        string propertyName,
-        out TimeSpan value,
-        out bool present
-    )
-    {
-        value = default;
-        present = patch.TryGetMergePatchField(propertyName, out JsonElement element);
-
-        return present && TimeSpan.TryParse(element.GetString(), out value);
     }
 }

@@ -90,31 +90,25 @@ public class MacVendorSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enableAutomaticRefresh", out JsonElement enable))
-        {
-            if (enable.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                throw new ValidationException("'enableAutomaticRefresh' must be a boolean.");
-
+        if (patch.TryGetMergePatchBoolean("enableAutomaticRefresh", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     MacVendorLookupOptions.SectionName,
                     nameof(MacVendorLookupOptions.EnableAutomaticRefresh),
-                    enable.GetBoolean()
+                    enable
                 )
             );
-        }
 
-        if (patch.TryGetMergePatchField("refreshInterval", out JsonElement intervalElement))
-        {
-            if (
-                intervalElement.ValueKind != JsonValueKind.String
-                || !TimeSpan.TryParse(intervalElement.GetString(), out TimeSpan interval)
-                || interval < MinimumRefreshInterval
+        // The interval is added to a timestamp to find the next due time, so the upper bound
+        // keeps that sum inside DateTimeOffset.
+        if (
+            patch.TryGetMergePatchDuration(
+                "refreshInterval",
+                out TimeSpan interval,
+                MinimumRefreshInterval,
+                TimeSpan.FromDays(36500)
             )
-                throw new ValidationException(
-                    "'refreshInterval' must be a valid TimeSpan of at least one day (for example \"14.00:00:00\")."
-                );
-
+        )
             settings.Add(
                 new PresetConfigurationSetting(
                     MacVendorLookupOptions.SectionName,
@@ -122,7 +116,6 @@ public class MacVendorSettingsController(
                     interval.ToString()
                 )
             );
-        }
 
         // Validate every registry URL identically, before anything is written.
         foreach (
@@ -134,10 +127,9 @@ public class MacVendorSettingsController(
             }
         )
         {
-            if (!patch.TryGetMergePatchField(field, out JsonElement element))
+            if (!patch.TryGetMergePatchString(field, out string url, allowNull: false))
                 continue;
 
-            string url = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
             if (
                 !Uri.TryCreate(url, UriKind.Absolute, out Uri parsed)
                 || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)

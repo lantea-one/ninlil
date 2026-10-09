@@ -73,19 +73,17 @@ public class OidcSsoSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("enable", out JsonElement enable))
+        if (patch.TryGetMergePatchBoolean("enable", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     OidcSsoOptions.SectionName,
                     nameof(OidcSsoOptions.Enable),
-                    enable.GetBoolean()
+                    enable
                 )
             );
 
-        if (patch.TryGetMergePatchField("displayName", out JsonElement displayNameElement))
+        if (patch.TryGetMergePatchString("displayName", out string displayName, allowNull: false))
         {
-            string displayName = displayNameElement.GetString();
-
             if (string.IsNullOrWhiteSpace(displayName))
                 throw new ValidationException("'displayName' must not be blank.");
 
@@ -98,10 +96,8 @@ public class OidcSsoSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("authority", out JsonElement authorityElement))
+        if (patch.TryGetMergePatchString("authority", out string authority, allowNull: false))
         {
-            string authority = authorityElement.GetString();
-
             if (
                 string.IsNullOrWhiteSpace(authority)
                 || !Uri.TryCreate(authority, UriKind.Absolute, out Uri parsedAuthority)
@@ -124,10 +120,8 @@ public class OidcSsoSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("clientId", out JsonElement clientIdElement))
+        if (patch.TryGetMergePatchString("clientId", out string clientId, allowNull: false))
         {
-            string clientId = clientIdElement.GetString();
-
             if (string.IsNullOrWhiteSpace(clientId))
                 throw new ValidationException("'clientId' must not be blank.");
 
@@ -142,9 +136,15 @@ public class OidcSsoSettingsController(
 
         // A blank string clears the stored secret (unlike 'clientId', which must not be blank); an
         // absent field leaves it alone, as with the SMTP 'password'.
-        if (patch.TryGetMergePatchField("clientSecret", out JsonElement clientSecretElement))
+        if (
+            patch.TryGetMergePatchString(
+                "clientSecret",
+                out string clientSecretText,
+                allowNull: true
+            )
+        )
         {
-            string clientSecret = clientSecretElement.GetString() ?? string.Empty;
+            string clientSecret = clientSecretText ?? string.Empty;
             string clientSecretEncrypted = string.IsNullOrEmpty(clientSecret)
                 ? string.Empty
                 : new OidcClientSecretProtector(dataProtectionProvider).Protect(clientSecret);
@@ -158,12 +158,12 @@ public class OidcSsoSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("scopes", out JsonElement scopesElement))
+        if (patch.TryGetMergePatchStringList("scopes", out List<string> scopes, allowNull: false))
             settings.Add(
                 new PresetConfigurationSetting(
                     OidcSsoOptions.SectionName,
                     nameof(OidcSsoOptions.Scopes),
-                    ParseScopes(scopesElement)
+                    ValidateScopes(scopes)
                 )
             );
 
@@ -181,40 +181,22 @@ public class OidcSsoSettingsController(
     }
 
     /// <summary>
-    ///     This method parses the <c>scopes</c> field, a JSON array of scope names, and rejects
-    ///     anything but non-blank strings. The list must include <c>openid</c>; without it the
-    ///     request is plain OAuth 2.0, not OpenID Connect.
+    ///     This method checks the <c>scopes</c> field, a JSON array of scope names, and rejects
+    ///     blank entries. The list must include <c>openid</c>; without it the request is plain
+    ///     OAuth 2.0, not OpenID Connect.
     /// </summary>
-    private static List<string> ParseScopes(JsonElement element)
+    private static List<string> ValidateScopes(List<string> scopes)
     {
-        if (element.ValueKind != JsonValueKind.Array)
-            throw new ValidationException(
-                "'scopes' must be a JSON array of OpenID Connect scope names, for example "
-                    + "[\"openid\", \"profile\", \"email\"]."
-            );
+        if (scopes.Any(string.IsNullOrWhiteSpace))
+            throw new ValidationException("Every entry in 'scopes' must be a non-blank string.");
 
-        List<string> parsed = [];
-
-        foreach (JsonElement item in element.EnumerateArray())
-        {
-            if (
-                item.ValueKind != JsonValueKind.String
-                || string.IsNullOrWhiteSpace(item.GetString())
-            )
-                throw new ValidationException(
-                    "Every entry in 'scopes' must be a non-blank string."
-                );
-
-            parsed.Add(item.GetString());
-        }
-
-        if (!parsed.Contains("openid", StringComparer.Ordinal))
+        if (!scopes.Contains("openid", StringComparer.Ordinal))
             throw new ValidationException(
                 "'scopes' must include \"openid\" -- without it, this is not an OpenID Connect "
                     + "request at all."
             );
 
-        return parsed;
+        return scopes;
     }
 
     /// <summary>

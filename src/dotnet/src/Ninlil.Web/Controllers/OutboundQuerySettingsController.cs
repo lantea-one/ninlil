@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Core.Transport;
 using Ninlil.Dns.Server.Presets;
@@ -63,31 +64,28 @@ public class OutboundQuerySettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (
-            patch.TryGetMergePatchField(
-                "enableSourcePortPool",
-                out JsonElement enableSourcePortPool
-            )
-        )
+        if (patch.TryGetMergePatchBoolean("enableSourcePortPool", out bool enableSourcePortPool))
             settings.Add(
                 new PresetConfigurationSetting(
                     OutboundQueryOptions.SectionName,
                     nameof(OutboundQueryOptions.EnableSourcePortPool),
-                    enableSourcePortPool.GetBoolean()
+                    enableSourcePortPool
                 )
             );
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "poolSizePerAddressFamily",
-                out JsonElement poolSizePerAddressFamily
+                out int poolSizePerAddressFamily,
+                1,
+                65535
             )
         )
             settings.Add(
                 new PresetConfigurationSetting(
                     OutboundQueryOptions.SectionName,
                     nameof(OutboundQueryOptions.PoolSizePerAddressFamily),
-                    poolSizePerAddressFamily.GetInt32()
+                    poolSizePerAddressFamily
                 )
             );
 
@@ -96,12 +94,7 @@ public class OutboundQuerySettingsController(
                 new PresetConfigurationSetting(
                     OutboundQueryOptions.SectionName,
                     nameof(OutboundQueryOptions.ExcludedSourcePorts),
-                    (List<int>)
-                        [
-                            .. excludedSourcePorts
-                                .EnumerateArray()
-                                .Select(element => element.GetInt32()),
-                        ]
+                    ReadPortList(excludedSourcePorts)
                 )
             );
 
@@ -114,5 +107,34 @@ public class OutboundQuerySettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
+    }
+
+    /// <summary>
+    ///     This method reads <c>excludedSourcePorts</c>: a JSON array of whole numbers from 1 to
+    ///     65535. Anything else is a 400 that names the field.
+    /// </summary>
+    private static List<int> ReadPortList(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Array)
+            throw new ValidationException(
+                "'excludedSourcePorts' must be an array of port numbers."
+            );
+
+        List<int> ports = [];
+        foreach (JsonElement item in element.EnumerateArray())
+        {
+            if (
+                item.ValueKind != JsonValueKind.Number
+                || !item.TryGetInt32(out int port)
+                || port is < 1 or > 65535
+            )
+                throw new ValidationException(
+                    "'excludedSourcePorts' must contain only whole numbers between 1 and 65535."
+                );
+
+            ports.Add(port);
+        }
+
+        return ports;
     }
 }

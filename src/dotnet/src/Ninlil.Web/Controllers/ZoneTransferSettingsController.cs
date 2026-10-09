@@ -60,17 +60,13 @@ public class ZoneTransferSettingsController(
         List<PresetConfigurationSetting> settings = [];
 
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchInt32(
                 "recordsPerMessage",
-                out JsonElement recordsPerMessageElement
+                out int recordsPerMessage,
+                1,
+                int.MaxValue
             )
         )
-        {
-            int recordsPerMessage = recordsPerMessageElement.GetInt32();
-
-            if (recordsPerMessage < 1)
-                throw new ValidationException("'recordsPerMessage' must be at least 1.");
-
             settings.Add(
                 new PresetConfigurationSetting(
                     ZoneTransferOptions.SectionName,
@@ -78,7 +74,6 @@ public class ZoneTransferSettingsController(
                     recordsPerMessage
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));

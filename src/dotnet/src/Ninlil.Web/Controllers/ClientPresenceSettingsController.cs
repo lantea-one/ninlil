@@ -70,30 +70,38 @@ public class ClientPresenceSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        // Check every interval field the same way before anything is written.
+        // The online window is an age compared against timestamps; the other two intervals feed
+        // timers, so they are capped at the timer limit.
         foreach (
-            (string field, string property) in new[]
+            (string field, string property, TimeSpan maximum) in new[]
             {
-                ("onlineWindow", nameof(ClientPresenceOptions.OnlineWindow)),
-                ("flushInterval", nameof(ClientPresenceOptions.FlushInterval)),
+                (
+                    "onlineWindow",
+                    nameof(ClientPresenceOptions.OnlineWindow),
+                    TimeSpan.FromDays(36500)
+                ),
+                (
+                    "flushInterval",
+                    nameof(ClientPresenceOptions.FlushInterval),
+                    JsonElementMergePatchExtension.TimerMaximum
+                ),
                 (
                     "neighborTablePollInterval",
-                    nameof(ClientPresenceOptions.NeighborTablePollInterval)
+                    nameof(ClientPresenceOptions.NeighborTablePollInterval),
+                    JsonElementMergePatchExtension.TimerMaximum
                 ),
             }
         )
         {
-            if (!patch.TryGetMergePatchField(field, out JsonElement element))
-                continue;
-
             if (
-                element.ValueKind != JsonValueKind.String
-                || !TimeSpan.TryParse(element.GetString(), out TimeSpan interval)
-                || interval <= TimeSpan.Zero
+                !patch.TryGetMergePatchDuration(
+                    field,
+                    out TimeSpan interval,
+                    TimeSpan.FromMilliseconds(1),
+                    maximum
+                )
             )
-                throw new ValidationException(
-                    $"'{field}' must be a valid, positive TimeSpan (for example \"00:10:00\")."
-                );
+                continue;
 
             settings.Add(
                 new PresetConfigurationSetting(
@@ -104,19 +112,14 @@ public class ClientPresenceSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("enableNeighborTableSignal", out JsonElement enable))
-        {
-            if (enable.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                throw new ValidationException("'enableNeighborTableSignal' must be a boolean.");
-
+        if (patch.TryGetMergePatchBoolean("enableNeighborTableSignal", out bool enable))
             settings.Add(
                 new PresetConfigurationSetting(
                     ClientPresenceOptions.SectionName,
                     nameof(ClientPresenceOptions.EnableNeighborTableSignal),
-                    enable.GetBoolean()
+                    enable
                 )
             );
-        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));

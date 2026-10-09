@@ -8,10 +8,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the range checks of the settings controllers whose fields reach a timer,
-///     a socket or a bucket (cluster, forwarding, client subnet, rate limiting, query logging, DNS
-///     cookies, event broker, identity, recursive, transport and web listen), over HTTP on the
-///     shared in-process host, signed in as the bootstrap administrator.
+///     This class covers the range and type checks of the settings controllers (every
+///     <c>*SettingsController</c> except DHCP, which has its own class), over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator. The first group (cluster,
+///     forwarding, client subnet, rate limiting, query logging, DNS cookies, event broker,
+///     identity, recursive, transport and web listen) holds fields that reach a timer, a socket or
+///     a bucket; the second group holds the remaining controllers, where each gets at least one
+///     wrong-JSON-type row.
 ///     <para>
 ///         A rejected value must give 400 naming the field, and the runtime settings file
 ///         (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) must be
@@ -623,5 +626,650 @@ public class SettingsRangeCheckTests(NinlilDnsWebApplicationFactory factory)
         "{\"certificate\":{\"certificateReloadPollInterval\":\"49.17:02:47.294\"}}"
     )]
     public async Task Patch_OnWebListenSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    private const string Branding = "/api/branding-settings";
+    private const string DnssecKeyRollover = "/api/dnssec-key-rollover-settings";
+    private const string Dns64 = "/api/dns64-settings";
+    private const string Appearance = "/api/appearance-settings";
+    private const string AppearanceMine = "/api/appearance-settings/me";
+    private const string ClientPresence = "/api/client-presence-settings";
+    private const string AdminLoginRateLimit = "/api/admin-login-rate-limit-settings";
+    private const string DnsPipeline = "/api/dns-pipeline-settings";
+    private const string Filtering = "/api/filtering-settings";
+    private const string Acme = "/api/acme-settings";
+    private const string Notify = "/api/notify-settings";
+    private const string MacVendor = "/api/mac-vendor-settings";
+    private const string PtrSync = "/api/ptr-sync-settings";
+    private const string OutboundQuery = "/api/outbound-query-settings";
+    private const string Rewrite = "/api/rewrite-settings";
+    private const string SecondaryZoneRefresh = "/api/secondary-zone-refresh-settings";
+    private const string ReverseProxy = "/api/reverse-proxy-settings";
+    private const string WebhookDelivery = "/api/webhook-delivery-settings";
+    private const string DnssecPolicy = "/api/dnssec-policy-settings";
+    private const string ZoneSigning = "/api/zone-signing-settings";
+    private const string OidcSso = "/api/sso-settings";
+    private const string ZoneTransfer = "/api/zone-transfer-settings";
+    private const string ZoneTransferClient = "/api/zone-transfer-client-settings";
+    private const string Smtp = "/api/smtp-settings";
+    private const string Tsig = "/api/tsig-settings";
+    private const string SelfUpdate = "/api/self-update-settings";
+
+    [Theory]
+    [InlineData(Branding, "{\"siteTitle\":5}", "siteTitle")]
+    [InlineData(Branding, "{\"logoDataUri\":5}", "logoDataUri")]
+    [InlineData(Branding, "{\"hostnameString\":null}", "hostnameString")]
+    [InlineData(Branding, "{\"hostnameString\":7}", "hostnameString")]
+    [InlineData(Branding, "{\"versionString\":true}", "versionString")]
+    [InlineData(Branding, "{\"enableChaosVersionQueries\":\"yes\"}", "enableChaosVersionQueries")]
+    public async Task Patch_OnBrandingSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Branding, "{\"siteTitle\":null}")]
+    [InlineData(Branding, "{\"enableChaosVersionQueries\":false}")]
+    public async Task Patch_OnBrandingSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DnssecKeyRollover, "{\"propagationDelay\":\"-00:00:01\"}", "propagationDelay")]
+    [InlineData(DnssecKeyRollover, "{\"propagationDelay\":\"36500.00:00:01\"}", "propagationDelay")]
+    [InlineData(DnssecKeyRollover, "{\"propagationDelay\":5}", "propagationDelay")]
+    [InlineData(DnssecKeyRollover, "{\"externalParentDsTtl\":\"00:00:00\"}", "externalParentDsTtl")]
+    [InlineData(DnssecKeyRollover, "{\"pollInterval\":\"00:00:00\"}", "pollInterval")]
+    [InlineData(DnssecKeyRollover, "{\"pollInterval\":\"49.17:02:47.295\"}", "pollInterval")]
+    public async Task Patch_OnDnssecKeyRolloverSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DnssecKeyRollover, "{\"propagationDelay\":\"00:00:00\"}")]
+    [InlineData(DnssecKeyRollover, "{\"propagationDelay\":\"36500.00:00:00\"}")]
+    [InlineData(DnssecKeyRollover, "{\"pollInterval\":\"49.17:02:47.294\"}")]
+    public async Task Patch_OnDnssecKeyRolloverSettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Dns64, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(Dns64, "{\"synthesisPrefix\":5}", "synthesisPrefix")]
+    [InlineData(Dns64, "{\"synthesisPrefix\":null}", "synthesisPrefix")]
+    public async Task Patch_OnDns64SettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Dns64, "{\"enable\":true}")]
+    public async Task Patch_OnDns64SettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Appearance, "{\"palette\":5}", "palette")]
+    [InlineData(Appearance, "{\"mode\":5}", "mode")]
+    [InlineData(Appearance, "{\"mode\":null}", "mode")]
+    [InlineData(Appearance, "{\"palette\":\"Chartreuse\"}", "palette")]
+    public async Task Patch_OnAppearanceSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Appearance, "{\"palette\":\"Amber\",\"mode\":\"Dark\"}")]
+    public async Task Patch_OnAppearanceSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(AppearanceMine, "{\"palette\":5}", "palette")]
+    [InlineData(AppearanceMine, "{\"mode\":true}", "mode")]
+    [InlineData(AppearanceMine, "{\"mode\":\"NotAMode\"}", "mode")]
+    public async Task Patch_OnAppearanceMineSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(ClientPresence, "{\"onlineWindow\":\"00:00:00\"}", "onlineWindow")]
+    [InlineData(ClientPresence, "{\"onlineWindow\":\"36500.00:00:01\"}", "onlineWindow")]
+    [InlineData(ClientPresence, "{\"flushInterval\":\"49.17:02:47.295\"}", "flushInterval")]
+    [InlineData(
+        ClientPresence,
+        "{\"neighborTablePollInterval\":\"-00:00:01\"}",
+        "neighborTablePollInterval"
+    )]
+    [InlineData(ClientPresence, "{\"flushInterval\":5}", "flushInterval")]
+    [InlineData(
+        ClientPresence,
+        "{\"enableNeighborTableSignal\":\"no\"}",
+        "enableNeighborTableSignal"
+    )]
+    public async Task Patch_OnClientPresenceSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(ClientPresence, "{\"onlineWindow\":\"36500.00:00:00\"}")]
+    [InlineData(ClientPresence, "{\"flushInterval\":\"49.17:02:47.294\"}")]
+    [InlineData(ClientPresence, "{\"neighborTablePollInterval\":\"00:00:00.001\"}")]
+    public async Task Patch_OnClientPresenceSettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(AdminLoginRateLimit, "{\"enable\":1}", "enable")]
+    [InlineData(AdminLoginRateLimit, "{\"permitLimit\":0}", "permitLimit")]
+    [InlineData(AdminLoginRateLimit, "{\"permitLimit\":\"5\"}", "permitLimit")]
+    [InlineData(AdminLoginRateLimit, "{\"permitLimit\":1.5}", "permitLimit")]
+    [InlineData(AdminLoginRateLimit, "{\"window\":\"00:00:00\"}", "window")]
+    [InlineData(AdminLoginRateLimit, "{\"window\":\"49.17:02:47.295\"}", "window")]
+    [InlineData(AdminLoginRateLimit, "{\"window\":300}", "window")]
+    public async Task Patch_OnAdminLoginRateLimitSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(AdminLoginRateLimit, "{\"permitLimit\":1}")]
+    [InlineData(AdminLoginRateLimit, "{\"window\":\"49.17:02:47.294\"}")]
+    public async Task Patch_OnAdminLoginRateLimitSettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DnsPipeline, "{\"workerCount\":0}", "workerCount")]
+    [InlineData(DnsPipeline, "{\"workerCount\":\"4\"}", "workerCount")]
+    [InlineData(DnsPipeline, "{\"workerCount\":2.5}", "workerCount")]
+    [InlineData(DnsPipeline, "{\"maxConcurrentQueries\":0}", "maxConcurrentQueries")]
+    [InlineData(DnsPipeline, "{\"channelCapacity\":0}", "channelCapacity")]
+    [InlineData(DnsPipeline, "{\"maxUdpPayloadSizeOctets\":0}", "maxUdpPayloadSizeOctets")]
+    [InlineData(DnsPipeline, "{\"maxUdpPayloadSizeOctets\":65536}", "maxUdpPayloadSizeOctets")]
+    [InlineData(DnsPipeline, "{\"maxUdpAmplificationFactor\":0}", "maxUdpAmplificationFactor")]
+    [InlineData(
+        DnsPipeline,
+        "{\"maxUdpAmplificationFactor\":\"big\"}",
+        "maxUdpAmplificationFactor"
+    )]
+    [InlineData(
+        DnsPipeline,
+        "{\"minUdpAmplificationFloorSizeOctets\":65536}",
+        "minUdpAmplificationFloorSizeOctets"
+    )]
+    public async Task Patch_OnDnsPipelineSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DnsPipeline, "{\"workerCount\":1}")]
+    [InlineData(DnsPipeline, "{\"maxUdpPayloadSizeOctets\":65535}")]
+    [InlineData(DnsPipeline, "{\"maxUdpAmplificationFactor\":0.5}")]
+    [InlineData(DnsPipeline, "{\"minUdpAmplificationFloorSizeOctets\":1}")]
+    public async Task Patch_OnDnsPipelineSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Filtering, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(Filtering, "{\"blockResponseMode\":5}", "blockResponseMode")]
+    [InlineData(Filtering, "{\"blockResponseMode\":\"NotARealMode\"}", "blockResponseMode")]
+    [InlineData(Filtering, "{\"sinkholeAddressV4\":5}", "sinkholeAddressV4")]
+    [InlineData(Filtering, "{\"sinkholeAddressV4\":\"2001:db8::1\"}", "IPv4 address")]
+    [InlineData(Filtering, "{\"sinkholeAddressV6\":null}", "sinkholeAddressV6")]
+    [InlineData(Filtering, "{\"sinkholeTimeToLiveSeconds\":-1}", "sinkholeTimeToLiveSeconds")]
+    [InlineData(
+        Filtering,
+        "{\"sinkholeTimeToLiveSeconds\":2147483648}",
+        "sinkholeTimeToLiveSeconds"
+    )]
+    [InlineData(Filtering, "{\"sinkholeTimeToLiveSeconds\":\"60\"}", "sinkholeTimeToLiveSeconds")]
+    [InlineData(Filtering, "{\"precedence\":5}", "precedence")]
+    [InlineData(Filtering, "{\"blockCnameCloaking\":\"x\"}", "blockCnameCloaking")]
+    public async Task Patch_OnFilteringSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Filtering, "{\"sinkholeTimeToLiveSeconds\":0}")]
+    [InlineData(Filtering, "{\"sinkholeTimeToLiveSeconds\":2147483647}")]
+    [InlineData(Filtering, "{\"precedence\":\"BlockWins\"}")]
+    public async Task Patch_OnFilteringSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Acme, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(Acme, "{\"directoryUri\":5}", "directoryUri")]
+    [InlineData(Acme, "{\"contactEmails\":\"a@b.c\"}", "contactEmails")]
+    [InlineData(Acme, "{\"contactEmails\":[5]}", "contactEmails")]
+    [InlineData(Acme, "{\"domains\":{}}", "domains")]
+    [InlineData(Acme, "{\"renewBeforeExpiration\":\"00:00:00\"}", "renewBeforeExpiration")]
+    [InlineData(Acme, "{\"renewBeforeExpiration\":\"36500.00:00:01\"}", "renewBeforeExpiration")]
+    [InlineData(Acme, "{\"pollInterval\":\"00:00:00\"}", "pollInterval")]
+    [InlineData(Acme, "{\"pollInterval\":\"49.17:02:47.295\"}", "pollInterval")]
+    [InlineData(Acme, "{\"pollInterval\":12}", "pollInterval")]
+    [InlineData(Acme, "{\"accountStateFilePath\":5}", "accountStateFilePath")]
+    [InlineData(Acme, "{\"certificateDirectoryPath\":false}", "certificateDirectoryPath")]
+    [InlineData(Acme, "{\"csrOrganization\":5}", "csrOrganization")]
+    [InlineData(
+        Acme,
+        "{\"caaAutoManagement\":{\"defaultEnabled\":\"x\"}}",
+        "caaAutoManagement.defaultEnabled"
+    )]
+    [InlineData(
+        Acme,
+        "{\"caaAutoManagement\":{\"defaultIssuerDomain\":5}}",
+        "caaAutoManagement.defaultIssuerDomain"
+    )]
+    public async Task Patch_OnAcmeSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Acme, "{\"pollInterval\":\"49.17:02:47.294\"}")]
+    [InlineData(Acme, "{\"renewBeforeExpiration\":\"36500.00:00:00\"}")]
+    [InlineData(Acme, "{\"pollInterval\":\"00:00:00.001\"}")]
+    public async Task Patch_OnAcmeSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Notify, "{\"maxAttempts\":0}", "maxAttempts")]
+    [InlineData(Notify, "{\"maxAttempts\":\"3\"}", "maxAttempts")]
+    [InlineData(Notify, "{\"responseTimeout\":\"00:00:00\"}", "responseTimeout")]
+    [InlineData(Notify, "{\"responseTimeout\":\"49.17:02:47.295\"}", "responseTimeout")]
+    [InlineData(Notify, "{\"retryDelay\":\"-00:00:01\"}", "retryDelay")]
+    [InlineData(Notify, "{\"retryDelay\":3}", "retryDelay")]
+    [InlineData(Notify, "{\"secondaryPort\":0}", "secondaryPort")]
+    [InlineData(Notify, "{\"secondaryPort\":65536}", "secondaryPort")]
+    public async Task Patch_OnNotifySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Notify, "{\"maxAttempts\":1}")]
+    [InlineData(Notify, "{\"secondaryPort\":1}")]
+    [InlineData(Notify, "{\"secondaryPort\":65535}")]
+    [InlineData(Notify, "{\"responseTimeout\":\"49.17:02:47.294\"}")]
+    public async Task Patch_OnNotifySettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(MacVendor, "{\"enableAutomaticRefresh\":\"yes\"}", "enableAutomaticRefresh")]
+    [InlineData(MacVendor, "{\"refreshInterval\":\"23:59:59\"}", "refreshInterval")]
+    [InlineData(MacVendor, "{\"refreshInterval\":\"36500.00:00:01\"}", "refreshInterval")]
+    [InlineData(MacVendor, "{\"refreshInterval\":14}", "refreshInterval")]
+    [InlineData(MacVendor, "{\"maLRegistryUrl\":5}", "maLRegistryUrl")]
+    [InlineData(MacVendor, "{\"maMRegistryUrl\":\"ftp://x/y\"}", "maMRegistryUrl")]
+    [InlineData(MacVendor, "{\"maSRegistryUrl\":null}", "maSRegistryUrl")]
+    public async Task Patch_OnMacVendorSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(MacVendor, "{\"refreshInterval\":\"1.00:00:00\"}")]
+    [InlineData(MacVendor, "{\"refreshInterval\":\"36500.00:00:00\"}")]
+    public async Task Patch_OnMacVendorSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(PtrSync, "{\"defaultEnabled\":\"yes\"}", "defaultEnabled")]
+    [InlineData(
+        PtrSync,
+        "{\"defaultIpv4ReverseZonePrefixBits\":23}",
+        "defaultIpv4ReverseZonePrefixBits"
+    )]
+    [InlineData(
+        PtrSync,
+        "{\"defaultIpv4ReverseZonePrefixBits\":31}",
+        "defaultIpv4ReverseZonePrefixBits"
+    )]
+    [InlineData(
+        PtrSync,
+        "{\"defaultIpv4ReverseZonePrefixBits\":\"24\"}",
+        "defaultIpv4ReverseZonePrefixBits"
+    )]
+    [InlineData(
+        PtrSync,
+        "{\"defaultIpv6ReverseZonePrefixBits\":15}",
+        "defaultIpv6ReverseZonePrefixBits"
+    )]
+    [InlineData(
+        PtrSync,
+        "{\"defaultIpv6ReverseZonePrefixBits\":125}",
+        "defaultIpv6ReverseZonePrefixBits"
+    )]
+    [InlineData(
+        PtrSync,
+        "{\"defaultIpv6ReverseZonePrefixBits\":50}",
+        "defaultIpv6ReverseZonePrefixBits"
+    )]
+    [InlineData(
+        PtrSync,
+        "{\"defaultIpv6ReverseZonePrefixBits\":64.5}",
+        "defaultIpv6ReverseZonePrefixBits"
+    )]
+    public async Task Patch_OnPtrSyncSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(PtrSync, "{\"defaultIpv4ReverseZonePrefixBits\":24}")]
+    [InlineData(PtrSync, "{\"defaultIpv4ReverseZonePrefixBits\":30}")]
+    [InlineData(PtrSync, "{\"defaultIpv6ReverseZonePrefixBits\":16}")]
+    [InlineData(PtrSync, "{\"defaultIpv6ReverseZonePrefixBits\":124}")]
+    public async Task Patch_OnPtrSyncSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(OutboundQuery, "{\"enableSourcePortPool\":\"x\"}", "enableSourcePortPool")]
+    [InlineData(OutboundQuery, "{\"poolSizePerAddressFamily\":0}", "poolSizePerAddressFamily")]
+    [InlineData(OutboundQuery, "{\"poolSizePerAddressFamily\":65536}", "poolSizePerAddressFamily")]
+    [InlineData(
+        OutboundQuery,
+        "{\"poolSizePerAddressFamily\":\"128\"}",
+        "poolSizePerAddressFamily"
+    )]
+    [InlineData(OutboundQuery, "{\"excludedSourcePorts\":5}", "excludedSourcePorts")]
+    [InlineData(OutboundQuery, "{\"excludedSourcePorts\":[\"53\"]}", "excludedSourcePorts")]
+    [InlineData(OutboundQuery, "{\"excludedSourcePorts\":[0]}", "excludedSourcePorts")]
+    [InlineData(OutboundQuery, "{\"excludedSourcePorts\":[65536]}", "excludedSourcePorts")]
+    [InlineData(OutboundQuery, "{\"excludedSourcePorts\":[1.5]}", "excludedSourcePorts")]
+    public async Task Patch_OnOutboundQuerySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(OutboundQuery, "{\"poolSizePerAddressFamily\":1}")]
+    [InlineData(OutboundQuery, "{\"poolSizePerAddressFamily\":65535}")]
+    [InlineData(OutboundQuery, "{\"excludedSourcePorts\":[1,65535]}")]
+    [InlineData(OutboundQuery, "{\"excludedSourcePorts\":[]}")]
+    public async Task Patch_OnOutboundQuerySettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Rewrite, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(Rewrite, "{\"timeToLiveSeconds\":-1}", "timeToLiveSeconds")]
+    [InlineData(Rewrite, "{\"timeToLiveSeconds\":2147483648}", "timeToLiveSeconds")]
+    [InlineData(Rewrite, "{\"timeToLiveSeconds\":\"60\"}", "timeToLiveSeconds")]
+    public async Task Patch_OnRewriteSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Rewrite, "{\"timeToLiveSeconds\":0}")]
+    [InlineData(Rewrite, "{\"timeToLiveSeconds\":2147483647}")]
+    public async Task Patch_OnRewriteSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(SecondaryZoneRefresh, "{\"pollInterval\":\"00:00:00\"}", "pollInterval")]
+    [InlineData(SecondaryZoneRefresh, "{\"pollInterval\":\"49.17:02:47.295\"}", "pollInterval")]
+    [InlineData(SecondaryZoneRefresh, "{\"pollInterval\":15}", "pollInterval")]
+    [InlineData(
+        SecondaryZoneRefresh,
+        "{\"defaultRetryInterval\":\"-00:00:01\"}",
+        "defaultRetryInterval"
+    )]
+    [InlineData(
+        SecondaryZoneRefresh,
+        "{\"defaultRetryInterval\":\"49.17:02:47.295\"}",
+        "defaultRetryInterval"
+    )]
+    public async Task Patch_OnSecondaryZoneRefreshSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(SecondaryZoneRefresh, "{\"pollInterval\":\"49.17:02:47.294\"}")]
+    [InlineData(SecondaryZoneRefresh, "{\"defaultRetryInterval\":\"00:00:00.001\"}")]
+    public async Task Patch_OnSecondaryZoneRefreshSettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(ReverseProxy, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(ReverseProxy, "{\"knownProxies\":\"10.0.0.1\"}", "knownProxies")]
+    [InlineData(ReverseProxy, "{\"knownProxies\":[5]}", "knownProxies")]
+    [InlineData(ReverseProxy, "{\"knownProxies\":[\"nope\"]}", "nope")]
+    [InlineData(ReverseProxy, "{\"knownProxies\":null}", "knownProxies")]
+    [InlineData(ReverseProxy, "{\"knownNetworks\":{}}", "knownNetworks")]
+    [InlineData(ReverseProxy, "{\"knownNetworks\":[\"10.0.0.0/99\"]}", "10.0.0.0/99")]
+    [InlineData(ReverseProxy, "{\"sharedSecretHeaderName\":5}", "sharedSecretHeaderName")]
+    [InlineData(ReverseProxy, "{\"sharedSecret\":5}", "sharedSecret")]
+    [InlineData(ReverseProxy, "{\"dnsOverTls\":[]}", "dnsOverTls")]
+    [InlineData(ReverseProxy, "{\"dnsOverTls\":{\"enable\":\"x\"}}", "dnsOverTls.enable")]
+    [InlineData(ReverseProxy, "{\"dnsOverTls\":{\"knownProxies\":[5]}}", "dnsOverTls.knownProxies")]
+    [InlineData(
+        ReverseProxy,
+        "{\"dnsOverTls\":{\"knownNetworks\":\"x\"}}",
+        "dnsOverTls.knownNetworks"
+    )]
+    public async Task Patch_OnReverseProxySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(ReverseProxy, "{\"knownProxies\":[]}")]
+    [InlineData(ReverseProxy, "{\"knownNetworks\":[\"10.0.0.0/24\"]}")]
+    public async Task Patch_OnReverseProxySettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(WebhookDelivery, "{\"initialRetryDelay\":\"00:00:00\"}", "initialRetryDelay")]
+    [InlineData(
+        WebhookDelivery,
+        "{\"initialRetryDelay\":\"49.17:02:47.295\"}",
+        "initialRetryDelay"
+    )]
+    [InlineData(WebhookDelivery, "{\"maxRetryDelay\":-1}", "maxRetryDelay")]
+    [InlineData(WebhookDelivery, "{\"maxRetryDelay\":\"49.17:02:47.295\"}", "maxRetryDelay")]
+    [InlineData(WebhookDelivery, "{\"requestTimeout\":\"00:00:00\"}", "requestTimeout")]
+    [InlineData(WebhookDelivery, "{\"requestTimeout\":\"24.20:31:23.648\"}", "requestTimeout")]
+    public async Task Patch_OnWebhookDeliverySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(WebhookDelivery, "{\"initialRetryDelay\":\"49.17:02:47.294\"}")]
+    [InlineData(WebhookDelivery, "{\"requestTimeout\":\"24.20:31:23.647\"}")]
+    public async Task Patch_OnWebhookDeliverySettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(DnssecPolicy, "{\"allowedAlgorithms\":\"ED25519\"}", "allowedAlgorithms")]
+    [InlineData(DnssecPolicy, "{\"allowedAlgorithms\":[5]}", "allowedAlgorithms")]
+    [InlineData(DnssecPolicy, "{\"allowedAlgorithms\":null}", "allowedAlgorithms")]
+    [InlineData(DnssecPolicy, "{\"allowedAlgorithms\":[\"NotAnAlgorithm\"]}", "NotAnAlgorithm")]
+    public async Task Patch_OnDnssecPolicySettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(DnssecPolicy, "{\"allowedAlgorithms\":[\"ECDSAP256SHA256\"]}")]
+    [InlineData(DnssecPolicy, "{\"allowedAlgorithms\":[]}")]
+    public async Task Patch_OnDnssecPolicySettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(
+        ZoneSigning,
+        "{\"signatureValidityPeriod\":\"00:00:00\"}",
+        "signatureValidityPeriod"
+    )]
+    [InlineData(
+        ZoneSigning,
+        "{\"signatureValidityPeriod\":\"36500.00:00:01\"}",
+        "signatureValidityPeriod"
+    )]
+    [InlineData(ZoneSigning, "{\"inceptionOffset\":\"-00:00:01\"}", "inceptionOffset")]
+    [InlineData(
+        ZoneSigning,
+        "{\"refreshBeforeExpiration\":\"00:00:00\"}",
+        "refreshBeforeExpiration"
+    )]
+    [InlineData(ZoneSigning, "{\"pollInterval\":\"49.17:02:47.295\"}", "pollInterval")]
+    [InlineData(ZoneSigning, "{\"pollInterval\":6}", "pollInterval")]
+    public async Task Patch_OnZoneSigningSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(ZoneSigning, "{\"inceptionOffset\":\"00:00:00\"}")]
+    [InlineData(ZoneSigning, "{\"signatureValidityPeriod\":\"36500.00:00:00\"}")]
+    [InlineData(ZoneSigning, "{\"pollInterval\":\"49.17:02:47.294\"}")]
+    public async Task Patch_OnZoneSigningSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(OidcSso, "{\"enable\":\"yes\"}", "enable")]
+    [InlineData(OidcSso, "{\"displayName\":5}", "displayName")]
+    [InlineData(OidcSso, "{\"authority\":false}", "authority")]
+    [InlineData(OidcSso, "{\"clientId\":null}", "clientId")]
+    [InlineData(OidcSso, "{\"clientSecret\":5}", "clientSecret")]
+    [InlineData(OidcSso, "{\"scopes\":\"openid\"}", "scopes")]
+    [InlineData(OidcSso, "{\"scopes\":[5]}", "scopes")]
+    [InlineData(OidcSso, "{\"scopes\":null}", "scopes")]
+    [InlineData(OidcSso, "{\"scopes\":[\"profile\"]}", "openid")]
+    public async Task Patch_OnOidcSsoSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(ZoneTransfer, "{\"recordsPerMessage\":0}", "recordsPerMessage")]
+    [InlineData(ZoneTransfer, "{\"recordsPerMessage\":\"10\"}", "recordsPerMessage")]
+    [InlineData(ZoneTransfer, "{\"recordsPerMessage\":1.5}", "recordsPerMessage")]
+    public async Task Patch_OnZoneTransferSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(ZoneTransfer, "{\"recordsPerMessage\":1}")]
+    public async Task Patch_OnZoneTransferSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(ZoneTransferClient, "{\"primaryPort\":0}", "primaryPort")]
+    [InlineData(ZoneTransferClient, "{\"primaryPort\":65536}", "primaryPort")]
+    [InlineData(ZoneTransferClient, "{\"primaryPort\":\"53\"}", "primaryPort")]
+    [InlineData(ZoneTransferClient, "{\"connectTimeout\":\"00:00:00\"}", "connectTimeout")]
+    [InlineData(ZoneTransferClient, "{\"readTimeout\":\"49.17:02:47.295\"}", "readTimeout")]
+    [InlineData(ZoneTransferClient, "{\"soaQueryTimeout\":3}", "soaQueryTimeout")]
+    public async Task Patch_OnZoneTransferClientSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(ZoneTransferClient, "{\"primaryPort\":1}")]
+    [InlineData(ZoneTransferClient, "{\"primaryPort\":65535}")]
+    [InlineData(ZoneTransferClient, "{\"readTimeout\":\"49.17:02:47.294\"}")]
+    public async Task Patch_OnZoneTransferClientSettingsAtABoundary_IsAccepted(
+        string url,
+        string body
+    ) => await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Smtp, "{\"smtpHost\":5}", "smtpHost")]
+    [InlineData(Smtp, "{\"smtpHost\":null}", "smtpHost")]
+    [InlineData(Smtp, "{\"smtpPort\":0}", "smtpPort")]
+    [InlineData(Smtp, "{\"smtpPort\":65536}", "smtpPort")]
+    [InlineData(Smtp, "{\"smtpPort\":\"25\"}", "smtpPort")]
+    [InlineData(Smtp, "{\"useTls\":\"yes\"}", "useTls")]
+    [InlineData(Smtp, "{\"username\":5}", "username")]
+    [InlineData(Smtp, "{\"password\":5}", "password")]
+    [InlineData(Smtp, "{\"fromAddress\":5}", "fromAddress")]
+    [InlineData(Smtp, "{\"fromDisplayName\":false}", "fromDisplayName")]
+    [InlineData(Smtp, "{\"publicBaseUrl\":5}", "publicBaseUrl")]
+    public async Task Patch_OnSmtpSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Smtp, "{\"smtpPort\":1}")]
+    [InlineData(Smtp, "{\"smtpPort\":65535}")]
+    [InlineData(Smtp, "{\"username\":null}")]
+    public async Task Patch_OnSmtpSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(Tsig, "{\"defaultFudgeSeconds\":-1}", "defaultFudgeSeconds")]
+    [InlineData(Tsig, "{\"defaultFudgeSeconds\":65536}", "defaultFudgeSeconds")]
+    [InlineData(Tsig, "{\"defaultFudgeSeconds\":\"300\"}", "defaultFudgeSeconds")]
+    public async Task Patch_OnTsigSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(Tsig, "{\"defaultFudgeSeconds\":0}")]
+    [InlineData(Tsig, "{\"defaultFudgeSeconds\":65535}")]
+    public async Task Patch_OnTsigSettingsAtABoundary_IsAccepted(string url, string body) =>
+        await AssertAcceptedAsync(url, body);
+
+    [Theory]
+    [InlineData(SelfUpdate, "{\"enableAutomaticCheck\":\"yes\"}", "enableAutomaticCheck")]
+    [InlineData(SelfUpdate, "{\"releaseFeedUrl\":5}", "releaseFeedUrl")]
+    [InlineData(SelfUpdate, "{\"checkInterval\":\"00:00:00\"}", "checkInterval")]
+    [InlineData(SelfUpdate, "{\"checkInterval\":\"36500.00:00:01\"}", "checkInterval")]
+    [InlineData(SelfUpdate, "{\"checkInterval\":24}", "checkInterval")]
+    public async Task Patch_OnSelfUpdateSettingsWithAnInvalidValue_ReturnsBadRequestAndWritesNothing(
+        string url,
+        string body,
+        string fieldName
+    ) => await AssertRejectedAsync(url, body, fieldName);
+
+    [Theory]
+    [InlineData(SelfUpdate, "{\"releaseFeedUrl\":null}")]
+    [InlineData(SelfUpdate, "{\"checkInterval\":\"36500.00:00:00\"}")]
+    public async Task Patch_OnSelfUpdateSettingsAtABoundary_IsAccepted(string url, string body) =>
         await AssertAcceptedAsync(url, body);
 }

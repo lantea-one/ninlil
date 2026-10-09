@@ -99,32 +99,32 @@ public class BrandingSettingsController(
     {
         List<PresetConfigurationSetting> settings = [];
 
-        if (patch.TryGetMergePatchField("siteTitle", out JsonElement siteTitleElement))
+        if (patch.TryGetMergePatchString("siteTitle", out string siteTitle, allowNull: true))
             settings.Add(
                 new PresetConfigurationSetting(
                     BrandingOptions.SectionName,
                     nameof(BrandingOptions.SiteTitle),
-                    siteTitleElement.ValueKind == JsonValueKind.Null
-                        ? null
-                        : siteTitleElement.GetString()
+                    siteTitle
                 )
             );
 
-        if (patch.TryGetMergePatchField("logoDataUri", out JsonElement logoDataUriElement))
+        if (patch.TryGetMergePatchString("logoDataUri", out string logoDataUri, allowNull: true))
             settings.Add(
                 new PresetConfigurationSetting(
                     BrandingOptions.SectionName,
                     nameof(BrandingOptions.LogoDataUri),
-                    logoDataUriElement.ValueKind == JsonValueKind.Null
-                        ? null
-                        : ValidateLogoDataUri(logoDataUriElement.GetString())
+                    logoDataUri == null ? null : ValidateLogoDataUri(logoDataUri)
                 )
             );
 
-        if (patch.TryGetMergePatchField("hostnameString", out JsonElement hostnameStringElement))
+        if (
+            patch.TryGetMergePatchString(
+                "hostnameString",
+                out string hostnameString,
+                allowNull: false
+            )
+        )
         {
-            string hostnameString = hostnameStringElement.GetString();
-
             if (string.IsNullOrWhiteSpace(hostnameString))
                 throw new ValidationException("'hostnameString' may not be blank.");
 
@@ -137,10 +137,14 @@ public class BrandingSettingsController(
             );
         }
 
-        if (patch.TryGetMergePatchField("versionString", out JsonElement versionStringElement))
+        if (
+            patch.TryGetMergePatchString(
+                "versionString",
+                out string versionString,
+                allowNull: false
+            )
+        )
         {
-            string versionString = versionStringElement.GetString();
-
             if (string.IsNullOrWhiteSpace(versionString))
                 throw new ValidationException("'versionString' may not be blank.");
 
@@ -153,17 +157,12 @@ public class BrandingSettingsController(
             );
         }
 
-        if (
-            patch.TryGetMergePatchField(
-                "enableChaosVersionQueries",
-                out JsonElement enableChaosElement
-            )
-        )
+        if (patch.TryGetMergePatchBoolean("enableChaosVersionQueries", out bool enableChaos))
             settings.Add(
                 new PresetConfigurationSetting(
                     AuthoritativeServerOptions.SectionName,
                     nameof(AuthoritativeServerOptions.EnableChaosVersionQueries),
-                    enableChaosElement.GetBoolean()
+                    enableChaos
                 )
             );
 

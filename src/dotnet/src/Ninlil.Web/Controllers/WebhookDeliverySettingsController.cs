@@ -74,10 +74,13 @@ public class WebhookDeliverySettingsController(
         bool touchedRequestTimeout = false;
         bool touchedHotReloadedField = false;
 
+        // The retry delays feed Task.Delay; the request timeout becomes an HttpClient timeout.
         if (
-            patch.TryGetMergePatchField(
+            patch.TryGetMergePatchDuration(
                 "initialRetryDelay",
-                out JsonElement initialRetryDelayElement
+                out TimeSpan initialRetryDelay,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
             )
         )
         {
@@ -85,31 +88,45 @@ public class WebhookDeliverySettingsController(
                 new PresetConfigurationSetting(
                     WebhookDeliveryOptions.SectionName,
                     nameof(WebhookDeliveryOptions.InitialRetryDelay),
-                    ParsePositiveTimeSpan(initialRetryDelayElement, "initialRetryDelay").ToString()
+                    initialRetryDelay.ToString()
                 )
             );
             touchedHotReloadedField = true;
         }
 
-        if (patch.TryGetMergePatchField("maxRetryDelay", out JsonElement maxRetryDelayElement))
+        if (
+            patch.TryGetMergePatchDuration(
+                "maxRetryDelay",
+                out TimeSpan maxRetryDelay,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.TimerMaximum
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     WebhookDeliveryOptions.SectionName,
                     nameof(WebhookDeliveryOptions.MaxRetryDelay),
-                    ParsePositiveTimeSpan(maxRetryDelayElement, "maxRetryDelay").ToString()
+                    maxRetryDelay.ToString()
                 )
             );
             touchedHotReloadedField = true;
         }
 
-        if (patch.TryGetMergePatchField("requestTimeout", out JsonElement requestTimeoutElement))
+        if (
+            patch.TryGetMergePatchDuration(
+                "requestTimeout",
+                out TimeSpan requestTimeout,
+                TimeSpan.FromMilliseconds(1),
+                JsonElementMergePatchExtension.HttpTimeoutMaximum
+            )
+        )
         {
             settings.Add(
                 new PresetConfigurationSetting(
                     WebhookDeliveryOptions.SectionName,
                     nameof(WebhookDeliveryOptions.RequestTimeout),
-                    ParsePositiveTimeSpan(requestTimeoutElement, "requestTimeout").ToString()
+                    requestTimeout.ToString()
                 )
             );
             touchedRequestTimeout = true;
@@ -131,19 +148,5 @@ public class WebhookDeliverySettingsController(
         };
 
         return Ok(new RuntimeSettingsWriteResult(note));
-    }
-
-    /// <summary>
-    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
-    ///     <see cref="ValidationException" /> naming the field.
-    /// </summary>
-    private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
-    {
-        if (!TimeSpan.TryParse(element.GetString(), out TimeSpan parsed) || parsed <= TimeSpan.Zero)
-            throw new ValidationException(
-                $"'{fieldName}' must be a valid, positive TimeSpan (for example \"00:00:10\")."
-            );
-
-        return parsed;
     }
 }
