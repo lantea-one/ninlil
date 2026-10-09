@@ -170,6 +170,7 @@ library, and the admin console are all inside the one file:
 | Linux ARM64 | `ninlil-linux-arm64` |
 | macOS Intel | `ninlil-macos-amd64` |
 | macOS Apple Silicon | `ninlil-macos-arm64` |
+| Windows x86-64 | `ninlil-windows-amd64.exe` |
 
 ```bash
 curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<version>/ninlil-linux-amd64
@@ -190,6 +191,64 @@ On first start, the native libraries bundled in the file are extracted once to
 REST API, and admin console work fully; the DHCP, Router Advertisement, and passive device-presence
 features rely on Linux kernel interfaces and are unavailable, and DNS-over-QUIC needs `libmsquic`
 from Homebrew.
+
+#### Windows
+
+The Windows executable is a plain console program that also runs as a Windows service. It is
+**unsigned**, so Windows SmartScreen warns the first time you start it. Verify the download against
+`SHA256SUMS` (in PowerShell: `(Get-FileHash .\ninlil-windows-amd64.exe).Hash` must equal the
+`ninlil-windows-amd64.exe` line there, ignoring case) before you accept the warning. The DNS server,
+REST API, and admin console work fully; the DHCP, Router Advertisement, and passive device-presence
+features rely on Linux kernel interfaces and are unavailable, as on macOS.
+
+Try it from a console first (an administrator PowerShell, because the defaults use ports 53, 80, and
+443; or override the ports, see "Ports" below):
+
+1. Create the folder and put the file in it: `New-Item -ItemType Directory C:\Ninlil`, then move
+   `ninlil-windows-amd64.exe` there.
+2. Remove the download mark: `Unblock-File C:\Ninlil\ninlil-windows-amd64.exe`.
+3. Run `C:\Ninlil\ninlil-windows-amd64.exe`, wait for the log lines, and open `http://localhost/`.
+   Press Ctrl+C to stop it. It created `C:\Ninlil\data\` next to the executable.
+
+To run it as a service that starts with Windows (all in an administrator PowerShell):
+
+1. Create the data folder: `New-Item -ItemType Directory -Force C:\Ninlil\data`. If you already ran the
+   executable from a console, keep that folder: it holds your database and keys.
+2. Create the service. The space after each `=` is required by `sc.exe`:
+
+   ```powershell
+   sc.exe create Ninlil binPath= "C:\Ninlil\ninlil-windows-amd64.exe" start= auto DisplayName= "Ninlil DNS server"
+   ```
+
+3. Run it as a virtual service account instead of LocalSystem, so it needs no password and owns
+   nothing but its data folder:
+
+   ```powershell
+   sc.exe config Ninlil obj= "NT SERVICE\Ninlil"
+   icacls C:\Ninlil\data /grant "NT SERVICE\Ninlil:(OI)(CI)M"
+   ```
+
+4. Let Windows restart it after a crash, open the ports you use, and start it:
+
+   ```powershell
+   sc.exe failure Ninlil reset= 86400 actions= restart/5000/restart/5000/restart/60000
+   New-NetFirewallRule -DisplayName "Ninlil DNS" -Direction Inbound -Protocol UDP -LocalPort 53 -Action Allow
+   New-NetFirewallRule -DisplayName "Ninlil DNS (TCP)" -Direction Inbound -Protocol TCP -LocalPort 53 -Action Allow
+   New-NetFirewallRule -DisplayName "Ninlil web" -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow
+   Start-Service Ninlil
+   ```
+
+5. Check it with `Get-Service Ninlil` and `Invoke-WebRequest http://localhost/status`. Service
+   settings go in the service's environment: `Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\Ninlil
+   -Name Environment -Type MultiString -Value "NINLIL_DNS_SERVER_WEB_HTTP_PORT=8080"` (one `NAME=value`
+   line per setting; see [`ENVIRONMENT.md`](./ENVIRONMENT.md)), then `Restart-Service Ninlil`.
+
+To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil`. Your `C:\Ninlil\data` folder stays.
+Updating means stopping the service, replacing the `.exe`, and starting it again.
+
+The Data Protection key ring and the JWT signing key are stored as plain files in `data\` (they are
+not tied to a Windows account), so changing the service account later only needs the new account to
+have modify rights on that folder. Protect the folder with its permissions.
 
 ### Arch Linux
 
@@ -540,7 +599,7 @@ console embedded, so build the console into `Ninlil.Web/wwwroot` first:
 
 ```bash
 .forgejo/scripts/build-admin-console.sh               # npm ci + npm run build, then into wwwroot
-.forgejo/scripts/publish-binary.sh linux-amd64 dist   # or linux-arm64, macos-amd64, macos-arm64
+.forgejo/scripts/publish-binary.sh linux-amd64 dist   # or linux-arm64, macos-amd64, macos-arm64, windows-amd64
 ```
 
 [`.forgejo/scripts/pack-packages.sh`](./.forgejo/scripts/pack-packages.sh) builds the NuGet
@@ -613,7 +672,13 @@ The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on 
 build and test step runs in a throwaway container of one of the toolchains in
 [`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and Chromium;
 `makepkg`; shellcheck and actionlint) with just the checkout mounted, through
-[`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). The Arch Linux toolchain
+[`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). One job, the Windows
+smoke test, runs on a Windows runner labelled `windows-latest` instead (the project's runner
+`lofnheim`; if it registers only under that name, change the job's `runs-on`). It runs
+[`windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1), which starts the Windows executable
+and checks `/status`, the admin console and one DNS query. Locally, `pwsh
+.forgejo/scripts/windows-smoke.ps1 -ExecutablePath dist/ninlil-linux-amd64` runs the same checks
+against a Linux binary. The Arch Linux toolchain
 exists for amd64 only, so an arm64 runner runs it under emulation, which must be registered for
 containers and at every boot: `qemu-user-static-binfmt`, or
 `docker run --privileged --rm tonistiigi/binfmt --install amd64` from a boot-time unit.
@@ -622,12 +687,12 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages and the multi-architecture image from the Linux binaries; and finally publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages and the multi-architecture image from the Linux binaries; the Windows smoke test; and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 | `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout commit (below) and opens a pull request into `develop` (by hand, any branch) |
 
 A build publishes nothing until lint and every test have passed, and its release stays an invisible draft
-until every binary, both Arch Linux packages, the multi-architecture image, and every NuGet
+until every binary (and the Windows smoke test), both Arch Linux packages, the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
 on the repository.
