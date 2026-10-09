@@ -429,7 +429,9 @@ public class TransportSettingsController(
         }
 
         return Ok(
-            new RuntimeSettingsWriteResult(DnsOverHttpsNoteFor(touchedEnable, touchedRestartRequiringField))
+            new RuntimeSettingsWriteResult(
+                DnsOverHttpsNoteFor(touchedEnable, touchedRestartRequiringField)
+            )
         );
     }
 
@@ -916,7 +918,10 @@ public class TransportSettingsController(
     ///     <c>maxMessageSizeBytes</c> need a process restart, not the listener restart that
     ///     <see cref="NoteFor" /> names, because the routes are mapped once at host start.
     /// </summary>
-    private static string DnsOverHttpsNoteFor(bool touchedEnable, bool touchedRestartRequiringField) =>
+    private static string DnsOverHttpsNoteFor(
+        bool touchedEnable,
+        bool touchedRestartRequiringField
+    ) =>
         (touchedEnable, touchedRestartRequiringField) switch
         {
             (true, true) => RuntimeSettingsWriteResult.DnsOverHttpsMixedReloadNote,

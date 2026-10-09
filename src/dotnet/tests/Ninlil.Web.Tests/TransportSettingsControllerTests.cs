@@ -410,7 +410,8 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
 
         // The values equal the defaults; the shared host does not read the runtime file back, so
         // the write changes nothing live.
-        object body = field == "path" ? new { path = "/dns-query" } : new { maxMessageSizeBytes = 65535 };
+        object body =
+            field == "path" ? new { path = "/dns-query" } : new { maxMessageSizeBytes = 65535 };
 
         HttpResponseMessage response = await client.SendAsync(
             PatchRequest("/api/transport-settings/dns-over-https", body)
