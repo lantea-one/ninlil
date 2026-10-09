@@ -13754,6 +13754,13 @@
                 },
                 "example": [
                   {
+                    "name": "dnssec",
+                    "entryCount": 4,
+                    "maxEntries": 10000,
+                    "hits": 36,
+                    "misses": 4
+                  },
+                  {
                     "name": "forwarded",
                     "entryCount": 1842,
                     "maxEntries": 10000,
@@ -13778,6 +13785,13 @@
                 },
                 "example": [
                   {
+                    "name": "dnssec",
+                    "entryCount": 4,
+                    "maxEntries": 10000,
+                    "hits": 36,
+                    "misses": 4
+                  },
+                  {
                     "name": "forwarded",
                     "entryCount": 1842,
                     "maxEntries": 10000,
@@ -13801,6 +13815,13 @@
                   }
                 },
                 "example": [
+                  {
+                    "name": "dnssec",
+                    "entryCount": 4,
+                    "maxEntries": 10000,
+                    "hits": 36,
+                    "misses": 4
+                  },
                   {
                     "name": "forwarded",
                     "entryCount": 1842,
@@ -13830,7 +13851,7 @@
           {
             "name": "cache",
             "in": "query",
-            "description": "A cache name (`forwarded` or `recursive`) to flush alone; omit to flush every cache.",
+            "description": "A cache name (`forwarded`, `recursive` or `dnssec`) to flush alone; omit to flush every cache.",
             "schema": {
               "type": "string"
             }
@@ -41357,7 +41378,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record describes one in-memory DNS answer cache on this node, as returned by\n`GET /api/dns-cache`: the forwarded-response cache (`forwarded`) or the recursive\nresolver's cache (`recursive`). The counts are this node's only; caches are not shared\nacross a cluster."
+        "description": "This record describes one in-memory DNS answer cache on this node, as returned by\n`GET /api/dns-cache`: the forwarded-response cache (`forwarded`), the recursive\nresolver's cache (`recursive`) or the DNSSEC trust cache (`dnssec`, the zones\nproven secure or insecure, with their keys). The counts are this node's only; caches are\nnot shared across a cluster."
       },
       "DnsCacheRemovalResult": {
         "type": "object",

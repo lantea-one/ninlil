@@ -10,7 +10,7 @@
 
 
 /**
- * This record describes one in-memory DNS answer cache on this node, as returned by `GET /api/dns-cache`: the forwarded-response cache (`forwarded`) or the recursive resolver\'s cache (`recursive`). The counts are this node\'s only; caches are not shared across a cluster.
+ * This record describes one in-memory DNS answer cache on this node, as returned by `GET /api/dns-cache`: the forwarded-response cache (`forwarded`), the recursive resolver\'s cache (`recursive`) or the DNSSEC trust cache (`dnssec`, the zones proven secure or insecure, with their keys). The counts are this node\'s only; caches are not shared across a cluster.
  */
 export interface DnsCacheDetail { 
     /**
