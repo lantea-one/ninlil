@@ -915,6 +915,8 @@ PrivilegedPortStartupDiagnostics.WarnAboutUnbindablePrivilegedPorts(
 ConfigurationStartupDiagnostics.LogWarnings(
     app.Services.GetRequiredService<IOptions<RecursiveServerOptions>>().Value,
     app.Services.GetRequiredService<IOptions<EmailSenderOptions>>().Value,
+    app.Services.GetRequiredService<IOptions<OidcSsoOptions>>().Value,
+    app.Services.GetRequiredService<IDataProtectionProvider>(),
     app.Services.GetRequiredService<ILoggerFactory>()
         .CreateLogger("Ninlil.Web.Startup.ConfigurationStartupDiagnostics")
 );

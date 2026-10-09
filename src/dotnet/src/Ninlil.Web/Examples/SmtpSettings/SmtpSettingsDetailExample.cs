@@ -24,6 +24,8 @@ public class SmtpSettingsDetailExample : IExamplesProvider<SmtpSettingsDetail>
             PasswordConfigured: true,
             FromAddress: "notifications@example.com",
             FromDisplayName: "Ninlil",
-            PublicBaseUrl: "https://dns.example.com"
+            PublicBaseUrl: "https://dns.example.com",
+            PasswordFromEnvironment: false,
+            PasswordUnreadable: false
         );
 }

@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Identity.Options;
+using Ninlil.Dns.Identity.Sso;
 using Ninlil.Dns.Server.Recursive;
 
 // Define our namespace.
@@ -13,7 +15,9 @@ namespace Ninlil.Web.Startup;
 ///     <para>
 ///         <c>Program.cs</c> calls <see cref="LogWarnings" /> once, next to
 ///         <see cref="PrivilegedPortStartupDiagnostics" />, after the options are bound. <b>It
-///         only diagnoses:</b> a finding is logged at Warning level and startup continues. Each
+///         only diagnoses:</b> a finding is logged and startup continues. Most findings are
+///         Warnings; an SSO client secret that cannot be decrypted is an Error, because SSO
+///         sign-in cannot work until someone acts. Each
 ///         check is a separate public method that returns the message or
 ///         <see langword="null" />, so a test can call it without a logger.
 ///     </para>
@@ -21,28 +25,73 @@ namespace Ninlil.Web.Startup;
 public static class ConfigurationStartupDiagnostics
 {
     /// <summary>
-    ///     This method runs every check and logs one Warning for each finding.
+    ///     This method runs every check and logs one entry for each finding: a Warning, or an Error
+    ///     for the SSO client secret.
     /// </summary>
     /// <param name="recursiveOptions">The bound <c>DnsServer:Recursive</c> settings.</param>
     /// <param name="emailOptions">The bound <c>Email</c> settings.</param>
-    /// <param name="logger">Receives the warnings.</param>
+    /// <param name="ssoOptions">The bound <c>Identity:Sso</c> settings.</param>
+    /// <param name="dataProtectionProvider">Decrypts the stored SSO client secret to test it.</param>
+    /// <param name="logger">Receives the findings.</param>
     public static void LogWarnings(
         RecursiveServerOptions recursiveOptions,
         EmailSenderOptions emailOptions,
+        OidcSsoOptions ssoOptions,
+        IDataProtectionProvider dataProtectionProvider,
         ILogger logger
     )
     {
-        string[] messages =
+        string[] warnings =
         [
             DescribeIgnoredInsecureDomains(recursiveOptions),
             DescribeSmtpUsernameWithoutPassword(emailOptions),
         ];
 
-        foreach (string message in messages)
+        foreach (string message in warnings)
         {
             if (message != null)
                 logger.LogWarning("{Message}", message);
         }
+
+        string ssoMessage = DescribeUnreadableSsoClientSecret(
+            ssoOptions,
+            new OidcClientSecretProtector(dataProtectionProvider)
+        );
+
+        if (ssoMessage != null)
+            logger.LogError("{Message}", ssoMessage);
+    }
+
+    /// <summary>
+    ///     This method reports an SSO client secret that cannot be decrypted. It applies only when
+    ///     SSO is configured the way <c>ServiceCollectionAuthenticationExtension</c> registers it
+    ///     (enabled, with an authority and a client id) and no plaintext
+    ///     <c>Identity:Sso:ClientSecret</c> overrides the stored one. The server keeps running;
+    ///     SSO sign-in fails at the provider. The message never contains the secret.
+    /// </summary>
+    /// <param name="options">The bound SSO settings.</param>
+    /// <param name="protector">Tests whether the stored secret is readable.</param>
+    /// <returns>The error text, or <see langword="null" /> when the settings agree.</returns>
+    public static string DescribeUnreadableSsoClientSecret(
+        OidcSsoOptions options,
+        OidcClientSecretProtector protector
+    )
+    {
+        bool configured =
+            options.Enable
+            && !string.IsNullOrWhiteSpace(options.Authority)
+            && !string.IsNullOrWhiteSpace(options.ClientId);
+
+        if (!configured || !string.IsNullOrEmpty(options.ClientSecret))
+            return null;
+
+        if (protector.TryUnprotect(options.ClientSecretEncrypted, out _))
+            return null;
+
+        return "Identity:Sso:ClientSecretEncrypted cannot be decrypted with this server's Data "
+            + "Protection key ring, so SSO sign-in will fail at the identity provider. The rest "
+            + "of the server is unaffected. Enter the client secret again on the SSO settings "
+            + "page, or set NINLIL_IDENTITY_SSO_CLIENT_SECRET.";
     }
 
     /// <summary>

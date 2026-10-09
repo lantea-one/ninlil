@@ -21,6 +21,16 @@ namespace Ninlil.Web.Models;
 ///     The address users open the admin console at, which password-reset links point to. Empty
 ///     means no reset link can be sent. Links never use the request's Host header.
 /// </param>
+/// <param name="PasswordFromEnvironment">
+///     Whether a plaintext password is set outside the admin console (the
+///     <c>NINLIL_EMAIL_PASSWORD</c> environment variable). It overrides the stored password, so a
+///     password saved on this page has no effect while it is set.
+/// </param>
+/// <param name="PasswordUnreadable">
+///     Whether a stored password exists but this server's Data Protection key ring cannot decrypt
+///     it (the key ring changed). Sending mail fails until the password is entered again or
+///     <c>NINLIL_EMAIL_PASSWORD</c> is set.
+/// </param>
 public record SmtpSettingsDetail(
     string SmtpHost,
     int SmtpPort,
@@ -29,5 +39,7 @@ public record SmtpSettingsDetail(
     bool PasswordConfigured,
     string FromAddress,
     string FromDisplayName,
-    string PublicBaseUrl
+    string PublicBaseUrl,
+    bool PasswordFromEnvironment,
+    bool PasswordUnreadable
 );

@@ -33,7 +33,9 @@ namespace Ninlil.Web.Controllers;
 ///         The client secret is accepted in plain text, encrypted with
 ///         <see cref="OidcClientSecretProtector" /> before it is written to disk, and never
 ///         returned. The SMTP password is protected the same way, by
-///         <c>SmtpPasswordProtector</c>.
+///         <c>SmtpPasswordProtector</c>. The plaintext variable <c>NINLIL_IDENTITY_SSO_CLIENT_SECRET</c>
+///         (<see cref="OidcSsoOptions.ClientSecret" />) overrides the stored secret; <see cref="Get" />
+///         reports that, and whether the stored secret can no longer be decrypted.
 ///     </para>
 /// </summary>
 /// <param name="ssoOptions">The current SSO settings.</param>
@@ -49,7 +51,8 @@ public class OidcSsoSettingsController(
 {
     /// <summary>
     ///     This action returns the current SSO settings. The client secret is never returned, only
-    ///     whether one is set (see <see cref="OidcSsoSettingsDetail.ClientSecretConfigured" />).
+    ///     whether one is set (see <see cref="OidcSsoSettingsDetail.ClientSecretConfigured" />),
+    ///     whether the plaintext variable overrides it and whether the stored one is unreadable.
     ///     Requires <c>ssosettings:read</c>.
     /// </summary>
     [HttpGet]
@@ -157,6 +160,17 @@ public class OidcSsoSettingsController(
                     clientSecretEncrypted
                 )
             );
+
+            // A plaintext value hand-edited into the file must not outlive this write. This
+            // blanks only the file's key; the environment variable is outside the file and keeps
+            // overriding (Get reports it).
+            settings.Add(
+                new PresetConfigurationSetting(
+                    OidcSsoOptions.SectionName,
+                    nameof(OidcSsoOptions.ClientSecret),
+                    string.Empty
+                )
+            );
         }
 
         if (patch.TryGetMergePatchStringList("scopes", out List<string> scopes, allowNull: false))
@@ -212,15 +226,28 @@ public class OidcSsoSettingsController(
 
     /// <summary>
     ///     This method builds <see cref="OidcSsoSettingsDetail" /> from the current
-    ///     <see cref="OidcSsoOptions" />.
+    ///     <see cref="OidcSsoOptions" />. A plaintext secret overrides the stored one, so the stored
+    ///     secret is only checked for readability when no plaintext secret is set.
     /// </summary>
-    private static OidcSsoSettingsDetail ToDetail(OidcSsoOptions options) =>
-        new(
+    private OidcSsoSettingsDetail ToDetail(OidcSsoOptions options)
+    {
+        bool fromEnvironment = !string.IsNullOrEmpty(options.ClientSecret);
+        bool unreadable =
+            !fromEnvironment
+            && !new OidcClientSecretProtector(dataProtectionProvider).TryUnprotect(
+                options.ClientSecretEncrypted,
+                out _
+            );
+
+        return new OidcSsoSettingsDetail(
             options.Enable,
             options.DisplayName,
             options.Authority,
             options.ClientId,
-            !string.IsNullOrEmpty(options.ClientSecretEncrypted),
-            options.Scopes
+            fromEnvironment || !string.IsNullOrEmpty(options.ClientSecretEncrypted),
+            options.Scopes,
+            fromEnvironment,
+            unreadable
         );
+    }
 }

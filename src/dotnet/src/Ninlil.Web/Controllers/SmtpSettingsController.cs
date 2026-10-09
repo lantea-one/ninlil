@@ -49,8 +49,9 @@ public class SmtpSettingsController(
 {
     /// <summary>
     ///     This action returns the current SMTP settings. The password is never returned, only
-    ///     whether one is set (see <see cref="SmtpSettingsDetail.PasswordConfigured" />). Requires
-    ///     <c>smtpsettings:read</c>.
+    ///     whether one is set (see <see cref="SmtpSettingsDetail.PasswordConfigured" />), whether
+    ///     <c>NINLIL_EMAIL_PASSWORD</c> overrides it and whether the stored one is unreadable.
+    ///     Requires <c>smtpsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("smtpsettings:read")]
@@ -63,9 +64,10 @@ public class SmtpSettingsController(
     ///     <paramref name="patch" /> keeps its value, including <c>password</c>, so an operator can
     ///     change only <c>smtpHost</c> without resupplying a password <see cref="Get" /> never
     ///     shows. A password is encrypted before it is written to the configuration file, and a blank
-    ///     one clears it. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a
-    ///     malformed from-address or a <c>publicBaseUrl</c> that is not an absolute http or https
-    ///     URL. Requires <c>smtpsettings:write</c>.
+    ///     one clears it. Every field takes effect at once. Returns 400 for a blank host or
+    ///     display name, a port outside 1-65535, a <c>username</c> left with no password from any
+    ///     source, a malformed from-address or a <c>publicBaseUrl</c> that is not an absolute http
+    ///     or https URL. Requires <c>smtpsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("smtpsettings:write")]
@@ -206,6 +208,8 @@ public class SmtpSettingsController(
             );
         }
 
+        RejectUsernameWithoutPassword(patch);
+
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
@@ -215,6 +219,48 @@ public class SmtpSettingsController(
         );
 
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
+    }
+
+    /// <summary>
+    ///     This method rejects a patch that would leave a non-blank <c>username</c> with no
+    ///     password from any source, because every e-mail send would then fail
+    ///     (<see cref="SmtpEmailSender" /> throws before connecting). The result is the current
+    ///     settings with the patch applied. A password counts when the patch sets a non-blank one,
+    ///     or when the current settings hold a plaintext <c>Password</c> (the environment variable,
+    ///     which survives a cleared password) or, when the patch leaves <c>password</c> out, a
+    ///     stored <c>PasswordEncrypted</c>. The admin console never sends a blank password, so
+    ///     saving other fields while a password is stored stays valid.
+    /// </summary>
+    private void RejectUsernameWithoutPassword(JsonElement patch)
+    {
+        EmailSenderOptions current = emailOptions.CurrentValue;
+
+        string username = patch.TryGetMergePatchString(
+            "username",
+            out string patchedUsername,
+            allowNull: true
+        )
+            ? patchedUsername
+            : current.Username;
+
+        if (string.IsNullOrWhiteSpace(username))
+            return;
+
+        bool hasPassword;
+        if (patch.TryGetMergePatchString("password", out string patchedPassword, allowNull: true))
+            hasPassword =
+                !string.IsNullOrEmpty(patchedPassword) || !string.IsNullOrEmpty(current.Password);
+        else
+            hasPassword =
+                !string.IsNullOrEmpty(current.Password)
+                || !string.IsNullOrEmpty(current.PasswordEncrypted);
+
+        if (!hasPassword)
+            throw new ValidationException(
+                $"'username' is set to '{username}' but no password is configured. Send a "
+                    + "'password' as well, or clear the 'username' for a server that accepts "
+                    + "anonymous connections."
+            );
     }
 
     /// <summary>
@@ -237,18 +283,30 @@ public class SmtpSettingsController(
 
     /// <summary>
     ///     This method builds <see cref="SmtpSettingsDetail" /> from the current
-    ///     <see cref="EmailSenderOptions" />.
+    ///     <see cref="EmailSenderOptions" />. A plaintext password overrides the stored one, so the
+    ///     stored password is only checked for readability when no plaintext password is set.
     /// </summary>
-    private static SmtpSettingsDetail ToDetail(EmailSenderOptions options) =>
-        new(
+    private SmtpSettingsDetail ToDetail(EmailSenderOptions options)
+    {
+        bool fromEnvironment = !string.IsNullOrEmpty(options.Password);
+        bool unreadable =
+            !fromEnvironment
+            && !new SmtpPasswordProtector(dataProtectionProvider).TryUnprotect(
+                options.PasswordEncrypted,
+                out _
+            );
+
+        return new SmtpSettingsDetail(
             options.SmtpHost,
             options.SmtpPort,
             options.UseTls,
             options.Username,
-            !string.IsNullOrEmpty(options.Password)
-                || !string.IsNullOrEmpty(options.PasswordEncrypted),
+            fromEnvironment || !string.IsNullOrEmpty(options.PasswordEncrypted),
             options.FromAddress,
             options.FromDisplayName,
-            options.PublicBaseUrl
+            options.PublicBaseUrl,
+            fromEnvironment,
+            unreadable
         );
+    }
 }

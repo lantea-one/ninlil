@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection;
 using Ninlil.Dns.Identity.Options;
 
@@ -45,6 +46,27 @@ public sealed class SmtpPasswordProtector(IDataProtectionProvider dataProtection
         string.IsNullOrEmpty(passwordEncrypted)
             ? string.Empty
             : _protector.Unprotect(passwordEncrypted);
+
+    /// <summary>
+    ///     This method decrypts an <see cref="EmailSenderOptions.PasswordEncrypted" /> value without
+    ///     throwing, for callers that only need to know whether the stored password is readable.
+    /// </summary>
+    /// <param name="passwordEncrypted">An <see cref="EmailSenderOptions.PasswordEncrypted" /> value.</param>
+    /// <param name="plaintext">The decrypted password, or an empty string on failure.</param>
+    /// <returns><see langword="true" /> when the value is empty or was decrypted.</returns>
+    public bool TryUnprotect(string passwordEncrypted, out string plaintext)
+    {
+        try
+        {
+            plaintext = Unprotect(passwordEncrypted);
+            return true;
+        }
+        catch (CryptographicException)
+        {
+            plaintext = string.Empty;
+            return false;
+        }
+    }
 
     /// <summary>
     ///     This method returns the password to authenticate with. A non-empty

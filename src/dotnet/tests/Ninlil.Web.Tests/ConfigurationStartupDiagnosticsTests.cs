@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Identity.Options;
+using Ninlil.Dns.Identity.Sso;
 using Ninlil.Dns.Server.Recursive;
 using Ninlil.Web.Startup;
 
@@ -94,6 +96,91 @@ public class ConfigurationStartupDiagnosticsTests
         Assert.Null(ConfigurationStartupDiagnostics.DescribeSmtpUsernameWithoutPassword(options));
     }
 
+    private static OidcSsoOptions ConfiguredSso(string secret, string encrypted) =>
+        new()
+        {
+            Enable = true,
+            Authority = "https://auth.example.test",
+            ClientId = "ninlil",
+            ClientSecret = secret,
+            ClientSecretEncrypted = encrypted,
+        };
+
+    [Fact]
+    public void DescribeUnreadableSsoClientSecret_ForeignCiphertext_NamesTheFixAndNotTheSecret()
+    {
+        string foreign = new OidcClientSecretProtector(
+            new EphemeralDataProtectionProvider()
+        ).Protect("old-secret");
+        OidcClientSecretProtector protector = new(new EphemeralDataProtectionProvider());
+
+        string message = ConfigurationStartupDiagnostics.DescribeUnreadableSsoClientSecret(
+            ConfiguredSso(string.Empty, foreign),
+            protector
+        );
+
+        Assert.NotNull(message);
+        Assert.Contains("NINLIL_IDENTITY_SSO_CLIENT_SECRET", message);
+        Assert.DoesNotContain(foreign, message);
+        Assert.DoesNotContain("old-secret", message);
+    }
+
+    [Fact]
+    public void DescribeUnreadableSsoClientSecret_PlaintextSecretOverridesAnUnreadableOne_ReturnsNull()
+    {
+        OidcClientSecretProtector protector = new(new EphemeralDataProtectionProvider());
+
+        Assert.Null(
+            ConfigurationStartupDiagnostics.DescribeUnreadableSsoClientSecret(
+                ConfiguredSso("from-environment", "not-decryptable"),
+                protector
+            )
+        );
+    }
+
+    [Fact]
+    public void DescribeUnreadableSsoClientSecret_ReadableEmptyOrUnconfiguredSso_ReturnsNull()
+    {
+        OidcClientSecretProtector protector = new(new EphemeralDataProtectionProvider());
+
+        Assert.Null(
+            ConfigurationStartupDiagnostics.DescribeUnreadableSsoClientSecret(
+                ConfiguredSso(string.Empty, protector.Protect("fine")),
+                protector
+            )
+        );
+        Assert.Null(
+            ConfigurationStartupDiagnostics.DescribeUnreadableSsoClientSecret(
+                ConfiguredSso(string.Empty, string.Empty),
+                protector
+            )
+        );
+        // SSO off: the scheme is not registered, so the stored value is not used.
+        OidcSsoOptions off = ConfiguredSso(string.Empty, "not-decryptable");
+        off.Enable = false;
+        Assert.Null(
+            ConfigurationStartupDiagnostics.DescribeUnreadableSsoClientSecret(off, protector)
+        );
+    }
+
+    [Fact]
+    public void LogWarnings_AnUnreadableSsoSecret_LogsOneErrorWithoutTheSecret()
+    {
+        FakeLogger logger = new();
+
+        ConfigurationStartupDiagnostics.LogWarnings(
+            new RecursiveServerOptions(),
+            new EmailSenderOptions(),
+            ConfiguredSso(string.Empty, "not-decryptable-ciphertext"),
+            new EphemeralDataProtectionProvider(),
+            logger
+        );
+
+        (LogLevel level, string message) = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, level);
+        Assert.DoesNotContain("not-decryptable-ciphertext", message);
+    }
+
     [Fact]
     public void LogWarnings_BothFindings_LogsEachOnceAtWarning()
     {
@@ -101,7 +188,13 @@ public class ConfigurationStartupDiagnosticsTests
         EmailSenderOptions email = new() { Username = "mailer" };
         FakeLogger logger = new();
 
-        ConfigurationStartupDiagnostics.LogWarnings(recursive, email, logger);
+        ConfigurationStartupDiagnostics.LogWarnings(
+            recursive,
+            email,
+            new OidcSsoOptions(),
+            new EphemeralDataProtectionProvider(),
+            logger
+        );
 
         Assert.Equal(2, logger.Entries.Count);
         Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
@@ -117,6 +210,8 @@ public class ConfigurationStartupDiagnosticsTests
         ConfigurationStartupDiagnostics.LogWarnings(
             new RecursiveServerOptions(),
             new EmailSenderOptions(),
+            new OidcSsoOptions(),
+            new EphemeralDataProtectionProvider(),
             logger
         );
 

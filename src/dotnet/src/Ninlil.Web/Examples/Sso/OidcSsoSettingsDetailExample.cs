@@ -21,6 +21,8 @@ public class OidcSsoSettingsDetailExample : IExamplesProvider<OidcSsoSettingsDet
             "https://auth.example.com",
             "ninlil-dns",
             true,
-            ["openid", "profile", "email"]
+            ["openid", "profile", "email"],
+            false,
+            false
         );
 }
