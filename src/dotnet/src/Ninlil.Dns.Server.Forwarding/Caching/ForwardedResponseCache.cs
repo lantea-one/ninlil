@@ -30,7 +30,9 @@ namespace Ninlil.Dns.Server.Forwarding.Caching;
 ///     </para>
 ///     <para>
 ///         <b>What is never cached.</b> Only the upstream's answer is stored, before anything
-///         client-specific happens to it. The pipeline applies response filtering, CNAME-cloaking
+///         client-specific happens to it, together with whether this server validated it as
+///         Secure; each hit is shaped for the client that asked (see
+///         <see cref="ForwardedResponseShaper" />). The pipeline applies response filtering, CNAME-cloaking
 ///         checks and cookies to whatever the dispatcher returns, on a cache hit as on a fresh
 ///         answer, so every client still gets its own block lists. A
 ///         truncated or TSIG-signed answer, SERVFAIL, REFUSED and every other error code, a
@@ -144,7 +146,7 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
     }
 
     /// <inheritdoc />
-    public bool TryStore(ForwardedResponseCacheKey key, DnsMessage response)
+    public bool TryStore(ForwardedResponseCacheKey key, DnsMessage response, bool isSecure = false)
     {
         if (!_forwardingOptions.CurrentValue.EnableCache)
             return false;
@@ -155,7 +157,7 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
             return false;
 
         DateTimeOffset now = _store.UtcNow;
-        _store.Set(key, new ForwardedResponseCacheEntry(response, now, now + lifetime));
+        _store.Set(key, new ForwardedResponseCacheEntry(response, now, now + lifetime, isSecure));
         return true;
     }
 

@@ -12,16 +12,14 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
+using Ninlil.Dns.Server.Core.ClientSubnet;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
-using Ninlil.Dns.Server.Dnssec;
-using Ninlil.Dns.Server.Dnssec.Algorithms;
 using Ninlil.Dns.Server.Forwarding.Caching;
 using Ninlil.Dns.Server.Forwarding.Clients;
 using Ninlil.Dns.Server.Forwarding.Definition;
 using Ninlil.Dns.Server.Forwarding.Tests.Fakes;
 using Ninlil.Dns.Server.Recursive;
-using Ninlil.Dns.Server.Recursive.Caching;
 using Ninlil.Dns.Server.Recursive.Resolution;
 using Ninlil.Dns.Server.Recursive.Validation;
 
@@ -238,113 +236,26 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         Assert.Equal(IPAddress.Parse("198.51.100.42"), answer.Address);
     }
 
+    /// <summary>
+    ///     This test checks the whole DNSSEC path of a forwarded answer with the real validator
+    ///     over a signed root, <c>com</c> and <c>example.com</c> (see the Dnssec part of this
+    ///     class): a genuine answer is accepted and the same answer with a damaged signature is
+    ///     not.
+    /// </summary>
     [Fact]
     public async Task TryResolveAsync_ReValidatesDnssec_AcceptingSecureAndRejectingBogus()
     {
-        DnssecAlgorithmRegistry.TryGetAlgorithm(
-            DnssecAlgorithmEnum.Ed25519,
-            out IDnssecSigningAlgorithm algorithm
+        DnssecEnvironment secure = new();
+        ForwarderQueryResolver secureResolver = await CreateDnssecResolverAsync(secure);
+
+        DnsQueryResolution secureResolution = await secureResolver.TryResolveAsync(
+            BuildContext(BuildClientQuery("www.example.com"))
         );
 
-        DnssecKeyPair rootKey = algorithm.GenerateKeyPair();
-        DnsKeyRecordData rootDnsKeyData = new(
-            true,
-            false,
-            DnssecAlgorithmEnum.Ed25519,
-            rootKey.PublicKeyWireFormat
-        );
-        byte[] rootDnsKeyRdata = DnsRecordDataCodecRegistry.Encode(
-            DnsResourceRecordTypeEnum.DnsKey,
-            rootDnsKeyData
-        );
-        DnsResourceRecord rootDnsKeyRecord = new(
-            DnsName.Root,
-            DnsResourceRecordTypeEnum.DnsKey,
-            DnsClassEnum.Internet,
-            3600,
-            rootDnsKeyRdata
-        );
-        ushort rootKeyTag = DnssecKeyTag.Compute(DnssecAlgorithmEnum.Ed25519, rootDnsKeyRdata);
-        DnsResourceRecord rootDnsKeyRrsig = Sign(
-            algorithm,
-            rootKey,
-            rootKeyTag,
-            DnsName.Root,
-            DnsName.Root,
-            [rootDnsKeyRecord]
-        );
+        Assert.True(secureResolution.IsHandled);
 
-        DnsName queriedName = DnsName.Parse("example.com");
-        DnsResourceRecord answer = new(
-            queriedName,
-            DnsResourceRecordTypeEnum.A,
-            DnsClassEnum.Internet,
-            300,
-            DnsRecordDataCodecRegistry.Encode(
-                DnsResourceRecordTypeEnum.A,
-                new ARecordData(IPAddress.Parse("192.0.2.55"))
-            )
-        );
-        DnsResourceRecord genuineRrsig = Sign(
-            algorithm,
-            rootKey,
-            rootKeyTag,
-            DnsName.Root,
-            queriedName,
-            [answer]
-        );
-
-        FakeIterativeResolutionEngine engine = new();
-        engine.AddResult(
-            DnsName.Root,
-            DnsResourceRecordTypeEnum.DnsKey,
-            new IterativeResolutionResult(
-                RecursiveResolutionStatusEnum.Success,
-                [rootDnsKeyRecord],
-                [rootDnsKeyRrsig],
-                null,
-                [DnsName.Root]
-            )
-        );
-
-        TrustAnchor trustAnchor = new(
-            rootKeyTag,
-            DnssecAlgorithmEnum.Ed25519,
-            2,
-            DsDigestCodec.Compute(2, DnsName.Root, rootDnsKeyRdata)
-        );
-        DnssecValidator realValidator = new(
-            engine,
-            new FixedTrustAnchorStoreStub([trustAnchor]),
-            new DnssecTrustCache(
-                new StaticOptionsMonitor<RecursiveServerOptions>(new RecursiveServerOptions()),
-                new RecordingEventPublisher()
-            )
-        );
-
-        // Secure case: the upstream returns the correctly signed answer.
-        using (
-            FakeUdpUpstream secureUpstream = FakeUdpUpstream.Start(
-                BuildSignedPositiveResponse(answer, genuineRrsig)
-            )
-        )
-        {
-            await SeedForwarderAsync($"127.0.0.1:{secureUpstream.Port}");
-
-            ForwarderQueryResolver secureResolver = CreateResolver(
-                validator: realValidator,
-                recursiveOptions: new RecursiveServerOptions { EnableDnssecValidation = true }
-            );
-
-            DnsQueryResolution secureResolution = await secureResolver.TryResolveAsync(
-                BuildContext(BuildQuery(1, "example.com."))
-            );
-
-            Assert.True(secureResolution.IsHandled);
-        }
-
-        // Bogus case: the only configured forwarder returns an answer with a tampered RRSIG. It
-        // must count as a failed attempt, leaving nothing to try, so the result is NotHandled.
+        // The only configured forwarder returns a damaged signature. It counts as a failed
+        // attempt, leaving nothing to try, so the result is NotHandled.
         await using NinlilDnsContext resetContext = _provider
             .GetRequiredService<IServiceScopeFactory>()
             .CreateScope()
@@ -352,43 +263,12 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         resetContext.RemoveRange(resetContext.Set<DnsForwarderEntity>());
         await resetContext.SaveChangesAsync();
 
-        RrSigRecordData genuineRrsigData = (RrSigRecordData)
-            DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.RrSig, genuineRrsig.Data);
-        byte[] tamperedSignature = [.. genuineRrsigData.Signature];
-        tamperedSignature[0] ^= 0xFF;
-        DnsResourceRecord tamperedRrsig = new(
-            queriedName,
-            DnsResourceRecordTypeEnum.RrSig,
-            DnsClassEnum.Internet,
-            300,
-            DnsRecordDataCodecRegistry.Encode(
-                DnsResourceRecordTypeEnum.RrSig,
-                new RrSigRecordData(
-                    genuineRrsigData.TypeCovered,
-                    genuineRrsigData.Algorithm,
-                    genuineRrsigData.Labels,
-                    genuineRrsigData.OriginalTimeToLiveSeconds,
-                    genuineRrsigData.SignatureExpiration,
-                    genuineRrsigData.SignatureInception,
-                    genuineRrsigData.KeyTag,
-                    genuineRrsigData.SignerName,
-                    tamperedSignature
-                )
-            )
-        );
-
-        using FakeUdpUpstream bogusUpstream = FakeUdpUpstream.Start(
-            BuildSignedPositiveResponse(answer, tamperedRrsig)
-        );
-        await SeedForwarderAsync($"127.0.0.1:{bogusUpstream.Port}");
-
-        ForwarderQueryResolver bogusResolver = CreateResolver(
-            validator: realValidator,
-            recursiveOptions: new RecursiveServerOptions { EnableDnssecValidation = true }
-        );
+        DnssecEnvironment bogus = new();
+        bogus.Upstream.Tamper = message => CorruptSignature(message, A);
+        ForwarderQueryResolver bogusResolver = await CreateDnssecResolverAsync(bogus);
 
         DnsQueryResolution bogusResolution = await bogusResolver.TryResolveAsync(
-            BuildContext(BuildQuery(2, "example.com."))
+            BuildContext(BuildClientQuery("www.example.com", dnssecOk: true))
         );
 
         Assert.False(bogusResolution.IsHandled);
@@ -398,7 +278,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         ForwardingOptions forwardingOptions = null,
         RecursiveServerOptions recursiveOptions = null,
         IDnssecValidator validator = null,
-        IForwardedResponseCache responseCache = null
+        IForwardedResponseCache responseCache = null,
+        IReadOnlyList<IUpstreamForwarderClient> forwarderClients = null,
+        EdnsClientSubnetService clientSubnetService = null
     )
     {
         ForwardingOptions effectiveForwardingOptions =
@@ -411,13 +293,15 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             };
 
         IReadOnlyList<IUpstreamForwarderClient> clientList =
-        [
-            new PlainForwarderClient(),
-            new TlsForwarderClient(),
-            new HttpsForwarderClient(),
-            new QuicForwarderClient(),
-            new DnsCryptForwarderClient(),
-        ];
+            forwarderClients
+            ??
+            [
+                new PlainForwarderClient(),
+                new TlsForwarderClient(),
+                new HttpsForwarderClient(),
+                new QuicForwarderClient(),
+                new DnsCryptForwarderClient(),
+            ];
 
         ForwarderHealthTracker tracker = new(
             clientList,
@@ -436,7 +320,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                 recursiveOptions ?? new RecursiveServerOptions { EnableDnssecValidation = false }
             ),
             NullLogger<ForwarderQueryResolver>.Instance,
-            responseCache: responseCache
+            clientSubnetService,
+            responseCache
         );
     }
 
@@ -536,76 +421,6 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         return DnsMessageWriter.Write(response);
     }
 
-    private static byte[] BuildSignedPositiveResponse(
-        DnsResourceRecord answer,
-        DnsResourceRecord rrsig
-    )
-    {
-        DnsMessage response = new()
-        {
-            IsResponse = true,
-            ResponseCode = DnsResponseCodeEnum.NoError,
-        };
-        response.Answers.Add(answer);
-        response.Answers.Add(rrsig);
-
-        return DnsMessageWriter.Write(response);
-    }
-
-    private static DnsResourceRecord Sign(
-        IDnssecSigningAlgorithm algorithm,
-        DnssecKeyPair key,
-        ushort keyTag,
-        DnsName signerName,
-        DnsName ownerName,
-        IReadOnlyList<DnsResourceRecord> rrset
-    )
-    {
-        DnsResourceRecord first = rrset[0];
-        DateTimeOffset inception = DateTimeOffset.UtcNow.AddDays(-1);
-        DateTimeOffset expiration = DateTimeOffset.UtcNow.AddDays(30);
-
-        RrSigRecordData unsigned = new(
-            first.Type,
-            DnssecAlgorithmEnum.Ed25519,
-            (byte)ownerName.Labels.Count,
-            first.TimeToLive,
-            (uint)expiration.ToUnixTimeSeconds(),
-            (uint)inception.ToUnixTimeSeconds(),
-            keyTag,
-            signerName,
-            []
-        );
-
-        byte[] signingInput = DnssecCanonicalization.BuildSigningInput(
-            unsigned,
-            first.Name,
-            first.Class,
-            rrset
-        );
-        byte[] signature = algorithm.Sign(signingInput, key.PrivateKeyPkcs8);
-
-        RrSigRecordData signed = new(
-            unsigned.TypeCovered,
-            unsigned.Algorithm,
-            unsigned.Labels,
-            unsigned.OriginalTimeToLiveSeconds,
-            unsigned.SignatureExpiration,
-            unsigned.SignatureInception,
-            unsigned.KeyTag,
-            unsigned.SignerName,
-            signature
-        );
-
-        return new DnsResourceRecord(
-            first.Name,
-            DnsResourceRecordTypeEnum.RrSig,
-            first.Class,
-            first.TimeToLive,
-            DnsRecordDataCodecRegistry.Encode(DnsResourceRecordTypeEnum.RrSig, signed)
-        );
-    }
-
     /// <summary>
     ///     This class always reports Insecure. It is the validator for tests that do not exercise
     ///     DNSSEC, which leave <see cref="RecursiveServerOptions.EnableDnssecValidation" /> off.
@@ -621,68 +436,6 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             CancellationToken stoppingToken = default,
             IDnssecRecordFetcher fetcher = null
         ) => Task.FromResult(DnssecValidationResult.Insecure());
-    }
-
-    private sealed class FixedTrustAnchorStoreStub(IReadOnlyList<TrustAnchor> anchors)
-        : ITrustAnchorStore
-    {
-        public IReadOnlyList<TrustAnchor> GetValidAnchors() => anchors;
-
-        public IReadOnlyList<PersistedTrustAnchor> GetAll() => [];
-
-        public void Save(IReadOnlyList<PersistedTrustAnchor> anchors) { }
-    }
-
-    private sealed class FakeIterativeResolutionEngine : IIterativeResolutionEngine
-    {
-        private readonly Dictionary<
-            (DnsName Name, DnsResourceRecordTypeEnum Type),
-            IterativeResolutionResult
-        > _results = [];
-
-        public void AddResult(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            IterativeResolutionResult result
-        ) => _results[(name, type)] = result;
-
-        public Task<IterativeResolutionResult> ResolveAsync(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            DnsClassEnum recordClass,
-            bool requestDnssec,
-            DnsEdnsOption clientSubnetOption = null,
-            CancellationToken stoppingToken = default
-        ) => Resolve(name, type);
-
-        public Task<IterativeResolutionResult> ResolveAsync(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            DnsClassEnum recordClass,
-            bool requestDnssec,
-            QueryBudget budget,
-            bool forceRootStart,
-            DnsEdnsOption clientSubnetOption = null,
-            CancellationToken stoppingToken = default
-        ) => Resolve(name, type);
-
-        public Task<IterativeResolutionResult> PrefetchAsync(
-            DnsName name,
-            DnsResourceRecordTypeEnum type,
-            DnsClassEnum recordClass,
-            bool requestDnssec,
-            CancellationToken stoppingToken = default
-        ) => Resolve(name, type);
-
-        private Task<IterativeResolutionResult> Resolve(
-            DnsName name,
-            DnsResourceRecordTypeEnum type
-        ) =>
-            Task.FromResult(
-                _results.TryGetValue((name, type), out IterativeResolutionResult result)
-                    ? result
-                    : IterativeResolutionResult.ServFail()
-            );
     }
 
     /// <summary>

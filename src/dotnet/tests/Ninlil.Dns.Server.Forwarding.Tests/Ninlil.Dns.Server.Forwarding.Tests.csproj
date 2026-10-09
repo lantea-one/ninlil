@@ -18,6 +18,16 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- The signed-hierarchy fixture and its fakes are shared with the Recursive tests by linking the
+       files, so the forwarder's DNSSEC tests walk the same signed root, com and example.com. -->
+  <ItemGroup>
+    <Compile Include="..\Ninlil.Dns.Server.Recursive.Tests\Support\*.cs" LinkBase="Shared\Support" />
+    <Compile Include="..\Ninlil.Dns.Server.Recursive.Tests\Fakes\FakeUpstreamDnsClient.cs" LinkBase="Shared\Fakes" />
+    <Compile Include="..\Ninlil.Dns.Server.Recursive.Tests\Fakes\FakeTrustAnchorStore.cs" LinkBase="Shared\Fakes" />
+    <Compile Include="..\Ninlil.Dns.Server.Recursive.Tests\Fakes\StaticOptionsMonitor.cs" LinkBase="Shared\Fakes" />
+    <Compile Include="..\Ninlil.Dns.Server.Recursive.Tests\Fakes\RecordingEventPublisher.cs" LinkBase="Shared\Fakes" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />

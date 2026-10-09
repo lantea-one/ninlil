@@ -19,12 +19,15 @@ namespace Ninlil.Dns.Server.Forwarding.Caching;
 /// <param name="Type">The queried type.</param>
 /// <param name="Class">The queried class.</param>
 /// <param name="DnssecOk">
-///     The client's DO bit: with it the upstream includes RRSIGs and NSEC proofs, without it
-///     those are left out, so the two answers are different messages.
+///     The client's DO bit. Without validation the upstream includes RRSIGs and NSEC proofs
+///     only with it, so the two answers are different messages; with validation the upstream
+///     always sends them, and the bit decides which records the client's reply keeps. Either
+///     way the replies differ, so the two clients never share an entry.
 /// </param>
 /// <param name="CheckingDisabled">
-///     The client's CD bit: a validating upstream answers SERVFAIL for a bogus name without it
-///     and hands over the data with it.
+///     The client's CD bit: without validation a validating upstream answers SERVFAIL for a
+///     bogus name without it and hands over the data with it; with validation it decides what
+///     happens to a bogus answer (SERVFAIL path or data without AD).
 /// </param>
 /// <param name="RecursionDesired">The client's RD bit, which the query is forwarded with unchanged.</param>
 /// <param name="HasEdns">

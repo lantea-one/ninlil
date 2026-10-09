@@ -134,6 +134,55 @@ public class ForwardedResponseCacheTests
     private static DnsMessage Positive(string name, uint ttl = 300) =>
         Response(DnsResponseCodeEnum.NoError, [A(name, ttl)]);
 
+    private static DnsResourceRecord Signature(
+        string name,
+        DnsResourceRecordTypeEnum covered,
+        uint ttl = 300
+    ) =>
+        new(
+            DnsName.Parse(name),
+            DnsResourceRecordTypeEnum.RrSig,
+            DnsClassEnum.Internet,
+            ttl,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.RrSig,
+                new RrSigRecordData(
+                    covered,
+                    Ninlil.Dns.Common.Enum.DnssecAlgorithmEnum.Ed25519,
+                    2,
+                    ttl,
+                    2_000_000_000,
+                    1_000_000_000,
+                    1234,
+                    DnsName.Parse("example.com"),
+                    new byte[64]
+                )
+            )
+        );
+
+    /// <summary>
+    ///     This method builds an upstream answer as a validating-forwarder gets it: an A record,
+    ///     its RRSIG, an NSEC proof in authority, the upstream's AD bit and an OPT record with
+    ///     options.
+    /// </summary>
+    private static DnsMessage SignedUpstreamAnswer()
+    {
+        DnsMessage response = Response(
+            DnsResponseCodeEnum.NoError,
+            [A("example.com", 300), Signature("example.com", DnsResourceRecordTypeEnum.A)],
+            [Signature("example.com", DnsResourceRecordTypeEnum.Nsec)]
+        );
+        response.AuthenticData = true;
+        response.Edns = new DnsEdnsOptions(
+            0,
+            4096,
+            true,
+            [new DnsEdnsOption((ushort)EdnsOptionCodeEnum.Cookie, new byte[16])]
+        );
+
+        return response;
+    }
+
     // --- Keys -------------------------------------------------------------------------------
 
     [Fact]
@@ -524,5 +573,111 @@ public class ForwardedResponseCacheTests
         Assert.Null(cache.TryGet(Key(a), a));
         Assert.Null(cache.TryGet(Key(aaaa), aaaa));
         Assert.NotNull(cache.TryGet(Key(Query("www.example.com")), Query("www.example.com")));
+    }
+
+    // --- Per-client shape -------------------------------------------------------------------
+
+    [Fact]
+    public void Hit_ForASecureAnswerAndADoClient_SetsAdAndKeepsTheSignatures()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", dnssecOk: true);
+        cache.TryStore(Key(request), SignedUpstreamAnswer(), isSecure: true);
+
+        DnsMessage hit = cache.TryGet(Key(request), request);
+
+        Assert.True(hit.AuthenticData);
+        Assert.Equal(2, hit.Answers.Count);
+        Assert.Single(hit.AuthorityRecords);
+        Assert.True(hit.Edns.DnssecOk);
+        Assert.Empty(hit.Edns.Options);
+    }
+
+    [Fact]
+    public void Hit_ForASecureAnswerAndAClientWithoutDo_DropsDnssecRecordsAndAd()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", edns: false);
+        cache.TryStore(Key(request), SignedUpstreamAnswer(), isSecure: true);
+
+        DnsMessage hit = cache.TryGet(Key(request), request);
+
+        Assert.False(hit.AuthenticData);
+        Assert.Equal([DnsResourceRecordTypeEnum.A], hit.Answers.Select(record => record.Type));
+        Assert.Empty(hit.AuthorityRecords);
+        Assert.Null(hit.Edns);
+    }
+
+    [Fact]
+    public void Hit_ForAnAnswerThatWasNotSecure_NeverSetsAdEvenWhenTheUpstreamDid()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", dnssecOk: true);
+        cache.TryStore(Key(request), SignedUpstreamAnswer(), isSecure: false);
+
+        Assert.False(cache.TryGet(Key(request), request).AuthenticData);
+    }
+
+    [Fact]
+    public void Hit_ForAClientThatOnlySetsAd_KeepsAdOnASecureAnswer()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", edns: false);
+        request.AuthenticData = true;
+        cache.TryStore(Key(request), SignedUpstreamAnswer(), isSecure: true);
+
+        Assert.True(cache.TryGet(Key(request), request).AuthenticData);
+    }
+
+    [Fact]
+    public void Hit_ForAQueryForTheSignatureType_KeepsTheSignaturesWithoutDo()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", DnsResourceRecordTypeEnum.RrSig, edns: false);
+        DnsMessage upstream = Response(
+            DnsResponseCodeEnum.NoError,
+            [Signature("example.com", DnsResourceRecordTypeEnum.A)]
+        );
+        cache.TryStore(Key(request), upstream);
+
+        DnsMessage hit = cache.TryGet(Key(request), request);
+
+        Assert.Single(hit.Answers);
+    }
+
+    [Fact]
+    public void Stale_ForASecureAnswer_NeverSetsAd()
+    {
+        _recursiveOptions.EnableServeStale = true;
+        _recursiveOptions.MaxStaleServeAge = TimeSpan.FromHours(1);
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", dnssecOk: true);
+        cache.TryStore(Key(request), SignedUpstreamAnswer(), isSecure: true);
+        _clock.Advance(TimeSpan.FromMinutes(10));
+
+        DnsMessage stale = cache.TryGetStale(Key(request), request);
+
+        Assert.NotNull(stale);
+        Assert.False(stale.AuthenticData);
+        Assert.Equal(2, stale.Answers.Count);
+    }
+
+    [Fact]
+    public void Hit_TwoHitsForTheSameEntry_ShareNoMessageState()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", dnssecOk: true);
+        cache.TryStore(Key(request), SignedUpstreamAnswer(), isSecure: true);
+
+        DnsMessage first = cache.TryGet(Key(request), request);
+        first.Answers.Clear();
+        first.AuthenticData = false;
+        first.Edns = null;
+
+        DnsMessage second = cache.TryGet(Key(request), request);
+
+        Assert.Equal(2, second.Answers.Count);
+        Assert.True(second.AuthenticData);
+        Assert.NotNull(second.Edns);
     }
 }

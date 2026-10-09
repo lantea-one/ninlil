@@ -37,6 +37,10 @@ public interface IForwardedResponseCache
     /// </summary>
     /// <param name="key">The question's cache key.</param>
     /// <param name="response">The upstream answer, exactly as received. It is copied, not kept.</param>
+    /// <param name="isSecure">
+    ///     Whether this server validated the answer as Secure. A later fresh hit sets AD for a
+    ///     client that asked for it; a stale hit never does.
+    /// </param>
     /// <returns>Whether the answer was cached.</returns>
-    bool TryStore(ForwardedResponseCacheKey key, DnsMessage response);
+    bool TryStore(ForwardedResponseCacheKey key, DnsMessage response, bool isSecure = false);
 }
