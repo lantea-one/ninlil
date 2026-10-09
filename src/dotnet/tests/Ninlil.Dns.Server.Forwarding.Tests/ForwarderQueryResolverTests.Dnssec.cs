@@ -85,8 +85,20 @@ public sealed partial class ForwarderQueryResolverTests
         /// <summary>Makes every query fail, as an unreachable upstream does.</summary>
         public bool Fail { get; set; }
 
-        /// <summary>Every query received, in order.</summary>
+        /// <summary>Every query received, in order, chain-of-trust lookups included.</summary>
         public List<DnsMessage> Queries { get; } = [];
+
+        /// <summary>
+        ///     The queries that are not DS or DNSKEY lookups of the validator: the forwarded
+        ///     client questions.
+        /// </summary>
+        public List<DnsMessage> AnswerQueries =>
+            [
+                .. Queries.Where(query =>
+                    query.Questions[0].Type
+                        is not (DnsResourceRecordTypeEnum.DS or DnsResourceRecordTypeEnum.DnsKey)
+                ),
+            ];
 
         public UpstreamForwarderProtocolEnum Protocol => UpstreamForwarderProtocolEnum.Plain;
 
@@ -117,7 +129,11 @@ public sealed partial class ForwarderQueryResolverTests
 
             for (int hop = 0; hop < 8; hop++)
             {
-                DnsMessage step = hierarchy.Respond(ServerFor(name), name, question.Type);
+                DnsMessage step = hierarchy.Respond(
+                    ServerFor(name, question.Type),
+                    name,
+                    question.Type
+                );
                 response.ResponseCode = step.ResponseCode;
                 response.Answers.AddRange(step.Answers);
                 response.AuthorityRecords.Clear();
@@ -164,12 +180,19 @@ public sealed partial class ForwarderQueryResolverTests
             return Task.FromResult(response);
         }
 
-        private IPAddress ServerFor(DnsName name) =>
-            hierarchy
-                .Zones.Where(zone => IsAtOrBelow(name, zone.Apex))
+        // The DS record of a name lives in the parent zone (RFC 4035 §3.1.4.1), so a DS query
+        // goes to the server of the name's parent.
+        private IPAddress ServerFor(DnsName name, DnsResourceRecordTypeEnum type)
+        {
+            DnsName location =
+                type == DnsResourceRecordTypeEnum.DS ? new DnsName([.. name.Labels.Skip(1)]) : name;
+
+            return hierarchy
+                .Zones.Where(zone => IsAtOrBelow(location, zone.Apex))
                 .OrderByDescending(zone => zone.Apex.Labels.Count)
                 .First()
                 .Server;
+        }
     }
 
     private static bool IsAtOrBelow(DnsName name, DnsName ancestor)
@@ -348,7 +371,7 @@ public sealed partial class ForwarderQueryResolverTests
 
         await AskHandledAsync(resolver, request);
 
-        DnsMessage sent = Assert.Single(environment.Upstream.Queries);
+        DnsMessage sent = Assert.Single(environment.Upstream.AnswerQueries);
         Assert.Null(sent.Tsig);
         Assert.True(sent.CheckingDisabled);
         Assert.NotNull(sent.Edns);
@@ -466,7 +489,7 @@ public sealed partial class ForwarderQueryResolverTests
 
         Assert.Contains(response.Answers, record => record.Type == A);
         Assert.False(response.AuthenticData);
-        Assert.False(environment.Upstream.Queries[0].CheckingDisabled);
+        Assert.False(environment.Upstream.AnswerQueries[0].CheckingDisabled);
     }
 
     [Fact]
@@ -478,7 +501,7 @@ public sealed partial class ForwarderQueryResolverTests
 
         await AskHandledAsync(resolver, BuildClientQuery("www.example.com"));
 
-        DnsMessage sent = Assert.Single(environment.Upstream.Queries);
+        DnsMessage sent = Assert.Single(environment.Upstream.AnswerQueries);
         Assert.Null(sent.Edns);
         Assert.False(sent.CheckingDisabled);
     }
@@ -686,7 +709,7 @@ public sealed partial class ForwarderQueryResolverTests
             BuildClientQuery("www.example.com", dnssecOk: true, checkingDisabled: true)
         );
         Assert.True(withCdAgain.IsHandled);
-        Assert.Equal(3, environment.Upstream.Queries.Count);
+        Assert.Equal(3, environment.Upstream.AnswerQueries.Count);
     }
 
     [Fact]
@@ -755,7 +778,7 @@ public sealed partial class ForwarderQueryResolverTests
         DnsMessage plain = await AskHandledAsync(resolver, BuildClientQuery("www.example.com"));
 
         Assert.Null(plain.Edns);
-        DnsMessage sent = Assert.Single(environment.Upstream.Queries);
+        DnsMessage sent = Assert.Single(environment.Upstream.AnswerQueries);
         Assert.Contains(
             sent.Edns.Options,
             option => option.Code == (ushort)EdnsOptionCodeEnum.ClientSubnet
@@ -792,7 +815,7 @@ public sealed partial class ForwarderQueryResolverTests
         // A client without DO has its own key, so it goes upstream once and is then cached.
         DnsMessage plainMiss = await AskHandledAsync(resolver, BuildClientQuery("www.example.com"));
         DnsMessage plainHit = await AskHandledAsync(resolver, BuildClientQuery("www.example.com"));
-        Assert.Equal(2, environment.Upstream.Queries.Count);
+        Assert.Equal(2, environment.Upstream.AnswerQueries.Count);
 
         foreach (DnsMessage plain in new[] { plainMiss, plainHit })
         {
@@ -806,7 +829,7 @@ public sealed partial class ForwarderQueryResolverTests
             resolver,
             BuildClientQuery("www.example.com", dnssecOk: true)
         );
-        Assert.Equal(2, environment.Upstream.Queries.Count);
+        Assert.Equal(2, environment.Upstream.AnswerQueries.Count);
         Assert.True(doHit.AuthenticData);
         Assert.Contains(doHit.Answers, record => record.Type == DnsResourceRecordTypeEnum.RrSig);
         Assert.Empty(doHit.Edns.Options);

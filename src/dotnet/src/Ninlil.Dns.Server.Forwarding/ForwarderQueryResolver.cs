@@ -11,6 +11,7 @@ using Ninlil.Dns.Server.Core.ClientSubnet;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Forwarding.Caching;
+using Ninlil.Dns.Server.Forwarding.Validation;
 using Ninlil.Dns.Server.Recursive;
 using Ninlil.Dns.Server.Recursive.Resolution;
 using Ninlil.Dns.Server.Recursive.Validation;
@@ -38,8 +39,9 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         Each answer is then checked locally with the same <see cref="IDnssecValidator" /> as
 ///         an iterative answer: the CNAME chain is rebuilt from the answer section, a negative
 ///         answer or a wildcard expansion carries the NSEC or NSEC3 proof the validator needs,
-///         and the DS and DNSKEY records of the chain of trust come from the validator's
-///         default source, the iterative engine. A
+///         and the DS and DNSKEY records of the chain of trust are asked of the same
+///         forwarders (see <see cref="ForwarderDnssecRecordFetcher" />), so the iterative engine
+///         is not needed and a network that only reaches its forwarders still validates. A
 ///         <see cref="DnssecValidationStateEnum.Bogus" /> answer counts as a failed forwarder, so
 ///         the next one is tried, unless the client set CD (RFC 4035 §3.2.2): it then gets the
 ///         data without AD, and the answer is not cached. Every other result is accepted.
@@ -236,6 +238,15 @@ public sealed class ForwarderQueryResolver(
             DnssecValidationStateEnum state = await ValidateAsync(
                 question,
                 response,
+                new ForwarderDnssecRecordFetcher(
+                    ordered,
+                    definitionStrings,
+                    _clientsByProtocol,
+                    healthTracker,
+                    responseCache,
+                    forwardingOptions,
+                    logger
+                ),
                 stoppingToken
             );
 
@@ -384,9 +395,14 @@ public sealed class ForwarderQueryResolver(
     ///     so it is returned as received. So is an ANY query, whose answer is a mix of types that
     ///     the validator does not check as one RRset.
     /// </summary>
+    /// <param name="question">The client's question.</param>
+    /// <param name="response">The forwarder's answer.</param>
+    /// <param name="fetcher">Supplies the DS and DNSKEY records of the chain of trust.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     private async Task<DnssecValidationStateEnum> ValidateAsync(
         DnsQuestion question,
         DnsMessage response,
+        IDnssecRecordFetcher fetcher,
         CancellationToken stoppingToken
     )
     {
@@ -406,7 +422,8 @@ public sealed class ForwarderQueryResolver(
             question.Class,
             result,
             budget,
-            stoppingToken
+            stoppingToken,
+            fetcher
         );
 
         return validation.State;
@@ -505,7 +522,7 @@ public sealed class ForwarderQueryResolver(
     ///     </list>
     ///     No zone cuts are known, so the validator starts any unsigned-answer walk at the root.
     /// </summary>
-    private static IterativeResolutionResult BuildResult(DnsQuestion question, DnsMessage response)
+    internal static IterativeResolutionResult BuildResult(DnsQuestion question, DnsMessage response)
     {
         DnsName end = question.Name;
         List<DnsResourceRecord> chain = [];
