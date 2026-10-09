@@ -16,12 +16,13 @@
 #           .forgejo/scripts/lint.sh.
 #
 # The base images are build arguments (SDK_IMAGE, NODE_IMAGE, ARCH_IMAGE, LINT_IMAGE), pinned by
-# tag only.
+# multi-architecture index digest. The tag is for readers; the digest decides what is pulled.
+# .forgejo/workflows/bump-pins.yml refreshes the digests weekly.
 
-ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-noble
-ARG NODE_IMAGE=node:24-bookworm-slim
-ARG ARCH_IMAGE=archlinux:base-devel
-ARG LINT_IMAGE=debian:bookworm-slim
+ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317
+ARG NODE_IMAGE=node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+ARG ARCH_IMAGE=archlinux:base-devel@sha256:996c3a1d6b0d87b01242f6fcd8cfa3ad3eece1a67ab5c8f108e20af1d7b97bdd
+ARG LINT_IMAGE=debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 
 # ---------------------------------------------------------------------------------------------
 # dotnet

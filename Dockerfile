@@ -11,7 +11,8 @@
 # Inputs:
 #   build context "binaries"  a directory holding ninlil-linux-amd64 and/or ninlil-linux-arm64
 #   build context "."         the repository (only docker/fetch-native-libraries.sh is used)
-#   build arguments           RUNTIME_IMAGE and FETCH_IMAGE (base images), BUILD_VERSION,
+#   build arguments           RUNTIME_IMAGE and FETCH_IMAGE (base images, pinned by
+#                             index digest and refreshed by bump-pins.yml), BUILD_VERSION,
 #                             BUILD_REVISION and BUILD_SOURCE (OCI labels)
 #
 # Output: the "runtime" target. The final stage only copies files and the native-libraries stage
@@ -23,8 +24,8 @@
 #   .forgejo/scripts/publish-binary.sh linux-amd64 dist
 #   docker buildx build --build-context binaries=dist -t ninlil .
 
-ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra
-ARG FETCH_IMAGE=buildpack-deps:noble-curl
+ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra@sha256:566a1d5613279cf96a70bc456b85a5e1dda0cc53f394209680d54b55e4d13cf7
+ARG FETCH_IMAGE=buildpack-deps:noble-curl@sha256:48a80dfb7e2f2d1e93dbfff934fd2f187f306eef36cb5359ef8bba0ffe9205b3
 
 # ---------------------------------------------------------------------------------------------
 # native-libraries: libmsquic (DNS-over-QUIC) and its libnuma dependency for the target
