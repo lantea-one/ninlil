@@ -12,7 +12,7 @@ import { RecursiveTrustAnchorDetail } from './recursiveTrustAnchorDetail';
 
 
 /**
- * This record is the REST shape of the recursive resolver settings (`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A `PATCH` to the same endpoint accepts the same fields. The two override lists are read once at startup or first seed, so the GET shows the saved lists, which may not be the ones in use; every other field takes effect at once. `RecursiveServerOptions` documents each field and its default.
+ * This record is the REST shape of the recursive resolver settings (`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A `PATCH` to the same endpoint accepts the same fields. The two override lists are read once at startup or first seed, so the GET shows the saved lists, which may not be the ones in use; every other field takes effect at once. `RecursiveServerOptions` documents each field and its default.  `InsecureDomains` is the list of Insecure domains (negative trust anchors) in     force: a query for a name at or below one skips DNSSEC validation and is never answered     with AD. It is the built-in list while `UseCustomInsecureDomains` is     false. A `PATCH` with an array replaces the whole list and makes     it custom; a `PATCH` with null restores the built-in list.     `BuiltInInsecureDomains` is that built-in list (`home.arpa`, `internal`     and the locally-served reverse zones of RFC 6303), for comparison and for a \"restore     defaults\" action; it is read-only.
  */
 export interface RecursiveSettingsDetail { 
     enableRecursion?: boolean;
@@ -35,5 +35,8 @@ export interface RecursiveSettingsDetail {
     enablePrefetch?: boolean;
     prefetchWindow?: string;
     prefetchRecentAccessWindow?: string;
+    insecureDomains?: Array<string> | null;
+    useCustomInsecureDomains?: boolean;
+    builtInInsecureDomains?: Array<string> | null;
 }
 

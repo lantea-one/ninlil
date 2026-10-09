@@ -30433,7 +30433,18 @@
                   "maxStaleServeAge": "1.00:00:00",
                   "enablePrefetch": true,
                   "prefetchWindow": "00:00:10",
-                  "prefetchRecentAccessWindow": "00:05:00"
+                  "prefetchRecentAccessWindow": "00:05:00",
+                  "insecureDomains": [
+                    "home.arpa",
+                    "internal",
+                    "10.in-addr.arpa"
+                  ],
+                  "useCustomInsecureDomains": false,
+                  "builtInInsecureDomains": [
+                    "home.arpa",
+                    "internal",
+                    "10.in-addr.arpa"
+                  ]
                 }
               },
               "application/json": {
@@ -30460,7 +30471,18 @@
                   "maxStaleServeAge": "1.00:00:00",
                   "enablePrefetch": true,
                   "prefetchWindow": "00:00:10",
-                  "prefetchRecentAccessWindow": "00:05:00"
+                  "prefetchRecentAccessWindow": "00:05:00",
+                  "insecureDomains": [
+                    "home.arpa",
+                    "internal",
+                    "10.in-addr.arpa"
+                  ],
+                  "useCustomInsecureDomains": false,
+                  "builtInInsecureDomains": [
+                    "home.arpa",
+                    "internal",
+                    "10.in-addr.arpa"
+                  ]
                 }
               },
               "text/json": {
@@ -30487,7 +30509,18 @@
                   "maxStaleServeAge": "1.00:00:00",
                   "enablePrefetch": true,
                   "prefetchWindow": "00:00:10",
-                  "prefetchRecentAccessWindow": "00:05:00"
+                  "prefetchRecentAccessWindow": "00:05:00",
+                  "insecureDomains": [
+                    "home.arpa",
+                    "internal",
+                    "10.in-addr.arpa"
+                  ],
+                  "useCustomInsecureDomains": false,
+                  "builtInInsecureDomains": [
+                    "home.arpa",
+                    "internal",
+                    "10.in-addr.arpa"
+                  ]
                 }
               }
             }
@@ -30498,7 +30531,7 @@
         "tags": [
           "RecursiveSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Recursive` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; an override list, when present, replaces the\nwhole list. The response note says whether a restart is needed. Returns 400 for a\nmalformed duration, an invalid root-hint address or a malformed trust anchor. Requires\n`recursivesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Recursive` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; an override list, when present, replaces the\nwhole list. `insecureDomains` is the same, and also accepts `null` to restore the\nbuilt-in list. The response note says whether a restart is needed. Returns 400 for a\nmalformed duration, an invalid root-hint address, a malformed trust anchor or an\ninvalid domain name in `insecureDomains`. Requires\n`recursivesettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -36076,7 +36109,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     },
                     {
                       "id": "9f8e7d6c-5b4a-4392-81c0-f0e1d2c3b4a5",
@@ -36110,7 +36144,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   ],
                   "skip": 0,
@@ -36160,7 +36195,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     },
                     {
                       "id": "9f8e7d6c-5b4a-4392-81c0-f0e1d2c3b4a5",
@@ -36194,7 +36230,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   ],
                   "skip": 0,
@@ -36244,7 +36281,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     },
                     {
                       "id": "9f8e7d6c-5b4a-4392-81c0-f0e1d2c3b4a5",
@@ -36278,7 +36316,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   ],
                   "skip": 0,
@@ -36336,7 +36375,8 @@
                     ],
                     "transferTsigKeyNames": [
                       "secondary-transfer-key"
-                    ]
+                    ],
+                    "validateDnssec": false
                   }
                 },
                 "Secondary zone": {
@@ -36369,7 +36409,42 @@
                     "ptrIpv6PrefixLength": null,
                     "transferTransport": "Plain",
                     "updateTsigKeyNames": null,
-                    "transferTsigKeyNames": null
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
+                  }
+                },
+                "Conditional forwarder zone": {
+                  "summary": "A private zone forwarded to its own name servers, without DNSSEC validation.",
+                  "value": {
+                    "name": "corp.example",
+                    "type": "Forwarder",
+                    "isDnssecSigned": false,
+                    "dnssecAlgorithm": null,
+                    "denialOfExistenceMode": "NSEC3",
+                    "nsec3Iterations": 10,
+                    "nsec3SaltHex": null,
+                    "isDisabled": false,
+                    "primaryServerAddresses": null,
+                    "forwarderAddresses": [
+                      "10.0.0.53",
+                      "10.0.0.54"
+                    ],
+                    "notifyAddresses": null,
+                    "tsigKeyName": null,
+                    "dynamicUpdateEnabled": false,
+                    "comments": "Internal zone answered by the corporate name servers.",
+                    "cloudProviderCredentialId": null,
+                    "cloudProviderZoneId": null,
+                    "cloudSyncInterval": null,
+                    "autoManageCaaRecords": null,
+                    "caaIssuerDomain": null,
+                    "autoManagePtrRecords": null,
+                    "ptrIpv4PrefixLength": null,
+                    "ptrIpv6PrefixLength": null,
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
                   }
                 }
               }
@@ -36413,7 +36488,8 @@
                     ],
                     "transferTsigKeyNames": [
                       "secondary-transfer-key"
-                    ]
+                    ],
+                    "validateDnssec": false
                   }
                 },
                 "Secondary zone": {
@@ -36446,7 +36522,42 @@
                     "ptrIpv6PrefixLength": null,
                     "transferTransport": "Plain",
                     "updateTsigKeyNames": null,
-                    "transferTsigKeyNames": null
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
+                  }
+                },
+                "Conditional forwarder zone": {
+                  "summary": "A private zone forwarded to its own name servers, without DNSSEC validation.",
+                  "value": {
+                    "name": "corp.example",
+                    "type": "Forwarder",
+                    "isDnssecSigned": false,
+                    "dnssecAlgorithm": null,
+                    "denialOfExistenceMode": "NSEC3",
+                    "nsec3Iterations": 10,
+                    "nsec3SaltHex": null,
+                    "isDisabled": false,
+                    "primaryServerAddresses": null,
+                    "forwarderAddresses": [
+                      "10.0.0.53",
+                      "10.0.0.54"
+                    ],
+                    "notifyAddresses": null,
+                    "tsigKeyName": null,
+                    "dynamicUpdateEnabled": false,
+                    "comments": "Internal zone answered by the corporate name servers.",
+                    "cloudProviderCredentialId": null,
+                    "cloudProviderZoneId": null,
+                    "cloudSyncInterval": null,
+                    "autoManageCaaRecords": null,
+                    "caaIssuerDomain": null,
+                    "autoManagePtrRecords": null,
+                    "ptrIpv4PrefixLength": null,
+                    "ptrIpv6PrefixLength": null,
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
                   }
                 }
               }
@@ -36490,7 +36601,8 @@
                     ],
                     "transferTsigKeyNames": [
                       "secondary-transfer-key"
-                    ]
+                    ],
+                    "validateDnssec": false
                   }
                 },
                 "Secondary zone": {
@@ -36523,7 +36635,42 @@
                     "ptrIpv6PrefixLength": null,
                     "transferTransport": "Plain",
                     "updateTsigKeyNames": null,
-                    "transferTsigKeyNames": null
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
+                  }
+                },
+                "Conditional forwarder zone": {
+                  "summary": "A private zone forwarded to its own name servers, without DNSSEC validation.",
+                  "value": {
+                    "name": "corp.example",
+                    "type": "Forwarder",
+                    "isDnssecSigned": false,
+                    "dnssecAlgorithm": null,
+                    "denialOfExistenceMode": "NSEC3",
+                    "nsec3Iterations": 10,
+                    "nsec3SaltHex": null,
+                    "isDisabled": false,
+                    "primaryServerAddresses": null,
+                    "forwarderAddresses": [
+                      "10.0.0.53",
+                      "10.0.0.54"
+                    ],
+                    "notifyAddresses": null,
+                    "tsigKeyName": null,
+                    "dynamicUpdateEnabled": false,
+                    "comments": "Internal zone answered by the corporate name servers.",
+                    "cloudProviderCredentialId": null,
+                    "cloudProviderZoneId": null,
+                    "cloudSyncInterval": null,
+                    "autoManageCaaRecords": null,
+                    "caaIssuerDomain": null,
+                    "autoManagePtrRecords": null,
+                    "ptrIpv4PrefixLength": null,
+                    "ptrIpv6PrefixLength": null,
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
                   }
                 }
               }
@@ -36577,7 +36724,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   },
                   "Secondary zone": {
@@ -36614,7 +36762,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   }
                 }
@@ -36662,7 +36811,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   },
                   "Secondary zone": {
@@ -36699,7 +36849,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   }
                 }
@@ -36747,7 +36898,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   },
                   "Secondary zone": {
@@ -36784,7 +36936,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   }
                 }
@@ -36858,7 +37011,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   },
                   "Secondary zone": {
@@ -36895,7 +37049,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   }
                 }
@@ -36943,7 +37098,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   },
                   "Secondary zone": {
@@ -36980,7 +37136,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   }
                 }
@@ -37028,7 +37185,8 @@
                       "createdAtUtc": "2026-08-01T09:00:00+00:00",
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   },
                   "Secondary zone": {
@@ -37065,7 +37223,8 @@
                       "createdAtUtc": "2026-08-01T09:05:00+00:00",
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
-                      "memberOfCatalogZoneId": null
+                      "memberOfCatalogZoneId": null,
+                      "validateDnssec": false
                     }
                   }
                 }
@@ -37131,7 +37290,8 @@
                     ],
                     "transferTsigKeyNames": [
                       "secondary-transfer-key"
-                    ]
+                    ],
+                    "validateDnssec": false
                   }
                 },
                 "Secondary zone": {
@@ -37164,7 +37324,42 @@
                     "ptrIpv6PrefixLength": null,
                     "transferTransport": "Plain",
                     "updateTsigKeyNames": null,
-                    "transferTsigKeyNames": null
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
+                  }
+                },
+                "Conditional forwarder zone": {
+                  "summary": "A private zone forwarded to its own name servers, without DNSSEC validation.",
+                  "value": {
+                    "name": "corp.example",
+                    "type": "Forwarder",
+                    "isDnssecSigned": false,
+                    "dnssecAlgorithm": null,
+                    "denialOfExistenceMode": "NSEC3",
+                    "nsec3Iterations": 10,
+                    "nsec3SaltHex": null,
+                    "isDisabled": false,
+                    "primaryServerAddresses": null,
+                    "forwarderAddresses": [
+                      "10.0.0.53",
+                      "10.0.0.54"
+                    ],
+                    "notifyAddresses": null,
+                    "tsigKeyName": null,
+                    "dynamicUpdateEnabled": false,
+                    "comments": "Internal zone answered by the corporate name servers.",
+                    "cloudProviderCredentialId": null,
+                    "cloudProviderZoneId": null,
+                    "cloudSyncInterval": null,
+                    "autoManageCaaRecords": null,
+                    "caaIssuerDomain": null,
+                    "autoManagePtrRecords": null,
+                    "ptrIpv4PrefixLength": null,
+                    "ptrIpv6PrefixLength": null,
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
                   }
                 }
               }
@@ -37208,7 +37403,8 @@
                     ],
                     "transferTsigKeyNames": [
                       "secondary-transfer-key"
-                    ]
+                    ],
+                    "validateDnssec": false
                   }
                 },
                 "Secondary zone": {
@@ -37241,7 +37437,42 @@
                     "ptrIpv6PrefixLength": null,
                     "transferTransport": "Plain",
                     "updateTsigKeyNames": null,
-                    "transferTsigKeyNames": null
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
+                  }
+                },
+                "Conditional forwarder zone": {
+                  "summary": "A private zone forwarded to its own name servers, without DNSSEC validation.",
+                  "value": {
+                    "name": "corp.example",
+                    "type": "Forwarder",
+                    "isDnssecSigned": false,
+                    "dnssecAlgorithm": null,
+                    "denialOfExistenceMode": "NSEC3",
+                    "nsec3Iterations": 10,
+                    "nsec3SaltHex": null,
+                    "isDisabled": false,
+                    "primaryServerAddresses": null,
+                    "forwarderAddresses": [
+                      "10.0.0.53",
+                      "10.0.0.54"
+                    ],
+                    "notifyAddresses": null,
+                    "tsigKeyName": null,
+                    "dynamicUpdateEnabled": false,
+                    "comments": "Internal zone answered by the corporate name servers.",
+                    "cloudProviderCredentialId": null,
+                    "cloudProviderZoneId": null,
+                    "cloudSyncInterval": null,
+                    "autoManageCaaRecords": null,
+                    "caaIssuerDomain": null,
+                    "autoManagePtrRecords": null,
+                    "ptrIpv4PrefixLength": null,
+                    "ptrIpv6PrefixLength": null,
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
                   }
                 }
               }
@@ -37285,7 +37516,8 @@
                     ],
                     "transferTsigKeyNames": [
                       "secondary-transfer-key"
-                    ]
+                    ],
+                    "validateDnssec": false
                   }
                 },
                 "Secondary zone": {
@@ -37318,7 +37550,42 @@
                     "ptrIpv6PrefixLength": null,
                     "transferTransport": "Plain",
                     "updateTsigKeyNames": null,
-                    "transferTsigKeyNames": null
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
+                  }
+                },
+                "Conditional forwarder zone": {
+                  "summary": "A private zone forwarded to its own name servers, without DNSSEC validation.",
+                  "value": {
+                    "name": "corp.example",
+                    "type": "Forwarder",
+                    "isDnssecSigned": false,
+                    "dnssecAlgorithm": null,
+                    "denialOfExistenceMode": "NSEC3",
+                    "nsec3Iterations": 10,
+                    "nsec3SaltHex": null,
+                    "isDisabled": false,
+                    "primaryServerAddresses": null,
+                    "forwarderAddresses": [
+                      "10.0.0.53",
+                      "10.0.0.54"
+                    ],
+                    "notifyAddresses": null,
+                    "tsigKeyName": null,
+                    "dynamicUpdateEnabled": false,
+                    "comments": "Internal zone answered by the corporate name servers.",
+                    "cloudProviderCredentialId": null,
+                    "cloudProviderZoneId": null,
+                    "cloudSyncInterval": null,
+                    "autoManageCaaRecords": null,
+                    "caaIssuerDomain": null,
+                    "autoManagePtrRecords": null,
+                    "ptrIpv4PrefixLength": null,
+                    "ptrIpv6PrefixLength": null,
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null,
+                    "validateDnssec": false
                   }
                 }
               }
@@ -43833,10 +44100,27 @@
           "prefetchRecentAccessWindow": {
             "type": "string",
             "format": "date-span"
+          },
+          "insecureDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "useCustomInsecureDomains": {
+            "type": "boolean"
+          },
+          "builtInInsecureDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the recursive resolver settings\n(`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A\n`PATCH` to the same endpoint accepts the same fields. The two override lists are read\nonce at startup or first seed, so the GET shows the saved lists, which may not be the ones\nin use; every other field takes effect at once. `RecursiveServerOptions` documents\neach field and its default."
+        "description": "This record is the REST shape of the recursive resolver settings\n(`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A\n`PATCH` to the same endpoint accepts the same fields. The two override lists are read\nonce at startup or first seed, so the GET shows the saved lists, which may not be the ones\nin use; every other field takes effect at once. `RecursiveServerOptions` documents\neach field and its default.\n\n`InsecureDomains` is the list of Insecure domains (negative trust anchors) in\n    force: a query for a name at or below one skips DNSSEC validation and is never answered\n    with AD. It is the built-in list while `UseCustomInsecureDomains` is\n    false. A `PATCH` with an array replaces the whole list and makes\n    it custom; a `PATCH` with null restores the built-in list.\n    `BuiltInInsecureDomains` is that built-in list (`home.arpa`, `internal`\n    and the locally-served reverse zones of RFC 6303), for comparison and for a \"restore\n    defaults\" action; it is read-only."
       },
       "RecursiveTrustAnchorDetail": {
         "type": "object",
@@ -45539,6 +45823,10 @@
             "description": "The RFC 9432 catalog zone this zone belongs to, or null if none.\nRead-only: it changes only through `POST` and\n`DELETE /api/zones/{id}/catalog-membership`.",
             "format": "uuid",
             "nullable": true
+          },
+          "validateDnssec": {
+            "type": "boolean",
+            "description": "Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default,\nbecause a private zone has no chain of trust from the public root. The global DNSSEC\nvalidation setting must also be on, and names on the Insecure domain list are never\nvalidated."
           }
         },
         "additionalProperties": false,
@@ -45828,6 +46116,10 @@
             },
             "description": "The TSIG keys allowed to transfer the zone (AXFR and IXFR). An empty list accepts no key.",
             "nullable": true
+          },
+          "validateDnssec": {
+            "type": "boolean",
+            "description": "Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default,\nbecause a private zone has no chain of trust from the public root. The global DNSSEC\nvalidation setting must also be on, and names on the Insecure domain list are never\nvalidated."
           }
         },
         "additionalProperties": false,

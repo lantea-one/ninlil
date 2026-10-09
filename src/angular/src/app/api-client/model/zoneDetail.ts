@@ -121,6 +121,10 @@ export interface ZoneDetail {
      * The RFC 9432 catalog zone this zone belongs to, or null if none. Read-only: it changes only through `POST` and `DELETE /api/zones/{id}/catalog-membership`.
      */
     memberOfCatalogZoneId?: string | null;
+    /**
+     * Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default, because a private zone has no chain of trust from the public root. The global DNSSEC validation setting must also be on, and names on the Insecure domain list are never validated.
+     */
+    validateDnssec?: boolean;
 }
 export namespace ZoneDetail {
 }

@@ -99,7 +99,7 @@ export class RecursiveSettingsService extends BaseService implements RecursiveSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Recursive&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; an override list, when present, replaces the whole list. The response note says whether a restart is needed. Returns 400 for a malformed duration, an invalid root-hint address or a malformed trust anchor. Requires &#x60;recursivesettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Recursive&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; an override list, when present, replaces the whole list. &#x60;insecureDomains&#x60; is the same, and also accepts &#x60;null&#x60; to restore the built-in list. The response note says whether a restart is needed. Returns 400 for a malformed duration, an invalid root-hint address, a malformed trust anchor or an invalid domain name in &#x60;insecureDomains&#x60;. Requires &#x60;recursivesettings:write&#x60;.
      * @endpoint patch /api/recursive-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

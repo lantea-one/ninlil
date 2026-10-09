@@ -105,6 +105,10 @@ export interface ZoneWriteRequest {
      * The TSIG keys allowed to transfer the zone (AXFR and IXFR). An empty list accepts no key.
      */
     transferTsigKeyNames?: Array<string> | null;
+    /**
+     * Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default, because a private zone has no chain of trust from the public root. The global DNSSEC validation setting must also be on, and names on the Insecure domain list are never validated.
+     */
+    validateDnssec?: boolean;
 }
 export namespace ZoneWriteRequest {
 }
