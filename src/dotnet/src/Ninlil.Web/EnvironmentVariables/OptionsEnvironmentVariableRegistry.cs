@@ -66,7 +66,8 @@ namespace Ninlil.Web.EnvironmentVariables;
 ///     </para>
 ///     <para>
 ///         When an options class is added, add its <see cref="Type" /> here in the same change.
-///         <c>Dhcpv6RelayOptions</c> is missing at present.
+///         <c>OptionsEnvironmentVariableRegistryTests</c> fails when a class with a
+///         <c>SectionName</c> constant is missing.
 ///     </para>
 /// </summary>
 public static class OptionsEnvironmentVariableRegistry
@@ -138,12 +139,13 @@ public static class OptionsEnvironmentVariableRegistry
         new(typeof(SelfUpdateOptions)),
         new(typeof(ClusterOptions)),
         // DHCP engine and DHCPv4/DHCPv6 transports (Ninlil.Dhcp.Server.Core, .Protocol.Dhcpv4,
-        // .Protocol.Dhcpv6), the DHCPv4 relay agent (Ninlil.Dhcp.Server.Relay) and the TFTP
-        // server. Dhcpv6RelayOptions, in the same relay project, is not listed.
+        // .Protocol.Dhcpv6), the DHCPv4 and DHCPv6 relay agents (Ninlil.Dhcp.Server.Relay) and
+        // the TFTP server.
         new(typeof(DhcpServerOptions)),
         new(typeof(Dhcpv4ProtocolOptions)),
         new(typeof(Dhcpv6ProtocolOptions)),
         new(typeof(Dhcpv4RelayOptions)),
+        new(typeof(Dhcpv6RelayOptions)),
         new(typeof(TftpServerOptions)),
         // Router Advertisement content (Ninlil.Dhcp.Server.Ra) and its ICMPv6 transport timing
         // (Ninlil.Dhcp.Protocol.Ra).
