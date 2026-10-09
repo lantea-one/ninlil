@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection;
 using Ninlil.Dns.Identity.Options;
 
@@ -43,4 +44,57 @@ public sealed class OidcClientSecretProtector(IDataProtectionProvider dataProtec
         string.IsNullOrEmpty(clientSecretEncrypted)
             ? string.Empty
             : _protector.Unprotect(clientSecretEncrypted);
+
+    /// <summary>
+    ///     This method decrypts an <see cref="OidcSsoOptions.ClientSecretEncrypted" /> value without
+    ///     throwing. A value that this server's key ring cannot read (a lost or replaced key ring,
+    ///     or plaintext put into the encrypted setting) gives <see langword="false" />.
+    /// </summary>
+    /// <param name="clientSecretEncrypted">An <see cref="OidcSsoOptions.ClientSecretEncrypted" /> value.</param>
+    /// <param name="plaintext">The decrypted secret, or an empty string on failure.</param>
+    /// <returns><see langword="true" /> when the value is empty or was decrypted.</returns>
+    public bool TryUnprotect(string clientSecretEncrypted, out string plaintext)
+    {
+        try
+        {
+            plaintext = Unprotect(clientSecretEncrypted);
+            return true;
+        }
+        catch (CryptographicException)
+        {
+            plaintext = string.Empty;
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     This method returns the client secret to use. A non-empty
+    ///     <see cref="OidcSsoOptions.ClientSecret" /> wins, so an environment variable overrides the
+    ///     configuration file, as <c>Email.SmtpPasswordProtector.ResolvePassword</c> does for SMTP.
+    ///     Otherwise it decrypts <see cref="OidcSsoOptions.ClientSecretEncrypted" />.
+    /// </summary>
+    /// <param name="options">The SSO settings.</param>
+    /// <param name="decrypted">
+    ///     <see langword="false" /> when only an unreadable stored value was available; the result
+    ///     is then empty.
+    /// </param>
+    /// <returns>The plaintext secret, or an empty string when none is set or readable.</returns>
+    public string ResolveClientSecret(OidcSsoOptions options, out bool decrypted)
+    {
+        decrypted = true;
+
+        if (!string.IsNullOrEmpty(options.ClientSecret))
+            return options.ClientSecret;
+
+        decrypted = TryUnprotect(options.ClientSecretEncrypted, out string plaintext);
+        return plaintext;
+    }
+
+    /// <summary>
+    ///     This method returns the client secret to use, or an empty string when none is set or
+    ///     readable. See <see cref="ResolveClientSecret(OidcSsoOptions, out bool)" />.
+    /// </summary>
+    /// <param name="options">The SSO settings.</param>
+    public string ResolveClientSecret(OidcSsoOptions options) =>
+        ResolveClientSecret(options, out _);
 }

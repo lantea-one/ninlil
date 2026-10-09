@@ -260,13 +260,31 @@ public static class ServiceCollectionAuthenticationExtension
             // The client secret is stored encrypted, and decrypting it needs the
             // IDataProtectionProvider, which only exists once the container is built. So it is
             // set here through the options pipeline rather than inside AddOpenIdConnect.
+            //
+            // This callback must never throw. The authentication middleware resolves the options
+            // of every request-handler scheme, OIDC included, on every request, so an exception
+            // here would fail the whole server (API, admin console and DNS over HTTPS), including
+            // the SSO settings page that could repair the secret. An unreadable secret is logged
+            // once (options are cached per process) and replaced by an empty one; the sign-in
+            // attempt then fails at the provider's token endpoint and reaches OnRemoteFailure.
             instance
                 .AddOptions<OpenIdConnectOptions>(OidcSchemeName)
-                .Configure<IDataProtectionProvider>(
-                    (options, dataProtectionProvider) =>
+                .Configure<IDataProtectionProvider, ILoggerFactory>(
+                    (options, dataProtectionProvider, loggerFactory) =>
+                    {
                         options.ClientSecret = new OidcClientSecretProtector(
                             dataProtectionProvider
-                        ).Unprotect(ssoOptions.ClientSecretEncrypted)
+                        ).ResolveClientSecret(ssoOptions, out bool decrypted);
+
+                        if (!decrypted)
+                            loggerFactory
+                                .CreateLogger(typeof(ServiceCollectionAuthenticationExtension))
+                                .LogError(
+                                    "The SSO client secret cannot be decrypted with this server's "
+                                        + "Data Protection key ring. Enter it again on the SSO "
+                                        + "settings page or set NINLIL_IDENTITY_SSO_CLIENT_SECRET."
+                                );
+                    }
                 );
         }
 

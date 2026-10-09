@@ -56,10 +56,23 @@ public sealed class OidcSsoOptions
     public string ClientId { get; set; } = string.Empty;
 
     /// <summary>
+    ///     This property contains the OAuth 2.0 client secret in plaintext, for the environment
+    ///     variable <c>NINLIL_IDENTITY_SSO_CLIENT_SECRET</c> and secret stores. Blank by default.
+    ///     A non-empty value overrides <see cref="ClientSecretEncrypted" />
+    ///     (see <see cref="Sso.OidcClientSecretProtector.ResolveClientSecret" />). The admin console
+    ///     never writes it. <c>Web.Startup.OidcClientSecretMigrationService</c> encrypts a value
+    ///     found in the configuration file; a value from the environment is never written to disk.
+    /// </summary>
+    public string ClientSecret { get; set; } = string.Empty;
+
+    /// <summary>
     ///     This property contains the OAuth 2.0 client secret, encrypted with
     ///     <see cref="Sso.OidcClientSecretProtector" /> before it is written to the configuration
     ///     file. Blank by default. Only <c>Web.Controllers.OidcSsoSettingsController.Patch</c> writes
-    ///     it, encrypting the plaintext <c>clientSecret</c> it receives.
+    ///     it, encrypting the plaintext <c>clientSecret</c> it receives. Do not set it by hand: a
+    ///     value that this server's Data Protection key ring cannot decrypt leaves SSO without a
+    ///     secret (see <see cref="Sso.OidcClientSecretProtector.TryUnprotect" />). Use
+    ///     <see cref="ClientSecret" /> to supply a secret from outside the application.
     /// </summary>
     public string ClientSecretEncrypted { get; set; } = string.Empty;
 
