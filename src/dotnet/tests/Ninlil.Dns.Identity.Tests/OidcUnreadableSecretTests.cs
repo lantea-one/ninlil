@@ -118,9 +118,8 @@ public sealed class OidcUnreadableSecretTests
             }
 
             Assert.Single(
-                logs.Entries.Where(entry =>
-                    entry.Level == LogLevel.Error && entry.Text.Contains("SSO client secret")
-                )
+                logs.Entries,
+                entry => entry.Level == LogLevel.Error && entry.Text.Contains("SSO client secret")
             );
         }
     }

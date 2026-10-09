@@ -47,6 +47,15 @@ public class SmtpEmailSender(
         // the operator can act on.
         string password = ResolvePassword(options);
 
+        // MailKit would throw an opaque ArgumentNullException from AuthenticateAsync; fail first,
+        // before any connection, with the action the operator can take.
+        if (!string.IsNullOrWhiteSpace(options.Username) && password == null)
+            throw new InvalidOperationException(
+                $"SMTP username '{options.Username}' is set but no password is configured. Enter "
+                    + "the password in the SMTP settings, or clear the username for a server "
+                    + "that accepts anonymous connections."
+            );
+
         MimeMessage message = new();
 
         message.From.Add(new MailboxAddress(options.FromDisplayName, options.FromAddress));
