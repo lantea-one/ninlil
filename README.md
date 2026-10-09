@@ -502,6 +502,45 @@ management, DHCP scopes/reservations/leases, forwarders, outbound webhooks, serv
 (presets, rate limiting, the event broker, DNS Cookies, clustering), and your own account's
 two-factor authentication setup (via the account menu in the top-right corner).
 
+### Single sign-on and e-mail secrets
+
+The SSO client secret and the SMTP password can come from two places. Each is stored encrypted
+with this server's Data Protection key ring when you save it in the admin console, or it can be
+supplied in plaintext from outside the application. The plaintext source wins.
+
+| Secret | Plaintext variable | Admin console page |
+|---|---|---|
+| SSO client secret | `NINLIL_IDENTITY_SSO_CLIENT_SECRET` | Single sign-on |
+| SMTP password | `NINLIL_EMAIL_PASSWORD` | SMTP |
+
+**Supply a secret from the environment** (containers, secret stores):
+
+1. Set the variable for the Ninlil process, for example `NINLIL_IDENTITY_SSO_CLIENT_SECRET=<secret>`
+   in your compose file or systemd unit.
+2. Restart Ninlil. SSO settings are read once at startup.
+3. Open the settings page. It shows that the secret comes from the environment and overrides
+   anything saved there. A secret you save on the page has no effect until you unset the variable.
+
+A plaintext secret typed into the configuration file is encrypted at startup and the plaintext is
+removed. A secret from the environment is never written to disk.
+
+**If the key ring is lost.** The Data Protection key ring lives in the data directory. If it is
+recreated, or the configuration file is copied to another host without it, a stored secret can no
+longer be decrypted. The same happens if you put a plaintext value into a
+`..._ENCRYPTED` variable. Ninlil keeps running and logs an Error at startup (SSO) or when a mail
+is sent (SMTP). The settings page shows that the saved secret cannot be decrypted. SSO sign-in
+then fails at the identity provider and sends the user back to the sign-in page with an error.
+
+To recover:
+
+1. Open the SSO or SMTP settings page, or set the plaintext variable above.
+2. Enter the secret again and save (or restart with the variable set).
+3. For SSO, restart Ninlil so the new secret is read.
+
+An SMTP user name needs a password: Ninlil rejects a save that would leave a user name without
+one, and logs a warning at startup if the configuration already has that state. Clear the user
+name for a mail server that accepts anonymous connections.
+
 ## REST API
 
 - **Swagger UI**: `/swagger`
