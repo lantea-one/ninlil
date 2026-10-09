@@ -10,7 +10,8 @@
 #
 # Inputs:
 #   build context "binaries"  a directory holding ninlil-linux-amd64 and/or ninlil-linux-arm64
-#   build context "."         the repository (only docker/fetch-native-libraries.sh is used)
+#   build context "."         the repository (only docker/fetch-native-libraries.sh and
+#                             docker/native-libraries.lock are used)
 #   build arguments           RUNTIME_IMAGE and FETCH_IMAGE (base images, pinned by
 #                             index digest and refreshed by bump-pins.yml), BUILD_VERSION,
 #                             BUILD_REVISION and BUILD_SOURCE (OCI labels)
@@ -30,13 +31,16 @@ ARG FETCH_IMAGE=buildpack-deps:noble-curl@sha256:48a80dfb7e2f2d1e93dbfff934fd2f1
 # ---------------------------------------------------------------------------------------------
 # native-libraries: libmsquic (DNS-over-QUIC) and its libnuma dependency for the target
 # architecture, plus the empty directories the shell-less runtime stage cannot create. It runs on
-# the build platform and downloads the target's packages (see fetch-native-libraries.sh).
+# the build platform and downloads the target's packages named in native-libraries.lock (see
+# fetch-native-libraries.sh).
 # ---------------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM ${FETCH_IMAGE} AS native-libraries
 
 ARG TARGETARCH
 
-COPY docker/fetch-native-libraries.sh /usr/local/bin/fetch-native-libraries.sh
+# The lock pins each package by version and SHA-256; the script fails the build on a mismatch and
+# finds the lock next to itself.
+COPY docker/fetch-native-libraries.sh docker/native-libraries.lock /usr/local/bin/
 RUN sh /usr/local/bin/fetch-native-libraries.sh "${TARGETARCH}" /native \
     && mkdir -p /staging/data /staging/wwwroot
 

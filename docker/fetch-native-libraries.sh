@@ -5,11 +5,15 @@
 #
 # The runtime image has no shell and no package manager, so these libraries cannot be installed
 # into it with apt. Instead, this script runs in a build stage on the build machine's
-# architecture, reads each package's Debian repository index (Packages.gz, over HTTPS) for the
-# *target* architecture, downloads the newest package, checks it against the SHA256 recorded in
-# that index, and extracts only the shared objects into an output directory the runtime stage
-# copies from. This lets one amd64 machine build both the amd64 and arm64 images with no CPU
-# emulation.
+# architecture, looks the exact package up in docker/native-libraries.lock, downloads that one
+# file, checks it against the SHA-256 committed in the lock, and extracts only the shared objects
+# into an output directory the runtime stage copies from. This lets one amd64 machine build both
+# the amd64 and arm64 images with no CPU emulation.
+#
+# The lock is the trust anchor: its versions and sums are reviewed in git (and refreshed by
+# .forgejo/scripts/refresh-native-lock.sh through bump-pins.sh), so a changed or tampered file on
+# a mirror fails the build instead of reaching the image. That is why no GPG check is needed. The
+# index of the repository is not read at all.
 #
 # Libraries fetched:
 #   libmsquic  -- the QUIC implementation System.Net.Quic loads for DNS-over-QUIC. Without it
@@ -19,72 +23,55 @@
 #
 # Usage: fetch-native-libraries.sh <amd64|arm64> <output-directory>
 #
+# Environment: NATIVE_LIBRARIES_LOCK is the lock file (default: native-libraries.lock next to
+# this script; the self-test points it at a fixture).
+#
 # Output: the libraries under <output-directory>/usr/lib/<multiarch triplet>/. Exits non-zero for
-# an unknown architecture, a package missing from its index, a failed download or a checksum
-# mismatch. Needs curl, gzip, awk, sort -V, sha256sum and dpkg-deb (buildpack-deps has them).
+# an unknown architecture, a package missing from the lock for that architecture, a failed
+# download or a checksum mismatch; nothing is extracted in the last two cases. Needs curl,
+# awk, sha256sum and dpkg-deb (buildpack-deps has them).
 
 set -eu
 
 target_arch="$1"
 output_directory="$2"
+lock_file="${NATIVE_LIBRARIES_LOCK:-$(dirname "$0")/native-libraries.lock}"
 
 case "${target_arch}" in
-    amd64)
-        ubuntu_repository='https://archive.ubuntu.com/ubuntu'
-        library_directory='usr/lib/x86_64-linux-gnu'
-        ;;
-    arm64)
-        ubuntu_repository='https://ports.ubuntu.com/ubuntu-ports'
-        library_directory='usr/lib/aarch64-linux-gnu'
-        ;;
+    amd64) library_directory='usr/lib/x86_64-linux-gnu' ;;
+    arm64) library_directory='usr/lib/aarch64-linux-gnu' ;;
     *)
         echo "Unsupported target architecture: ${target_arch}" >&2
         exit 1
         ;;
 esac
 
-microsoft_repository='https://packages.microsoft.com/ubuntu/24.04/prod'
 work_directory="$(mktemp -d)"
 trap 'rm -rf "${work_directory}"' EXIT
 mkdir -p "${output_directory}/${library_directory}"
 
-# fetch_package <repository-base-url> <suite> <package-name>
+# fetch_package <package-name>
 #
-# Downloads the Packages index for the suite/architecture, picks the stanza with the highest
-# version of the named package (an index can list several), downloads that .deb, checks its
-# SHA256 against the index, and extracts every shared object it contains into the output
+# Finds the package's line for the target architecture in the lock, downloads the file, checks
+# its SHA-256 against the lock, and extracts every shared object it contains into the output
 # directory under the architecture's multiarch library path.
 fetch_package() {
-    repository="$1"
-    suite="$2"
-    package="$3"
+    package="$1"
 
-    curl --fail --silent --show-error --location \
-        "${repository}/dists/${suite}/main/binary-${target_arch}/Packages.gz" \
-        | gzip -d > "${work_directory}/Packages"
-
-    # Emit "<version> <filename> <sha256>" for each stanza of this package, then keep the
-    # highest version.
-    selected="$(awk -v wanted="${package}" '
-        /^Package: / { name = $2 }
-        /^Version: / { version = $2 }
-        /^Filename: / { filename = $2 }
-        /^SHA256: / { sha = $2 }
-        /^$/ {
-            if (name == wanted) print version, filename, sha
-            name = ""; version = ""; filename = ""; sha = ""
-        }
-        END { if (name == wanted) print version, filename, sha }
-    ' "${work_directory}/Packages" | sort -V | tail -n 1)"
+    # Lock columns (tab-separated): arch, package, version, repository URL, file name, sha256.
+    selected="$(awk -F '\t' -v arch="${target_arch}" -v wanted="${package}" '
+        $1 == arch && $2 == wanted { print $3 "\t" $4 "\t" $5 "\t" $6 }
+    ' "${lock_file}")"
 
     if [ -z "${selected}" ]; then
-        echo "Package ${package} not found for ${target_arch} in ${repository}" >&2
+        echo "Package ${package} has no ${target_arch} entry in ${lock_file}" >&2
         exit 1
     fi
 
-    version="$(echo "${selected}" | cut -d ' ' -f 1)"
-    filename="$(echo "${selected}" | cut -d ' ' -f 2)"
-    expected_sha="$(echo "${selected}" | cut -d ' ' -f 3)"
+    version="$(echo "${selected}" | cut -f 1)"
+    repository="$(echo "${selected}" | cut -f 2)"
+    filename="$(echo "${selected}" | cut -f 3)"
+    expected_sha="$(echo "${selected}" | cut -f 4)"
     echo "Fetching ${package} ${version} (${target_arch})"
 
     curl --fail --silent --show-error --location \
@@ -103,7 +90,7 @@ fetch_package() {
     done
 }
 
-fetch_package "${microsoft_repository}" 'noble' 'libmsquic'
-fetch_package "${ubuntu_repository}" 'noble' 'libnuma1'
+fetch_package 'libmsquic'
+fetch_package 'libnuma1'
 
 ls -l "${output_directory}/${library_directory}"

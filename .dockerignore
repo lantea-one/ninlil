@@ -1,7 +1,7 @@
 # Trims the build context sent to the daemon for the root Dockerfile. The image build copies only
-# docker/fetch-native-libraries.sh from this context (the executables come from the separate
-# "binaries" build context), so these exclusions keep the upload small and keep local state, such
-# as an appsettings.json, out of the daemon.
+# docker/fetch-native-libraries.sh and docker/native-libraries.lock from this context (the
+# executables come from the separate "binaries" build context), so these exclusions keep the
+# upload small and keep local state, such as an appsettings.json, out of the daemon.
 
 # Git metadata and CI configuration: unused by the build, and often large.
 .git/

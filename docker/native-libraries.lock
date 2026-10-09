@@ -1,0 +1,8 @@
+# Native libraries the container image installs, pinned by version and SHA-256.
+# Read by docker/fetch-native-libraries.sh; rewritten by .forgejo/scripts/refresh-native-lock.sh
+# (run weekly by bump-pins.sh). Do not edit by hand. Columns, separated by one tab:
+# architecture, package, version, repository URL, file name below it, SHA-256 of the file.
+amd64	libmsquic	2.6.2	https://packages.microsoft.com/ubuntu/24.04/prod	pool/main/libm/libmsquic/libmsquic_2.6.2_amd64.deb	9ac90841ad45d99c1ff85b427d6dc7f0849291d596f0049d13db779a5a66ba4e
+amd64	libnuma1	2.0.18-1ubuntu0.24.04.1	https://archive.ubuntu.com/ubuntu	pool/main/n/numactl/libnuma1_2.0.18-1ubuntu0.24.04.1_amd64.deb	f333b8edf6f0b705c19f2a67008194df66f7aab0fa2350dc98510569a033ff29
+arm64	libmsquic	2.6.2	https://packages.microsoft.com/ubuntu/24.04/prod	pool/main/libm/libmsquic/libmsquic_2.6.2_arm64.deb	600ee72c4d2088b3435c0806d7569c5a661d19d6be8b67d1a734e391b22109b9
+arm64	libnuma1	2.0.18-1ubuntu0.24.04.1	https://ports.ubuntu.com/ubuntu-ports	pool/main/n/numactl/libnuma1_2.0.18-1ubuntu0.24.04.1_arm64.deb	fb1de2dbe2a22cb59753c2ec622575a408d1ade28a9b090acc4c59d247462eb4
