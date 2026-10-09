@@ -26,14 +26,15 @@ intra-segment word breaks) with a single `_`, prefixed with the literal `NINLIL_
 means one day, `00:05:00` means five minutes.
 
 **Not every setting has an environment variable.** A list-valued setting (allowed DNSSEC
-algorithms, ACME contact emails, a reverse proxy's own known-proxy list, and so on) has no fixed,
+algorithms, ACME contact emails, a reverse proxy's own known-proxy list, the recursive resolver's
+Insecure domains, and so on) has no fixed,
 finite environment-variable name to assign — ASP.NET Core's configuration binder represents a list
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **295 individual settings** across 57 bound configuration classes, plus **2 standalone**
+Total: **296 individual settings** across 57 bound configuration classes, plus **2 standalone**
 bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **304 environment variables
+variables that redirect onto .NET's own real, unprefixed equivalents — **305 environment variables
 in total**.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
@@ -262,6 +263,7 @@ and RFC 5011 automated trust-anchor rollover.
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` | Whether this server answers recursive queries at all (off by default — capability-expanding). | `false` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_QNAME_MINIMIZATION` | Whether RFC 9156 QNAME minimization is used during iterative resolution. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION` | Whether recursively resolved and forwarded answers are DNSSEC-validated. | `true` |
+| `NINLIL_DNS_SERVER_RECURSIVE_USE_CUSTOM_INSECURE_DOMAINS` | Whether the Insecure domain list (`DnsServer:Recursive:InsecureDomains`, the names that skip DNSSEC validation and are never answered with AD) replaces the built-in list. Off: the built-in list applies (`home.arpa`, `internal`, and the RFC 6303 / RFC 7793 locally-served reverse zones). On: only `InsecureDomains` applies, and an empty list exempts nothing. The list itself has no variable; edit it in the admin console, through `PATCH /api/recursive-settings` or in the configuration file. | `false` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_SERVE_STALE` | Whether RFC 8767 serve-stale (answering from an expired cache entry when upstream is unreachable) is enabled. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_MAX_STALE_SERVE_AGE` | The maximum age of a stale cache entry still eligible to be served. | `1.00:00:00` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_PREFETCH` | Whether a soon-to-expire, recently-popular cache entry is proactively refreshed before it expires. | `true` |

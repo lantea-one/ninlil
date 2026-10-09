@@ -52,6 +52,31 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   network that only reaches its forwarders still validates without iterating to the internet. A
   failed DS or DNSKEY lookup under a trust anchor makes the answer bogus. A cached forwarded answer
   never outlives its shortest RRSIG Original TTL or its earliest RRSIG expiration.
+  **Private zones.** A zone that is served only on your network (`corp.internal`, `home.arpa`, a
+  private reverse zone such as `10.in-addr.arpa`) has no chain of trust from the public root: the
+  root or `arpa` proves, with a signed answer, that it does not exist, and validation would end in
+  SERVFAIL. Two settings keep such names working with validation on. First, the **Insecure
+  domains** list (a negative trust anchor list) on the Recursive Resolver settings page, in the
+  REST API (`GET` and `PATCH /api/recursive-settings`, field `insecureDomains`) and in the
+  configuration file (`DnsServer:Recursive:InsecureDomains` with
+  `DnsServer:Recursive:UseCustomInsecureDomains` set to `true`): a query for a name at or below an
+  entry is not validated, so it is answered as insecure, without the AD bit and without a DNSSEC
+  SERVFAIL, whether it was forwarded or resolved recursively. The list starts as the built-in one:
+  `home.arpa` (RFC 8375), `internal` (reserved by ICANN for private use) and the locally-served
+  zones of RFC 6303 and RFC 7793 (the RFC 1918 reverse zones, `127.in-addr.arpa`,
+  `254.169.in-addr.arpa`, the documentation and shared address space ranges, and the `ip6.arpa`
+  zones for `::`, `::1`, `fd00::/8`, `fe80::/10` and `2001:db8::/32`). It is fully editable: saving
+  a list replaces the built-in one entirely (an empty list exempts nothing), and "Restore
+  defaults" (`insecureDomains: null` in the API) goes back to the built-in list, which then
+  follows later releases. A change applies to the next query; the forwarded-answer cache is
+  flushed, because it remembers whether an answer was validated. Only the queried name counts, so a
+  CNAME from a public name into a listed domain is still validated. Add your own private zones, for
+  example `corp.example`, to the list. Second, each **conditional forwarder zone** has a
+  *Validate answers with DNSSEC* switch (`validateDnssec` in the zone API), **off by default** and
+  off for every zone that existed before it was added: answers for the zone are forwarded without
+  validation and never carry AD. Turn it on for a forwarded zone that is signed under the public
+  root. It works only while validation is on globally, and a name on the Insecure domains list is
+  still not validated. The global forwarders follow the global setting alone.
 - **Every major DNS transport**: plain UDP/TCP (on by default — this is a DNS server, after all),
   DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, and DNSCrypt v2. Every transport beyond plain DNS is
   off by default; see [Enabling additional transports](#enabling-additional-transports). Each one,
