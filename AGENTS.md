@@ -21,7 +21,8 @@ For installation, operation and the release pipeline, see [`README.md`](./README
 | `Directory.Build.props`, `global.json`, `.editorconfig` | Shared MSBuild settings (net10.0, nullable off, XML docs on), SDK pin, code style |
 | `.config/dotnet-tools.json` | Local tools: `dotnet-ef`, `csharpier`, `reportgenerator` |
 | `src/dotnet/src/` | Production projects, one per concern (see below) |
-| `src/dotnet/tests/` | xUnit test projects, named `<Project>.Tests` |
+| `src/dotnet/tests/` | xUnit test projects, named `<Project>.Tests`, plus `Ninlil.Dns.Data.EngineHosts`, a library (no test SDK) that starts the database containers the integration tests and the benchmarks share |
+| `src/dotnet/benchmarks/` | `Ninlil.Benchmarks`, the BenchmarkDotNet project. CI builds it and never runs it (see [Benchmark](#benchmark)) |
 | `src/angular/` | Angular 22 admin console, a separate npm workspace ([its README](./src/angular/README.md)) |
 | `src/angular/openapi/swagger.json` | Committed OpenAPI snapshot the API client is generated from |
 | `src/angular/src/app/api-client/` | Generated TypeScript client. Never edit by hand |
@@ -97,6 +98,35 @@ dotnet test Ninlil.slnx                                               # everythi
 - QUIC tests check `QuicListener.IsSupported` / `QuicConnection.IsSupported` and return early when
   QUIC (libmsquic) is missing, so they report as passed, not skipped.
 - CI runs the timing-sensitive `DnssecKeyRolloverZskPrePublishLiveTests` alone, after the rest.
+
+## Benchmark
+
+`src/dotnet/benchmarks/Ninlil.Benchmarks` measures the database layer with BenchmarkDotNet. It is a
+console program, not a test project: `dotnet test` skips it and the pipeline only builds it. Its
+benchmarks live under `Storage/` (data-layer queries); DNS and DHCP path benchmarks join them later.
+
+```bash
+dotnet run -c Release --project src/dotnet/benchmarks/Ninlil.Benchmarks -- \
+  --filter '*QueryLog*' --engines Sqlite,PostgreSql --scale Large
+```
+
+- `--engines` picks from `Sqlite,PostgreSql,MySql,SqlServer,MongoDb` (default: all). The program
+  starts a Docker container per engine (pinned images from `Ninlil.Dns.Data.EngineHosts`) and skips,
+  with a message, an engine whose container cannot start. SQLite needs no Docker.
+- `--connection PostgreSql="Host=...;Username=...;Password=..."` uses an existing server instead of a
+  container (repeat for other engines; not for SQLite). The database name is replaced by the data
+  set's (`ninlil_bench_<scale>_v<N>`). A database that already holds the data set is not seeded
+  again, so a long-lived server pays the seed once.
+- `--scale Small|Large` (default `Small`). `Small` is about 1/100 of `Large` and proves that every
+  benchmark runs; only `Large` numbers mean something. `Large` seeds 1,000,000 query-log entries,
+  1,000 zones plus one of 50,000 records, three 100,000-entry filter lists and more, which takes
+  minutes on a relational engine and longer on MongoDB.
+- `--job short|default` (default `short`: one launch, 3 warm-ups, 10 iterations). `--data-directory`
+  sets where the SQLite files go (default `BenchmarkDotNet.Artifacts/data`, git-ignored; a seeded
+  file is reused). Every other argument (`--filter`, `--list flat`) goes to BenchmarkDotNet.
+- Containers are removed when the run ends, so the next run seeds again. Copy results into the
+  work-package notes; do not commit `BenchmarkDotNet.Artifacts/`.
+- Changing the data-set generator (`Seeding/BenchmarkDataSet.cs`) means bumping its `Version`.
 
 ## Format and lint
 
