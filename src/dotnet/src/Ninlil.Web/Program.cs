@@ -102,6 +102,12 @@ FrameworkEnvironmentVariableBootstrap.Apply();
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+// Lets the Windows Service Control Manager start and stop the process (sc.exe create Ninlil ...).
+// It does nothing unless the SCM started the process, so console runs, Linux and macOS are
+// unchanged. When it is active it also sets the content root to the executable's directory
+// instead of C:\Windows\System32.
+builder.Host.UseWindowsService(options => options.ServiceName = "Ninlil");
+
 // Every environment variable the application reads uses one NINLIL_-prefixed, single-underscore
 // naming scheme: the bound Options classes directly, and the framework variables through the
 // bootstrap step above. ASP.NET Core's default double-underscore
