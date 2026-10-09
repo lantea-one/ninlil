@@ -32,7 +32,9 @@ public sealed class FileTrustAnchorStore(
             return
             [
                 .. _anchors
-                    .Where(anchor => anchor.State == TrustAnchorStateEnum.Valid)
+                    .Where(anchor =>
+                        anchor.State is TrustAnchorStateEnum.Valid or TrustAnchorStateEnum.Missing
+                    )
                     .Select(anchor => new TrustAnchor(
                         anchor.KeyTag,
                         anchor.Algorithm,

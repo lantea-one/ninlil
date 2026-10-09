@@ -3,8 +3,9 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
 ///     This enumeration lists the states a trust anchor candidate can be in, after the RFC 5011
-///     rollover model. <see cref="TrustAnchorRolloverService" /> drives every transition, and
-///     only <see cref="Valid" /> anchors are used for validation.
+///     rollover model. <see cref="TrustAnchorRolloverService" /> drives every transition. Validation
+///     and the acceptance of root DNSKEY updates use <see cref="Valid" /> and
+///     <see cref="Missing" /> anchors only (RFC 5011 §4).
 /// </summary>
 public enum TrustAnchorStateEnum
 {
@@ -22,15 +23,16 @@ public enum TrustAnchorStateEnum
 
     /// <summary>
     ///     A <see cref="Valid" /> key that the latest check did not find in the root DNSKEY RRset,
-    ///     without a revocation. It is not used for validation meanwhile. If it reappears it
+    ///     without a revocation. RFC 5011 §4 keeps it a trust point, so it is still used for
+    ///     validation, and a root DNSKEY RRset it signs is still accepted. If it reappears it
     ///     returns to <see cref="Valid" />; if it stays absent for the remove hold-down duration it
     ///     becomes <see cref="Removed" />.
     /// </summary>
     Missing,
 
     /// <summary>
-    ///     A key that announced its revocation with the REVOKE bit (RFC 5011). It is no longer
-    ///     trusted, and is kept in the store so it is never re-added as a new candidate.
+    ///     A key that announced its revocation with the REVOKE bit and signed the DNSKEY RRset
+    ///     itself (RFC 5011 §2.1). It is no longer trusted, and is kept in the store so it is never re-added as a new candidate.
     /// </summary>
     Revoked,
 

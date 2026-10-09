@@ -90,15 +90,26 @@ public sealed class TrustAnchorMissingRemovedStateTests
         FakeTrustAnchorStore store = new(initialAnchors);
         RecordingEventPublisher publisher = new();
 
+        // The clock starts at the real time, because the fixture's signatures are valid around it.
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+
         TrustAnchorRolloverService service = new(
             new FakeIterativeResolutionEngine(canned),
             store,
             new StaticOptionsMonitor<RecursiveServerOptions>(options),
             NullLogger<TrustAnchorRolloverService>.Instance,
-            publisher
+            publisher,
+            clock
         );
 
         await service.StartAsync(CancellationToken.None);
+
+        // The first check runs one minute after start. The host may start ExecuteAsync on another
+        // thread, so wait until it has armed that wait before moving the clock.
+        for (int attempt = 0; attempt < 100 && clock.PendingTimerCount == 0; attempt++)
+            await Task.Delay(50);
+
+        clock.Advance(TimeSpan.FromMinutes(1));
 
         for (
             int attempt = 0;
@@ -154,7 +165,6 @@ public sealed class TrustAnchorMissingRemovedStateTests
         RecursiveServerOptions options = new()
         {
             EnableAutomaticTrustAnchorUpdate = true,
-            TrustAnchorRefreshInterval = TimeSpan.FromMilliseconds(50),
             TrustAnchorRemoveHoldDownDuration = TimeSpan.FromDays(30),
         };
 
@@ -225,7 +235,6 @@ public sealed class TrustAnchorMissingRemovedStateTests
         RecursiveServerOptions options = new()
         {
             EnableAutomaticTrustAnchorUpdate = true,
-            TrustAnchorRefreshInterval = TimeSpan.FromMilliseconds(50),
             TrustAnchorRemoveHoldDownDuration = TimeSpan.FromDays(30),
         };
 
@@ -275,7 +284,6 @@ public sealed class TrustAnchorMissingRemovedStateTests
         RecursiveServerOptions options = new()
         {
             EnableAutomaticTrustAnchorUpdate = true,
-            TrustAnchorRefreshInterval = TimeSpan.FromMilliseconds(50),
             TrustAnchorRemoveHoldDownDuration = TimeSpan.FromDays(30),
         };
         PersistedTrustAnchor missingAnchorB = new(
@@ -353,11 +361,7 @@ public sealed class TrustAnchorMissingRemovedStateTests
             DateTimeOffset.UtcNow.AddDays(-370)
         );
 
-        RecursiveServerOptions options = new()
-        {
-            EnableAutomaticTrustAnchorUpdate = true,
-            TrustAnchorRefreshInterval = TimeSpan.FromMilliseconds(50),
-        };
+        RecursiveServerOptions options = new() { EnableAutomaticTrustAnchorUpdate = true };
 
         (IReadOnlyList<PersistedTrustAnchor> saved, _) = await RunOneCheckAsync(
             canned,

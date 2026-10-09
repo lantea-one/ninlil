@@ -114,8 +114,6 @@ public sealed class TrustAnchorRolloverServiceEventTests
         {
             EnableAutomaticTrustAnchorUpdate = true,
             TrustAnchorHoldDownDuration = TimeSpan.FromDays(30),
-            // Short, because ExecuteAsync waits this long before its first check.
-            TrustAnchorRefreshInterval = TimeSpan.FromMilliseconds(50),
         };
 
         PersistedTrustAnchor pendingAnchor = new(
@@ -134,17 +132,27 @@ public sealed class TrustAnchorRolloverServiceEventTests
         FakeTrustAnchorStore store = new([validAnchor, pendingAnchor]);
         RecordingEventPublisher publisher = new();
 
+        // The clock starts at the real time, because the fixture's signatures are valid around it.
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+
         TrustAnchorRolloverService service = new(
             new FakeIterativeResolutionEngine(canned),
             store,
             new StaticOptionsMonitor<RecursiveServerOptions>(options),
             NullLogger<TrustAnchorRolloverService>.Instance,
-            publisher
+            publisher,
+            clock
         );
 
-        // StartAsync returns once ExecuteAsync reaches its first await (the refresh delay), so
-        // poll for the event rather than assuming the check has run.
+        // ExecuteAsync may start on another thread, so wait until it has armed its first-check
+        // delay, move the clock past it and poll for the event rather than assuming the check has
+        // run.
         await service.StartAsync(CancellationToken.None);
+
+        for (int attempt = 0; attempt < 100 && clock.PendingTimerCount == 0; attempt++)
+            await Task.Delay(50);
+
+        clock.Advance(TimeSpan.FromMinutes(1));
 
         for (int attempt = 0; attempt < 100 && publisher.Published.Count == 0; attempt++)
             await Task.Delay(50);

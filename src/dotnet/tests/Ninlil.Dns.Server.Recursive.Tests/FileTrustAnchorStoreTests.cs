@@ -70,4 +70,38 @@ public sealed class FileTrustAnchorStoreTests : IDisposable
             )
         );
     }
+
+    [Fact]
+    public void GetValidAnchors_ReturnsValidAndMissingAnchorsOnly()
+    {
+        FileTrustAnchorStore store = new(
+            Options.Create(new RecursiveServerOptions { TrustAnchorStateFilePath = _statePath }),
+            NullLogger<FileTrustAnchorStore>.Instance
+        );
+        PersistedTrustAnchor seed = store.GetAll()[0];
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // One anchor per state; the key tags only tell them apart.
+        store.Save([
+            .. Enum.GetValues<TrustAnchorStateEnum>()
+                .Select(
+                    (state, index) =>
+                        seed with
+                        {
+                            KeyTag = (ushort)(100 + index),
+                            State = state,
+                            FirstObservedUtc = now,
+                        }
+                ),
+        ]);
+
+        // RFC 5011 §4: a Missing key stays a trust point.
+        Assert.Equal(
+            [
+                (ushort)(100 + (int)TrustAnchorStateEnum.Valid),
+                (ushort)(100 + (int)TrustAnchorStateEnum.Missing),
+            ],
+            store.GetValidAnchors().Select(anchor => anchor.KeyTag).Order()
+        );
+    }
 }

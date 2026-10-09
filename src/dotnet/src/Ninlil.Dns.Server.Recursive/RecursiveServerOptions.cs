@@ -111,10 +111,14 @@ public class RecursiveServerOptions
     public bool EnableAutomaticTrustAnchorUpdate { get; set; } = true;
 
     /// <summary>
-    ///     This property contains how often <see cref="TrustAnchorRolloverService" /> queries the
-    ///     root DNSKEY RRset for new or revoked keys. The default, 15 days, is the longest interval
-    ///     RFC 5011 §2.3 allows; the RFC's formula gives a shorter one for the root's TTL and
-    ///     signature lifetimes. The first check happens one interval after startup.
+    ///     This property contains the longest wait between two checks of
+    ///     <see cref="TrustAnchorRolloverService" /> for new or revoked root keys. The service
+    ///     checks sooner when RFC 5011 §2.3 says so: the wait is
+    ///     MAX(1 hour, MIN(this value, half the DNSKEY signature's Original TTL, half the time
+    ///     left until it expires)), which is about one day for the root, and a failed check is
+    ///     retried after at most one day. The first check runs one minute after startup. The
+    ///     default, 15 days, is the longest wait RFC 5011 §2.3 allows; values below one hour act
+    ///     as one hour.
     /// </summary>
     public TimeSpan TrustAnchorRefreshInterval { get; set; } = TimeSpan.FromDays(15);
 

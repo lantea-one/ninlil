@@ -58,9 +58,10 @@ public static class RrsetSignatureVerifier
     ///         ancestor of it, its Labels field does not exceed the owner's label count, and
     ///         <paramref name="now" /> lies in its validity window. A key is considered only when it
     ///         is a DNSKEY owned by the signer name, has Protocol 3 (RFC 4034 §2.1.2), has the Zone
-    ///         Key bit set (RFC 4034 §2.1.1), does not have the REVOKE bit set (RFC 5011 §2.1), and
-    ///         matches the RRSIG's algorithm and key tag. Algorithms the registry knows are
-    ///         verified even when this server no longer signs with them.
+    ///         Key bit set (RFC 4034 §2.1.1), does not have the REVOKE bit set (RFC 5011 §2.1) unless
+    ///         <paramref name="acceptRevokedKeys" /> is set, and matches the RRSIG's algorithm and
+    ///         key tag. Algorithms the registry knows are verified even when this server no longer
+    ///         signs with them.
     ///     </para>
     /// </summary>
     /// <param name="rrset">The RRset to verify, all of one owner name, class and type.</param>
@@ -76,6 +77,11 @@ public static class RrsetSignatureVerifier
     /// <param name="budget">
     ///     The work budget; the call starts a new RRset on it and fails once a limit is hit.
     /// </param>
+    /// <param name="acceptRevokedKeys">
+    ///     <see langword="true" /> only to check a self-signed revocation (RFC 5011 §2.1): the
+    ///     revoked key itself signs the DNSKEY RRset, so a key with the REVOKE bit set may verify.
+    ///     It is <see langword="false" /> everywhere else, where a revoked key is never trusted.
+    /// </param>
     /// <returns>The outcome, with the verifying RRSIG or the reason for the failure.</returns>
     public static RrsetVerificationResult Verify(
         IReadOnlyList<DnsResourceRecord> rrset,
@@ -83,7 +89,8 @@ public static class RrsetSignatureVerifier
         IReadOnlyList<DnsResourceRecord> trustedKeys,
         DnsName zoneApex,
         DateTimeOffset now,
-        SignatureCheckBudget budget
+        SignatureCheckBudget budget,
+        bool acceptRevokedKeys = false
     )
     {
         if (rrset.Count == 0 || trustedKeys is null || zoneApex is null)
@@ -171,7 +178,7 @@ public static class RrsetSignatureVerifier
                     )
                         is not DnsKeyRecordData dnsKey
                     || !dnsKey.IsZoneKey
-                    || dnsKey.IsRevoked
+                    || (dnsKey.IsRevoked && !acceptRevokedKeys)
                     || dnsKey.Algorithm != rrsig.Algorithm
                 )
                     continue;

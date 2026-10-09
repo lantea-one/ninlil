@@ -10,8 +10,11 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 public interface ITrustAnchorStore
 {
     /// <summary>
-    ///     This method returns every <see cref="TrustAnchorStateEnum.Valid" /> anchor, in the
-    ///     smaller shape validation needs.
+    ///     This method returns every <see cref="TrustAnchorStateEnum.Valid" /> and
+    ///     <see cref="TrustAnchorStateEnum.Missing" /> anchor, in the smaller shape validation
+    ///     needs. A Missing key stays a trust point (RFC 5011 §4), so a check that fails to find
+    ///     the only root KSK does not switch validation off.
+    ///     was included.
     /// </summary>
     IReadOnlyList<TrustAnchor> GetValidAnchors();
 
