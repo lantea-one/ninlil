@@ -48,6 +48,7 @@ public sealed class DnssecValidator(
         // unsigned zone has nothing to check but caps the result at Insecure, since Secure needs
         // every RRset in the chain verified. A Bogus or Indeterminate hop ends validation.
         bool anyHopInsecure = false;
+        SignatureCheckBudget signatureBudget = new();
         DnsName lastHopZone = null;
         ZoneTrustChainResult lastHopTrust = default;
 
@@ -59,6 +60,7 @@ public sealed class DnssecValidator(
                     hop.OwningZone,
                     recordClass,
                     budget,
+                    signatureBudget,
                     stoppingToken
                 );
                 lastHopZone = hop.OwningZone;
@@ -79,16 +81,18 @@ public sealed class DnssecValidator(
                 continue;
             }
 
-            if (
-                !RrsetSignatureVerifier.TryVerify(
-                    [hop.CnameRecord],
-                    hop.DnssecRecords,
-                    lastHopTrust.TrustedKeys,
-                    DateTimeOffset.UtcNow
-                )
-            )
+            RrsetVerificationResult hopVerification = RrsetSignatureVerifier.Verify(
+                [hop.CnameRecord],
+                hop.DnssecRecords,
+                lastHopTrust.TrustedKeys,
+                hop.OwningZone,
+                DateTimeOffset.UtcNow,
+                signatureBudget
+            );
+
+            if (!hopVerification.IsVerified)
                 return DnssecValidationResult.Bogus(
-                    $"The CNAME record for '{hop.CnameRecord.Name}' did not verify against '{hop.OwningZone}''s trusted keys."
+                    $"The CNAME record for '{hop.CnameRecord.Name}' did not verify against '{hop.OwningZone}''s trusted keys: {hopVerification.FailureReason}"
                 );
         }
 
@@ -101,6 +105,7 @@ public sealed class DnssecValidator(
             leafZone,
             recordClass,
             budget,
+            signatureBudget,
             stoppingToken
         );
 
@@ -126,15 +131,19 @@ public sealed class DnssecValidator(
                 .. result.Answer.Where(record => record.Type == queriedType),
             ];
 
-            if (
-                !RrsetSignatureVerifier.TryVerify(
-                    terminalAnswer,
-                    result.DnssecRecords,
-                    terminalTrust.TrustedKeys,
-                    DateTimeOffset.UtcNow
-                )
-            )
-                return DnssecValidationResult.Bogus("The final answer's RRSIG did not verify.");
+            RrsetVerificationResult answerVerification = RrsetSignatureVerifier.Verify(
+                terminalAnswer,
+                result.DnssecRecords,
+                terminalTrust.TrustedKeys,
+                leafZone,
+                DateTimeOffset.UtcNow,
+                signatureBudget
+            );
+
+            if (!answerVerification.IsVerified)
+                return DnssecValidationResult.Bogus(
+                    $"The final answer's RRSIG did not verify: {answerVerification.FailureReason}"
+                );
 
             return anyHopInsecure
                 ? DnssecValidationResult.Insecure()
@@ -152,7 +161,8 @@ public sealed class DnssecValidator(
                 queriedType,
                 leafZone,
                 result,
-                terminalTrust.TrustedKeys
+                terminalTrust.TrustedKeys,
+                signatureBudget
             );
 
             if (denial == DenialOfExistenceOutcomeEnum.NotProven)
@@ -211,6 +221,7 @@ public sealed class DnssecValidator(
         DnsName targetZone,
         DnsClassEnum recordClass,
         QueryBudget budget,
+        SignatureCheckBudget signatureBudget,
         CancellationToken stoppingToken
     )
     {
@@ -262,9 +273,16 @@ public sealed class DnssecValidator(
                         "No DNSKEY RRset could be retrieved for the root zone."
                     );
 
+                // Only DNSKEY records owned by the zone count; a CNAME or foreign record in the
+                // answer is not part of the zone's key set.
+                List<DnsResourceRecord> rootKeys = OwnedRecords(
+                    dnsKeyResult.Answer,
+                    DnsResourceRecordTypeEnum.DnsKey,
+                    zone
+                );
                 IReadOnlyList<TrustAnchor> anchors = trustAnchorStore.GetValidAnchors();
                 DnsResourceRecord matchingKey = RrsetSignatureVerifier.FindKeyMatchingTrustAnchor(
-                    dnsKeyResult.Answer,
+                    rootKeys,
                     zone,
                     anchors
                 );
@@ -274,19 +292,21 @@ public sealed class DnssecValidator(
                         "The root zone's DNSKEY RRset matches none of this resolver's configured trust anchors."
                     );
 
-                if (
-                    !RrsetSignatureVerifier.TryVerify(
-                        dnsKeyResult.Answer,
-                        dnsKeyResult.DnssecRecords,
-                        [matchingKey],
-                        DateTimeOffset.UtcNow
-                    )
-                )
+                RrsetVerificationResult rootVerification = RrsetSignatureVerifier.Verify(
+                    rootKeys,
+                    dnsKeyResult.DnssecRecords,
+                    [matchingKey],
+                    zone,
+                    DateTimeOffset.UtcNow,
+                    signatureBudget
+                );
+
+                if (!rootVerification.IsVerified)
                     return ZoneTrustChainResult.Bogus(
-                        "The root zone's DNSKEY RRset did not verify against the trust anchor."
+                        $"The root zone's DNSKEY RRset did not verify against the trust anchor: {rootVerification.FailureReason}"
                     );
 
-                trustedKeys = dnsKeyResult.Answer;
+                trustedKeys = rootKeys;
                 continue;
             }
 
@@ -315,7 +335,7 @@ public sealed class DnssecValidator(
                     or RecursiveResolutionStatusEnum.NoData
             )
                 return
-                    VerifyAbsenceOfDs(zone, parentZone, dsResult, trustedKeys)
+                    VerifyAbsenceOfDs(zone, parentZone, dsResult, trustedKeys, signatureBudget)
                     != DenialOfExistenceOutcomeEnum.NotProven
                     ? ZoneTrustChainResult.Insecure()
                     : ZoneTrustChainResult.Bogus(
@@ -327,17 +347,30 @@ public sealed class DnssecValidator(
                     $"Could not resolve a DS record for '{zone}'."
                 );
 
-            if (
-                !RrsetSignatureVerifier.TryVerify(
-                    dsResult.Answer,
-                    dsResult.DnssecRecords,
-                    trustedKeys,
-                    DateTimeOffset.UtcNow
-                )
-            )
+            // A CNAME or foreign record in the answer is not part of the DS RRset.
+            List<DnsResourceRecord> dsRrset = OwnedRecords(
+                dsResult.Answer,
+                DnsResourceRecordTypeEnum.DS,
+                zone
+            );
+            RrsetVerificationResult dsVerification = RrsetSignatureVerifier.Verify(
+                dsRrset,
+                dsResult.DnssecRecords,
+                trustedKeys,
+                parentZone,
+                DateTimeOffset.UtcNow,
+                signatureBudget
+            );
+
+            if (!dsVerification.IsVerified)
                 return ZoneTrustChainResult.Bogus(
-                    $"The DS RRset for '{zone}' did not verify against '{parentZone}''s trusted keys."
+                    $"The DS RRset for '{zone}' did not verify against '{parentZone}''s trusted keys: {dsVerification.FailureReason}"
                 );
+
+            // RFC 4035 §5.2: a DS RRset with no digest type or algorithm this validator supports
+            // makes the zone Insecure, not Bogus.
+            if (!RrsetSignatureVerifier.HasSupportedDs(dsRrset))
+                return ZoneTrustChainResult.Insecure();
 
             IterativeResolutionResult dnsKeyForZone = await ResolveDnsKeyAsync(
                 zone,
@@ -351,32 +384,49 @@ public sealed class DnssecValidator(
                     $"'{zone}' has a DS record, but no DNSKEY RRset could be retrieved for it."
                 );
 
-            DnsResourceRecord matchingKeyForZone = RrsetSignatureVerifier.FindKeyMatchingDs(
+            List<DnsResourceRecord> zoneKeys = OwnedRecords(
                 dnsKeyForZone.Answer,
-                zone,
-                dsResult.Answer
+                DnsResourceRecordTypeEnum.DnsKey,
+                zone
             );
+            IReadOnlyList<DnsResourceRecord> matchingKeysForZone =
+                RrsetSignatureVerifier.FindKeysMatchingDs(zoneKeys, zone, dsRrset);
 
-            if (matchingKeyForZone is null)
+            if (matchingKeysForZone.Count == 0)
                 return ZoneTrustChainResult.Bogus(
                     $"No DNSKEY at '{zone}' matches its own DS record."
                 );
 
-            if (
-                !RrsetSignatureVerifier.TryVerify(
-                    dnsKeyForZone.Answer,
-                    dnsKeyForZone.DnssecRecords,
-                    [matchingKeyForZone],
-                    DateTimeOffset.UtcNow
-                )
-            )
-                return ZoneTrustChainResult.Bogus($"The DNSKEY RRset for '{zone}' did not verify.");
+            RrsetVerificationResult zoneKeysVerification = RrsetSignatureVerifier.Verify(
+                zoneKeys,
+                dnsKeyForZone.DnssecRecords,
+                matchingKeysForZone,
+                zone,
+                DateTimeOffset.UtcNow,
+                signatureBudget
+            );
 
-            trustedKeys = dnsKeyForZone.Answer;
+            if (!zoneKeysVerification.IsVerified)
+                return ZoneTrustChainResult.Bogus(
+                    $"The DNSKEY RRset for '{zone}' did not verify: {zoneKeysVerification.FailureReason}"
+                );
+
+            trustedKeys = zoneKeys;
         }
 
         return ZoneTrustChainResult.Secure(trustedKeys);
     }
+
+    /// <summary>
+    ///     This method keeps the records of one type and owner name from an answer, so a CNAME or
+    ///     an unrelated record that came with a DS or DNSKEY answer never reaches signature
+    ///     verification as part of the RRset.
+    /// </summary>
+    private static List<DnsResourceRecord> OwnedRecords(
+        IReadOnlyList<DnsResourceRecord> records,
+        DnsResourceRecordTypeEnum type,
+        DnsName owner
+    ) => [.. records.Where(record => record.Type == type && record.Name == owner)];
 
     /// <summary>
     ///     This method resolves a zone's DNSKEY RRset, or returns <see langword="null" /> if the
@@ -435,10 +485,18 @@ public sealed class DnssecValidator(
         DnsName zone,
         DnsName parentZone,
         IterativeResolutionResult dsResult,
-        IReadOnlyList<DnsResourceRecord> parentTrustedKeys
+        IReadOnlyList<DnsResourceRecord> parentTrustedKeys,
+        SignatureCheckBudget signatureBudget
     )
     {
-        if (!VerifyAllNsecOrNsec3Signatures(dsResult.DnssecRecords, parentTrustedKeys))
+        if (
+            !VerifyAllNsecOrNsec3Signatures(
+                dsResult.DnssecRecords,
+                parentTrustedKeys,
+                parentZone,
+                signatureBudget
+            )
+        )
             return DenialOfExistenceOutcomeEnum.NotProven;
 
         bool usesNsec3 = dsResult.DnssecRecords.Any(record =>
@@ -470,10 +528,18 @@ public sealed class DnssecValidator(
         DnsResourceRecordTypeEnum queriedType,
         DnsName zoneApex,
         IterativeResolutionResult result,
-        IReadOnlyList<DnsResourceRecord> trustedKeys
+        IReadOnlyList<DnsResourceRecord> trustedKeys,
+        SignatureCheckBudget signatureBudget
     )
     {
-        if (!VerifyAllNsecOrNsec3Signatures(result.DnssecRecords, trustedKeys))
+        if (
+            !VerifyAllNsecOrNsec3Signatures(
+                result.DnssecRecords,
+                trustedKeys,
+                zoneApex,
+                signatureBudget
+            )
+        )
             return DenialOfExistenceOutcomeEnum.NotProven;
 
         bool usesNsec3 = result.DnssecRecords.Any(record =>
@@ -510,12 +576,14 @@ public sealed class DnssecValidator(
 
     /// <summary>
     ///     This method verifies the signature of every NSEC and NSEC3 RRset present (each owner
-    ///     name is its own RRset) against trusted keys, so an unsigned record cannot prove
-    ///     anything. It fails when there are none.
+    ///     name is its own RRset) against the keys of <c>zoneApex</c>, so an unsigned record cannot
+    ///     prove anything. It fails when there are none.
     /// </summary>
     private static bool VerifyAllNsecOrNsec3Signatures(
         IReadOnlyList<DnsResourceRecord> dnssecRecords,
-        IReadOnlyList<DnsResourceRecord> trustedKeys
+        IReadOnlyList<DnsResourceRecord> trustedKeys,
+        DnsName zoneApex,
+        SignatureCheckBudget signatureBudget
     )
     {
         bool foundAny = false;
@@ -531,12 +599,16 @@ public sealed class DnssecValidator(
             foundAny = true;
 
             if (
-                !RrsetSignatureVerifier.TryVerify(
-                    [.. group],
-                    dnssecRecords,
-                    trustedKeys,
-                    DateTimeOffset.UtcNow
-                )
+                !RrsetSignatureVerifier
+                    .Verify(
+                        [.. group],
+                        dnssecRecords,
+                        trustedKeys,
+                        zoneApex,
+                        DateTimeOffset.UtcNow,
+                        signatureBudget
+                    )
+                    .IsVerified
             )
                 return false;
         }

@@ -13,6 +13,14 @@ namespace Ninlil.Dns.Server.Dnssec;
 public static class DsDigestCodec
 {
     /// <summary>
+    ///     This method tells whether <see cref="Compute" /> supports a DS digest type, so a
+    ///     validator can skip a DS record it cannot check instead of failing on it (RFC 4035 §5.2).
+    /// </summary>
+    /// <param name="digestType">The digest type from the IANA DS digest algorithm registry.</param>
+    /// <returns><see langword="true" /> for 1 (SHA-1), 2 (SHA-256) and 4 (SHA-384).</returns>
+    public static bool IsSupported(byte digestType) => digestType is 1 or 2 or 4;
+
+    /// <summary>
     ///     This method computes a DS digest.
     /// </summary>
     /// <param name="digestType">

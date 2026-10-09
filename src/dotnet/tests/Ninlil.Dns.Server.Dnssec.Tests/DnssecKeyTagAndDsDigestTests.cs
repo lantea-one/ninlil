@@ -123,6 +123,18 @@ public class DnssecKeyTagAndDsDigestTests
         Assert.Throws<NotSupportedException>(() => DsDigestCodec.Compute(3, owner, dnsKeyRdata));
     }
 
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(3, false)]
+    [InlineData(4, true)]
+    [InlineData(0, false)]
+    [InlineData(5, false)]
+    public void DsDigestIsSupportedMatchesTheTypesComputeAccepts(byte digestType, bool expected)
+    {
+        Assert.Equal(expected, DsDigestCodec.IsSupported(digestType));
+    }
+
     [Fact]
     public void DsDigestChangesWithTheOwnerNameHoldingRdataConstant()
     {

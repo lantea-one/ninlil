@@ -335,4 +335,89 @@ public class DnssecValidatorTests
 
         Assert.Equal(DnssecValidationStateEnum.Indeterminate, validation.State);
     }
+
+    [Fact]
+    public async Task ValidateAsyncReturnsInsecureWhenTheSignedDsSetHasNoSupportedDigest()
+    {
+        DnssecTestFixture.ZoneKey rootKey = _fixture.GenerateZoneKey(DnsName.Root);
+        DnsResourceRecord rootDnsKeyRrsig = _fixture.Sign(
+            rootKey,
+            DnsName.Root,
+            [rootKey.DnsKeyRecord]
+        );
+
+        DnsName exampleCom = DnsName.Parse("example.com");
+        DnssecTestFixture.ZoneKey childKey = _fixture.GenerateZoneKey(exampleCom);
+
+        // A DS with digest type 3 (GOST), which this validator cannot compute (RFC 4035 §5.2).
+        DnsResourceRecord ds = new(
+            exampleCom,
+            DnsResourceRecordTypeEnum.DS,
+            DnsClassEnum.Internet,
+            3600,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.DS,
+                new DsRecordData(childKey.KeyTag, DnssecAlgorithmEnum.Ed25519, 3, [1, 2, 3, 4])
+            )
+        );
+        DnsResourceRecord dsRrsig = _fixture.Sign(rootKey, DnsName.Root, [ds]);
+
+        DnsName www = DnsName.Parse("www.example.com");
+        DnsResourceRecord answer = new(
+            www,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            300,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.A,
+                new ARecordData(System.Net.IPAddress.Parse("192.0.2.1"))
+            )
+        );
+
+        FakeIterativeResolutionEngine engine = new();
+        engine.AddResult(
+            DnsName.Root,
+            DnsResourceRecordTypeEnum.DnsKey,
+            new IterativeResolutionResult(
+                RecursiveResolutionStatusEnum.Success,
+                [rootKey.DnsKeyRecord],
+                [rootDnsKeyRrsig],
+                null,
+                [DnsName.Root]
+            )
+        );
+        engine.AddResult(
+            exampleCom,
+            DnsResourceRecordTypeEnum.DS,
+            new IterativeResolutionResult(
+                RecursiveResolutionStatusEnum.Success,
+                [ds],
+                [dsRrsig],
+                null,
+                [DnsName.Root]
+            )
+        );
+
+        DnssecValidator validator = new(
+            engine,
+            new EmptyRecursiveCache(),
+            new FakeTrustAnchorStore([_fixture.BuildTrustAnchor(DnsName.Root, rootKey)])
+        );
+
+        DnssecValidationResult validation = await validator.ValidateAsync(
+            www,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            new IterativeResolutionResult(
+                RecursiveResolutionStatusEnum.Success,
+                [answer],
+                [],
+                null,
+                [exampleCom]
+            ),
+            CreateBudget()
+        );
+
+        Assert.Equal(DnssecValidationStateEnum.Insecure, validation.State);
+    }
 }
