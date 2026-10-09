@@ -937,7 +937,13 @@ The general shape, in order:
 
    cd ../Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer
    dotnet ef migrations add AddYourNewEntity
+
+   cd ../../../..
+   src/script/development/file-scoped-namespaces.sh src/dotnet/src/Ninlil.Dns.Data.EntityFrameworkCore.Migrations.*/Migrations
    ```
+
+   `dotnet ef` writes block-scoped namespaces (`namespace X { }`); the last command converts the
+   new files to the file-scoped form (`namespace X;`) the code base uses, which the lint job checks.
 
    All four providers share one model (`NinlilDnsContext`, covering DNS *and* DHCP entities
    alike), but **each provider's migration history must live in its own separate assembly** —

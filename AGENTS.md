@@ -107,9 +107,12 @@ dotnet test Ninlil.slnx                                               # everythi
 
 - Formatting the whole tree is safe: `.csharpierignore` skips the generated EF migration folders
   (`Migrations/` in each `Ninlil.Dns.Data.EntityFrameworkCore.Migrations.*` project), which must
-  stay exactly as `dotnet ef` wrote them. Never remove that entry or format those files by hand.
-- `.editorconfig` enforces file-scoped namespaces and `using` directives outside the namespace as
-  errors.
+  stay as `dotnet ef` wrote them apart from the namespace conversion below. Never remove that
+  entry or format those files by hand.
+- Every C# file uses a file-scoped namespace (`namespace X;`), never a block (`namespace X { }`),
+  generated migrations included. `.editorconfig` enforces it, and `using` directives outside the
+  namespace, as errors in hand-written code; the lint job (`.forgejo/scripts/lint.sh`) fails on
+  any tracked block-scoped namespace.
 
 ## Frontend (`src/angular/`)
 
@@ -163,9 +166,13 @@ page](./README.md#frontend-adding-a-feature-page).
   for p in Sqlite PostgreSql MySql SqlServer; do
     (cd src/dotnet/src/Ninlil.Dns.Data.EntityFrameworkCore.Migrations.$p && dotnet ef migrations add AddYourChange)
   done
+  src/script/development/file-scoped-namespaces.sh src/dotnet/src/Ninlil.Dns.Data.EntityFrameworkCore.Migrations.*/Migrations
   ```
 
-- Do not hand-edit or reformat generated migrations, `*.Designer.cs` or `NinlilDnsContextModelSnapshot.cs`.
+  `dotnet ef` writes block-scoped namespaces; the script converts the new migration, Designer and
+  snapshot files to file-scoped ones and leaves already converted files alone.
+- Do not otherwise hand-edit or reformat generated migrations, `*.Designer.cs` or
+  `NinlilDnsContextModelSnapshot.cs`.
 - MongoDB: add or update the repository and class map; `AutoMap()` picks up new properties (do not
   call `MapIdProperty` on `Id`, it throws).
 - Lists that can grow use a database-side `SearchAsync`/`CountAsync` pair, never `ListAsync()`

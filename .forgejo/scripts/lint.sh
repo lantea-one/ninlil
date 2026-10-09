@@ -12,7 +12,10 @@
 #      Forgejo mode, so the workflows are copied to a temporary .github/workflows with the
 #      forgejo context renamed to github, which has the same shape. It does not treat
 #      forgejo.ref_name as untrusted input; the "no ${{ }} in a run: body" rule is kept by review.
-#   3. Every .forgejo/scripts/tests/*.test.sh.
+#   3. No tracked C# file uses a block-scoped namespace (`namespace X {`). The code base uses
+#      file-scoped ones only; `dotnet ef migrations add` writes block-scoped ones, which
+#      src/script/development/file-scoped-namespaces.sh converts.
+#   4. Every .forgejo/scripts/tests/*.test.sh.
 #
 # Inputs: none; run from anywhere (it changes to the repository root). Needs shellcheck,
 # actionlint, find and the tools the tests need. Outputs: tool output on stdout/stderr and a
@@ -50,6 +53,15 @@ if (cd "${work}" && actionlint -config-file "${repository_root}/.forgejo/actionl
     echo 'ok'
 else
     failed+=('actionlint')
+fi
+
+echo '== file-scoped namespaces'
+if block_namespaces="$(git grep -lE '^namespace [A-Za-z0-9_.]+[[:space:]]*$' -- '*.cs')"; then
+    echo 'These C# files use a block-scoped namespace; run src/script/development/file-scoped-namespaces.sh on them:' >&2
+    echo "${block_namespaces}" >&2
+    failed+=('file-scoped namespaces')
+else
+    echo 'ok'
 fi
 
 echo '== script self-tests'
