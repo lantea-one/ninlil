@@ -643,4 +643,122 @@ public class RecursiveCacheTests
         Assert.Equal(200u, Assert.Single(positive.Records).TimeToLive);
         Assert.Equal(3500u, negative.Soa.TimeToLive);
     }
+
+    private static DnsResourceRecord BuildSignature(
+        DnsName name,
+        uint originalTtl,
+        DateTimeOffset expiration
+    ) =>
+        new(
+            name,
+            DnsResourceRecordTypeEnum.RrSig,
+            DnsClassEnum.Internet,
+            originalTtl,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.RrSig,
+                new RrSigRecordData(
+                    DnsResourceRecordTypeEnum.A,
+                    DnssecAlgorithmEnum.Ed25519,
+                    (byte)name.Labels.Count,
+                    originalTtl,
+                    (uint)expiration.ToUnixTimeSeconds(),
+                    (uint)expiration.AddDays(-30).ToUnixTimeSeconds(),
+                    1,
+                    DnsName.Parse("example.com"),
+                    [1]
+                )
+            )
+        );
+
+    private static RecursiveCache CreateCacheWithClock(ManualTimeProvider clock) =>
+        new(
+            new StaticOptionsMonitor<RecursiveServerOptions>(
+                new RecursiveServerOptions { EnableServeStale = false }
+            ),
+            new RecordingEventPublisher(),
+            clock
+        );
+
+    [Fact]
+    public void StorePositive_WithASignatureExpiringBeforeTheTtl_ExpiresWithTheSignature()
+    {
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+        RecursiveCache cache = CreateCacheWithClock(clock);
+        DnsName name = DnsName.Parse("www.example.com");
+
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 3600)],
+            [BuildSignature(name, 3600, clock.GetUtcNow().AddSeconds(60))]
+        );
+
+        clock.Advance(TimeSpan.FromSeconds(59));
+        Assert.NotNull(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+    }
+
+    [Fact]
+    public void StorePositive_WithALowerSignatureOriginalTtl_ExpiresAtTheOriginalTtl()
+    {
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+        RecursiveCache cache = CreateCacheWithClock(clock);
+        DnsName name = DnsName.Parse("www.example.com");
+
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 3600)],
+            [BuildSignature(name, 120, clock.GetUtcNow().AddDays(10))]
+        );
+
+        clock.Advance(TimeSpan.FromSeconds(121));
+
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+    }
+
+    [Fact]
+    public void StoreNegative_WithASignatureExpiringBeforeTheTtl_ExpiresWithTheSignature()
+    {
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+        RecursiveCache cache = CreateCacheWithClock(clock);
+        DnsName name = DnsName.Parse("missing.example.com");
+
+        cache.StoreNegative(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            DnsResponseCodeEnum.NxDomain,
+            BuildSoaRecord(DnsName.Parse("example.com"), 3600),
+            [BuildSignature(name, 3600, clock.GetUtcNow().AddSeconds(60))]
+        );
+
+        clock.Advance(TimeSpan.FromSeconds(61));
+
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+    }
+
+    [Fact]
+    public void StorePositive_WithoutSignatures_KeepsTheRecordTtl()
+    {
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+        RecursiveCache cache = CreateCacheWithClock(clock);
+        DnsName name = DnsName.Parse("www.example.com");
+
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 3600)],
+            []
+        );
+
+        clock.Advance(TimeSpan.FromSeconds(3000));
+
+        Assert.NotNull(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+    }
 }

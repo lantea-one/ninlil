@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
@@ -51,13 +53,32 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 /// </param>
 /// <param name="trustCache">The cache of proven zone results, shared by all validations.</param>
 /// <param name="timeProvider">The clock for signature validity windows; the system clock by default.</param>
+/// <param name="logger">
+///     The log a Bogus zone is reported to, at most once per zone per hour with the reason
+///     (<see cref="DnssecValidationResult.Reason" />), so an operator can see why a name gives
+///     SERVFAIL; none when <see langword="null" />.
+/// </param>
 public sealed class DnssecValidator(
     IIterativeResolutionEngine engine,
     ITrustAnchorStore trustAnchorStore,
     DnssecTrustCache trustCache,
-    TimeProvider timeProvider = null
+    TimeProvider timeProvider = null,
+    ILogger<DnssecValidator> logger = null
 ) : IDnssecValidator
 {
+    /// <summary>
+    ///     This constant is the least time between two Warning logs for the same zone.
+    /// </summary>
+    private static readonly TimeSpan BogusLogInterval = TimeSpan.FromHours(1);
+
+    /// <summary>
+    ///     This constant bounds the zones remembered for the log rate limit, so a flood of
+    ///     distinct bogus zones cannot grow the table without limit.
+    /// </summary>
+    private const int MaxRememberedBogusZones = 1024;
+
+    private readonly ConcurrentDictionary<DnsName, DateTimeOffset> _bogusLoggedAt = new();
+
     /// <summary>
     ///     This constant bounds how many signer names of one RRset are tried. An RRset has one
     ///     signing zone; the second slot covers a junk RRSIG that names a different ancestor.
@@ -518,6 +539,42 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
+    ///     This method logs a Warning that a zone failed validation, at most once per zone per
+    ///     <see cref="BogusLogInterval" />, because one broken zone fails every query below it.
+    /// </summary>
+    private void LogBogusZone(DnsName zone, string reason, DateTimeOffset now)
+    {
+        if (logger is null)
+            return;
+
+        if (_bogusLoggedAt.Count >= MaxRememberedBogusZones)
+            foreach (KeyValuePair<DnsName, DateTimeOffset> entry in _bogusLoggedAt)
+                if (now - entry.Value >= BogusLogInterval)
+                    _bogusLoggedAt.TryRemove(entry.Key, out _);
+
+        bool shouldLog = false;
+
+        _bogusLoggedAt.AddOrUpdate(
+            zone,
+            _ =>
+            {
+                shouldLog = true;
+
+                return now;
+            },
+            (_, last) =>
+            {
+                shouldLog = now - last >= BogusLogInterval;
+
+                return shouldLog ? now : last;
+            }
+        );
+
+        if (shouldLog)
+            logger.LogWarning("DNSSEC validation failed for zone '{Zone}': {Reason}", zone, reason);
+    }
+
+    /// <summary>
     ///     This method maps a zone result that is not secure to the validation result for data
     ///     below it.
     /// </summary>
@@ -556,6 +613,9 @@ public sealed class DnssecValidator(
 
         context.Memo[zone] = computed;
         trustCache.Store(zone, context.Class, computed, context.AnchorFingerprint);
+
+        if (computed.State == DnssecValidationStateEnum.Bogus)
+            LogBogusZone(zone, computed.Reason, context.Now);
 
         return computed;
     }

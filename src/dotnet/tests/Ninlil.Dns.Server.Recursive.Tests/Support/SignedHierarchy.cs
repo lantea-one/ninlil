@@ -25,7 +25,7 @@ namespace Ninlil.Dns.Server.Recursive.Tests.Support;
 ///         The responder is a minimal authoritative server: it answers from the deepest zone it
 ///         serves for a name (a DS query uses the zone above the name), refers a name below a
 ///         delegation, and otherwise answers positively, NODATA or NXDOMAIN with the NSEC records
-///         that prove it. It has no wildcards. A test replaces single answers with
+///         that prove it. The only wildcard is the A record at <c>*.wild.example.com</c>. A test replaces single answers with
 ///         <see cref="FakeUpstreamDnsClient.AddResponse" />, usually after fetching the genuine one
 ///         with <see cref="Respond" />.
 ///     </para>
@@ -140,6 +140,7 @@ public sealed class SignedHierarchy
             example.SignatureLifetime = lifetime;
 
         example.AddA("www.example.com", "192.0.2.10");
+        example.AddA("*.wild.example.com", "192.0.2.20");
         example.AddCname("web.example.com", "www.example.com");
         example.AddCname("toinsecure.example.com", "www.insecure.com");
         example.AddCname("alias.example.com", "missing.example.com");
@@ -315,7 +316,10 @@ public sealed class SignedHierarchy
                     zone.Apex,
                     rrset,
                     inception,
-                    expiration
+                    expiration,
+                    // RFC 4034 §3.1.3: Labels does not count a leading "*", which is how a
+                    // validator learns the RRset can be a wildcard expansion.
+                    labels: (byte)(name.Labels.Count - (IsWildcardOwner(name) ? 1 : 0))
                 );
 
             List<DnsName> owners = [.. zone.Rrsets.Keys.Select(key => key.Name).Distinct()];
@@ -346,7 +350,8 @@ public sealed class SignedHierarchy
                     zone.Apex,
                     [nsec],
                     inception,
-                    expiration
+                    expiration,
+                    labels: (byte)(owner.Labels.Count - (IsWildcardOwner(owner) ? 1 : 0))
                 );
             }
         }
@@ -415,6 +420,11 @@ public sealed class SignedHierarchy
             return response;
         }
 
+        DnsMessage wildcardAnswer = TryBuildWildcardAnswer(zone, name, type);
+
+        if (wildcardAnswer is not null)
+            return wildcardAnswer;
+
         DnsResourceRecord soa = zone.Rrsets[(zone.Apex, DnsResourceRecordTypeEnum.Soa)][0];
         AddWithSignature(
             response.AuthorityRecords,
@@ -460,6 +470,76 @@ public sealed class SignedHierarchy
 
         return response;
     }
+
+    /// <summary>
+    ///     This method builds the answer a server gives for a name that does not exist when the
+    ///     closest encloser has a wildcard record of the type (RFC 4035 §3.1.3.3): the records and
+    ///     the wildcard's RRSIG under the queried name (the RRSIG keeps the wildcard's Labels), and
+    ///     the NSEC that covers the next closer name in the authority section.
+    /// </summary>
+    /// <returns>The answer, or <see langword="null" /> when no wildcard applies.</returns>
+    private static DnsMessage TryBuildWildcardAnswer(
+        Zone zone,
+        DnsName name,
+        DnsResourceRecordTypeEnum type
+    )
+    {
+        if (zone.ExistingNames().Contains(name))
+            return null;
+
+        DnsName closestEncloser = zone.ClosestEncloser(name);
+        DnsName wildcard = closestEncloser.PrependLabels("*");
+
+        if (!zone.Rrsets.TryGetValue((wildcard, type), out List<DnsResourceRecord> rrset))
+            return null;
+
+        DnsMessage response = new()
+        {
+            IsResponse = true,
+            IsAuthoritativeAnswer = true,
+            ResponseCode = DnsResponseCodeEnum.NoError,
+        };
+        response.Answers.AddRange(
+            rrset.Select(record => new DnsResourceRecord(
+                name,
+                record.Type,
+                record.Class,
+                record.TimeToLive,
+                record.Data
+            ))
+        );
+
+        if (zone.Signatures.TryGetValue((wildcard, type), out DnsResourceRecord signature))
+            response.Answers.Add(
+                new DnsResourceRecord(
+                    name,
+                    signature.Type,
+                    signature.Class,
+                    signature.TimeToLive,
+                    signature.Data
+                )
+            );
+
+        if (zone.IsSigned)
+        {
+            DnsName nextCloser = new([
+                .. name.Labels.Skip(name.Labels.Count - closestEncloser.Labels.Count - 1),
+            ]);
+            DnsResourceRecord covering = zone.CoveringNsec(nextCloser);
+            AddWithSignature(
+                response.AuthorityRecords,
+                zone,
+                covering.Name,
+                DnsResourceRecordTypeEnum.Nsec,
+                [covering]
+            );
+        }
+
+        return response;
+    }
+
+    private static bool IsWildcardOwner(DnsName name) =>
+        name.Labels.Count > 0 && name.Labels[0].Length == 1 && name.Labels[0][0] == (byte)'*';
 
     /// <summary>
     ///     This method builds a referral to <paramref name="cut" />: the delegation NS records,

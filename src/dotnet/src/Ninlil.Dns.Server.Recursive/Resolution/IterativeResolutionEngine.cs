@@ -364,12 +364,7 @@ public sealed class IterativeResolutionEngine(
 
             if (exactAnswers.Count > 0)
             {
-                List<DnsResourceRecord> dnssecRecords =
-                [
-                    .. response.Answers.Where(record =>
-                        record.Type == DnsResourceRecordTypeEnum.RrSig
-                    ),
-                ];
+                List<DnsResourceRecord> dnssecRecords = CollectPositiveDnssecRecords(response);
                 cache.StorePositive(name, type, recordClass, exactAnswers, dnssecRecords);
 
                 return new IterativeResolutionResult(
@@ -393,12 +388,7 @@ public sealed class IterativeResolutionEngine(
             {
                 // Keep this hop's RRSIGs with the CNAME RRset, in the cache and in the chain, so the
                 // validator can check the hop against its zone.
-                List<DnsResourceRecord> cnameDnssecRecords =
-                [
-                    .. response.Answers.Where(record =>
-                        record.Type == DnsResourceRecordTypeEnum.RrSig
-                    ),
-                ];
+                List<DnsResourceRecord> cnameDnssecRecords = CollectPositiveDnssecRecords(response);
                 cache.StorePositive(
                     name,
                     DnsResourceRecordTypeEnum.Cname,
@@ -620,6 +610,31 @@ public sealed class IterativeResolutionEngine(
             stoppingToken
         );
     }
+
+    /// <summary>
+    ///     This method collects the DNSSEC records a positive answer keeps: the answer section's
+    ///     RRSIGs, and the authority section's NSEC and NSEC3 records with the RRSIGs over them.
+    ///     The authority records are the proof that no closer name exists, which the validator
+    ///     requires when the answer was synthesized from a wildcard (RFC 4035 §5.3.4,
+    ///     RFC 5155 §8.8); dropping them would make every wildcard answer from a signed zone
+    ///     bogus, and they must stay in the cache entry so a cached answer validates the same way.
+    /// </summary>
+    private static List<DnsResourceRecord> CollectPositiveDnssecRecords(DnsMessage response) =>
+        [
+            .. response.Answers.Where(record => record.Type == DnsResourceRecordTypeEnum.RrSig),
+            .. response.AuthorityRecords.Where(record =>
+                record.Type is DnsResourceRecordTypeEnum.Nsec or DnsResourceRecordTypeEnum.Nsec3
+                || (
+                    record.Type == DnsResourceRecordTypeEnum.RrSig
+                    && DnsRecordDataCodecRegistry.Decode(record.Type, record.Data)
+                        is RrSigRecordData
+                        {
+                            TypeCovered: DnsResourceRecordTypeEnum.Nsec
+                                or DnsResourceRecordTypeEnum.Nsec3
+                        }
+                )
+            ),
+        ];
 
     /// <summary>
     ///     This method builds a negative result, and caches it when the response carried the SOA

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Server.Core.AccessControl;
 using Ninlil.Dns.Server.Core.ClientSubnet;
 using Ninlil.Dns.Server.Core.Dns64;
@@ -42,9 +43,12 @@ namespace Ninlil.Dns.Server.Recursive.Resolution;
 /// <param name="dns64Service">
 ///     The RFC 6147 DNS64 synthesis service. When it is enabled and an AAAA query comes back
 ///     <see cref="RecursiveResolutionStatusEnum.NoData" />, the resolver looks up A for the same
-///     name and synthesizes AAAA records from it; no other query pays for the extra lookup. The
-///     A lookup is not DNSSEC-validated. <see langword="null" /> (the default) disables DNS64,
-///     the same as <see cref="Dns64Options.Enable" /> being off.
+///     name and synthesizes AAAA records from it; no other query pays for the extra lookup. With
+///     validation on, the A answer is validated first (RFC 6147 §5.5): a Bogus one is not used
+///     (SERVFAIL, or NODATA when the client set CD), and a query with both DO and CD set is never
+///     synthesized for, because that client wants the DNSSEC data and a synthesized answer has
+///     none. <see langword="null" /> (the default) disables DNS64, the same as
+///     <see cref="Dns64Options.Enable" /> being off.
 /// </param>
 public class RecursiveQueryResolver(
     IIterativeResolutionEngine engine,
@@ -136,14 +140,17 @@ public class RecursiveQueryResolver(
 
         // RFC 6147 DNS64: only for an AAAA query that came back NoData, never for NXDOMAIN,
         // SERVFAIL or an enforced Bogus result, since only NoData means the name may have an A
-        // record to synthesize from.
+        // record to synthesize from. RFC 6147 §5.5: a client that set DO and CD wants the
+        // DNSSEC data itself, so nothing is synthesized for it.
         IReadOnlyList<DnsResourceRecord> synthesizedAaaa = [];
+        bool dns64SourceBogus = false;
 
         if (
             !enforceBogus
             && dns64Service is { IsEnabled: true }
             && question.Type == DnsResourceRecordTypeEnum.Aaaa
             && result.Status == RecursiveResolutionStatusEnum.NoData
+            && !(clientRequestedDnssec && request.CheckingDisabled)
         )
         {
             IterativeResolutionResult aResult = await engine.ResolveAsync(
@@ -158,8 +165,30 @@ public class RecursiveQueryResolver(
             );
 
             if (aResult.Status == RecursiveResolutionStatusEnum.Success)
-                synthesizedAaaa = dns64Service.SynthesizeAaaaRecords(aResult.Answer);
+            {
+                // RFC 6147 §5.5: do not synthesize from an A answer that failed validation.
+                // Secure, Insecure and Indeterminate answers are used.
+                DnssecValidationResult aValidation = currentOptions.EnableDnssecValidation
+                    ? await validator.ValidateAsync(
+                        question.Name,
+                        DnsResourceRecordTypeEnum.A,
+                        question.Class,
+                        aResult,
+                        budget,
+                        stoppingToken
+                    )
+                    : DnssecValidationResult.Indeterminate("DNSSEC validation is disabled.");
+                dns64SourceBogus = aValidation.State == DnssecValidationStateEnum.Bogus;
+
+                if (!dns64SourceBogus)
+                    synthesizedAaaa = dns64Service.SynthesizeAaaaRecords(aResult.Answer);
+            }
         }
+
+        // A Bogus A answer is SERVFAIL for a client that did not set CD; a CD client gets the
+        // plain NODATA of the AAAA lookup.
+        bool dns64Servfail = dns64SourceBogus && !request.CheckingDisabled;
+        enforceBogus |= dns64Servfail;
 
         bool didSynthesizeDns64Answer = synthesizedAaaa.Count > 0;
 
@@ -174,11 +203,15 @@ public class RecursiveQueryResolver(
             // Echoed back so the client can match this response to its query (as
             // AuthoritativeQueryResolver.CreateAnswerHeader does).
             Questions = [.. request.Questions],
-            // A synthesized DNS64 answer is never marked authenticated, whatever the NoData
-            // answer's validation state: the records were made here and signed by no one (see
-            // Dns64SynthesisService).
+            // RFC 6840 §5.8: AD is set only for a Secure answer to a client that set DO or AD,
+            // so a client that never asked for DNSSEC never sees it. A synthesized DNS64 answer
+            // is never marked authenticated, whatever the NoData answer's validation state: the
+            // records were made here and signed by no one (see Dns64SynthesisService).
             AuthenticData =
-                !didSynthesizeDns64Answer && validation.State == DnssecValidationStateEnum.Secure,
+                !enforceBogus
+                && !didSynthesizeDns64Answer
+                && validation.State == DnssecValidationStateEnum.Secure
+                && (clientRequestedDnssec || request.AuthenticData),
             ResponseCode = enforceBogus
                 ? DnsResponseCodeEnum.ServerFailure
                 : result.Status switch
@@ -205,11 +238,13 @@ public class RecursiveQueryResolver(
             if (clientRequestedDnssec)
             {
                 // Each CNAME hop's RRSIGs, in chain order, then the final answer's, so a
-                // validating client can check the whole chain itself.
+                // validating client can check the whole chain itself. The NSEC and NSEC3
+                // records that prove a wildcard expansion belong to the authority section
+                // (RFC 4035 §3.1.3.3), with their RRSIGs.
                 foreach (CnameChainHop hop in result.CnameChain)
-                    response.Answers.AddRange(hop.DnssecRecords);
+                    AddPositiveDnssecRecords(response, hop.DnssecRecords);
 
-                response.Answers.AddRange(result.DnssecRecords);
+                AddPositiveDnssecRecords(response, result.DnssecRecords);
             }
         }
         else if (didSynthesizeDns64Answer)
@@ -233,4 +268,33 @@ public class RecursiveQueryResolver(
 
         return DnsQueryResolution.Handled(response);
     }
+
+    /// <summary>
+    ///     This method adds the DNSSEC records of a positive answer for a DO client: RRSIGs over
+    ///     the answer go to the answer section; NSEC and NSEC3 records and the RRSIGs over them go
+    ///     to the authority section.
+    /// </summary>
+    private static void AddPositiveDnssecRecords(
+        DnsMessage response,
+        IReadOnlyList<DnsResourceRecord> dnssecRecords
+    )
+    {
+        foreach (DnsResourceRecord record in dnssecRecords)
+            (IsDenialProof(record) ? response.AuthorityRecords : response.Answers).Add(record);
+    }
+
+    /// <summary>
+    ///     This method tells whether a record is an NSEC or NSEC3 record, or an RRSIG covering
+    ///     one.
+    /// </summary>
+    private static bool IsDenialProof(DnsResourceRecord record) =>
+        record.Type is DnsResourceRecordTypeEnum.Nsec or DnsResourceRecordTypeEnum.Nsec3
+        || (
+            record.Type == DnsResourceRecordTypeEnum.RrSig
+            && DnsRecordDataCodecRegistry.Decode(record.Type, record.Data)
+                is RrSigRecordData
+                {
+                    TypeCovered: DnsResourceRecordTypeEnum.Nsec or DnsResourceRecordTypeEnum.Nsec3
+                }
+        );
 }

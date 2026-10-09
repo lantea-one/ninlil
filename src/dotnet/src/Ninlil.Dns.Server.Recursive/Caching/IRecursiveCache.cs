@@ -56,7 +56,9 @@ public interface IRecursiveCache
     /// <summary>
     ///     This method stores a positive answer, replacing whatever was previously cached for
     ///     the same (name, type, class). The entry lives for the lowest TTL among
-    ///     <paramref name="records" />. An empty list is ignored.
+    ///     <paramref name="records" />, and not past the earliest expiration or the lowest
+    ///     Original TTL of the RRSIGs in <paramref name="dnssecRecords" /> (RFC 4035 §5.3.3). An
+    ///     empty list is ignored.
     /// </summary>
     /// <param name="name">The answer's owner name.</param>
     /// <param name="type">The answer's record type.</param>
@@ -73,7 +75,8 @@ public interface IRecursiveCache
 
     /// <summary>
     ///     This method stores a negative (NXDOMAIN/NODATA) answer for the lesser of the SOA
-    ///     record's TTL and its MINIMUM field (RFC 2308).
+    ///     record's TTL and its MINIMUM field (RFC 2308), capped by the RRSIGs in
+    ///     <paramref name="dnssecRecords" /> the same way as a positive answer.
     /// </summary>
     /// <param name="name">The name that does not exist, or lacks the queried type.</param>
     /// <param name="type">The record type that was queried for.</param>

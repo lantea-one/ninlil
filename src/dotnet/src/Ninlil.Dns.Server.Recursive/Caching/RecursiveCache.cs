@@ -100,6 +100,11 @@ public sealed class RecursiveCache(
 
         uint ttlSeconds = records.Min(record => record.TimeToLive);
         DateTimeOffset now = _store.UtcNow;
+        DateTimeOffset expiresAt = CapAtSignatureLifetime(
+            now.AddSeconds(ttlSeconds),
+            now,
+            dnssecRecords
+        );
 
         _store.Set(
             (name, type, recordClass),
@@ -109,7 +114,7 @@ public sealed class RecursiveCache(
                 dnssecRecords,
                 DnsResponseCodeEnum.NoError,
                 null,
-                now.AddSeconds(ttlSeconds),
+                expiresAt,
                 now
             )
         );
@@ -133,19 +138,52 @@ public sealed class RecursiveCache(
 
         uint ttlSeconds = Math.Min(soa.TimeToLive, soaData.MinimumTtlSeconds);
         DateTimeOffset now = _store.UtcNow;
+        DateTimeOffset expiresAt = CapAtSignatureLifetime(
+            now.AddSeconds(ttlSeconds),
+            now,
+            dnssecRecords
+        );
 
         _store.Set(
             (name, type, recordClass),
-            new RecursiveCacheEntry(
-                true,
-                [],
-                dnssecRecords,
-                responseCode,
-                soa,
-                now.AddSeconds(ttlSeconds),
-                now
-            )
+            new RecursiveCacheEntry(true, [], dnssecRecords, responseCode, soa, expiresAt, now)
         );
+    }
+
+    /// <summary>
+    ///     This method caps an entry's expiry the way RFC 4035 §5.3.3 caps a validated RRset's
+    ///     TTL: at the smallest Original TTL of its RRSIGs, and not past the earliest signature
+    ///     expiration. Without the cap, a cached answer would outlive its signature and then
+    ///     validate as Bogus until the entry expired.
+    /// </summary>
+    private static DateTimeOffset CapAtSignatureLifetime(
+        DateTimeOffset expiresAt,
+        DateTimeOffset now,
+        IReadOnlyList<DnsResourceRecord> dnssecRecords
+    )
+    {
+        foreach (DnsResourceRecord record in dnssecRecords)
+        {
+            if (
+                record.Type != DnsResourceRecordTypeEnum.RrSig
+                || DnsRecordDataCodecRegistry.Decode(record.Type, record.Data)
+                    is not RrSigRecordData signature
+            )
+                continue;
+
+            DateTimeOffset originalTtlLimit = now.AddSeconds(signature.OriginalTimeToLiveSeconds);
+            DateTimeOffset expirationLimit = DateTimeOffset.FromUnixTimeSeconds(
+                signature.SignatureExpiration
+            );
+
+            if (originalTtlLimit < expiresAt)
+                expiresAt = originalTtlLimit;
+
+            if (expirationLimit < expiresAt)
+                expiresAt = expirationLimit;
+        }
+
+        return expiresAt;
     }
 
     /// <inheritdoc cref="IRecursiveCache.EvictExpiredAndOverCapacity" />
