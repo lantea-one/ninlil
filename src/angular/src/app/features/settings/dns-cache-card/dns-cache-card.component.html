@@ -19,8 +19,9 @@
     <p cFormText class="cache-intro">
       Answers from forwarders and from recursive resolution are kept until their TTL runs out, so a
       repeat lookup is answered locally. Filtering and rewrites still apply to every client on a
-      cached answer. These figures are for this server only; other cluster nodes keep their own
-      cache.
+      cached answer. The DNSSEC trust cache remembers which zones are proven secure or insecure, so
+      validation does not repeat the chain of trust. These figures are for this server only; other
+      cluster nodes keep their own cache.
     </p>
 
     @if (errorMessage()) {

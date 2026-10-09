@@ -26,13 +26,14 @@ import { NotificationService } from '../../../shared/notification/notification.s
 
 /** The label each cache is shown under; an unknown future cache falls back to its API name. */
 const CACHE_LABELS: Record<string, string> = {
+  dnssec: 'DNSSEC trust',
   forwarded: 'Forwarded answers',
   recursive: 'Recursive resolver',
 };
 
 /**
- * This component shows this node's DNS answer caches -- the forwarded-response cache and the
- * recursive resolver's cache -- with their size and hit rate, and lets an operator flush one or
+ * This component shows this node's DNS caches -- the forwarded-response cache, the recursive
+ * resolver's cache and the DNSSEC trust cache -- with their size and hit rate, and lets an operator flush one or
  * all of them, or forget a single name, via `GET`/`DELETE /api/dns-cache` and
  * `DELETE /api/dns-cache/entries/{name}`. It sits on the Recursive Resolver settings page, next to
  * the cache size and serve-stale settings, and uses the same permissions: `recursivesettings:read`

@@ -24,6 +24,7 @@ describe('DnsCacheCardComponent', () => {
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
   const caches = [
+    { name: 'dnssec', entryCount: 4, maxEntries: 10000, hits: 36, misses: 4 },
     { name: 'forwarded', entryCount: 1842, maxEntries: 10000, hits: 900, misses: 100 },
     { name: 'recursive', entryCount: 0, maxEntries: 100000, hits: 0, misses: 0 },
   ];
@@ -78,6 +79,10 @@ describe('DnsCacheCardComponent', () => {
     const recursive = element.querySelector('tr[data-cache="recursive"]')?.textContent ?? '';
     expect(recursive).toContain('Recursive resolver');
     expect(recursive).toContain('—');
+
+    const dnssec = element.querySelector('tr[data-cache="dnssec"]')?.textContent ?? '';
+    expect(dnssec).toContain('DNSSEC trust');
+    expect(dnssec).toContain('90%');
   });
 
   it('hides every write action from a read-only user', async () => {
@@ -93,7 +98,7 @@ describe('DnsCacheCardComponent', () => {
     const fixture = await createComponent(['recursivesettings:read', 'recursivesettings:write']);
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('tr[data-cache] button').length).toBe(2);
+    expect(element.querySelectorAll('tr[data-cache] button').length).toBe(3);
     expect(element.querySelector('#dns-cache-remove-name')).not.toBeNull();
     expect(element.textContent).toContain('Flush all');
   });
@@ -103,7 +108,7 @@ describe('DnsCacheCardComponent', () => {
       apiSpy.apiDnsCacheDelete.and.returnValue(of({ removedEntryCount: 1842 }));
     });
 
-    const flushing = fixture.componentInstance.flush(caches[0]);
+    const flushing = fixture.componentInstance.flush(caches[1]);
     await confirmNextDialog(fixture, true);
     await flushing;
 
