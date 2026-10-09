@@ -35,7 +35,7 @@ export interface ClientSubnetSettingsServiceInterface {
     apiClientSubnetSettingsGet(extraHttpRequestParams?: any): Observable<ClientSubnetSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:ClientSubnet&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; a null or blank &#x60;overrideAddress&#x60; clears it. Returns 400 for an override address that is not an IP address. Requires &#x60;clientsubnetsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:ClientSubnet&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; a null or blank &#x60;overrideAddress&#x60; clears it. Returns 400 for a field of the wrong JSON type, a source prefix length outside 0-32 (IPv4) or 0-128 (IPv6), or an override address that is not an IP address. Requires &#x60;clientsubnetsettings:write&#x60;.
      * 
      * @endpoint patch /api/client-subnet-settings
 * @param requestParameters

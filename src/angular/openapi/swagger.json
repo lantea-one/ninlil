@@ -7301,7 +7301,7 @@
         "tags": [
           "ClientSubnetSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:ClientSubnet` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; a null or blank `overrideAddress` clears\nit. Returns 400 for an override address that is not an IP address. Requires\n`clientsubnetsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:ClientSubnet` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; a null or blank `overrideAddress` clears\nit. Returns 400 for a field of the wrong JSON type, a source prefix length outside 0-32\n(IPv4) or 0-128 (IPv6), or an override address that is not an IP address. Requires\n`clientsubnetsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8830,7 +8830,7 @@
         "tags": [
           "ClusterSettings"
         ],
-        "summary": "This action merges a partial update into the `Cluster` section (and, for\n`addressReconcileInterval`, the `CatalogSync` section) as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. There is no `nodeId`\nfield. The response note says whether the change applies at once or needs a restart.\nReturns 400 for a port outside 0-65535 (0 means the shared HTTPS port), a\nmissed-heartbeat threshold below 1, or a duration that is not a valid TimeSpan. Requires\n`clustersettings:write`.",
+        "summary": "This action merges a partial update into the `Cluster` section (and, for\n`addressReconcileInterval`, the `CatalogSync` section) as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. There is no `nodeId`\nfield. The response note says whether the change applies at once or needs a restart.\nReturns 400 for a field of the wrong JSON type, a port outside 0-65535 (0 means the\nshared HTTPS port), a missed-heartbeat threshold below 1, a `heartbeatInterval`\noutside 1 second to 1 day, a `heartbeatTimeout` outside 1 second to 5 minutes, or\nan `addressReconcileInterval` that is not positive or exceeds the timer limit.\nRequires `clustersettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -14356,7 +14356,7 @@
         "tags": [
           "DnsCookieSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Cookies` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. The change needs a restart. Returns 400 for a\nmalformed rotation interval. Requires `dnscookies:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Cookies` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. The change needs a restart. Returns 400 for a\nfield of the wrong JSON type or a rotation interval outside 1 minute to the timer\nlimit (about 49 days). Requires `dnscookies:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -16326,7 +16326,7 @@
         "tags": [
           "EventBrokerSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Events`,\n`DnsServer:Events:RabbitMq` and `DnsServer:Events:ActiveMq` as an RFC 7396\nmerge patch at every level, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A\nfield absent at the top level or within `rabbitMq` or `activeMq` keeps its\nvalue, including `password`, so an operator can change only `hostName` without\nresupplying a password M:Ninlil.Web.Controllers.EventBrokerSettingsController.Get(System.Threading.CancellationToken) never shows. The change needs a restart.\nReturns 400 for an unknown transport or a malformed duration. Requires\n`eventbroker:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Events`,\n`DnsServer:Events:RabbitMq` and `DnsServer:Events:ActiveMq` as an RFC 7396\nmerge patch at every level, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A\nfield absent at the top level or within `rabbitMq` or `activeMq` keeps its\nvalue, including `password`, so an operator can change only `hostName` without\nresupplying a password M:Ninlil.Web.Controllers.EventBrokerSettingsController.Get(System.Threading.CancellationToken) never shows. The change needs a restart.\nReturns 400 for a field of the wrong JSON type (nested fields are named like\n`rabbitMq.port`), an unknown transport, a port outside 1-65535, a reconnect delay\nor publish timeout that is not positive or exceeds the timer limit, or a maximum\nreconnect delay below the initial delay in the same patch. Requires\n`eventbroker:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -19256,7 +19256,7 @@
         "tags": [
           "ForwardingSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Forwarding` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. Every field takes effect at once. Returns 400\nfor an unknown failover strategy, a malformed duration or a `maxCacheEntries` below\n1. Requires `forwardingsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Forwarding` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. Every field takes effect at once. Returns 400\nfor a field of the wrong JSON type, an unknown failover strategy, a\n`healthCheckInterval` outside 1 second to 1 day, a `perForwarderTimeout`\noutside 100 milliseconds to 1 minute, or a `maxCacheEntries` below 1. Requires `forwardingsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -19378,7 +19378,7 @@
         "tags": [
           "IdentitySettings"
         ],
-        "summary": "This action merges a partial update into `Identity:Password` and\n`Identity:Lockout` as an RFC 7396 merge patch, through\nNinlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect on the next\nrequest. Returns 400 when a length or attempt count is below 1 or the lockout duration\nis not a valid TimeSpan. Requires `identitysettings:write`.",
+        "summary": "This action merges a partial update into `Identity:Password` and\n`Identity:Lockout` as an RFC 7396 merge patch, through\nNinlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect on the next\nrequest. Returns 400 for a field of the wrong JSON type, a length or attempt count below\n1, a length above 128, a unique-character count above 64 or above the length, or a lockout duration that is negative or longer than 100 years. Requires `identitysettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -19802,7 +19802,7 @@
         "tags": [
           "OidcSsoSettings"
         ],
-        "summary": "This action returns the current SSO settings. The client secret is never returned, only\nwhether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured).\nRequires `ssosettings:read`.",
+        "summary": "This action returns the current SSO settings. The client secret is never returned, only\nwhether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured),\nwhether the plaintext variable overrides it and whether the stored one is unreadable.\nRequires `ssosettings:read`.",
         "responses": {
           "200": {
             "description": "OK",
@@ -19821,7 +19821,9 @@
                     "openid",
                     "profile",
                     "email"
-                  ]
+                  ],
+                  "clientSecretFromEnvironment": false,
+                  "clientSecretUnreadable": false
                 }
               },
               "application/json": {
@@ -19838,7 +19840,9 @@
                     "openid",
                     "profile",
                     "email"
-                  ]
+                  ],
+                  "clientSecretFromEnvironment": false,
+                  "clientSecretUnreadable": false
                 }
               },
               "text/json": {
@@ -19855,7 +19859,9 @@
                     "openid",
                     "profile",
                     "email"
-                  ]
+                  ],
+                  "clientSecretFromEnvironment": false,
+                  "clientSecretUnreadable": false
                 }
               }
             }
@@ -20740,7 +20746,7 @@
         "tags": [
           "QueryLoggingSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:QueryLogging` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. The response note says whether a restart is\nneeded. Returns 400 for a malformed duration or an unknown privacy level. Requires\n`querylog:write`.",
+        "summary": "This action merges a partial update into `DnsServer:QueryLogging` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. The response note says whether a restart is\nneeded. Returns 400 for a field of the wrong JSON type, a negative `retentionPeriod`\nor `maxRetainedEntries` (zero turns the bound off), a `cleanupInterval` that\nis not positive or exceeds the timer limit, or an unknown privacy level. Requires\n`querylog:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -20883,7 +20889,7 @@
         "tags": [
           "RateLimitingSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:RateLimiting` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; `subnetBypassCidrs` replaces the whole\nlist. The change needs a restart. Returns 400 for a malformed duration or a truncation\npercentage outside 0-100. Requires `ratelimiting:write`.",
+        "summary": "This action merges a partial update into `DnsServer:RateLimiting` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; `subnetBypassCidrs` replaces the whole\nlist. The change needs a restart. Returns 400 for a field of the wrong JSON type, a rate,\nbucket size, tracked-client ceiling or subnet query limit below 1, a duration that is\nnot positive or exceeds the timer limit, a subnet prefix length outside 1-32 (IPv4) or\n1-128 (IPv6), a truncation percentage outside 0-100, or a bypass entry that is not a\nCIDR network address (for example `10.0.0.1/8`). Requires `ratelimiting:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -30531,7 +30537,7 @@
         "tags": [
           "RecursiveSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Recursive` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; an override list, when present, replaces the\nwhole list. `insecureDomains` is the same, and also accepts `null` to restore the\nbuilt-in list. The response note says whether a restart is needed. Returns 400 for a\nmalformed duration, an invalid root-hint address, a malformed trust anchor or an\ninvalid domain name in `insecureDomains`. Requires\n`recursivesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Recursive` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value; an override list, when present, replaces the\nwhole list. `insecureDomains` is the same, and also accepts `null` to restore the\nbuilt-in list. The response note says whether a restart is needed. Returns 400 for a\nfield of the wrong JSON type, an `upstreamQueryTimeout` outside 100 milliseconds\nto 1 minute, an `overallQueryTimeout` outside 1 second to 5 minutes or shorter\nthan the upstream timeout (the stored value stands in for an absent field), a count\nbelow 1, a refresh interval or window that is not positive, a hold-down or stale age\nthat is negative, a duration beyond the timer limit or 100 years, an invalid root-hint\naddress, a malformed trust anchor or an invalid domain name in\n`insecureDomains`. Requires\n`recursivesettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -32277,7 +32283,7 @@
         "tags": [
           "SmtpSettings"
         ],
-        "summary": "This action returns the current SMTP settings. The password is never returned, only\nwhether one is set (see Ninlil.Web.Models.SmtpSettingsDetail.PasswordConfigured). Requires\n`smtpsettings:read`.",
+        "summary": "This action returns the current SMTP settings. The password is never returned, only\nwhether one is set (see Ninlil.Web.Models.SmtpSettingsDetail.PasswordConfigured), whether\n`NINLIL_EMAIL_PASSWORD` overrides it and whether the stored one is unreadable.\nRequires `smtpsettings:read`.",
         "responses": {
           "200": {
             "description": "OK",
@@ -32294,7 +32300,9 @@
                   "passwordConfigured": true,
                   "fromAddress": "notifications@example.com",
                   "fromDisplayName": "Ninlil",
-                  "publicBaseUrl": "https://dns.example.com"
+                  "publicBaseUrl": "https://dns.example.com",
+                  "passwordFromEnvironment": false,
+                  "passwordUnreadable": false
                 }
               },
               "application/json": {
@@ -32309,7 +32317,9 @@
                   "passwordConfigured": true,
                   "fromAddress": "notifications@example.com",
                   "fromDisplayName": "Ninlil",
-                  "publicBaseUrl": "https://dns.example.com"
+                  "publicBaseUrl": "https://dns.example.com",
+                  "passwordFromEnvironment": false,
+                  "passwordUnreadable": false
                 }
               },
               "text/json": {
@@ -32324,7 +32334,9 @@
                   "passwordConfigured": true,
                   "fromAddress": "notifications@example.com",
                   "fromDisplayName": "Ninlil",
-                  "publicBaseUrl": "https://dns.example.com"
+                  "publicBaseUrl": "https://dns.example.com",
+                  "passwordFromEnvironment": false,
+                  "passwordUnreadable": false
                 }
               }
             }
@@ -32335,7 +32347,7 @@
         "tags": [
           "SmtpSettings"
         ],
-        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never\nshows. A password is encrypted before it is written to the configuration file, and a blank\none clears it. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a\nmalformed from-address or a `publicBaseUrl` that is not an absolute http or https\nURL. Requires `smtpsettings:write`.",
+        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never\nshows. A password is encrypted before it is written to the configuration file, and a blank\none clears it. Every field takes effect at once. Returns 400 for a blank host or\ndisplay name, a port outside 1-65535, a `username` left with no password from any\nsource, a malformed from-address or a `publicBaseUrl` that is not an absolute http\nor https URL. Requires `smtpsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -32720,7 +32732,7 @@
         "tags": [
           "TransportSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Protocol:Plain` as an RFC 7396\nmerge patch. Every field needs a listener or process restart. Returns 400 for an invalid\nlisten address or duration. Requires `transportsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Protocol:Plain` as an RFC 7396\nmerge patch. Every field needs a listener or process restart. Returns 400 for\na field of the wrong JSON type, a port outside 0-65535, a connection or stream limit\nbelow 1, an idle timeout outside 1 second to 1 day, or an invalid listen address. Requires\n`transportsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -32872,7 +32884,7 @@
         "tags": [
           "TransportSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsOverTls` as an\nRFC 7396 merge patch. `enable` starts or stops the listener at once; every other\nfield needs a listener restart. The response note says which applies. Returns 400 for an\ninvalid listen address, duration or TLS protocol name. Requires\n`transportsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsOverTls` as an\nRFC 7396 merge patch. `enable` starts or stops the listener at once; every other\nfield needs a listener restart. The response note says which applies. Returns 400 for\na field of the wrong JSON type, a port outside 0-65535, a connection or stream limit\nbelow 1, an idle timeout outside 1 second to 1 day, a certificate poll interval that is not positive or exceeds the\ntimer limit, or an invalid listen address or TLS protocol name. Requires\n`transportsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -32976,7 +32988,7 @@
         "tags": [
           "TransportSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsOverHttps` as an\nRFC 7396 merge patch. `enable` takes effect at once; `path` and\n`maxMessageSizeBytes` need a full process restart (see\nNinlil.Web.Models.DnsOverHttpsSettingsDetail for why). Returns 400 for a path that does not\nstart with `/`. Requires `transportsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsOverHttps` as an\nRFC 7396 merge patch. `enable` takes effect at once; `path` and\n`maxMessageSizeBytes` need a full process restart (see\nNinlil.Web.Models.DnsOverHttpsSettingsDetail for why). Returns 400 for a field of the\nwrong JSON type, a path that does not start with `/`, or a\n`maxMessageSizeBytes` outside 1-65535. Requires `transportsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33116,7 +33128,7 @@
         "tags": [
           "TransportSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsOverQuic` as an\nRFC 7396 merge patch. `enable` starts or stops the listener at once; every other\nfield needs a listener restart. Returns 400 for an invalid listen address, duration or\nTLS protocol name. Requires `transportsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsOverQuic` as an\nRFC 7396 merge patch. `enable` starts or stops the listener at once; every other\nfield needs a listener restart. Returns 400 for\na field of the wrong JSON type, a port outside 0-65535, a connection or stream limit\nbelow 1, an idle timeout outside 1 second to 1 day, a certificate poll interval that is not positive or exceeds the\ntimer limit, or an invalid listen address or TLS protocol name. Requires\n`transportsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33250,7 +33262,7 @@
         "tags": [
           "TransportSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsCrypt` as an\nRFC 7396 merge patch. `enable` starts or stops the UDP and TCP listeners and the\ncertificate rotation loop at once; every other field needs a restart of those services.\nReturns 400 for an invalid listen address, duration or cipher name, or an empty cipher\nlist. Requires `transportsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsCrypt` as an\nRFC 7396 merge patch. `enable` starts or stops the UDP and TCP listeners and the\ncertificate rotation loop at once; every other field needs a restart of those services.\nReturns 400 for\na field of the wrong JSON type, a port outside 0-65535, a connection or stream limit\nbelow 1, an idle timeout outside 1 second to 1 day, a certificate rotation interval, validity duration or clock-skew tolerance\nbeyond the timer limit (rotation and validity must also be positive, validity longer\nthan rotation), an invalid listen address or cipher name, or an empty cipher list.\nRequires `transportsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -35978,7 +35990,7 @@
         "tags": [
           "WebListenSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Web` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change is written to\nthe file and applied only after a full restart. Returns 400 for a port outside 1-65535,\nan invalid listen address, a malformed duration or an unknown TLS protocol name.\nRequires `weblistensettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Web` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change is written to\nthe file and applied only after a full restart. Returns 400 for a field of the wrong JSON\ntype, a port outside 1-65535, an invalid listen address, a certificate poll interval\nthat is not positive or exceeds the timer limit, or an unknown TLS protocol name.\nRequires `weblistensettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -43549,7 +43561,7 @@
           },
           "clientSecretConfigured": {
             "type": "boolean",
-            "description": "Whether `OidcSsoOptions.ClientSecretEncrypted` has a value. The secret itself is never\nreturned."
+            "description": "Whether a client secret is set from either source: `OidcSsoOptions.ClientSecretEncrypted`\nor the plaintext `OidcSsoOptions.ClientSecret`. The secret itself is never returned."
           },
           "scopes": {
             "type": "array",
@@ -43558,6 +43570,14 @@
             },
             "description": "The scopes requested in the authorization code flow. Defaults to `openid`, `profile` and `email`.",
             "nullable": true
+          },
+          "clientSecretFromEnvironment": {
+            "type": "boolean",
+            "description": "Whether a plaintext client secret is set outside the admin console (the\n`NINLIL_IDENTITY_SSO_CLIENT_SECRET` environment variable). It overrides the stored\nsecret, so a secret saved on this page has no effect while it is set."
+          },
+          "clientSecretUnreadable": {
+            "type": "boolean",
+            "description": "Whether a stored client secret exists but this server's Data Protection key ring cannot\ndecrypt it (the key ring changed) and no plaintext secret overrides it. SSO sign-in fails at\nthe provider until the secret is entered again; the rest of the server is unaffected."
           }
         },
         "additionalProperties": false,
@@ -44533,6 +44553,14 @@
             "type": "string",
             "description": "The address users open the admin console at, which password-reset links point to. Empty\nmeans no reset link can be sent. Links never use the request's Host header.",
             "nullable": true
+          },
+          "passwordFromEnvironment": {
+            "type": "boolean",
+            "description": "Whether a plaintext password is set outside the admin console (the\n`NINLIL_EMAIL_PASSWORD` environment variable). It overrides the stored password, so a\npassword saved on this page has no effect while it is set."
+          },
+          "passwordUnreadable": {
+            "type": "boolean",
+            "description": "Whether a stored password exists but this server's Data Protection key ring cannot decrypt\nit (the key ring changed). Sending mail fails until the password is entered again or\n`NINLIL_EMAIL_PASSWORD` is set."
           }
         },
         "additionalProperties": false,

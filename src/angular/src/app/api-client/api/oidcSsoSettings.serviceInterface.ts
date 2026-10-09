@@ -28,7 +28,7 @@ export interface OidcSsoSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action returns the current SSO settings. The client secret is never returned, only whether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured). Requires &#x60;ssosettings:read&#x60;.
+     * This action returns the current SSO settings. The client secret is never returned, only whether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured), whether the plaintext variable overrides it and whether the stored one is unreadable. Requires &#x60;ssosettings:read&#x60;.
      * 
      * @endpoint get /api/sso-settings
 */

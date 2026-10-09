@@ -99,7 +99,7 @@ export class DnsCookieSettingsService extends BaseService implements DnsCookieSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Cookies&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The change needs a restart. Returns 400 for a malformed rotation interval. Requires &#x60;dnscookies:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Cookies&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The change needs a restart. Returns 400 for a field of the wrong JSON type or a rotation interval outside 1 minute to the timer limit (about 49 days). Requires &#x60;dnscookies:write&#x60;.
      * @endpoint patch /api/dns-cookie-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

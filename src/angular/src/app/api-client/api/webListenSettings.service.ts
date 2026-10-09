@@ -99,7 +99,7 @@ export class WebListenSettingsService extends BaseService implements WebListenSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Web&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change is written to the file and applied only after a full restart. Returns 400 for a port outside 1-65535, an invalid listen address, a malformed duration or an unknown TLS protocol name. Requires &#x60;weblistensettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Web&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change is written to the file and applied only after a full restart. Returns 400 for a field of the wrong JSON type, a port outside 1-65535, an invalid listen address, a certificate poll interval that is not positive or exceeds the timer limit, or an unknown TLS protocol name. Requires &#x60;weblistensettings:write&#x60;.
      * @endpoint patch /api/web-listen-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

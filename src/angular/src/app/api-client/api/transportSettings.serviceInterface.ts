@@ -55,7 +55,7 @@ export interface TransportSettingsServiceInterface {
     apiTransportSettingsDnsOverHttpsGet(extraHttpRequestParams?: any): Observable<DnsOverHttpsSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverHttps&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; takes effect at once; &#x60;path&#x60; and &#x60;maxMessageSizeBytes&#x60; need a full process restart (see Ninlil.Web.Models.DnsOverHttpsSettingsDetail for why). Returns 400 for a path that does not start with &#x60;/&#x60;. Requires &#x60;transportsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverHttps&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; takes effect at once; &#x60;path&#x60; and &#x60;maxMessageSizeBytes&#x60; need a full process restart (see Ninlil.Web.Models.DnsOverHttpsSettingsDetail for why). Returns 400 for a field of the wrong JSON type, a path that does not start with &#x60;/&#x60;, or a &#x60;maxMessageSizeBytes&#x60; outside 1-65535. Requires &#x60;transportsettings:write&#x60;.
      * 
      * @endpoint patch /api/transport-settings/dns-over-https
 * @param requestParameters
@@ -70,7 +70,7 @@ export interface TransportSettingsServiceInterface {
     apiTransportSettingsDnsOverQuicGet(extraHttpRequestParams?: any): Observable<DnsOverQuicSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverQuic&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the listener at once; every other field needs a listener restart. Returns 400 for an invalid listen address, duration or TLS protocol name. Requires &#x60;transportsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverQuic&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the listener at once; every other field needs a listener restart. Returns 400 for a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit below 1, an idle timeout outside 1 second to 1 day, a certificate poll interval that is not positive or exceeds the timer limit, or an invalid listen address or TLS protocol name. Requires &#x60;transportsettings:write&#x60;.
      * 
      * @endpoint patch /api/transport-settings/dns-over-quic
 * @param requestParameters
@@ -85,7 +85,7 @@ export interface TransportSettingsServiceInterface {
     apiTransportSettingsDnsOverTlsGet(extraHttpRequestParams?: any): Observable<DnsOverTlsSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverTls&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the listener at once; every other field needs a listener restart. The response note says which applies. Returns 400 for an invalid listen address, duration or TLS protocol name. Requires &#x60;transportsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverTls&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the listener at once; every other field needs a listener restart. The response note says which applies. Returns 400 for a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit below 1, an idle timeout outside 1 second to 1 day, a certificate poll interval that is not positive or exceeds the timer limit, or an invalid listen address or TLS protocol name. Requires &#x60;transportsettings:write&#x60;.
      * 
      * @endpoint patch /api/transport-settings/dns-over-tls
 * @param requestParameters
@@ -100,7 +100,7 @@ export interface TransportSettingsServiceInterface {
     apiTransportSettingsDnscryptGet(extraHttpRequestParams?: any): Observable<DnsCryptSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsCrypt&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the UDP and TCP listeners and the certificate rotation loop at once; every other field needs a restart of those services. Returns 400 for an invalid listen address, duration or cipher name, or an empty cipher list. Requires &#x60;transportsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsCrypt&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the UDP and TCP listeners and the certificate rotation loop at once; every other field needs a restart of those services. Returns 400 for a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit below 1, an idle timeout outside 1 second to 1 day, a certificate rotation interval, validity duration or clock-skew tolerance beyond the timer limit (rotation and validity must also be positive, validity longer than rotation), an invalid listen address or cipher name, or an empty cipher list. Requires &#x60;transportsettings:write&#x60;.
      * 
      * @endpoint patch /api/transport-settings/dnscrypt
 * @param requestParameters
@@ -115,7 +115,7 @@ export interface TransportSettingsServiceInterface {
     apiTransportSettingsPlainGet(extraHttpRequestParams?: any): Observable<PlainTransportSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:Plain&#x60; as an RFC 7396 merge patch. Every field needs a listener or process restart. Returns 400 for an invalid listen address or duration. Requires &#x60;transportsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:Plain&#x60; as an RFC 7396 merge patch. Every field needs a listener or process restart. Returns 400 for a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit below 1, an idle timeout outside 1 second to 1 day, or an invalid listen address. Requires &#x60;transportsettings:write&#x60;.
      * 
      * @endpoint patch /api/transport-settings/plain
 * @param requestParameters

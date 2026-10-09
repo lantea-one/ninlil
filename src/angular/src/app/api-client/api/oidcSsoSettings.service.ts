@@ -42,7 +42,7 @@ export class OidcSsoSettingsService extends BaseService implements OidcSsoSettin
     }
 
     /**
-     * This action returns the current SSO settings. The client secret is never returned, only whether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured). Requires &#x60;ssosettings:read&#x60;.
+     * This action returns the current SSO settings. The client secret is never returned, only whether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured), whether the plaintext variable overrides it and whether the stored one is unreadable. Requires &#x60;ssosettings:read&#x60;.
      * @endpoint get /api/sso-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

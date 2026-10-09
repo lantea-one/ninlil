@@ -30,12 +30,20 @@ export interface OidcSsoSettingsDetail {
      */
     clientId?: string | null;
     /**
-     * Whether `OidcSsoOptions.ClientSecretEncrypted` has a value. The secret itself is never returned.
+     * Whether a client secret is set from either source: `OidcSsoOptions.ClientSecretEncrypted` or the plaintext `OidcSsoOptions.ClientSecret`. The secret itself is never returned.
      */
     clientSecretConfigured?: boolean;
     /**
      * The scopes requested in the authorization code flow. Defaults to `openid`, `profile` and `email`.
      */
     scopes?: Array<string> | null;
+    /**
+     * Whether a plaintext client secret is set outside the admin console (the `NINLIL_IDENTITY_SSO_CLIENT_SECRET` environment variable). It overrides the stored secret, so a secret saved on this page has no effect while it is set.
+     */
+    clientSecretFromEnvironment?: boolean;
+    /**
+     * Whether a stored client secret exists but this server\'s Data Protection key ring cannot decrypt it (the key ring changed) and no plaintext secret overrides it. SSO sign-in fails at the provider until the secret is entered again; the rest of the server is unaffected.
+     */
+    clientSecretUnreadable?: boolean;
 }
 

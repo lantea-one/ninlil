@@ -35,7 +35,7 @@ export interface RateLimitingSettingsServiceInterface {
     apiRateLimitingSettingsGet(extraHttpRequestParams?: any): Observable<RateLimitingSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:RateLimiting&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; &#x60;subnetBypassCidrs&#x60; replaces the whole list. The change needs a restart. Returns 400 for a malformed duration or a truncation percentage outside 0-100. Requires &#x60;ratelimiting:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:RateLimiting&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; &#x60;subnetBypassCidrs&#x60; replaces the whole list. The change needs a restart. Returns 400 for a field of the wrong JSON type, a rate, bucket size, tracked-client ceiling or subnet query limit below 1, a duration that is not positive or exceeds the timer limit, a subnet prefix length outside 1-32 (IPv4) or 1-128 (IPv6), a truncation percentage outside 0-100, or a bypass entry that is not a CIDR network address (for example &#x60;10.0.0.1/8&#x60;). Requires &#x60;ratelimiting:write&#x60;.
      * 
      * @endpoint patch /api/rate-limiting-settings
 * @param requestParameters

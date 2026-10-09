@@ -45,5 +45,13 @@ export interface SmtpSettingsDetail {
      * The address users open the admin console at, which password-reset links point to. Empty means no reset link can be sent. Links never use the request\'s Host header.
      */
     publicBaseUrl?: string | null;
+    /**
+     * Whether a plaintext password is set outside the admin console (the `NINLIL_EMAIL_PASSWORD` environment variable). It overrides the stored password, so a password saved on this page has no effect while it is set.
+     */
+    passwordFromEnvironment?: boolean;
+    /**
+     * Whether a stored password exists but this server\'s Data Protection key ring cannot decrypt it (the key ring changed). Sending mail fails until the password is entered again or `NINLIL_EMAIL_PASSWORD` is set.
+     */
+    passwordUnreadable?: boolean;
 }
 

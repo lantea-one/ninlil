@@ -35,7 +35,7 @@ export interface ClusterSettingsServiceInterface {
     apiClusterSettingsGet(extraHttpRequestParams?: any): Observable<ClusterSettingsDetail>;
 
     /**
-     * This action merges a partial update into the &#x60;Cluster&#x60; section (and, for &#x60;addressReconcileInterval&#x60;, the &#x60;CatalogSync&#x60; section) as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. There is no &#x60;nodeId&#x60; field. The response note says whether the change applies at once or needs a restart. Returns 400 for a port outside 0-65535 (0 means the shared HTTPS port), a missed-heartbeat threshold below 1, or a duration that is not a valid TimeSpan. Requires &#x60;clustersettings:write&#x60;.
+     * This action merges a partial update into the &#x60;Cluster&#x60; section (and, for &#x60;addressReconcileInterval&#x60;, the &#x60;CatalogSync&#x60; section) as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. There is no &#x60;nodeId&#x60; field. The response note says whether the change applies at once or needs a restart. Returns 400 for a field of the wrong JSON type, a port outside 0-65535 (0 means the shared HTTPS port), a missed-heartbeat threshold below 1, a &#x60;heartbeatInterval&#x60; outside 1 second to 1 day, a &#x60;heartbeatTimeout&#x60; outside 1 second to 5 minutes, or an &#x60;addressReconcileInterval&#x60; that is not positive or exceeds the timer limit. Requires &#x60;clustersettings:write&#x60;.
      * 
      * @endpoint patch /api/cluster-settings
 * @param requestParameters
