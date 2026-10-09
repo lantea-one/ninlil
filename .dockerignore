@@ -7,9 +7,26 @@
 .git/
 .forgejo/
 
+# Release binaries and Linux packages the pipeline collects in dist/ and packages/. The image
+# gets the executables through the separate "binaries" build context.
+dist/
+packages/
+
 # .NET build output: every project's bin/ and obj/, matching .gitignore's [Bb]in/ and [Oo]bj/.
 **/bin/
 **/obj/
+
+# Local tool and agent state: the Angular cache at the repository root, agent settings and the
+# dotnet local tool manifest. None of it is used by the build.
+.angular/
+.claude/
+.config/
+
+# Packaging and operations files the image does not use: Arch packages, Terraform modules and the
+# installer and database scripts.
+src/archlinux/
+src/terraform/
+src/script/
 
 # Angular dependencies and build output. node_modules/ alone is several hundred MB and would
 # dominate the build context.
