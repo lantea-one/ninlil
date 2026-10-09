@@ -22,12 +22,14 @@ name: 'Ninlil Pipeline'
 ##   version ────────────┐
 ##   lint ───────────────┤
 ##   test-dotnet ────────┼─ draft ── binaries (×5) ─┬─ arch-packages ─┬─ publish
-##   test-admin-console ─┤                          └─ image ─────────┤
+##   test-admin-console ─┤                          ├─ image ─────────┤
+##                       │                          └─ windows-smoke ─┤
 ##                       └─ packages (×4) ────────────────────────────┘
 ##
 ## The draft release doubles as the hand-off between jobs: each binary job attaches its
-## executable to it, and the Arch Linux and image jobs build from the two Linux executables they
-## download back from it. Publish turns the draft into the visible release.
+## executable to it, the Arch Linux and image jobs build from the two Linux executables they
+## download back from it, and the Windows smoke test runs the Windows executable it downloads.
+## Publish turns the draft into the visible release.
 ##
 ## No run: body contains a ${{ }} expression. Every value reaches a script through env:, so a
 ## branch name can never become shell text.
@@ -490,6 +492,40 @@ jobs:
           done
         shell: 'bash'
   ##
+  ## Starts the Windows executable from the draft on the Windows runner and checks /status, the
+  ## admin console and one DNS query (windows-smoke.ps1). A smoke test only; there is no Windows
+  ## test suite. 'windows-latest' is the label the Windows runner registers; if that runner
+  ## registers only under its own name, change the label to 'lofnheim' (both are declared in
+  ## .forgejo/actionlint.yaml). Windows PowerShell 5.1 is always installed there, so the step
+  ## uses it instead of requiring pwsh.
+  ##
+  windows-smoke:
+    name: 'Smoke Test the Windows Binary'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'binaries'
+    runs-on: 'windows-latest'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' # v7.0.1
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Run the Windows Executable'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          RELEASE_TAG: '${{ needs.version.outputs.version }}'
+          FORGEJO_SERVER_URL: '${{ forgejo.server_url }}'
+          FORGEJO_REPOSITORY: '${{ forgejo.repository }}'
+        run: |-
+          .\.forgejo\scripts\windows-smoke.ps1 -ReleaseTag $env:RELEASE_TAG -Asset ninlil-windows-amd64.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        shell: 'powershell'
+  ##
   ## Turns the draft into the visible release once every artifact is in place.
   ##
   publish:
@@ -499,6 +535,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
+      - 'windows-smoke'
       - 'arch-packages'
       - 'image'
       - 'packages'
