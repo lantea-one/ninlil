@@ -153,10 +153,11 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
 
         DnsQuestion question = new(key.Name, key.Type, key.Class);
 
-        if (ComputeLifetime(question, response) is not { } lifetime)
+        DateTimeOffset now = _store.UtcNow;
+
+        if (ComputeLifetime(question, response, now) is not { } lifetime)
             return false;
 
-        DateTimeOffset now = _store.UtcNow;
         _store.Set(key, new ForwardedResponseCacheEntry(response, now, now + lifetime, isSecure));
         return true;
     }
@@ -180,6 +181,12 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
     ///             by, and RFC 2308 says not to cache it.
     ///         </item>
     ///         <item>
+    ///             Either kind is also capped like a validated RRset (RFC 4035 §5.3.3): at the
+    ///             smallest Original TTL of any RRSIG in the message and not past the earliest
+    ///             RRSIG expiration. Without the cap, an answer cached as Secure would be served
+    ///             with AD after its signatures ran out.
+    ///         </item>
+    ///         <item>
     ///             Anything else is not cached: SERVFAIL, REFUSED, FORMERR, NOTIMP and every other
     ///             code, a truncated answer (incomplete), a TSIG-signed one (signed for one
     ///             transaction only), or a lifetime of zero.
@@ -188,8 +195,13 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
     /// </summary>
     /// <param name="question">The question the answer is for.</param>
     /// <param name="response">The upstream answer.</param>
+    /// <param name="now">The current time on the cache's clock, which RRSIG expirations are measured against.</param>
     /// <returns>How long to cache it, or <see langword="null" /> when it must not be cached.</returns>
-    public static TimeSpan? ComputeLifetime(DnsQuestion question, DnsMessage response)
+    public static TimeSpan? ComputeLifetime(
+        DnsQuestion question,
+        DnsMessage response,
+        DateTimeOffset now
+    )
     {
         if (response.IsTruncated || response.Tsig is not null)
             return null;
@@ -246,6 +258,26 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
 
             if (lifetime > MaxNegativeLifetime)
                 lifetime = MaxNegativeLifetime;
+        }
+
+        foreach (DnsResourceRecord record in records)
+        {
+            if (
+                record.Type != DnsResourceRecordTypeEnum.RrSig
+                || DnsRecordDataCodecRegistry.Decode(record.Type, record.Data)
+                    is not RrSigRecordData signature
+            )
+                continue;
+
+            TimeSpan originalTtl = TimeSpan.FromSeconds(signature.OriginalTimeToLiveSeconds);
+            TimeSpan untilExpiration =
+                DateTimeOffset.FromUnixTimeSeconds(signature.SignatureExpiration) - now;
+
+            if (originalTtl < lifetime)
+                lifetime = originalTtl;
+
+            if (untilExpiration < lifetime)
+                lifetime = untilExpiration;
         }
 
         return lifetime > TimeSpan.Zero ? lifetime : null;

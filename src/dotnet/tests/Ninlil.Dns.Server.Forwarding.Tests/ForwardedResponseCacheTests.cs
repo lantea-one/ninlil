@@ -299,7 +299,8 @@ public class ForwardedResponseCacheTests
     {
         TimeSpan? lifetime = ForwardedResponseCache.ComputeLifetime(
             Query("example.com").Questions[0],
-            Positive("example.com", ttl: 30_000_000)
+            Positive("example.com", ttl: 30_000_000),
+            _clock.GetUtcNow()
         );
 
         Assert.Equal(TimeSpan.FromDays(7), lifetime);
@@ -331,7 +332,8 @@ public class ForwardedResponseCacheTests
     {
         TimeSpan? lifetime = ForwardedResponseCache.ComputeLifetime(
             Query("missing.example.com").Questions[0],
-            Response(DnsResponseCodeEnum.NxDomain, authority: [Soa("example.com", 3600, 60)])
+            Response(DnsResponseCodeEnum.NxDomain, authority: [Soa("example.com", 3600, 60)]),
+            _clock.GetUtcNow()
         );
 
         Assert.Equal(TimeSpan.FromSeconds(60), lifetime);
@@ -342,7 +344,8 @@ public class ForwardedResponseCacheTests
     {
         TimeSpan? lifetime = ForwardedResponseCache.ComputeLifetime(
             Query("missing.example.com").Questions[0],
-            Response(DnsResponseCodeEnum.NxDomain, authority: [Soa("example.com", 45, 900)])
+            Response(DnsResponseCodeEnum.NxDomain, authority: [Soa("example.com", 45, 900)]),
+            _clock.GetUtcNow()
         );
 
         Assert.Equal(TimeSpan.FromSeconds(45), lifetime);
@@ -353,7 +356,8 @@ public class ForwardedResponseCacheTests
     {
         TimeSpan? lifetime = ForwardedResponseCache.ComputeLifetime(
             Query("missing.example.com").Questions[0],
-            Response(DnsResponseCodeEnum.NxDomain, authority: [Soa("example.com", 86400, 86400)])
+            Response(DnsResponseCodeEnum.NxDomain, authority: [Soa("example.com", 86400, 86400)]),
+            _clock.GetUtcNow()
         );
 
         Assert.Equal(TimeSpan.FromHours(3), lifetime);
@@ -390,7 +394,8 @@ public class ForwardedResponseCacheTests
                 DnsResponseCodeEnum.NoError,
                 [Cname("www.example.com", "cdn.example.net", 20)],
                 [Soa("example.net", 3600, 300)]
-            )
+            ),
+            _clock.GetUtcNow()
         );
 
         Assert.Equal(TimeSpan.FromSeconds(20), lifetime);
@@ -660,6 +665,98 @@ public class ForwardedResponseCacheTests
         Assert.NotNull(stale);
         Assert.False(stale.AuthenticData);
         Assert.Equal(2, stale.Answers.Count);
+    }
+
+    /// <summary>
+    ///     This method builds an RRSIG over an A record with the given Original TTL and
+    ///     expiration, for the signature-lifetime cap tests.
+    /// </summary>
+    private static DnsResourceRecord SignatureLasting(
+        string name,
+        uint originalTtl,
+        DateTimeOffset expiration
+    ) =>
+        new(
+            DnsName.Parse(name),
+            DnsResourceRecordTypeEnum.RrSig,
+            DnsClassEnum.Internet,
+            3600, // The record TTL stays high so that only the RRSIG fields can shorten the entry.
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.RrSig,
+                new RrSigRecordData(
+                    DnsResourceRecordTypeEnum.A,
+                    DnssecAlgorithmEnum.Ed25519,
+                    2,
+                    originalTtl,
+                    (uint)expiration.ToUnixTimeSeconds(),
+                    (uint)expiration.AddDays(-30).ToUnixTimeSeconds(),
+                    1234,
+                    DnsName.Parse("example.com"),
+                    new byte[64]
+                )
+            )
+        );
+
+    [Fact]
+    public void TryStore_WithASignatureExpiringBeforeTheTtl_ExpiresWithTheSignature()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", dnssecOk: true);
+        DnsMessage answer = Response(
+            DnsResponseCodeEnum.NoError,
+            [
+                A("example.com", 3600),
+                SignatureLasting("example.com", 3600, _clock.GetUtcNow().AddSeconds(60)),
+            ]
+        );
+        cache.TryStore(Key(request), answer, isSecure: true);
+
+        _clock.Advance(TimeSpan.FromSeconds(59));
+        Assert.NotNull(cache.TryGet(Key(request), request));
+
+        _clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Null(cache.TryGet(Key(request), request));
+    }
+
+    [Fact]
+    public void TryStore_WithASignatureOriginalTtlBelowTheRecordTtl_ExpiresAtTheOriginalTtl()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("example.com", dnssecOk: true);
+        DnsMessage answer = Response(
+            DnsResponseCodeEnum.NoError,
+            [
+                A("example.com", 3600),
+                SignatureLasting("example.com", 60, _clock.GetUtcNow().AddDays(30)),
+            ]
+        );
+        cache.TryStore(Key(request), answer, isSecure: true);
+
+        _clock.Advance(TimeSpan.FromSeconds(59));
+        Assert.NotNull(cache.TryGet(Key(request), request));
+
+        _clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Null(cache.TryGet(Key(request), request));
+    }
+
+    [Fact]
+    public void TryStore_ANegativeAnswerWithASignatureExpiringSoon_ExpiresWithTheSignature()
+    {
+        ForwardedResponseCache cache = CreateCache();
+        DnsMessage request = Query("missing.example.com", dnssecOk: true);
+        DnsMessage answer = Response(
+            DnsResponseCodeEnum.NxDomain,
+            [],
+            [
+                Soa("example.com", 3600, 3600),
+                SignatureLasting("example.com", 3600, _clock.GetUtcNow().AddSeconds(60)),
+            ]
+        );
+        cache.TryStore(Key(request), answer, isSecure: true);
+
+        _clock.Advance(TimeSpan.FromSeconds(61));
+
+        Assert.Null(cache.TryGet(Key(request), request));
     }
 
     [Fact]
