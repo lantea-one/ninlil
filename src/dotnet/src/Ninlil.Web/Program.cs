@@ -736,7 +736,9 @@ builder
 builder.Services.AddExceptionHandler<NinlilExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-builder.Services.AddControllers();
+// MergePatchBodyFilter turns a non-object PATCH body or a wrong-typed field into 400 for every
+// action that takes a [FromBody] JsonElement.
+builder.Services.AddControllers(options => options.Filters.Add<MergePatchBodyFilter>());
 builder.Services.AddEndpointsApiExplorer();
 
 // Registers every IExamplesProvider<T> and IMultipleExamplesProvider<T> in this assembly (the
