@@ -32,9 +32,9 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **301 individual settings** across 58 bound configuration classes, plus **2 standalone**
+Total: **305 individual settings** across 58 bound configuration classes, plus **2 standalone**
 bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **310 environment variables
+variables that redirect onto .NET's own real, unprefixed equivalents — **314 environment variables
 in total**.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
@@ -74,6 +74,10 @@ Which database backend the whole application persists every DNS/DHCP/identity en
 |---|---|---|
 | `NINLIL_STORAGE_ENGINE` | Which storage backend is active: `Sqlite`, `PostgreSql`, `MySql`, `SqlServer`, or `MongoDb`. Relational engines get their EF Core migrations applied automatically on startup; MongoDB is schemaless. | `Sqlite` |
 | `NINLIL_STORAGE_CONNECTION_STRING` | The connection string for the selected engine. Ignored for SQLite unless you want to override the default local database file location. | *(none — SQLite uses a local file under `data/` when unset)* |
+| `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT` | Whether a snapshot of the database is taken before pending migrations are applied to a database that already holds data. SQLite snapshots are files in a `migration-snapshots` folder next to the database file. Set `false` to migrate without one. | `true` |
+| `NINLIL_STORAGE_MIGRATION_SAFETY_SNAPSHOTS_TO_KEEP` | How many finished snapshots are kept after a successful migration; the oldest are deleted first. Values below 1 count as 1. | `3` |
+| `NINLIL_STORAGE_MIGRATION_SAFETY_RETRY_FAILED_MIGRATION` | Whether a start may try a migration again after an earlier attempt failed and may have left the database partly migrated. By default that start is refused until the snapshot is restored. | `false` |
+| `NINLIL_STORAGE_MIGRATION_SAFETY_RESTORE_SNAPSHOT` | The id of a snapshot to restore at the next start, before anything else touches the database. Remove it after the restore; a snapshot that was already restored is not restored again. | *(empty)* |
 
 ## Identity, authentication & SSO
 
