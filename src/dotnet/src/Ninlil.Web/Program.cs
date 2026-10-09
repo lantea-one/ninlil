@@ -30,10 +30,12 @@ using Ninlil.Dhcp.Server.Relay.Extension;
 using Ninlil.Dhcp.Server.Tftp.Extension;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.IO;
+using Ninlil.Dns.Data.Abstractions.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
+using Ninlil.Dns.Data.EntityFrameworkCore.Maintenance;
 using Ninlil.Dns.Data.MongoDb;
 using Ninlil.Dns.Data.MongoDb.Extension;
 using Ninlil.Dns.Data.MongoDb.Maintenance;
@@ -846,7 +848,28 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
     await using AsyncServiceScope migrationScope = app.Services.CreateAsyncScope();
     NinlilDnsContext dbContext =
         migrationScope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
-    await dbContext.Database.MigrateAsync();
+    try
+    {
+        await RelationalStartupMigrator.RunAsync(
+            dbContext,
+            storageOptions,
+            app.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(RelationalStartupMigrator).FullName),
+            app.Lifetime.ApplicationStopping
+        );
+    }
+    catch (DatabaseStartupRefusedException refusal)
+    {
+        // The database is in a state this version must not run on. Exit 78 (EX_CONFIG) so the
+        // systemd units, which list it in RestartPreventExitStatus, do not restart in a loop.
+        app.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(RelationalStartupMigrator).FullName)
+            .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+        await migrationScope.DisposeAsync();
+        await app.DisposeAsync();
+        Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
+        return;
+    }
 }
 else
 {

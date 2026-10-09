@@ -27,6 +27,9 @@ EnvironmentFile=-/etc/ninlil/ninlil.env
 Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/ninlil/.bundle
 Restart=on-failure
 RestartSec=5
+# Exit code 78 means Ninlil refused to start on purpose: the database was upgraded by a newer
+# version, or a migration failed. Restarting cannot fix either, so systemd must not retry.
+RestartPreventExitStatus=78
 # Ports below 1024 (53, 67, 80, 443, 547) without root, and raw sockets and interface access for
 # DHCP and Router Advertisement.
 AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
