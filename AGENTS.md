@@ -78,6 +78,10 @@ dotnet test Ninlil.slnx                                               # everythi
   Tests that need Docker carry `[Trait("Category", "RequiresDocker")]`. Pull-request CI has no
   Docker socket and runs with `--filter "Category!=RequiresDocker"`; add the trait to any new
   test that starts a container.
+- `Ninlil.Dns.Data.Integration.Tests` also needs Docker: it runs the storage layer against real
+  PostgreSQL, MySQL, SQL Server and MongoDB containers (one fixture per engine, a fresh database
+  per test). Every class there carries the `RequiresDocker` trait. The first run pulls the SQL
+  Server image (about 1.5 GB, amd64 only). Add multi-engine storage tests there.
 - Tests use OS-assigned free ports, never fixed ones, and need no root.
 - `Ninlil.Web.Tests`:
   - Every class joins `[Collection(WebTestCollection.Name)]` and shares one
