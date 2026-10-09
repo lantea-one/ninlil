@@ -424,10 +424,15 @@ jobs:
         run: |-
           # The feed's PackagePublish endpoint (see its index.json); a trailing slash is a 404.
           feed="${SERVER_URL}/api/packages/${REPOSITORY_OWNER}/nuget"
-          response="$(mktemp)"
+          # The credentials go to curl in a private config file, not on its command line.
+          # shellcheck source=/dev/null
+          source ./.forgejo/scripts/forgejo-api.sh
+          nuget_config=''
+          forgejo_write_config nuget_config user "${NINLIL_CI_USER}:${NINLIL_CI_TOKEN}"
+          response="${forgejo_work}/response"
           for package in packages/*.nupkg; do
             status="$(curl --silent --show-error --output "${response}" --write-out '%{http_code}' \
-              --user "${NINLIL_CI_USER}:${NINLIL_CI_TOKEN}" \
+              --config "${nuget_config}" \
               --upload-file "${package}" \
               "${feed}")"
             case "${status}" in

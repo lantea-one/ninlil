@@ -26,47 +26,32 @@
 #   FORGEJO_SERVER_URL / GITHUB_SERVER_URL, FORGEJO_REPOSITORY / GITHUB_REPOSITORY
 #                       set by the Actions runner
 #
+# The token reaches curl through a config file (forgejo-api.sh), never on a command line.
+#
 # Exits non-zero on any failed API call, and when upload, download or publish finds no draft.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 : "${NINLIL_CI_TOKEN:?NINLIL_CI_TOKEN is required}"
 : "${RELEASE_TAG:?RELEASE_TAG is required}"
 
+# shellcheck source=./forgejo-api.sh
+source "$(dirname "${BASH_SOURCE[0]}")/forgejo-api.sh"
+
 server="${FORGEJO_SERVER_URL:-${GITHUB_SERVER_URL:?no server URL in the environment}}"
 repository="${FORGEJO_REPOSITORY:-${GITHUB_REPOSITORY:?no repository in the environment}}"
-api="${server}/api/v1/repos/${repository}"
+# forgejo_api calls this base plus a path below the repository.
+FORGEJO_API="${server}/api/v1/repos/${repository}"
 image="${server#https://}/${repository,,}"
 
-# Calls the Forgejo API, failing on any HTTP error and printing the response body.
-forgejo() {
-    local method="$1" path="$2"
-    shift 2
-    curl --fail-with-body --silent --show-error \
-        --request "${method}" \
-        --header "Authorization: token ${NINLIL_CI_TOKEN}" \
-        --header 'Accept: application/json' \
-        "$@" \
-        "${api}${path}"
-}
-
-# Prints the id of the draft release for RELEASE_TAG, or nothing when there is none.
+# Prints the id of the draft release for RELEASE_TAG, or nothing when there is none. The whole
+# list is read first; a failed page stops the script instead of reading as "no draft".
 find_draft() {
-    local page=1 releases id
-    while :; do
-        releases="$(forgejo GET "/releases?draft=true&limit=50&page=${page}")"
-        # An empty page means every release has been examined.
-        if [[ "$(jq 'length' <<< "${releases}")" -eq 0 ]]; then
-            return
-        fi
-        id="$(jq -r --arg tag "${RELEASE_TAG}" \
-            '[.[] | select(.draft and .tag_name == $tag) | .id][0] // empty' <<< "${releases}")"
-        if [[ -n "${id}" ]]; then
-            echo "${id}"
-            return
-        fi
-        page=$((page + 1))
-    done
+    local drafts="${forgejo_work}/drafts.jsonl"
+    forgejo_paginate '/releases?draft=true' "${drafts}"
+    jq -rs --arg tag "${RELEASE_TAG}" \
+        '[.[] | select(.draft and .tag_name == $tag) | .id][0] // empty' "${drafts}"
 }
 
 # Prints the id of the draft release for RELEASE_TAG, failing when there is none.
@@ -89,7 +74,7 @@ stage() {
     existing="$(find_draft)"
     if [[ -n "${existing}" ]]; then
         echo "Replacing earlier draft ${existing} for ${RELEASE_TAG}"
-        forgejo DELETE "/releases/${existing}" > /dev/null
+        forgejo_api DELETE "/releases/${existing}" > /dev/null
     fi
 
     local kind='Release'
@@ -146,7 +131,7 @@ EOF
         --arg body "${body}" \
         --argjson prerelease "${RELEASE_PRERELEASE}" \
         '{tag_name: $tag, target_commitish: $target, name: $tag, body: $body, draft: true, prerelease: $prerelease}')"
-    id="$(forgejo POST '/releases' --header 'Content-Type: application/json' --data "${payload}" | jq -r '.id')"
+    id="$(forgejo_api POST '/releases' --header 'Content-Type: application/json' --data "${payload}" | jq -r '.id')"
     echo "Created draft release ${id} for ${RELEASE_TAG}"
 }
 
@@ -154,13 +139,13 @@ EOF
 attach() {
     local id="$1" file="$2" name existing
     name="$(basename "${file}")"
-    existing="$(forgejo GET "/releases/${id}/assets" \
+    existing="$(forgejo_api GET "/releases/${id}/assets" \
         | jq -r --arg name "${name}" '.[] | select(.name == $name) | .id')"
     if [[ -n "${existing}" ]]; then
-        forgejo DELETE "/releases/${id}/assets/${existing}" > /dev/null
+        forgejo_api DELETE "/releases/${id}/assets/${existing}" > /dev/null
     fi
     echo "Uploading ${name}"
-    forgejo POST "/releases/${id}/assets?name=${name}" --form "attachment=@${file}" > /dev/null
+    forgejo_api POST "/releases/${id}/assets?name=${name}" --form "attachment=@${file}" > /dev/null
 }
 
 upload() {
@@ -179,7 +164,7 @@ upload() {
 download() {
     local name="$1" directory="$2" id url
     id="$(require_draft)"
-    url="$(forgejo GET "/releases/${id}/assets" \
+    url="$(forgejo_api GET "/releases/${id}/assets" \
         | jq -r --arg name "${name}" '.[] | select(.name == $name) | .browser_download_url')"
     if [[ -z "${url}" ]]; then
         echo "The draft for ${RELEASE_TAG} has no attachment named ${name}." >&2
@@ -187,33 +172,34 @@ download() {
     fi
     mkdir -p "${directory}"
     echo "Downloading ${name}"
-    curl --fail --silent --show-error --location \
-        --header "Authorization: token ${NINLIL_CI_TOKEN}" \
-        --output "${directory}/${name}" "${url}"
+    forgejo_download "${url}" "${directory}/${name}"
 }
 
 publish() {
-    local id assets work asset
+    local id assets work asset url asset_id
     id="$(require_draft)"
-    assets="$(forgejo GET "/releases/${id}/assets")"
-    work="$(mktemp -d)"
+    assets="$(forgejo_api GET "/releases/${id}/assets")"
+    work="${forgejo_work}/publish"
+    mkdir -p "${work}"
 
     # Merge the per-file checksums the jobs attached into one SHA256SUMS, deleting each one
     # as it is read.
     : > "${work}/SHA256SUMS"
+    jq -c '.[] | select(.name | endswith(".sha256"))' <<< "${assets}" \
+        > "${work}/checksum-assets.jsonl"
     while read -r asset; do
         [[ -z "${asset}" ]] && continue
-        curl --fail --silent --show-error --location \
-            --header "Authorization: token ${NINLIL_CI_TOKEN}" \
-            "$(jq -r '.browser_download_url' <<< "${asset}")" >> "${work}/SHA256SUMS"
-        forgejo DELETE "/releases/${id}/assets/$(jq -r '.id' <<< "${asset}")" > /dev/null
-    done < <(jq -c '.[] | select(.name | endswith(".sha256"))' <<< "${assets}")
+        url="$(jq -r '.browser_download_url' <<< "${asset}")"
+        forgejo_download "${url}" "${work}/one.sha256"
+        cat "${work}/one.sha256" >> "${work}/SHA256SUMS"
+        asset_id="$(jq -r '.id' <<< "${asset}")"
+        forgejo_api DELETE "/releases/${id}/assets/${asset_id}" > /dev/null
+    done < "${work}/checksum-assets.jsonl"
     sort -k 2 -o "${work}/SHA256SUMS" "${work}/SHA256SUMS"
     cat "${work}/SHA256SUMS"
     attach "${id}" "${work}/SHA256SUMS"
-    rm -rf "${work}"
 
-    forgejo PATCH "/releases/${id}" --header 'Content-Type: application/json' \
+    forgejo_api PATCH "/releases/${id}" --header 'Content-Type: application/json' \
         --data '{"draft": false}' > /dev/null
     echo "Published release ${id}: ${server}/${repository}/releases/tag/${RELEASE_TAG}"
 }
