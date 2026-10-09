@@ -20,6 +20,15 @@ public static class Nsec3Hasher
     private const string Base32HexAlphabet = "0123456789abcdefghijklmnopqrstuv";
 
     /// <summary>
+    ///     This method tells whether <see cref="ComputeHash" /> supports an NSEC3 hash algorithm.
+    ///     Validators call it to skip NSEC3 records with an unassigned algorithm instead of
+    ///     catching <see cref="NotSupportedException" /> (RFC 5155 §8.1).
+    /// </summary>
+    /// <param name="hashAlgorithm">The hash algorithm number from an NSEC3 record.</param>
+    /// <returns><see langword="true" /> only for 1 (SHA-1).</returns>
+    public static bool IsSupported(byte hashAlgorithm) => hashAlgorithm == 1;
+
+    /// <summary>
     ///     This method computes a name's iterated, salted hash per RFC 5155 §5: <c>IH(salt, x, 0)
     ///     = H(x || salt)</c>, and <c>IH(salt, x, k) = H(IH(salt, x, k-1) || salt)</c> for
     ///     <c>k &gt; 0</c>, where <c>H</c> is SHA-1 and <c>x</c> is the name's canonical,

@@ -147,12 +147,22 @@ public sealed class DnssecValidator(
                 or RecursiveResolutionStatusEnum.NoData
         )
         {
-            if (!VerifyNegativeResult(queriedName, queriedType, result, terminalTrust.TrustedKeys))
+            DenialOfExistenceOutcomeEnum denial = VerifyNegativeResult(
+                queriedName,
+                queriedType,
+                leafZone,
+                result,
+                terminalTrust.TrustedKeys
+            );
+
+            if (denial == DenialOfExistenceOutcomeEnum.NotProven)
                 return DnssecValidationResult.Bogus(
                     "The negative response's denial of existence did not verify."
                 );
 
-            return anyHopInsecure
+            // An Opt-Out span or an NSEC3 iteration count above the cap proves the name is not
+            // secured by the zone: the answer is served without the AD bit.
+            return anyHopInsecure || denial == DenialOfExistenceOutcomeEnum.ProvenInsecure
                 ? DnssecValidationResult.Insecure()
                 : DnssecValidationResult.Secure();
         }
@@ -304,7 +314,9 @@ public sealed class DnssecValidator(
                 is RecursiveResolutionStatusEnum.NxDomain
                     or RecursiveResolutionStatusEnum.NoData
             )
-                return VerifyAbsenceOfDs(zone, dsResult, trustedKeys)
+                return
+                    VerifyAbsenceOfDs(zone, parentZone, dsResult, trustedKeys)
+                    != DenialOfExistenceOutcomeEnum.NotProven
                     ? ZoneTrustChainResult.Insecure()
                     : ZoneTrustChainResult.Bogus(
                         $"No DS record exists for '{zone}', and its absence could not be authenticated."
@@ -415,49 +427,54 @@ public sealed class DnssecValidator(
 
     /// <summary>
     ///     This method checks the signed proof that a delegation has no DS (RFC 4035 §5.4,
-    ///     RFC 5155): an NSEC or matching NSEC3 without the DS bit, or an opt-out NSEC3 covering
-    ///     the name. The NS and SOA bits are not checked.
+    ///     RFC 6840 §4.4, RFC 5155 §8.6): an NSEC or matching NSEC3 for the delegation name with NS
+    ///     set, SOA clear and DS clear, or an Opt-Out NSEC3 covering it. The records belong to the
+    ///     parent zone, so the parent's apex bounds them.
     /// </summary>
-    private static bool VerifyAbsenceOfDs(
+    private static DenialOfExistenceOutcomeEnum VerifyAbsenceOfDs(
         DnsName zone,
+        DnsName parentZone,
         IterativeResolutionResult dsResult,
         IReadOnlyList<DnsResourceRecord> parentTrustedKeys
     )
     {
         if (!VerifyAllNsecOrNsec3Signatures(dsResult.DnssecRecords, parentTrustedKeys))
-            return false;
+            return DenialOfExistenceOutcomeEnum.NotProven;
 
         bool usesNsec3 = dsResult.DnssecRecords.Any(record =>
             record.Type == DnsResourceRecordTypeEnum.Nsec3
         );
 
-        if (!usesNsec3)
-            return DenialOfExistenceValidator.VerifyNoData(
+        return usesNsec3
+            ? DenialOfExistenceValidator.VerifyNoDataNsec3(
                 zone,
                 DnsResourceRecordTypeEnum.DS,
+                parentZone,
+                dsResult.DnssecRecords
+            )
+            : DenialOfExistenceValidator.VerifyNoData(
+                zone,
+                DnsResourceRecordTypeEnum.DS,
+                parentZone,
                 dsResult.DnssecRecords
             );
-
-        return DenialOfExistenceValidator.VerifyNoDataNsec3(
-                zone,
-                DnsResourceRecordTypeEnum.DS,
-                dsResult.DnssecRecords
-            ) || DenialOfExistenceValidator.VerifyOptOut(zone, dsResult.DnssecRecords);
     }
 
     /// <summary>
     ///     This method checks the signed proof for a negative answer (NXDOMAIN or NODATA), per
-    ///     RFC 4035 §5.4 and RFC 5155 §8.
+    ///     RFC 4035 §5.4 and RFC 5155 §8. The records belong to the zone that answered, whose apex
+    ///     bounds them.
     /// </summary>
-    private static bool VerifyNegativeResult(
+    private static DenialOfExistenceOutcomeEnum VerifyNegativeResult(
         DnsName queriedName,
         DnsResourceRecordTypeEnum queriedType,
+        DnsName zoneApex,
         IterativeResolutionResult result,
         IReadOnlyList<DnsResourceRecord> trustedKeys
     )
     {
         if (!VerifyAllNsecOrNsec3Signatures(result.DnssecRecords, trustedKeys))
-            return false;
+            return DenialOfExistenceOutcomeEnum.NotProven;
 
         bool usesNsec3 = result.DnssecRecords.Any(record =>
             record.Type == DnsResourceRecordTypeEnum.Nsec3
@@ -468,17 +485,27 @@ public sealed class DnssecValidator(
                 ? DenialOfExistenceValidator.VerifyNoDataNsec3(
                     queriedName,
                     queriedType,
+                    zoneApex,
                     result.DnssecRecords
                 )
                 : DenialOfExistenceValidator.VerifyNoData(
                     queriedName,
                     queriedType,
+                    zoneApex,
                     result.DnssecRecords
                 );
 
         return usesNsec3
-            ? DenialOfExistenceValidator.VerifyNxDomainNsec3(queriedName, result.DnssecRecords)
-            : DenialOfExistenceValidator.VerifyNxDomain(queriedName, result.DnssecRecords);
+            ? DenialOfExistenceValidator.VerifyNxDomainNsec3(
+                queriedName,
+                zoneApex,
+                result.DnssecRecords
+            )
+            : DenialOfExistenceValidator.VerifyNxDomain(
+                queriedName,
+                zoneApex,
+                result.DnssecRecords
+            );
     }
 
     /// <summary>

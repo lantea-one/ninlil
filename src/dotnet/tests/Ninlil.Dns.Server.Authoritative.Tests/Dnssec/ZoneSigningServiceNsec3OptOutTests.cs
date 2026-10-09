@@ -24,7 +24,8 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 ///     This class tests the NSEC3 Opt-Out flag set by <see cref="ZoneSigningService" />
 ///     (<c>BuildNsec3Chain</c>, RFC 5155 §7.1): a zone with an insecure delegation has the flag on
 ///     every NSEC3 record, and a zone without one has it clear. Both cases are also checked with
-///     <see cref="DenialOfExistenceValidator.VerifyOptOut" />, which the recursive resolver uses.
+///     <see cref="DenialOfExistenceValidator.VerifyNoDataNsec3" />, which the recursive resolver
+///     uses for the missing-DS proof.
 /// </summary>
 public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
 {
@@ -200,19 +201,20 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
 
         // Validator, case 1: the signer keeps the insecure delegation's NSEC3 record (RFC 5155 §7.1
         // allows omitting it), so the delegation is proven insecure by the missing DS bit in that
-        // record (RFC 5155 §6), through VerifyNoDataNsec3, which DnssecValidator.VerifyAbsenceOfDs
-        // tries before VerifyOptOut.
-        Assert.True(
+        // record (RFC 5155 §6), through the matching-record branch of VerifyNoDataNsec3.
+        Assert.Equal(
+            DenialOfExistenceOutcomeEnum.Proven,
             DenialOfExistenceValidator.VerifyNoDataNsec3(
                 DnsName.Parse(InsecureDelegationName),
                 DnsResourceRecordTypeEnum.DS,
+                DnsName.Parse(ZoneName),
                 signed.DenialOfExistenceRecords
             )
         );
 
         // Validator, case 2: had the signer omitted the delegation's record (the other case in RFC
         // 5155 §6), the Opt-Out flag on the covering record must still let a validator accept the
-        // delegation as possibly insecure. Simulate the omission by removing the record and pointing
+        // delegation as possibly insecure (the closest provable encloser is the apex). Simulate the omission by removing the record and pointing
         // its predecessor's next hash at its successor, as a signer omitting it would have done.
         int delegationIndex = nsec3Records.FindIndex(entry =>
             Nsec3Hasher
@@ -274,9 +276,12 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
             rewiredPredecessorRecord,
         ];
 
-        Assert.True(
-            DenialOfExistenceValidator.VerifyOptOut(
+        Assert.Equal(
+            DenialOfExistenceOutcomeEnum.ProvenInsecure,
+            DenialOfExistenceValidator.VerifyNoDataNsec3(
                 DnsName.Parse(InsecureDelegationName),
+                DnsResourceRecordTypeEnum.DS,
+                DnsName.Parse(ZoneName),
                 chainWithDelegationRecordOmitted
             )
         );
