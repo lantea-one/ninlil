@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
@@ -44,6 +45,49 @@ public static class RelationalStartupMigrator
         StorageOptions storageOptions,
         ILogger logger,
         CancellationToken stoppingToken = default
+    )
+    {
+        await ApplyMigrationsAsync(context, storageOptions, logger, stoppingToken);
+
+        if (storageOptions.Engine == StorageEngineEnum.Sqlite)
+            await TuneSqliteAsync(context, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method puts a SQLite database file into write-ahead-log mode and refreshes the
+    ///     query planner's statistics. The journal mode is stored in the file, so a database that
+    ///     was created another way (copied in, restored from a snapshot) is switched here on the
+    ///     next start. WAL lets readers run during a write and, with the per-connection
+    ///     <c>synchronous = NORMAL</c> setting, avoids an fsync per commit. An in-memory database
+    ///     has no journal file and is left alone.
+    /// </summary>
+    private static async Task TuneSqliteAsync(
+        NinlilDnsContext context,
+        CancellationToken stoppingToken
+    )
+    {
+        SqliteConnectionStringBuilder builder = new(context.Database.GetConnectionString());
+        if (
+            builder.Mode == SqliteOpenMode.Memory
+            || builder.DataSource.Contains(":memory:", StringComparison.OrdinalIgnoreCase)
+        )
+            return;
+
+        // The pragma returns the new mode as a row; the provider reads and discards it.
+        await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode = WAL;", stoppingToken);
+        // Gathers statistics for the tables whose indexes the planner has to choose between.
+        await context.Database.ExecuteSqlRawAsync("PRAGMA optimize;", stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method does the guarded migration work <see cref="RunAsync" /> describes: restore,
+    ///     checks, snapshot and apply.
+    /// </summary>
+    private static async Task ApplyMigrationsAsync(
+        NinlilDnsContext context,
+        StorageOptions storageOptions,
+        ILogger logger,
+        CancellationToken stoppingToken
     )
     {
         StorageMigrationSafetyOptions safety =

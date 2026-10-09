@@ -74,11 +74,16 @@ public sealed class DnsQueryLogCleanupService(
             );
 
         if (deletedByAge > 0 || deletedByCount > 0)
+        {
+            // Large deletes change the data the SQLite planner's statistics describe.
+            await repository.OptimizeAsync(stoppingToken);
+
             logger.LogInformation(
                 "Query log cleanup removed {DeletedByAge} entries past the retention window and {DeletedByCount} entries beyond the maximum retained count.",
                 deletedByAge,
                 deletedByCount
             );
+        }
 
         return (deletedByAge, deletedByCount);
     }

@@ -1,7 +1,10 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
+using Ninlil.Dns.Data.EntityFrameworkCore.Sqlite;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Extension;
@@ -44,10 +47,16 @@ public static class DbContextOptionsBuilderExtension
         this DbContextOptionsBuilder instance,
         string connectionString
     ) =>
-        instance.UseSqlite(
-            connectionString,
-            options =>
-                options.MigrationsAssembly("Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite")
+        QuietCommandLogging(
+            instance
+                .UseSqlite(
+                    connectionString,
+                    options =>
+                        options.MigrationsAssembly(
+                            "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite"
+                        )
+                )
+                .AddInterceptors(SqliteConnectionPragmaInterceptor.Instance)
         );
 
     /// <summary>
@@ -60,12 +69,14 @@ public static class DbContextOptionsBuilderExtension
         this DbContextOptionsBuilder instance,
         string connectionString
     ) =>
-        instance.UseNpgsql(
-            connectionString,
-            options =>
-                options.MigrationsAssembly(
-                    "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql"
-                )
+        QuietCommandLogging(
+            instance.UseNpgsql(
+                connectionString,
+                options =>
+                    options.MigrationsAssembly(
+                        "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql"
+                    )
+            )
         );
 
     /// <summary>
@@ -84,12 +95,16 @@ public static class DbContextOptionsBuilderExtension
         string connectionString,
         ServerVersion serverVersion = null
     ) =>
-        instance.UseMySql(
-            connectionString,
-            serverVersion
-                ?? DetectedMySqlVersions.GetOrAdd(connectionString, ServerVersion.AutoDetect),
-            options =>
-                options.MigrationsAssembly("Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql")
+        QuietCommandLogging(
+            instance.UseMySql(
+                connectionString,
+                serverVersion
+                    ?? DetectedMySqlVersions.GetOrAdd(connectionString, ServerVersion.AutoDetect),
+                options =>
+                    options.MigrationsAssembly(
+                        "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql"
+                    )
+            )
         );
 
     /// <summary>
@@ -102,12 +117,14 @@ public static class DbContextOptionsBuilderExtension
         this DbContextOptionsBuilder instance,
         string connectionString
     ) =>
-        instance.UseSqlServer(
-            connectionString,
-            options =>
-                options.MigrationsAssembly(
-                    "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer"
-                )
+        QuietCommandLogging(
+            instance.UseSqlServer(
+                connectionString,
+                options =>
+                    options.MigrationsAssembly(
+                        "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer"
+                    )
+            )
         );
 
     /// <summary>
@@ -137,4 +154,17 @@ public static class DbContextOptionsBuilderExtension
                 $"'{options.Engine}' is not a relational storage engine and cannot be used with Entity Framework Core."
             ),
         };
+
+    /// <summary>
+    ///     This method lowers EF Core's "Executed DbCommand" log entry from Information to Debug.
+    ///     At the default log level every SQL command would otherwise print a console line, which
+    ///     costs time and drowns the log on a busy server. An operator still sees the SQL by
+    ///     setting <c>Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command</c> to
+    ///     <c>Debug</c>. A failed command (<see cref="RelationalEventId.CommandError" />) keeps
+    ///     its Error level.
+    /// </summary>
+    private static DbContextOptionsBuilder QuietCommandLogging(DbContextOptionsBuilder instance) =>
+        instance.ConfigureWarnings(warnings =>
+            warnings.Log((RelationalEventId.CommandExecuted, LogLevel.Debug))
+        );
 }

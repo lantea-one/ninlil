@@ -72,4 +72,12 @@ public interface IDnsQueryLogRepository : IRepository<DnsQueryLogEntryEntity>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of entries removed.</returns>
     Task<int> ClearAsync(CancellationToken stoppingToken = default);
+
+    /// <summary>
+    ///     This method asks the engine to refresh the statistics its query planner uses after a
+    ///     large delete. Only SQLite needs it (<c>PRAGMA optimize</c>); every other
+    ///     implementation does nothing.
+    /// </summary>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    Task OptimizeAsync(CancellationToken stoppingToken = default);
 }

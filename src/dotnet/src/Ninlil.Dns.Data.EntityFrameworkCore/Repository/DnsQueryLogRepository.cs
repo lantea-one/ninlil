@@ -70,6 +70,13 @@ public class DnsQueryLogRepository(NinlilDnsContext context)
     public async Task<int> ClearAsync(CancellationToken stoppingToken = default) =>
         await Set.ExecuteDeleteAsync(stoppingToken);
 
+    /// <inheritdoc />
+    public async Task OptimizeAsync(CancellationToken stoppingToken = default)
+    {
+        if (Context.Database.IsSqlite())
+            await Context.Database.ExecuteSqlRawAsync("PRAGMA optimize;", stoppingToken);
+    }
+
     /// <summary>
     ///     This method applies the filters in <paramref name="criteria" />. <see cref="SearchAsync" />
     ///     and <see cref="CountAsync" /> share it so they always agree on what matches. It is an

@@ -108,6 +108,9 @@ public class DnsQueryLogMongoRepository
     }
 
     /// <inheritdoc />
+    public Task OptimizeAsync(CancellationToken stoppingToken = default) => Task.CompletedTask;
+
+    /// <inheritdoc />
     public async Task<int> ClearAsync(CancellationToken stoppingToken = default)
     {
         DeleteResult result = await Collection.DeleteManyAsync(
