@@ -1,5 +1,11 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import {
   AlertComponent,
   ButtonDirective,
@@ -21,6 +27,28 @@ import { IdentitySettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+
+/** The largest `requiredLength` the API accepts (`IdentitySettingsController`). */
+export const MAX_REQUIRED_LENGTH = 128;
+
+/** The largest `requiredUniqueChars` the API accepts (`IdentitySettingsController`). */
+export const MAX_REQUIRED_UNIQUE_CHARS = 64;
+
+/**
+ * This validator rejects a form whose `requiredUniqueChars` exceeds `requiredLength`, since no
+ * password could meet both. It sets the `uniqueExceedsLength` error on the group, with the
+ * message the API returns for the same mistake.
+ */
+export function uniqueCharsWithinLength(group: AbstractControl): ValidationErrors | null {
+  const length = group.get('requiredLength')?.value;
+  const unique = group.get('requiredUniqueChars')?.value;
+  if (typeof length !== 'number' || typeof unique !== 'number') return null;
+  return unique > length
+    ? {
+        uniqueExceedsLength: `'requiredUniqueChars' (${unique}) must not exceed 'requiredLength' (${length}).`,
+      }
+    : null;
+}
 
 /**
  * This component is the "Identity" settings page (`/settings/identity`). It edits the ASP.NET Core
@@ -61,17 +89,26 @@ export class IdentitySettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  readonly form = this.formBuilder.group({
-    requiredLength: [12, [Validators.required, Validators.min(1)]],
-    requiredUniqueChars: [1, [Validators.required, Validators.min(1)]],
-    requireDigit: [true],
-    requireLowercase: [true],
-    requireUppercase: [true],
-    requireNonAlphanumeric: [true],
-    defaultLockoutTimeSpan: ['00:15:00', [Validators.required]],
-    maxFailedAccessAttempts: [5, [Validators.required, Validators.min(1)]],
-    allowedForNewUsers: [true],
-  });
+  readonly form = this.formBuilder.group(
+    {
+      requiredLength: [
+        12,
+        [Validators.required, Validators.min(1), Validators.max(MAX_REQUIRED_LENGTH)],
+      ],
+      requiredUniqueChars: [
+        1,
+        [Validators.required, Validators.min(1), Validators.max(MAX_REQUIRED_UNIQUE_CHARS)],
+      ],
+      requireDigit: [true],
+      requireLowercase: [true],
+      requireUppercase: [true],
+      requireNonAlphanumeric: [true],
+      defaultLockoutTimeSpan: ['00:15:00', [Validators.required]],
+      maxFailedAccessAttempts: [5, [Validators.required, Validators.min(1)]],
+      allowedForNewUsers: [true],
+    },
+    { validators: uniqueCharsWithinLength },
+  );
 
   ngOnInit(): void {
     void this.loadSettings();

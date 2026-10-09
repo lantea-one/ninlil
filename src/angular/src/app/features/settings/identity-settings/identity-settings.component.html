@@ -22,8 +22,15 @@
               id="identity-required-length"
               type="number"
               min="1"
+              max="128"
               formControlName="requiredLength"
             />
+            @if (
+              form.controls.requiredLength.errors?.['max'] ||
+              form.controls.requiredLength.errors?.['min']
+            ) {
+              <div class="text-danger small">The minimum length must be between 1 and 128.</div>
+            }
           </div>
 
           <div class="field">
@@ -33,10 +40,23 @@
               id="identity-required-unique-chars"
               type="number"
               min="1"
+              max="64"
               formControlName="requiredUniqueChars"
             />
+            @if (
+              form.controls.requiredUniqueChars.errors?.['max'] ||
+              form.controls.requiredUniqueChars.errors?.['min']
+            ) {
+              <div class="text-danger small">The unique characters must be between 1 and 64.</div>
+            }
           </div>
         </div>
+
+        @if (form.errors?.['uniqueExceedsLength']) {
+          <c-alert color="danger" [dismissible]="false" role="alert">{{
+            form.errors['uniqueExceedsLength']
+          }}</c-alert>
+        }
 
         <c-form-check class="mb-2">
           <input

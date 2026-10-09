@@ -96,4 +96,42 @@ describe('IdentitySettingsComponent', () => {
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
   });
+
+  it('rejects a minimum length above 128 and a unique count above 64', async () => {
+    const fixture = await createComponent();
+    const form = fixture.componentInstance.form;
+
+    form.patchValue({ requiredLength: 129 });
+    expect(form.controls.requiredLength.valid).toBeFalse();
+    form.patchValue({ requiredLength: 128, requiredUniqueChars: 65 });
+    expect(form.controls.requiredUniqueChars.valid).toBeFalse();
+    form.patchValue({ requiredLength: 128, requiredUniqueChars: 64 });
+    expect(form.valid).toBeTrue();
+  });
+
+  it('rejects unique characters above the length with the API message', async () => {
+    const fixture = await createComponent();
+    const form = fixture.componentInstance.form;
+
+    form.patchValue({ requiredLength: 8, requiredUniqueChars: 9 });
+    fixture.detectChanges();
+
+    expect(form.invalid).toBeTrue();
+    expect(form.errors?.['uniqueExceedsLength']).toBe(
+      "'requiredUniqueChars' (9) must not exceed 'requiredLength' (8).",
+    );
+    expect(fixture.nativeElement.textContent).toContain('must not exceed');
+
+    form.patchValue({ requiredUniqueChars: 8 });
+    expect(form.valid).toBeTrue();
+  });
+
+  it('save() sends nothing when unique characters exceed the length', async () => {
+    const fixture = await createComponent();
+
+    fixture.componentInstance.form.patchValue({ requiredLength: 8, requiredUniqueChars: 9 });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiIdentitySettingsPatch).not.toHaveBeenCalled();
+  });
 });
