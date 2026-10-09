@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
@@ -22,6 +23,17 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 /// </summary>
 public static class DbContextOptionsBuilderExtension
 {
+    /// <summary>
+    ///     The detected MySQL or MariaDB server version per full connection string. The
+    ///     <c>AddDbContext</c> options delegate runs for every DI scope, and
+    ///     <see cref="ServerVersion.AutoDetect(string)" /> opens a server connection each time, so
+    ///     the result is resolved once per connection string. A throwing factory caches nothing in
+    ///     <see cref="ConcurrentDictionary{TKey,TValue}.GetOrAdd(TKey,Func{TKey,TValue})" />, so a
+    ///     failed detection is retried on the next call.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, ServerVersion> DetectedMySqlVersions =
+        new();
+
     /// <summary>
     ///     This method configures <paramref name="instance" /> to use SQLite.
     /// </summary>
@@ -62,9 +74,9 @@ public static class DbContextOptionsBuilderExtension
     /// <param name="instance">The current <see cref="DbContextOptionsBuilder" /> instance.</param>
     /// <param name="connectionString">The MySQL or MariaDB connection string.</param>
     /// <param name="serverVersion">
-    ///     Optional, the server's version. When omitted, Pomelo connects to the server once to detect
-    ///     it; pass it to avoid that round trip (for example when generating a migration without a
-    ///     running server).
+    ///     Optional, the server's version. When omitted, Pomelo connects to the server to detect it
+    ///     once per connection string and the result is cached for the process; pass it to avoid
+    ///     that round trip (for example when generating a migration without a running server).
     /// </param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="DbContextOptionsBuilder" />.</returns>
     public static DbContextOptionsBuilder UseNinlilDnsMySql(
@@ -74,7 +86,8 @@ public static class DbContextOptionsBuilderExtension
     ) =>
         instance.UseMySql(
             connectionString,
-            serverVersion ?? ServerVersion.AutoDetect(connectionString),
+            serverVersion
+                ?? DetectedMySqlVersions.GetOrAdd(connectionString, ServerVersion.AutoDetect),
             options =>
                 options.MigrationsAssembly("Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql")
         );
