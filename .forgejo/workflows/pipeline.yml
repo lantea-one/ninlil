@@ -4,12 +4,15 @@ name: 'Ninlil Pipeline'
 ## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
 ##
 ## Every build and test step runs in a throwaway container of one of the toolchains in
-## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg), through
-## .forgejo/scripts/in-container.sh, with only the checkout mounted. The runners (all labelled
-## 'archlinux') need just Docker (with buildx), git, curl, and jq, for the version, the release
-## API calls, and the container image, which is the prebuilt Linux executables copied onto a
-## chiseled base. Everything cross-compiles, so any runner builds every platform; the arch
-## toolchain image is amd64-only, so an arm64 runner needs amd64 emulation (binfmt) for it.
+## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg; shellcheck and
+## actionlint; nFPM), through .forgejo/scripts/in-container.sh, with only the checkout mounted.
+## The runners
+## (all labelled 'archlinux') need just Docker (with buildx), git, curl, and jq, for the version,
+## the release API calls, and the container image, which is the prebuilt Linux executables copied
+## onto a chiseled base. Everything cross-compiles, so any runner builds every platform; the arch
+## toolchain image is amd64-only, so an arm64 runner needs amd64 emulation (binfmt) for it. The
+## Deb and RPM install test pulls Debian, Ubuntu, Rocky Linux and Fedora images from
+## public.ecr.aws and quay.io.
 ##
 ## Tests run as the runner's unprivileged user inside a container on Docker's bridge network, so
 ## they never collide with the DNS, DHCP, web, and database services the runners host; every
@@ -21,15 +24,16 @@ name: 'Ninlil Pipeline'
 ##
 ##   version ────────────┐
 ##   lint ───────────────┤
-##   test-dotnet ────────┼─ draft ── binaries (×5) ─┬─ arch-packages ─┬─ publish
-##   test-admin-console ─┤                          ├─ image ─────────┤
-##                       │                          └─ windows-smoke ─┤
-##                       └─ packages (×4) ────────────────────────────┘
+##   test-dotnet ────────┼─ draft ── binaries (×5) ─┬─ arch-packages ───┬─ publish
+##   test-admin-console ─┤                          ├─ linux-packages ──┤
+##                       │                          ├─ image ───────────┤
+##                       │                          └─ windows-smoke ───┤
+##                       └─ packages (×4) ──────────────────────────────┘
 ##
 ## The draft release doubles as the hand-off between jobs: each binary job attaches its
-## executable to it, the Arch Linux and image jobs build from the two Linux executables they
-## download back from it, and the Windows smoke test runs the Windows executable it downloads.
-## Publish turns the draft into the visible release.
+## executable to it, the Arch Linux, Deb/RPM and image jobs build from the two Linux executables
+## they download back from it, and the Windows smoke test runs the Windows executable it
+## downloads. Publish turns the draft into the visible release.
 ##
 ## No run: body contains a ${{ }} expression. Every value reaches a script through env:, so a
 ## branch name can never become shell text.
@@ -65,6 +69,9 @@ jobs:
       package-version: '${{ steps.version.outputs.package-version }}'
       image-version: '${{ steps.version.outputs.image-version }}'
       arch-version: '${{ steps.version.outputs.arch-version }}'
+      deb-version: '${{ steps.version.outputs.deb-version }}'
+      rpm-version: '${{ steps.version.outputs.rpm-version }}'
+      rpm-release: '${{ steps.version.outputs.rpm-release }}'
       prerelease: '${{ steps.version.outputs.prerelease }}'
       short-sha: '${{ steps.version.outputs.short-sha }}'
     steps:
@@ -248,6 +255,9 @@ jobs:
           RELEASE_PRERELEASE: '${{ needs.version.outputs.prerelease }}'
           IMAGE_VERSION: '${{ needs.version.outputs.image-version }}'
           ARCH_VERSION: '${{ needs.version.outputs.arch-version }}'
+          DEB_VERSION: '${{ needs.version.outputs.deb-version }}'
+          RPM_VERSION: '${{ needs.version.outputs.rpm-version }}'
+          RPM_RELEASE: '${{ needs.version.outputs.rpm-release }}'
           COMMIT_SHA: '${{ forgejo.sha }}'
           REF_NAME: '${{ forgejo.ref_name }}'
         run: |-
@@ -349,6 +359,57 @@ jobs:
       - name: 'Attach to the Draft Release'
         run: |-
           ./.forgejo/scripts/release.sh upload dist/ninlil-*.pkg.tar.zst
+        shell: 'bash'
+  ##
+  ## The ninlil Debian and RPM packages for amd64/x86_64 and arm64/aarch64, built by nFPM from
+  ## the two Linux executables on the draft in one amd64 run (the packages only copy files, so
+  ## nothing is emulated). Before they are attached, the amd64 packages are installed in
+  ## disposable Debian 12, Ubuntu 22.04, Ubuntu 24.04, Rocky Linux 9 and Fedora 41 containers
+  ## (linux-packages-smoke.sh), where the executable must start and answer /status. The arm64
+  ## packages are built but not run, because that would need emulation on the runner.
+  ##
+  linux-packages:
+    name: 'Build and Test Deb and RPM Packages'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'binaries'
+    runs-on: 'archlinux'
+    env:
+      NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+      RELEASE_TAG: '${{ needs.version.outputs.version }}'
+      DEB_VERSION: '${{ needs.version.outputs.deb-version }}'
+      RPM_VERSION: '${{ needs.version.outputs.rpm-version }}'
+      RPM_RELEASE: '${{ needs.version.outputs.rpm-release }}'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' # v7.0.1
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Fetch the Linux Binaries From the Draft Release'
+        run: |-
+          rm -rf dist
+          ./.forgejo/scripts/release.sh download ninlil-linux-amd64 dist
+          ./.forgejo/scripts/release.sh download ninlil-linux-arm64 dist
+        shell: 'bash'
+      ##
+      - name: 'Build the Deb and RPM Packages'
+        run: |-
+          ./.forgejo/scripts/in-container.sh packages ./.forgejo/scripts/linux-packages.sh dist
+        shell: 'bash'
+      ##
+      - name: 'Install and Start the Packages in Distribution Containers'
+        run: |-
+          ./.forgejo/scripts/linux-packages-smoke.sh dist
+        shell: 'bash'
+      ##
+      - name: 'Attach to the Draft Release'
+        run: |-
+          ./.forgejo/scripts/release.sh upload dist/ninlil_*.deb dist/ninlil-*.rpm
         shell: 'bash'
   ##
   ## The multi-platform container image, built from the two Linux executables on the draft and
@@ -537,6 +598,7 @@ jobs:
       - 'binaries'
       - 'windows-smoke'
       - 'arch-packages'
+      - 'linux-packages'
       - 'image'
       - 'packages'
     runs-on: 'archlinux'

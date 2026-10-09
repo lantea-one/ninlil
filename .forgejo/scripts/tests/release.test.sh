@@ -2,7 +2,7 @@
 # Tests release.sh (upload and draft lookup) against a fake Forgejo server (fake-forgejo.py)
 # with the real curl and jq.
 #
-# Covers: publish merges the per-file checksums; a successful upload exits 0 and the token is on no curl command line; a failing asset
+# Covers: stage puts the Deb and RPM install commands in the release notes; publish merges the per-file checksums; a successful upload exits 0 and the token is on no curl command line; a failing asset
 # upload exits non-zero; a failing second page of the draft listing exits non-zero instead of
 # reading as "no draft"; a missing draft exits non-zero.
 #
@@ -33,6 +33,18 @@ draft_routes() {
 }
 JSON
 }
+
+# --- Stage: the release notes carry the Deb and RPM install commands -----------------------------
+stage_env=(RELEASE_TAG="${tag}" RELEASE_PRERELEASE=false COMMIT_SHA=abc1234def REF_NAME=main
+    IMAGE_VERSION=2026.01.01.1 ARCH_VERSION=2026.01.01.1)
+set_routes "{\"GET ${releases}#1\": [200, []], \"POST ${releases}\": [201, {\"id\": 9}]}"
+run_script "${stage_env[@]}" DEB_VERSION=2026.01.01.1 RPM_VERSION=2026.01.01.1 RPM_RELEASE=1 -- bash "${scripts}/release.sh" stage
+assert_eq 'release: stage exits 0' 0 "${status}"
+assert_contains 'release: the notes install the Deb with apt' "$(cat "${argv_log}")" 'sudo apt install ./ninlil_2026.01.01.1_amd64.deb'
+assert_contains 'release: the notes install the RPM with dnf' "$(cat "${argv_log}")" 'sudo dnf install ./ninlil-2026.01.01.1-1.x86_64.rpm'
+set_routes "{}"
+run_script "${stage_env[@]}" -- bash "${scripts}/release.sh" stage
+if [[ "${status}" -ne 0 && "${output}" == *'DEB_VERSION is required'* ]]; then pass 'release: stage without the package versions fails'; else fail 'release: stage without the package versions fails' "${output}"; fi
 
 # --- Successful upload -------------------------------------------------------------------------
 set_routes "$(draft_routes 201)"

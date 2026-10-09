@@ -21,6 +21,9 @@
 #   RELEASE_PRERELEASE  "true" or "false" (stage only)
 #   IMAGE_VERSION       the container image tag (stage only, for the release notes)
 #   ARCH_VERSION        the Arch Linux package version (stage only, for the release notes)
+#   DEB_VERSION, RPM_VERSION, RPM_RELEASE
+#                       the Debian package version and the RPM version and release (stage only,
+#                       for the release notes; compute-version.sh outputs)
 #   COMMIT_SHA          the commit being released (stage only)
 #   REF_NAME            the branch being built (stage only, for the release notes)
 #   FORGEJO_SERVER_URL / GITHUB_SERVER_URL, FORGEJO_REPOSITORY / GITHUB_REPOSITORY
@@ -69,6 +72,9 @@ stage() {
     : "${RELEASE_PRERELEASE:?RELEASE_PRERELEASE is required}"
     : "${COMMIT_SHA:?COMMIT_SHA is required}"
     : "${ARCH_VERSION:?ARCH_VERSION is required}"
+    : "${DEB_VERSION:?DEB_VERSION is required}"
+    : "${RPM_VERSION:?RPM_VERSION is required}"
+    : "${RPM_RELEASE:?RPM_RELEASE is required}"
 
     local existing
     existing="$(find_draft)"
@@ -115,6 +121,30 @@ sudo systemctl enable --now ninlil
 \`\`\`
 
 (\`ninlil-${ARCH_VERSION}-1-aarch64.pkg.tar.zst\` for ARM64.)
+
+### Debian and Ubuntu
+
+\`ninlil\` packages for Debian 12 and Ubuntu 22.04 and 24.04:
+
+\`\`\`sh
+curl -LO ${downloads}/ninlil_${DEB_VERSION}_amd64.deb
+sudo apt install ./ninlil_${DEB_VERSION}_amd64.deb
+sudo systemctl enable --now ninlil
+\`\`\`
+
+(\`ninlil_${DEB_VERSION}_arm64.deb\` for ARM64.)
+
+### Fedora, RHEL, Rocky Linux and AlmaLinux
+
+\`ninlil\` packages for Fedora 41 and RHEL-compatible 9 (Rocky Linux, AlmaLinux):
+
+\`\`\`sh
+curl -LO ${downloads}/ninlil-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm
+sudo dnf install ./ninlil-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm
+sudo systemctl enable --now ninlil
+\`\`\`
+
+(\`ninlil-${RPM_VERSION}-${RPM_RELEASE}.aarch64.rpm\` for ARM64.)
 
 ### Container image
 
