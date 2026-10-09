@@ -10,9 +10,13 @@
 # The admin console's production build must already be in src/dotnet/src/Ninlil.Web/wwwroot/
 # (build-admin-console.sh puts it there).
 #
-# Usage: publish-binary.sh <linux-amd64|linux-arm64|macos-amd64|macos-arm64> <output-directory>
+# The Windows executable is unsigned and reads the Windows Service Control Manager's start
+# request (UseWindowsService in Program.cs), so it also runs as a service.
 #
-# Output: <output-directory>/ninlil-<name>. Exits non-zero for an unknown name, a missing admin
+# Usage: publish-binary.sh <linux-amd64|linux-arm64|macos-amd64|macos-arm64|windows-amd64>
+#        <output-directory>
+#
+# Output: <output-directory>/ninlil-<name>, or ninlil-windows-amd64.exe for windows-amd64. Exits non-zero for an unknown name, a missing admin
 # console build, or a failed publish.
 #
 # Environment (all optional; a local build is 0.0.0-local). These avoid the NINLIL_ prefix,
@@ -31,6 +35,7 @@ case "${name}" in
     linux-arm64) rid='linux-arm64' ;;
     macos-amd64) rid='osx-x64' ;;
     macos-arm64) rid='osx-arm64' ;;
+    windows-amd64) rid='win-x64' ;;
     *)
         echo "Unknown binary '${name}'." >&2
         exit 1
@@ -45,6 +50,14 @@ fi
 
 publish="$(mktemp -d)"
 trap 'rm -rf "${publish}"' EXIT
+
+# The SDK names the apphost Ninlil.Web.exe for Windows runtime identifiers.
+built='Ninlil.Web'
+target="ninlil-${name}"
+if [[ "${rid}" == win-* ]]; then
+    built='Ninlil.Web.exe'
+    target="${target}.exe"
+fi
 
 dotnet publish "${repository_root}/src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj" \
     --configuration Release \
@@ -64,5 +77,5 @@ dotnet publish "${repository_root}/src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj" 
     --output "${publish}"
 
 mkdir -p "${output}"
-install -m 0755 "${publish}/Ninlil.Web" "${output}/ninlil-${name}"
-ls -l "${output}/ninlil-${name}"
+install -m 0755 "${publish}/${built}" "${output}/${target}"
+ls -l "${output}/${target}"

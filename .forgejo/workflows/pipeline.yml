@@ -21,7 +21,7 @@ name: 'Ninlil Pipeline'
 ##
 ##   version ────────────┐
 ##   lint ───────────────┤
-##   test-dotnet ────────┼─ draft ── binaries (×4) ─┬─ arch-packages ─┬─ publish
+##   test-dotnet ────────┼─ draft ── binaries (×5) ─┬─ arch-packages ─┬─ publish
 ##   test-admin-console ─┤                          └─ image ─────────┤
 ##                       └─ packages (×4) ────────────────────────────┘
 ##
@@ -264,11 +264,18 @@ jobs:
     runs-on: 'archlinux'
     strategy:
       matrix:
-        binary:
-          - 'linux-amd64'
-          - 'linux-arm64'
-          - 'macos-amd64'
-          - 'macos-arm64'
+        ## 'file' is the name publish-binary.sh writes (the Windows one ends in .exe).
+        include:
+          - binary: 'linux-amd64'
+            file: 'ninlil-linux-amd64'
+          - binary: 'linux-arm64'
+            file: 'ninlil-linux-arm64'
+          - binary: 'macos-amd64'
+            file: 'ninlil-macos-amd64'
+          - binary: 'macos-arm64'
+            file: 'ninlil-macos-arm64'
+          - binary: 'windows-amd64'
+            file: 'ninlil-windows-amd64.exe'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -298,9 +305,9 @@ jobs:
         env:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
           RELEASE_TAG: '${{ needs.version.outputs.version }}'
-          BINARY: '${{ matrix.binary }}'
+          BINARY_FILE: '${{ matrix.file }}'
         run: |-
-          ./.forgejo/scripts/release.sh upload "dist/ninlil-${BINARY}"
+          ./.forgejo/scripts/release.sh upload "dist/${BINARY_FILE}"
         shell: 'bash'
   ##
   ## The ninlil Arch Linux packages, built from the two Linux executables on the draft.
