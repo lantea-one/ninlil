@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
@@ -112,7 +113,9 @@ public static class AdministratorBootstrapper
         string configuredPassword = configuration[PasswordConfigurationKey];
         bool passwordWasGenerated = string.IsNullOrWhiteSpace(configuredPassword);
         string password = passwordWasGenerated
-            ? PasswordGenerator.GenerateStrongRandomPassword()
+            ? PasswordGenerator.GenerateStrongRandomPassword(
+                scope.ServiceProvider.GetRequiredService<IOptions<IdentityOptions>>().Value.Password
+            )
             : configuredPassword;
 
         // AddNinlilDnsIdentity sets RequireUniqueEmail = true, which rejects a null or empty e-mail

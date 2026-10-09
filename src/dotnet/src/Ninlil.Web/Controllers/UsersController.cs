@@ -73,6 +73,9 @@ namespace Ninlil.Web.Controllers;
 ///     <see cref="AuditableEntityBase.OriginatingNodeId" /> on every local change so the account
 ///     shows which node changed it last and cluster sync can break a last-write-wins tie.
 /// </param>
+/// <param name="identityOptions">
+///     Supplies the live password policy an auto-generated password has to meet.
+/// </param>
 [ApiController]
 [Route("api/users")]
 public class UsersController(
@@ -84,7 +87,8 @@ public class UsersController(
     PasswordResetLinkSender passwordResetLinkSender,
     IDnsServerEventPublisher eventPublisher,
     IClusterUsernameUniquenessChecker usernameUniquenessChecker,
-    IOptionsMonitor<ClusterOptions> clusterOptions
+    IOptionsMonitor<ClusterOptions> clusterOptions,
+    IOptionsMonitor<IdentityOptions> identityOptions
 ) : ControllerBase
 {
     /// <summary>
@@ -482,7 +486,9 @@ public class UsersController(
 
         if (request.Mode == AdminPasswordResetMode.AutoGenerate)
         {
-            string newPassword = PasswordGenerator.GenerateStrongRandomPassword();
+            string newPassword = PasswordGenerator.GenerateStrongRandomPassword(
+                identityOptions.CurrentValue.Password
+            );
 
             string resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
             IdentityResult result = await userManager.ResetPasswordAsync(

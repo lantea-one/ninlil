@@ -161,6 +161,48 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task AdminResetPassword_AutoGenerate_WithARequiredLengthOf40_ReturnsAPasswordThatMeetsIt()
+    {
+        (_, Guid id, string userName, _) = await CreateOrdinaryUserClientAsync(
+            Guid.NewGuid().ToString("N")
+        );
+        HttpClient adminClient = await CreateAuthenticatedAdminClientAsync();
+
+        // The runtime settings file is not a configuration source of the test host, so the live
+        // policy is set on the cached options instance (see LiveClusterOptionsScope) and put back
+        // afterwards. The tests in the collection run one at a time.
+        PasswordOptions live = factory
+            .Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<IdentityOptions>>()
+            .CurrentValue.Password;
+        int previousLength = live.RequiredLength;
+        int previousUnique = live.RequiredUniqueChars;
+
+        try
+        {
+            live.RequiredLength = 40;
+            live.RequiredUniqueChars = 30;
+
+            HttpResponseMessage response = await adminClient.PostAsJsonAsync(
+                $"/api/users/{id}/reset-password",
+                new AdminResetPasswordRequest(AdminPasswordResetMode.AutoGenerate)
+            );
+            response.EnsureSuccessStatusCode();
+
+            AdminResetPasswordResult result =
+                await response.Content.ReadFromJsonAsync<AdminResetPasswordResult>();
+
+            Assert.True(result.GeneratedPassword.Length >= 40);
+            Assert.True(result.GeneratedPassword.Distinct().Count() >= 30);
+            Assert.True(await CanSignInAsAsync(userName, result.GeneratedPassword));
+        }
+        finally
+        {
+            live.RequiredLength = previousLength;
+            live.RequiredUniqueChars = previousUnique;
+        }
+    }
+
+    [Fact]
     public async Task ConfirmPasswordReset_RevokesRefreshTokensIssuedBeforeTheReset()
     {
         (_, Guid id, string userName, string password) = await CreateOrdinaryUserClientAsync(
