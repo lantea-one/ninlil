@@ -29,7 +29,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   are validated but never signed with, per RFC 8624), NSEC/NSEC3 (with RFC 5155 opt-out),
   automated proactive re-signing, and a full RFC 6781 automated key-rollover state machine
   (Pre-Publish for ZSKs, Double-Signature for KSKs, with automatic DS cutover when the parent zone
-  is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side.
+  is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side: the first check runs a
+  minute after start, later ones follow the RFC's refresh rule (at most the configured interval),
+  and a root key counts as revoked only if it signed its own revocation.
   The validator builds the chain of trust from the root trust anchor and keeps the zones it has
   proven in the `dnssec` cache (listed, and flushable, with the other caches). With a trust anchor
   configured, a DS or DNSKEY lookup that fails or does not verify makes the answer bogus, so the

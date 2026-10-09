@@ -274,7 +274,7 @@ and RFC 5011 automated trust-anchor rollover.
 | `NINLIL_DNS_SERVER_RECURSIVE_UPSTREAM_QUERY_TIMEOUT` | Per-upstream-query timeout during iterative resolution. | `00:00:03` |
 | `NINLIL_DNS_SERVER_RECURSIVE_OVERALL_QUERY_TIMEOUT` | Overall wall-clock budget for resolving one client query, across every upstream hop. | `00:00:15` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_AUTOMATIC_TRUST_ANCHOR_UPDATE` | Whether RFC 5011 automated root trust-anchor rollover is enabled. | `true` |
-| `NINLIL_DNS_SERVER_RECURSIVE_TRUST_ANCHOR_REFRESH_INTERVAL` | How often the trust-anchor rollover state machine polls the root zone for changes. | `15.00:00:00` |
+| `NINLIL_DNS_SERVER_RECURSIVE_TRUST_ANCHOR_REFRESH_INTERVAL` | Longest wait between two RFC 5011 checks of the root DNSKEY RRset; the service checks sooner when the RRset's TTL or signature lifetime is shorter (RFC 5011 §2.3), and the first check runs one minute after start. | `15.00:00:00` |
 | `NINLIL_DNS_SERVER_RECURSIVE_TRUST_ANCHOR_HOLD_DOWN_DURATION` | RFC 5011's Add-Pending hold-down duration before a new trust anchor becomes valid. | `30.00:00:00` |
 | `NINLIL_DNS_SERVER_RECURSIVE_TRUST_ANCHOR_REMOVE_HOLD_DOWN_DURATION` | RFC 5011's hold-down duration before a revoked trust anchor is fully removed. | `30.00:00:00` |
 | `NINLIL_DNS_SERVER_RECURSIVE_TRUST_ANCHOR_STATE_FILE_PATH` | Where the current trust-anchor rollover state is persisted across restarts. | `data/recursive-trust-anchors.json` |
