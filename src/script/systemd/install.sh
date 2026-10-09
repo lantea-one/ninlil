@@ -10,12 +10,15 @@
 #   sudo ./install.sh ./ninlil-linux-amd64
 #   sudo ./install.sh /path/to/published/Ninlil.Web
 #
-# Writes: /opt/ninlil-dns (program, data/ and wwwroot/), /etc/ninlil-dns/ninlil-dns.env,
-# /var/log/ninlil-dns and /etc/systemd/system/ninlil-dns.service. Exits non-zero when not run as
-# root, when the argument is missing or does not exist, or when a step fails.
+# Writes: /opt/ninlil-dns (program, data/ and wwwroot/), /etc/ninlil-dns/ninlil-dns.env and
+# /etc/systemd/system/ninlil-dns.service. Ninlil logs to the journal, so no log directory is
+# created. Exits non-zero when not run as root, when the argument is missing or does not exist,
+# or when a step fails.
 #
 # Re-running it upgrades the installed program and the unit file, and leaves the data directory
-# and the environment file untouched.
+# and the environment file untouched. An upgrade first removes everything in /opt/ninlil-dns
+# except data/, so files the new version dropped do not linger, then restarts the service if it
+# is running.
 
 set -euo pipefail
 
@@ -35,7 +38,6 @@ SOURCE="${1:-}"
 SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIRECTORY="/opt/ninlil-dns"
 CONFIG_DIRECTORY="/etc/ninlil-dns"
-LOG_DIRECTORY="/var/log/ninlil-dns"
 SERVICE_USER="ninlil-dns"
 
 # Create the unprivileged service account, if it does not already exist.
@@ -44,8 +46,14 @@ if ! id "${SERVICE_USER}" &>/dev/null; then
 fi
 
 # Lay down the directories the service needs. The program itself stays root-owned (read-only to
-# the service account); only the data and log directories belong to it.
-mkdir -p "${INSTALL_DIRECTORY}" "${INSTALL_DIRECTORY}/data" "${CONFIG_DIRECTORY}" "${LOG_DIRECTORY}"
+# the service account); only the data directory belongs to it.
+mkdir -p "${INSTALL_DIRECTORY}" "${INSTALL_DIRECTORY}/data" "${CONFIG_DIRECTORY}"
+# Remove the previous program (assemblies a new version dropped, or a whole publish tree being
+# replaced by the single file) but keep the data directory. The guard keeps a changed
+# INSTALL_DIRECTORY from ever pointing this delete elsewhere.
+if [[ "${INSTALL_DIRECTORY}" == /opt/ninlil-dns ]]; then
+    find "${INSTALL_DIRECTORY}" -mindepth 1 -maxdepth 1 ! -name data -exec rm -rf {} +
+fi
 if [[ -f "${SOURCE}" ]]; then
     # A single-file release binary, installed under the name the unit starts.
     install -m 0755 "${SOURCE}" "${INSTALL_DIRECTORY}/Ninlil.Web"
@@ -56,7 +64,7 @@ else
     cp -r "${SOURCE}/." "${INSTALL_DIRECTORY}/"
     chmod 0755 "${INSTALL_DIRECTORY}/Ninlil.Web"
 fi
-chown -R "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_DIRECTORY}/data" "${LOG_DIRECTORY}"
+chown -R "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_DIRECTORY}/data"
 chmod 0700 "${INSTALL_DIRECTORY}/data"
 
 # Create a starter environment file, if one does not already exist, without overwriting any
@@ -80,7 +88,11 @@ fi
 cp "${SCRIPT_DIRECTORY}/ninlil-dns.service" /etc/systemd/system/ninlil-dns.service
 systemctl daemon-reload
 systemctl enable ninlil-dns
+# Restart only if the service is running, so an upgrade takes effect and a fresh install stays
+# stopped.
+systemctl try-restart ninlil-dns
 
 echo "Ninlil has been installed. Review ${ENVIRONMENT_FILE}, then start it with:"
 echo "  sudo systemctl start ninlil-dns"
+echo "(An already running service has just been restarted onto the new version.)"
 echo "The bootstrap administrator's password is printed once to: journalctl -u ninlil-dns"

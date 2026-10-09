@@ -32,7 +32,7 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 # ProtectSystem=strict makes everything else read-only.
-ReadWritePaths=/opt/ninlil-dns/data /var/log/ninlil-dns
+ReadWritePaths=/opt/ninlil-dns/data
 
 [Install]
 WantedBy=multi-user.target
