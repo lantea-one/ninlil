@@ -341,11 +341,11 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
                         .HasMaxLength(45)
                         .HasColumnType("character varying(45)");
 
-                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<long?>("LeaseExpiresAtUtc")
+                        .HasColumnType("bigint");
 
-                    b.Property<DateTimeOffset?>("LeaseObtainedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<long?>("LeaseObtainedAtUtc")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid?>("OriginatingNodeId")
                         .HasColumnType("uuid");

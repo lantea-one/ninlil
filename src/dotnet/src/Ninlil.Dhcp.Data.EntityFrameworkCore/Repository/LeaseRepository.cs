@@ -61,16 +61,13 @@ public class LeaseRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // The SQLite provider cannot translate a DateTimeOffset comparison, and the column is
-        // not stored as ticks, so only the state is filtered in the database and the expiry check
-        // runs in memory. The expiry sweep marks expired leases Expired, so the Active rows
-        // loaded here are almost all still unexpired.
-        List<LeaseEntity> active = await Set.Where(lease => lease.State == LeaseStateEnum.Active)
+        // The lease instants are stored as UTC ticks, so the expiry comparison runs in SQL on
+        // every engine.
+        return await Set.Where(lease =>
+                lease.State == LeaseStateEnum.Active
+                && (lease.LeaseExpiresAtUtc == null || lease.LeaseExpiresAtUtc > nowUtc)
+            )
             .ToListAsync(stoppingToken);
-
-        return active
-            .Where(lease => lease.LeaseExpiresAtUtc is null || lease.LeaseExpiresAtUtc > nowUtc)
-            .ToList();
     }
 
     /// <inheritdoc />

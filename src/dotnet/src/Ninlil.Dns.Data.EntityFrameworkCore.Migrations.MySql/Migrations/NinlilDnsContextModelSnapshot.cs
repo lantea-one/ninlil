@@ -341,11 +341,11 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations
                         .HasMaxLength(45)
                         .HasColumnType("varchar(45)");
 
-                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
-                        .HasColumnType("datetime(6)");
+                    b.Property<long?>("LeaseExpiresAtUtc")
+                        .HasColumnType("bigint");
 
-                    b.Property<DateTimeOffset?>("LeaseObtainedAtUtc")
-                        .HasColumnType("datetime(6)");
+                    b.Property<long?>("LeaseObtainedAtUtc")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid?>("OriginatingNodeId")
                         .HasColumnType("char(36)");

@@ -336,11 +336,11 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
                         .HasMaxLength(45)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LeaseExpiresAtUtc")
+                        .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LeaseObtainedAtUtc")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LeaseObtainedAtUtc")
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid?>("OriginatingNodeId")
                         .HasColumnType("TEXT");

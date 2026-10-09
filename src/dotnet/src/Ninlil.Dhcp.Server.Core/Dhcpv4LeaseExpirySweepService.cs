@@ -32,10 +32,9 @@ namespace Ninlil.Dhcp.Server.Core;
 ///         rather than one interval later.
 ///     </para>
 ///     <para>
-///         The query filters by state only and compares <c>LeaseExpiresAtUtc</c> in memory, as
-///         <see cref="Allocation.Dhcpv4LeaseAllocationService.IsLeaseBlocking" /> does: the SQLite
-///         provider does not translate every <c>DateTimeOffset</c> comparison (it cannot order by
-///         one at all), and lease counts are small.
+///         The query filters by state and expiry in the database: the lease instants are stored as
+///         UTC ticks, so the comparison translates on every engine. Only the leases that have
+///         expired are loaded.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">The factory that creates a scope for each sweep.</param>
@@ -89,17 +88,15 @@ public sealed class Dhcpv4LeaseExpirySweepService(
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        IReadOnlyList<LeaseEntity> activeLeases = await leaseRepository.ListAsync(
-            lease => lease.State == LeaseStateEnum.Active,
+        IReadOnlyList<LeaseEntity> expiredLeases = await leaseRepository.ListAsync(
+            lease =>
+                lease.State == LeaseStateEnum.Active
+                && lease.LeaseExpiresAtUtc != null
+                && lease.LeaseExpiresAtUtc <= now,
             stoppingToken
         );
 
-        List<LeaseEntity> expired =
-        [
-            .. activeLeases.Where(lease =>
-                lease.LeaseExpiresAtUtc.HasValue && lease.LeaseExpiresAtUtc.Value <= now
-            ),
-        ];
+        List<LeaseEntity> expired = [.. expiredLeases];
 
         if (expired.Count == 0)
             return 0;

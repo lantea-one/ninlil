@@ -28,6 +28,22 @@ public class LeaseConfiguration : IEntityTypeConfiguration<LeaseEntity>
         builder.Property(lease => lease.ProtocolVersion).HasConversion<string>().HasMaxLength(16);
         builder.Property(lease => lease.State).HasConversion<string>().HasMaxLength(16);
 
+        // Both lease instants are stored as UTC ticks so every engine can compare and order them
+        // in SQL (the SQLite provider cannot translate DateTimeOffset comparisons).
+        builder
+            .Property(lease => lease.LeaseObtainedAtUtc)
+            .HasConversion(
+                value => value.HasValue ? value.Value.UtcTicks : (long?)null,
+                value => value.HasValue ? new DateTimeOffset(value.Value, TimeSpan.Zero) : null
+            );
+
+        builder
+            .Property(lease => lease.LeaseExpiresAtUtc)
+            .HasConversion(
+                value => value.HasValue ? value.Value.UtcTicks : (long?)null,
+                value => value.HasValue ? new DateTimeOffset(value.Value, TimeSpan.Zero) : null
+            );
+
         // Within a scope, a client holds at most one lease and an address is leased at most
         // once.
         builder.HasIndex(lease => new { lease.ScopeName, lease.ClientIdentifier }).IsUnique();
