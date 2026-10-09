@@ -28,7 +28,7 @@ trap 'rm -rf "${work}"' EXIT
 tree="${work}/tree"
 digests="${work}/digests"
 mirror="${work}/mirror"
-mkdir -p "${tree}/docker" "${tree}/.forgejo/workflows" "${tree}/.forgejo/scripts" "${tree}/src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests" "${digests}" "${work}/bin"
+mkdir -p "${tree}/docker" "${tree}/.forgejo/workflows" "${tree}/.forgejo/scripts" "${tree}/src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests" "${tree}/src/dotnet/tests/Ninlil.Dns.Data.EngineHosts" "${digests}" "${work}/bin"
 
 hex() { printf '%064d' "$1" | tr '0' "$2"; }
 old_a="sha256:$(hex 1 a)"
@@ -96,6 +96,10 @@ DOCKERFILE
     printf '    image: example.test/fetch:2@%s\n    image: other\n' "${old_b}" > "${tree}/docker-compose.yml"
     printf 'new PostgreSqlBuilder("example.test/fetch:2@%s")\n' "${old_b}" \
         > "${tree}/src/dotnet/tests/Ninlil.Dns.Server.QueryLog.Tests/QueryLogPostgreSqlTestHost.cs"
+    # The shared database hosts hold pins too; the test needs the files to exist, not their content.
+    for engine in MongoDb MySql PostgreSql SqlServer; do
+        : > "${tree}/src/dotnet/tests/Ninlil.Dns.Data.EngineHosts/${engine}EngineHost.cs"
+    done
     cat > "${tree}/.forgejo/workflows/one.yml" <<YAML
 steps:
   - uses: 'actions/checkout@${commit_old}' # v7.0.0
