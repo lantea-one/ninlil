@@ -16,10 +16,12 @@
   </ItemGroup>
 
   <!--
+      Ninlil.Benchmarks is referenced for its data-set seeder (BenchmarkDataSetTests).
       Ninlil.Web is referenced only for its health checks, which the storage health test runs
       against a real MongoDB server (Ninlil.Web.Tests has no Docker).
   -->
   <ItemGroup>
+    <ProjectReference Include="..\..\benchmarks\Ninlil.Benchmarks\Ninlil.Benchmarks.csproj" />
     <ProjectReference Include="..\Ninlil.Dns.Data.EngineHosts\Ninlil.Dns.Data.EngineHosts.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />

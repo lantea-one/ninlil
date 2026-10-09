@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+      The BenchmarkDotNet project of Ninlil: a console program, not a test project, so
+      "dotnet test" never runs it. CI builds it with the solution and does not run it. See the
+      "Benchmark" section of AGENTS.md for how to run it.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Ninlil.Benchmarks</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\tests\Ninlil.Dns.Data.EngineHosts\Ninlil.Dns.Data.EngineHosts.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj" />
+  </ItemGroup>
+</Project>

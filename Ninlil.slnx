@@ -53,6 +53,9 @@
   <Project Path="src\dotnet\src\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj" />
   <Project Path="src\dotnet\src\Ninlil.Dns.Server.ClusterSync\Ninlil.Dns.Server.ClusterSync.csproj" />
   <Project Path="src\dotnet\src\Ninlil.Web\Ninlil.Web.csproj" />
+  <Folder Name="/Benchmarks/">
+    <Project Path="src\dotnet\benchmarks\Ninlil.Benchmarks\Ninlil.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/Tests/">
     <Project Path="src\dotnet\tests\Ninlil.Dns.Data.EngineHosts\Ninlil.Dns.Data.EngineHosts.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Identity.Tests\Ninlil.Dns.Identity.Tests.csproj" />

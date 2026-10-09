@@ -916,3 +916,6 @@ dist-ssr
 
 # The Arch Linux packages' default environment file (a template, no secrets).
 !src/archlinux/common/ninlil.env
+
+# BenchmarkDotNet results and the seeded SQLite files (src/dotnet/benchmarks/Ninlil.Benchmarks).
+BenchmarkDotNet.Artifacts/
