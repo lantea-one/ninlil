@@ -10,7 +10,7 @@
 # keep two jobs on one host from extracting the same package into that cache at once, and would
 # otherwise sit in each container's /tmp, where no other container sees them.
 #
-# Usage: in-container.sh [--docker] <dotnet|node|arch> <command> [argument...]
+# Usage: in-container.sh [--docker] <dotnet|node|arch|lint> <command> [argument...]
 #   --docker  Also hands the container the host's Docker socket, for the tests that start
 #             database containers (Testcontainers), and routes those containers' published ports
 #             back through the host gateway.
@@ -26,7 +26,7 @@ if [[ "${1:-}" == '--docker' ]]; then
     docker_socket=true
     shift
 fi
-toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch> <command> [argument...]}"
+toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch|lint> <command> [argument...]}"
 shift
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

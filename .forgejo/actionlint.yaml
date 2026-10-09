@@ -1,0 +1,19 @@
+# Configuration for actionlint, read by .forgejo/scripts/lint.sh.
+#
+# actionlint knows only GitHub Actions. The runner labels the Forgejo workflows use are declared
+# here so it does not report them as unknown:
+#   archlinux       the Linux runners that run every job today
+#   windows-latest  the Windows runner that runs the Windows smoke test
+#   lofnheim        that Windows runner's own name
+self-hosted-runner:
+  labels:
+    - archlinux
+    - windows-latest
+    - lofnheim
+paths:
+  # test-dotnet passes a single-quoted script to `bash -c` in the container on purpose: the
+  # outer shell must not expand ${timing_sensitive}, the inner one does. lint.sh copies the
+  # workflows to .github/workflows, hence the path.
+  .github/workflows/pipeline.yml:
+    ignore:
+      - 'SC2016:info:.*'
