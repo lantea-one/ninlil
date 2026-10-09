@@ -60,3 +60,15 @@ public sealed class MongoDbStandaloneCollection : ICollectionFixture<MongoDbStan
     /// </summary>
     public const string Name = "MongoDB standalone engine";
 }
+
+/// <summary>
+///     This class defines the xUnit collection that shares one SQLite fixture (no container).
+/// </summary>
+[CollectionDefinition(Name)]
+public sealed class SqliteCollection : ICollectionFixture<SqliteEngineFixture>
+{
+    /// <summary>
+    ///     This constant contains the collection name.
+    /// </summary>
+    public const string Name = "SQLite engine";
+}

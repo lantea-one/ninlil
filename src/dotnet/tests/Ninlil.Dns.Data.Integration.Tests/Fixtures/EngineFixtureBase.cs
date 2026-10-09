@@ -49,9 +49,13 @@ public abstract class EngineFixtureBase : IAsyncLifetime
     ///     This method creates a new, empty database with a unique name and a service provider
     ///     that uses it: the DNS and DHCP repositories of the engine, a unit of work and logging.
     ///     On a relational engine the schema is created from the entity model with
-    ///     <c>EnsureCreatedAsync</c> (not the migrations).
+    ///     <c>EnsureCreatedAsync</c> (not the migrations), unless <paramref name="createSchema" />
+    ///     is false: a migration test passes false and applies the migrations itself.
     /// </summary>
-    public async Task<EngineDatabase> CreateDatabaseAsync()
+    /// <param name="createSchema">
+    ///     Whether to create the schema from the entity model. Ignored on MongoDB.
+    /// </param>
+    public async Task<EngineDatabase> CreateDatabaseAsync(bool createSchema = true)
     {
         string connectionString = BuildConnectionString($"ninlil_{Guid.NewGuid():N}");
 
@@ -82,7 +86,7 @@ public abstract class EngineFixtureBase : IAsyncLifetime
         ServiceProvider provider = services.BuildServiceProvider();
         EngineDatabase database = new(provider, connectionString);
 
-        if (Engine != StorageEngineEnum.MongoDb)
+        if (createSchema && Engine != StorageEngineEnum.MongoDb)
             await database.CreateContext().Database.EnsureCreatedAsync();
 
         return database;
