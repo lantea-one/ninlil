@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
+import { AuthService } from '../../../core/auth/auth.service';
 import { DnsCacheService, RecursiveSettingsService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import {
   RecursiveSettingsComponent,
+  toInsecureDomains,
   toRootHintServers,
   toTrustAnchors,
 } from './recursive-settings.component';
@@ -62,6 +64,9 @@ describe('RecursiveSettingsComponent', () => {
         enablePrefetch: true,
         prefetchWindow: '00:00:10',
         prefetchRecentAccessWindow: '00:05:00',
+        insecureDomains: ['home.arpa', 'internal'],
+        useCustomInsecureDomains: false,
+        builtInInsecureDomains: ['home.arpa', 'internal'],
         ...overrides,
       }),
     );
@@ -76,6 +81,8 @@ describe('RecursiveSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // An administrator's view: every permission held, so the write-only buttons render.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(RecursiveSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -204,5 +211,108 @@ describe('RecursiveSettingsComponent', () => {
     expect(
       toTrustAnchors([{ keyTag: 1, algorithm: 'ED25519', digestType: 2, digestHex: 'ab cd\nef' }]),
     ).toEqual([{ keyTag: 1, algorithm: 'ED25519', digestType: 2, digestHex: 'ABCDEF' }]);
+  });
+
+  it('shows the Insecure domains section with the list in force', async () => {
+    const fixture = await createComponent();
+    const element: HTMLElement = fixture.nativeElement;
+
+    const section = element.querySelector('[data-section="insecure-domains"]');
+    expect(section).not.toBeNull();
+    expect(fixture.componentInstance.form.controls.insecureDomainsText.value).toBe(
+      'home.arpa\ninternal',
+    );
+    expect(section?.querySelector('[data-list-kind]')?.textContent).toContain('Built-in list');
+  });
+
+  it('save() leaves an unchanged Insecure domain list out', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' }));
+    });
+
+    await fixture.componentInstance.save();
+
+    const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
+    expect('insecureDomains' in body).toBeFalse();
+    expect('insecureDomainsText' in body).toBeFalse();
+  });
+
+  it('save() sends an edited Insecure domain list and marks it custom', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' }));
+    });
+    const component = fixture.componentInstance;
+
+    component.form.controls.insecureDomainsText.setValue('home.arpa\nCorp.Example.\n');
+    await component.save();
+
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ insecureDomains: ['home.arpa', 'corp.example'] }),
+    });
+    expect(component.insecureDomainsCustom()).toBeTrue();
+
+    // A second save without a change sends nothing for the list.
+    await component.save();
+    const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
+    expect('insecureDomains' in body).toBeFalse();
+  });
+
+  it('save() can send an empty Insecure domain list', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' }));
+    });
+
+    fixture.componentInstance.form.controls.insecureDomainsText.setValue('');
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ insecureDomains: [] }),
+    });
+  });
+
+  it('Restore defaults refills the editor and a save then sends null', async () => {
+    const fixture = await createComponent(
+      () => apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' })),
+      { insecureDomains: ['corp.example'], useCustomInsecureDomains: true },
+    );
+    const component = fixture.componentInstance;
+    expect(component.insecureDomainsCustom()).toBeTrue();
+
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector(
+      '[data-action="restore-insecure-domains"]',
+    );
+    button.click();
+    expect(component.form.controls.insecureDomainsText.value).toBe('home.arpa\ninternal');
+
+    await component.save();
+
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ insecureDomains: null }),
+    });
+    expect(component.insecureDomainsCustom()).toBeFalse();
+  });
+
+  it('editing after Restore defaults sends the edited list, not null', async () => {
+    const fixture = await createComponent(
+      () => apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' })),
+      { insecureDomains: ['corp.example'], useCustomInsecureDomains: true },
+    );
+    const component = fixture.componentInstance;
+
+    component.restoreInsecureDomainDefaults();
+    component.form.controls.insecureDomainsText.setValue('internal');
+    await component.save();
+
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ insecureDomains: ['internal'] }),
+    });
+  });
+
+  it('toInsecureDomains() splits, lowercases and de-duplicates the editor text', () => {
+    expect(toInsecureDomains(' A.example., b.example\nA.EXAMPLE  \n\n')).toEqual([
+      'a.example',
+      'b.example',
+    ]);
+    expect(toInsecureDomains('')).toEqual([]);
   });
 });

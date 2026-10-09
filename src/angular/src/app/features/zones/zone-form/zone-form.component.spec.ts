@@ -252,6 +252,79 @@ describe('ZoneFormComponent', () => {
     });
   });
 
+  it('forwarder zone: the validate-DNSSEC switch is shown, off by default, and submitted', async () => {
+    const fixture = await createComponent(null, () => {
+      zonesApiSpy.apiZonesPost.and.returnValue(of({ id: 'new-zone' }));
+    });
+    const component = fixture.componentInstance;
+    const element: HTMLElement = fixture.nativeElement;
+
+    // The switch belongs to the Forwarding section, which only forwarder types show.
+    expect(element.querySelector('#zone-validate-dnssec')).toBeNull();
+    component.form.patchValue({
+      name: 'corp.example',
+      type: ZoneTypeEnum.Forwarder,
+      forwarderAddressesText: '10.0.0.53',
+    });
+    fixture.detectChanges();
+
+    const checkbox: HTMLInputElement | null = element.querySelector('#zone-validate-dnssec');
+    expect(checkbox).not.toBeNull();
+    expect(checkbox?.checked).toBeFalse();
+    expect(element.querySelector('#zone-validate-dnssec-hint')?.textContent).toContain(
+      'Insecure domains',
+    );
+
+    await component.save();
+    expect(zonesApiSpy.apiZonesPost).toHaveBeenCalledWith({
+      zoneWriteRequest: jasmine.objectContaining({ validateDnssec: false }),
+    });
+
+    checkbox?.click();
+    fixture.detectChanges();
+    expect(component.form.controls.validateDnssec.value).toBeTrue();
+
+    await component.save();
+    expect(zonesApiSpy.apiZonesPost).toHaveBeenCalledWith({
+      zoneWriteRequest: jasmine.objectContaining({ validateDnssec: true }),
+    });
+  });
+
+  it('forwarder zone: edit mode loads the switch and keeps it on a PUT', async () => {
+    const fixture = await createComponent('zone-1', () => {
+      zonesApiSpy.apiZonesIdGet.and.returnValue(
+        of({
+          id: 'zone-1',
+          name: 'signed.example',
+          type: ZoneTypeEnum.Forwarder,
+          forwarderAddresses: ['192.0.2.53'],
+          validateDnssec: true,
+          cloudSyncInterval: '00:05:00',
+        }),
+      );
+      zonesApiSpy.apiZonesIdPut.and.returnValue(of(undefined));
+    });
+
+    expect(fixture.componentInstance.form.controls.validateDnssec.value).toBeTrue();
+
+    await fixture.componentInstance.save();
+
+    expect(zonesApiSpy.apiZonesIdPut).toHaveBeenCalledWith({
+      id: 'zone-1',
+      zoneWriteRequest: jasmine.objectContaining({ validateDnssec: true }),
+    });
+  });
+
+  it('forwarder zone: a zone without the field loads with the switch off', async () => {
+    const fixture = await createComponent('zone-1', () => {
+      zonesApiSpy.apiZonesIdGet.and.returnValue(
+        of({ id: 'zone-1', name: 'old.example', type: ZoneTypeEnum.Forwarder }),
+      );
+    });
+
+    expect(fixture.componentInstance.form.controls.validateDnssec.value).toBeFalse();
+  });
+
   it('save() in edit mode PUTs the built request and navigates back to the zone list', async () => {
     const fixture = await createComponent('zone-1', () => {
       zonesApiSpy.apiZonesIdGet.and.returnValue(

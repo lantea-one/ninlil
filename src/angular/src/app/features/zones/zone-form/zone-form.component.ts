@@ -172,6 +172,8 @@ export class ZoneFormComponent implements OnInit {
     // (see showTransferSection). Plain matches ZoneEntity.TransferTransport's default.
     transferTransport: [ZoneTransferTransportEnum.Plain as ZoneTransferTransportEnum],
     forwarderAddressesText: [''],
+    // ZoneEntity.ValidateDnssec: off by default, because a private zone has no chain of trust.
+    validateDnssec: [false],
     notifyAddressesText: [''],
     tsigKeyName: [''],
     // UI-only; save() does not send it. It holds '' (no key), a listed key's name, or
@@ -439,6 +441,7 @@ export class ZoneFormComponent implements OnInit {
       primaryServerAddresses: splitAddressLines(value.primaryServerAddressesText),
       transferTransport: value.transferTransport,
       forwarderAddresses: splitAddressLines(value.forwarderAddressesText),
+      validateDnssec: value.validateDnssec,
       notifyAddresses: splitAddressLines(value.notifyAddressesText),
       tsigKeyName: value.tsigKeyName.trim().length > 0 ? value.tsigKeyName : null,
       dynamicUpdateEnabled: value.dynamicUpdateEnabled,
@@ -519,6 +522,7 @@ export class ZoneFormComponent implements OnInit {
       primaryServerAddressesText: (zone.primaryServerAddresses ?? []).join('\n'),
       transferTransport: zone.transferTransport ?? ZoneTransferTransportEnum.Plain,
       forwarderAddressesText: (zone.forwarderAddresses ?? []).join('\n'),
+      validateDnssec: zone.validateDnssec ?? false,
       notifyAddressesText: (zone.notifyAddresses ?? []).join('\n'),
       tsigKeyName,
       tsigKeySelection,

@@ -220,6 +220,48 @@
           </div>
         </div>
 
+        <div class="override-group" data-section="insecure-domains">
+          <div class="override-group-label">
+            Insecure domains
+            <c-badge color="secondary" class="ms-2" data-list-kind>{{
+              insecureDomainsCustom() ? 'Custom list' : 'Built-in list'
+            }}</c-badge>
+          </div>
+          <div cFormText class="override-hint">
+            Names at or below one of these domains are not validated with DNSSEC: the answer is
+            served as insecure, never with the AD bit, and never fails for DNSSEC reasons. Use it
+            for private zones that the public DNSSEC chain says do not exist (for example
+            <code>corp.example</code>). A conditional forwarder zone has its own switch. One domain
+            per line. The built-in list holds <code>home.arpa</code> (RFC 8375),
+            <code>internal</code> and the locally-served reverse zones of RFC 6303 and RFC 7793;
+            edit it freely, and use "Restore defaults" to go back. Takes effect at once.
+          </div>
+          <label cLabel for="recursive-insecure-domains" class="visually-hidden"
+            >Insecure domains</label
+          >
+          <textarea
+            cFormControl
+            id="recursive-insecure-domains"
+            formControlName="insecureDomainsText"
+            rows="10"
+            spellcheck="false"
+            placeholder="corp.example"
+          ></textarea>
+          <button
+            *appIfPermission="'recursivesettings:write'"
+            cButton
+            size="sm"
+            variant="outline"
+            color="secondary"
+            type="button"
+            class="mt-2"
+            data-action="restore-insecure-domains"
+            (click)="restoreInsecureDomainDefaults()"
+          >
+            Restore defaults
+          </button>
+        </div>
+
         <div class="override-group">
           <div class="override-group-label">Root hints override</div>
           <div cFormText class="override-hint">

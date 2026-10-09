@@ -132,6 +132,24 @@
                     rows="2"
                   ></textarea>
                 </div>
+                <c-form-check class="mb-3">
+                  <input
+                    cFormCheckInput
+                    type="checkbox"
+                    id="zone-validate-dnssec"
+                    formControlName="validateDnssec"
+                  />
+                  <label cFormCheckLabel for="zone-validate-dnssec"
+                    >Validate answers with DNSSEC</label
+                  >
+                  <div cFormText id="zone-validate-dnssec-hint">
+                    Off by default: a private zone (such as <code>corp.example</code>) has no chain
+                    of trust from the public root, so validating it ends in SERVFAIL. Turn it on for
+                    a forwarded zone that is signed under the public DNSSEC root. It has an effect
+                    only while DNSSEC validation is on in the recursive resolver settings, and names
+                    on that page's Insecure domains list are never validated.
+                  </div>
+                </c-form-check>
               </div>
             }
           </section>

@@ -8,6 +8,7 @@ import {
 } from '@angular/forms';
 import {
   AlertComponent,
+  BadgeComponent,
   ButtonDirective,
   CardBodyComponent,
   CardComponent,
@@ -76,6 +77,12 @@ const TRUST_ANCHOR_ALGORITHMS: DnssecAlgorithmEnum[] = [
  * read at startup. Those lists are edited as rows at the bottom of the form and sent only when
  * they changed, so saving another field does not produce the restart note.
  *
+ * <p>The Insecure domains section edits the list of domain names (negative trust anchors) that skip
+ * DNSSEC validation, one name per line. The list starts as the built-in one (private zones such as
+ * `home.arpa`, `internal` and the RFC 6303 reverse zones) and is fully editable. "Restore
+ * defaults" puts the built-in names back and, on save, sends `null` so the server goes back to
+ * following its built-in list. The list is sent only when it changed.
+ *
  * <p>Below the form, {@link DnsCacheCardComponent} shows the forwarded and recursive answer caches
  * and can flush them; it uses this page's permissions.
  */
@@ -86,6 +93,7 @@ const TRUST_ANCHOR_ALGORITHMS: DnssecAlgorithmEnum[] = [
     IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
+    BadgeComponent,
     ButtonDirective,
     CardBodyComponent,
     CardComponent,
@@ -133,6 +141,7 @@ export class RecursiveSettingsComponent implements OnInit {
     enablePrefetch: [true],
     prefetchWindow: ['00:00:10', [Validators.required]],
     prefetchRecentAccessWindow: ['00:05:00', [Validators.required]],
+    insecureDomainsText: [''],
     rootHintServers: this.formBuilder.array<RootHintServerFormGroup>([]),
     trustAnchors: this.formBuilder.array<TrustAnchorFormGroup>([]),
   });
@@ -142,6 +151,18 @@ export class RecursiveSettingsComponent implements OnInit {
 
   /** The two override lists as last loaded or saved, to tell whether a save must send them. */
   private loadedOverrides = { rootHints: '[]', trustAnchors: '[]' };
+
+  /** The built-in Insecure domain list the server reports, for "Restore defaults". */
+  readonly builtInInsecureDomains = signal<string[]>([]);
+
+  /** Whether the saved Insecure domain list is the operator's own rather than the built-in one. */
+  readonly insecureDomainsCustom = signal(false);
+
+  /** The Insecure domain list as last loaded or saved, to tell whether a save must send it. */
+  private loadedInsecureDomains = '[]';
+
+  /** Whether "Restore defaults" was clicked since the last load or save. */
+  private restoreRequested = false;
 
   /** Every root hint server row. */
   get rootHintServers() {
@@ -169,6 +190,16 @@ export class RecursiveSettingsComponent implements OnInit {
     this.trustAnchors.removeAt(index);
   }
 
+  /**
+   * This method puts the built-in Insecure domain names into the editor. Saving then asks the
+   * server to follow its built-in list again, unless the names are edited first.
+   */
+  restoreInsecureDomainDefaults(): void {
+    this.form.controls.insecureDomainsText.setValue(this.builtInInsecureDomains().join('\n'));
+    this.form.controls.insecureDomainsText.markAsDirty();
+    this.restoreRequested = true;
+  }
+
   ngOnInit(): void {
     void this.loadSettings();
   }
@@ -180,8 +211,21 @@ export class RecursiveSettingsComponent implements OnInit {
     this.submitting.set(true);
     this.errorMessage.set(null);
 
-    const { rootHintServers, trustAnchors, ...value } = this.form.getRawValue();
+    const { rootHintServers, trustAnchors, insecureDomainsText, ...value } =
+      this.form.getRawValue();
     const body: Record<string, unknown> = { ...value };
+
+    // The list is sent only when it changed or when the defaults are restored. Restoring while
+    // the text still equals the built-in names sends null; any edit after that sends the list.
+    const insecureDomains = toInsecureDomains(insecureDomainsText);
+    const restoring =
+      this.restoreRequested &&
+      JSON.stringify(insecureDomains) === JSON.stringify(this.builtInInsecureDomains());
+    if (restoring) {
+      body['insecureDomains'] = null;
+    } else if (JSON.stringify(insecureDomains) !== this.loadedInsecureDomains) {
+      body['insecureDomains'] = insecureDomains;
+    }
 
     // The override lists are read only at startup, so sending them unchanged would make the
     // backend report that a restart is needed when nothing that needs one was touched.
@@ -200,6 +244,13 @@ export class RecursiveSettingsComponent implements OnInit {
         rootHints: JSON.stringify(rootHints),
         trustAnchors: JSON.stringify(anchors),
       };
+      this.loadedInsecureDomains = JSON.stringify(insecureDomains);
+      if (restoring) {
+        this.insecureDomainsCustom.set(false);
+      } else if ('insecureDomains' in body) {
+        this.insecureDomainsCustom.set(true);
+      }
+      this.restoreRequested = false;
       this.notification.success(result.note ?? 'Recursive resolver settings saved.');
     } catch (error) {
       this.errorMessage.set(
@@ -237,6 +288,13 @@ export class RecursiveSettingsComponent implements OnInit {
         prefetchWindow: settings.prefetchWindow ?? '00:00:10',
         prefetchRecentAccessWindow: settings.prefetchRecentAccessWindow ?? '00:05:00',
       });
+
+      const insecureDomains = settings.insecureDomains ?? [];
+      this.builtInInsecureDomains.set(settings.builtInInsecureDomains ?? []);
+      this.insecureDomainsCustom.set(settings.useCustomInsecureDomains ?? false);
+      this.form.controls.insecureDomainsText.setValue(insecureDomains.join('\n'));
+      this.loadedInsecureDomains = JSON.stringify(toInsecureDomains(insecureDomains.join('\n')));
+      this.restoreRequested = false;
 
       this.rootHintServers.clear();
       for (const server of settings.rootHintServersOverride ?? []) {
@@ -282,6 +340,19 @@ export class RecursiveSettingsComponent implements OnInit {
       ],
     });
   }
+}
+
+/**
+ * This function turns the Insecure domain editor text into the request shape: names separated by
+ * whitespace or commas, lowercase, without a trailing dot, empty entries and duplicates dropped.
+ * The server validates each name and answers 400 for one that is not a domain name.
+ */
+export function toInsecureDomains(text: string): string[] {
+  const names = text
+    .split(/[\s,]+/)
+    .map((name) => name.trim().toLowerCase().replace(/\.$/, ''))
+    .filter((name) => name.length > 0);
+  return [...new Set(names)];
 }
 
 /** This function turns the root hint rows into the request shape, splitting each address list. */
