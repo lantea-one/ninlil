@@ -46,24 +46,42 @@ public sealed partial class ForwarderQueryResolverTests
             Options.EnableDnssecValidation = true;
             Options.EnableRecursion = false;
 
-            StaticOptionsMonitor<RecursiveServerOptions> monitor = new(Options);
-            RecursiveCache cache = new(monitor, new RecordingEventPublisher(), Clock);
-            Engine = new IterativeResolutionEngine(cache, Hierarchy.Client, monitor);
+            Monitor = new SwappableOptionsMonitor<RecursiveServerOptions>(Options);
+            InsecureDomains = new InsecureDomainPolicy(Monitor);
+            RecursiveCache cache = new(Monitor, new RecordingEventPublisher(), Clock);
+            Engine = new IterativeResolutionEngine(cache, Hierarchy.Client, Monitor);
             Validator = new DnssecValidator(
                 Engine,
                 new FakeTrustAnchorStore(Hierarchy.Anchors),
                 ValidatorTestHelpers.CreateTrustCache(Clock),
-                Clock
+                Clock,
+                insecureDomains: InsecureDomains
             );
             Upstream = new HierarchyForwarderClient(Hierarchy);
         }
 
         public ManualTimeProvider Clock { get; }
         public SignedHierarchy Hierarchy { get; }
-        public RecursiveServerOptions Options { get; }
+        public RecursiveServerOptions Options { get; private set; }
+        public SwappableOptionsMonitor<RecursiveServerOptions> Monitor { get; }
+        public InsecureDomainPolicy InsecureDomains { get; }
         public IterativeResolutionEngine Engine { get; }
         public DnssecValidator Validator { get; }
         public HierarchyForwarderClient Upstream { get; }
+
+        /// <summary>
+        ///     This method swaps in a new options object whose Insecure domain list is exactly
+        ///     <paramref name="domains" />, the way a saved settings change does.
+        /// </summary>
+        public void SetInsecureDomains(params string[] domains)
+        {
+            Options = Hierarchy.CreateOptions();
+            Options.EnableDnssecValidation = true;
+            Options.EnableRecursion = false;
+            Options.UseCustomInsecureDomains = true;
+            Options.InsecureDomains = [.. domains];
+            Monitor.CurrentValue = Options;
+        }
     }
 
     /// <summary>
@@ -225,7 +243,9 @@ public sealed partial class ForwarderQueryResolverTests
             recursiveOptions: environment.Options,
             validator: environment.Validator,
             responseCache: responseCache,
-            forwarderClients: [environment.Upstream]
+            forwarderClients: [environment.Upstream],
+            recursiveMonitor: environment.Monitor,
+            insecureDomains: environment.InsecureDomains
         );
     }
 

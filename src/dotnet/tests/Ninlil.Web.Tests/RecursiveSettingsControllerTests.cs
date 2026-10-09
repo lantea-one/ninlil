@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Configuration;
+using Ninlil.Dns.Server.Recursive;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
 
@@ -16,7 +18,8 @@ namespace Ninlil.Web.Tests;
 ///     signed in as the bootstrap administrator: the compiled-in defaults, patches checked by
 ///     reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
-///     returned note, and input validation. <see cref="RecursiveOptionsHotReloadTests" /> covers
+///     returned note, and input validation (the Insecure domain list is also bound back from the
+///     file to check what the configuration system makes of it). <see cref="RecursiveOptionsHotReloadTests" /> covers
 ///     the reload. Recursion stays off in the host, since the settings file is never loaded.
 /// </summary>
 [Collection(WebTestCollection.Name)]
@@ -285,6 +288,125 @@ public class RecursiveSettingsControllerTests(NinlilDnsWebApplicationFactory fac
                     },
                 }
             )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Get_ShowsTheBuiltInInsecureDomainsAsTheListInForce()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        RecursiveSettingsDetail detail = await client.GetFromJsonAsync<RecursiveSettingsDetail>(
+            "/api/recursive-settings"
+        );
+
+        Assert.False(detail.UseCustomInsecureDomains);
+        Assert.Contains("home.arpa", detail.InsecureDomains);
+        Assert.Contains("internal", detail.InsecureDomains);
+        Assert.Contains("10.in-addr.arpa", detail.InsecureDomains);
+        Assert.Contains("168.192.in-addr.arpa", detail.InsecureDomains);
+        Assert.Equal(detail.BuiltInInsecureDomains, detail.InsecureDomains);
+    }
+
+    /// <summary>
+    ///     This method binds the host's settings file the way the configuration system does and
+    ///     returns the effective Insecure domains of the result.
+    /// </summary>
+    private IReadOnlyList<string> ReadEffectiveInsecureDomainsFromTheFile()
+    {
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddJsonFile(factory.RuntimeConfigurationFilePath, optional: false)
+            .Build();
+        RecursiveServerOptions options = new();
+        configuration.GetSection(RecursiveServerOptions.SectionName).Bind(options);
+
+        return options.GetEffectiveInsecureDomains();
+    }
+
+    [Fact]
+    public async Task Patch_WithAnInsecureDomainList_StoresItNormalizedAndItBindsAsTheListInForce()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/recursive-settings",
+                new { insecureDomains = new[] { "Corp.Example.", "lab.example", "corp.example" } }
+            )
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
+        Assert.Equal(["corp.example", "lab.example"], ReadEffectiveInsecureDomainsFromTheFile());
+    }
+
+    [Fact]
+    public async Task Patch_WithAnEmptyInsecureDomainList_BindsAsNoExemptions()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/recursive-settings", new { insecureDomains = Array.Empty<string>() })
+        );
+        response.EnsureSuccessStatusCode();
+
+        Assert.Empty(ReadEffectiveInsecureDomainsFromTheFile());
+    }
+
+    [Fact]
+    public async Task Patch_WithANullInsecureDomainList_RestoresTheBuiltInList()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        (
+            await client.SendAsync(
+                PatchRequest(
+                    "/api/recursive-settings",
+                    new { insecureDomains = new[] { "corp.example" } }
+                )
+            )
+        ).EnsureSuccessStatusCode();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/recursive-settings", new { insecureDomains = (string[])null })
+        );
+        response.EnsureSuccessStatusCode();
+
+        Assert.Equal(
+            RecursiveServerOptions.BuiltInInsecureDomains,
+            ReadEffectiveInsecureDomainsFromTheFile()
+        );
+    }
+
+    [Theory]
+    [InlineData("not a domain")]
+    [InlineData(".")]
+    [InlineData("a..b")]
+    [InlineData("")]
+    public async Task Patch_WithAnInvalidInsecureDomain_ReturnsBadRequest(string entry)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/recursive-settings",
+                new { insecureDomains = new[] { "ok.example", entry } }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Patch_WithInsecureDomainsThatAreNotAnArray_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/recursive-settings", new { insecureDomains = "corp.example" })
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

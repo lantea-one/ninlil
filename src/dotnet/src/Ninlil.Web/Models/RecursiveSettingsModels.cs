@@ -10,6 +10,16 @@ namespace Ninlil.Web.Models;
 ///     once at startup or first seed, so the GET shows the saved lists, which may not be the ones
 ///     in use; every other field takes effect at once. <c>RecursiveServerOptions</c> documents
 ///     each field and its default.
+///     <para>
+///         <c>InsecureDomains</c> is the list of Insecure domains (negative trust anchors) in
+///         force: a query for a name at or below one skips DNSSEC validation and is never answered
+///         with AD. It is the built-in list while <c>UseCustomInsecureDomains</c> is
+///         <see langword="false" />. A <c>PATCH</c> with an array replaces the whole list and makes
+///         it custom; a <c>PATCH</c> with <see langword="null" /> restores the built-in list.
+///         <c>BuiltInInsecureDomains</c> is that built-in list (<c>home.arpa</c>, <c>internal</c>
+///         and the locally-served reverse zones of RFC 6303), for comparison and for a "restore
+///         defaults" action; it is read-only.
+///     </para>
 /// </summary>
 public record RecursiveSettingsDetail(
     bool EnableRecursion,
@@ -31,7 +41,10 @@ public record RecursiveSettingsDetail(
     TimeSpan MaxStaleServeAge,
     bool EnablePrefetch,
     TimeSpan PrefetchWindow,
-    TimeSpan PrefetchRecentAccessWindow
+    TimeSpan PrefetchRecentAccessWindow,
+    IReadOnlyList<string> InsecureDomains,
+    bool UseCustomInsecureDomains,
+    IReadOnlyList<string> BuiltInInsecureDomains
 );
 
 /// <summary>

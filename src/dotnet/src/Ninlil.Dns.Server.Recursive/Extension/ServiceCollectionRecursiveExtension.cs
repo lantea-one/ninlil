@@ -68,6 +68,9 @@ public static class ServiceCollectionRecursiveExtension
         instance.AddSingleton<IDnsCache>(provider =>
             provider.GetRequiredService<DnssecTrustCache>()
         );
+
+        // The Insecure domains (negative trust anchors) the validator and the forwarder read.
+        instance.AddSingleton<InsecureDomainPolicy>();
         instance.AddSingleton<IDnssecValidator, DnssecValidator>();
         instance.AddSingleton<IDnsQueryResolver, RecursiveQueryResolver>();
 

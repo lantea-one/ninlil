@@ -20,6 +20,11 @@ namespace Ninlil.Dns.Server.Recursive.Tests.Support;
 ///         <c>sub.example.com</c> and an unsigned <c>plain.example.com</c>, both served by the
 ///         same server as <c>example.com</c> (so no referral is seen); and
 ///         <c>alias.example.com</c>, a CNAME to <c>missing.example.com</c>, which does not exist.
+///         It also holds two private, unsigned zones the root does not delegate,
+///         <c>corp.internal</c> and <c>corp.lan</c>, each with a <c>www</c> A record. A forwarder
+///         upstream reaches them by name; for the iterative engine the root answers
+///         <c>www.corp.internal</c> and <c>www.corp.lan</c> with a referral, as a split-horizon
+///         root would, while every DS query for the zones gets the root's signed NXDOMAIN.
 ///     </para>
 ///     <para>
 ///         The responder is a minimal authoritative server: it answers from the deepest zone it
@@ -46,6 +51,18 @@ public sealed class SignedHierarchy
 
     /// <summary>This field is the address of the <c>insecure.com</c> server.</summary>
     public static readonly IPAddress InsecureAddress = IPAddress.Parse("192.0.2.4");
+
+    /// <summary>
+    ///     This field is the address of the server for <c>corp.internal</c>, a private zone that
+    ///     the signed root does not delegate (it proves <c>internal</c> does not exist).
+    /// </summary>
+    public static readonly IPAddress CorpInternalAddress = IPAddress.Parse("192.0.2.50");
+
+    /// <summary>
+    ///     This field is the address of the server for <c>corp.lan</c>, a private zone like
+    ///     <c>corp.internal</c> whose parent is not on the default list of Insecure domains.
+    /// </summary>
+    public static readonly IPAddress CorpLanAddress = IPAddress.Parse("192.0.2.51");
 
     private const uint RecordTtl = 300;
     private readonly List<Zone> _zones = [];
@@ -148,9 +165,45 @@ public sealed class SignedHierarchy
         plain.AddA("www.plain.example.com", "192.0.2.12");
         insecure.AddA("www.insecure.com", "192.0.2.13");
 
+        Zone corpInternal = hierarchy.AddZone("corp.internal", CorpInternalAddress, false);
+        Zone corpLan = hierarchy.AddZone("corp.lan", CorpLanAddress, false);
+        corpInternal.AddA("www.corp.internal", "10.0.0.5");
+        corpLan.AddA("www.corp.lan", "10.0.0.6");
+
         hierarchy.Finish();
 
+        hierarchy.AddPrivateReferral(corpInternal, "www.corp.internal");
+        hierarchy.AddPrivateReferral(corpLan, "www.corp.lan");
+
         return hierarchy;
+    }
+
+    /// <summary>
+    ///     This method makes the root answer an A query for <paramref name="host" /> with an
+    ///     unsigned referral to <paramref name="zone" />, which the root does not delegate. It
+    ///     stands for a split-horizon resolver whose root view differs from the public one.
+    /// </summary>
+    private void AddPrivateReferral(Zone zone, string host)
+    {
+        DnsMessage referral = new()
+        {
+            IsResponse = true,
+            ResponseCode = DnsResponseCodeEnum.NoError,
+        };
+        referral.AuthorityRecords.AddRange(zone.Rrsets[(zone.Apex, DnsResourceRecordTypeEnum.NS)]);
+        referral.AdditionalRecords.Add(
+            new DnsResourceRecord(
+                zone.NameServer,
+                DnsResourceRecordTypeEnum.A,
+                DnsClassEnum.Internet,
+                3600,
+                DnsRecordDataCodecRegistry.Encode(
+                    DnsResourceRecordTypeEnum.A,
+                    new ARecordData(zone.Server)
+                )
+            )
+        );
+        Client.AddResponse(RootAddress, DnsName.Parse(host), DnsResourceRecordTypeEnum.A, referral);
     }
 
     /// <summary>

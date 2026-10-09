@@ -42,6 +42,16 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 ///         engine by default, or the one a caller passes to
 ///         <see cref="ValidateAsync" />.
 ///     </para>
+///     <para>
+///         <b>Insecure domains.</b> Before any of this, a query name at or below an entry of
+///         <see cref="InsecureDomainPolicy" /> (a negative trust anchor) ends the validation with
+///         <see cref="DnssecValidationStateEnum.Insecure" />. Such a name is served by a private
+///         zone that the public chain of trust proves does not exist, so validating it can only
+///         fail. Only the query name counts: a CNAME that leads into a listed domain from a name
+///         outside the list is validated as usual, so a forged CNAME cannot switch validation
+///         off. Because the check comes first, the trust cache never holds state for these names
+///         and needs no flush when the list changes.
+///     </para>
 /// </summary>
 /// <param name="engine">
 ///     The resolution engine behind the default <see cref="IDnssecRecordFetcher" />; it shares the
@@ -53,6 +63,10 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 /// </param>
 /// <param name="trustCache">The cache of proven zone results, shared by all validations.</param>
 /// <param name="timeProvider">The clock for signature validity windows; the system clock by default.</param>
+/// <param name="insecureDomains">
+///     The Insecure domains (negative trust anchors) that skip validation; none when
+///     <see langword="null" />.
+/// </param>
 /// <param name="logger">
 ///     The log a Bogus zone is reported to, at most once per zone per hour with the reason
 ///     (<see cref="DnssecValidationResult.Reason" />), so an operator can see why a name gives
@@ -63,7 +77,8 @@ public sealed class DnssecValidator(
     ITrustAnchorStore trustAnchorStore,
     DnssecTrustCache trustCache,
     TimeProvider timeProvider = null,
-    ILogger<DnssecValidator> logger = null
+    ILogger<DnssecValidator> logger = null,
+    InsecureDomainPolicy insecureDomains = null
 ) : IDnssecValidator
 {
     /// <summary>
@@ -101,6 +116,9 @@ public sealed class DnssecValidator(
         IDnssecRecordFetcher fetcher = null
     )
     {
+        if (insecureDomains?.IsInsecure(queriedName) == true)
+            return DnssecValidationResult.Insecure();
+
         IReadOnlyList<TrustAnchor> anchors = trustAnchorStore.GetValidAnchors();
 
         // Indeterminate means exactly this: there is nothing to start a chain from.

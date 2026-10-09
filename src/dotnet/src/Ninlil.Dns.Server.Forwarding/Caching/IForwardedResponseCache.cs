@@ -43,4 +43,10 @@ public interface IForwardedResponseCache
     /// </param>
     /// <returns>Whether the answer was cached.</returns>
     bool TryStore(ForwardedResponseCacheKey key, DnsMessage response, bool isSecure = false);
+
+    /// <summary>
+    ///     This method removes every cached answer, stale ones included.
+    /// </summary>
+    /// <returns>How many entries were removed.</returns>
+    int Flush();
 }

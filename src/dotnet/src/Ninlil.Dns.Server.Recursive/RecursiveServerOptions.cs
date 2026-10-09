@@ -36,6 +36,86 @@ public class RecursiveServerOptions
     public bool EnableDnssecValidation { get; set; } = true;
 
     /// <summary>
+    ///     This property contains the built-in Insecure domains: the names that
+    ///     <see cref="GetEffectiveInsecureDomains" /> returns while
+    ///     <see cref="UseCustomInsecureDomains" /> is off. They are the zones that are served
+    ///     locally and never signed under the public root, so a signed proof of their
+    ///     non-existence from the root or <c>arpa</c> is not an attack:
+    ///     <c>home.arpa</c> (RFC 8375), <c>internal</c> (reserved by ICANN for private use), and
+    ///     the zones of the IANA "Locally-Served DNS Zones" registry: the IPv4 zones of RFC 6303
+    ///     §4.1 (RFC 1918 and link-local space, loopback, "this network", the documentation
+    ///     ranges, the broadcast address), the IPv6 zones of RFC 6303 §4.2 (unspecified address,
+    ///     loopback, unique local <c>fd00::/8</c>, link local <c>fe80::/10</c>, documentation
+    ///     <c>2001:db8::/32</c>) and the shared address space <c>100.64.0.0/10</c> (RFC 7793).
+    /// </summary>
+    public static IReadOnlyList<string> BuiltInInsecureDomains { get; } =
+        BuildBuiltInInsecureDomains();
+
+    /// <summary>
+    ///     This property contains the operator's own list of Insecure domains (negative trust
+    ///     anchors). It is used only while <see cref="UseCustomInsecureDomains" /> is on, and then
+    ///     it is the whole list: an empty list means no domain is exempt. A query for a name at or
+    ///     below an entry skips DNSSEC validation: the answer is
+    ///     <see cref="Validation.DnssecValidationStateEnum.Insecure" />, never carries AD, and
+    ///     never ends in SERVFAIL for DNSSEC reasons. Entries are domain names such as
+    ///     <c>corp.example</c>; the root name is ignored. This is a list setting, so it has no
+    ///     environment variable.
+    /// </summary>
+    public List<string> InsecureDomains { get; set; } = [];
+
+    /// <summary>
+    ///     This property controls whether <see cref="InsecureDomains" /> replaces
+    ///     <see cref="BuiltInInsecureDomains" />. It is off by default, so the built-in list
+    ///     applies and follows the server's releases. It exists because a configuration list that
+    ///     is empty cannot be told apart from one that is absent, and an operator must be able to
+    ///     remove every entry. <c>RecursiveSettingsController</c> turns it on when it saves a
+    ///     list, and off to restore the built-in list.
+    /// </summary>
+    public bool UseCustomInsecureDomains { get; set; }
+
+    /// <summary>
+    ///     This method returns the Insecure domains in force: <see cref="InsecureDomains" /> while
+    ///     <see cref="UseCustomInsecureDomains" /> is on, else <see cref="BuiltInInsecureDomains" />.
+    /// </summary>
+    public IReadOnlyList<string> GetEffectiveInsecureDomains() =>
+        UseCustomInsecureDomains ? InsecureDomains ?? [] : BuiltInInsecureDomains;
+
+    private static List<string> BuildBuiltInInsecureDomains()
+    {
+        List<string> domains = ["home.arpa", "internal", "10.in-addr.arpa"];
+
+        // RFC 1918 172.16.0.0/12.
+        domains.AddRange(Enumerable.Range(16, 16).Select(octet => $"{octet}.172.in-addr.arpa"));
+        domains.AddRange([
+            "168.192.in-addr.arpa",
+            "0.in-addr.arpa",
+            "127.in-addr.arpa",
+            "254.169.in-addr.arpa",
+            "2.0.192.in-addr.arpa",
+            "100.51.198.in-addr.arpa",
+            "113.0.203.in-addr.arpa",
+            "255.255.255.255.in-addr.arpa",
+        ]);
+
+        // RFC 7793: 100.64.0.0/10 is 64.100.in-addr.arpa through 127.100.in-addr.arpa.
+        domains.AddRange(Enumerable.Range(64, 64).Select(octet => $"{octet}.100.in-addr.arpa"));
+
+        // RFC 6303 §4.2. The first two are the 32-nibble reverse names of :: and ::1.
+        domains.AddRange([
+            string.Concat(Enumerable.Repeat("0.", 32)) + "ip6.arpa",
+            "1." + string.Concat(Enumerable.Repeat("0.", 31)) + "ip6.arpa",
+            "d.f.ip6.arpa",
+            "8.e.f.ip6.arpa",
+            "9.e.f.ip6.arpa",
+            "a.e.f.ip6.arpa",
+            "b.e.f.ip6.arpa",
+            "8.b.d.0.1.0.0.2.ip6.arpa",
+        ]);
+
+        return domains;
+    }
+
+    /// <summary>
     ///     This property controls whether <see cref="Resolution.IterativeResolutionEngine" />
     ///     applies RFC 9156 QNAME minimization: each intermediate server sees only one label more
     ///     than the zone cut already known, and only the authoritative server sees the full name

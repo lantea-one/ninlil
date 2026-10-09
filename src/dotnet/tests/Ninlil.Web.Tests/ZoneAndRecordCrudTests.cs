@@ -349,6 +349,83 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task Zone_ValidateDnssecSwitch_DefaultsOffAndRoundTripsThroughCreateReplaceAndPatch()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"validate-{Guid.NewGuid():N}.example.com";
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = zoneName,
+                type = "Forwarder",
+                forwarderAddresses = new[] { "192.0.2.53" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        ZoneDetail zone = await createResponse.Content.ReadFromJsonAsync<ZoneDetail>();
+        Assert.False(zone.ValidateDnssec);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (
+                await client.PutAsJsonAsync(
+                    $"/api/zones/{zone.Id}",
+                    new
+                    {
+                        name = zoneName,
+                        type = "Forwarder",
+                        forwarderAddresses = new[] { "192.0.2.53" },
+                        validateDnssec = true,
+                    }
+                )
+            ).StatusCode
+        );
+        Assert.True(
+            (await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{zone.Id}")).ValidateDnssec
+        );
+
+        // A PATCH that does not name the field leaves it alone.
+        await client.SendAsync(PatchRequest($"/api/zones/{zone.Id}", new { comments = "x" }));
+        Assert.True(
+            (await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{zone.Id}")).ValidateDnssec
+        );
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (
+                await client.SendAsync(
+                    PatchRequest($"/api/zones/{zone.Id}", new { validateDnssec = false })
+                )
+            ).StatusCode
+        );
+        Assert.False(
+            (await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{zone.Id}")).ValidateDnssec
+        );
+    }
+
+    [Fact]
+    public async Task Zone_ValidateDnssecSwitch_SetOnCreate_IsReturned()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = $"validate-on-{Guid.NewGuid():N}.example.com",
+                type = "Forwarder",
+                forwarderAddresses = new[] { "192.0.2.53" },
+                validateDnssec = true,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        Assert.True((await createResponse.Content.ReadFromJsonAsync<ZoneDetail>()).ValidateDnssec);
+    }
+
+    [Fact]
     public async Task CreateZone_WithAnInvalidName_ReturnsBadRequest()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();

@@ -13,7 +13,8 @@ public class RecursiveSettingsDetailExample : IExamplesProvider<RecursiveSetting
     /// <summary>
     ///     This method returns recursion turned on; every other field is the default, including
     ///     DNSSEC validation, QNAME minimization and RFC 5011 trust anchor updates on, and no root
-    ///     hint or trust anchor overrides (so the internet root is used).
+    ///     hint or trust anchor overrides (so the internet root is used) and the built-in
+    ///     Insecure domain list (shortened here to its first entries).
     /// </summary>
     public RecursiveSettingsDetail GetExamples() =>
         new(
@@ -36,6 +37,9 @@ public class RecursiveSettingsDetailExample : IExamplesProvider<RecursiveSetting
             MaxStaleServeAge: TimeSpan.FromHours(24),
             EnablePrefetch: true,
             PrefetchWindow: TimeSpan.FromSeconds(10),
-            PrefetchRecentAccessWindow: TimeSpan.FromMinutes(5)
+            PrefetchRecentAccessWindow: TimeSpan.FromMinutes(5),
+            InsecureDomains: ["home.arpa", "internal", "10.in-addr.arpa"],
+            UseCustomInsecureDomains: false,
+            BuiltInInsecureDomains: ["home.arpa", "internal", "10.in-addr.arpa"]
         );
 }

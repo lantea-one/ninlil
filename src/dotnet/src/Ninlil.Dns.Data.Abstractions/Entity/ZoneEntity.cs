@@ -79,6 +79,17 @@ public class ZoneEntity : AuditableEntityBase
     public List<string> ForwarderAddresses { get; set; } = [];
 
     /// <summary>
+    ///     This property controls whether answers forwarded for this zone are validated with
+    ///     DNSSEC, when <see cref="Type" /> is <see cref="ZoneTypeEnum.Forwarder" /> or
+    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" />. It is off by default: a conditional
+    ///     forwarder usually serves a private zone, which has no chain of trust from the public
+    ///     root and would end in SERVFAIL. Turn it on for a forwarded zone that is signed under
+    ///     the public root. The global <c>RecursiveServerOptions.EnableDnssecValidation</c>
+    ///     setting still has to be on, and a name on the Insecure domain list is never validated.
+    /// </summary>
+    public bool ValidateDnssec { get; set; }
+
+    /// <summary>
     ///     This property contains the addresses of the secondary servers that get an RFC 1996 NOTIFY
     ///     when this <see cref="ZoneTypeEnum.Primary" /> zone changes. It is an explicit list rather
     ///     than taken from the zone's NS records, so no server is notified just because it is

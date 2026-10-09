@@ -48,7 +48,8 @@ public class ZoneDetailPagedResultExample : IExamplesProvider<PagedResult<ZoneDe
                     DateTimeOffset.Parse("2026-08-01T09:00:00+00:00"),
                     DateTimeOffset.Parse("2026-08-15T14:30:00+00:00"),
                     ZoneTransferTransportEnum.Plain,
-                    null
+                    null,
+                    false
                 ),
                 new ZoneDetail(
                     Guid.Parse("9f8e7d6c-5b4a-4392-81c0-f0e1d2c3b4a5"),
@@ -79,7 +80,8 @@ public class ZoneDetailPagedResultExample : IExamplesProvider<PagedResult<ZoneDe
                     DateTimeOffset.Parse("2026-08-01T09:05:00+00:00"),
                     null,
                     ZoneTransferTransportEnum.Tls,
-                    null
+                    null,
+                    false
                 ),
             ],
             0,

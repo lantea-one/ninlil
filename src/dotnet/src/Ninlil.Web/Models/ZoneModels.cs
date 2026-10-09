@@ -63,6 +63,12 @@ namespace Ninlil.Web.Models;
 ///     The transport that carries the zone's AXFR and IXFR traffic (see
 ///     <c>ZoneEntity.TransferTransport</c>). Defaults to <see cref="ZoneTransferTransportEnum.Plain" />.
 /// </param>
+/// <param name="ValidateDnssec">
+///     Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default,
+///     because a private zone has no chain of trust from the public root. The global DNSSEC
+///     validation setting must also be on, and names on the Insecure domain list are never
+///     validated.
+/// </param>
 /// <remarks>
 ///     There is no <c>MemberOfCatalogZoneId</c> field. RFC 9432 catalog membership is set and
 ///     cleared only through <c>POST</c> and <c>DELETE /api/zones/{id}/catalog-membership</c>,
@@ -93,7 +99,8 @@ public record ZoneWriteRequest(
     int? PtrIpv6PrefixLength = null,
     ZoneTransferTransportEnum TransferTransport = ZoneTransferTransportEnum.Plain,
     IReadOnlyList<string> UpdateTsigKeyNames = null,
-    IReadOnlyList<string> TransferTsigKeyNames = null
+    IReadOnlyList<string> TransferTsigKeyNames = null,
+    bool ValidateDnssec = false
 );
 
 /// <summary>
@@ -153,6 +160,12 @@ public record ZoneWriteRequest(
 ///     Read-only: it changes only through <c>POST</c> and
 ///     <c>DELETE /api/zones/{id}/catalog-membership</c>.
 /// </param>
+/// <param name="ValidateDnssec">
+///     Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default,
+///     because a private zone has no chain of trust from the public root. The global DNSSEC
+///     validation setting must also be on, and names on the Insecure domain list are never
+///     validated.
+/// </param>
 public record ZoneDetail(
     Guid Id,
     string Name,
@@ -182,7 +195,8 @@ public record ZoneDetail(
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? UpdatedAtUtc,
     ZoneTransferTransportEnum TransferTransport,
-    Guid? MemberOfCatalogZoneId
+    Guid? MemberOfCatalogZoneId,
+    bool ValidateDnssec
 );
 
 /// <summary>

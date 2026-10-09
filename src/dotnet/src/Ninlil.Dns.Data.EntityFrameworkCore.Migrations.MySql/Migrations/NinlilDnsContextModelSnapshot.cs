@@ -2003,6 +2003,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<bool>("ValidateDnssec")
+                        .HasColumnType("tinyint(1)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name")

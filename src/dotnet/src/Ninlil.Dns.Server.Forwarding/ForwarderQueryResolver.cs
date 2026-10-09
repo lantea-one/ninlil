@@ -32,7 +32,7 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     through to recursive iteration.
 ///     <para>
 ///         <b>DNSSEC.</b> When <see cref="RecursiveServerOptions.EnableDnssecValidation" /> is
-///         on, the query sent upstream has EDNS with DO and CD set, whatever the client sent
+///         on and the forwarder set allows it, the query sent upstream has EDNS with DO and CD set, whatever the client sent
 ///         (RFC 6840 §5.9: a validating resolver sets CD upstream, so the upstream returns the
 ///         data and its signatures even when its own validation fails). Only the client's ECS
 ///         option is kept; its cookie and other options belong to the client-to-server hop.
@@ -45,6 +45,11 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         <see cref="DnssecValidationStateEnum.Bogus" /> answer counts as a failed forwarder, so
 ///         the next one is tried, unless the client set CD (RFC 4035 §3.2.2): it then gets the
 ///         data without AD, and the answer is not cached. Every other result is accepted.
+///         A conditional-forwarder zone validates only when its
+///         <see cref="ZoneEntity.ValidateDnssec" /> switch is on (it is off by default, because a
+///         private zone has no chain of trust from the public root); the global forwarders follow
+///         the global setting. A query for a name on the Insecure domain list
+///         (<see cref="InsecureDomainPolicy" />) is accepted as Insecure whatever the switch says.
 ///     </para>
 ///     <para>
 ///         <b>The reply.</b> The reply is built per client with
@@ -60,7 +65,8 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         uses, and both are part of the cache key (see <see cref="ForwardedResponseCacheKey" />).
 ///         The lookup happens after the forwarder set is chosen and before anything is sent; an
 ///         accepted, cacheable answer is stored (as received, with whether it was Secure)
-///         before the reply is shaped. The pipeline filters
+///         before the reply is shaped. The cache is flushed when the Insecure domain list changes,
+///         because it remembers whether an answer was Secure. The pipeline filters
 ///         whatever the dispatcher returns, so a cache hit is filtered per client like a fresh
 ///         answer. When every forwarder fails, an expired answer is served stale if the
 ///         server-wide RFC 8767 serve-stale setting allows it, before falling through to
@@ -96,6 +102,10 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     The forwarded-response cache. <see langword="null" /> (the default) sends every query
 ///     upstream.
 /// </param>
+/// <param name="insecureDomains">
+///     The Insecure domain list whose changes flush <paramref name="responseCache" />.
+///     <see langword="null" /> (the default) never flushes.
+/// </param>
 public sealed class ForwarderQueryResolver(
     IServiceScopeFactory scopeFactory,
     IEnumerable<IUpstreamForwarderClient> clients,
@@ -106,9 +116,12 @@ public sealed class ForwarderQueryResolver(
     IOptionsMonitor<RecursiveServerOptions> recursiveOptions,
     ILogger<ForwarderQueryResolver> logger,
     EdnsClientSubnetService clientSubnetService = null,
-    IForwardedResponseCache responseCache = null
+    IForwardedResponseCache responseCache = null,
+    InsecureDomainPolicy insecureDomains = null
 ) : IDnsQueryResolver
 {
+    private string _seenInsecureDomains;
+
     private readonly IReadOnlyDictionary<
         UpstreamForwarderProtocolEnum,
         IUpstreamForwarderClient
@@ -128,10 +141,10 @@ public sealed class ForwarderQueryResolver(
 
         DnsQuestion question = context.Request.Questions[0];
 
-        IReadOnlyList<string> definitionStrings = await ResolveForwarderSetAsync(
-            question.Name,
-            stoppingToken
-        );
+        FlushCacheWhenInsecureDomainsChanged();
+
+        (IReadOnlyList<string> definitionStrings, bool zoneValidates) =
+            await ResolveForwarderSetAsync(question.Name, stoppingToken);
 
         if (definitionStrings.Count == 0)
             return DnsQueryResolution.NotHandled;
@@ -153,7 +166,9 @@ public sealed class ForwarderQueryResolver(
                 ? healthTracker.OrderForAttempt(candidates)
                 : candidates;
 
-        bool validationEnabled = recursiveOptions.CurrentValue.EnableDnssecValidation;
+        // The global switch is the master: a zone's own switch can only turn validation off.
+        bool validationEnabled =
+            recursiveOptions.CurrentValue.EnableDnssecValidation && zoneValidates;
 
         // Built once per query: the ECS option is the same whichever forwarder answers.
         // AttachToRequest returns a copy, because context.Request is shared with the resolvers
@@ -317,16 +332,19 @@ public sealed class ForwarderQueryResolver(
     ///     This method finds the forwarder set for a query. It walks from the queried name up to
     ///     the root, and the first enabled <see cref="ZoneTypeEnum.Forwarder" /> or
     ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone with addresses wins; otherwise the
-    ///     enabled global <see cref="DnsForwarderEntity" /> set is used, in order. A
+    ///     enabled global <see cref="DnsForwarderEntity" /> set is used, in order. The result also
+    ///     says whether DNSSEC validation may run for the set: a zone's
+    ///     <see cref="ZoneEntity.ValidateDnssec" />, always <see langword="true" /> for the global
+    ///     set. A
     ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone gets its
     ///     <see cref="ZoneEntity.ForwarderAddresses" /> from <c>SecondaryZoneRefreshService</c>,
     ///     which transfers them from a forwarder-zone primary's apex TXT records; here it behaves
     ///     like any forwarder zone. This costs one zone lookup per label on every query.
     /// </summary>
-    private async Task<IReadOnlyList<string>> ResolveForwarderSetAsync(
-        DnsName queriedName,
-        CancellationToken stoppingToken
-    )
+    private async Task<(
+        IReadOnlyList<string> Definitions,
+        bool Validates
+    )> ResolveForwarderSetAsync(DnsName queriedName, CancellationToken stoppingToken)
     {
         using IServiceScope scope = scopeFactory.CreateScope();
         IZoneRepository zoneRepository =
@@ -347,7 +365,7 @@ public sealed class ForwarderQueryResolver(
                     }
                 && zone.ForwarderAddresses.Count > 0
             )
-                return zone.ForwarderAddresses;
+                return (zone.ForwarderAddresses, zone.ValidateDnssec);
         }
 
         IDnsForwarderRepository forwarderRepository =
@@ -355,7 +373,25 @@ public sealed class ForwarderQueryResolver(
         IReadOnlyList<DnsForwarderEntity> globalForwarders =
             await forwarderRepository.ListEnabledOrderedAsync(stoppingToken);
 
-        return [.. globalForwarders.Select(forwarder => forwarder.DefinitionString)];
+        return ([.. globalForwarders.Select(forwarder => forwarder.DefinitionString)], true);
+    }
+
+    /// <summary>
+    ///     This method empties the response cache when the Insecure domain list differs from the
+    ///     one the last query saw. Entries store whether an answer was Secure (and so gets AD), and
+    ///     the list decides that, so an entry made under another list must not be replayed. The
+    ///     first query only records the list.
+    /// </summary>
+    private void FlushCacheWhenInsecureDomainsChanged()
+    {
+        if (insecureDomains is null || responseCache is null)
+            return;
+
+        string current = insecureDomains.Fingerprint;
+        string previous = Interlocked.Exchange(ref _seenInsecureDomains, current);
+
+        if (previous is not null && previous != current)
+            responseCache.Flush();
     }
 
     /// <summary>

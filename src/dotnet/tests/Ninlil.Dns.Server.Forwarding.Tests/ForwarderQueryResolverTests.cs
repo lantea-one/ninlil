@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
@@ -280,7 +281,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         IDnssecValidator validator = null,
         IForwardedResponseCache responseCache = null,
         IReadOnlyList<IUpstreamForwarderClient> forwarderClients = null,
-        EdnsClientSubnetService clientSubnetService = null
+        EdnsClientSubnetService clientSubnetService = null,
+        IOptionsMonitor<RecursiveServerOptions> recursiveMonitor = null,
+        InsecureDomainPolicy insecureDomains = null
     )
     {
         ForwardingOptions effectiveForwardingOptions =
@@ -316,12 +319,15 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             tracker,
             validator ?? new AlwaysInsecureDnssecValidatorStub(),
             new StaticOptionsMonitor<ForwardingOptions>(effectiveForwardingOptions),
-            new StaticOptionsMonitor<RecursiveServerOptions>(
-                recursiveOptions ?? new RecursiveServerOptions { EnableDnssecValidation = false }
-            ),
+            recursiveMonitor
+                ?? new StaticOptionsMonitor<RecursiveServerOptions>(
+                    recursiveOptions
+                        ?? new RecursiveServerOptions { EnableDnssecValidation = false }
+                ),
             NullLogger<ForwarderQueryResolver>.Instance,
             clientSubnetService,
-            responseCache
+            responseCache,
+            insecureDomains
         );
     }
 

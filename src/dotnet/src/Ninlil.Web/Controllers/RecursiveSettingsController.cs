@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Dns.Server.Recursive;
@@ -21,7 +22,8 @@ namespace Ninlil.Web.Controllers;
 /// <summary>
 ///     This controller reads and writes <see cref="RecursiveServerOptions" />: whether recursion
 ///     and DNSSEC validation are on, query limits and timeouts, cache size, root-hint and
-///     trust-anchor overrides, RFC 5011 trust-anchor updates, serve-stale and prefetch. A fresh
+///     trust-anchor overrides, RFC 5011 trust-anchor updates, serve-stale and prefetch, and the
+///     list of Insecure domains (negative trust anchors) that skip DNSSEC validation. A fresh
 ///     install starts with recursion off (see
 ///     <see cref="RecursiveServerOptions.EnableRecursion" />), and this is where it is turned on.
 ///     Reading needs <c>recursivesettings:read</c> and writing needs
@@ -64,8 +66,10 @@ public class RecursiveSettingsController(
     ///     This action merges a partial update into <c>DnsServer:Recursive</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value; an override list, when present, replaces the
-    ///     whole list. The response note says whether a restart is needed. Returns 400 for a
-    ///     malformed duration, an invalid root-hint address or a malformed trust anchor. Requires
+    ///     whole list. <c>insecureDomains</c> is the same, and also accepts <c>null</c> to restore the
+    ///     built-in list. The response note says whether a restart is needed. Returns 400 for a
+    ///     malformed duration, an invalid root-hint address, a malformed trust anchor or an
+    ///     invalid domain name in <c>insecureDomains</c>. Requires
     ///     <c>recursivesettings:write</c>.
     /// </summary>
     [HttpPatch]
@@ -431,6 +435,30 @@ public class RecursiveSettingsController(
                 "'prefetchRecentAccessWindow' must be a valid TimeSpan (for example \"00:05:00\")."
             );
 
+        if (patch.TryGetMergePatchField("insecureDomains", out JsonElement insecureDomains))
+        {
+            // An array replaces the whole list and makes it the operator's own. A JSON null
+            // restores the built-in list. An empty list cannot be told from an absent one in
+            // configuration, so the "custom" flag is what keeps a deliberately empty list.
+            bool restore = insecureDomains.ValueKind == JsonValueKind.Null;
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    RecursiveServerOptions.SectionName,
+                    nameof(RecursiveServerOptions.InsecureDomains),
+                    restore ? new List<string>() : ParseInsecureDomains(insecureDomains)
+                )
+            );
+            settings.Add(
+                new PresetConfigurationSetting(
+                    RecursiveServerOptions.SectionName,
+                    nameof(RecursiveServerOptions.UseCustomInsecureDomains),
+                    !restore
+                )
+            );
+            touchedHotReloadingField = true;
+        }
+
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
@@ -465,6 +493,55 @@ public class RecursiveSettingsController(
 
         return present && TimeSpan.TryParse(element.GetString(), out value);
     }
+
+    /// <summary>
+    ///     This method parses an <c>insecureDomains</c> field into the list
+    ///     <see cref="RecursiveServerOptions.InsecureDomains" /> binds. Each entry must be a valid
+    ///     domain name other than the root; it is stored lowercase without a trailing dot, and
+    ///     duplicates are dropped, keeping the first.
+    /// </summary>
+    private static List<string> ParseInsecureDomains(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Array)
+            throw new ValidationException(
+                "'insecureDomains' must be a JSON array of domain names, or null to restore the built-in list."
+            );
+
+        List<string> parsed = [];
+
+        foreach (JsonElement item in element.EnumerateArray())
+        {
+            string text = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+
+            if (
+                string.IsNullOrWhiteSpace(text)
+                || !DnsName.TryParse(text.Trim(), out DnsName name)
+                || name.IsRoot
+            )
+                throw new ValidationException(
+                    $"'{text}' is not a valid domain name for 'insecureDomains'; the root name is not allowed."
+                );
+
+            string canonical = name.ToCanonicalLower().ToString().TrimEnd('.');
+
+            // A list entry is a host-style name: letters, digits, hyphens and underscores in
+            // each label (a non-ASCII name is entered in its xn-- form). This keeps a typo such
+            // as a space from becoming an entry that never matches.
+            if (!canonical.Split('.').All(IsHostLabel))
+                throw new ValidationException(
+                    $"'{text}' is not a valid domain name for 'insecureDomains'; use letters, digits, hyphens and underscores in each label."
+                );
+
+            if (!parsed.Contains(canonical))
+                parsed.Add(canonical);
+        }
+
+        return parsed;
+    }
+
+    private static bool IsHostLabel(string label) =>
+        label.Length > 0
+        && label.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 
     /// <summary>
     ///     This method parses a <c>rootHintServersOverride</c> field into the shape
@@ -637,6 +714,9 @@ public class RecursiveSettingsController(
             options.MaxStaleServeAge,
             options.EnablePrefetch,
             options.PrefetchWindow,
-            options.PrefetchRecentAccessWindow
+            options.PrefetchRecentAccessWindow,
+            options.GetEffectiveInsecureDomains(),
+            options.UseCustomInsecureDomains,
+            RecursiveServerOptions.BuiltInInsecureDomains
         );
 }

@@ -322,6 +322,9 @@ public class ZonesController(
         )
             zone.DynamicUpdateEnabled = dynamicUpdateEnabled.GetBoolean();
 
+        if (patch.TryGetMergePatchField("validateDnssec", out JsonElement validateDnssec))
+            zone.ValidateDnssec = validateDnssec.GetBoolean();
+
         if (patch.TryGetMergePatchField("updateTsigKeyNames", out JsonElement updateTsigKeyNames))
             zone.UpdateTsigKeyNames = await NormalizeBoundKeyNamesAsync(
                 ReadStringList(updateTsigKeyNames),
@@ -738,6 +741,7 @@ public class ZonesController(
         zone.PtrIpv4PrefixLength = request.PtrIpv4PrefixLength;
         zone.PtrIpv6PrefixLength = request.PtrIpv6PrefixLength;
         zone.TransferTransport = request.TransferTransport;
+        zone.ValidateDnssec = request.ValidateDnssec;
     }
 
     /// <summary>
@@ -773,6 +777,7 @@ public class ZonesController(
             zone.CreatedAtUtc,
             zone.UpdatedAtUtc,
             zone.TransferTransport,
-            zone.MemberOfCatalogZoneId
+            zone.MemberOfCatalogZoneId,
+            zone.ValidateDnssec
         );
 }
