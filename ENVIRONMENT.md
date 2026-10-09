@@ -261,7 +261,7 @@ and RFC 5011 automated trust-anchor rollover.
 |---|---|---|
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` | Whether this server answers recursive queries at all (off by default — capability-expanding). | `false` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_QNAME_MINIMIZATION` | Whether RFC 9156 QNAME minimization is used during iterative resolution. | `true` |
-| `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION` | Whether recursively resolved answers are DNSSEC-validated. | `true` |
+| `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION` | Whether recursively resolved and forwarded answers are DNSSEC-validated. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_SERVE_STALE` | Whether RFC 8767 serve-stale (answering from an expired cache entry when upstream is unreachable) is enabled. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_MAX_STALE_SERVE_AGE` | The maximum age of a stale cache entry still eligible to be served. | `1.00:00:00` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_PREFETCH` | Whether a soon-to-expire, recently-popular cache entry is proactively refreshed before it expires. | `true` |

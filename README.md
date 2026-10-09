@@ -40,7 +40,14 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   never outlive their signatures. With DNS64 on, the A answer is validated before AAAA is
   synthesized: a bogus one gives SERVFAIL (NODATA if the client set CD), and a client that set both
   DO and CD gets no synthesis. A zone that fails validation is logged as a warning, at most once
-  per zone per hour.
+  per zone per hour. Forwarded answers are validated the same way: the forwarder asks its upstream
+  with DO and CD set, checks the answer itself, and builds the reply for each client, so AD is
+  set only for an answer this server validated (never copied from the upstream) and only for a
+  client that set DO or AD, a client without DO gets no RRSIG, NSEC or NSEC3 records, and no
+  upstream EDNS option reaches a client. A bogus forwarded answer makes the forwarder count as
+  failed unless the client set CD. The DS and DNSKEY records for the chain of trust are still
+  looked up by iteration from the root hints, so a network that blocks outbound DNS to the
+  internet needs `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION=false` to forward.
 - **Every major DNS transport**: plain UDP/TCP (on by default — this is a DNS server, after all),
   DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, and DNSCrypt v2. Every transport beyond plain DNS is
   off by default; see [Enabling additional transports](#enabling-additional-transports). Each one,
