@@ -380,12 +380,17 @@ builder.Services.PostConfigure<BackupOptions>(options =>
     options.RuntimeConfigurationFilePath = runtimeConfigurationOptions.ConfigurationFilePath;
 });
 
-// The live storage-engine switch changes the StorageOptions singleton that
-// AddNinlilDnsEntityFrameworkCore or AddNinlilDnsMongoDb registered above, inside this process
-// (see StorageEngineSwitchService for why that is enough). The service is scoped, like the
-// IBackupService it uses; StorageEngineSwitchState is a singleton because it is the in-progress
-// flag shared by every request, StorageSwitchGateMiddleware included.
-builder.Services.AddSingleton<StorageEngineSwitchState>();
+// A storage switch is saved by the request side (StorageEngineSwitchService) and applied by
+// PendingStorageSwitchApplier at the next start, before any background service runs. The
+// pending record lives in the data directory, its connection strings protected by the Data
+// Protection key ring.
+builder.Services.AddSingleton(provider => new PendingStorageSwitchStore(
+    dataDirectory,
+    provider.GetRequiredService<IDataProtectionProvider>(),
+    provider.GetRequiredService<ILogger<PendingStorageSwitchStore>>()
+));
+builder.Services.AddSingleton<StorageSwitchOutcomeRecorder>();
+builder.Services.AddSingleton<PendingStorageSwitchApplier>();
 builder.Services.AddScoped<IStorageEngineSwitchService, StorageEngineSwitchService>();
 
 builder.Services.AddNinlilDnsIdentity(builder.Configuration);
@@ -835,11 +840,6 @@ if (reverseProxyOptions.Enable)
     app.UseForwardedHeaders();
 }
 
-// Answers /api requests with 503 during the short window of a live storage-engine switch
-// (StorageController.Switch); see StorageSwitchGateMiddleware for why that window needs
-// guarding.
-app.UseMiddleware<StorageSwitchGateMiddleware>();
-
 // Apply pending relational migrations at startup, so a fresh installation works without a
 // separate migration step, as the auto-generated SQLite connection string of
 // AddNinlilDnsEntityFrameworkCore intends. MongoDB is schemaless and has no migrations.
@@ -911,6 +911,29 @@ else
             "MongoDB is a standalone server, so a save that writes several documents is not atomic; "
                 + "run a replica set (a single-node one is enough) for all-or-nothing saves."
         );
+}
+
+// A storage switch the operator requested is applied now: the configured database has been
+// migrated above and no background service has started, so nothing writes while the data is
+// copied (see PendingStorageSwitchApplier). MongoDB cannot take part in a switch.
+if (storageOptions.Engine != StorageEngineEnum.MongoDb)
+{
+    try
+    {
+        await app
+            .Services.GetRequiredService<PendingStorageSwitchApplier>()
+            .ApplyAsync(app.Lifetime.ApplicationStopping);
+    }
+    catch (DatabaseStartupRefusedException refusal)
+    {
+        // The configured target could not be filled; same exit path as the guards above.
+        app.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(PendingStorageSwitchApplier).FullName)
+            .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+        await app.DisposeAsync();
+        Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
+        return;
+    }
 }
 
 // TSIG key names are stored in lowercase; lowercase any row written with capitals (see

@@ -157,10 +157,8 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     public string RuntimeConfigurationFilePath => _runtimeConfigurationFilePath;
 
     /// <summary>
-    ///     This property contains the SQLite database file the host starts on. A test of
-    ///     <c>StorageController.Switch</c> changes the live storage engine for every later test in
-    ///     the collection, so it uses this path to switch back when it finishes, as
-    ///     <c>ServicesControllerCrudTests</c> restarts a service it stopped.
+    ///     This property contains the SQLite database file the host starts on. A test that needs
+    ///     to tell the host's database apart from another file uses it.
     /// </summary>
     public string SqlitePath => _sqlitePath;
 

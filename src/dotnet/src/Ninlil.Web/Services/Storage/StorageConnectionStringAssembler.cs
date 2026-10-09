@@ -11,7 +11,7 @@ namespace Ninlil.Web.Services.Storage;
 
 /// <summary>
 ///     This class builds the ADO.NET connection string for
-///     <see cref="IStorageEngineSwitchService.SwitchEngineAsync" /> from the structured fields of
+///     <see cref="IStorageEngineSwitchService.ScheduleSwitchAsync" /> from the structured fields of
 ///     <see cref="StorageEngineSwitchApiRequest" />, always through the provider's
 ///     <c>*ConnectionStringBuilder</c> rather than string interpolation, so values are escaped
 ///     correctly. <see cref="Controllers.StorageController.Switch" /> calls <see cref="Assemble" />;
@@ -44,7 +44,7 @@ public static class StorageConnectionStringAssembler
     ///     This method builds the connection string from the section of <paramref name="request" />
     ///     that matches <see cref="StorageEngineSwitchApiRequest.TargetEngine" />. For
     ///     <see cref="StorageEngineEnum.MongoDb" />, which has no section, it returns an empty
-    ///     string; <see cref="IStorageEngineSwitchService.SwitchEngineAsync" /> then rejects the
+    ///     string; <see cref="IStorageEngineSwitchService.ScheduleSwitchAsync" /> then rejects the
     ///     target with its own message.
     /// </summary>
     /// <exception cref="ValidationException">

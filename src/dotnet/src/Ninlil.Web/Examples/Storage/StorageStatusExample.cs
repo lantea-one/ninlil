@@ -7,8 +7,8 @@ namespace Ninlil.Web.Examples.Storage;
 
 /// <summary>
 ///     This class supplies the Swagger example for <see cref="StorageStatus" />, as returned by
-///     <see cref="Controllers.StorageController.Status" />: a new install on its generated SQLite
-///     database, with no switch running.
+///     <see cref="Controllers.StorageController.Status" />: an install on SQLite with a switch to
+///     PostgreSQL waiting for the next start, and no switch applied by this start.
 /// </summary>
 public class StorageStatusExample : IExamplesProvider<StorageStatus>
 {
@@ -16,7 +16,13 @@ public class StorageStatusExample : IExamplesProvider<StorageStatus>
     public StorageStatus GetExamples() =>
         new(
             StorageEngineEnum.Sqlite,
-            false,
+            new PendingStorageSwitchInfo(
+                StorageEngineEnum.PostgreSql,
+                DateTimeOffset.Parse("2026-09-01T12:00:00Z"),
+                "admin",
+                false
+            ),
+            null,
             [
                 StorageEngineEnum.Sqlite,
                 StorageEngineEnum.PostgreSql,
