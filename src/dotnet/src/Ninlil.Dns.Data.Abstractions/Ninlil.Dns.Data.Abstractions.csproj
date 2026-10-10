@@ -10,12 +10,14 @@
     <PackageId>Ninlil.Dns.Data.Abstractions</PackageId>
   </PropertyGroup>
 
-  <!-- The read router registers itself in DI and the replica-scope helper extends IServiceScopeFactory. -->
+  <!-- The read router registers itself in DI, the replica-scope helper extends IServiceScopeFactory and the replica health monitor is a hosted service. -->
   <ItemGroup>
     <PackageReference
       Include="Microsoft.Extensions.DependencyInjection.Abstractions"
       Version="10.0.11"
     />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
   </ItemGroup>
 
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->

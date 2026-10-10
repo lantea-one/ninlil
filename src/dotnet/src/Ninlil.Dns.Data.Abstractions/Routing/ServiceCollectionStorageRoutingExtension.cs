@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.Abstractions.Routing;
@@ -26,6 +27,25 @@ public static class ServiceCollectionStorageRoutingExtension
     {
         instance.TryAddSingleton<IStorageReadRouter>(new StorageReadRouter(splitConfigured));
         instance.TryAddScoped<StorageReadIntent>();
+        return instance;
+    }
+
+    /// <summary>
+    ///     This method registers the <see cref="ReplicaHealthMonitor" /> as a hosted service,
+    ///     with the probe that <paramref name="probeFactory" /> builds. A storage extension calls
+    ///     it only when the settings describe a split, so without a replica no monitor runs.
+    /// </summary>
+    /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
+    /// <param name="probeFactory">Builds the engine-specific probe.</param>
+    /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
+    public static IServiceCollection AddNinlilReplicaHealthMonitor(
+        this IServiceCollection instance,
+        Func<IServiceProvider, IReplicaHealthProbe> probeFactory
+    )
+    {
+        instance.TryAddSingleton(probeFactory);
+        instance.TryAddSingleton<ReplicaHealthMonitor>();
+        instance.AddHostedService(provider => provider.GetRequiredService<ReplicaHealthMonitor>());
         return instance;
     }
 }

@@ -35,6 +35,22 @@ public interface IStorageReadRouter
     long ReadsToPrimary { get; }
 
     /// <summary>
+    ///     This property contains the latest replica health check. It is
+    ///     <see cref="ReplicaHealthStatus.NotChecked" /> until the first check, and the replica
+    ///     serves no reads while <see cref="ReplicaHealthStatus.IsEligible" /> is false.
+    /// </summary>
+    ReplicaHealthStatus ReplicaHealth { get; }
+
+    /// <summary>
+    ///     This method publishes the result of a replica health check. The
+    ///     <see cref="ReplicaHealthMonitor" /> calls it after every check; scopes that resolve a
+    ///     context afterwards see the new eligibility, scopes that already resolved one keep their
+    ///     choice.
+    /// </summary>
+    /// <param name="status">The result of the check.</param>
+    void ReportReplicaHealth(ReplicaHealthStatus status);
+
+    /// <summary>
     ///     This method lets scopes use the replica. <c>Program</c> calls it after the startup
     ///     migration or guard and the storage switch have finished. Calling it again does
     ///     nothing.
@@ -50,7 +66,8 @@ public interface IStorageReadRouter
     /// </param>
     /// <returns>
     ///     True only when a split is configured, the router is enabled, the scope asked for
-    ///     <see cref="StorageReadTargetEnum.Replica" /> and the replica may be used.
+    ///     <see cref="StorageReadTargetEnum.Replica" /> and the replica is eligible (its last
+    ///     health check passed).
     /// </returns>
     bool UseReplica(StorageReadIntent intent, string principalKey);
 }

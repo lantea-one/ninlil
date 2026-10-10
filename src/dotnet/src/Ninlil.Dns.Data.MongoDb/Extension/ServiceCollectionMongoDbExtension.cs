@@ -102,6 +102,14 @@ public static class ServiceCollectionMongoDbExtension
                 )
         ));
 
+        // With a split, the monitor measures the secondaries and decides whether the router may
+        // use them.
+        if (replicaReadPreference != null)
+            instance.AddNinlilReplicaHealthMonitor(provider => new MongoReplicaHealthProbe(
+                provider.GetRequiredService<IMongoClient>(),
+                provider.GetRequiredService<MongoContexts>().Replica
+            ));
+
         // The first context of a scope fixes the intent of the whole scope, so a later attempt to
         // change it throws instead of being ignored.
         instance.AddScoped(provider =>

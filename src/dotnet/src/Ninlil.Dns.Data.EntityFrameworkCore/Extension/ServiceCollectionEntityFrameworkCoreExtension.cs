@@ -87,6 +87,16 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
         // startup work is done and only when the settings describe a split.
         instance.AddNinlilStorageRouting(composed.Replica != null);
 
+        // With a split, the monitor measures lag and schema of the replica and decides whether
+        // the router may use it. The strings are the ones composed at startup: the storage
+        // switch is refused while a replica is configured.
+        if (composed.Replica != null)
+            instance.AddNinlilReplicaHealthMonitor(_ => new RelationalReplicaHealthProbe(
+                options.Engine,
+                composed.Primary,
+                composed.Replica
+            ));
+
         // The storage switch changes the engine and connection string of the options in place at
         // startup, so the context options compose again when the composed strings no longer match.
         StorageConnectionStrings current = composed;
