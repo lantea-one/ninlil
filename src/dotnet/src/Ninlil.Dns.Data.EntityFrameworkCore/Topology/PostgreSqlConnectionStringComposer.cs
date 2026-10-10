@@ -151,11 +151,17 @@ internal static class PostgreSqlConnectionStringComposer
                 $"the read connection has Target Session Attributes '{attributes}', which would "
                     + "send reads to the primary only. Use PreferStandby, Standby or ReadOnly."
             );
-        if (!Has(builder, TargetSessionAttributesKey))
+        // Npgsql refuses any Target Session Attributes other than Any on a single host, so the
+        // defaults below belong to a read connection that lists several hosts. A single host is
+        // the standby itself.
+        bool multiHost = Hosts(builder).Count > 1;
+        if (
+            !Has(builder, TargetSessionAttributesKey) && (multiHost || optionAttributes is not null)
+        )
             builder.TargetSessionAttributes = attributes;
 
         // Balancing across the standbys is the point of a multi-host read connection.
-        if (!options.LoadBalanceHosts.HasValue && !Has(builder, LoadBalanceHostsKey))
+        if (multiHost && !options.LoadBalanceHosts.HasValue && !Has(builder, LoadBalanceHostsKey))
             builder.LoadBalanceHosts = true;
         ApplyShared(builder, options);
 

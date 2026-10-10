@@ -207,6 +207,26 @@ public sealed class RelationalConnectionStringComposerTests
     }
 
     [Fact]
+    public void PostgreSql_ReplicaWithASingleHost_GetsNoTargetSessionAttributesOrBalancing()
+    {
+        // Npgsql refuses a Target Session Attributes value other than Any on a single host.
+        string replica = StorageConnectionStringComposer
+            .Compose(
+                Options(
+                    StorageEngineEnum.PostgreSql,
+                    PostgreSqlSingle,
+                    "Host=standby;Database=ninlil;Username=u;Password=hunter2"
+                )
+            )
+            .Replica;
+
+        Assert.DoesNotContain("Target Session Attributes", replica);
+        Assert.DoesNotContain("Load Balance Hosts", replica);
+        Assert.Equal("standby", new Npgsql.NpgsqlConnectionStringBuilder(replica).Host);
+        using Npgsql.NpgsqlConnection connection = new(replica);
+    }
+
+    [Fact]
     public void PostgreSql_ReplicaOptions_LandInTheReplicaString()
     {
         StorageOptions options = Options(

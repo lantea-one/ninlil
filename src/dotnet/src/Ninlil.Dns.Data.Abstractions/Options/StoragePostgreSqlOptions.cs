@@ -21,14 +21,16 @@ public class StoragePostgreSqlOptions
 
     /// <summary>
     ///     This property contains the <c>Target Session Attributes</c> of the read connection. Any
-    ///     value except <c>ReadWrite</c> and <c>Primary</c> is accepted. When it is empty,
-    ///     <c>PreferStandby</c> is used.
+    ///     value except <c>ReadWrite</c> and <c>Primary</c> is accepted. When it is empty and the read
+    ///     connection string lists several hosts, <c>PreferStandby</c> is used; a single host stays
+    ///     unchanged, because Npgsql accepts a value other than <c>Any</c> only with several hosts.
     /// </summary>
     public string ReplicaTargetSessionAttributes { get; set; } = "";
 
     /// <summary>
     ///     This property contains the Npgsql <c>Load Balance Hosts</c> value. When it is not set,
-    ///     the read connection balances (true) and the primary connection does not (false).
+    ///     a read connection with several hosts balances (true) and the primary connection does
+    ///     not (false).
     /// </summary>
     public bool? LoadBalanceHosts { get; set; }
 
