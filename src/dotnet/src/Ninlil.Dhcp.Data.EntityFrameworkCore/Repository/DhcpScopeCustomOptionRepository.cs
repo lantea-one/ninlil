@@ -23,7 +23,8 @@ public class DhcpScopeCustomOptionRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(customOption => customOption.ScopeId == scopeId)
+        await Set.AsNoTracking()
+            .Where(customOption => customOption.ScopeId == scopeId)
             .OrderBy(customOption => customOption.OptionTag)
             .Skip(skip)
             .Take(take)
@@ -40,6 +41,7 @@ public class DhcpScopeCustomOptionRepository(NinlilDnsContext context)
         Guid scopeId,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(customOption => customOption.ScopeId == scopeId && !customOption.IsDisabled)
+        await Set.AsNoTracking()
+            .Where(customOption => customOption.ScopeId == scopeId && !customOption.IsDisabled)
             .ToListAsync(stoppingToken);
 }

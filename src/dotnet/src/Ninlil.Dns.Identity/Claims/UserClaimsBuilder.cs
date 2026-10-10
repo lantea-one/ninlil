@@ -26,20 +26,15 @@ public class UserClaimsBuilder(IUserRepository userRepository, IRoleRepository r
             stoppingToken
         );
 
-        List<string> permissionsFromRoles = [];
-        foreach (RoleEntity role in roles)
-        {
-            IReadOnlyList<RoleClaimEntity> roleClaims = await roleRepository.ListClaimsAsync(
-                role.Id,
-                stoppingToken
-            );
+        // One query for the claims of all the user's roles, not one per role.
+        IReadOnlyList<RoleClaimEntity> roleClaims = await roleRepository.ListClaimsForRolesAsync(
+            [.. roles.Select(role => role.Id)],
+            stoppingToken
+        );
 
-            permissionsFromRoles.AddRange(
-                roleClaims
-                    .Where(claim => claim.ClaimType == NinlilDnsClaimTypes.Permission)
-                    .Select(claim => claim.ClaimValue)
-            );
-        }
+        IEnumerable<string> permissionsFromRoles = roleClaims
+            .Where(claim => claim.ClaimType == NinlilDnsClaimTypes.Permission)
+            .Select(claim => claim.ClaimValue);
 
         IReadOnlyList<UserClaimEntity> userClaims = await userRepository.ListClaimsAsync(
             user.Id,

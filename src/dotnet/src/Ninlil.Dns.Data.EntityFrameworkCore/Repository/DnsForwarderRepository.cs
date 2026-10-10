@@ -18,7 +18,8 @@ public class DnsForwarderRepository(NinlilDnsContext context)
     public async Task<IReadOnlyList<DnsForwarderEntity>> ListEnabledOrderedAsync(
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(forwarder => !forwarder.IsDisabled)
+        await Set.AsNoTracking()
+            .Where(forwarder => !forwarder.IsDisabled)
             .OrderBy(forwarder => forwarder.SortOrder)
             .ToListAsync(stoppingToken);
 
@@ -28,7 +29,8 @@ public class DnsForwarderRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.OrderBy(forwarder => forwarder.SortOrder)
+        await Set.AsNoTracking()
+            .OrderBy(forwarder => forwarder.SortOrder)
             .ThenBy(forwarder => forwarder.Name)
             .Skip(skip)
             .Take(take)

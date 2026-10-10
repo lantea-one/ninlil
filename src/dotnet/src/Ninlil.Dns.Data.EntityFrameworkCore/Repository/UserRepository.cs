@@ -174,7 +174,12 @@ public class UserRepository(NinlilDnsContext context)
         int skip,
         int take,
         CancellationToken stoppingToken = default
-    ) => await Set.OrderBy(user => user.UserName).Skip(skip).Take(take).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .OrderBy(user => user.UserName)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>

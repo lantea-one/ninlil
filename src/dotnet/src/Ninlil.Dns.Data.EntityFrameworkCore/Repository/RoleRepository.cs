@@ -27,6 +27,23 @@ public class RoleRepository(NinlilDnsContext context)
     ) => await Context.RoleClaims.Where(claim => claim.RoleId == roleId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<RoleClaimEntity>> ListClaimsForRolesAsync(
+        IReadOnlyCollection<Guid> roleIds,
+        CancellationToken stoppingToken = default
+    )
+    {
+        if (roleIds.Count == 0)
+            return [];
+
+        // Untracked: the only caller (UserClaimsBuilder) reads the claims and never saves them.
+        Guid[] ids = [.. roleIds];
+        return await Context
+            .RoleClaims.AsNoTracking()
+            .Where(claim => ids.Contains(claim.RoleId))
+            .ToListAsync(stoppingToken);
+    }
+
+    /// <inheritdoc />
     public async Task AddClaimAsync(
         Guid roleId,
         string claimType,
@@ -82,7 +99,12 @@ public class RoleRepository(NinlilDnsContext context)
         int skip,
         int take,
         CancellationToken stoppingToken = default
-    ) => await Set.OrderBy(role => role.Name).Skip(skip).Take(take).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .OrderBy(role => role.Name)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>

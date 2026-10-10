@@ -17,7 +17,7 @@ public class DnsClientStaticAddressMappingRepository(NinlilDnsContext context)
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsClientStaticAddressMappingEntity>> ListEnabledAsync(
         CancellationToken stoppingToken = default
-    ) => await Set.Where(mapping => !mapping.IsDisabled).ToListAsync(stoppingToken);
+    ) => await Set.AsNoTracking().Where(mapping => !mapping.IsDisabled).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsClientStaticAddressMappingEntity>> SearchAsync(
@@ -25,7 +25,11 @@ public class DnsClientStaticAddressMappingRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.OrderBy(mapping => mapping.Cidr).Skip(skip).Take(take).ToListAsync(stoppingToken);
+        await Set.AsNoTracking()
+            .OrderBy(mapping => mapping.Cidr)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>

@@ -23,6 +23,22 @@ public interface IRecordRepository : IRepository<RecordEntity>
     );
 
     /// <summary>
+    ///     This method lists every record of several zones in one query. The result is for
+    ///     read-only use (the zone cache builds its copy from it); use
+    ///     <see cref="ListByZoneIdAsync" /> to get records that are going to be changed.
+    /// </summary>
+    /// <param name="zoneIds">The identifiers of the zones whose records should be listed.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>
+    ///     Every record of the zones, in no particular order; group them by
+    ///     <see cref="RecordEntity.ZoneId" />. Empty when <paramref name="zoneIds" /> is empty.
+    /// </returns>
+    Task<IReadOnlyList<RecordEntity>> ListByZoneIdsAsync(
+        IReadOnlyCollection<Guid> zoneIds,
+        CancellationToken stoppingToken = default
+    );
+
+    /// <summary>
     ///     This method looks up the record set at an exact owner name, optionally narrowed to a
     ///     single record type.
     /// </summary>

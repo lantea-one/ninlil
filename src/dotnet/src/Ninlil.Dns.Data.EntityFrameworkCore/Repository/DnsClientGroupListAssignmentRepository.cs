@@ -29,7 +29,8 @@ public class DnsClientGroupListAssignmentRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(assignment => assignment.ClientGroupId == clientGroupId)
+        await Set.AsNoTracking()
+            .Where(assignment => assignment.ClientGroupId == clientGroupId)
             .OrderBy(assignment => assignment.CreatedAtUtc)
             .Skip(skip)
             .Take(take)

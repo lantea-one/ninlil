@@ -22,6 +22,22 @@ public class RecordRepository(NinlilDnsContext context)
     ) => await Set.Where(record => record.ZoneId == zoneId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<RecordEntity>> ListByZoneIdsAsync(
+        IReadOnlyCollection<Guid> zoneIds,
+        CancellationToken stoppingToken = default
+    )
+    {
+        if (zoneIds.Count == 0)
+            return [];
+
+        // Untracked: the only caller (AuthoritativeZoneCache) keeps the rows as a read-only copy.
+        Guid[] ids = [.. zoneIds];
+        return await Set.AsNoTracking()
+            .Where(record => ids.Contains(record.ZoneId))
+            .ToListAsync(stoppingToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<RecordEntity>> FindByNameAsync(
         Guid zoneId,
         string name,
@@ -46,7 +62,8 @@ public class RecordRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(record => record.ZoneId == zoneId)
+        await Set.AsNoTracking()
+            .Where(record => record.ZoneId == zoneId)
             .OrderBy(record => record.Name)
             .ThenBy(record => record.Type)
             .Skip(skip)

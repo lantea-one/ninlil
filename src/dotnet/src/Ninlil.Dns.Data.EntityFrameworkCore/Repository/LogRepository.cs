@@ -26,11 +26,12 @@ public class LogRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        IQueryable<LogEntity> query = Set.Where(log =>
-            log.TimestampUtc >= fromUtc
-            && log.TimestampUtc <= toUtc
-            && log.Severity >= minimumSeverity
-        );
+        IQueryable<LogEntity> query = Set.AsNoTracking()
+            .Where(log =>
+                log.TimestampUtc >= fromUtc
+                && log.TimestampUtc <= toUtc
+                && log.Severity >= minimumSeverity
+            );
 
         if (!string.IsNullOrWhiteSpace(category))
             query = query.Where(log => log.Category == category);

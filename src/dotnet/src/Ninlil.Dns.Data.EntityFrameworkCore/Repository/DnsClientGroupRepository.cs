@@ -29,7 +29,12 @@ public class DnsClientGroupRepository(NinlilDnsContext context)
         int skip,
         int take,
         CancellationToken stoppingToken = default
-    ) => await Set.OrderBy(group => group.Name).Skip(skip).Take(take).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .OrderBy(group => group.Name)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>

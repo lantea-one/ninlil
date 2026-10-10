@@ -27,7 +27,8 @@ public class DnssecKeyRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(key => key.ZoneId == zoneId)
+        await Set.AsNoTracking()
+            .Where(key => key.ZoneId == zoneId)
             .OrderBy(key => key.Role)
             .ThenBy(key => key.CreatedAtUtc)
             .Skip(skip)

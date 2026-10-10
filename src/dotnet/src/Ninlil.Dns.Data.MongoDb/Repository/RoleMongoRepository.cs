@@ -30,6 +30,20 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     ) => await context.RoleClaims.Find(claim => claim.RoleId == roleId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<RoleClaimEntity>> ListClaimsForRolesAsync(
+        IReadOnlyCollection<Guid> roleIds,
+        CancellationToken stoppingToken = default
+    )
+    {
+        if (roleIds.Count == 0)
+            return [];
+
+        return await context
+            .RoleClaims.Find(Builders<RoleClaimEntity>.Filter.In(claim => claim.RoleId, roleIds))
+            .ToListAsync(stoppingToken);
+    }
+
+    /// <inheritdoc />
     public Task AddClaimAsync(
         Guid roleId,
         string claimType,

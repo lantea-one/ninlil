@@ -17,14 +17,19 @@ public class DnsAccessControlRuleRepository(NinlilDnsContext context)
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsAccessControlRuleEntity>> ListEnabledAsync(
         CancellationToken stoppingToken = default
-    ) => await Set.Where(rule => !rule.IsDisabled).ToListAsync(stoppingToken);
+    ) => await Set.AsNoTracking().Where(rule => !rule.IsDisabled).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsAccessControlRuleEntity>> SearchAsync(
         int skip,
         int take,
         CancellationToken stoppingToken = default
-    ) => await Set.OrderBy(rule => rule.Name).Skip(skip).Take(take).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .OrderBy(rule => rule.Name)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>

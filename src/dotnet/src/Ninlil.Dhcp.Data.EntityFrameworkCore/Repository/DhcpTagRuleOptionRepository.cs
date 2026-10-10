@@ -23,7 +23,8 @@ public class DhcpTagRuleOptionRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(ruleOption => ruleOption.TagRuleId == tagRuleId)
+        await Set.AsNoTracking()
+            .Where(ruleOption => ruleOption.TagRuleId == tagRuleId)
             .OrderBy(ruleOption => ruleOption.OptionTag)
             .Skip(skip)
             .Take(take)
@@ -40,5 +41,7 @@ public class DhcpTagRuleOptionRepository(NinlilDnsContext context)
         Guid tagRuleId,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(ruleOption => ruleOption.TagRuleId == tagRuleId).ToListAsync(stoppingToken);
+        await Set.AsNoTracking()
+            .Where(ruleOption => ruleOption.TagRuleId == tagRuleId)
+            .ToListAsync(stoppingToken);
 }

@@ -17,7 +17,7 @@ public class DnsRewriteRepository(NinlilDnsContext context)
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsRewriteEntity>> ListEnabledAsync(
         CancellationToken stoppingToken = default
-    ) => await Set.Where(rewrite => !rewrite.IsDisabled).ToListAsync(stoppingToken);
+    ) => await Set.AsNoTracking().Where(rewrite => !rewrite.IsDisabled).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsRewriteEntity>> SearchAsync(
@@ -25,7 +25,8 @@ public class DnsRewriteRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.OrderBy(rewrite => rewrite.Domain)
+        await Set.AsNoTracking()
+            .OrderBy(rewrite => rewrite.Domain)
             .ThenBy(rewrite => rewrite.CreatedAtUtc)
             .Skip(skip)
             .Take(take)

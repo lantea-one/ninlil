@@ -22,6 +22,20 @@ public class RecordMongoRepository(NinlilDnsMongoContext context, MongoChangeTra
     ) => await Collection.Find(record => record.ZoneId == zoneId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<RecordEntity>> ListByZoneIdsAsync(
+        IReadOnlyCollection<Guid> zoneIds,
+        CancellationToken stoppingToken = default
+    )
+    {
+        if (zoneIds.Count == 0)
+            return [];
+
+        return await Collection
+            .Find(Builders<RecordEntity>.Filter.In(record => record.ZoneId, zoneIds))
+            .ToListAsync(stoppingToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<RecordEntity>> FindByNameAsync(
         Guid zoneId,
         string name,

@@ -25,7 +25,12 @@ public class DnsFilterListRepository(NinlilDnsContext context)
         int skip,
         int take,
         CancellationToken stoppingToken = default
-    ) => await Set.OrderBy(list => list.Name).Skip(skip).Take(take).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .OrderBy(list => list.Name)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>

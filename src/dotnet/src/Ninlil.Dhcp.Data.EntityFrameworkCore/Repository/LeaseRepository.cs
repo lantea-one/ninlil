@@ -63,7 +63,8 @@ public class LeaseRepository(NinlilDnsContext context)
     {
         // The lease instants are stored as UTC ticks, so the expiry comparison runs in SQL on
         // every engine.
-        return await Set.Where(lease =>
+        return await Set.AsNoTracking()
+            .Where(lease =>
                 lease.State == LeaseStateEnum.Active
                 && (lease.LeaseExpiresAtUtc == null || lease.LeaseExpiresAtUtc > nowUtc)
             )
@@ -76,7 +77,8 @@ public class LeaseRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.OrderBy(lease => lease.ScopeName)
+        await Set.AsNoTracking()
+            .OrderBy(lease => lease.ScopeName)
             .ThenBy(lease => lease.ClientIdentifier)
             .Skip(skip)
             .Take(take)
@@ -93,7 +95,8 @@ public class LeaseRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(lease => lease.ScopeName == scopeName)
+        await Set.AsNoTracking()
+            .Where(lease => lease.ScopeName == scopeName)
             .OrderBy(lease => lease.ClientIdentifier)
             .Skip(skip)
             .Take(take)

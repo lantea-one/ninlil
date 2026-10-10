@@ -23,7 +23,10 @@ public class WebhookSubscriptionRepository(NinlilDnsContext context)
     /// <inheritdoc />
     public async Task<IReadOnlyList<WebhookSubscriptionEntity>> ListEnabledAsync(
         CancellationToken stoppingToken = default
-    ) => await Set.Where(subscription => !subscription.IsDisabled).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .Where(subscription => !subscription.IsDisabled)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<WebhookSubscriptionEntity>> SearchAsync(
@@ -31,7 +34,8 @@ public class WebhookSubscriptionRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.OrderBy(subscription => subscription.Name)
+        await Set.AsNoTracking()
+            .OrderBy(subscription => subscription.Name)
             .Skip(skip)
             .Take(take)
             .ToListAsync(stoppingToken);

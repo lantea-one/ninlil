@@ -34,6 +34,22 @@ public interface IRoleRepository : IRepository<RoleEntity>
     );
 
     /// <summary>
+    ///     This method lists the claims granted to any of several roles in one query. The result
+    ///     is read-only data for claim building; use <see cref="ListClaimsAsync" /> to get claims
+    ///     that are going to be changed.
+    /// </summary>
+    /// <param name="roleIds">The identifiers of the roles whose claims should be listed.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>
+    ///     The claims granted to the roles, in no particular order; each carries its
+    ///     <see cref="RoleClaimEntity.RoleId" />. Empty when <paramref name="roleIds" /> is empty.
+    /// </returns>
+    Task<IReadOnlyList<RoleClaimEntity>> ListClaimsForRolesAsync(
+        IReadOnlyCollection<Guid> roleIds,
+        CancellationToken stoppingToken = default
+    );
+
+    /// <summary>
     ///     This method grants a role a claim.
     /// </summary>
     /// <param name="roleId">The identifier of the role to grant the claim to.</param>

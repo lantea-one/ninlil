@@ -51,7 +51,8 @@ public class DnsFilterListEntryRepository(
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(entry => entry.ListId == listId)
+        await Set.AsNoTracking()
+            .Where(entry => entry.ListId == listId)
             .OrderBy(entry => entry.Value)
             .Skip(skip)
             .Take(take)

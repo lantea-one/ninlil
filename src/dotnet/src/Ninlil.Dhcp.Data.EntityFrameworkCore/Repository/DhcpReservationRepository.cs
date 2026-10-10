@@ -46,7 +46,8 @@ public class DhcpReservationRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(reservation => reservation.ScopeId == scopeId)
+        await Set.AsNoTracking()
+            .Where(reservation => reservation.ScopeId == scopeId)
             .OrderBy(reservation => reservation.ClientIdentifier)
             .Skip(skip)
             .Take(take)

@@ -41,7 +41,8 @@ public class DnsClientAddressRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(address => address.ClientId == clientId)
+        await Set.AsNoTracking()
+            .Where(address => address.ClientId == clientId)
             .OrderBy(address => address.CreatedAtUtc)
             .Skip(skip)
             .Take(take)

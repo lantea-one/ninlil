@@ -29,7 +29,8 @@ public class DnsClientGroupScheduleRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(schedule => schedule.ClientGroupId == clientGroupId)
+        await Set.AsNoTracking()
+            .Where(schedule => schedule.ClientGroupId == clientGroupId)
             .OrderBy(schedule => schedule.CreatedAtUtc)
             .Skip(skip)
             .Take(take)

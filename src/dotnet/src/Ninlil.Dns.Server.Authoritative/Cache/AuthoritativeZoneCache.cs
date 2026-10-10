@@ -44,8 +44,24 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
             cancellationToken
         );
 
-        foreach (ZoneEntity zone in everyEnabledZone.Where(zone => IsAnswerableZoneType(zone.Type)))
-            await LoadZoneAsync(zone, recordRepository, cancellationToken);
+        List<ZoneEntity> answerableZones =
+        [
+            .. everyEnabledZone.Where(zone => IsAnswerableZoneType(zone.Type)),
+        ];
+
+        // One query for the records of every zone, not one per zone, so the number of queries at
+        // startup does not grow with the number of zones.
+        IReadOnlyList<RecordEntity> everyRecord = await recordRepository.ListByZoneIdsAsync(
+            [.. answerableZones.Select(zone => zone.Id)],
+            cancellationToken
+        );
+        ILookup<Guid, RecordEntity> recordsByZoneId = everyRecord.ToLookup(record => record.ZoneId);
+
+        foreach (ZoneEntity zone in answerableZones)
+            _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(
+                zone,
+                [.. recordsByZoneId[zone.Id]]
+            );
     }
 
     /// <inheritdoc />

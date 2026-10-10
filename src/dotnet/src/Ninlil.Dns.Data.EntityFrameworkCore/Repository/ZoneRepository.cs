@@ -25,7 +25,12 @@ public class ZoneRepository(NinlilDnsContext context)
         int skip,
         int take,
         CancellationToken stoppingToken = default
-    ) => await Set.OrderBy(zone => zone.Name).Skip(skip).Take(take).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .OrderBy(zone => zone.Name)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>

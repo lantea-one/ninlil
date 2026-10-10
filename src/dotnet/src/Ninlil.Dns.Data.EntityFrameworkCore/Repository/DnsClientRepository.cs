@@ -39,7 +39,7 @@ public class DnsClientRepository(NinlilDnsContext context)
     )
     {
         criteria ??= DnsClientSearchCriteria.All;
-        IQueryable<DnsClientEntity> filtered = Filter(criteria);
+        IQueryable<DnsClientEntity> filtered = Filter(criteria).AsNoTracking();
         IQueryable<DnsClientAddressEntity> addresses = Context.Set<DnsClientAddressEntity>();
 
         // Each ordering puts rows with a missing value last through an explicit leading key,

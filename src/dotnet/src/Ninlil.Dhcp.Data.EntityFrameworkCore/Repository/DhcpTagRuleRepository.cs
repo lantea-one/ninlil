@@ -21,7 +21,12 @@ public class DhcpTagRuleRepository(NinlilDnsContext context)
         int skip,
         int take,
         CancellationToken stoppingToken = default
-    ) => await Set.OrderBy(rule => rule.Name).Skip(skip).Take(take).ToListAsync(stoppingToken);
+    ) =>
+        await Set.AsNoTracking()
+            .OrderBy(rule => rule.Name)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>
@@ -32,8 +37,7 @@ public class DhcpTagRuleRepository(NinlilDnsContext context)
         Guid scopeId,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.Where(rule =>
-                !rule.IsDisabled && (rule.ScopeId == scopeId || rule.ScopeId == null)
-            )
+        await Set.AsNoTracking()
+            .Where(rule => !rule.IsDisabled && (rule.ScopeId == scopeId || rule.ScopeId == null))
             .ToListAsync(stoppingToken);
 }

@@ -26,7 +26,8 @@ public class CloudDnsProviderCredentialRepository(NinlilDnsContext context)
         int take,
         CancellationToken stoppingToken = default
     ) =>
-        await Set.OrderBy(credential => credential.Name)
+        await Set.AsNoTracking()
+            .OrderBy(credential => credential.Name)
             .Skip(skip)
             .Take(take)
             .ToListAsync(stoppingToken);
