@@ -121,6 +121,35 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This test checks that a flush that advances presence raises no entity-change signal, so
+    ///     the client directory is not reloaded every flush, while an ordinary save of an address
+    ///     row (the seeding here) still does.
+    /// </summary>
+    [Fact]
+    public async Task AFlushThatAdvancesPresenceRaisesNoChangeSignal()
+    {
+        List<Type> signalled = [];
+        using IDisposable subscription = _host
+            .Services.GetRequiredService<IEntityChangeNotifier>()
+            .Subscribe([typeof(DnsClientAddressEntity)], types => signalled.AddRange(types));
+        Guid[] ids = await SeedDeviceAsync((Mac, InternetProtocolVersionEnum.IPv4));
+        Assert.Single(signalled);
+
+        _tracker.RecordIdentity(
+            Mac,
+            InternetProtocolVersionEnum.IPv4,
+            IPAddress.Parse("192.0.2.10"),
+            DateTimeOffset.UtcNow
+        );
+
+        Assert.Equal(1, await _flush.FlushAsync());
+
+        DnsClientAddressEntity row = await ReadAsync(ids[0]);
+        Assert.NotNull(row.LastSeenUtc);
+        Assert.Single(signalled);
+    }
+
+    /// <summary>
     ///     This test checks that an identity sighting advances its address row's presence and address,
     ///     matching the identifier case-insensitively.
     /// </summary>

@@ -37,7 +37,9 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 ///         flush -- appropriate for this project's homelab scale of tens to hundreds of devices. A
 ///         sighting never moves <see cref="DnsClientAddressEntity.LastSeenUtc" /> backwards, and never
 ///         touches <see cref="AuditableEntityBase.UpdatedAtUtc" />, which records configuration
-///         edits rather than observations.
+///         edits rather than observations. The save raises no entity-change signal
+///         (<see cref="EntityChangeSuppression" />), so it does not make
+///         <see cref="DnsClientDirectory" /> reload.
 ///     </para>
 /// </summary>
 /// <param name="tracker">The buffer sightings are drained from.</param>
@@ -209,7 +211,13 @@ public sealed class ClientPresenceFlushService(
         }
 
         if (advanced > 0)
+        {
+            // A sighting changes only the last-seen time and the address text, and no cache reads
+            // those. Without this scope each flush would make the next DNS query wait for a
+            // reload of DnsClientDirectory.
+            using IDisposable quiet = EntityChangeSuppression.Begin(typeof(DnsClientAddressEntity));
             await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync(stoppingToken);
+        }
 
         return advanced;
     }

@@ -20,8 +20,9 @@ namespace Ninlil.Dns.Server.Core.ClientIdentity;
 ///         added, disabled, moved to another group or given another identifier through the API
 ///         applies to the next query in this process. A change made by another cluster node or
 ///         outside the process shows after the time-to-live (<see cref="SnapshotTimeToLive" />).
-///         The presence flush saves address rows about every 30 seconds while clients are active,
-///         and each such save makes the next query wait for one reload.
+///         The presence flush saves address rows about every 30 seconds while clients are active;
+///         it opens an <see cref="EntityChangeSuppression" /> scope, so those saves do not expire
+///         the directory.
 ///     </para>
 ///     <para>
 ///         Identifiers compare case-insensitively: a MAC address or DUID is hexadecimal text, and

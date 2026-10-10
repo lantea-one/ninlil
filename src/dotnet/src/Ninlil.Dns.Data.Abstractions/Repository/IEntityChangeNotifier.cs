@@ -20,7 +20,8 @@ public interface IEntityChangeNotifier
     /// <summary>
     ///     This method reports that rows of the given entity types were added, changed or deleted
     ///     and are now committed. Callbacks run synchronously on the calling thread, one failing
-    ///     callback does not stop the others, and the exception is not rethrown.
+    ///     callback does not stop the others, and the exception is not rethrown. Types inside an
+    ///     open <see cref="EntityChangeSuppression" /> scope are dropped before any callback runs.
     /// </summary>
     /// <param name="entityTypes">The CLR types of the entities that changed.</param>
     void NotifyChanged(IReadOnlyCollection<Type> entityTypes);

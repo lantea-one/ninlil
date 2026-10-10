@@ -31,6 +31,18 @@ public sealed class EntityChangeNotifier(Action<Exception> onCallbackError = nul
         if (entityTypes is null || entityTypes.Count == 0)
             return;
 
+        // A writer can mark rows no cache reads (see EntityChangeSuppression).
+        if (entityTypes.Any(EntityChangeSuppression.IsSuppressed))
+        {
+            entityTypes =
+            [
+                .. entityTypes.Where(type => !EntityChangeSuppression.IsSuppressed(type)),
+            ];
+
+            if (entityTypes.Count == 0)
+                return;
+        }
+
         foreach (Subscription subscription in _subscriptions)
         {
             IReadOnlyCollection<Type> matching = subscription.Match(entityTypes);
