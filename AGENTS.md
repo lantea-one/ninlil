@@ -81,8 +81,10 @@ dotnet test Ninlil.slnx                                               # everythi
   test that starts a container.
 - `Ninlil.Dns.Data.Integration.Tests` also needs Docker: it runs the storage layer against real
   PostgreSQL, MySQL, SQL Server and MongoDB containers (one fixture per engine, a fresh database
-  per test). Every class there carries the `RequiresDocker` trait. The first run pulls the SQL
-  Server image (about 1.5 GB, amd64 only). Add multi-engine storage tests there.
+  per test). Every class there that needs a container carries the `RequiresDocker` trait. The
+  first run pulls the SQL Server image (about 1.5 GB, amd64 only). Add multi-engine storage tests
+  there. Its SQLite tests need no Docker and carry no trait. Replication tests start primary and
+  replica containers from `Ninlil.Dns.Data.EngineHosts`.
 - Tests use OS-assigned free ports, never fixed ones, and need no root.
 - `Ninlil.Web.Tests`:
   - Every class joins `[Collection(WebTestCollection.Name)]` and shares one
@@ -185,8 +187,13 @@ page](./README.md#frontend-adding-a-feature-page).
 | SQL Server | `SqlServer` | `...Migrations.SqlServer` |
 | MongoDB | `MongoDb` | Schemaless (`Ninlil.Dns.Data.MongoDb`, `Ninlil.Dhcp.Data.MongoDb`), no migrations |
 
-- Relational migrations are applied automatically at startup (`Database.MigrateAsync()` in
-  `src/dotnet/src/Ninlil.Web/Program.cs`).
+- Relational migrations are applied at startup by `RelationalStartupMigrator`
+  (`Ninlil.Dns.Data.EntityFrameworkCore/Maintenance/`), which `Program.cs` calls; never call
+  `Database.MigrateAsync()` from `Program.cs` or a new host. The migrator refuses a database that a
+  newer version upgraded, takes a snapshot first (`Storage:MigrationSafety`) and exits with code
+  78 through `DatabaseStartupRefusedException`, which `Program.cs` catches. Throw that exception for
+  any other reason a start must stop on purpose. Operator view:
+  [README: upgrades and migration snapshots](./README.md#upgrades-and-migration-snapshots).
 - Each provider keeps its migrations in its own assembly; never mix two providers in one.
 - Adding a migration: change the entity and its `IEntityTypeConfiguration` in
   `Ninlil.Dns.Data.EntityFrameworkCore/Configuration/`, then run the same name once per provider
@@ -202,10 +209,23 @@ page](./README.md#frontend-adding-a-feature-page).
 
   `dotnet ef` writes block-scoped namespaces; the script converts the new migration, Designer and
   snapshot files to file-scoped ones and leaves already converted files alone.
-- Do not otherwise hand-edit or reformat generated migrations, `*.Designer.cs` or
-  `NinlilDnsContextModelSnapshot.cs`.
+- Do not hand-edit or reformat generated migrations, `*.Designer.cs` or
+  `NinlilDnsContextModelSnapshot.cs`. The one exception: when a change alters how existing rows are
+  stored (for example a date column moves to ticks), add the data-conversion
+  `migrationBuilder.Sql(...)` to `Up` and `Down` of the generated migration file, for every
+  provider that needs it (see `*ConvertDhcpLeaseTimesToTicks.cs`). Never touch the Designer or the
+  snapshot.
 - MongoDB: add or update the repository and class map; `AutoMap()` picks up new properties (do not
   call `MapIdProperty` on `Id`, it throws).
+- MongoDB has no migrations; `MongoStartupGuard` records one document per applied step in
+  `NinlilDnsSchemaSteps` and refuses a database that holds a step it does not know. Add a step to
+  `MongoSchemaSteps.Known` whenever you add a backfill or change a document shape in a way an older
+  build would misread. Never rename or remove a step.
+- Read replicas: a controller action reads from a replica only through `[ReadFromReplica]` on a GET
+  action; background code that only reads uses `CreateReplicaReadScope()`. Anything that writes, or
+  reads and then writes, stays on the primary. A cache loader built on `RefreshingSnapshot` reads
+  the replica only for the `TimeToLive` reason. Operator view:
+  [README: read replicas](./README.md#read-replicas-and-database-clusters).
 - Lists that can grow use a database-side `SearchAsync`/`CountAsync` pair, never `ListAsync()`
   sliced in memory. Worked end-to-end example: [README: adding a new
   entity](./README.md#backend-adding-a-new-entity-end-to-end).
@@ -217,11 +237,16 @@ page](./README.md#frontend-adding-a-feature-page).
 - Every setting is also a `NINLIL_*` environment variable derived from its config path: split
   PascalCase into words, uppercase, join with `_`, prefix `NINLIL_` (`IPv4`/`IPv6` stay one word).
   `DnsServer:Web:HttpPort` becomes `NINLIL_DNS_SERVER_WEB_HTTP_PORT`. The `Section__Key` form is
-  disabled. List-valued settings have no variable.
+  disabled. List-valued settings have no variable. A class nested inside another options class
+  (such as `StorageOptions.MigrationSafety`) must not have its own `SectionName` constant: the
+  registry test fails if it does.
 - A new top-level options class must be added to
   `src/dotnet/src/Ninlil.Web/EnvironmentVariables/OptionsEnvironmentVariableRegistry.cs`.
 - [`ENVIRONMENT.md`](./ENVIRONMENT.md) is the single registry of variables. Update it (row, default,
-  and the totals at the top) whenever you add, rename or remove an option.
+  and the totals at the top) whenever you add, rename or remove an option. The totals are the
+  number of names `OptionsEnvironmentVariableMap.BuildMappings` returns for
+  `OptionsEnvironmentVariableRegistry.Roots` and `StandaloneConfigurationPaths`; count them, do not
+  add by hand.
 
 ## Code conventions
 
