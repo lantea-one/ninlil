@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations;
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations;
 
 /// <inheritdoc />
 public partial class ConvertWebhookAttemptCreatedAtToTicks : Migration
@@ -15,8 +15,8 @@ public partial class ConvertWebhookAttemptCreatedAtToTicks : Migration
             name: "IX_NinlilDnsWebhookDeliveryAttempts_SubscriptionId",
             table: "NinlilDnsWebhookDeliveryAttempts");
 
-        // MySQL's own datetime-to-bigint ALTER yields a YYYYMMDDhhmmss number rather than ticks,
-        // so the ticks go into a new column that replaces the old one.
+        // SQL Server refuses to convert datetimeoffset to bigint, so the ticks go into a new column
+        // that replaces the old one.
         migrationBuilder.AddColumn<long>(
             name: "CreatedAtUtcTicks",
             table: "NinlilDnsWebhookDeliveryAttempts",
@@ -27,7 +27,7 @@ public partial class ConvertWebhookAttemptCreatedAtToTicks : Migration
 
         migrationBuilder.Sql(
             """
-            UPDATE `NinlilDnsWebhookDeliveryAttempts` SET `CreatedAtUtcTicks` = TIMESTAMPDIFF(MICROSECOND, '1970-01-01 00:00:00', `CreatedAtUtc`) * 10 + 621355968000000000;
+            UPDATE [NinlilDnsWebhookDeliveryAttempts] SET [CreatedAtUtcTicks] = DATEDIFF_BIG(MICROSECOND, CAST('1970-01-01T00:00:00+00:00' AS datetimeoffset), [CreatedAtUtc]) * 10 + 621355968000000000;
             """
         );
 
@@ -40,22 +40,24 @@ public partial class ConvertWebhookAttemptCreatedAtToTicks : Migration
         );
 
         migrationBuilder.CreateIndex(
-            name: "IX_NinlilDnsWebhookDeliveryAttempts_SubscriptionId_CreatedAtUtc",
+            name: "IX_NinlilDnsWebhookAttempts_SubscriptionId_CreatedAtUtc_Id",
             table: "NinlilDnsWebhookDeliveryAttempts",
-            columns: new[] { "SubscriptionId", "CreatedAtUtc" });
+            columns: new[] { "SubscriptionId", "CreatedAtUtc", "Id" });
     }
 
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(
-            name: "IX_NinlilDnsWebhookDeliveryAttempts_SubscriptionId_CreatedAtUtc",
+            name: "IX_NinlilDnsWebhookAttempts_SubscriptionId_CreatedAtUtc_Id",
             table: "NinlilDnsWebhookDeliveryAttempts");
 
+        // Ticks back to datetimeoffset. DATEADD takes an int, so the offset is applied as days,
+        // seconds and microseconds.
         migrationBuilder.AddColumn<DateTimeOffset>(
             name: "CreatedAtUtcValue",
             table: "NinlilDnsWebhookDeliveryAttempts",
-            type: "datetime(6)",
+            type: "datetimeoffset",
             nullable: false,
             defaultValue: new DateTimeOffset(
                 new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
@@ -65,7 +67,7 @@ public partial class ConvertWebhookAttemptCreatedAtToTicks : Migration
 
         migrationBuilder.Sql(
             """
-            UPDATE `NinlilDnsWebhookDeliveryAttempts` SET `CreatedAtUtcValue` = DATE_ADD('1970-01-01 00:00:00.000000', INTERVAL (`CreatedAtUtc` - 621355968000000000) DIV 10 MICROSECOND);
+            UPDATE [NinlilDnsWebhookDeliveryAttempts] SET [CreatedAtUtcValue] = DATEADD(MICROSECOND, (([CreatedAtUtc] - 621355968000000000) / 10) % 1000000, DATEADD(SECOND, (([CreatedAtUtc] - 621355968000000000) / 10000000) % 86400, DATEADD(DAY, ([CreatedAtUtc] - 621355968000000000) / 864000000000, CAST('1970-01-01T00:00:00+00:00' AS datetimeoffset))));
             """
         );
 

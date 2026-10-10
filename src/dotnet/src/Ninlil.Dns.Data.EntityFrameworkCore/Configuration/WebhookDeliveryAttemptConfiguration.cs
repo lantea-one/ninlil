@@ -25,8 +25,17 @@ public class WebhookDeliveryAttemptConfiguration
         builder.HasKey(attempt => attempt.Id);
 
         // The attempts page of a subscription filters on SubscriptionId and orders by CreatedAtUtc
-        // (newest first), so one composite index serves both the page and the count.
-        builder.HasIndex(attempt => new { attempt.SubscriptionId, attempt.CreatedAtUtc });
+        // then Id, newest first. The index ends in Id so the engine reads the page straight off
+        // the index, without sorting every attempt of the subscription.
+        // The name is explicit because the default is 66 characters and MySQL allows 64.
+        builder
+            .HasIndex(attempt => new
+            {
+                attempt.SubscriptionId,
+                attempt.CreatedAtUtc,
+                attempt.Id,
+            })
+            .HasDatabaseName("IX_NinlilDnsWebhookAttempts_SubscriptionId_CreatedAtUtc_Id");
 
         builder.Property(attempt => attempt.SubscriptionName).HasMaxLength(255);
 

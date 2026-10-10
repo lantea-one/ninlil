@@ -33,9 +33,9 @@ public partial class ConvertWebhookAttemptCreatedAtToTicks : Migration
             oldType: "TEXT");
 
         migrationBuilder.CreateIndex(
-            name: "IX_NinlilDnsWebhookDeliveryAttempts_SubscriptionId_CreatedAtUtc",
+            name: "IX_NinlilDnsWebhookAttempts_SubscriptionId_CreatedAtUtc_Id",
             table: "NinlilDnsWebhookDeliveryAttempts",
-            columns: new[] { "SubscriptionId", "CreatedAtUtc" });
+            columns: new[] { "SubscriptionId", "CreatedAtUtc", "Id" });
     }
 
     /// <inheritdoc />
@@ -49,7 +49,7 @@ public partial class ConvertWebhookAttemptCreatedAtToTicks : Migration
         );
 
         migrationBuilder.DropIndex(
-            name: "IX_NinlilDnsWebhookDeliveryAttempts_SubscriptionId_CreatedAtUtc",
+            name: "IX_NinlilDnsWebhookAttempts_SubscriptionId_CreatedAtUtc_Id",
             table: "NinlilDnsWebhookDeliveryAttempts");
 
         migrationBuilder.AlterColumn<DateTimeOffset>(

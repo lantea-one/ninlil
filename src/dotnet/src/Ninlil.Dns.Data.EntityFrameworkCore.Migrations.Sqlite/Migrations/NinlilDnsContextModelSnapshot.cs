@@ -1801,7 +1801,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("Status", "NextRetryDueUtc");
 
-                b.HasIndex("SubscriptionId", "CreatedAtUtc");
+                b.HasIndex("SubscriptionId", "CreatedAtUtc", "Id")
+                    .HasDatabaseName("IX_NinlilDnsWebhookAttempts_SubscriptionId_CreatedAtUtc_Id");
 
                 b.ToTable("NinlilDnsWebhookDeliveryAttempts", (string)null);
             });

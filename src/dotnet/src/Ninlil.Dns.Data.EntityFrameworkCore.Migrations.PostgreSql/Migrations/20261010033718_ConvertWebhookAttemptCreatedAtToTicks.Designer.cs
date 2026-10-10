@@ -5,59 +5,64 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ninlil.Dns.Data.EntityFrameworkCore;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations;
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations;
 
 [DbContext(typeof(NinlilDnsContext))]
-[Migration("20261010030614_ConvertWebhookAttemptCreatedAtToTicks")]
+[Migration("20261010033718_ConvertWebhookAttemptCreatedAtToTicks")]
 partial class ConvertWebhookAttemptCreatedAtToTicks
 {
     /// <inheritdoc />
     protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
 #pragma warning disable 612, 618
-        modelBuilder.HasAnnotation("ProductVersion", "9.0.19");
+        modelBuilder
+            .HasAnnotation("ProductVersion", "9.0.19")
+            .HasAnnotation("Relational:MaxIdentifierLength", 63);
+
+        NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
         modelBuilder.Entity("Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity", b =>
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ClientIdentifier")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("HostName")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("IpAddress")
                     .IsRequired()
                     .HasMaxLength(45)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(45)");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("ScopeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -74,40 +79,40 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<byte>("OptionTag")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("smallint");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("ScopeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("ValueHex")
                     .IsRequired()
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<string>("ValueSource")
                     .IsRequired()
                     .ValueGeneratedOnAdd()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT")
+                    .HasColumnType("character varying(32)")
                     .HasDefaultValue("Custom");
 
                 b.HasKey("Id");
@@ -122,77 +127,77 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("BootFileName")
                     .HasMaxLength(128)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(128)");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<TimeSpan>("DefaultLeaseDuration")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("interval");
 
                 b.Property<int?>("DelegatedPrefixLength")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("DnsServerAddresses")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<Guid?>("DnsZoneId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("GatewayAddresses")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Kind")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<TimeSpan>("MaxLeaseDuration")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("interval");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("NextServerAddress")
                     .HasMaxLength(45)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(45)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ProtocolVersion")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<string>("RangeEndAddress")
                     .IsRequired()
                     .HasMaxLength(45)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(45)");
 
                 b.Property<string>("RangeStartAddress")
                     .IsRequired()
                     .HasMaxLength(45)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(45)");
 
                 b.Property<int>("SubnetPrefixLength")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -206,67 +211,67 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int>("Priority")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("RelayAgentCircuitIdHex")
                     .HasMaxLength(512)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(512)");
 
                 b.Property<string>("RelayAgentRemoteIdHex")
                     .HasMaxLength(512)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(512)");
 
                 b.Property<string>("RelayInterfaceIdHex")
                     .HasMaxLength(512)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(512)");
 
                 b.Property<Guid?>("ScopeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("UserClassMatch")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("UserClassMatchMode")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<long?>("VendorClassEnterpriseNumber")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("VendorClassIdentifierMatch")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("VendorClassIdentifierMatchMode")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.HasKey("Id");
 
@@ -279,33 +284,33 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<byte>("OptionTag")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("smallint");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("TagRuleId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("ValueHex")
                     .IsRequired()
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<string>("ValueSource")
                     .IsRequired()
                     .ValueGeneratedOnAdd()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT")
+                    .HasColumnType("character varying(32)")
                     .HasDefaultValue("Custom");
 
                 b.HasKey("Id");
@@ -320,54 +325,54 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ClientIdentifier")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("HostName")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("IpAddress")
                     .IsRequired()
                     .HasMaxLength(45)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(45)");
 
                 b.Property<long?>("LeaseExpiresAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<long?>("LeaseObtainedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int?>("PrefixLength")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("ProtocolVersion")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<string>("ScopeName")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("State")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -388,37 +393,37 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("ConsumedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<DateTimeOffset?>("ExpiresAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<DateTimeOffset?>("RevokedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("TokenHash")
                     .IsRequired()
                     .HasMaxLength(512)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(512)");
 
                 b.Property<string>("Type")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<Guid>("UserId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -434,37 +439,37 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("CredentialsEncrypted")
                     .IsRequired()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ProviderType")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -478,57 +483,57 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("Host")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<DateTimeOffset?>("LastHeartbeatAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<int>("MissedHeartbeatCount")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int>("Port")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<Guid>("RemoteNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Status")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("TlsCertificateThumbprint")
                     .IsRequired()
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<string>("TsigKeyName")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -542,26 +547,26 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("EntityKey")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<string>("EntityType")
                     .IsRequired()
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -575,21 +580,21 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("SectionName")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -603,32 +608,32 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int>("Capabilities")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("Cidr")
                     .IsRequired()
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -639,39 +644,39 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Address")
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<Guid>("ClientId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ClientIdentifier")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<long>("FirstSeenUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<long?>("LastSeenUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ProtocolVersion")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -687,45 +692,45 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid?>("ClientGroupId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("DeviceIconKey")
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("DisplayName")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<bool>("IsFavorite")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Origin")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("PausedUntilUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -738,30 +743,30 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsDefault")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("PausedUntilUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -775,16 +780,16 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("ClientGroupId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<Guid>("ListId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -799,21 +804,21 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Cidr")
                     .IsRequired()
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<Guid>("ClientGroupId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ClientId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -826,40 +831,40 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("ClientGroupId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<int>("DaysOfWeek")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<TimeOnly>("EndTime")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("time without time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<TimeOnly>("StartTime")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("time without time zone");
 
                 b.Property<string>("TimeZoneId")
                     .IsRequired()
                     .HasMaxLength(128)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(128)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -872,16 +877,16 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("ClientId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<Guid>("ListId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -896,40 +901,40 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("ClientId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<int>("DaysOfWeek")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<TimeOnly>("EndTime")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("time without time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<TimeOnly>("StartTime")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("time without time zone");
 
                 b.Property<string>("TimeZoneId")
                     .IsRequired()
                     .HasMaxLength(128)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(128)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -942,38 +947,38 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Cidr")
                     .IsRequired()
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<string>("ClientIdentifier")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ProtocolVersion")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -986,53 +991,53 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Action")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Kind")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<DateTimeOffset?>("LastFetchedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<TimeSpan?>("RefreshInterval")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("interval");
 
                 b.Property<string>("Source")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("SubscriptionUrl")
                     .HasMaxLength(2048)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(2048)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -1046,36 +1051,36 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comment")
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsException")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Kind")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<Guid>("ListId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("Value")
                     .IsRequired()
                     .HasMaxLength(512)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(512)");
 
                 b.HasKey("Id");
 
@@ -1088,36 +1093,36 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("DefinitionString")
                     .IsRequired()
                     .HasMaxLength(2048)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(2048)");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int>("SortOrder")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -1131,46 +1136,46 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int>("AnswerCount")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("ClientAddress")
                     .HasMaxLength(45)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(45)");
 
                 b.Property<string>("ClientIdentifier")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("ClientProtocolVersion")
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<long>("OccurredAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("Protocol")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("QueriedName")
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<string>("QueriedType")
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("ResponseCode")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.HasKey("Id");
 
@@ -1189,39 +1194,39 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid?>("ClientGroupId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid?>("ClientId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("Domain")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Target")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -1238,52 +1243,52 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<byte>("Algorithm")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("smallint");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
-                b.Property<ushort>("KeyTag")
-                    .HasColumnType("INTEGER");
+                b.Property<int>("KeyTag")
+                    .HasColumnType("integer");
 
                 b.Property<int>("LifecycleState")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("ParentDsConfirmedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("PrivateKeyPkcs8Encrypted")
                     .IsRequired()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<byte[]>("PublicKeyWireFormat")
                     .IsRequired()
-                    .HasColumnType("BLOB");
+                    .HasColumnType("bytea");
 
                 b.Property<DateTimeOffset>("PublishedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<DateTimeOffset?>("RetiredAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<int>("Role")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<Guid>("ZoneId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -1296,32 +1301,32 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Category")
                     .HasMaxLength(512)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(512)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("Exception")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("Message")
                     .IsRequired()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("PropertiesJson")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("Severity")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<DateTimeOffset>("TimestampUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -1334,29 +1339,29 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Category")
                     .IsRequired()
                     .HasMaxLength(128)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(128)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("DimensionsJson")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<DateTimeOffset>("TimestampUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<double>("Value")
-                    .HasColumnType("REAL");
+                    .HasColumnType("double precision");
 
                 b.HasKey("Id");
 
@@ -1369,55 +1374,55 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Class")
                     .IsRequired()
                     .HasMaxLength(16)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(16)");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("DataJson")
                     .IsRequired()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<bool>("ExcludeFromSync")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("ManagedByFeature")
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<long>("TimeToLiveSeconds")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("Type")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<Guid>("ZoneId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -1432,23 +1437,23 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ClaimType")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("ClaimValue")
                     .IsRequired()
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<Guid>("RoleId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -1461,36 +1466,36 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ClusterConflictNote")
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<string>("ConcurrencyStamp")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("Description")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("NormalizedName")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -1504,35 +1509,35 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<DateTimeOffset>("ExpiresAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("IpAddress")
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<bool>("IsPersistent")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("RefreshTokenHash")
                     .IsRequired()
                     .HasMaxLength(512)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(512)");
 
                 b.Property<DateTimeOffset?>("RevokedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("UserAgent")
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<Guid>("UserId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -1548,43 +1553,43 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("AlgorithmName")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<DateTimeOffset?>("ClusterInviteExpiresAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<Guid?>("ClusterNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("SecretEncrypted")
                     .IsRequired()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -1598,23 +1603,23 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("ClaimType")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("ClaimValue")
                     .IsRequired()
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<Guid>("UserId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -1627,98 +1632,98 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int>("AccessFailedCount")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("ClusterConflictNote")
                     .HasMaxLength(1024)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(1024)");
 
                 b.Property<string>("ConcurrencyStamp")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("DisplayName")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("Email")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<bool>("EmailConfirmed")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("ExternalIdentityProvider")
                     .HasMaxLength(64)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(64)");
 
                 b.Property<string>("ExternalSubjectId")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<bool>("LockoutEnabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<DateTimeOffset?>("LockoutEndUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("NormalizedEmail")
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<string>("NormalizedUserName")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("PasswordHash")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("PhoneNumber")
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<bool>("PhoneNumberConfirmed")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("PreferredMode")
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("PreferredPalette")
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("SecurityStamp")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<bool>("TwoFactorEnabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("TwoFactorRecoveryCodesEncrypted")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("TwoFactorTotpSecretEncrypted")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("UserName")
                     .IsRequired()
                     .HasMaxLength(256)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(256)");
 
                 b.HasKey("Id");
 
@@ -1736,10 +1741,10 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
         modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.UserRoleEntity", b =>
             {
                 b.Property<Guid>("UserId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<Guid>("RoleId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("UserId", "RoleId");
 
@@ -1752,51 +1757,51 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<int>("AttemptCount")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<long?>("CompletedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<long>("CreatedAtUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("EventTypeName")
                     .HasMaxLength(128)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(128)");
 
                 b.Property<DateTimeOffset?>("LastAttemptedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("LastErrorMessage")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<int?>("LastHttpStatusCode")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<int>("MaxAttempts")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<long?>("NextRetryDueUtc")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("PayloadJson")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("Status")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<Guid>("SubscriptionId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("SubscriptionName")
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.HasKey("Id");
 
@@ -1804,7 +1809,8 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
 
                 b.HasIndex("Status", "NextRetryDueUtc");
 
-                b.HasIndex("SubscriptionId", "CreatedAtUtc");
+                b.HasIndex("SubscriptionId", "CreatedAtUtc", "Id")
+                    .HasDatabaseName("IX_NinlilDnsWebhookAttempts_SubscriptionId_CreatedAtUtc_Id");
 
                 b.ToTable("NinlilDnsWebhookDeliveryAttempts", (string)null);
             });
@@ -1813,50 +1819,50 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("AuthCredentialsEncrypted")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("AuthMode")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<string>("EventTypeNames")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("HmacSigningSecretEncrypted")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<int>("MaxDeliveryAttempts")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("TargetUrl")
                     .IsRequired()
                     .HasMaxLength(2048)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(2048)");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.HasKey("Id");
 
@@ -1870,27 +1876,27 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("AddedRecordsJson")
                     .IsRequired()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<long>("NewSerial")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<long>("OldSerial")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("bigint");
 
                 b.Property<string>("RemovedRecordsJson")
                     .IsRequired()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<Guid>("ZoneId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.HasKey("Id");
 
@@ -1903,108 +1909,108 @@ partial class ConvertWebhookAttemptCreatedAtToTicks
             {
                 b.Property<Guid>("Id")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<bool?>("AutoManageCaaRecords")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<bool?>("AutoManagePtrRecords")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("CaaIssuerDomain")
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<Guid?>("CloudProviderCredentialId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("CloudProviderZoneId")
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<TimeSpan>("CloudSyncInterval")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("TEXT")
+                    .HasColumnType("interval")
                     .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(4096)");
 
                 b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<int>("DenialOfExistenceMode")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("DnssecAlgorithm")
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<bool>("DynamicUpdateEnabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<string>("ForwarderAddresses")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<bool>("IsDisabled")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<bool>("IsDnssecSigned")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.Property<Guid?>("MemberOfCatalogZoneId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<string>("NotifyAddresses")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
-                b.Property<ushort>("Nsec3Iterations")
-                    .HasColumnType("INTEGER");
+                b.Property<int>("Nsec3Iterations")
+                    .HasColumnType("integer");
 
                 b.Property<string>("Nsec3SaltHex")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<Guid?>("OriginatingNodeId")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("uuid");
 
                 b.Property<string>("PrimaryServerAddresses")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<int?>("PtrIpv4PrefixLength")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<int?>("PtrIpv6PrefixLength")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<int>("TransferTransport")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("integer");
 
                 b.Property<string>("TransferTsigKeyNames")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<string>("TsigKeyName")
                     .HasMaxLength(255)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(255)");
 
                 b.Property<string>("Type")
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("character varying(32)");
 
                 b.Property<string>("UpdateTsigKeyNames")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("text");
 
                 b.Property<DateTimeOffset?>("UpdatedAtUtc")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<bool>("ValidateDnssec")
-                    .HasColumnType("INTEGER");
+                    .HasColumnType("boolean");
 
                 b.HasKey("Id");
 
