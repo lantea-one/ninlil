@@ -49,6 +49,32 @@ public sealed class NinlilEnvironmentVariableNamingTests
 
     [Theory]
     [InlineData(
+        "Storage:PostgreSql:TargetSessionAttributes",
+        "NINLIL_STORAGE_POSTGRESQL_TARGET_SESSION_ATTRIBUTES"
+    )]
+    [InlineData("Storage:MySql:ReplicaLoadBalance", "NINLIL_STORAGE_MYSQL_REPLICA_LOAD_BALANCE")]
+    [InlineData(
+        "Storage:SqlServer:MultiSubnetFailover",
+        "NINLIL_STORAGE_SQLSERVER_MULTI_SUBNET_FAILOVER"
+    )]
+    [InlineData("Storage:MongoDb:ReadPreference", "NINLIL_STORAGE_MONGODB_READ_PREFERENCE")]
+    [InlineData(
+        "Storage:ReadReplica:ConnectionString",
+        "NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING"
+    )]
+    public void ToEnvironmentVariableName_KeepsEachEngineNameAsOneWord(
+        string configurationPath,
+        string expected
+    )
+    {
+        Assert.Equal(
+            expected,
+            NinlilEnvironmentVariableNaming.ToEnvironmentVariableName(configurationPath)
+        );
+    }
+
+    [Theory]
+    [InlineData(
         "DnsServer:ClientSubnet:SourcePrefixLengthIPv4",
         "NINLIL_DNS_SERVER_CLIENT_SUBNET_SOURCE_PREFIX_LENGTH_IPV4"
     )]

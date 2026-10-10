@@ -96,6 +96,7 @@
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.ClusterSync.Tests\Ninlil.Dns.Server.ClusterSync.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Common.Configuration.Tests\Ninlil.Common.Configuration.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dhcp.Data.EntityFrameworkCore.Tests\Ninlil.Dhcp.Data.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="src\dotnet\tests\Ninlil.Dns.Data.Tests\Ninlil.Dns.Data.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dhcp.Common.Tests\Ninlil.Dhcp.Common.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dhcp.Protocol.Dhcpv4.Tests\Ninlil.Dhcp.Protocol.Dhcpv4.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dhcp.Protocol.Dhcpv6.Tests\Ninlil.Dhcp.Protocol.Dhcpv6.Tests.csproj" />

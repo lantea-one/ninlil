@@ -72,6 +72,61 @@ public class OptionsEnvironmentVariableRegistryTests
         Assert.Equal(Dhcpv6RelayOptions.SectionName + ":UpstreamServerPort", path);
     }
 
+    [Theory]
+    [InlineData(
+        "NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING",
+        "Storage:ReadReplica:ConnectionString"
+    )]
+    [InlineData(
+        "NINLIL_STORAGE_READ_REPLICA_STICKY_AFTER_WRITE_SECONDS",
+        "Storage:ReadReplica:StickyAfterWriteSeconds"
+    )]
+    [InlineData("NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS", "Storage:ReadReplica:MaxLagSeconds")]
+    [InlineData(
+        "NINLIL_STORAGE_READ_REPLICA_LAG_CHECK_INTERVAL_SECONDS",
+        "Storage:ReadReplica:LagCheckIntervalSeconds"
+    )]
+    [InlineData(
+        "NINLIL_STORAGE_POSTGRESQL_TARGET_SESSION_ATTRIBUTES",
+        "Storage:PostgreSql:TargetSessionAttributes"
+    )]
+    [InlineData(
+        "NINLIL_STORAGE_POSTGRESQL_REPLICA_TARGET_SESSION_ATTRIBUTES",
+        "Storage:PostgreSql:ReplicaTargetSessionAttributes"
+    )]
+    [InlineData(
+        "NINLIL_STORAGE_POSTGRESQL_LOAD_BALANCE_HOSTS",
+        "Storage:PostgreSql:LoadBalanceHosts"
+    )]
+    [InlineData(
+        "NINLIL_STORAGE_POSTGRESQL_HOST_RECHECK_SECONDS",
+        "Storage:PostgreSql:HostRecheckSeconds"
+    )]
+    [InlineData("NINLIL_STORAGE_MYSQL_LOAD_BALANCE", "Storage:MySql:LoadBalance")]
+    [InlineData("NINLIL_STORAGE_MYSQL_REPLICA_LOAD_BALANCE", "Storage:MySql:ReplicaLoadBalance")]
+    [InlineData(
+        "NINLIL_STORAGE_SQLSERVER_MULTI_SUBNET_FAILOVER",
+        "Storage:SqlServer:MultiSubnetFailover"
+    )]
+    [InlineData("NINLIL_STORAGE_MONGODB_REPLICA_SET", "Storage:MongoDb:ReplicaSet")]
+    [InlineData("NINLIL_STORAGE_MONGODB_READ_PREFERENCE", "Storage:MongoDb:ReadPreference")]
+    [InlineData(
+        "NINLIL_STORAGE_MONGODB_MAX_STALENESS_SECONDS",
+        "Storage:MongoDb:MaxStalenessSeconds"
+    )]
+    [InlineData("NINLIL_STORAGE_MONGODB_WRITE_CONCERN", "Storage:MongoDb:WriteConcern")]
+    [InlineData("NINLIL_STORAGE_MONGODB_JOURNAL", "Storage:MongoDb:Journal")]
+    public void Roots_MapTheStorageClusterSettings(string variable, string path)
+    {
+        IReadOnlyDictionary<string, string> mappings = OptionsEnvironmentVariableMap.BuildMappings(
+            OptionsEnvironmentVariableRegistry.Roots,
+            OptionsEnvironmentVariableRegistry.StandaloneConfigurationPaths
+        );
+
+        Assert.True(mappings.TryGetValue(variable, out string actual));
+        Assert.Equal(path, actual);
+    }
+
     private static bool HasSectionNameConstant(Type type)
     {
         FieldInfo field = type.GetField(

@@ -11,7 +11,7 @@ namespace Ninlil.Web.Tests;
 /// <summary>
 ///     This class tests the process-level behaviour of a refused startup: <c>Ninlil.Web</c> exits
 ///     with code 78 (EX_CONFIG) and prints the reason when the database holds a migration this
-///     version does not know. It starts the built <c>Ninlil.Web.dll</c> as a child process with
+///     version does not know, or when the storage cluster settings contradict themselves. It starts the built <c>Ninlil.Web.dll</c> as a child process with
 ///     <c>dotnet</c>, which is the only way to observe an exit code. The class deliberately does
 ///     not join <c>WebTestCollection</c>: it does not use the shared host, and the shared host
 ///     sets process-wide environment variables this test does not want. The child gets its own
@@ -59,6 +59,48 @@ public sealed class StartupRefusalProcessTests : IDisposable
             command.ExecuteNonQuery();
         }
 
+        (int exitCode, string text) = await RunUntilExitAsync(
+            databasePath,
+            new Dictionary<string, string>()
+        );
+        Assert.True(exitCode == 78, $"Exit code {exitCode}. Output: {text}");
+        Assert.Contains("20991231000000_FromTheFuture", text);
+        Assert.Contains("upgraded by a newer Ninlil version", text);
+    }
+
+    /// <summary>
+    ///     A read replica connection string on SQLite (which has no replica) stops the process
+    ///     with exit code 78 before the database is touched, and the message names the setting
+    ///     without printing the connection string.
+    /// </summary>
+    [Fact]
+    public async Task Startup_WithAReplicaConnectionStringOnSqlite_ExitsWith78WithoutTheSecret()
+    {
+        (int exitCode, string text) = await RunUntilExitAsync(
+            Path.Combine(_directory, "unused.sqlite3"),
+            new Dictionary<string, string>
+            {
+                ["NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING"] =
+                    "Host=replica;Password=hunter2-secret",
+            }
+        );
+
+        Assert.True(exitCode == 78, $"Exit code {exitCode}. Output: {text}");
+        Assert.Contains("Storage:ReadReplica:ConnectionString", text);
+        Assert.DoesNotContain("hunter2", text);
+    }
+
+    /// <summary>
+    ///     This method starts the built host as a child process on a SQLite database, waits for it
+    ///     to exit and returns the exit code with everything it printed.
+    /// </summary>
+    /// <param name="databasePath">The SQLite file the child is pointed at.</param>
+    /// <param name="extraEnvironment">Further environment variables for the child.</param>
+    private async Task<(int ExitCode, string Output)> RunUntilExitAsync(
+        string databasePath,
+        IReadOnlyDictionary<string, string> extraEnvironment
+    )
+    {
         string webAssembly = Path.Combine(AppContext.BaseDirectory, "Ninlil.Web.dll");
         Assert.True(File.Exists(webAssembly), "Ninlil.Web.dll is missing from the test output.");
 
@@ -73,6 +115,8 @@ public sealed class StartupRefusalProcessTests : IDisposable
         startInfo.ArgumentList.Add($"--webroot={Path.Combine(_directory, "wwwroot")}");
         startInfo.Environment["NINLIL_STORAGE_ENGINE"] = "Sqlite";
         startInfo.Environment["NINLIL_STORAGE_CONNECTION_STRING"] = $"Data Source={databasePath}";
+        foreach ((string name, string value) in extraEnvironment)
+            startInfo.Environment[name] = value;
         startInfo.Environment["NINLIL_JWT_SIGNING_KEY"] = Convert.ToBase64String(
             RandomNumberGenerator.GetBytes(64)
         );
@@ -118,9 +162,7 @@ public sealed class StartupRefusalProcessTests : IDisposable
         string text;
         lock (output)
             text = output.ToString();
-        Assert.True(process.ExitCode == 78, $"Exit code {process.ExitCode}. Output: {text}");
-        Assert.Contains("20991231000000_FromTheFuture", text);
-        Assert.Contains("upgraded by a newer Ninlil version", text);
+        return (process.ExitCode, text);
     }
 
     private static int GetFreePort()
