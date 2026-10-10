@@ -146,6 +146,16 @@ public sealed class DnsFilterListExternalRefreshService(
             scope.ServiceProvider.GetRequiredService<IDnsFilterListRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
+        // On the relational engines the replace changes the entries at once, so the replace,
+        // the list update and the save run in one transaction: a failure rolls back and leaves
+        // the old entries. MongoDB registers no factory; its staged replace runs at save time
+        // (OD-B11-d).
+        IUnitOfWorkTransactionFactory transactionFactory =
+            scope.ServiceProvider.GetService<IUnitOfWorkTransactionFactory>();
+        await using IUnitOfWorkTransaction transaction = transactionFactory is null
+            ? null
+            : await transactionFactory.BeginAsync(stoppingToken);
+
         await entryRepository.ReplaceEntriesAsync(list.Id, parsed.Entries, stoppingToken);
 
         DnsFilterListEntity tracked = await listRepository.GetByIdAsync(list.Id, stoppingToken);
@@ -157,6 +167,9 @@ public sealed class DnsFilterListExternalRefreshService(
         }
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        if (transaction is not null)
+            await transaction.CommitAsync(stoppingToken);
 
         // The skipped count matters: a list of mostly cosmetic or browser-only rules (such as
         // EasyList) would otherwise look fine while blocking far less than its size suggests.

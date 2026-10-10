@@ -51,8 +51,13 @@ public interface IDnsFilterListEntryRepository : IRepository<DnsFilterListEntryE
 
     /// <summary>
     ///     This method replaces every entry of one list with a new set, as a subscribed list's
-    ///     refresh needs (a whole swap, not an entry-by-entry diff). The change is persisted by
-    ///     <see cref="IUnitOfWork.SaveChangesAsync" />.
+    ///     refresh needs (a whole swap, not an entry-by-entry diff). On the relational engines the
+    ///     old entries are deleted and the new ones inserted in the database at once, in bulk and
+    ///     outside the change tracker, not at <see cref="IUnitOfWork.SaveChangesAsync" /> time, so
+    ///     the caller must open a transaction first (<see cref="IUnitOfWorkTransactionFactory" />)
+    ///     and commit it after its other changes are saved; otherwise a later failure leaves the
+    ///     list replaced. MongoDB stages the delete and the insert together and runs them when
+    ///     the unit of work saves.
     /// </summary>
     /// <param name="listId">The owning list's identifier.</param>
     /// <param name="entries">The complete new set of entries, each a value plus its exception flag.</param>
