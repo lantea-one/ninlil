@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Ninlil.Dns.Server.Core.ClientIdentity;
 using Ninlil.Dns.Server.Core.Rewrites;
 using Ninlil.Dns.Server.Rewrites;
 
@@ -20,7 +22,9 @@ public static class ServiceCollectionRewritesExtension
     ///     install starts with them off). <see cref="DnsRewriteEngine" /> checks
     ///     <see cref="DnsRewriteOptions.Enable" /> live through
     ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so a disabled
-    ///     engine costs one field read per query and no database access.
+    ///     engine costs one field read per query and no database access. It also registers the
+    ///     <see cref="DnsRewriteCache" /> and the <see cref="DnsClientDirectory" /> the engine
+    ///     reads; both need an <c>IEntityChangeNotifier</c>, which the storage extensions register.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read rewrite settings from.</param>
@@ -35,8 +39,11 @@ public static class ServiceCollectionRewritesExtension
         );
 
         // Singleton, because the singleton DnsQueryProcessingPipeline takes it as a constructor
-        // dependency. The engine reaches the scoped repository by opening a short-lived scope
-        // per query through IServiceScopeFactory.
+        // dependency. The engine reads the singleton rewrite cache and client directory, which
+        // open a short-lived scope only when they load. The directory uses TryAdd because the
+        // filtering and schedule extensions register the same singleton.
+        instance.AddSingleton<DnsRewriteCache>();
+        instance.TryAddSingleton<DnsClientDirectory>();
         instance.AddSingleton<IDnsRewriteEngine, DnsRewriteEngine>();
 
         // We're done, return the IServiceCollection instance.

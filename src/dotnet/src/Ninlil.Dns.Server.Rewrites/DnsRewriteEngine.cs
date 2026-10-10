@@ -1,14 +1,11 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
-using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientIdentity;
 using Ninlil.Dns.Server.Core.Rewrites;
 
@@ -17,10 +14,13 @@ namespace Ninlil.Dns.Server.Rewrites;
 
 /// <summary>
 ///     This class implements <see cref="IDnsRewriteEngine" />: it matches a query's first
-///     question against every enabled <see cref="DnsRewriteEntity" /> and, on a match, builds the
-///     answer. <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" /> calls it
-///     before any resolver (see that class for where rewrites sit in the query path). The
-///     rewrite list is read from the repository on every query that passes the cheap checks.
+///     question against every enabled <see cref="DnsRewriteEntity" />
+///     and, on a match, builds the answer.
+///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" /> calls it before
+///     any resolver (see that class for where rewrites sit in the query path). The rewrites come
+///     from <see cref="DnsRewriteCache">an in-memory copy</see> that a saved change refreshes at
+///     once, and the client from <see cref="DnsClientDirectory" />, so a query that passes the
+///     cheap checks reads no database rows while the copies are fresh and opens no scope.
 ///     <para>
 ///         <strong>Matching.</strong> A <see cref="DnsRewriteEntity.Domain" /> without <c>*</c>
 ///         matches only that exact name, not its subdomains (unlike the domain filter), because a
@@ -46,11 +46,11 @@ namespace Ninlil.Dns.Server.Rewrites;
 ///         rewrites apply to every query either way. Between two equally specific matches (both
 ///         exact or both wildcard), a client-scoped rewrite beats a group-scoped one, which beats
 ///         a global one (see <see cref="FindBestMatch" />). The resolver and
-///         <see cref="IDnsClientRepository" /> are optional; without either, or without a
+///         <see cref="DnsClientDirectory" /> are optional; without either, or without a
 ///         <c>remoteAddress</c>, only global rewrites are considered.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach the scoped rewrite repository, once per check.</param>
+/// <param name="cache">The in-memory copy of the enabled rewrites, already sorted and compiled.</param>
 /// <param name="options">
 ///     The <see cref="DnsRewriteOptions.Enable" /> switch and answer TTL, read live through
 ///     <see cref="IOptionsMonitor{TOptions}" /> rather than <see cref="IOptions{TOptions}" />, so
@@ -63,11 +63,16 @@ namespace Ninlil.Dns.Server.Rewrites;
 ///     client scoping (see the class summary). <see langword="null" /> (the default) means only
 ///     global rewrites apply.
 /// </param>
+/// <param name="clientDirectory">
+///     The optional in-memory client lookup that turns the resolved identifier into a registered
+///     client. <see langword="null" /> (the default) means only global rewrites apply.
+/// </param>
 public sealed class DnsRewriteEngine(
-    IServiceScopeFactory scopeFactory,
+    DnsRewriteCache cache,
     IOptionsMonitor<DnsRewriteOptions> options,
     ILogger<DnsRewriteEngine> logger,
-    IClientIdentityResolver clientIdentityResolver = null
+    IClientIdentityResolver clientIdentityResolver = null,
+    DnsClientDirectory clientDirectory = null
 ) : IDnsRewriteEngine
 {
     /// <summary>
@@ -75,13 +80,6 @@ public sealed class DnsRewriteEngine(
     ///     <c>DnsFilterEngine</c>), so a pathological pattern cannot stall query answering.
     /// </summary>
     private static readonly TimeSpan WildcardMatchTimeout = TimeSpan.FromMilliseconds(250);
-
-    /// <summary>
-    ///     This field caches each wildcard domain's compiled <see cref="Regex" />, keyed by the
-    ///     stored domain string, so a pattern is compiled once. The engine is a singleton, so the
-    ///     cache is shared by every query. Entries are never removed.
-    /// </summary>
-    private readonly ConcurrentDictionary<string, Regex> _compiledWildcardCache = new();
 
     /// <inheritdoc />
     public async ValueTask<DnsMessage> TryBuildResponseAsync(
@@ -106,7 +104,7 @@ public sealed class DnsRewriteEngine(
             return null;
 
         // Only A, AAAA and CNAME can be answered by a rewrite (see the class summary), so other
-        // types skip the repository read below.
+        // types skip the matching below.
         if (
             question.Type
             is not (
@@ -117,25 +115,18 @@ public sealed class DnsRewriteEngine(
         )
             return null;
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        IDnsRewriteRepository repository =
-            scope.ServiceProvider.GetRequiredService<IDnsRewriteRepository>();
-        IReadOnlyList<DnsRewriteEntity> rewrites = await repository.ListEnabledAsync(stoppingToken);
+        DnsRewriteSet rewrites = await cache.GetAsync(stoppingToken);
 
-        if (rewrites.Count == 0)
+        if (rewrites.IsEmpty)
             return null;
 
         string queriedPresentation = NormalizeDomain(question.Name.ToString());
 
         // Resolved once per query. A null client means no scoped rewrite can match (see
         // AppliesToClient).
-        DnsClientEntity resolvedClient = await ResolveClientAsync(
-            scope,
-            remoteAddress,
-            stoppingToken
-        );
+        DnsClientInfo resolvedClient = await ResolveClientAsync(remoteAddress, stoppingToken);
 
-        DnsRewriteEntity match = FindBestMatch(
+        DnsCompiledRewrite match = FindBestMatch(
             rewrites,
             queriedPresentation,
             question.Type,
@@ -145,85 +136,56 @@ public sealed class DnsRewriteEngine(
         if (match is null)
             return null;
 
-        if (
-            !DnsRewriteTargetClassifier.TryClassify(
-                match.Target,
-                out DnsRewriteTargetKindEnum kind,
-                out _
-            )
-        )
-        {
-            // The REST controllers reject unclassifiable targets on write, so this only guards
-            // against rows written some other way.
-            logger.LogWarning(
-                "DNS rewrite '{Domain}' ({Id}) has an unclassifiable target; skipping.",
-                match.Domain,
-                match.Id
-            );
-            return null;
-        }
-
-        return BuildResponse(request, question, match, kind);
+        return BuildResponse(request, question, match);
     }
 
     /// <summary>
     ///     This method picks the rewrite, if any, that answers a query. An exact match beats a
-    ///     wildcard match. Among equally specific matches, the narrower audience wins (see
-    ///     <see cref="ScopeSpecificityRank" />), then the earliest-created entry. Rewrites that do
-    ///     not apply to <paramref name="resolvedClient" /> (see <see cref="AppliesToClient" />) are
-    ///     dropped first.
+    ///     wildcard match. The set is already in tie-break order (narrower audience, then the
+    ///     earliest-created entry), so the first hit of each scan wins. Rewrites that do not apply
+    ///     to <paramref name="resolvedClient" /> (see <see cref="AppliesToClient" />) are skipped.
     /// </summary>
-    private DnsRewriteEntity FindBestMatch(
-        IReadOnlyList<DnsRewriteEntity> rewrites,
+    private DnsCompiledRewrite FindBestMatch(
+        DnsRewriteSet rewrites,
         string queriedPresentation,
         DnsResourceRecordTypeEnum questionType,
-        DnsClientEntity resolvedClient
+        DnsClientInfo resolvedClient
     )
     {
-        // Sorted by scope, then creation time, so the first hit of either scan below is the
-        // tie-break winner.
-        List<DnsRewriteEntity> ordered =
-        [
-            .. rewrites
-                .Where(rewrite => AppliesToClient(rewrite, resolvedClient))
-                .OrderByDescending(ScopeSpecificityRank)
-                .ThenBy(rewrite => rewrite.CreatedAtUtc),
-        ];
+        if (rewrites.Exact.TryGetValue(queriedPresentation, out var candidates))
+        {
+            foreach (DnsCompiledRewrite rewrite in candidates)
+            {
+                if (
+                    AppliesToClient(rewrite, resolvedClient)
+                    && AnswersQuestionType(rewrite.Kind, questionType)
+                )
+                    return rewrite;
+            }
+        }
 
-        DnsRewriteEntity exact = ordered.FirstOrDefault(rewrite =>
-            !ContainsWildcard(rewrite.Domain)
-            && MatchesExact(queriedPresentation, rewrite.Domain)
-            && AnswersQuestionType(rewrite, questionType)
-        );
+        foreach (DnsCompiledRewrite rewrite in rewrites.Wildcards)
+        {
+            if (
+                AppliesToClient(rewrite, resolvedClient)
+                && AnswersQuestionType(rewrite.Kind, questionType)
+                && MatchesWildcard(queriedPresentation, rewrite)
+            )
+                return rewrite;
+        }
 
-        return exact
-            ?? ordered.FirstOrDefault(rewrite =>
-                ContainsWildcard(rewrite.Domain)
-                && MatchesWildcard(queriedPresentation, rewrite.Domain)
-                && AnswersQuestionType(rewrite, questionType)
-            );
+        return null;
     }
-
-    /// <summary>
-    ///     This method ranks a rewrite's audience for <see cref="FindBestMatch" />; higher is
-    ///     narrower. Client-scoped (<see cref="DnsRewriteEntity.ClientId" />) outranks
-    ///     group-scoped (<see cref="DnsRewriteEntity.ClientGroupId" />), which outranks global. A
-    ///     row with both set (which the write paths never produce) counts as client-scoped.
-    /// </summary>
-    private static int ScopeSpecificityRank(DnsRewriteEntity rewrite) =>
-        rewrite.ClientId is not null ? 2
-        : rewrite.ClientGroupId is not null ? 1
-        : 0;
 
     /// <summary>
     ///     This method checks whether a rewrite applies to the query's resolved client. A global
     ///     rewrite always applies. A scoped one applies only when <paramref name="resolvedClient" />
-    ///     is not <see langword="null" /> and its <c>Id</c> matches
-    ///     <see cref="DnsRewriteEntity.ClientId" />, or (when no client is named) its
-    ///     <see cref="DnsClientEntity.ClientGroupId" /> matches
-    ///     <see cref="DnsRewriteEntity.ClientGroupId" />.
+    ///     is not <see langword="null" /> and its <c>ClientId</c> matches
+    ///     <see cref="DnsCompiledRewrite.ClientId" />, or (when no client is named) its
+    ///     <see cref="DnsClientInfo.ClientGroupId" /> matches
+    ///     <see cref="DnsCompiledRewrite.ClientGroupId" />.
     /// </summary>
-    private static bool AppliesToClient(DnsRewriteEntity rewrite, DnsClientEntity resolvedClient)
+    private static bool AppliesToClient(DnsCompiledRewrite rewrite, DnsClientInfo resolvedClient)
     {
         if (rewrite.ClientId is null && rewrite.ClientGroupId is null)
             return true;
@@ -232,25 +194,24 @@ public sealed class DnsRewriteEngine(
             return false;
 
         if (rewrite.ClientId is { } clientId)
-            return resolvedClient.Id == clientId;
+            return resolvedClient.ClientId == clientId;
 
         return resolvedClient.ClientGroupId == rewrite.ClientGroupId;
     }
 
     /// <summary>
-    ///     This method resolves a query's source address to its registered, enabled
-    ///     <see cref="DnsClientEntity" />. <c>DnsFilterEngine</c> and <c>DnsClientScheduleEngine</c>
-    ///     have their own copies of this helper. Returns <see langword="null" /> when the resolver
-    ///     or client repository is missing, no address was given, the address has no mapping, no
-    ///     client is registered for it, or that client is disabled.
+    ///     This method resolves a query's source address to its registered, enabled client.
+    ///     <c>DnsFilterEngine</c> and <c>DnsClientScheduleEngine</c> have their own copies of this
+    ///     helper. Returns <see langword="null" /> when the resolver or directory is missing, no
+    ///     address was given, the address has no mapping, no client is registered for it, or that
+    ///     client is disabled.
     /// </summary>
-    private async Task<DnsClientEntity> ResolveClientAsync(
-        AsyncServiceScope scope,
+    private async Task<DnsClientInfo> ResolveClientAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken
     )
     {
-        if (clientIdentityResolver is null || remoteAddress is null)
+        if (clientIdentityResolver is null || clientDirectory is null || remoteAddress is null)
             return null;
 
         ClientIdentityResolution resolution = await clientIdentityResolver.ResolveAsync(
@@ -261,13 +222,7 @@ public sealed class DnsRewriteEngine(
         if (resolution is null)
             return null;
 
-        IDnsClientRepository clientRepository =
-            scope.ServiceProvider.GetService<IDnsClientRepository>();
-
-        if (clientRepository is null)
-            return null;
-
-        DnsClientEntity client = await clientRepository.GetByClientIdentifierAsync(
+        DnsClientInfo client = await clientDirectory.FindAsync(
             resolution.ClientIdentifier,
             resolution.ProtocolVersion,
             stoppingToken
@@ -281,20 +236,10 @@ public sealed class DnsRewriteEngine(
     ///     class summary).
     /// </summary>
     private static bool AnswersQuestionType(
-        DnsRewriteEntity rewrite,
+        DnsRewriteTargetKindEnum kind,
         DnsResourceRecordTypeEnum questionType
-    )
-    {
-        if (
-            !DnsRewriteTargetClassifier.TryClassify(
-                rewrite.Target,
-                out DnsRewriteTargetKindEnum kind,
-                out _
-            )
-        )
-            return false;
-
-        return kind switch
+    ) =>
+        kind switch
         {
             DnsRewriteTargetKindEnum.A => questionType == DnsResourceRecordTypeEnum.A,
             DnsRewriteTargetKindEnum.Aaaa => questionType == DnsResourceRecordTypeEnum.Aaaa,
@@ -304,7 +249,6 @@ public sealed class DnsRewriteEngine(
                     or DnsResourceRecordTypeEnum.Cname,
             _ => false,
         };
-    }
 
     /// <summary>
     ///     This method builds the complete answer response for a matched rewrite.
@@ -312,10 +256,10 @@ public sealed class DnsRewriteEngine(
     private DnsMessage BuildResponse(
         DnsMessage request,
         DnsQuestion question,
-        DnsRewriteEntity match,
-        DnsRewriteTargetKindEnum kind
+        DnsCompiledRewrite match
     )
     {
+        DnsRewriteTargetKindEnum kind = match.Kind;
         DnsResourceRecordTypeEnum answerType = kind switch
         {
             DnsRewriteTargetKindEnum.A => DnsResourceRecordTypeEnum.A,
@@ -364,52 +308,20 @@ public sealed class DnsRewriteEngine(
     }
 
     /// <summary>
-    ///     This method checks whether a domain pattern contains a wildcard character.
+    ///     This method checks a queried name against a wildcard rewrite's compiled regex. A match
+    ///     timeout counts as no match and is logged; it does not throw.
     /// </summary>
-    private static bool ContainsWildcard(string domain) => domain?.Contains('*') == true;
-
-    /// <summary>
-    ///     This method checks a queried name against a non-wildcard domain. Subdomains do not match
-    ///     (see the class summary).
-    /// </summary>
-    private static bool MatchesExact(string queriedPresentation, string domain) =>
-        queriedPresentation == NormalizeDomain(domain);
-
-    /// <summary>
-    ///     This method checks a queried name against a wildcard domain, compiling and caching its
-    ///     regex on first use (see <see cref="_compiledWildcardCache" />). A compile failure or a
-    ///     match timeout counts as no match and is logged; neither throws.
-    /// </summary>
-    private bool MatchesWildcard(string queriedPresentation, string domain)
+    private bool MatchesWildcard(string queriedPresentation, DnsCompiledRewrite rewrite)
     {
-        Regex regex = _compiledWildcardCache.GetOrAdd(
-            domain,
-            key =>
-            {
-                Regex compiled = CompileOrNull(BuildWildcardRegexPattern(NormalizeDomain(key)));
-
-                if (compiled is null)
-                    logger.LogWarning(
-                        "A DNS rewrite has a wildcard domain that failed to compile; treating as a non-match. Domain: {Domain}",
-                        key
-                    );
-
-                return compiled;
-            }
-        );
-
-        if (regex is null)
-            return false;
-
         try
         {
-            return regex.IsMatch(queriedPresentation);
+            return rewrite.Wildcard.IsMatch(queriedPresentation);
         }
         catch (RegexMatchTimeoutException)
         {
             logger.LogWarning(
                 "A DNS rewrite wildcard domain timed out matching a query name; treating as a non-match. Domain: {Domain}",
-                domain
+                rewrite.Domain
             );
 
             return false;
@@ -453,5 +365,5 @@ public sealed class DnsRewriteEngine(
     ///     <see cref="DnsName.ToString" />'s always-fully-qualified form compares correctly
     ///     against an operator-entered value that may or may not have one.
     /// </summary>
-    private static string NormalizeDomain(string value) => value.TrimEnd('.').ToLowerInvariant();
+    internal static string NormalizeDomain(string value) => value.TrimEnd('.').ToLowerInvariant();
 }

@@ -20,12 +20,17 @@ namespace Ninlil.Dns.Server.Rewrites.Tests;
 /// </summary>
 public class DnsRewriteEngineTests
 {
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         public readonly InMemoryDnsRewriteRepository Rewrites = new();
         public readonly InMemoryDnsClientRepository Clients = new();
+        public readonly InMemoryDnsClientAddressRepository ClientAddresses = new();
+        public readonly EntityChangeNotifier Notifier = new();
+        public readonly DnsRewriteCache Cache;
+        public readonly DnsClientDirectory Directory;
         public readonly DnsRewriteOptions Options = new() { Enable = true, TimeToLiveSeconds = 60 };
         public readonly DnsRewriteEngine Engine;
+        public readonly IServiceScopeFactory ScopeFactory;
 
         /// <param name="clientIdentityResolver">
         ///     The optional resolver to build the engine with. <see langword="null" /> (the default)
@@ -44,19 +49,46 @@ public class DnsRewriteEngineTests
             services.AddSingleton<IDnsRewriteRepository>(Rewrites);
 
             if (registerClientRepository)
+            {
                 services.AddSingleton<IDnsClientRepository>(Clients);
+                services.AddSingleton<IDnsClientAddressRepository>(ClientAddresses);
+            }
 
             IServiceScopeFactory scopeFactory = services
                 .BuildServiceProvider()
                 .GetRequiredService<IServiceScopeFactory>();
+            ScopeFactory = scopeFactory;
 
-            Engine = new DnsRewriteEngine(
+            Cache = new DnsRewriteCache(
                 scopeFactory,
+                Notifier,
+                NullLogger<DnsRewriteCache>.Instance
+            );
+            Directory = new DnsClientDirectory(
+                scopeFactory,
+                Notifier,
+                NullLogger<DnsClientDirectory>.Instance
+            );
+            Engine = new DnsRewriteEngine(
+                Cache,
                 new StaticOptionsMonitor<DnsRewriteOptions>(Options),
                 NullLogger<DnsRewriteEngine>.Instance,
-                clientIdentityResolver
+                clientIdentityResolver,
+                registerClientRepository ? Directory : null
             );
         }
+
+        /// <summary>
+        ///     This method stands in for the committed save a real repository write ends with: the
+        ///     in-memory repositories have no unit of work, so the fixture's setup helpers raise
+        ///     the signal themselves, for the entity types the caches watch.
+        /// </summary>
+        public void Changed() =>
+            Notifier.NotifyChanged([
+                typeof(DnsRewriteEntity),
+                typeof(DnsClientEntity),
+                typeof(DnsClientAddressEntity),
+            ]);
 
         public DnsRewriteEntity Add(string domain, string target, bool isDisabled = false) =>
             Add(domain, target, DateTimeOffset.UtcNow, isDisabled);
@@ -77,6 +109,7 @@ public class DnsRewriteEngineTests
                 CreatedAtUtc = createdAtUtc,
             };
             Rewrites.Items.Add(entity);
+            Changed();
             return entity;
         }
 
@@ -87,6 +120,7 @@ public class DnsRewriteEngineTests
         {
             DnsRewriteEntity entity = Add(domain, target);
             entity.ClientId = clientId;
+            Changed();
             return entity;
         }
 
@@ -97,6 +131,7 @@ public class DnsRewriteEngineTests
         {
             DnsRewriteEntity entity = Add(domain, target);
             entity.ClientGroupId = clientGroupId;
+            Changed();
             return entity;
         }
 
@@ -119,11 +154,21 @@ public class DnsRewriteEngineTests
             };
             Clients.Items.Add(client);
             Clients.Addresses.Add((clientIdentifier, InternetProtocolVersionEnum.IPv4, client.Id));
+            ClientAddresses.Items.Add(
+                new DnsClientAddressEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ClientId = client.Id,
+                    ClientIdentifier = clientIdentifier,
+                    ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                }
+            );
+            Changed();
             return client;
         }
     }
 
-    private static DnsMessage BuildRequest(string name, DnsResourceRecordTypeEnum type) =>
+    internal static DnsMessage BuildRequest(string name, DnsResourceRecordTypeEnum type) =>
         new()
         {
             Id = 1,

@@ -14,9 +14,8 @@ public interface IDnsRewriteRepository : IRepository<DnsRewriteEntity>
 {
     /// <summary>
     ///     This method lists every enabled rewrite: the set <c>Server.Rewrites.DnsRewriteEngine</c>
-    ///     matches a query against. The engine reads it fresh on each query, without a cache, as
-    ///     <c>ForwarderQueryResolver</c> does with
-    ///     <see cref="IDnsForwarderRepository.ListEnabledOrderedAsync" />.
+    ///     matches a query against. <c>Server.Rewrites.DnsRewriteCache</c> reads it once into memory and
+    ///     again after a saved rewrite or when its time-to-live ends, not on each query.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task<IReadOnlyList<DnsRewriteEntity>> ListEnabledAsync(
