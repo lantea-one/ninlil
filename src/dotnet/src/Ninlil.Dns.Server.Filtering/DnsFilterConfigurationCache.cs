@@ -53,6 +53,13 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         also keeps its compiled regex, which is larger than the entry text; the compiled
 ///         patterns of the previous index are reused on reload.
 ///     </para>
+///     <para>
+///         <strong>Storage.</strong> When a read replica is configured, a reload that only follows
+///         the age of the copy reads the configuration and the list entries from the replica
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />). The first load and every reload after a
+///         local change read the primary, so a change saved here is never lost to a replica that
+///         has not received it yet (see <see cref="SnapshotLoadScopeExtension" />).
+///     </para>
 /// </summary>
 public sealed class DnsFilterConfigurationCache : IDisposable
 {
@@ -176,7 +183,7 @@ public sealed class DnsFilterConfigurationCache : IDisposable
             .GetOrAdd(
                 (list.Id, list.Kind),
                 key => new RefreshingSnapshot<DnsFilterListIndex>(
-                    token => LoadEntriesAsync(key.ListId, key.Kind, token),
+                    (reason, token) => LoadEntriesAsync(key.ListId, key.Kind, reason, token),
                     DnsFilterListIndex.Empty,
                     EntriesTimeToLive,
                     _timeProvider,
@@ -270,10 +277,11 @@ public sealed class DnsFilterConfigurationCache : IDisposable
     ///     snapshot, then drops the indexes of lists that are no longer enabled.
     /// </summary>
     private async Task<DnsFilterConfiguration> LoadConfigurationAsync(
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = _scopeFactory.CreateLoadScope(reason);
         IServiceProvider services = scope.ServiceProvider;
 
         IReadOnlyList<DnsClientGroupEntity> groups = await services
@@ -369,10 +377,11 @@ public sealed class DnsFilterConfigurationCache : IDisposable
     private async Task<DnsFilterListIndex> LoadEntriesAsync(
         Guid listId,
         DnsFilterListKindEnum kind,
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = _scopeFactory.CreateLoadScope(reason);
         IReadOnlyList<DnsFilterListEntryEntity> entries = await scope
             .ServiceProvider.GetRequiredService<IDnsFilterListEntryRepository>()
             .ListByListIdAsync(listId, stoppingToken);

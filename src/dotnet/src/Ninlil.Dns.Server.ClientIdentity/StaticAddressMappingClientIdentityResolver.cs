@@ -34,6 +34,13 @@ namespace Ninlil.Dns.Server.ClientIdentity;
 ///         query. If a refresh fails, the last good snapshot stays in use. The mappings are
 ///         scanned in order and the first that matches wins.
 ///     </para>
+///     <para>
+///         <strong>Storage.</strong> When a read replica is configured, a reload that only follows
+///         the age of the copy reads the mappings from the replica
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />). The first load and every reload after a
+///         local change read the primary, so a change saved here is never lost to a replica that
+///         has not received it yet (see <see cref="SnapshotLoadScopeExtension" />).
+///     </para>
 /// </summary>
 /// <param name="scopeFactory">
 ///     The factory used to reach <see cref="IDnsClientStaticAddressMappingRepository" /> in a
@@ -58,7 +65,7 @@ public sealed class StaticAddressMappingClientIdentityResolver(
     ///     This field is the in-memory copy of the enabled mappings.
     /// </summary>
     private readonly RefreshingSnapshot<MappingSnapshot> _snapshot = new(
-        token => LoadAsync(scopeFactory, token),
+        (reason, token) => LoadAsync(scopeFactory, reason, token),
         new MappingSnapshot([]),
         SnapshotTimeToLive,
         timeProvider ?? TimeProvider.System,
@@ -115,10 +122,11 @@ public sealed class StaticAddressMappingClientIdentityResolver(
     /// </summary>
     private static async Task<MappingSnapshot> LoadAsync(
         IServiceScopeFactory scopeFactory,
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = scopeFactory.CreateLoadScope(reason);
         IDnsClientStaticAddressMappingRepository repository =
             scope.ServiceProvider.GetRequiredService<IDnsClientStaticAddressMappingRepository>();
 

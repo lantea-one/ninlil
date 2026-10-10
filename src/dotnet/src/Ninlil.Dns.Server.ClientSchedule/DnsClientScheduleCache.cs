@@ -29,6 +29,13 @@ namespace Ninlil.Dns.Server.ClientSchedule;
 ///         <strong>Memory.</strong> A schedule is a few fields; a thousand take well under a
 ///         megabyte.
 ///     </para>
+///     <para>
+///         <strong>Storage.</strong> When a read replica is configured, a reload that only follows
+///         the age of the copy reads the schedules from the replica
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />). The first load and every reload after a
+///         local change read the primary, so a change saved here is never lost to a replica that
+///         has not received it yet (see <see cref="SnapshotLoadScopeExtension" />).
+///     </para>
 /// </summary>
 public sealed class DnsClientScheduleCache : IDisposable
 {
@@ -63,7 +70,7 @@ public sealed class DnsClientScheduleCache : IDisposable
     )
     {
         _snapshot = new RefreshingSnapshot<DnsScheduleSet>(
-            token => LoadAsync(scopeFactory, logger, token),
+            (reason, token) => LoadAsync(scopeFactory, logger, reason, token),
             DnsScheduleSet.Empty,
             SnapshotTimeToLive,
             timeProvider ?? TimeProvider.System,
@@ -107,10 +114,11 @@ public sealed class DnsClientScheduleCache : IDisposable
     private static async Task<DnsScheduleSet> LoadAsync(
         IServiceScopeFactory scopeFactory,
         ILogger logger,
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = scopeFactory.CreateLoadScope(reason);
         IServiceProvider services = scope.ServiceProvider;
 
         IReadOnlyList<DnsClientScheduleEntity> clientRows =

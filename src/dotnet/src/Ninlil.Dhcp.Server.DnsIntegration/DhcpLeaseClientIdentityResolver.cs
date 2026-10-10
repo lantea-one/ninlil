@@ -36,6 +36,13 @@ namespace Ninlil.Dhcp.Server.DnsIntegration;
 ///         the snapshot still holds it, so a lease stops resolving the moment it expires. If a
 ///         refresh fails, the last good snapshot stays in use.
 ///     </para>
+///     <para>
+///         <strong>Storage.</strong> When a read replica is configured, a reload that only follows
+///         the age of the copy reads the leases from the replica
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />). The first load and every reload after a
+///         local change read the primary, so a change saved here is never lost to a replica that
+///         has not received it yet (see <see cref="SnapshotLoadScopeExtension" />).
+///     </para>
 /// </summary>
 /// <param name="scopeFactory">The factory that creates a scope, and an <see cref="ILeaseRepository" />, per refresh.</param>
 /// <param name="timeProvider">The clock for the snapshot age and lease expiry; the system clock when <see langword="null" />.</param>
@@ -60,7 +67,8 @@ public sealed class DhcpLeaseClientIdentityResolver(
     ///     This field is the in-memory copy of the active leases.
     /// </summary>
     private readonly RefreshingSnapshot<LeaseSnapshot> _snapshot = new(
-        token => LoadAsync(scopeFactory, timeProvider ?? TimeProvider.System, token),
+        (reason, token) =>
+            LoadAsync(scopeFactory, timeProvider ?? TimeProvider.System, reason, token),
         new LeaseSnapshot(new Dictionary<IPAddress, ActiveLease>()),
         SnapshotTimeToLive,
         timeProvider ?? TimeProvider.System,
@@ -121,10 +129,11 @@ public sealed class DhcpLeaseClientIdentityResolver(
     private static async Task<LeaseSnapshot> LoadAsync(
         IServiceScopeFactory scopeFactory,
         TimeProvider timeProvider,
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = scopeFactory.CreateLoadScope(reason);
         ILeaseRepository leaseRepository =
             scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
 

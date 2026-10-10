@@ -25,16 +25,29 @@ namespace Ninlil.Dns.Server.Core.ClientIdentity;
 ///         while that load runs wait for the same one. If the load fails, they get the last good
 ///         value and the failure is logged.
 ///     </para>
+///     <para>
+///         The loader is told why it runs (<see cref="SnapshotLoadReasonEnum" />) so it can pick
+///         the database it reads. A refresh only because the value got old
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />) may read a replica that is a few
+///         seconds behind. The first load and every load that follows an <see cref="Expire" />
+///         or an explicit refresh must read the primary: an expiry means this process just
+///         wrote, and a replica may not have that write yet, so reloading from it would keep the
+///         old rows until the next time-to-live refresh. <see cref="SnapshotLoadScopeExtension" />
+///         applies that rule to a scope factory.
+///     </para>
 /// </summary>
 /// <typeparam name="T">The immutable snapshot type.</typeparam>
-/// <param name="loader">Reads the rows and builds a new snapshot; called by one refresh at a time.</param>
+/// <param name="loader">
+///     Reads the rows and builds a new snapshot; called by one refresh at a time. It receives the
+///     reason for the load.
+/// </param>
 /// <param name="emptyValue">The value used when the first load fails.</param>
 /// <param name="timeToLive">How old the value may get before a background refresh starts.</param>
 /// <param name="timeProvider">The clock for the time-to-live.</param>
 /// <param name="logger">The logger refresh failures are recorded to.</param>
 /// <param name="description">What the snapshot holds, for the log messages.</param>
 public sealed class RefreshingSnapshot<T>(
-    Func<CancellationToken, Task<T>> loader,
+    Func<SnapshotLoadReasonEnum, CancellationToken, Task<T>> loader,
     T emptyValue,
     TimeSpan timeToLive,
     TimeProvider timeProvider,
@@ -43,6 +56,33 @@ public sealed class RefreshingSnapshot<T>(
 )
     where T : class
 {
+    /// <summary>
+    ///     This constructor creates a snapshot whose loader does not care why it runs, such as one
+    ///     that reads no database.
+    /// </summary>
+    /// <param name="loader">Reads the rows and builds a new snapshot; called by one refresh at a time.</param>
+    /// <param name="emptyValue">The value used when the first load fails.</param>
+    /// <param name="timeToLive">How old the value may get before a background refresh starts.</param>
+    /// <param name="timeProvider">The clock for the time-to-live.</param>
+    /// <param name="logger">The logger refresh failures are recorded to.</param>
+    /// <param name="description">What the snapshot holds, for the log messages.</param>
+    public RefreshingSnapshot(
+        Func<CancellationToken, Task<T>> loader,
+        T emptyValue,
+        TimeSpan timeToLive,
+        TimeProvider timeProvider,
+        ILogger logger,
+        string description
+    )
+        : this(
+            (_, stoppingToken) => loader(stoppingToken),
+            emptyValue,
+            timeToLive,
+            timeProvider,
+            logger,
+            description
+        ) { }
+
     /// <summary>
     ///     This field is the longest one refresh may run before it is abandoned.
     /// </summary>
@@ -134,7 +174,7 @@ public sealed class RefreshingSnapshot<T>(
         lock (_gate)
         {
             if (_running is null)
-                _running = Task.Run(RunAsync);
+                _running = Task.Run(() => RunAsync(false));
             else
                 _runAgain = true;
 
@@ -161,7 +201,7 @@ public sealed class RefreshingSnapshot<T>(
     private void StartIfIdle()
     {
         lock (_gate)
-            _running ??= Task.Run(RunAsync);
+            _running ??= Task.Run(() => RunAsync(true));
     }
 
     /// <summary>
@@ -179,7 +219,7 @@ public sealed class RefreshingSnapshot<T>(
 
             // A running load that started before the expiry reruns by itself (see RunAsync), so
             // joining it is enough and concurrent readers share one load.
-            _running ??= Task.Run(RunAsync);
+            _running ??= Task.Run(() => RunAsync(false));
             running = _running;
         }
 
@@ -200,18 +240,35 @@ public sealed class RefreshingSnapshot<T>(
     ///     This method loads, then loads again for as long as a refresh was requested during the
     ///     load. It never throws.
     /// </summary>
-    private async Task RunAsync()
+    /// <param name="startedByTimeToLive">
+    ///     True when the first load of this run only follows the age of the value. Every later
+    ///     load of the run was requested by an <see cref="Expire" /> or an explicit refresh.
+    /// </param>
+    private async Task RunAsync(bool startedByTimeToLive)
     {
         while (true)
         {
             long startedAtGeneration;
+            SnapshotLoadReasonEnum reason;
             lock (_gate)
+            {
                 startedAtGeneration = _expireGeneration;
+
+                // An Expire that landed before the load started makes it an expired load even
+                // when the age triggered the run.
+                reason =
+                    _entry is null ? SnapshotLoadReasonEnum.Initial
+                    : startedByTimeToLive && _servedGeneration >= startedAtGeneration
+                        ? SnapshotLoadReasonEnum.TimeToLive
+                    : SnapshotLoadReasonEnum.Expired;
+            }
+
+            startedByTimeToLive = false;
 
             try
             {
                 using CancellationTokenSource timeout = new(RefreshTimeout, timeProvider);
-                T value = await loader(timeout.Token);
+                T value = await loader(reason, timeout.Token);
                 _entry = new Entry(value, timeProvider.GetUtcNow());
             }
             catch (Exception exception)

@@ -28,6 +28,13 @@ namespace Ninlil.Dns.Server.Rewrites;
 ///         <strong>Memory.</strong> A rewrite is a few strings and, for a wildcard, one compiled
 ///         regex; a thousand rewrites take well under a megabyte.
 ///     </para>
+///     <para>
+///         <strong>Storage.</strong> When a read replica is configured, a reload that only follows
+///         the age of the copy reads the rewrites from the replica
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />). The first load and every reload after a
+///         local change read the primary, so a change saved here is never lost to a replica that
+///         has not received it yet (see <see cref="SnapshotLoadScopeExtension" />).
+///     </para>
 /// </summary>
 public sealed class DnsRewriteCache : IDisposable
 {
@@ -62,7 +69,7 @@ public sealed class DnsRewriteCache : IDisposable
     )
     {
         _snapshot = new RefreshingSnapshot<DnsRewriteSet>(
-            token => LoadAsync(scopeFactory, logger, token),
+            (reason, token) => LoadAsync(scopeFactory, logger, reason, token),
             DnsRewriteSet.Empty,
             SnapshotTimeToLive,
             timeProvider ?? TimeProvider.System,
@@ -98,10 +105,11 @@ public sealed class DnsRewriteCache : IDisposable
     private static async Task<DnsRewriteSet> LoadAsync(
         IServiceScopeFactory scopeFactory,
         ILogger logger,
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = scopeFactory.CreateLoadScope(reason);
         IReadOnlyList<DnsRewriteEntity> rows = await scope
             .ServiceProvider.GetRequiredService<IDnsRewriteRepository>()
             .ListEnabledAsync(stoppingToken);

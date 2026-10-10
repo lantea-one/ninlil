@@ -33,6 +33,13 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         and is logged; if the first load fails the copy is empty (nothing is forwarded) until
 ///         the next time-to-live expiry.
 ///     </para>
+///     <para>
+///         <strong>Storage.</strong> When a read replica is configured, a reload that only follows
+///         the age of the copy reads the forwarder zones and forwarders from the replica
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />). The first load and every reload after a
+///         local change read the primary, so a change saved here is never lost to a replica that
+///         has not received it yet (see <see cref="SnapshotLoadScopeExtension" />).
+///     </para>
 /// </summary>
 public sealed class ForwarderSetCache : IDisposable
 {
@@ -67,7 +74,7 @@ public sealed class ForwarderSetCache : IDisposable
     )
     {
         _snapshot = new RefreshingSnapshot<ForwarderSetSnapshot>(
-            token => LoadAsync(scopeFactory, token),
+            (reason, token) => LoadAsync(scopeFactory, reason, token),
             ForwarderSetSnapshot.Empty,
             SnapshotTimeToLive,
             timeProvider ?? TimeProvider.System,
@@ -114,10 +121,11 @@ public sealed class ForwarderSetCache : IDisposable
     /// </summary>
     private static async Task<ForwarderSetSnapshot> LoadAsync(
         IServiceScopeFactory scopeFactory,
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = scopeFactory.CreateLoadScope(reason);
         IServiceProvider services = scope.ServiceProvider;
 
         IReadOnlyList<ZoneEntity> zones = await services

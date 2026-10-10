@@ -28,6 +28,13 @@ namespace Ninlil.Dns.Server.Core.ClientIdentity;
 ///         Identifiers compare case-insensitively: a MAC address or DUID is hexadecimal text, and
 ///         the relational engines differ in how their collations compare it.
 ///     </para>
+///     <para>
+///         <strong>Storage.</strong> When a read replica is configured, a reload that only follows
+///         the age of the copy reads the clients and addresses from the replica
+///         (<see cref="SnapshotLoadReasonEnum.TimeToLive" />). The first load and every reload after a
+///         local change read the primary, so a change saved here is never lost to a replica that
+///         has not received it yet (see <see cref="SnapshotLoadScopeExtension" />).
+///     </para>
 /// </summary>
 public sealed class DnsClientDirectory : IDisposable
 {
@@ -64,7 +71,7 @@ public sealed class DnsClientDirectory : IDisposable
     )
     {
         _snapshot = new RefreshingSnapshot<DirectorySnapshot>(
-            token => LoadAsync(scopeFactory, token),
+            (reason, token) => LoadAsync(scopeFactory, reason, token),
             DirectorySnapshot.Empty,
             SnapshotTimeToLive,
             timeProvider ?? TimeProvider.System,
@@ -128,10 +135,11 @@ public sealed class DnsClientDirectory : IDisposable
     /// </summary>
     private static async Task<DirectorySnapshot> LoadAsync(
         IServiceScopeFactory scopeFactory,
+        SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        await using AsyncServiceScope scope = scopeFactory.CreateLoadScope(reason);
         IDnsClientRepository clientRepository =
             scope.ServiceProvider.GetRequiredService<IDnsClientRepository>();
         IDnsClientAddressRepository addressRepository =
