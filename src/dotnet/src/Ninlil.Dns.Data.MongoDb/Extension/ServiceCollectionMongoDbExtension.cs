@@ -82,7 +82,10 @@ public static class ServiceCollectionMongoDbExtension
         // the primary whatever the read preference is.
         ReadPreference replicaReadPreference =
             MongoClientSettingsComposer.ComposeReplicaReadPreference(options);
-        instance.AddNinlilStorageRouting(replicaReadPreference != null);
+        instance.AddNinlilStorageRouting(
+            replicaReadPreference != null,
+            TimeSpan.FromSeconds(options.ReadReplica.StickyAfterWriteSeconds)
+        );
 
         instance.AddSingleton(options);
         instance.AddSingleton<IMongoClient>(new MongoClient(mongoUrl));
@@ -117,7 +120,10 @@ public static class ServiceCollectionMongoDbExtension
             MongoContexts contexts = provider.GetRequiredService<MongoContexts>();
             bool replica = provider
                 .GetRequiredService<StorageReadIntent>()
-                .ResolveUseReplica(provider.GetRequiredService<IStorageReadRouter>());
+                .ResolveUseReplica(
+                    provider.GetRequiredService<IStorageReadRouter>(),
+                    provider.GetRequiredService<StoragePrincipal>().Key
+                );
             return replica && contexts.Replica != null ? contexts.Replica : contexts.Primary;
         });
 

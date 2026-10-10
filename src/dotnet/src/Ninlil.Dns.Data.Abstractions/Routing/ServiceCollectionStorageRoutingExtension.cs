@@ -15,18 +15,27 @@ public static class ServiceCollectionStorageRoutingExtension
 {
     /// <summary>
     ///     This method registers <see cref="IStorageReadRouter" /> (one per process, disabled until
-    ///     <see cref="IStorageReadRouter.Enable" />) and the scoped <see cref="StorageReadIntent" />.
+    ///     <see cref="IStorageReadRouter.Enable" />) and the scoped <see cref="StorageReadIntent" />
+    ///     and <see cref="StoragePrincipal" />.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="splitConfigured">Whether the storage settings describe a read/write split.</param>
+    /// <param name="stickyWindow">
+    ///     How long a principal reads the primary after it wrote
+    ///     (<c>Storage:ReadReplica:StickyAfterWriteSeconds</c>).
+    /// </param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
     public static IServiceCollection AddNinlilStorageRouting(
         this IServiceCollection instance,
-        bool splitConfigured
+        bool splitConfigured,
+        TimeSpan stickyWindow
     )
     {
-        instance.TryAddSingleton<IStorageReadRouter>(new StorageReadRouter(splitConfigured));
+        instance.TryAddSingleton<IStorageReadRouter>(
+            new StorageReadRouter(splitConfigured, stickyWindow)
+        );
         instance.TryAddScoped<StorageReadIntent>();
+        instance.TryAddScoped<StoragePrincipal>();
         return instance;
     }
 

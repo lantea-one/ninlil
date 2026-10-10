@@ -58,6 +58,14 @@ public interface IStorageReadRouter
     void Enable();
 
     /// <summary>
+    ///     This method records that a principal wrote just now. For the sticky window
+    ///     (<c>Storage:ReadReplica:StickyAfterWriteSeconds</c>) the scopes of that principal read
+    ///     the primary, so the principal sees its own writes however far the replica is behind.
+    /// </summary>
+    /// <param name="principalKey">The key of the principal, see <see cref="StoragePrincipal" />.</param>
+    void RecordWrite(string principalKey);
+
+    /// <summary>
     ///     This method decides where a scope reads from.
     /// </summary>
     /// <param name="intent">The intent of the scope.</param>
@@ -66,8 +74,8 @@ public interface IStorageReadRouter
     /// </param>
     /// <returns>
     ///     True only when a split is configured, the router is enabled, the scope asked for
-    ///     <see cref="StorageReadTargetEnum.Replica" /> and the replica is eligible (its last
-    ///     health check passed).
+    ///     <see cref="StorageReadTargetEnum.Replica" />, the replica is eligible (its last
+    ///     health check passed) and the principal did not write within the sticky window.
     /// </returns>
     bool UseReplica(StorageReadIntent intent, string principalKey);
 }

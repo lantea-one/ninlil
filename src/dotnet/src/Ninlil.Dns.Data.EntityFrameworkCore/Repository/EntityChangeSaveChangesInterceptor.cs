@@ -3,7 +3,10 @@ using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Repository;
@@ -214,6 +217,8 @@ public sealed class EntityChangeSaveChangesInterceptor(IEntityChangeNotifier not
         if (types.Length == 0)
             return;
 
+        ReportWrite(context);
+
         if (context?.Database.CurrentTransaction is not null)
         {
             State state = _states.GetOrCreateValue(context);
@@ -225,6 +230,21 @@ public sealed class EntityChangeSaveChangesInterceptor(IEntityChangeNotifier not
         }
 
         notifier.NotifyChanged(types);
+    }
+
+    /// <summary>
+    ///     This method tells the principal of the context's scope that a write happened.
+    /// </summary>
+    private static void ReportWrite(DbContext context)
+    {
+        if (context is null)
+            return;
+
+        context
+            .GetService<IDbContextOptions>()
+            .FindExtension<CoreOptionsExtension>()
+            ?.ApplicationServiceProvider?.GetService<StoragePrincipal>()
+            ?.ReportWrite();
     }
 
     /// <summary>

@@ -85,7 +85,10 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
 
         // The router sends a scope that asked for the replica to the read connection, once the
         // startup work is done and only when the settings describe a split.
-        instance.AddNinlilStorageRouting(composed.Replica != null);
+        instance.AddNinlilStorageRouting(
+            composed.Replica != null,
+            TimeSpan.FromSeconds(options.ReadReplica.StickyAfterWriteSeconds)
+        );
 
         // With a split, the monitor measures lag and schema of the replica and decides whether
         // the router may use it. The strings are the ones composed at startup: the storage
@@ -111,11 +114,15 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
                 }
 
                 // The first context of a scope fixes the intent of the whole scope, so a later
-                // attempt to change it throws instead of being ignored.
+                // attempt to change it throws instead of being ignored. The principal of the
+                // scope keeps a user who just wrote on the primary.
                 bool replica =
                     provider
                         .GetRequiredService<StorageReadIntent>()
-                        .ResolveUseReplica(provider.GetRequiredService<IStorageReadRouter>())
+                        .ResolveUseReplica(
+                            provider.GetRequiredService<IStorageReadRouter>(),
+                            provider.GetRequiredService<StoragePrincipal>().Key
+                        )
                     && strings.Replica != null;
 
                 if (replica)

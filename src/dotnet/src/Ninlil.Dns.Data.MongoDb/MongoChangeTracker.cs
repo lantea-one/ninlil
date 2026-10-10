@@ -1,5 +1,6 @@
 using MongoDB.Driver;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.MongoDb;
@@ -29,11 +30,17 @@ namespace Ninlil.Dns.Data.MongoDb;
 ///     The notifier told which entity types a flush wrote, once every write of the flush has
 ///     succeeded.
 /// </param>
+/// <param name="principal">
+///     The user the scope works for. A flush that wrote tells it, so the router keeps the user's
+///     next reads on the primary (read-your-own-writes). Null outside a dependency-injection
+///     scope that registers it.
+/// </param>
 public class MongoChangeTracker(
     IMongoClient client,
     NinlilDnsMongoContext context,
     MongoTransactionSupport transactionSupport,
-    IEntityChangeNotifier notifier
+    IEntityChangeNotifier notifier,
+    StoragePrincipal principal = null
 )
 {
     /// <summary>
@@ -138,6 +145,7 @@ public class MongoChangeTracker(
 
         // Every write has succeeded (an exception above skips this line), so tell the caches.
         notifier.NotifyChanged([.. operations.Select(item => item.EntityType).Distinct()]);
+        principal?.ReportWrite();
 
         return operations.Length;
     }
