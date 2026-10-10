@@ -29,6 +29,10 @@ namespace Ninlil.Web.Controllers;
 /// <param name="listAssignmentRepository">
 ///     Removes a deleted list's client-group assignments (see <see cref="Delete" />).
 /// </param>
+/// <param name="clientListAssignmentRepository">
+///     Removes a deleted list's direct client assignments (see <see cref="Delete" />).
+/// </param>
+/// <param name="entryRepository">Removes a deleted list's entries (see <see cref="Delete" />).</param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
 ///     Publishes <see cref="DnsFilterListChangedEvent" /> on every write so
@@ -43,6 +47,8 @@ namespace Ninlil.Web.Controllers;
 public class FilterListsController(
     IDnsFilterListRepository filterListRepository,
     IDnsClientGroupListAssignmentRepository listAssignmentRepository,
+    IDnsClientListAssignmentRepository clientListAssignmentRepository,
+    IDnsFilterListEntryRepository entryRepository,
     IUnitOfWork unitOfWork,
     IDnsServerEventPublisher eventPublisher,
     IOptionsMonitor<ClusterOptions> clusterOptions
@@ -304,11 +310,11 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This action deletes a list and the client-group assignments that refer to it (see
-    ///     <see cref="ClientGroupListAssignmentsController" />). <see cref="DnsFilterEngine" />
-    ///     would skip a missing list anyway, but the assignments are removed so join rows do not
-    ///     pile up. The list's entries and any direct client assignments are not removed. Returns
-    ///     404 for an unknown id. Requires <c>filterlists:write</c>.
+    ///     This action deletes a list together with its entries and every assignment that refers
+    ///     to it: client-group assignments (see <see cref="ClientGroupListAssignmentsController" />)
+    ///     and direct client assignments (see <see cref="ClientListAssignmentsController" />).
+    ///     Nothing is left behind. The removal runs in one transaction on the relational engines.
+    ///     Returns 404 for an unknown id. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("filterlists:write")]
@@ -318,16 +324,26 @@ public class FilterListsController(
         if (list is null)
             throw new NotFoundException("FilterList", id.ToString());
 
-        IReadOnlyList<DnsClientGroupListAssignmentEntity> assignments =
-            await listAssignmentRepository.ListAsync(
-                assignment => assignment.ListId == id,
-                stoppingToken
-            );
-        foreach (DnsClientGroupListAssignmentEntity assignment in assignments)
-            listAssignmentRepository.Remove(assignment);
+        // The entry delete runs in the database at once on the relational engines, so the
+        // whole removal sits in one transaction; MongoDB registers no factory.
+        IUnitOfWorkTransactionFactory transactionFactory =
+            HttpContext.RequestServices.GetService<IUnitOfWorkTransactionFactory>();
+        await using IUnitOfWorkTransaction transaction = transactionFactory is null
+            ? null
+            : await transactionFactory.BeginAsync(stoppingToken);
 
+        await DnsFilterListDependents.StageRemovalAsync(
+            id,
+            listAssignmentRepository,
+            clientListAssignmentRepository,
+            entryRepository,
+            stoppingToken
+        );
         filterListRepository.Remove(list);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        if (transaction is not null)
+            await transaction.CommitAsync(stoppingToken);
 
         eventPublisher.Publish(
             new DnsFilterListChangedEvent(DateTimeOffset.UtcNow, id, IsDeleted: true)

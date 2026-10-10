@@ -39,8 +39,8 @@ namespace Ninlil.Web.Controllers;
 ///         through the repositories behind <see cref="ClientListAssignmentsController" /> and
 ///         <see cref="ClientGroupListAssignmentsController" />, saving a second call. With a
 ///         target, <c>Disable</c> removes only that target's assignment and leaves the list and
-///         other targets alone. Without one, <c>Disable</c> deletes the list and every client and
-///         client-group assignment that refers to it.
+///         other targets alone. Without one, <c>Disable</c> deletes the list, its entries and
+///         every client and client-group assignment that refers to it.
 ///     </para>
 /// </summary>
 /// <param name="filterListRepository">Reads and writes the managed filter lists.</param>
@@ -52,6 +52,7 @@ namespace Ninlil.Web.Controllers;
 /// <param name="clientRepository">Confirms a <c>clientId</c> target exists.</param>
 /// <param name="clientGroupRepository">Confirms a <c>clientGroupId</c> target exists.</param>
 /// <param name="clientListAssignmentRepository">Creates and removes client assignments.</param>
+/// <param name="entryRepository">Removes the entries of a deleted list.</param>
 [ApiController]
 [Route("api/blocked-services")]
 public class BlockedServicesController(
@@ -60,7 +61,8 @@ public class BlockedServicesController(
     IUnitOfWork unitOfWork,
     IDnsClientRepository clientRepository,
     IDnsClientGroupRepository clientGroupRepository,
-    IDnsClientListAssignmentRepository clientListAssignmentRepository
+    IDnsClientListAssignmentRepository clientListAssignmentRepository,
+    IDnsFilterListEntryRepository entryRepository
 ) : ControllerBase
 {
     /// <summary>
@@ -180,9 +182,8 @@ public class BlockedServicesController(
 
     /// <summary>
     ///     This action disables one catalog entry. Without a target it deletes the entry's managed
-    ///     <see cref="DnsFilterListEntity" /> and every client and client-group assignment that
-    ///     refers to it (as <see cref="FilterListsController.Delete" /> does for group
-    ///     assignments). With a <c>clientId</c> or <c>clientGroupId</c> it removes only that
+    ///     <see cref="DnsFilterListEntity" />, its entries and every client and client-group
+    ///     assignment that refers to it (as <see cref="FilterListsController.Delete" /> does). With a <c>clientId</c> or <c>clientGroupId</c> it removes only that
     ///     target's assignment and leaves the list and every other target alone, so unblocking a
     ///     service for one device does not unblock it for everyone. Having nothing to remove is not
     ///     an error. Returns 400 when both targets are given and 404 for an unknown key. Requires
@@ -229,30 +230,44 @@ public class BlockedServicesController(
         }
         else
         {
-            IReadOnlyList<DnsClientGroupListAssignmentEntity> groupAssignments =
-                await listAssignmentRepository.ListAsync(
-                    assignment => assignment.ListId == existing.Id,
-                    stoppingToken
-                );
-            foreach (DnsClientGroupListAssignmentEntity assignment in groupAssignments)
-                listAssignmentRepository.Remove(assignment);
-
-            // A client assignment of this list can exist only from a targeted Enable; it is removed
-            // too so deleting the list leaves no dangling reference.
-            IReadOnlyList<DnsClientListAssignmentEntity> clientAssignments =
-                await clientListAssignmentRepository.ListAsync(
-                    assignment => assignment.ListId == existing.Id,
-                    stoppingToken
-                );
-            foreach (DnsClientListAssignmentEntity assignment in clientAssignments)
-                clientListAssignmentRepository.Remove(assignment);
-
-            filterListRepository.Remove(existing);
+            await DeleteManagedListAsync(existing, stoppingToken);
+            return NoContent();
         }
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
+    }
+
+    /// <summary>
+    ///     This method deletes a managed list together with its entries and every client and
+    ///     client-group assignment, as <see cref="FilterListsController.Delete" /> does. The
+    ///     entry delete runs at once on the relational engines, so the removal sits in one
+    ///     transaction there; MongoDB registers no transaction factory.
+    /// </summary>
+    private async Task DeleteManagedListAsync(
+        DnsFilterListEntity list,
+        CancellationToken stoppingToken
+    )
+    {
+        IUnitOfWorkTransactionFactory transactionFactory =
+            HttpContext.RequestServices.GetService<IUnitOfWorkTransactionFactory>();
+        await using IUnitOfWorkTransaction transaction = transactionFactory is null
+            ? null
+            : await transactionFactory.BeginAsync(stoppingToken);
+
+        await DnsFilterListDependents.StageRemovalAsync(
+            list.Id,
+            listAssignmentRepository,
+            clientListAssignmentRepository,
+            entryRepository,
+            stoppingToken
+        );
+        filterListRepository.Remove(list);
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        if (transaction is not null)
+            await transaction.CommitAsync(stoppingToken);
     }
 
     /// <summary>
