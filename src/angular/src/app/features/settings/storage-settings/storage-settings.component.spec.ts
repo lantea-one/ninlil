@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
-import { StorageEngineEnum, StorageService } from '../../../api-client';
+import { StorageEngineEnum, StorageService, StorageStatus } from '../../../api-client';
 import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { StorageSettingsComponent } from './storage-settings.component';
@@ -11,32 +11,45 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the Storage page: loading the status, per-engine validation, the switch request
- * and its result, permissions and errors. TestBed with a spy-backed `StorageService`,
+ * These tests cover the Storage page: loading the status, per-engine validation, scheduling a
+ * switch and its toast, the pending-switch card and cancel, the last outcome, the `targetHasData`
+ * warning, permissions and errors. TestBed with a spy-backed `StorageService`,
  * `NotificationService` and a stubbed `AuthService`.
  */
 describe('StorageSettingsComponent', () => {
-  let apiSpy: { apiStorageGet: jasmine.Spy; apiStorageSwitchPost: jasmine.Spy };
+  let apiSpy: {
+    apiStorageGet: jasmine.Spy;
+    apiStorageSwitchPost: jasmine.Spy;
+    apiStorageSwitchDelete: jasmine.Spy;
+  };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
   let authSpy: { hasPermission: jasmine.Spy };
 
-  async function createComponent(options?: { configureApi?: () => void; canManage?: boolean }) {
-    apiSpy = jasmine.createSpyObj('StorageService', ['apiStorageGet', 'apiStorageSwitchPost']);
+  const allEngines = [
+    StorageEngineEnum.Sqlite,
+    StorageEngineEnum.PostgreSql,
+    StorageEngineEnum.MySql,
+    StorageEngineEnum.SqlServer,
+  ];
+
+  async function createComponent(options?: {
+    configureApi?: () => void;
+    canManage?: boolean;
+    status?: StorageStatus;
+  }) {
+    apiSpy = jasmine.createSpyObj('StorageService', [
+      'apiStorageGet',
+      'apiStorageSwitchPost',
+      'apiStorageSwitchDelete',
+    ]);
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
     authSpy = jasmine.createSpyObj('AuthService', ['hasPermission']);
     authSpy.hasPermission.and.returnValue(options?.canManage ?? true);
 
     apiSpy.apiStorageGet.and.returnValue(
-      of({
-        engine: StorageEngineEnum.Sqlite,
-        switchInProgress: false,
-        liveSwitchSupportedEngines: [
-          StorageEngineEnum.Sqlite,
-          StorageEngineEnum.PostgreSql,
-          StorageEngineEnum.MySql,
-          StorageEngineEnum.SqlServer,
-        ],
-      }),
+      of(
+        options?.status ?? { engine: StorageEngineEnum.Sqlite, switchSupportedEngines: allEngines },
+      ),
     );
     options?.configureApi?.();
 
@@ -114,15 +127,16 @@ describe('StorageSettingsComponent', () => {
     expect(fixture.componentInstance.form.valid).toBeTrue();
   });
 
-  it('switchEngine() posts only the structured section matching the target engine and surfaces a success notification', async () => {
+  it('switchEngine() posts only the structured section matching the target engine and shows the server note as the toast', async () => {
+    const note = 'Set NINLIL_STORAGE_ENGINE and restart Ninlil.';
     const fixture = await createComponent({
       configureApi: () => {
         apiSpy.apiStorageSwitchPost.and.returnValue(
           of({
-            previousEngine: StorageEngineEnum.Sqlite,
-            newEngine: StorageEngineEnum.PostgreSql,
-            totalEntitiesRestored: 5,
-            entityCounts: { Zones: 1 },
+            targetEngine: StorageEngineEnum.PostgreSql,
+            appliesAutomatically: false,
+            targetHasData: false,
+            note,
           }),
         );
       },
@@ -152,12 +166,141 @@ describe('StorageSettingsComponent', () => {
         },
       },
     });
-    expect(notificationSpy.success).toHaveBeenCalledWith(
-      jasmine.stringContaining('no restart required'),
-    );
-    expect(fixture.componentInstance.lastResult()?.newEngine).toBe(StorageEngineEnum.PostgreSql);
-    // The password is cleared after a successful switch; it is never returned.
+    expect(notificationSpy.success).toHaveBeenCalledWith(note);
+    // The password is cleared after a successful request; it is never returned.
     expect(fixture.componentInstance.form.controls.postgreSqlPassword.value).toBe('');
+  });
+
+  it('warns that the copy replaces data when the target already holds Ninlil data', async () => {
+    const fixture = await createComponent({
+      configureApi: () => {
+        apiSpy.apiStorageSwitchPost.and.returnValue(
+          of({ targetEngine: StorageEngineEnum.Sqlite, targetHasData: true, note: 'Restart.' }),
+        );
+      },
+    });
+    expect(fixture.nativeElement.querySelector('.target-has-data')).toBeNull();
+
+    fixture.componentInstance.form.patchValue({ sqliteFilePath: '/var/lib/ninlil/new.sqlite3' });
+    await fixture.componentInstance.switchEngine();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.target-has-data')?.textContent).toContain(
+      'replaces it',
+    );
+  });
+
+  it('shows no data warning when the target is empty', async () => {
+    const fixture = await createComponent({
+      configureApi: () => {
+        apiSpy.apiStorageSwitchPost.and.returnValue(
+          of({ targetEngine: StorageEngineEnum.Sqlite, targetHasData: false, note: 'Restart.' }),
+        );
+      },
+    });
+
+    fixture.componentInstance.form.patchValue({ sqliteFilePath: '/var/lib/ninlil/new.sqlite3' });
+    await fixture.componentInstance.switchEngine();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.target-has-data')).toBeNull();
+  });
+
+  describe('pending switch', () => {
+    const pendingStatus: StorageStatus = {
+      engine: StorageEngineEnum.Sqlite,
+      switchSupportedEngines: allEngines,
+      pendingSwitch: {
+        targetEngine: StorageEngineEnum.PostgreSql,
+        requestedAtUtc: '2026-10-09T10:00:00Z',
+        requestedBy: 'admin',
+        appliesAutomatically: false,
+      },
+    };
+
+    it('is hidden when nothing is pending', async () => {
+      const fixture = await createComponent();
+
+      expect(fixture.nativeElement.querySelector('.pending-switch')).toBeNull();
+    });
+
+    it('shows the target, requester and the environment variable case', async () => {
+      const fixture = await createComponent({ status: pendingStatus });
+      const card: HTMLElement = fixture.nativeElement.querySelector('.pending-switch');
+
+      expect(card.textContent).toContain('PostgreSql');
+      expect(card.textContent).toContain('admin');
+      expect(card.textContent).toContain('environment variables');
+      expect(card.querySelector('.cancel-switch')).not.toBeNull();
+    });
+
+    it('hides Cancel without storage:manage', async () => {
+      const fixture = await createComponent({ status: pendingStatus, canManage: false });
+
+      expect(fixture.nativeElement.querySelector('.pending-switch')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.cancel-switch')).toBeNull();
+    });
+
+    it('Cancel sends DELETE and reloads the status', async () => {
+      const fixture = await createComponent({
+        status: pendingStatus,
+        configureApi: () => apiSpy.apiStorageSwitchDelete.and.returnValue(of(null)),
+      });
+      apiSpy.apiStorageGet.and.returnValue(
+        of({ engine: StorageEngineEnum.Sqlite, switchSupportedEngines: allEngines }),
+      );
+
+      fixture.nativeElement.querySelector('.cancel-switch').click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(apiSpy.apiStorageSwitchDelete).toHaveBeenCalled();
+      expect(fixture.nativeElement.querySelector('.pending-switch')).toBeNull();
+    });
+  });
+
+  describe('last outcome', () => {
+    it('shows rows copied after a success', async () => {
+      const fixture = await createComponent({
+        status: {
+          engine: StorageEngineEnum.PostgreSql,
+          switchSupportedEngines: allEngines,
+          lastSwitchOutcome: {
+            succeeded: true,
+            fromEngine: StorageEngineEnum.Sqlite,
+            toEngine: StorageEngineEnum.PostgreSql,
+            atUtc: '2026-10-09T10:00:00Z',
+            rowsCopied: 1234,
+            message: 'Copied.',
+          },
+        },
+      });
+      const card: HTMLElement = fixture.nativeElement.querySelector('.switch-outcome');
+
+      expect(card.textContent).toContain('succeeded');
+      expect(card.textContent).toContain('1234');
+    });
+
+    it('shows the failure message', async () => {
+      const fixture = await createComponent({
+        status: {
+          engine: StorageEngineEnum.Sqlite,
+          switchSupportedEngines: allEngines,
+          lastSwitchOutcome: {
+            succeeded: false,
+            fromEngine: StorageEngineEnum.Sqlite,
+            toEngine: StorageEngineEnum.MySql,
+            atUtc: '2026-10-09T10:00:00Z',
+            rowsCopied: 0,
+            message: 'Could not reach the target.',
+          },
+        },
+      });
+      const card: HTMLElement = fixture.nativeElement.querySelector('.switch-outcome');
+
+      expect(card.textContent).toContain('failed');
+      expect(card.textContent).toContain('Could not reach the target.');
+    });
   });
 
   it('shows an error message when the switch fails', async () => {

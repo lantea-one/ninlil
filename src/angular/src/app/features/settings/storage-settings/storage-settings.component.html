@@ -15,71 +15,105 @@
         <p>
           Currently active engine:
           <c-badge color="info">{{ currentStatus.engine }}</c-badge>
-          @if (currentStatus.switchInProgress) {
-            <c-badge color="warning" class="ms-2">Switch in progress</c-badge>
-          }
         </p>
+
+        @if (currentStatus.pendingSwitch; as pending) {
+          <c-alert color="warning" [dismissible]="false" class="pending-switch" role="status">
+            <p class="mb-1">
+              <strong>Switch to {{ pending.targetEngine }} pending.</strong>
+              It happens when Ninlil restarts.
+            </p>
+            <ul class="mb-2">
+              <li>Requested: {{ pending.requestedAtUtc | date: 'medium' }}</li>
+              <li>Requested by: {{ pending.requestedBy || 'unknown' }}</li>
+              <li>
+                @if (pending.appliesAutomatically) {
+                  Ninlil points its runtime configuration file at the target while it copies the
+                  data.
+                } @else {
+                  Storage is set by environment variables or another configuration source, so you
+                  must change those to the target engine before the restart.
+                }
+              </li>
+            </ul>
+            @if (canManage()) {
+              <button
+                cButton
+                color="warning"
+                size="sm"
+                class="cancel-switch"
+                [disabled]="cancelling()"
+                (click)="cancelSwitch()"
+              >
+                @if (cancelling()) {
+                  <c-spinner size="sm" />
+                } @else {
+                  Cancel
+                }
+              </button>
+            }
+          </c-alert>
+        }
+
+        @if (currentStatus.lastSwitchOutcome; as outcome) {
+          <c-alert
+            [color]="outcome.succeeded ? 'success' : 'danger'"
+            [dismissible]="false"
+            class="switch-outcome"
+            role="status"
+          >
+            <strong>Last switch, {{ outcome.atUtc | date: 'medium' }}:</strong>
+            @if (outcome.succeeded) {
+              {{ outcome.fromEngine }} to {{ outcome.toEngine }} succeeded; {{ outcome.rowsCopied }}
+              rows copied.
+            } @else {
+              {{ outcome.fromEngine }} to {{ outcome.toEngine }} failed.
+            }
+            @if (outcome.message) {
+              {{ outcome.message }}
+            }
+          </c-alert>
+        }
       }
 
-      @if (lastResult(); as result) {
-        <c-alert color="success" [dismissible]="false" role="alert">
-          Switched from {{ result.previousEngine }} to {{ result.newEngine }}, restoring
-          {{ result.totalEntitiesRestored }} rows across
-          {{ result.entityCounts ? (result.entityCounts | keyvalue).length : 0 }} entity types --
-          this process never restarted.
-        </c-alert>
+      @if (scheduled(); as result) {
+        @if (result.targetHasData) {
+          <c-alert color="warning" [dismissible]="false" class="target-has-data" role="alert">
+            The {{ result.targetEngine }} database already holds Ninlil data. The copy at the next
+            restart replaces it.
+          </c-alert>
+        }
       }
 
       <p class="text-body-secondary">
-        Switches this already-running server onto a different database engine, in place -- no
-        restart, no Docker, no systemd. This backs up the currently active engine, provisions and
-        migrates the target, flips this process onto it, and restores the backup into it. Only the
-        four relational engines below can be switched to or from live; MongoDB still requires
-        editing configuration and restarting.
+        Schedules a switch to a different database engine. Nothing changes now: Ninlil saves the
+        request, and at its next start it copies all its data from the current database into the
+        target and then uses the target. Restart Ninlil yourself to apply it. You can cancel a
+        pending switch until then.
       </p>
 
       <p class="hint">
-        Every zone, record, key, credential, user, role, API token, filter list, client group,
-        forwarder, webhook subscription, and DNS rewrite this server holds carries across -- this
-        reuses the exact same full backup/restore mechanism as the Backup &amp; Restore page, with
-        the same scope. The persistent query log, the zone-transfer journal, and server logs/metrics
-        are not included either way, for the same reason they're left out of a manual backup:
-        diagnostic history, not configuration this server needs in order to keep working.
+        The copy takes every table, the query log included. A failed copy leaves the current
+        database as it was and Ninlil keeps using it; the last outcome above says what happened.
       </p>
 
       <p class="hint">
-        The target is connected to and fully migrated <em>before</em> anything about this server's
-        live storage changes -- a wrong host name, an unreachable server, or a rejected username/
-        password is caught right there, and the switch stops with this server still serving every
-        request from its current engine, completely untouched. Only once the target has proven
-        reachable does the switch back up the current engine and start copying data into it; a
-        problem at that later stage reverts this process back onto the engine that was active before
-        you clicked Switch, whose own data was never touched either. While a switch is running,
-        every other administrative request (including this page's own other tabs) is briefly
-        rejected with a 503 rather than risking a confusing, half-restored answer -- real DNS query
-        resolution keeps running throughout, since it's served from this server's own in-memory zone
-        cache, not read fresh from the database on every query.
+        <strong>Warning:</strong> if the target database already holds Ninlil data, the copy
+        replaces it.
       </p>
 
       <p class="hint">
-        <strong>Warning:</strong> if the target database is reachable and already holds real data --
-        an existing production database mistaken for a scratch one, for example -- that data is
-        wiped and overwritten with this server's own restored data during this switch, exactly like
-        a manual restore on the Backup &amp; Restore page. Double-check the connection details below
-        actually point at a database you intend to overwrite.
+        Which settings decide the engine matters. When the runtime configuration file decides,
+        Ninlil points it at the target itself. When environment variables decide (the usual case
+        with Docker), Ninlil cannot change them: after you schedule the switch, set
+        <code>NINLIL_STORAGE_ENGINE</code> and <code>NINLIL_STORAGE_CONNECTION_STRING</code> to the
+        target and restart. The copy runs at the first start that points at the target. The old
+        database stays as it was and is not updated afterwards.
       </p>
 
       <p class="hint">
-        <strong>Warning:</strong> this switch changes what this already-running process uses in
-        memory only -- it does not rewrite this server's own on-disk configuration to match. If this
-        process is ever restarted after switching (a container restart, a host reboot, a manual
-        stop/start), it comes back up on whichever engine its configuration file's own "Storage"
-        section still names, which -- unless you update that yourself afterward -- is the engine you
-        just switched away from, not this one. Treat a live switch as provisional until the
-        persisted configuration is updated to match; also worth knowing: the previous engine's own
-        data is left exactly as it was, untouched and still switchable back to at any time, but
-        frozen at the moment you switched away from it -- nothing written while running on the new
-        engine appears there automatically.
+        MongoDB cannot be a source or target of a switch. Switching is refused while a read replica
+        or a cluster setting is configured: remove it, switch, then configure it again.
       </p>
 
       <form cForm [formGroup]="form" class="settings-form">
@@ -87,7 +121,7 @@
           <label cCol="sm-3" cLabel for="storage-target-engine">Target engine</label>
           <c-col sm="9">
             <select cSelect id="storage-target-engine" formControlName="targetEngine">
-              @for (engine of status()?.liveSwitchSupportedEngines ?? []; track engine) {
+              @for (engine of status()?.switchSupportedEngines ?? []; track engine) {
                 <option [value]="engine">{{ engine }}</option>
               }
             </select>
@@ -301,7 +335,7 @@
         @if (switching()) {
           <c-spinner size="sm" />
         } @else {
-          Switch now
+          Schedule switch
         }
       </button>
     </c-card-footer>

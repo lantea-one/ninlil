@@ -1,4 +1,4 @@
-import { KeyValuePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import {
   NonNullableFormBuilder,
@@ -25,9 +25,9 @@ import {
 import { firstValueFrom } from 'rxjs';
 import {
   StorageEngineEnum,
-  StorageEngineSwitchResult,
   StorageService,
   StorageStatus,
+  StorageSwitchScheduled,
 } from '../../../api-client';
 import { AuthService } from '../../../core/auth/auth.service';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
@@ -42,7 +42,7 @@ import {
  * This map lists the connection-field controls of each storage engine (not `targetEngine`).
  * `applyValidatorsForEngine` makes only the selected engine's fields required, so a hidden section
  * never blocks the switch. `StorageEngineEnum.MongoDb` has no entry because it is never offered:
- * the engine select lists only the backend's `liveSwitchSupportedEngines`.
+ * the engine select lists only the backend's `switchSupportedEngines`.
  */
 const CONTROL_NAMES_BY_ENGINE: Readonly<Record<string, readonly string[]>> = {
   [StorageEngineEnum.Sqlite]: ['sqliteFilePath'],
@@ -81,18 +81,19 @@ const PORT_CONTROL_NAMES: ReadonlySet<string> = new Set([
 
 /**
  * This component is the "Storage" settings page (`/settings/storage`). It shows the active storage
- * engine from `GET /api/storage` (`storage:read`) and, with `storage:manage`, switches the running
- * server to another engine through `POST /api/storage/switch`: the backend backs up the current
- * engine, prepares and migrates the target, moves the process onto it and restores the backup into
- * it, without a restart (see `StorageEngineSwitchService`). The form asks for structured
- * connection fields per engine (a file path for SQLite; host, port, database, user, password and
- * encryption mode for the others) rather than a connection string.
+ * engine, the pending and last storage switch and the primary and read-replica status from
+ * `GET /api/storage` (`storage:read`). With `storage:manage` it schedules a switch to another engine
+ * through `POST /api/storage/switch` and cancels a pending one through `DELETE /api/storage/switch`.
+ * Scheduling only saves the request: the server copies the data at its next restart (see the
+ * explanatory text in the template). The form asks for structured connection fields per engine (a
+ * file path for SQLite; host, port, database, user, password and encryption mode for the others)
+ * rather than a connection string.
  *
  * <p>Only the selected engine's fields are required (see {@link CONTROL_NAMES_BY_ENGINE}), matching
  * the checks in `StorageConnectionStringAssembler`: host, database name, user name and encryption
  * mode required, port 1 to 65535.
  *
- * <p>Only the engines in {@link StorageStatus.liveSwitchSupportedEngines} are offered. MongoDB is not,
+ * <p>Only the engines in {@link StorageStatus.switchSupportedEngines} are offered. MongoDB is not,
  * since it uses separate repositories this switch cannot move to or from; it needs a configuration
  * change and a restart.
  */
@@ -100,7 +101,7 @@ const PORT_CONTROL_NAMES: ReadonlySet<string> = new Set([
   selector: 'app-storage-settings',
   imports: [
     ReactiveFormsModule,
-    KeyValuePipe,
+    DatePipe,
     AlertComponent,
     BadgeComponent,
     ButtonDirective,
@@ -127,9 +128,12 @@ export class StorageSettingsComponent implements OnInit {
 
   readonly loading = signal(true);
   readonly switching = signal(false);
+  readonly cancelling = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly status = signal<StorageStatus | null>(null);
-  readonly lastResult = signal<StorageEngineSwitchResult | null>(null);
+
+  /** The answer to the switch scheduled in this session; its `targetHasData` flag drives a warning. */
+  readonly scheduled = signal<StorageSwitchScheduled | null>(null);
 
   /** Whether the user may switch engines; without `storage:manage` the page only shows the status. */
   readonly canManage = computed(() => this.authService.hasPermission('storage:manage'));
@@ -171,13 +175,17 @@ export class StorageSettingsComponent implements OnInit {
     void this.loadStatus();
   }
 
-  /** This method switches the storage engine, sending only the selected engine's connection fields. */
+  /**
+   * This method schedules the storage switch, sending only the selected engine's connection fields.
+   * The success toast is the server's own note, which says whether Ninlil edits the configuration or
+   * the operator must change environment variables.
+   */
   async switchEngine(): Promise<void> {
     if (this.form.invalid || this.switching() || !this.canManage()) return;
 
     this.switching.set(true);
     this.errorMessage.set(null);
-    this.lastResult.set(null);
+    this.scheduled.set(null);
 
     const value: StorageSettingsFormValue = this.form.getRawValue();
 
@@ -187,11 +195,11 @@ export class StorageSettingsComponent implements OnInit {
           storageEngineSwitchApiRequest: buildStorageSwitchRequest(value),
         }),
       );
-      this.lastResult.set(result);
+      this.scheduled.set(result);
       this.notification.success(
-        `Switched from ${result.previousEngine} to ${result.newEngine}, restoring ${result.totalEntitiesRestored} rows -- no restart required.`,
+        result.note || `Switch to ${result.targetEngine} scheduled for the next restart.`,
       );
-      // The switch response has no password, and a later switch needs it typed again.
+      // The response has no password, and a later switch needs it typed again.
       this.form.patchValue({
         postgreSqlPassword: '',
         mySqlPassword: '',
@@ -202,6 +210,25 @@ export class StorageSettingsComponent implements OnInit {
       this.errorMessage.set(extractErrorMessage(error, 'Could not switch the storage engine.'));
     } finally {
       this.switching.set(false);
+    }
+  }
+
+  /** This method cancels the pending switch (`DELETE /api/storage/switch`) and reloads the status. */
+  async cancelSwitch(): Promise<void> {
+    if (this.cancelling() || !this.canManage()) return;
+
+    this.cancelling.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      await firstValueFrom(this.storageApi.apiStorageSwitchDelete());
+      this.scheduled.set(null);
+      this.notification.success('The pending storage switch was cancelled.');
+      await this.loadStatus();
+    } catch (error) {
+      this.errorMessage.set(extractErrorMessage(error, 'Could not cancel the storage switch.'));
+    } finally {
+      this.cancelling.set(false);
     }
   }
 
