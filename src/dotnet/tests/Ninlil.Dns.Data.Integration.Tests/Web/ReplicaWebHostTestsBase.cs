@@ -3,13 +3,16 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv4;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.Abstractions.Routing;
 using Ninlil.Dns.Identity.Token;
 using Ninlil.Dns.Server.Backup.Crypto;
+using Ninlil.Dns.Server.Rewrites;
 using Ninlil.Web.Models;
 
 // Define our namespace.
@@ -28,7 +31,15 @@ namespace Ninlil.Dns.Data.Integration.Tests.Web;
 ///         </item>
 ///         <item>
 ///             sign-in, DHCP allocation and backup export read the primary although the replica is
-///             behind.
+///             behind;
+///         </item>
+///         <item>
+///             the DNS rewrite cache sees a rewrite saved through the API at once although the
+///             replica is behind (its reload after a local change reads the primary);
+///         </item>
+///         <item>
+///             <c>GET /api/storage</c> and <c>GET /status</c> report the replica, its lag and the
+///             routed reads, and turn Degraded while the replica serves no reads.
 ///         </item>
 ///     </list>
 ///     One subclass per engine supplies the host and the engine settings. The sticky window is
@@ -422,6 +433,105 @@ public abstract class ReplicaWebHostTestsBase(ReplicatedEngineHost host)
             Assert.Equal(HttpStatusCode.OK, backup.StatusCode);
             Assert.Contains(domain, ReadBackupText(await backup.Content.ReadAsByteArrayAsync()));
         });
+
+    /// <summary>
+    ///     With replication paused and the replica eligible, the DNS rewrite cache (the real
+    ///     singleton of the running application) answers with a rewrite saved through the API on
+    ///     its very next read, while the replica still lacks the row. The save expires the cache,
+    ///     and an expired load reads the primary.
+    /// </summary>
+    [Fact]
+    public Task RewriteCache_RightAfterAnApiSaveWhileReplicationIsPaused_AnswersFromThePrimary() =>
+        WithHostAsync(async web =>
+        {
+            HttpClient admin = await web.LoginAdminAsync();
+            string suffix = Guid.NewGuid().ToString("N")[..8];
+            DnsRewriteCache cache = web.Services.GetRequiredService<DnsRewriteCache>();
+            await cache.GetAsync();
+            await web.SettleAsync();
+            await host.PauseReplicationAsync(web.Database);
+
+            string domain = $"dnspath-{suffix}.example";
+            await web.CreateRewriteAsync(admin, domain);
+
+            // A replica read does not have the row, the cache does.
+            await using (AsyncServiceScope scope = web.Services.CreateAsyncScope())
+            {
+                IServiceScopeFactory factory =
+                    scope.ServiceProvider.GetRequiredService<IServiceScopeFactory>();
+                await using AsyncServiceScope replica = factory.CreateReplicaReadScope();
+                Assert.DoesNotContain(
+                    await replica
+                        .ServiceProvider.GetRequiredService<IDnsRewriteRepository>()
+                        .ListEnabledAsync(),
+                    rewrite => rewrite.Domain.TrimEnd('.') == domain
+                );
+            }
+
+            Assert.True((await cache.GetAsync()).Exact.ContainsKey(domain));
+        });
+
+    /// <summary>
+    ///     The storage status lists the primary and the replica, counts routed reads, and follows
+    ///     the replica when it falls behind: while replication is paused and writes continue, the
+    ///     health monitor's check makes the replica ineligible, <c>GET /api/storage</c> says why
+    ///     and <c>GET /status</c> shows the storage component Degraded with the reason; after
+    ///     the replica catches up both return to normal.
+    /// </summary>
+    [Fact]
+    public Task StorageStatus_FollowsTheReplicaIntoLagAndBack() =>
+        WithHostAsync(async web =>
+        {
+            HttpClient admin = await web.LoginAdminAsync();
+            string suffix = Guid.NewGuid().ToString("N")[..8];
+            await web.CreateUserAsync(admin, $"statusreader{suffix}", "dnsrewrites:read");
+            HttpClient reader = await web.LoginUserAsync($"statusreader{suffix}");
+            await web.SettleAsync();
+
+            // A replica read, then the status.
+            await web.RewriteDomainsAsync(reader);
+            StorageStatus healthy = await admin.GetFromJsonAsync<StorageStatus>("/api/storage");
+            Assert.NotNull(healthy.ReadReplica);
+            Assert.True(healthy.ReadReplica.Configured);
+            Assert.True(healthy.ReadReplica.Eligible, healthy.ReadReplica.Reason);
+            Assert.True(healthy.ReadReplica.SchemaCurrent);
+            Assert.NotNull(healthy.ReadReplica.LastCheckedAtUtc);
+            Assert.True(healthy.ReadReplica.ReadsToReplica >= 1);
+            Assert.True(healthy.ReadReplica.ReadsToPrimary >= 1);
+            Assert.NotEmpty(healthy.Primary.Hosts);
+            Assert.DoesNotContain("Password", JsonSerializer.Serialize(healthy));
+            Assert.Equal("Healthy", await StorageComponentStatusAsync(admin));
+
+            // The replica falls behind: writes continue on the primary.
+            await host.PauseReplicationAsync(web.Database);
+            ReplicaHealthMonitor monitor = web.Services.GetRequiredService<ReplicaHealthMonitor>();
+            DateTime giveUp = DateTime.UtcNow.AddSeconds(60);
+            int index = 0;
+            while (web.Router.ReplicaHealth.IsEligible && DateTime.UtcNow < giveUp)
+            {
+                await web.CreateRewriteAsync(admin, $"lag{index++}-{suffix}.example.");
+                await Task.Delay(1500);
+                await monitor.CheckOnceAsync(CancellationToken.None);
+            }
+
+            StorageStatus lagging = await admin.GetFromJsonAsync<StorageStatus>("/api/storage");
+            Assert.False(lagging.ReadReplica.Eligible);
+            Assert.NotEmpty(lagging.ReadReplica.Reason);
+            Assert.Equal("Degraded", await StorageComponentStatusAsync(admin));
+
+            // Back to normal after the catch-up.
+            await host.ResumeReplicationAsync(web.Database);
+            await web.SettleAsync();
+            StorageStatus recovered = await admin.GetFromJsonAsync<StorageStatus>("/api/storage");
+            Assert.True(recovered.ReadReplica.Eligible, recovered.ReadReplica.Reason);
+            Assert.Equal("Healthy", await StorageComponentStatusAsync(admin));
+        });
+
+    private static async Task<string> StorageComponentStatusAsync(HttpClient admin)
+    {
+        StatusResponse status = await admin.GetFromJsonAsync<StatusResponse>("/status");
+        return status.Components.Single(component => component.Name == "storage").Status;
+    }
 
     private static string ReadBackupText(byte[] archive)
     {
