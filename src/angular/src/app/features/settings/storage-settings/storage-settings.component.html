@@ -116,6 +116,13 @@
         or a cluster setting is configured: remove it, switch, then configure it again.
       </p>
 
+      @if (currentReplica()) {
+        <c-alert color="info" [dismissible]="false" class="replica-blocks-switch" role="status">
+          A read replica is configured, so a switch is refused. Remove the replica settings, switch,
+          then configure the replica again.
+        </c-alert>
+      }
+
       <form cForm [formGroup]="form" class="settings-form">
         <c-row class="mb-3">
           <label cCol="sm-3" cLabel for="storage-target-engine">Target engine</label>
@@ -329,7 +336,7 @@
       <button
         cButton
         color="primary"
-        [disabled]="form.invalid || switching() || !canManage()"
+        [disabled]="form.invalid || switching() || !canManage() || !!currentReplica()"
         (click)="switchEngine()"
       >
         @if (switching()) {
@@ -340,4 +347,88 @@
       </button>
     </c-card-footer>
   </c-card>
+
+  @if (status(); as currentStatus) {
+    <c-card class="form-card replica-card">
+      <c-card-header>
+        <strong>Primary and read replica</strong>
+      </c-card-header>
+
+      <c-card-body>
+        <p>
+          Primary:
+          @if (currentStatus.primary?.hosts?.length) {
+            <code class="primary-hosts">{{ currentStatus.primary?.hosts?.join(', ') }}</code>
+          } @else {
+            <span class="text-body-secondary primary-hosts">no server host (a file, or none)</span>
+          }
+        </p>
+
+        @if (currentStatus.readReplica; as replica) {
+          <p>
+            Read replica:
+            @if (replica.eligible) {
+              <c-badge color="success" class="replica-state">Eligible</c-badge>
+            } @else {
+              <c-badge color="warning" class="replica-state">Degraded</c-badge>
+            }
+          </p>
+          @if (!replica.eligible) {
+            <p class="hint replica-reason">
+              Reads go to the primary.
+              {{ replica.reason || 'The replica has not been checked yet.' }}
+            </p>
+          }
+          <dl class="replica-details">
+            <dt>Hosts</dt>
+            <dd>
+              @if (replica.hosts?.length) {
+                {{ replica.hosts?.join(', ') }}
+              } @else {
+                the replica set members above
+              }
+            </dd>
+            @if (replica.readPreference) {
+              <dt>Read preference</dt>
+              <dd>{{ replica.readPreference }}</dd>
+            }
+            <dt>Lag</dt>
+            <dd>
+              {{
+                replica.lagSeconds !== null && replica.lagSeconds !== undefined
+                  ? replica.lagSeconds + ' s'
+                  : 'unknown'
+              }}
+            </dd>
+            <dt>Schema</dt>
+            <dd>{{ replica.schemaCurrent ? 'current' : 'behind the primary' }}</dd>
+            <dt>Last check</dt>
+            <dd>
+              {{ replica.lastCheckedAtUtc ? (replica.lastCheckedAtUtc | date: 'medium') : 'never' }}
+            </dd>
+            <dt>Reads to the replica</dt>
+            <dd class="replica-reads-replica">{{ replica.readsToReplica }}</dd>
+            <dt>Scopes on the primary</dt>
+            <dd class="replica-reads-primary">{{ replica.readsToPrimary }}</dd>
+          </dl>
+        } @else {
+          <p class="replica-none text-body-secondary">
+            No read replica is configured: every read and write uses the primary.
+          </p>
+        }
+
+        <p class="hint">
+          Replica settings are not editable here. Set them as environment variables or in the
+          runtime configuration file, then restart:
+        </p>
+        <ul class="hint replica-variables">
+          @for (variable of replicaVariables; track variable) {
+            <li>
+              <code>{{ variable }}</code>
+            </li>
+          }
+        </ul>
+      </c-card-body>
+    </c-card>
+  }
 }

@@ -19,3 +19,13 @@
   font-size: var(--ninlil-font-size-sm);
   color: var(--cui-secondary-color);
 }
+
+.replica-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ninlil-space-1) var(--ninlil-space-4);
+
+  dd {
+    margin: 0;
+  }
+}

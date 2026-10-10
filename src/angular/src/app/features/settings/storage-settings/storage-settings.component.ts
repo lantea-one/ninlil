@@ -80,6 +80,30 @@ const PORT_CONTROL_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * This constant lists the read-replica and per-engine topology settings as environment variables
+ * (see `ENVIRONMENT.md`). The page shows them read-only: the settings come from the environment or
+ * the runtime configuration file, never from this page.
+ */
+const REPLICA_VARIABLES: readonly string[] = [
+  'NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING',
+  'NINLIL_STORAGE_READ_REPLICA_STICKY_AFTER_WRITE_SECONDS',
+  'NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS',
+  'NINLIL_STORAGE_READ_REPLICA_LAG_CHECK_INTERVAL_SECONDS',
+  'NINLIL_STORAGE_POSTGRESQL_TARGET_SESSION_ATTRIBUTES',
+  'NINLIL_STORAGE_POSTGRESQL_REPLICA_TARGET_SESSION_ATTRIBUTES',
+  'NINLIL_STORAGE_POSTGRESQL_LOAD_BALANCE_HOSTS',
+  'NINLIL_STORAGE_POSTGRESQL_HOST_RECHECK_SECONDS',
+  'NINLIL_STORAGE_MYSQL_LOAD_BALANCE',
+  'NINLIL_STORAGE_MYSQL_REPLICA_LOAD_BALANCE',
+  'NINLIL_STORAGE_SQLSERVER_MULTI_SUBNET_FAILOVER',
+  'NINLIL_STORAGE_MONGODB_REPLICA_SET',
+  'NINLIL_STORAGE_MONGODB_READ_PREFERENCE',
+  'NINLIL_STORAGE_MONGODB_MAX_STALENESS_SECONDS',
+  'NINLIL_STORAGE_MONGODB_WRITE_CONCERN',
+  'NINLIL_STORAGE_MONGODB_JOURNAL',
+];
+
+/**
  * This component is the "Storage" settings page (`/settings/storage`). It shows the active storage
  * engine, the pending and last storage switch and the primary and read-replica status from
  * `GET /api/storage` (`storage:read`). With `storage:manage` it schedules a switch to another engine
@@ -88,6 +112,10 @@ const PORT_CONTROL_NAMES: ReadonlySet<string> = new Set([
  * explanatory text in the template). The form asks for structured connection fields per engine (a
  * file path for SQLite; host, port, database, user, password and encryption mode for the others)
  * rather than a connection string.
+ *
+ * <p>A second card shows the primary hosts and, when a read replica is configured, its health
+ * (Eligible or Degraded, lag, schema, last check, read counters) and disables scheduling, because
+ * the server refuses a switch while replica settings exist.
  *
  * <p>Only the selected engine's fields are required (see {@link CONTROL_NAMES_BY_ENGINE}), matching
  * the checks in `StorageConnectionStringAssembler`: host, database name, user name and encryption
@@ -137,6 +165,12 @@ export class StorageSettingsComponent implements OnInit {
 
   /** Whether the user may switch engines; without `storage:manage` the page only shows the status. */
   readonly canManage = computed(() => this.authService.hasPermission('storage:manage'));
+
+  /** The topology setting variables the replica card lists (see {@link REPLICA_VARIABLES}). */
+  readonly replicaVariables = REPLICA_VARIABLES;
+
+  /** The read-replica status, or null without a split; the server refuses a switch while it is set. */
+  readonly currentReplica = computed(() => this.status()?.readReplica ?? null);
 
   /** The valid `encryptionMode` values per engine (see {@link ENCRYPTION_MODE_OPTIONS_BY_ENGINE}). */
   readonly encryptionModeOptions = ENCRYPTION_MODE_OPTIONS_BY_ENGINE;

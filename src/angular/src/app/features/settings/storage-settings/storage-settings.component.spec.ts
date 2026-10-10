@@ -13,7 +13,7 @@ function flushMicrotasks(): Promise<void> {
 /**
  * These tests cover the Storage page: loading the status, per-engine validation, scheduling a
  * switch and its toast, the pending-switch card and cancel, the last outcome, the `targetHasData`
- * warning, permissions and errors. TestBed with a spy-backed `StorageService`,
+ * warning, the primary and read-replica card in each of its states, the refusal message, permissions and errors. TestBed with a spy-backed `StorageService`,
  * `NotificationService` and a stubbed `AuthService`.
  */
 describe('StorageSettingsComponent', () => {
@@ -300,6 +300,107 @@ describe('StorageSettingsComponent', () => {
 
       expect(card.textContent).toContain('failed');
       expect(card.textContent).toContain('Could not reach the target.');
+    });
+  });
+
+  it('shows the 400 message of a refused switch verbatim', async () => {
+    const message =
+      'A read replica or cluster setting is configured; remove it, switch, then configure it again.';
+    const fixture = await createComponent({
+      configureApi: () => {
+        apiSpy.apiStorageSwitchPost.and.returnValue(
+          throwError(() => new HttpErrorResponse({ status: 400, error: message })),
+        );
+      },
+    });
+
+    fixture.componentInstance.form.patchValue({ sqliteFilePath: '/var/lib/ninlil/new.sqlite3' });
+    await fixture.componentInstance.switchEngine();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('c-alert[role="alert"]').textContent).toContain(
+      message,
+    );
+  });
+
+  describe('primary and read replica card', () => {
+    const baseStatus: StorageStatus = {
+      engine: StorageEngineEnum.PostgreSql,
+      switchSupportedEngines: allEngines,
+      primary: { hosts: ['db1:5432', 'db2:5432'] },
+    };
+
+    function text(fixture: { nativeElement: HTMLElement }, selector: string): string {
+      return fixture.nativeElement.querySelector(selector)?.textContent ?? '';
+    }
+
+    it('without a split shows the primary hosts and that no replica is configured', async () => {
+      const fixture = await createComponent({ status: baseStatus });
+
+      expect(text(fixture, '.primary-hosts')).toContain('db1:5432, db2:5432');
+      expect(fixture.nativeElement.querySelector('.replica-none')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.replica-state')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.replica-blocks-switch')).toBeNull();
+    });
+
+    it('lists the topology setting variables read-only', async () => {
+      const fixture = await createComponent({ status: baseStatus });
+      const list = text(fixture, '.replica-variables');
+
+      expect(list).toContain('NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING');
+      expect(list).toContain('NINLIL_STORAGE_MONGODB_READ_PREFERENCE');
+    });
+
+    it('an eligible replica shows the Eligible badge, lag and counters', async () => {
+      const fixture = await createComponent({
+        status: {
+          ...baseStatus,
+          readReplica: {
+            configured: true,
+            eligible: true,
+            lagSeconds: 1.5,
+            schemaCurrent: true,
+            lastCheckedAtUtc: '2026-10-09T10:00:00Z',
+            reason: '',
+            readsToReplica: 120,
+            readsToPrimary: 30,
+            hosts: ['standby:5432'],
+          },
+        },
+      });
+
+      expect(text(fixture, '.replica-state')).toContain('Eligible');
+      expect(text(fixture, '.replica-details')).toContain('1.5 s');
+      expect(text(fixture, '.replica-details')).toContain('standby:5432');
+      expect(text(fixture, '.replica-reads-replica')).toContain('120');
+      expect(text(fixture, '.replica-reads-primary')).toContain('30');
+      expect(fixture.nativeElement.querySelector('.replica-reason')).toBeNull();
+    });
+
+    it('a replica that is not eligible shows Degraded and the reason, and disables scheduling', async () => {
+      const fixture = await createComponent({
+        status: {
+          ...baseStatus,
+          readReplica: {
+            configured: true,
+            eligible: false,
+            lagSeconds: null,
+            schemaCurrent: false,
+            lastCheckedAtUtc: null,
+            reason: 'The replica is 30 s behind.',
+            readsToReplica: 0,
+            readsToPrimary: 4,
+            hosts: [],
+          },
+        },
+      });
+
+      expect(text(fixture, '.replica-state')).toContain('Degraded');
+      expect(text(fixture, '.replica-reason')).toContain('The replica is 30 s behind.');
+      expect(text(fixture, '.replica-details')).toContain('unknown');
+      expect(fixture.nativeElement.querySelector('.replica-blocks-switch')).not.toBeNull();
+      const button: HTMLButtonElement = fixture.nativeElement.querySelector('c-card-footer button');
+      expect(button.disabled).toBeTrue();
     });
   });
 
