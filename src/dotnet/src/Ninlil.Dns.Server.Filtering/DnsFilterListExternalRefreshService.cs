@@ -178,11 +178,21 @@ public sealed class DnsFilterListExternalRefreshService(
 
         DnsFilterListEntity tracked = await listRepository.GetByIdAsync(list.Id, stoppingToken);
 
-        if (tracked is not null)
+        if (tracked is null)
         {
-            tracked.LastFetchedAtUtc = DateTimeOffset.UtcNow;
-            listRepository.Update(tracked);
+            // The list was deleted while the fetch ran. Returning without a save or a commit
+            // discards the replace (the transaction rolls back on the relational engines, the
+            // staged operations die with the scope on MongoDB), so no entries are left for an id
+            // that no longer exists.
+            logger.LogInformation(
+                "Block/allow list '{ListName}' was deleted during its refresh; the fetched entries are discarded.",
+                list.Name
+            );
+            return;
         }
+
+        tracked.LastFetchedAtUtc = DateTimeOffset.UtcNow;
+        listRepository.Update(tracked);
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 

@@ -47,6 +47,12 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
     private WebApplication _fakeServer;
     private string _served = AdblockList;
 
+    /// <summary>
+    ///     This field is run by the <c>/filter-then-delete</c> route before it answers, so a test
+    ///     can delete the list while the refresh is fetching it.
+    /// </summary>
+    private Action _onFetch;
+
     public async Task InitializeAsync()
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -54,6 +60,14 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
         builder.Logging.ClearProviders();
         _fakeServer = builder.Build();
         _fakeServer.MapGet("/filter.txt", () => Results.Text(_served, "text/plain"));
+        _fakeServer.MapGet(
+            "/filter-then-delete",
+            () =>
+            {
+                _onFetch?.Invoke();
+                return Results.Text(_served, "text/plain");
+            }
+        );
         await _fakeServer.StartAsync();
     }
 
@@ -391,6 +405,46 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
         );
         Assert.Equal(3, harness.Entries.LoadedListIds.Count);
         Assert.Equal(subscribed.Id, harness.Entries.LoadedListIds[2]);
+    }
+
+    /// <summary>
+    ///     This test deletes the list while the refresh fetches it. The refresh must log that and
+    ///     finish without an error and without recording a fetch or reporting a refresh.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_WhenTheListIsDeletedDuringTheFetch_LogsItAndReportsNoRefresh()
+    {
+        Harness harness = new();
+        DnsFilterListEntity list = harness.Subscribe(
+            $"{_fakeServer.Urls.First()}/filter-then-delete",
+            DnsFilterListActionEnum.Block
+        );
+        _onFetch = () => harness.Lists.Items.Remove(list);
+
+        DnsFilterListExternalRefreshService service = new(
+            harness.Provider.GetRequiredService<IServiceScopeFactory>(),
+            harness.Provider.GetRequiredService<IHttpClientFactory>(),
+            new StaticOptionsMonitor<DnsFilterOptions>(harness.Options),
+            harness.RefreshLog,
+            harness.Cache
+        );
+        await service.StartAsync(CancellationToken.None);
+
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+        while (
+            !harness.RefreshLog.Messages.Any(message => message.Contains("was deleted"))
+            && DateTime.UtcNow < deadline
+        )
+            await Task.Delay(20);
+
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.Contains(harness.RefreshLog.Messages, message => message.Contains("was deleted"));
+        Assert.DoesNotContain(
+            harness.RefreshLog.Messages,
+            message => message.StartsWith("Refreshed block/allow list", StringComparison.Ordinal)
+        );
+        Assert.Null(list.LastFetchedAtUtc);
     }
 
     private sealed class AnsweringResolver : IDnsQueryResolver
