@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
 using Ninlil.Dns.Common.Enum;
@@ -7,6 +8,8 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.EngineHosts;
 using Ninlil.Dns.Data.EntityFrameworkCore;
+using Ninlil.Dns.Data.MongoDb;
+using Ninlil.Dns.Data.MongoDb.Maintenance;
 using Ninlil.Dns.Identity;
 
 // Define our namespace.
@@ -195,17 +198,25 @@ public static class BenchmarkDataSet
 
     /// <summary>
     ///     This method creates the schema of a relational database from the real migrations, so
-    ///     the benchmarks see the indexes a real installation has. It does nothing on MongoDB.
+    ///     the benchmarks see the indexes a real installation has. On MongoDB it runs the startup
+    ///     guard instead, which creates the indexes the host creates.
     /// </summary>
     public static async Task MigrateAsync(EngineDatabase database)
     {
+        NinlilDnsMongoContext mongoContext = database.Services.GetService<NinlilDnsMongoContext>();
+        if (mongoContext != null)
+        {
+            await MongoStartupGuard.RunAsync(mongoContext, NullLogger.Instance);
+            return;
+        }
+
         try
         {
             await database.CreateContext().Database.MigrateAsync();
         }
         catch (InvalidOperationException)
         {
-            // MongoDB has no EF context and no migrations.
+            // No EF context is registered: nothing to migrate.
         }
     }
 
