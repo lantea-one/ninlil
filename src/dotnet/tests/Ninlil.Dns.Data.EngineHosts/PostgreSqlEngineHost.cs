@@ -12,9 +12,14 @@ namespace Ninlil.Dns.Data.EngineHosts;
 /// </summary>
 public sealed class PostgreSqlEngineHost : EngineHost
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(
-        "postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
-    )
+    /// <summary>
+    ///     This constant contains the pinned image, shared with
+    ///     <see cref="PostgreSqlReplicatedEngineHost" /> so one digest line serves both.
+    /// </summary>
+    internal const string Image =
+        "postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea";
+
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(Image)
         .WithPortBinding(PostgreSqlBuilder.PostgreSqlPort, assignRandomHostPort: true)
         .Build();
 

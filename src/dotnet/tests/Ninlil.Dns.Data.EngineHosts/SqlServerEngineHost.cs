@@ -13,9 +13,14 @@ namespace Ninlil.Dns.Data.EngineHosts;
 /// </summary>
 public sealed class SqlServerEngineHost : EngineHost
 {
-    private readonly MsSqlContainer _container = new MsSqlBuilder(
-        "mcr.microsoft.com/mssql/server:2022-latest@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090"
-    )
+    /// <summary>
+    ///     This constant contains the pinned image, shared with
+    ///     <see cref="SqlServerReplicatedEngineHost" /> so one digest line serves both.
+    /// </summary>
+    internal const string Image =
+        "mcr.microsoft.com/mssql/server:2022-latest@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090";
+
+    private readonly MsSqlContainer _container = new MsSqlBuilder(Image)
         .WithPortBinding(MsSqlBuilder.MsSqlPort, assignRandomHostPort: true)
         .Build();
 

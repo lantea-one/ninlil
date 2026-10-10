@@ -12,9 +12,14 @@ namespace Ninlil.Dns.Data.EngineHosts;
 /// </summary>
 public sealed class MySqlEngineHost : EngineHost
 {
-    private readonly MySqlContainer _container = new MySqlBuilder(
-        "public.ecr.aws/docker/library/mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242"
-    )
+    /// <summary>
+    ///     This constant contains the pinned image, shared with
+    ///     <see cref="MySqlReplicatedEngineHost" /> so one digest line serves both.
+    /// </summary>
+    internal const string Image =
+        "public.ecr.aws/docker/library/mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242";
+
+    private readonly MySqlContainer _container = new MySqlBuilder(Image)
         .WithUsername("root")
         .WithPortBinding(MySqlBuilder.MySqlPort, assignRandomHostPort: true)
         .Build();

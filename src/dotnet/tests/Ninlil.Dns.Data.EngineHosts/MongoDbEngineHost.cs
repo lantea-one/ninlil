@@ -14,7 +14,11 @@ namespace Ninlil.Dns.Data.EngineHosts;
 /// <param name="replicaSet">Whether to start the server as a single-node replica set.</param>
 public sealed class MongoDbEngineHost(bool replicaSet = true) : EngineHost
 {
-    private const string Image =
+    /// <summary>
+    ///     This constant contains the pinned image, shared with
+    ///     <see cref="MongoDbReplicaSetEngineHost" /> so one digest line serves both.
+    /// </summary>
+    internal const string Image =
         "public.ecr.aws/docker/library/mongo:8@sha256:d731d77bfd7afd66bd487bdf627b5bf7ce4c3602ec461d635977021db529ebbc";
 
     private readonly MongoDbContainer _container = CreateContainer(replicaSet);
