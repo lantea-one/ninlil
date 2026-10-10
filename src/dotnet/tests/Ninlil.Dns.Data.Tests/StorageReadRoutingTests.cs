@@ -83,7 +83,7 @@ public sealed class StorageReadRoutingTests
     public void ResolveUseReplica_CalledTwice_AsksTheRouterOnce()
     {
         StorageReadRouter router = new(splitConfigured: true);
-        router.Enable();
+        router.EnableWithAnEligibleReplica();
         StorageReadIntent intent = new();
         intent.Set(StorageReadTargetEnum.Replica);
 
@@ -107,7 +107,7 @@ public sealed class StorageReadRoutingTests
     public void UseReplica_WithoutASplit_ReturnsFalseAndCountsNothing()
     {
         StorageReadRouter router = new(splitConfigured: false);
-        router.Enable();
+        router.EnableWithAnEligibleReplica();
         StorageReadIntent intent = new();
         intent.Set(StorageReadTargetEnum.Replica);
 
@@ -119,7 +119,7 @@ public sealed class StorageReadRoutingTests
     public void UseReplica_ForAPrimaryIntent_ReturnsFalse()
     {
         StorageReadRouter router = new(splitConfigured: true);
-        router.Enable();
+        router.EnableWithAnEligibleReplica();
 
         Assert.False(router.UseReplica(new StorageReadIntent(), null));
     }
@@ -185,7 +185,7 @@ public sealed class StorageReadRoutingTests
     public void RelationalContext_WithoutASplit_AlwaysUsesThePrimary()
     {
         using ServiceProvider services = RelationalServices(withReplica: false);
-        services.GetRequiredService<IStorageReadRouter>().Enable();
+        services.GetRequiredService<IStorageReadRouter>().EnableWithAnEligibleReplica();
 
         using IServiceScope scope = services.CreateScope();
         scope
@@ -215,7 +215,7 @@ public sealed class StorageReadRoutingTests
     public void RelationalContext_WithAReplicaIntentAfterEnable_ReadsTheReplicaWithoutTracking()
     {
         using ServiceProvider services = RelationalServices(withReplica: true);
-        services.GetRequiredService<IStorageReadRouter>().Enable();
+        services.GetRequiredService<IStorageReadRouter>().EnableWithAnEligibleReplica();
 
         using AsyncServiceScope scope = services
             .GetRequiredService<IServiceScopeFactory>()
@@ -231,7 +231,7 @@ public sealed class StorageReadRoutingTests
     public void RelationalContext_WithThePrimaryIntent_UsesThePrimaryEvenWithASplit()
     {
         using ServiceProvider services = RelationalServices(withReplica: true);
-        services.GetRequiredService<IStorageReadRouter>().Enable();
+        services.GetRequiredService<IStorageReadRouter>().EnableWithAnEligibleReplica();
 
         using IServiceScope scope = services.CreateScope();
         NinlilDnsContext context = scope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
@@ -244,7 +244,7 @@ public sealed class StorageReadRoutingTests
     public void RelationalContext_SettingTheIntentAfterResolvingARepository_Throws()
     {
         using ServiceProvider services = RelationalServices(withReplica: true);
-        services.GetRequiredService<IStorageReadRouter>().Enable();
+        services.GetRequiredService<IStorageReadRouter>().EnableWithAnEligibleReplica();
 
         using IServiceScope scope = services.CreateScope();
         scope.ServiceProvider.GetRequiredService<IZoneRepository>();
@@ -260,7 +260,7 @@ public sealed class StorageReadRoutingTests
     public async Task RelationalContext_ForAReplicaScope_RefusesTheStartupMigrationAndTheBulkReplace()
     {
         using ServiceProvider services = RelationalServices(withReplica: true);
-        services.GetRequiredService<IStorageReadRouter>().Enable();
+        services.GetRequiredService<IStorageReadRouter>().EnableWithAnEligibleReplica();
 
         await using AsyncServiceScope scope = services
             .GetRequiredService<IServiceScopeFactory>()
@@ -285,7 +285,7 @@ public sealed class StorageReadRoutingTests
     public void MongoContext_WithoutASplit_IsThePrimaryEvenForAReplicaIntent()
     {
         using ServiceProvider services = MongoServices(withReadPreference: false);
-        services.GetRequiredService<IStorageReadRouter>().Enable();
+        services.GetRequiredService<IStorageReadRouter>().EnableWithAnEligibleReplica();
 
         using AsyncServiceScope scope = services
             .GetRequiredService<IServiceScopeFactory>()
@@ -308,7 +308,7 @@ public sealed class StorageReadRoutingTests
                 early.ServiceProvider.GetRequiredService<NinlilDnsMongoContext>().IsReplicaView
             );
 
-        router.Enable();
+        router.EnableWithAnEligibleReplica();
 
         using (AsyncServiceScope replica = factory.CreateReplicaReadScope())
         {
@@ -335,7 +335,7 @@ public sealed class StorageReadRoutingTests
     public async Task MongoContext_ForAReplicaScope_RefusesStagingSavingAndDriverWrites()
     {
         using ServiceProvider services = MongoServices(withReadPreference: true);
-        services.GetRequiredService<IStorageReadRouter>().Enable();
+        services.GetRequiredService<IStorageReadRouter>().EnableWithAnEligibleReplica();
 
         await using AsyncServiceScope scope = services
             .GetRequiredService<IServiceScopeFactory>()
