@@ -18,6 +18,13 @@ namespace Ninlil.Dns.Server.Core.ClientIdentity;
 ///         the next time-to-live expiry, so a database outage does not turn into one failing
 ///         query per DNS query.
 ///     </para>
+///     <para>
+///         <see cref="Expire" /> is the stricter signal for a known local write: the next
+///         <see cref="GetAsync" /> waits for a load that starts after the call, so a change saved
+///         through the API is visible to the very next read in this process. Readers that arrive
+///         while that load runs wait for the same one. If the load fails, they get the last good
+///         value and the failure is logged.
+///     </para>
 /// </summary>
 /// <typeparam name="T">The immutable snapshot type.</typeparam>
 /// <param name="loader">Reads the rows and builds a new snapshot; called by one refresh at a time.</param>
@@ -53,6 +60,19 @@ public sealed class RefreshingSnapshot<T>(
     private volatile Entry _entry;
 
     /// <summary>
+    ///     This field counts calls to <see cref="Expire" />. It is written under
+    ///     <see cref="_gate" />.
+    /// </summary>
+    private long _expireGeneration;
+
+    /// <summary>
+    ///     This field is the value of <see cref="_expireGeneration" /> when the most recently
+    ///     finished load started. While it is below <see cref="_expireGeneration" /> the value is
+    ///     known to be out of date and readers wait for a new load.
+    /// </summary>
+    private long _servedGeneration;
+
+    /// <summary>
     ///     This field is the running refresh loop, or <see langword="null" /> when idle.
     /// </summary>
     private Task _running;
@@ -74,10 +94,26 @@ public sealed class RefreshingSnapshot<T>(
         if (entry is null)
             return new ValueTask<T>(LoadFirstAsync(stoppingToken));
 
+        if (Volatile.Read(ref _servedGeneration) < Volatile.Read(ref _expireGeneration))
+            return new ValueTask<T>(LoadExpiredAsync(stoppingToken));
+
         if (timeProvider.GetUtcNow() - entry.LoadedAtUtc >= timeToLive)
             StartIfIdle();
 
         return new ValueTask<T>(entry.Value);
+    }
+
+    /// <summary>
+    ///     This method marks the value out of date because the rows it was built from changed.
+    ///     It does not load: the next <see cref="GetAsync" /> awaits one load that starts after
+    ///     this call (readers arriving meanwhile join it), so that read sees the change. A load
+    ///     that is already running and started earlier is followed by another one. This method is
+    ///     cheap and never blocks, so it is safe to call from a change-notification callback.
+    /// </summary>
+    public void Expire()
+    {
+        lock (_gate)
+            _expireGeneration++;
     }
 
     /// <summary>
@@ -129,6 +165,29 @@ public sealed class RefreshingSnapshot<T>(
     }
 
     /// <summary>
+    ///     This method waits for a load that started after the latest <see cref="Expire" /> and
+    ///     returns the value it left, or the last good value when that load failed.
+    /// </summary>
+    private async Task<T> LoadExpiredAsync(CancellationToken stoppingToken)
+    {
+        Task running;
+        lock (_gate)
+        {
+            // Another reader's load may have finished while this one waited for the lock.
+            if (_servedGeneration >= _expireGeneration)
+                return _entry.Value;
+
+            // A running load that started before the expiry reruns by itself (see RunAsync), so
+            // joining it is enough and concurrent readers share one load.
+            _running ??= Task.Run(RunAsync);
+            running = _running;
+        }
+
+        await running.WaitAsync(stoppingToken);
+        return _entry.Value;
+    }
+
+    /// <summary>
     ///     This method waits for the first load and returns the value it produced.
     /// </summary>
     private async Task<T> LoadFirstAsync(CancellationToken stoppingToken)
@@ -145,6 +204,10 @@ public sealed class RefreshingSnapshot<T>(
     {
         while (true)
         {
+            long startedAtGeneration;
+            lock (_gate)
+                startedAtGeneration = _expireGeneration;
+
             try
             {
                 using CancellationTokenSource timeout = new(RefreshTimeout, timeProvider);
@@ -166,7 +229,13 @@ public sealed class RefreshingSnapshot<T>(
 
             lock (_gate)
             {
-                if (!_runAgain)
+                // A failed load also counts as served: readers get the last good value rather
+                // than retrying on every query. The time-to-live retries it.
+                _servedGeneration = startedAtGeneration;
+
+                // Load again for a refresh requested mid-load, and for an Expire that landed
+                // after this load started (its rows may predate the change).
+                if (!_runAgain && _servedGeneration >= _expireGeneration)
                 {
                     _running = null;
                     return;
