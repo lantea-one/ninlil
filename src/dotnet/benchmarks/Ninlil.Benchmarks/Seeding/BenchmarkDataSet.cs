@@ -36,7 +36,7 @@ public static class BenchmarkDataSet
     ///     This constant contains the version of the generator; it is part of the database name
     ///     and of the marker zone name.
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>
     ///     This constant contains the seed of the random generator.
@@ -271,7 +271,8 @@ public static class BenchmarkDataSet
 
     /// <summary>
     ///     This method generates query-log rows over <see cref="QueryLogSpan" /> before
-    ///     <paramref name="now" />: clients and names follow a Zipf distribution, A queries are
+    ///     <paramref name="now" />, oldest first, with time-ordered version 7 ids like the real
+    ///     log writes: clients and names follow a Zipf distribution, A queries are
     ///     60 %, AAAA 25 %, HTTPS 8 % and the rest TXT or MX; NoError is 85 %, NXDOMAIN 10 % and
     ///     SERVFAIL 5 %.
     /// </summary>
@@ -286,17 +287,27 @@ public static class BenchmarkDataSet
         ZipfSampler identifiers = new(shape.QueryLogClientIdentifiers);
         ZipfSampler names = new(shape.QueryLogNames);
 
-        for (int index = 0; index < (count ?? shape.QueryLogEntries); index++)
+        int total = count ?? shape.QueryLogEntries;
+
+        for (int index = 0; index < total; index++)
         {
             int clientRank = clients.Next(random);
             double typeRoll = random.NextDouble();
             double codeRoll = random.NextDouble();
+
+            // Rows are produced oldest first, one time slice each, with a random instant inside
+            // the slice, because a real log is written in time order: row position then follows
+            // OccurredAtUtc, and so do the table rows an index on it points at. A random order
+            // would make every index-driven read a random read and overstate its cost.
+            double slice = QueryLogSpan.Ticks / (double)total;
             DateTimeOffset occurred =
-                now - TimeSpan.FromTicks((long)(random.NextDouble() * QueryLogSpan.Ticks));
+                now
+                - QueryLogSpan
+                + TimeSpan.FromTicks((long)((index + random.NextDouble()) * slice));
 
             yield return new DnsQueryLogEntryEntity
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.CreateVersion7(occurred),
                 CreatedAtUtc = occurred,
                 OccurredAtUtc = occurred,
                 ClientAddress = ClientAddress(clientRank),

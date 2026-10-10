@@ -11,8 +11,8 @@ namespace Ninlil.Benchmarks.Storage;
 
 /// <summary>
 ///     This class measures the claim lookup behind every token-authenticated request:
-///     <c>UserClaimsBuilder.BuildClaimsAsync</c> for a user with three roles (one claims query
-///     per role today).
+///     <c>UserClaimsBuilder.BuildClaimsAsync</c> for a user with three roles (one query for
+///     the claims of all the roles).
 /// </summary>
 [Config(typeof(StorageConfig))]
 public class AuthBenchmarks : StorageBenchmarkBase

@@ -5,6 +5,7 @@ using Ninlil.Benchmarks.Seeding;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Authoritative.Cache;
 
 // Define our namespace.
 namespace Ninlil.Benchmarks.Storage;
@@ -97,11 +98,26 @@ public class RecordBenchmarks : StorageBenchmarkBase
         );
 
     /// <summary>
-    ///     Loads every enabled zone and the records of each, the way
-    ///     <c>AuthoritativeZoneCache.StartAsync</c> does.
+    ///     Starts a real <c>AuthoritativeZoneCache</c>: every enabled zone, then one query for
+    ///     the records of every answerable zone.
     /// </summary>
     [Benchmark]
-    public Task<int> ZoneCacheStartupLoad() =>
+    public async Task<int> ZoneCacheStartupLoad()
+    {
+        AuthoritativeZoneCache cache = new(
+            Database.Services.GetRequiredService<IServiceScopeFactory>()
+        );
+        await cache.StartAsync(CancellationToken.None);
+        return 1;
+    }
+
+    /// <summary>
+    ///     Loads every enabled zone and then the records of each zone with one query per zone
+    ///     (<c>ListByZoneIdAsync</c>, tracked) and builds each <c>CachedZone</c>, the way the zone cache loaded before the bulk
+    ///     load. Kept as the baseline for <see cref="ZoneCacheStartupLoad" />.
+    /// </summary>
+    [Benchmark]
+    public Task<int> ZoneCacheStartupLoadPerZone() =>
         InScopeAsync(async provider =>
         {
             IReadOnlyList<ZoneEntity> zones = await provider
@@ -111,7 +127,10 @@ public class RecordBenchmarks : StorageBenchmarkBase
             int total = 0;
 
             foreach (ZoneEntity zone in zones)
-                total += (await records.ListByZoneIdAsync(zone.Id)).Count;
+            {
+                IReadOnlyList<RecordEntity> zoneRecords = await records.ListByZoneIdAsync(zone.Id);
+                total += new CachedZone(zone, zoneRecords).Zone is null ? 0 : zoneRecords.Count;
+            }
 
             return total;
         });
