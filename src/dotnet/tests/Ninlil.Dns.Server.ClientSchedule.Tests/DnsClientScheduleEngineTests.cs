@@ -36,12 +36,15 @@ public sealed class DnsClientScheduleEngineTests
         "2026-09-15T03:00:00Z"
     );
 
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         public readonly InMemoryDnsClientRepository Clients = new();
         public readonly InMemoryDnsClientGroupRepository Groups = new();
         public readonly InMemoryDnsClientScheduleRepository ClientSchedules = new();
         public readonly InMemoryDnsClientGroupScheduleRepository GroupSchedules = new();
+        public readonly InMemoryDnsClientAddressRepository ClientAddresses = new();
+        public readonly EntityChangeNotifier Notifier = new();
+        public readonly IServiceScopeFactory ScopeFactory;
         public readonly DnsClientScheduleEngine Engine;
 
         /// <param name="identityResolver">
@@ -58,6 +61,7 @@ public sealed class DnsClientScheduleEngineTests
         {
             ServiceCollection services = new();
             services.AddSingleton<IDnsClientRepository>(Clients);
+            services.AddSingleton<IDnsClientAddressRepository>(ClientAddresses);
             services.AddSingleton<IDnsClientScheduleRepository>(ClientSchedules);
             services.AddSingleton<IDnsClientGroupScheduleRepository>(GroupSchedules);
 
@@ -68,11 +72,56 @@ public sealed class DnsClientScheduleEngineTests
                 .BuildServiceProvider()
                 .GetRequiredService<IServiceScopeFactory>();
 
+            ScopeFactory = scopeFactory;
+
             Engine = new DnsClientScheduleEngine(
-                scopeFactory,
-                NullLogger<DnsClientScheduleEngine>.Instance,
-                identityResolver
+                new DnsClientScheduleCache(
+                    scopeFactory,
+                    Notifier,
+                    NullLogger<DnsClientScheduleCache>.Instance
+                ),
+                identityResolver,
+                new DnsClientDirectory(
+                    scopeFactory,
+                    Notifier,
+                    NullLogger<DnsClientDirectory>.Instance
+                )
             );
+        }
+
+        /// <summary>
+        ///     This method stands in for the committed save a real repository write ends with: the
+        ///     in-memory repositories have no unit of work, so the fixture's setup helpers (and
+        ///     tests that change a row afterwards) raise the signal themselves, for the entity
+        ///     types the caches watch.
+        /// </summary>
+        public void Changed() =>
+            Notifier.NotifyChanged([
+                typeof(DnsClientEntity),
+                typeof(DnsClientAddressEntity),
+                typeof(DnsClientGroupEntity),
+                typeof(DnsClientScheduleEntity),
+                typeof(DnsClientGroupScheduleEntity),
+            ]);
+
+        /// <summary>
+        ///     This method registers an identifier for a client.
+        /// </summary>
+        public void AddAddress(Guid clientId, ClientIdentityResolution resolution)
+        {
+            Clients.Addresses.Add(
+                (resolution.ClientIdentifier, resolution.ProtocolVersion, clientId)
+            );
+            ClientAddresses.Items.Add(
+                new DnsClientAddressEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ClientId = clientId,
+                    ClientIdentifier = resolution.ClientIdentifier,
+                    ProtocolVersion = resolution.ProtocolVersion,
+                }
+            );
+            Changed();
         }
 
         public DnsClientEntity AddClient(
@@ -90,9 +139,7 @@ public sealed class DnsClientScheduleEngineTests
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             };
             Clients.Items.Add(client);
-            Clients.Addresses.Add(
-                (Resolution.ClientIdentifier, Resolution.ProtocolVersion, client.Id)
-            );
+            AddAddress(client.Id, Resolution);
             return client;
         }
 
@@ -106,6 +153,7 @@ public sealed class DnsClientScheduleEngineTests
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             };
             Groups.Items.Add(group);
+            Changed();
             return group;
         }
 
@@ -116,7 +164,8 @@ public sealed class DnsClientScheduleEngineTests
             TimeOnly end,
             string timeZoneId = "Asia/Tokyo",
             bool isDisabled = false
-        ) =>
+        )
+        {
             ClientSchedules.Items.Add(
                 new DnsClientScheduleEntity
                 {
@@ -130,6 +179,8 @@ public sealed class DnsClientScheduleEngineTests
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                 }
             );
+            Changed();
+        }
 
         public void AddGroupSchedule(
             Guid groupId,
@@ -138,7 +189,8 @@ public sealed class DnsClientScheduleEngineTests
             TimeOnly end,
             string timeZoneId = "Asia/Tokyo",
             bool isDisabled = false
-        ) =>
+        )
+        {
             GroupSchedules.Items.Add(
                 new DnsClientGroupScheduleEntity
                 {
@@ -152,6 +204,8 @@ public sealed class DnsClientScheduleEngineTests
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                 }
             );
+            Changed();
+        }
     }
 
     private static DnsScheduleDayOfWeekEnum SchoolNights() =>
@@ -434,13 +488,7 @@ public sealed class DnsClientScheduleEngineTests
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         fixture.Clients.Items.Add(unrelatedClient);
-        fixture.Clients.Addresses.Add(
-            (
-                unrelatedResolution.ClientIdentifier,
-                unrelatedResolution.ProtocolVersion,
-                unrelatedClient.Id
-            )
-        );
+        fixture.AddAddress(unrelatedClient.Id, unrelatedResolution);
 
         DnsClientScheduleDecision pausedClientDecision = await fixture.Engine.EvaluateAsync(
             ClientAddress,
@@ -457,8 +505,8 @@ public sealed class DnsClientScheduleEngineTests
 
     /// <summary>
     ///     This test checks that clearing <see cref="DnsClientEntity.PausedUntilUtc" /> (what
-    ///     <c>ClientsController.Resume</c> does) unblocks the next evaluation at once: the engine
-    ///     caches no decision.
+    ///     <c>ClientsController.Resume</c> does) unblocks the next evaluation at once: the saved
+    ///     change expires the cached client.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_ResumingAPausedClient_UnblocksImmediately()
@@ -472,8 +520,10 @@ public sealed class DnsClientScheduleEngineTests
         );
         Assert.True(pausedDecision.IsBlocked);
 
-        // Do what ClientsController.Resume does, on the same stored entity.
+        // Do what ClientsController.Resume does, on the same stored entity: change the row and
+        // save, which raises the change signal.
         client.PausedUntilUtc = null;
+        fixture.Changed();
 
         DnsClientScheduleDecision resumedDecision = await fixture.Engine.EvaluateAsync(
             ClientAddress,

@@ -9,7 +9,7 @@ namespace Ninlil.Dns.Server.Core.ClientIdentity;
 
 /// <summary>
 ///     This class is the in-memory lookup from a client identifier to the registered client that
-///     owns it. The DNS-path engines (the filter engine today) call <see cref="FindAsync" /> after
+///     owns it. The DNS-path engines (filter, rewrite and schedule) call <see cref="FindAsync" /> after
 ///     <see cref="IClientIdentityResolver" /> has turned a source address into an identifier, so
 ///     a query does not join clients and client addresses in the database.
 ///     <para>
@@ -140,7 +140,12 @@ public sealed class DnsClientDirectory : IDisposable
 
         Dictionary<Guid, DnsClientInfo> byId = clients.ToDictionary(
             client => client.Id,
-            client => new DnsClientInfo(client.Id, client.ClientGroupId, client.IsDisabled)
+            client => new DnsClientInfo(
+                client.Id,
+                client.ClientGroupId,
+                client.IsDisabled,
+                client.PausedUntilUtc
+            )
         );
         Dictionary<(string, InternetProtocolVersionEnum), DnsClientInfo> byIdentifier = new(
             addresses.Count,
@@ -210,4 +215,10 @@ public sealed class DnsClientDirectory : IDisposable
 /// <param name="ClientId">The <c>Id</c> of the client.</param>
 /// <param name="ClientGroupId">The client's group, or <see langword="null" /> when it has none.</param>
 /// <param name="IsDisabled">Whether the client is disabled, so no per-client setting applies to it.</param>
-public sealed record DnsClientInfo(Guid ClientId, Guid? ClientGroupId, bool IsDisabled);
+/// <param name="PausedUntilUtc">The end of the client's instant pause, or <see langword="null" /> when it has none.</param>
+public sealed record DnsClientInfo(
+    Guid ClientId,
+    Guid? ClientGroupId,
+    bool IsDisabled,
+    DateTimeOffset? PausedUntilUtc = null
+);
