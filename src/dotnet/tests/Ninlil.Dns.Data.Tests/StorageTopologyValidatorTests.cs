@@ -83,6 +83,86 @@ public sealed class StorageTopologyValidatorTests
     }
 
     [Theory]
+    [InlineData(59, true)]
+    [InlineData(60, false)]
+    [InlineData(300, false)]
+    public void Validate_MaxLagReachingTheShortestCacheRefresh_IsRefused(int maxLag, bool accepted)
+    {
+        // The sticky window is larger than the lag, so only the cache rule can refuse.
+        StorageOptions options = new() { Engine = StorageEngineEnum.PostgreSql };
+        options.ReadReplica.ConnectionString = "Host=replica";
+        options.ReadReplica.StickyAfterWriteSeconds = 600;
+        options.ReadReplica.MaxLagSeconds = maxLag;
+
+        if (accepted)
+        {
+            Assert.Empty(StorageTopologyValidator.Validate(options));
+            return;
+        }
+
+        DatabaseStartupRefusedException refusal = Assert.Throws<DatabaseStartupRefusedException>(
+            () =>
+                StorageTopologyValidator.Validate(options)
+        );
+        Assert.Contains("Storage:ReadReplica:MaxLagSeconds", refusal.Message);
+        Assert.Contains("60", refusal.Message);
+    }
+
+    [Fact]
+    public void Validate_MaxLagReachingTheShortestCacheRefresh_IsIgnoredWithoutAReplica()
+    {
+        StorageOptions options = new() { Engine = StorageEngineEnum.PostgreSql };
+        options.ReadReplica.StickyAfterWriteSeconds = 600;
+        options.ReadReplica.MaxLagSeconds = 120;
+
+        Assert.Empty(StorageTopologyValidator.Validate(options));
+    }
+
+    [Fact]
+    public void HasClusterSettings_WithDefaults_IsFalse()
+    {
+        Assert.False(StorageTopologyValidator.HasClusterSettings(new StorageOptions()));
+    }
+
+    [Fact]
+    public void HasClusterSettings_WithAReplicaConnectionString_IsTrue()
+    {
+        StorageOptions options = new() { Engine = StorageEngineEnum.PostgreSql };
+        options.ReadReplica.ConnectionString = "Host=replica";
+
+        Assert.True(StorageTopologyValidator.HasClusterSettings(options));
+    }
+
+    [Theory]
+    [InlineData(StorageEngineEnum.PostgreSql, true)]
+    [InlineData(StorageEngineEnum.MySql, false)]
+    public void HasClusterSettings_CountsOnlyTheSectionOfTheEngineInUse(
+        StorageEngineEnum engine,
+        bool expected
+    )
+    {
+        StorageOptions options = new() { Engine = engine };
+        options.PostgreSql.HostRecheckSeconds = 3;
+
+        Assert.Equal(expected, StorageTopologyValidator.HasClusterSettings(options));
+    }
+
+    [Fact]
+    public void HasClusterSettings_ForEachEnginesOwnSetting_IsTrue()
+    {
+        StorageOptions mySql = new() { Engine = StorageEngineEnum.MySql };
+        mySql.MySql.LoadBalance = "FailOver";
+        StorageOptions sqlServer = new() { Engine = StorageEngineEnum.SqlServer };
+        sqlServer.SqlServer.MultiSubnetFailover = true;
+        StorageOptions mongo = new() { Engine = StorageEngineEnum.MongoDb };
+        mongo.MongoDb.ReplicaSet = "rs0";
+
+        Assert.True(StorageTopologyValidator.HasClusterSettings(mySql));
+        Assert.True(StorageTopologyValidator.HasClusterSettings(sqlServer));
+        Assert.True(StorageTopologyValidator.HasClusterSettings(mongo));
+    }
+
+    [Theory]
     [InlineData(0, 5, 5)]
     [InlineData(10, -1, 5)]
     [InlineData(10, 5, 0)]

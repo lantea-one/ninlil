@@ -16,6 +16,15 @@ namespace Ninlil.Dns.Data.Abstractions.Topology;
 public static class StorageTopologyValidator
 {
     /// <summary>
+    ///     This constant is the shortest time-to-live of an in-memory cache that reloads from a
+    ///     read replica: the client directory, rewrites, schedules and forwarders refresh every
+    ///     60 seconds. A replica allowed to lag that far could answer a refresh with rows older
+    ///     than what the cache loaded from the primary after a local save, so a change would
+    ///     briefly revert. <c>MaxLagSeconds</c> must stay below it.
+    /// </summary>
+    public const int ShortestReplicaCacheTimeToLiveSeconds = 60;
+
+    /// <summary>
     ///     This method checks <paramref name="options" /> and returns the warnings.
     /// </summary>
     /// <param name="options">The storage configuration to check.</param>
@@ -78,9 +87,43 @@ public static class StorageTopologyValidator
                     + "not yet received their own save."
             );
 
+        // A cache refresh by age reads the replica (see RefreshingSnapshot); a replica that is
+        // allowed to be as old as the cache itself could hand back data older than the cache holds.
+        if (hasSplit && replica.MaxLagSeconds >= ShortestReplicaCacheTimeToLiveSeconds)
+            throw Refusal(
+                $"{Key(nameof(StorageOptions.ReadReplica), nameof(StorageReadReplicaOptions.MaxLagSeconds))} "
+                    + $"({replica.MaxLagSeconds}) must be below {ShortestReplicaCacheTimeToLiveSeconds}, "
+                    + "the shortest refresh interval of the in-memory caches; otherwise a refresh could "
+                    + "return data older than the cache already holds."
+            );
+
         WarnForOtherEngines(options, warnings);
         return warnings;
     }
+
+    /// <summary>
+    ///     This method reports whether any read replica or cluster setting of the engine in use
+    ///     is set. The storage switch refuses a request while this is true: the settings belong to
+    ///     one engine and may come from environment variables Ninlil cannot change, so the
+    ///     operator removes them first.
+    /// </summary>
+    /// <param name="options">The storage configuration in use.</param>
+    /// <returns>
+    ///     True when <c>Storage:ReadReplica:ConnectionString</c> is set, or when any setting of
+    ///     the section for <see cref="StorageOptions.Engine" /> differs from its unset value.
+    ///     Windows and intervals alone do not count, and sections of other engines are only
+    ///     warnings at startup.
+    /// </returns>
+    public static bool HasClusterSettings(StorageOptions options) =>
+        !string.IsNullOrWhiteSpace(options.ReadReplica?.ConnectionString)
+        || options.Engine switch
+        {
+            StorageEngineEnum.PostgreSql => IsConfigured(options.PostgreSql),
+            StorageEngineEnum.MySql => IsConfigured(options.MySql),
+            StorageEngineEnum.SqlServer => IsConfigured(options.SqlServer),
+            StorageEngineEnum.MongoDb => IsConfigured(options.MongoDb),
+            _ => false,
+        };
 
     /// <summary>
     ///     This method builds the configuration key of a nested setting, for messages.

@@ -31,7 +31,10 @@ public class StorageReadReplicaOptions
 
     /// <summary>
     ///     This property contains how many seconds a replica may be behind the primary and still
-    ///     receive reads. A replica further behind, or whose lag is unknown, gets none.
+    ///     receive reads. A replica further behind, or whose lag is unknown, gets none. When a
+    ///     replica is configured the value must be below <see cref="StickyAfterWriteSeconds" /> and
+    ///     below the shortest cache refresh interval (60 seconds); startup is refused otherwise
+    ///     (see <c>StorageTopologyValidator</c>).
     /// </summary>
     public int MaxLagSeconds { get; set; } = 5;
 
