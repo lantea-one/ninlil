@@ -137,8 +137,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.Property<DateTimeOffset>("CreatedAtUtc")
                     .HasColumnType("datetimeoffset");
 
-                b.Property<TimeSpan>("DefaultLeaseDuration")
-                    .HasColumnType("time");
+                b.Property<long>("DefaultLeaseDuration")
+                    .HasColumnType("bigint");
 
                 b.Property<int?>("DelegatedPrefixLength")
                     .HasColumnType("int");
@@ -160,8 +160,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(32)
                     .HasColumnType("nvarchar(32)");
 
-                b.Property<TimeSpan>("MaxLeaseDuration")
-                    .HasColumnType("time");
+                b.Property<long>("MaxLeaseDuration")
+                    .HasColumnType("bigint");
 
                 b.Property<string>("Name")
                     .IsRequired()
@@ -1021,8 +1021,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.Property<Guid?>("OriginatingNodeId")
                     .HasColumnType("uniqueidentifier");
 
-                b.Property<TimeSpan?>("RefreshInterval")
-                    .HasColumnType("time");
+                b.Property<long?>("RefreshInterval")
+                    .HasColumnType("bigint");
 
                 b.Property<string>("Source")
                     .IsRequired()
@@ -1926,10 +1926,10 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(255)
                     .HasColumnType("nvarchar(255)");
 
-                b.Property<TimeSpan>("CloudSyncInterval")
+                b.Property<long>("CloudSyncInterval")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("time")
-                    .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
+                    .HasColumnType("bigint")
+                    .HasDefaultValue(3000000000L);
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)

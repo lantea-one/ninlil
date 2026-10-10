@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Entity;
 
@@ -47,6 +49,16 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore;
 ///             <description>
 ///                 Unsigned integers are stored as a wider signed type, since not every provider
 ///                 has unsigned columns.
+///             </description>
+///         </item>
+///         <item>
+///             <description>
+///                 On SQL Server every <see cref="TimeSpan" /> property is stored as
+///                 <see cref="long" /> ticks (<c>bigint</c>). EF Core maps it to <c>time</c> by
+///                 default, which holds less than 24 hours, so a lease duration of 7 days or a
+///                 refresh interval of 1 day would not save. The other providers keep their native
+///                 mapping, which holds longer spans (SQLite text, PostgreSQL <c>interval</c>,
+///                 MySQL <c>time(6)</c> up to about 34 days).
 ///             </description>
 ///         </item>
 ///     </list>
@@ -290,6 +302,33 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NinlilDnsContext).Assembly);
 
+        if (Database.IsSqlServer())
+        {
+            StoreTimeSpansAsTicks(modelBuilder);
+        }
+
         base.OnModelCreating(modelBuilder);
+    }
+
+    /// <summary>
+    ///     This method stores every <see cref="TimeSpan" /> and <c>TimeSpan?</c> property of the
+    ///     model as ticks. It scans the model instead of listing properties, so a new
+    ///     <see cref="TimeSpan" /> property needs no extra registration on SQL Server.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder being configured.</param>
+    private static void StoreTimeSpansAsTicks(ModelBuilder modelBuilder)
+    {
+        foreach (IMutableEntityType entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (IMutableProperty property in entityType.GetProperties())
+            {
+                Type clrType = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
+
+                if (clrType == typeof(TimeSpan))
+                {
+                    property.SetValueConverter(new TimeSpanToTicksConverter());
+                }
+            }
+        }
     }
 }
