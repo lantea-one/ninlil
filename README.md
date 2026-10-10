@@ -739,6 +739,210 @@ above that: `ulimit -n 64000` before starting `mongod`, `LimitNOFILE=64000` in i
 or `docker run --ulimit nofile=64000:64000 ...` for the container. Without it, `mongod` can abort
 with `Too many open files`.
 
+### Read replicas and database clusters
+
+For a large installation you can add a **read replica**: a second database server that holds a
+copy of the primary and answers some of Ninlil's reads. Nothing changes until you configure one.
+All writes, startup work and everything that must see the newest data always use the primary.
+Read replicas work with PostgreSQL, MySQL, SQL Server and MongoDB, not with SQLite.
+
+Ninlil does not set up replication. You create the replica with your database's own tools. Ninlil
+only needs to know where to read.
+
+**What goes to a replica, and what never does**
+
+| Goes to an eligible replica | Always uses the primary |
+|---|---|
+| The admin console's list, detail and statistics pages (zones, records, users, roles, clients, DHCP, filtering, forwarders, webhooks, the query log search and so on) | Startup, migrations, snapshots and restores |
+| The in-memory DNS caches, when a refresh is only due to age (see below) | Every write, and every read that is followed by a write |
+| The cluster, forwarder and webhook health checks, and the query counts a cluster peer asks for | Sign-in, sessions, two-factor, API-token checks and the rest of `/api/auth` |
+| | DHCP packet handling |
+| | Backup export |
+| | The zone, signed-zone, access-rule and TSIG key lookups of the DNS server |
+
+**Set up a replica (any engine)**
+
+1. Create the replica with the database's own replication so that it holds the same database
+   (name, tables and accounts) as the primary. Check that it is read-only.
+2. Make sure the Ninlil account exists on the replica. PostgreSQL, MySQL and MongoDB copy
+   accounts with the data. A SQL Server login belongs to the server, not to the database, so
+   create it on every replica instance with the same SID as on the primary. Add the extra grants
+   in the per-engine section below.
+3. Set the variables for your engine (examples below). Put the replica's connection string in
+   `NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING` (for MongoDB use
+   `NINLIL_STORAGE_MONGODB_READ_PREFERENCE` instead).
+4. Restart Ninlil. A setting that contradicts another setting or the connection string stops the
+   start with exit code 78 and a message that names both
+   (see [When the start is refused](#when-the-start-is-refused-exit-code-78)).
+5. Find this line in the log. It never contains a user name, password or database name:
+
+   ```text
+   Storage: PostgreSql, primary db1:5432, read replica r1:5432, r2:5433; a user who saved reads the primary for 10 s, a replica more than 5 s behind gets no reads.
+   ```
+
+6. Open **Settings**, then **Storage**. The **Primary and read replica** card shows the replica as
+   *Eligible* once its first check passes (within `NINLIL_STORAGE_READ_REPLICA_LAG_CHECK_INTERVAL_SECONDS`,
+   5 seconds by default), together with its lag and how many database scopes went to each side.
+   The same data is in `GET /api/storage` (the `primary` and `readReplica` objects).
+
+**PostgreSQL**
+
+Use a streaming-replication hot standby (or several). List every host that can be the primary in
+the primary string, and every standby in the read string:
+
+```bash
+NINLIL_STORAGE_ENGINE=PostgreSql
+NINLIL_STORAGE_CONNECTION_STRING="Host=db1.example,db2.example;Database=ninlil;Username=ninlil;Password=change-me"
+NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING="Host=standby1.example,standby2.example;Database=ninlil;Username=ninlil;Password=change-me"
+```
+
+- A primary string with several hosts gets `Target Session Attributes=read-write` from Ninlil, so
+  after a failover the next new connection finds the new primary.
+- A read string with several hosts gets `Target Session Attributes=prefer-standby` and
+  `Load Balance Hosts=true`: reads spread over the standbys and fall back to the primary when no
+  standby is up. A read string with one host is used as written.
+- The account needs no extra grant.
+- The optional variables `NINLIL_STORAGE_POSTGRESQL_*` change these defaults.
+
+**MySQL**
+
+Put the cluster's router or proxy in front of the servers, so that the primary string reaches the
+one writable server and the read string reaches the replicas (the ports below are the defaults of
+MySQL Router):
+
+```bash
+NINLIL_STORAGE_ENGINE=MySql
+NINLIL_STORAGE_CONNECTION_STRING="Server=router.example;Port=6446;Database=ninlil;User=ninlil;Password=change-me"
+NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING="Server=router.example;Port=6447;Database=ninlil;User=ninlil;Password=change-me"
+```
+
+- The primary must be writable (`read_only=0`). Ninlil checks this at every start and refuses to
+  start on a read-only server; the **Storage** health component reports Unhealthy if the primary
+  becomes read-only later.
+- A primary string with several hosts is only accepted in `FailOver` mode, and only behind an
+  external failover (InnoDB Cluster, Orchestrator) that leaves exactly one host writable. The
+  driver cannot tell a writable server from a read-only one.
+- A read string with several hosts uses `RoundRobin` unless `NINLIL_STORAGE_MYSQL_REPLICA_LOAD_BALANCE`
+  says otherwise.
+- **Extra grant:** Ninlil measures the lag with `SHOW REPLICA STATUS`, which needs the
+  `REPLICATION CLIENT` privilege. The account from `src/script/database/mysql/init.sql` does not
+  have it, so run this once as an administrator on the replicas:
+
+  ```sql
+  GRANT REPLICATION CLIENT ON *.* TO 'ninlil'@'%';
+  ```
+
+  Without it the replica's lag is unknown and the replica is never used.
+- If replication is stopped on a replica, its lag is unknown and it gets no reads.
+
+**SQL Server**
+
+Use an Always On availability group with a readable secondary and read-only routing. Both strings
+name the listener; Ninlil adds `ApplicationIntent=ReadOnly` to the read string, which makes the
+listener route it to a secondary:
+
+```bash
+NINLIL_STORAGE_ENGINE=SqlServer
+NINLIL_STORAGE_CONNECTION_STRING="Server=listener.example;Database=ninlil;User Id=ninlil;Password=Change-Me-1!;Encrypt=True"
+NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING="Server=listener.example;Database=ninlil;User Id=ninlil;Password=Change-Me-1!;Encrypt=True"
+NINLIL_STORAGE_SQLSERVER_MULTI_SUBNET_FAILOVER=true   # only for a listener that spans subnets
+```
+
+- **Extra grant:** Ninlil reads the secondary's lag from the primary with
+  `sys.dm_hadr_database_replica_states`, which needs `VIEW SERVER STATE`. The login from
+  `src/script/database/sqlserver/init.sql` does not have it, so run this once, connected as an
+  administrator, on the primary instance:
+
+  ```sql
+  GRANT VIEW SERVER STATE TO [ninlil];
+  ```
+
+  Without it the lag is unknown, the Storage page says so, and the replica is never used.
+- Database mirroring (`Failover Partner`) is not supported.
+
+**MongoDB**
+
+Use a replica set. List the members in the connection string. Set the read preference for the
+work that tolerates lag; work that needs the newest data always reads the primary:
+
+```bash
+NINLIL_STORAGE_ENGINE=MongoDb
+NINLIL_STORAGE_CONNECTION_STRING="mongodb://ninlil:change-me@m1.example:27017,m2.example:27017,m3.example:27017/ninlil?replicaSet=rs0"
+NINLIL_STORAGE_MONGODB_READ_PREFERENCE=SecondaryPreferred
+```
+
+- Ninlil adds `w=majority` and `journal=true` to the string of a replica set unless it already
+  says something else (`NINLIL_STORAGE_MONGODB_WRITE_CONCERN` and `..._JOURNAL` change them).
+- `NINLIL_STORAGE_MONGODB_MAX_STALENESS_SECONDS` is optional; when set it must be at least 90
+  (the driver's minimum). Ninlil's own lag limit applies as well.
+- A standalone server has no secondaries, so a read preference other than `Primary` has no effect
+  there and the replica is never used.
+- **Extra grant:** Ninlil reads the members' optimes with `replSetGetStatus`. If authentication is
+  on, the account needs the `clusterMonitor` role:
+
+  ```javascript
+  db.getSiblingDB("ninlil").grantRolesToUser("ninlil", [{ role: "clusterMonitor", db: "admin" }])
+  ```
+
+  Without it the lag is unknown and the replica is never used. The optimes have a resolution of
+  one second, so a current secondary can read as 1 second behind.
+
+**When a replica gets reads**
+
+Ninlil checks every replica every `NINLIL_STORAGE_READ_REPLICA_LAG_CHECK_INTERVAL_SECONDS` (5).
+A replica is **eligible** only when its lag is known and no more than
+`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS` (5), and it has the same database layout as the
+primary. Otherwise every read goes to the primary, Ninlil logs why (once per change), and the
+**storage** component of `/status` and the Storage page show *Degraded*. Degraded means the
+replica is unused and everything still works. A replica starts as not eligible until its first
+check passes. After an upgrade that migrates the primary, the replica is held back until
+replication brings its layout up to date. If a replica stays unused for more than 5 minutes, the
+log gets a warning. A check that fails or times out counts as an unknown lag.
+Health checks that read a replica can be a few seconds out of date.
+
+With several hosts in the read string, one check measures whichever host the driver picked, once
+per interval.
+
+**Seeing your own changes**
+
+After you save something, your reads go to the primary for
+`NINLIL_STORAGE_READ_REPLICA_STICKY_AFTER_WRITE_SECONDS` (10). Your sign-in session and your API
+tokens count as the same user. Other users may read a replica that is up to the lag limit behind.
+After the window, a replica serves you only if it was within the lag limit at its last check.
+Because the lag limit must be lower than the window, you see your own change as long as the last
+check is no older than the window minus the lag limit (5 seconds with the defaults). Keep
+`NINLIL_STORAGE_READ_REPLICA_LAG_CHECK_INTERVAL_SECONDS` at or below that difference. This is a
+bound, not a guarantee.
+
+Ninlil refuses to start when the lag limit is not below the sticky window or is 60 or more,
+because 60 seconds is the shortest refresh interval of the in-memory caches (a refresh from a
+replica that is that far behind could bring back data older than the cache already holds).
+
+**DNS caches**
+
+The DNS server keeps its working data in memory. The first load and every reload that follows a
+change made on this node read the **primary**, so a change you make shows up in DNS answers at
+once. A reload that is only due to age (60 seconds for the client directory, filter configuration,
+rewrites, client schedules and forwarder zones, 5 minutes for the entries of a filter list, 30
+seconds for static address mappings) reads an eligible replica. A change made on **another**
+cluster node therefore reaches this node after at most the refresh interval plus the lag limit. The
+zone, signed-zone and access-rule caches have no timer and always read the primary.
+
+**Other limits and warnings**
+
+- *Storage switch.* Ninlil refuses to schedule a switch while `NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING`
+  or any setting of the engine in use (`NINLIL_STORAGE_POSTGRESQL_*`, `..._MYSQL_*`,
+  `..._SQLSERVER_*`, `..._MONGODB_*`) is set. Remove them, switch, then configure replicas for
+  the new engine. A switch that was saved before such a setting appeared is kept, with a
+  warning, and not applied.
+- *Same server.* If the read string names the same hosts (with ports) and database as the primary,
+  Ninlil starts and logs a warning that the split gains nothing.
+- *Settings of another engine* are ignored with a warning.
+- *Snapshots.* The snapshots described in
+  [Upgrades and migration snapshots](#upgrades-and-migration-snapshots) are part of the database,
+  so replicas hold them too and need the disk space. A restore runs on the primary and the replicas
+  follow.
+
 ### Behaviour worth knowing
 
 - **SQL statements are logged at Debug level.** At the default level the log shows none. To see
