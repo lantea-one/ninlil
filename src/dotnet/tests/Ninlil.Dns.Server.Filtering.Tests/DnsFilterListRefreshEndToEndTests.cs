@@ -78,6 +78,8 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
         public readonly DnsFilterOptions Options = new() { Enable = true };
         public readonly CapturingLogger<DnsFilterListExternalRefreshService> RefreshLog = new();
         public readonly ServiceProvider Provider;
+        public readonly EntityChangeNotifier Notifier = new();
+        public readonly DnsFilterConfigurationCache Cache;
 
         public Harness()
         {
@@ -92,6 +94,12 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
             services.AddSingleton<IUnitOfWork>(new NoOpUnitOfWork());
             services.AddHttpClient();
             Provider = services.BuildServiceProvider();
+            Entries.Notifier = Notifier;
+            Cache = new DnsFilterConfigurationCache(
+                Provider.GetRequiredService<IServiceScopeFactory>(),
+                Notifier,
+                NullLogger<DnsFilterConfigurationCache>.Instance
+            );
         }
 
         public DnsFilterListEntity Subscribe(string url, DnsFilterListActionEnum action)
@@ -138,7 +146,8 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
                 Provider.GetRequiredService<IServiceScopeFactory>(),
                 Provider.GetRequiredService<IHttpClientFactory>(),
                 new StaticOptionsMonitor<DnsFilterOptions>(Options),
-                RefreshLog
+                RefreshLog,
+                Cache
             );
 
             await service.StartAsync(CancellationToken.None);
@@ -320,6 +329,68 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
 
         DnsFilterListEntryEntity entry = Assert.Single(harness.Entries.Items);
         Assert.Equal("only-this-now.example", entry.Value);
+    }
+
+    /// <summary>
+    ///     This test checks that a refresh reloads only the refreshed list's index: the entry
+    ///     signal the replace raises is silenced and the list is expired by id, so a second list
+    ///     of the same group stays loaded.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_WithTheCache_ReloadsOnlyTheRefreshedList()
+    {
+        Harness harness = new();
+        DnsFilterListEntity subscribed = harness.Subscribe(ListUrl, DnsFilterListActionEnum.Block);
+        DnsFilterListEntity other = new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "static",
+            Kind = DnsFilterListKindEnum.Domain,
+            Action = DnsFilterListActionEnum.Block,
+            Source = DnsFilterListSourceEnum.Local,
+        };
+        harness.Lists.Items.Add(other);
+        harness.Assignments.Items.Add(
+            new DnsClientGroupListAssignmentEntity
+            {
+                Id = Guid.NewGuid(),
+                ClientGroupId = harness.Groups.Items[0].Id,
+                ListId = other.Id,
+            }
+        );
+        harness.Entries.Items.Add(
+            new DnsFilterListEntryEntity
+            {
+                Id = Guid.NewGuid(),
+                ListId = other.Id,
+                Value = "static-block.example",
+            }
+        );
+        DnsFilterEngine engine = new(
+            harness.Cache,
+            new StaticOptionsMonitor<DnsFilterOptions>(harness.Options),
+            NullLogger<DnsFilterEngine>.Instance
+        );
+        IPAddress client = IPAddress.Parse("10.0.0.5");
+
+        Assert.False(
+            (await engine.EvaluateDomainAsync(DnsName.Parse("ok.example.org"), client)).IsDenied
+        );
+        Assert.Equal(2, harness.Entries.LoadedListIds.Count);
+
+        await harness.RefreshAsync(subscribed);
+
+        // The new entries apply to the next query, and only that list was read again.
+        Assert.True(
+            (await engine.EvaluateDomainAsync(DnsName.Parse("ads.example.com"), client)).IsDenied
+        );
+        Assert.True(
+            (
+                await engine.EvaluateDomainAsync(DnsName.Parse("static-block.example"), client)
+            ).IsDenied
+        );
+        Assert.Equal(3, harness.Entries.LoadedListIds.Count);
+        Assert.Equal(subscribed.Id, harness.Entries.LoadedListIds[2]);
     }
 
     private sealed class AnsweringResolver : IDnsQueryResolver

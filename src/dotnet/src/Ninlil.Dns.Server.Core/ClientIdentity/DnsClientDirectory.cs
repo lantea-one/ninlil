@@ -104,6 +104,14 @@ public sealed class DnsClientDirectory : IDisposable
     }
 
     /// <summary>
+    ///     This method loads the directory now if it has not been loaded, so the first query does
+    ///     not wait for it. A start-up warm-up calls it.
+    /// </summary>
+    /// <param name="stoppingToken">The token used to stop waiting for the load.</param>
+    public async Task WarmUpAsync(CancellationToken stoppingToken = default) =>
+        await _snapshot.GetAsync(stoppingToken);
+
+    /// <summary>
     ///     This method marks the directory out of date; the next lookup waits for a reload. Tests
     ///     and code that changes clients without a repository save call it.
     /// </summary>

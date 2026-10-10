@@ -32,8 +32,9 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         <strong>Expiry.</strong> The cache subscribes to <see cref="IEntityChangeNotifier" />.
 ///         A save of a group, a group network, a group or client list assignment, or a list
 ///         expires the configuration; a save of a <see cref="DnsFilterListEntryEntity" /> expires
-///         every list index, because the signal does not say which list changed (a subscribed
-///         list's refresh and a backup restore raise it too). An expired snapshot makes the next
+///         every list index, because the signal does not say which list changed (an API edit and a
+///         backup restore raise it). The subscribed-list refresh changes one list: it silences that
+///         signal and calls <see cref="ExpireList" />, so only the refreshed list reloads. An expired snapshot makes the next
 ///         read wait for a fresh load, so a change saved through the API applies to the very next
 ///         query in this process. A change made elsewhere (another cluster node, a direct
 ///         database edit) shows after the time-to-live: <see cref="ConfigurationTimeToLive" /> for
@@ -184,6 +185,57 @@ public sealed class DnsFilterConfigurationCache : IDisposable
                 )
             )
             .GetAsync(stoppingToken);
+
+    /// <summary>
+    ///     This method loads the configuration and the entries of every list a group or client
+    ///     uses now, so the first query does not wait for them. A start-up warm-up calls it. A
+    ///     list whose load fails is retried by the first query that needs it.
+    /// </summary>
+    /// <param name="stoppingToken">The token used to stop waiting for the loads.</param>
+    /// <returns>The number of lists that were loaded.</returns>
+    public async Task<int> WarmUpAsync(CancellationToken stoppingToken = default)
+    {
+        DnsFilterConfiguration configuration = await GetConfigurationAsync(stoppingToken);
+
+        IEnumerable<Guid> listIds = configuration
+            .EnabledGroups.Values.SelectMany(group => group.ListIds)
+            .Concat(configuration.ClientListIds.Values.SelectMany(ids => ids))
+            .Distinct();
+        int loaded = 0;
+
+        foreach (Guid listId in listIds)
+        {
+            if (!configuration.Lists.TryGetValue(listId, out DnsFilterList list))
+                continue;
+
+            await GetEntriesAsync(list, stoppingToken);
+            loaded++;
+        }
+
+        return loaded;
+    }
+
+    /// <summary>
+    ///     This method marks one list's index out of date; the next query that needs the list waits
+    ///     for its reload, and the other lists keep their indexes. A writer that changes the
+    ///     entries of one list (the subscribed-list refresh) calls it after the commit, and
+    ///     suppresses the generic entry signal (<c>EntityChangeSuppression</c>) so the other
+    ///     lists are not reloaded needlessly.
+    /// </summary>
+    /// <param name="listId">The list whose entries changed.</param>
+    public void ExpireList(Guid listId)
+    {
+        foreach (
+            KeyValuePair<
+                (Guid ListId, DnsFilterListKindEnum Kind),
+                RefreshingSnapshot<DnsFilterListIndex>
+            > item in _entries
+        )
+        {
+            if (item.Key.ListId == listId)
+                item.Value.Expire();
+        }
+    }
 
     /// <summary>
     ///     This method marks the configuration and every list index out of date; the next reads

@@ -14,8 +14,8 @@ namespace Ninlil.Dns.Server.Filtering.Extension;
 public static class ServiceCollectionFilteringExtension
 {
     /// <summary>
-    ///     This method binds <see cref="DnsFilterOptions" /> and registers the filter engine and the
-    ///     subscribed-list refresh service. Both are registered even when
+    ///     This method binds <see cref="DnsFilterOptions" /> and registers the filter engine, the
+    ///     subscribed-list refresh service and the start-up warm-up service. All are registered even when
     ///     <see cref="DnsFilterOptions.Enable" /> is off at startup, so that
     ///     <c>FilteringSettingsController.Patch</c> can turn filtering on without a restart (a
     ///     fresh install starts with it off). <see cref="DnsFilterEngine" /> checks
@@ -48,6 +48,7 @@ public static class ServiceCollectionFilteringExtension
         instance.TryAddSingleton<DnsClientDirectory>();
         instance.AddSingleton<IDnsFilterEngine, DnsFilterEngine>();
         instance.AddHostedService<DnsFilterListExternalRefreshService>();
+        instance.AddHostedService<DnsFilterWarmUpService>();
 
         // We're done, return the IServiceCollection instance.
         return instance;

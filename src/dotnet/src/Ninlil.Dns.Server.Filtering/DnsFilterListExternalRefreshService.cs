@@ -18,7 +18,10 @@ namespace Ninlil.Dns.Server.Filtering;
 ///     <see cref="DnsFilterListEntity.RefreshInterval" />, or never fetched, counts as due on
 ///     every tick. The replace raises the entry-change signal when it commits
 ///     (<see cref="Ninlil.Dns.Data.Abstractions.Repository.IEntityChangeNotifier" />), which
-///     expires <see cref="DnsFilterConfigurationCache" />, so the next query uses the new entries.
+///     would expire every list's index in <see cref="DnsFilterConfigurationCache" />. The service
+///     silences that signal for its own replace and, after the commit, expires only the refreshed
+///     list (<see cref="DnsFilterConfigurationCache.ExpireList" />), so the next query rebuilds one
+///     index and the other lists stay loaded.
 /// </summary>
 /// <param name="scopeFactory">The factory used to reach the scoped repositories, once per tick and once per refreshed list.</param>
 /// <param name="httpClientFactory">The factory used to fetch a list's subscription URL.</param>
@@ -28,11 +31,16 @@ namespace Ninlil.Dns.Server.Filtering;
 ///     <c>FilteringSettingsController.Patch</c> resumes refreshes without a restart.
 /// </param>
 /// <param name="logger">The logger this service records per-list fetch failures to.</param>
+/// <param name="cache">
+///     The cache whose list index is expired after a refresh. With <see langword="null" /> (the
+///     default) the generic entry signal is left on and expires every list.
+/// </param>
 public sealed class DnsFilterListExternalRefreshService(
     IServiceScopeFactory scopeFactory,
     IHttpClientFactory httpClientFactory,
     IOptionsMonitor<DnsFilterOptions> options,
-    ILogger<DnsFilterListExternalRefreshService> logger
+    ILogger<DnsFilterListExternalRefreshService> logger,
+    DnsFilterConfigurationCache cache = null
 ) : BackgroundService
 {
     /// <summary>
@@ -158,6 +166,14 @@ public sealed class DnsFilterListExternalRefreshService(
             ? null
             : await transactionFactory.BeginAsync(stoppingToken);
 
+        // The entry signal carries no list id and would reload every list's index. This refresh
+        // changes one list, so the signal is silenced and that list is expired by id after the
+        // commit instead. The scope must enclose the commit, where the relational engines raise
+        // the signal.
+        using IDisposable quiet = cache is null
+            ? null
+            : EntityChangeSuppression.Begin(typeof(DnsFilterListEntryEntity));
+
         await entryRepository.ReplaceEntriesAsync(list.Id, parsed.Entries, stoppingToken);
 
         DnsFilterListEntity tracked = await listRepository.GetByIdAsync(list.Id, stoppingToken);
@@ -172,6 +188,8 @@ public sealed class DnsFilterListExternalRefreshService(
 
         if (transaction is not null)
             await transaction.CommitAsync(stoppingToken);
+
+        cache?.ExpireList(list.Id);
 
         // The skipped count matters: a list of mostly cosmetic or browser-only rules (such as
         // EasyList) would otherwise look fine while blocking far less than its size suggests.

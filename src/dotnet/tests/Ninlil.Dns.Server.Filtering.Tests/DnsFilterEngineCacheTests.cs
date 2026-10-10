@@ -318,6 +318,134 @@ public class DnsFilterEngineCacheTests
         Assert.True(await IsDeniedAsync(engine, Anyone));
     }
 
+    [Fact]
+    public async Task ExpireList_ForOneList_ReloadsOnlyThatListOnTheNextQuery()
+    {
+        DnsFilterEngineTests.Fixture fixture = new();
+        DnsClientGroupEntity group = fixture.AddGroup("default", isDefault: true);
+        DnsFilterListEntity first = fixture.AddList(
+            "first",
+            DnsFilterListKindEnum.Domain,
+            DnsFilterListActionEnum.Block,
+            "ads.example.com"
+        );
+        DnsFilterListEntity second = fixture.AddList(
+            "second",
+            DnsFilterListKindEnum.Domain,
+            DnsFilterListActionEnum.Block,
+            "tracker.example.com"
+        );
+        fixture.AssignListToGroup(group.Id, first.Id);
+        fixture.AssignListToGroup(group.Id, second.Id);
+
+        // The allowed query reads every applicable list.
+        Assert.False(
+            (
+                await fixture.Engine.EvaluateDomainAsync(DnsName.Parse("ok.example.org"), Anyone)
+            ).IsDenied
+        );
+        Assert.Equal(2, fixture.Entries.LoadedListIds.Count);
+
+        fixture.Cache.ExpireList(first.Id);
+        Assert.False(
+            (
+                await fixture.Engine.EvaluateDomainAsync(DnsName.Parse("ok.example.org"), Anyone)
+            ).IsDenied
+        );
+
+        Assert.Equal(3, fixture.Entries.LoadedListIds.Count);
+        Assert.Equal(first.Id, fixture.Entries.LoadedListIds[2]);
+    }
+
+    [Fact]
+    public async Task ExpireList_AfterAnEntryChange_AppliesToTheNextDecision()
+    {
+        DnsFilterEngineTests.Fixture fixture = new();
+        (_, DnsFilterListEntity list) = DefaultGroupWithBlockList(fixture);
+        Assert.True(await IsDeniedAsync(fixture.Engine, Anyone));
+
+        fixture.Entries.Items.Clear();
+        fixture.Cache.ExpireList(list.Id);
+
+        Assert.False(await IsDeniedAsync(fixture.Engine, Anyone));
+    }
+
+    [Fact]
+    public async Task WarmUpAsync_LoadsTheConfigurationAndEveryListAGroupUses()
+    {
+        DnsFilterEngineTests.Fixture fixture = new();
+        DnsClientGroupEntity group = fixture.AddGroup("default", isDefault: true);
+        DnsFilterListEntity used = fixture.AddList(
+            "used",
+            DnsFilterListKindEnum.Domain,
+            DnsFilterListActionEnum.Block,
+            "ads.example.com"
+        );
+        fixture.AddList(
+            "unused",
+            DnsFilterListKindEnum.Domain,
+            DnsFilterListActionEnum.Block,
+            "other.example.com"
+        );
+        fixture.AssignListToGroup(group.Id, used.Id);
+        CountingScopeFactory scopes = new(fixture.ScopeFactory);
+        DnsFilterConfigurationCache cache = new(
+            scopes,
+            fixture.Notifier,
+            NullLogger<DnsFilterConfigurationCache>.Instance
+        );
+
+        int loaded = await cache.WarmUpAsync();
+
+        Assert.Equal(1, loaded);
+        int afterWarmUp = scopes.Count;
+        DnsFilterEngine engine = new(
+            cache,
+            new StaticOptionsMonitor<DnsFilterOptions>(fixture.Options),
+            NullLogger<DnsFilterEngine>.Instance
+        );
+        Assert.True(await IsDeniedAsync(engine, Anyone));
+        Assert.Equal(afterWarmUp, scopes.Count);
+    }
+
+    [Fact]
+    public async Task WarmUpService_WithFilteringOn_LoadsTheDataWithoutAQuery()
+    {
+        DnsFilterEngineTests.Fixture fixture = new();
+        DefaultGroupWithBlockList(fixture);
+        fixture.Options.Enable = true;
+        using DnsFilterWarmUpService service = new(
+            fixture.Cache,
+            fixture.Directory,
+            new StaticOptionsMonitor<DnsFilterOptions>(fixture.Options),
+            NullLogger<DnsFilterWarmUpService>.Instance
+        );
+
+        await service.StartAsync(CancellationToken.None);
+        await service.ExecuteTask;
+
+        Assert.Single(fixture.Entries.LoadedListIds);
+    }
+
+    [Fact]
+    public async Task WarmUpService_WithFilteringOff_LoadsNothing()
+    {
+        DnsFilterEngineTests.Fixture fixture = new();
+        DefaultGroupWithBlockList(fixture);
+        fixture.Options.Enable = false;
+        using DnsFilterWarmUpService service = new(
+            fixture.Cache,
+            fixture.Directory,
+            new StaticOptionsMonitor<DnsFilterOptions>(fixture.Options),
+            NullLogger<DnsFilterWarmUpService>.Instance
+        );
+
+        await service.StartAsync(CancellationToken.None);
+        await service.ExecuteTask;
+
+        Assert.Empty(fixture.Entries.LoadedListIds);
+    }
+
     /// <summary>
     ///     This class wraps an <see cref="IServiceScopeFactory" />, counting the scopes opened
     ///     and optionally failing like a database that is down.

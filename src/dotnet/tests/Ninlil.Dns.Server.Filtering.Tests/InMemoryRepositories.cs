@@ -65,6 +65,19 @@ public sealed class InMemoryDnsFilterListEntryRepository : IDnsFilterListEntryRe
 {
     public readonly List<DnsFilterListEntryEntity> Items = [];
 
+    /// <summary>
+    ///     This field records the list id of every <see cref="ListByListIdAsync" /> call, so a test
+    ///     can tell which lists an index rebuild read.
+    /// </summary>
+    public readonly List<Guid> LoadedListIds = [];
+
+    /// <summary>
+    ///     This field is the notifier <see cref="ReplaceEntriesAsync" /> raises the entry-change
+    ///     signal on, as the real repositories do when the replace commits. A test sets it to
+    ///     cover code that reacts to that signal; <see langword="null" /> raises none.
+    /// </summary>
+    public IEntityChangeNotifier Notifier;
+
     public Task<DnsFilterListEntryEntity> GetByIdAsync(
         Guid id,
         CancellationToken stoppingToken = default
@@ -91,10 +104,15 @@ public sealed class InMemoryDnsFilterListEntryRepository : IDnsFilterListEntryRe
     public Task<IReadOnlyList<DnsFilterListEntryEntity>> ListByListIdAsync(
         Guid listId,
         CancellationToken stoppingToken = default
-    ) =>
-        Task.FromResult<IReadOnlyList<DnsFilterListEntryEntity>>([
+    )
+    {
+        lock (LoadedListIds)
+            LoadedListIds.Add(listId);
+
+        return Task.FromResult<IReadOnlyList<DnsFilterListEntryEntity>>([
             .. Items.Where(item => item.ListId == listId),
         ]);
+    }
 
     public Task<IReadOnlyList<DnsFilterListEntryEntity>> SearchByListIdAsync(
         Guid listId,
@@ -129,6 +147,7 @@ public sealed class InMemoryDnsFilterListEntryRepository : IDnsFilterListEntryRe
                 IsException = entry.IsException,
             })
         );
+        Notifier?.NotifyChanged([typeof(DnsFilterListEntryEntity)]);
         return Task.CompletedTask;
     }
 }
