@@ -31,13 +31,20 @@ public static class NinlilEnvironmentVariableNaming
     ///     boundary (<c>IPv4</c> is "IP" + "v4", not "I" + "Pv4"). Each replacement is the final,
     ///     uppercased word. Configuration properties such as
     ///     <c>EdnsClientSubnetOptions.SourcePrefixLengthIPv4</c> and
-    ///     <c>DnsRateLimitOptions.SubnetPrefixLengthIPv6</c> depend on it. Add an entry here if a
-    ///     new property introduces another irregular token.
+    ///     <c>DnsRateLimitOptions.SubnetPrefixLengthIPv6</c> depend on it. The same list holds the
+    ///     four engine names (<c>PostgreSql</c>, <c>MySql</c>, <c>SqlServer</c>, <c>MongoDb</c>) that
+    ///     the <c>Storage</c> section uses as sub-section names: each stays one word, matching how
+    ///     the engines are spelled in documentation (<c>NINLIL_STORAGE_POSTGRESQL_...</c>). Add an
+    ///     entry here if a new property introduces another irregular token.
     /// </summary>
     private static readonly (string Pattern, string Replacement)[] IrregularTokens =
     [
         ("IPv6", "IPV6"),
         ("IPv4", "IPV4"),
+        ("PostgreSql", "POSTGRESQL"),
+        ("MySql", "MYSQL"),
+        ("SqlServer", "SQLSERVER"),
+        ("MongoDb", "MONGODB"),
     ];
 
     /// <summary>

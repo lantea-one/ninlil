@@ -4,8 +4,10 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.MongoDb.Configuration;
 using Ninlil.Dns.Data.MongoDb.Repository;
+using Ninlil.Dns.Data.MongoDb.Topology;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.MongoDb.Extension;
@@ -38,6 +40,10 @@ public static class ServiceCollectionMongoDbExtension
     ///     Thrown when no MongoDB connection string is configured; unlike SQLite there is no
     ///     default to generate.
     /// </exception>
+    /// <exception cref="Ninlil.Dns.Data.Abstractions.Exceptions.DatabaseStartupRefusedException">
+    ///     Thrown when the <c>Storage:MongoDb</c> or <c>Storage:ReadReplica</c> settings are not
+    ///     valid or contradict the connection string.
+    /// </exception>
     public static IServiceCollection AddNinlilDnsMongoDb(
         this IServiceCollection instance,
         IConfiguration configuration
@@ -56,8 +62,14 @@ public static class ServiceCollectionMongoDbExtension
         // Class maps must be registered before the first document is read or written.
         MongoClassMapRegistrar.Register();
 
+        // The replica set, write concern and journal settings are validated and applied to the
+        // URL once, before any database work. A bad combination throws
+        // DatabaseStartupRefusedException here, which Program turns into exit code 78.
+        StorageConnectionStrings composed = MongoClientSettingsComposer.Compose(options);
+        instance.AddSingleton(composed);
+
         // Use the database name from the connection string, or the default if it has none.
-        MongoUrl mongoUrl = MongoUrl.Create(options.ConnectionString);
+        MongoUrl mongoUrl = MongoUrl.Create(composed.Primary);
         string databaseName = string.IsNullOrWhiteSpace(mongoUrl.DatabaseName)
             ? DefaultDatabaseName
             : mongoUrl.DatabaseName;

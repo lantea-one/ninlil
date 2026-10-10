@@ -129,7 +129,10 @@ public static class DbContextOptionsBuilderExtension
 
     /// <summary>
     ///     This method configures <paramref name="instance" /> to use whichever relational
-    ///     provider <paramref name="options" /> selects.
+    ///     provider <paramref name="options" /> selects, with
+    ///     <see cref="StorageOptions.ConnectionString" /> exactly as written. Code that runs on a
+    ///     composed connection string (cluster settings applied) uses the overload that takes the
+    ///     engine and the string.
     /// </summary>
     /// <param name="instance">The current <see cref="DbContextOptionsBuilder" /> instance.</param>
     /// <param name="options">The storage configuration to apply.</param>
@@ -141,17 +144,32 @@ public static class DbContextOptionsBuilderExtension
     public static DbContextOptionsBuilder UseNinlilDnsStorage(
         this DbContextOptionsBuilder instance,
         StorageOptions options
+    ) => instance.UseNinlilDnsStorage(options.Engine, options.ConnectionString);
+
+    /// <summary>
+    ///     This method configures <paramref name="instance" /> to use the relational provider
+    ///     <paramref name="engine" /> with <paramref name="connectionString" />.
+    /// </summary>
+    /// <param name="instance">The current <see cref="DbContextOptionsBuilder" /> instance.</param>
+    /// <param name="engine">The relational engine.</param>
+    /// <param name="connectionString">The connection string for that engine.</param>
+    /// <returns>The modified <paramref name="instance" /> of <see cref="DbContextOptionsBuilder" />.</returns>
+    /// <exception cref="NotSupportedException">
+    ///     Thrown when <paramref name="engine" /> is <see cref="StorageEngineEnum.MongoDb" />.
+    /// </exception>
+    public static DbContextOptionsBuilder UseNinlilDnsStorage(
+        this DbContextOptionsBuilder instance,
+        StorageEngineEnum engine,
+        string connectionString
     ) =>
-        options.Engine switch
+        engine switch
         {
-            StorageEngineEnum.Sqlite => instance.UseNinlilDnsSqlite(options.ConnectionString),
-            StorageEngineEnum.PostgreSql => instance.UseNinlilDnsPostgreSql(
-                options.ConnectionString
-            ),
-            StorageEngineEnum.MySql => instance.UseNinlilDnsMySql(options.ConnectionString),
-            StorageEngineEnum.SqlServer => instance.UseNinlilDnsSqlServer(options.ConnectionString),
+            StorageEngineEnum.Sqlite => instance.UseNinlilDnsSqlite(connectionString),
+            StorageEngineEnum.PostgreSql => instance.UseNinlilDnsPostgreSql(connectionString),
+            StorageEngineEnum.MySql => instance.UseNinlilDnsMySql(connectionString),
+            StorageEngineEnum.SqlServer => instance.UseNinlilDnsSqlServer(connectionString),
             _ => throw new NotSupportedException(
-                $"'{options.Engine}' is not a relational storage engine and cannot be used with Entity Framework Core."
+                $"'{engine}' is not a relational storage engine and cannot be used with Entity Framework Core."
             ),
         };
 

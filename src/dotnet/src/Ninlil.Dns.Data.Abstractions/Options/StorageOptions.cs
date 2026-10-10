@@ -34,4 +34,34 @@ public class StorageOptions
     ///     migrations are applied at startup (snapshots, retention, restore).
     /// </summary>
     public StorageMigrationSafetyOptions MigrationSafety { get; set; } = new();
+
+    /// <summary>
+    ///     This property contains the optional read-only connection of a relational engine and the
+    ///     read-your-own-writes windows. It does nothing while its connection string is empty.
+    /// </summary>
+    public StorageReadReplicaOptions ReadReplica { get; set; } = new();
+
+    /// <summary>
+    ///     This property contains the Npgsql cluster settings, used when <see cref="Engine" /> is
+    ///     PostgreSQL.
+    /// </summary>
+    public StoragePostgreSqlOptions PostgreSql { get; set; } = new();
+
+    /// <summary>
+    ///     This property contains the MySqlConnector cluster settings, used when
+    ///     <see cref="Engine" /> is MySQL.
+    /// </summary>
+    public StorageMySqlOptions MySql { get; set; } = new();
+
+    /// <summary>
+    ///     This property contains the availability group settings, used when <see cref="Engine" />
+    ///     is SQL Server.
+    /// </summary>
+    public StorageSqlServerOptions SqlServer { get; set; } = new();
+
+    /// <summary>
+    ///     This property contains the replica set settings, used when <see cref="Engine" /> is
+    ///     MongoDB.
+    /// </summary>
+    public StorageMongoDbOptions MongoDb { get; set; } = new();
 }

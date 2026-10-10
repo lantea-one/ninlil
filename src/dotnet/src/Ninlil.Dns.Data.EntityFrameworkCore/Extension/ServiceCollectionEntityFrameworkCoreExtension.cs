@@ -5,7 +5,9 @@ using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
+using Ninlil.Dns.Data.EntityFrameworkCore.Topology;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Extension;
@@ -28,6 +30,11 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read storage settings from.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
+    /// <exception cref="Ninlil.Dns.Data.Abstractions.Exceptions.DatabaseStartupRefusedException">
+    ///     Thrown when the cluster settings (<c>Storage:ReadReplica</c>, <c>Storage:PostgreSql</c>,
+    ///     <c>Storage:MySql</c>, <c>Storage:SqlServer</c>) are not valid or contradict the
+    ///     connection string.
+    /// </exception>
     public static IServiceCollection AddNinlilDnsEntityFrameworkCore(
         this IServiceCollection instance,
         IConfiguration configuration
@@ -69,13 +76,31 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
         ));
         instance.AddSingleton<EntityChangeSaveChangesInterceptor>();
 
+        // The cluster settings are validated and applied to the connection string once, before any
+        // database work. A bad combination throws DatabaseStartupRefusedException here, which
+        // Program turns into exit code 78.
+        StorageConnectionStrings composed = StorageConnectionStringComposer.Compose(options);
+        instance.AddSingleton(composed);
+
+        // The storage switch changes the engine and connection string of the options in place at
+        // startup, so the context options compose again when the composed strings no longer match.
+        StorageConnectionStrings current = composed;
         instance.AddDbContext<NinlilDnsContext>(
             (provider, builder) =>
+            {
+                StorageConnectionStrings strings = Volatile.Read(ref current);
+                if (!strings.IsComposedFrom(options))
+                {
+                    strings = StorageConnectionStringComposer.Compose(options);
+                    Volatile.Write(ref current, strings);
+                }
+
                 builder
-                    .UseNinlilDnsStorage(options)
+                    .UseNinlilDnsStorage(options.Engine, strings.Primary)
                     .AddInterceptors(
                         provider.GetRequiredService<EntityChangeSaveChangesInterceptor>()
-                    )
+                    );
+            }
         );
 
         instance.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();

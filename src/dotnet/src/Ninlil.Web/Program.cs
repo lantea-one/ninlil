@@ -33,6 +33,7 @@ using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Data.EntityFrameworkCore.Maintenance;
@@ -322,10 +323,27 @@ StorageOptions storageOptions =
     builder.Configuration.GetSection(StorageOptions.SectionName).Get<StorageOptions>()
     ?? new StorageOptions();
 
-if (storageOptions.Engine == StorageEngineEnum.MongoDb)
-    builder.Services.AddNinlilDnsMongoDb(builder.Configuration);
-else
-    builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
+// The registration validates the cluster settings (Storage:ReadReplica, Storage:PostgreSql and so
+// on) and composes the connection strings. A contradiction refuses the start with exit code 78,
+// like the database guards further down, before anything touches the database.
+try
+{
+    if (storageOptions.Engine == StorageEngineEnum.MongoDb)
+        builder.Services.AddNinlilDnsMongoDb(builder.Configuration);
+    else
+        builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
+}
+catch (DatabaseStartupRefusedException refusal)
+{
+    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
+        logging.AddConsole()
+    );
+    refusalLoggerFactory
+        .CreateLogger("Ninlil.Web.Storage")
+        .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+    Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
+    return;
+}
 
 // The DHCP repositories are entity types in the same context or client, not a second storage
 // engine (see NinlilDnsContext). They are registered right after the DNS-side call above, the
@@ -839,6 +857,13 @@ if (reverseProxyOptions.Enable)
     app.UseMiddleware<ReverseProxyTrustGatingMiddleware>();
     app.UseForwardedHeaders();
 }
+
+// Settings that are ignored or have no effect, found while the storage topology was composed.
+ILogger topologyLogger = app
+    .Services.GetRequiredService<ILoggerFactory>()
+    .CreateLogger("Ninlil.Web.Storage");
+foreach (string warning in app.Services.GetRequiredService<StorageConnectionStrings>().Warnings)
+    topologyLogger.LogWarning("{Message}", warning);
 
 // Apply pending relational migrations at startup, so a fresh installation works without a
 // separate migration step, as the auto-generated SQLite connection string of
