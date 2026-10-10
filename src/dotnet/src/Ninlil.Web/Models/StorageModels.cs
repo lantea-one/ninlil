@@ -23,11 +23,80 @@ namespace Ninlil.Web.Models;
 ///     <see cref="StorageEngineEnum.MongoDb" /> is not among them. It uses a separate repository
 ///     implementation chosen at startup.
 /// </param>
+/// <param name="Primary">The servers the process writes to, by host name and port only.</param>
+/// <param name="ReadReplica">
+///     The read replica and how reads are routed to it, or null when no read/write split is
+///     configured (no <c>Storage:ReadReplica:ConnectionString</c> on a relational engine, a
+///     <c>Primary</c> read preference on MongoDB).
+/// </param>
 public record StorageStatus(
     StorageEngineEnum Engine,
     PendingStorageSwitchInfo PendingSwitch,
     StorageSwitchOutcome LastSwitchOutcome,
-    IReadOnlyList<StorageEngineEnum> SwitchSupportedEngines
+    IReadOnlyList<StorageEngineEnum> SwitchSupportedEngines,
+    StoragePrimaryStatus Primary,
+    StorageReadReplicaStatus ReadReplica
+);
+
+/// <summary>
+///     This record names the servers the process writes to. It carries host names and ports
+///     only, never a user name, password or database name.
+/// </summary>
+/// <param name="Hosts">
+///     The <c>host:port</c> entries of the primary connection: one per member of a multi-host
+///     PostgreSQL or MySQL string or a MongoDB replica set URL, the data source of a SQL Server
+///     string, and none for SQLite (a file, not a server).
+/// </param>
+public record StoragePrimaryStatus(IReadOnlyList<string> Hosts);
+
+/// <summary>
+///     This record describes the read replica: whether Ninlil may read from it now and how many
+///     reads went where. The numbers come from the latest check of the replica health monitor
+///     (every <c>Storage:ReadReplica:LagCheckIntervalSeconds</c>) and from counters that start at
+///     zero when the process starts.
+/// </summary>
+/// <param name="Configured">Always true; the whole object is null when no split is configured.</param>
+/// <param name="Eligible">
+///     True when the replica serves reads: its last check found the lag within
+///     <c>Storage:ReadReplica:MaxLagSeconds</c> and the schema current. False before the first
+///     check; reads then go to the primary.
+/// </param>
+/// <param name="LagSeconds">The measured lag in seconds, or null when it is unknown or not yet measured.</param>
+/// <param name="SchemaCurrent">Whether the replica has the primary's schema version.</param>
+/// <param name="LastCheckedAtUtc">When the replica was last checked, or null before the first check.</param>
+/// <param name="Reason">
+///     Why the replica serves no reads, in plain words, or an empty string when it does. It never
+///     contains a connection string.
+/// </param>
+/// <param name="ReadsToReplica">
+///     How many requests and background reads (counted once per database scope) went to the
+///     replica since the process started.
+/// </param>
+/// <param name="ReadsToPrimary">
+///     How many database scopes used the primary since the process started. This counts every
+///     scope that used it: writes, startup work, sign-in and DHCP as well as reads that fell
+///     back because the replica was not eligible or the user wrote a moment ago.
+/// </param>
+/// <param name="Hosts">
+///     The <c>host:port</c> entries of the read connection. Empty on MongoDB, where the replica
+///     set members are the primary's hosts and <paramref name="ReadPreference" /> chooses among
+///     them.
+/// </param>
+/// <param name="ReadPreference">
+///     The MongoDB read preference used for replica-eligible reads (for example
+///     <c>SecondaryPreferred</c>), or null on the relational engines.
+/// </param>
+public record StorageReadReplicaStatus(
+    bool Configured,
+    bool Eligible,
+    double? LagSeconds,
+    bool SchemaCurrent,
+    DateTimeOffset? LastCheckedAtUtc,
+    string Reason,
+    long ReadsToReplica,
+    long ReadsToPrimary,
+    IReadOnlyList<string> Hosts,
+    string ReadPreference
 );
 
 /// <summary>

@@ -36,7 +36,10 @@ public class StorageController(IStorageEngineSwitchService switchService) : Cont
 {
     /// <summary>
     ///     This action reports the active storage engine, the switch waiting for the next start,
-    ///     the outcome of a switch this start applied, and which engines a switch can target.
+    ///     the outcome of a switch this start applied, and which engines a switch can target. It
+    ///     also lists the primary's hosts and, when a read replica is configured, whether the
+    ///     replica serves reads now (lag, schema, reason) and how many database scopes went to
+    ///     each side. Host names and ports are the only connection details it returns.
     ///     Requires <c>storage:read</c>.
     /// </summary>
     [HttpGet]

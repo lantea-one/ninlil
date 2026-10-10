@@ -2,8 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
+using Ninlil.Dns.Data.Abstractions.Routing;
+using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
+using Ninlil.Dns.Data.MongoDb.Topology;
 using Ninlil.Web.Models;
 using Ninlil.Web.Options;
 
@@ -27,6 +30,11 @@ namespace Ninlil.Web.Services.Storage;
 /// <param name="currentOptions">
 ///     The <see cref="StorageOptions" /> singleton that holds the engine in use.
 /// </param>
+/// <param name="connectionStrings">
+///     The connection strings composed at startup, read for the host names of the primary and
+///     the replica in <see cref="GetStatus" />.
+/// </param>
+/// <param name="router">Supplies the replica health and the routed-read counters for <see cref="GetStatus" />.</param>
 /// <param name="store">Keeps the pending switch.</param>
 /// <param name="outcomeRecorder">Supplies the outcome of this start's switch to the status.</param>
 /// <param name="configuration">The configuration root, searched for the origin of the storage settings.</param>
@@ -34,6 +42,8 @@ namespace Ninlil.Web.Services.Storage;
 /// <param name="logger">Records a request.</param>
 public sealed class StorageEngineSwitchService(
     StorageOptions currentOptions,
+    StorageConnectionStrings connectionStrings,
+    IStorageReadRouter router,
     PendingStorageSwitchStore store,
     StorageSwitchOutcomeRecorder outcomeRecorder,
     IConfiguration configuration,
@@ -75,7 +85,55 @@ public sealed class StorageEngineSwitchService(
             currentOptions.Engine,
             info,
             outcomeRecorder.Current,
-            SwitchSupportedEngines
+            SwitchSupportedEngines,
+            new StoragePrimaryStatus(
+                StorageHostLister.List(currentOptions.Engine, PrimaryConnectionString())
+            ),
+            DescribeReadReplica()
+        );
+    }
+
+    /// <summary>
+    ///     This method returns the connection string the primary uses now. The composed string
+    ///     is only valid while it was composed from the engine and string in use: a storage
+    ///     switch applied at startup changes both in place, and the switch is refused while a
+    ///     replica is configured, so the operator's string is then the primary.
+    /// </summary>
+    private string PrimaryConnectionString() =>
+        connectionStrings.IsComposedFrom(currentOptions)
+            ? connectionStrings.Primary
+            : currentOptions.ConnectionString;
+
+    /// <summary>
+    ///     This method builds the replica part of the status, or returns null when no split is
+    ///     configured.
+    /// </summary>
+    private StorageReadReplicaStatus DescribeReadReplica()
+    {
+        if (!router.SplitConfigured)
+            return null;
+
+        ReplicaHealthStatus health = router.ReplicaHealth;
+        bool mongo = currentOptions.Engine == StorageEngineEnum.MongoDb;
+        string replicaString = connectionStrings.IsComposedFrom(currentOptions)
+            ? connectionStrings.Replica
+            : null;
+
+        return new StorageReadReplicaStatus(
+            true,
+            health.IsEligible,
+            health.LagSeconds,
+            health.SchemaCurrent,
+            health.CheckedAtUtc,
+            health.Reason,
+            router.ReadsToReplica,
+            router.ReadsToPrimary,
+            mongo ? [] : StorageHostLister.List(currentOptions.Engine, replicaString),
+            mongo
+                ? MongoClientSettingsComposer
+                    .ComposeReplicaReadPreference(currentOptions)
+                    ?.ReadPreferenceMode.ToString()
+                : null
         );
     }
 
