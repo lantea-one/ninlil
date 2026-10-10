@@ -48,7 +48,9 @@ namespace Ninlil.Dns.Server.Filtering;
 ///     <para>
 ///         <strong>Memory.</strong> An index holds one string and one hash-set slot per entry, about
 ///         100 bytes each, so three lists of 100,000 entries take roughly 30 to 50 MB in total.
-///         While a list reloads, the old and the new index are both alive.
+///         While a list reloads, the old and the new index are both alive. A wildcard or regex entry
+///         also keeps its compiled regex, which is larger than the entry text; the compiled
+///         patterns of the previous index are reused on reload.
 ///     </para>
 /// </summary>
 public sealed class DnsFilterConfigurationCache : IDisposable
@@ -93,6 +95,15 @@ public sealed class DnsFilterConfigurationCache : IDisposable
         (Guid ListId, DnsFilterListKindEnum Kind),
         RefreshingSnapshot<DnsFilterListIndex>
     > _entries = new();
+
+    /// <summary>
+    ///     This field is the index most recently built for each list, so that a reload reuses its
+    ///     compiled patterns (see <see cref="DnsFilterListIndex.Build" />).
+    /// </summary>
+    private readonly ConcurrentDictionary<
+        (Guid ListId, DnsFilterListKindEnum Kind),
+        DnsFilterListIndex
+    > _built = new();
 
     /// <summary>
     ///     This field holds the change-notification subscriptions, removed in <see cref="Dispose" />.
@@ -285,7 +296,10 @@ public sealed class DnsFilterConfigurationCache : IDisposable
                 !enabledLists.TryGetValue(key.ListId, out DnsFilterList list)
                 || list.Kind != key.Kind
             )
+            {
                 _entries.TryRemove(key, out _);
+                _built.TryRemove(key, out _);
+            }
         }
 
         return new DnsFilterConfiguration(
@@ -311,6 +325,29 @@ public sealed class DnsFilterConfigurationCache : IDisposable
             .ServiceProvider.GetRequiredService<IDnsFilterListEntryRepository>()
             .ListByListIdAsync(listId, stoppingToken);
 
-        return DnsFilterListIndex.Build(kind, entries);
+        _built.TryGetValue((listId, kind), out DnsFilterListIndex previous);
+        DnsFilterListIndex index = DnsFilterListIndex.Build(kind, entries, previous);
+        _built[(listId, kind)] = index;
+
+        // A pattern that does not compile can only come from a row written outside the API,
+        // which validates patterns before saving. It never matches; say so once per load.
+        DnsFilterPatternEntry[] broken =
+        [
+            .. index.Patterns.Where(pattern =>
+                pattern.Compiled is null && !string.IsNullOrWhiteSpace(pattern.Value)
+            ),
+        ];
+
+        if (broken.Length > 0)
+        {
+            _logger.LogWarning(
+                "{Count} entries of filter list {ListId} have a wildcard or regex pattern that failed to compile and are treated as non-matches. First: {Pattern}",
+                broken.Length,
+                listId,
+                broken[0].Value
+            );
+        }
+
+        return index;
     }
 }

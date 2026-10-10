@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -48,10 +47,11 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         the full queried name. Plain domain entries are looked up in a hash set per list (see
 ///         <see cref="DnsFilterListIndex" />), which gives the same answer as comparing every
 ///         entry. Globs are turned into anchored regexes, so one engine with one
-///         timeout handles both. Compiled patterns are cached in
-///         <see cref="_compiledPatternCache" />, shared by every query since the engine is a
-///         singleton. Every match runs with <see cref="RegexMatchTimeout" />, so a pathological
-///         pattern cannot stall query answering; a timeout counts as no match and is logged.
+///         timeout handles both. The index compiles each pattern once, when the list is loaded
+///         (see <see cref="DnsFilterListIndex.Build" />), and every query reuses the compiled
+///         <see cref="Regex" />. Every match runs with <see cref="RegexMatchTimeout" />, so a
+///         pathological pattern cannot stall query answering; a timeout counts as no match and is
+///         logged.
 ///     </para>
 ///     <para>
 ///         <strong>Exceptions and precedence.</strong> An adblock <c>@@</c> exception only cancels
@@ -88,16 +88,6 @@ public sealed class DnsFilterEngine(
     ///     This field bounds how long one wildcard or regex match may run (see the class summary).
     /// </summary>
     private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
-
-    /// <summary>
-    ///     This field caches each wildcard or regex entry's compiled <see cref="Regex" /> (or
-    ///     <see langword="null" /> if it failed to compile), keyed by kind and pattern text.
-    ///     Entries are never removed.
-    /// </summary>
-    private readonly ConcurrentDictionary<
-        (DnsFilterEntryKindEnum Kind, string Pattern),
-        Regex
-    > _compiledPatternCache = new();
 
     /// <inheritdoc />
     public async ValueTask<DnsFilterDecision> EvaluateClientAsync(
@@ -587,75 +577,19 @@ public sealed class DnsFilterEngine(
         && string.Equals(entryClientId, queryClientId, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    ///     This method checks whether a wildcard or regex entry covers a queried name.
+    ///     This method matches a wildcard or regex entry against the queried name with the regex
+    ///     the index compiled for it. An entry whose pattern did not compile (the cache logs
+    ///     that when it loads the list) or is blank counts as no match, and so does a match
+    ///     timeout, which is logged; neither throws.
     /// </summary>
-    private bool MatchesPatternEntry(string queriedPresentation, DnsFilterPatternEntry entry) =>
-        entry.Kind == DnsFilterEntryKindEnum.Wildcard
-            ? MatchesPattern(
-                DnsFilterEntryKindEnum.Wildcard,
-                entry.Value,
-                queriedPresentation,
-                BuildWildcardRegexPattern
-            )
-            : MatchesPattern(
-                DnsFilterEntryKindEnum.Regex,
-                entry.Value,
-                queriedPresentation,
-                static pattern => pattern
-            );
-
-    /// <summary>
-    ///     This method matches a wildcard or regex entry against the queried name, compiling and
-    ///     caching the pattern on first use (see <see cref="_compiledPatternCache" />). A compile
-    ///     failure or a match timeout counts as no match and is logged; neither throws.
-    /// </summary>
-    /// <param name="kind">The entry's kind, used only as part of the cache key.</param>
-    /// <param name="rawPattern">The entry's pattern text as stored.</param>
-    /// <param name="queriedPresentation">The already-normalized queried name to match against.</param>
-    /// <param name="toRegexPattern">
-    ///     The function that turns <paramref name="rawPattern" /> into the regex to compile: the
-    ///     identity for a <see cref="DnsFilterEntryKindEnum.Regex" /> entry, or
-    ///     <see cref="BuildWildcardRegexPattern" /> for a <see cref="DnsFilterEntryKindEnum.Wildcard" />
-    ///     one.
-    /// </param>
-    private bool MatchesPattern(
-        DnsFilterEntryKindEnum kind,
-        string rawPattern,
-        string queriedPresentation,
-        Func<string, string> toRegexPattern
-    )
+    private bool MatchesPatternEntry(string queriedPresentation, DnsFilterPatternEntry entry)
     {
-        if (string.IsNullOrWhiteSpace(rawPattern))
-            return false;
-
-        Regex regex = _compiledPatternCache.GetOrAdd(
-            (kind, rawPattern),
-            key =>
-            {
-                Regex compiled = CompileOrNull(toRegexPattern(key.Pattern));
-
-                if (compiled is null)
-                {
-                    // The null result is cached, so this is normally logged once per pattern.
-                    // FilterListEntriesController compiles patterns before saving them, so this
-                    // is expected only for rows written some other way.
-                    logger.LogWarning(
-                        "A {Kind} filter list entry has a pattern that failed to compile; treating as a non-match. Pattern: {Pattern}",
-                        key.Kind,
-                        key.Pattern
-                    );
-                }
-
-                return compiled;
-            }
-        );
-
-        if (regex is null)
+        if (entry.Compiled is null)
             return false;
 
         try
         {
-            return regex.IsMatch(queriedPresentation);
+            return entry.Compiled.IsMatch(queriedPresentation);
         }
         catch (RegexMatchTimeoutException)
         {
@@ -663,8 +597,8 @@ public sealed class DnsFilterEngine(
             logger.LogWarning(
                 "A {Kind} filter list entry pattern timed out matching a query name; treating as a non-match. "
                     + "Pattern: {Pattern}",
-                kind,
-                rawPattern
+                entry.Kind,
+                entry.Value
             );
 
             return false;

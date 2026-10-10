@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -16,7 +17,8 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         entry with <c>name == entry || name.EndsWith("." + entry)</c>: an entry covers a name
 ///         when it equals the name or a suffix of the name that starts at a label boundary.
 ///         Wildcard and regex entries cannot be hashed, so they stay in <see cref="Patterns" />
-///         for the engine to match one by one. A network list (client-source or response-IP)
+///         for the engine to match one by one; each carries its compiled <see cref="Regex" />,
+///         built when the index is, so a query compiles nothing. A network list (client-source or response-IP)
 ///         keeps the entry values for <see cref="ContainsAddress" />.
 ///     </para>
 ///     <para>
@@ -90,9 +92,15 @@ public sealed class DnsFilterListIndex
     /// </summary>
     /// <param name="kind">The list's kind: a domain list is hashed, any other kind keeps address values.</param>
     /// <param name="entries">Every entry of the list.</param>
+    /// <param name="previous">
+    ///     The index this one replaces, or <see langword="null" />. Its compiled patterns are
+    ///     reused for entries with the same kind and text, so a reload of a large list does not
+    ///     compile every pattern again.
+    /// </param>
     public static DnsFilterListIndex Build(
         DnsFilterListKindEnum kind,
-        IReadOnlyList<DnsFilterListEntryEntity> entries
+        IReadOnlyList<DnsFilterListEntryEntity> entries,
+        DnsFilterListIndex previous = null
     )
     {
         if (kind != DnsFilterListKindEnum.Domain)
@@ -101,12 +109,28 @@ public sealed class DnsFilterListIndex
         HashSet<string> rules = new(StringComparer.Ordinal);
         HashSet<string> exceptions = new(StringComparer.Ordinal);
         List<DnsFilterPatternEntry> patterns = [];
+        Dictionary<(DnsFilterEntryKindEnum, string), Regex> reusable = [];
+
+        foreach (DnsFilterPatternEntry old in previous?.Patterns ?? [])
+        {
+            if (old.Compiled is not null)
+                reusable[(old.Kind, old.Value)] = old.Compiled;
+        }
 
         foreach (DnsFilterListEntryEntity entry in entries)
         {
             if (entry.Kind is DnsFilterEntryKindEnum.Wildcard or DnsFilterEntryKindEnum.Regex)
             {
-                patterns.Add(new DnsFilterPatternEntry(entry.Kind, entry.Value, entry.IsException));
+                patterns.Add(
+                    new DnsFilterPatternEntry(
+                        entry.Kind,
+                        entry.Value,
+                        entry.IsException,
+                        reusable.TryGetValue((entry.Kind, entry.Value), out Regex known)
+                            ? known
+                            : CompilePattern(entry.Kind, entry.Value)
+                    )
+                );
                 continue;
             }
 
@@ -118,6 +142,19 @@ public sealed class DnsFilterListIndex
 
         return new DnsFilterListIndex(rules, exceptions, [.. patterns], []);
     }
+
+    /// <summary>
+    ///     This method compiles one wildcard or regex entry the way the engine matches it, or
+    ///     returns <see langword="null" /> for a blank pattern or one that does not compile.
+    /// </summary>
+    private static Regex CompilePattern(DnsFilterEntryKindEnum kind, string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : DnsFilterEngine.CompileOrNull(
+                kind == DnsFilterEntryKindEnum.Wildcard
+                    ? DnsFilterEngine.BuildWildcardRegexPattern(value)
+                    : value
+            );
 
     /// <summary>
     ///     This method normalizes a domain to lowercase with no trailing dot, so
@@ -177,8 +214,14 @@ public sealed class DnsFilterListIndex
 /// <param name="Kind">Either <see cref="DnsFilterEntryKindEnum.Wildcard" /> or <see cref="DnsFilterEntryKindEnum.Regex" />.</param>
 /// <param name="Value">The pattern text as stored.</param>
 /// <param name="IsException">Whether the entry is an adblock exception.</param>
+/// <param name="Compiled">
+///     The compiled, case-insensitive regex with the engine's match timeout, or
+///     <see langword="null" /> when the pattern is blank or does not compile (such an entry never
+///     matches).
+/// </param>
 public sealed record DnsFilterPatternEntry(
     DnsFilterEntryKindEnum Kind,
     string Value,
-    bool IsException
+    bool IsException,
+    Regex Compiled
 );

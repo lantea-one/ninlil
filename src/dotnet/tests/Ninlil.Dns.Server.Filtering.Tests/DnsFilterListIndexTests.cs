@@ -143,8 +143,33 @@ public class DnsFilterListIndexTests
 
         Assert.False(index.ContainsDomain("a.ads.b", false));
         Assert.Equal(2, index.Patterns.Count);
+        Assert.Matches(index.Patterns[0].Compiled, "x.ads.y");
+        Assert.Matches(index.Patterns[1].Compiled, "X12.TEST");
         Assert.False(index.Patterns[0].IsException);
         Assert.True(index.Patterns[1].IsException);
+    }
+
+    [Fact]
+    public void Build_WithAPreviousIndex_ReusesTheCompiledPatternsOfUnchangedEntries()
+    {
+        DnsFilterListIndex first = DnsFilterListIndex.Build(
+            DnsFilterListKindEnum.Domain,
+            [Entry("*.ads.*", kind: DnsFilterEntryKindEnum.Wildcard)]
+        );
+
+        DnsFilterListIndex second = DnsFilterListIndex.Build(
+            DnsFilterListKindEnum.Domain,
+            [
+                Entry("*.ads.*", kind: DnsFilterEntryKindEnum.Wildcard),
+                Entry("(", kind: DnsFilterEntryKindEnum.Regex),
+                Entry(" ", kind: DnsFilterEntryKindEnum.Regex),
+            ],
+            first
+        );
+
+        Assert.Same(first.Patterns[0].Compiled, second.Patterns[0].Compiled);
+        Assert.Null(second.Patterns[1].Compiled);
+        Assert.Null(second.Patterns[2].Compiled);
     }
 
     [Fact]
