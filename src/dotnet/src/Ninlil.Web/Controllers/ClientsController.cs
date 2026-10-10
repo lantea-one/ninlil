@@ -78,7 +78,8 @@ public class ClientsController(
     ///     (<c>createdSinceUtc</c>), in the requested order (<c>sort</c>; creation order by
     ///     default). Presence uses the online window at the moment of the request, the same cutoff
     ///     each device's <see cref="ClientDetail.IsOnline" /> uses. Filtering, ordering and paging
-    ///     run in the storage engine. Requires <c>clients:read</c>.
+    ///     run in the storage engine; each listed client's addresses are then loaded one client at a
+    ///     time. Requires <c>clients:read</c>.
     /// </summary>
     /// <param name="pagination">The page to return.</param>
     /// <param name="isFavorite">When set, only clients whose favorite star matches this value are listed.</param>
@@ -126,11 +127,12 @@ public class ClientsController(
         );
         int totalCount = await clientRepository.CountAsync(criteria, stoppingToken);
 
-        // Each client's addresses are loaded with one query per client on this page, all started
-        // at once.
-        ClientDetail[] details = await Task.WhenAll(
-            clients.Select(client => ToDetailAsync(client, stoppingToken))
-        );
+        // Each client's addresses are loaded with one query per client on this page, one after
+        // another: the repositories share this request's scoped DbContext, which does not allow
+        // two operations at once.
+        List<ClientDetail> details = new(clients.Count);
+        foreach (DnsClientEntity client in clients)
+            details.Add(await ToDetailAsync(client, stoppingToken));
 
         return Ok(new PagedResult<ClientDetail>(details, skip, take, totalCount));
     }
