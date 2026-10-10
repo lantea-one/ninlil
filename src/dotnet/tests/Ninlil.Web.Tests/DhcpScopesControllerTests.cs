@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +17,10 @@ namespace Ninlil.Web.Tests;
 ///     in-process host, signed in as the bootstrap administrator. Lease and reservation rows are
 ///     saved directly through the repositories, in the shape the allocation engine in
 ///     <c>Ninlil.Dhcp.Server.Core</c> writes, and the tests check that the reported figures match
-///     those rows and change when they change.
+///     those rows and change when they change. It also covers the scope integrity rules of
+///     <see cref="DhcpScopesController.Replace" /> and <see cref="DhcpScopesController.Patch" />:
+///     a rename keeps the scope's leases, and bad durations, a reversed range or a protocol
+///     change are refused with 400 and leave the scope as it was.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -256,6 +260,227 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private static object ScopeBody(
+        string name,
+        string protocolVersion = "IPv4",
+        string start = "10.77.0.1",
+        string end = "10.77.0.50",
+        string defaultLease = "1.00:00:00"
+    ) =>
+        new
+        {
+            name,
+            protocolVersion,
+            rangeStartAddress = start,
+            rangeEndAddress = end,
+            subnetPrefixLength = protocolVersion == "IPv4" ? 24 : 64,
+            defaultLeaseDuration = defaultLease,
+            maxLeaseDuration = "7.00:00:00",
+        };
+
+    private async Task<DhcpScopeDetail> CreateScopeWithTwoLeasesAsync(
+        HttpClient client,
+        string name
+    )
+    {
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            ScopeBody(name)
+        );
+        response.EnsureSuccessStatusCode();
+        DhcpScopeDetail scope = await response.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        using IServiceScope serviceScope = factory.Services.CreateScope();
+        ILeaseRepository leaseRepository =
+            serviceScope.ServiceProvider.GetRequiredService<ILeaseRepository>();
+        IUnitOfWork unitOfWork = serviceScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        for (int i = 1; i <= 2; i++)
+        {
+            await leaseRepository.AddAsync(
+                new LeaseEntity
+                {
+                    Id = Guid.NewGuid(),
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeName = name,
+                    ClientIdentifier = $"aa:bb:cc:dd:77:0{i}",
+                    IpAddress = $"10.77.0.{i}",
+                    State = LeaseStateEnum.Active,
+                    LeaseObtainedAtUtc = DateTimeOffset.UtcNow,
+                    LeaseExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(1),
+                }
+            );
+        }
+
+        await unitOfWork.SaveChangesAsync();
+
+        return scope;
+    }
+
+    private static async Task AssertBothLeasesFollowAsync(
+        HttpClient client,
+        DhcpScopeDetail scope,
+        string newName
+    )
+    {
+        HttpResponseMessage response = await client.GetAsync(
+            $"/api/dhcp-leases?scopeId={scope.Id}"
+        );
+        response.EnsureSuccessStatusCode();
+        PagedResult<DhcpLeaseDetail> page = await response.Content.ReadFromJsonAsync<
+            PagedResult<DhcpLeaseDetail>
+        >();
+        Assert.Equal(2, page.Items.Count);
+        Assert.All(page.Items, lease => Assert.Equal(newName, lease.ScopeName));
+
+        DhcpScopeStatisticsDetail statistics = await GetStatisticsAsync(client, scope.Id);
+        Assert.Equal(2, statistics.LeasedCount);
+    }
+
+    [Fact]
+    public async Task Patch_RenamingAScope_KeepsItsLeases()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string oldName = $"rename-patch-{Guid.NewGuid():N}";
+        string newName = $"renamed-patch-{Guid.NewGuid():N}";
+        DhcpScopeDetail scope = await CreateScopeWithTwoLeasesAsync(client, oldName);
+
+        HttpResponseMessage response = await client.PatchAsJsonAsync(
+            $"/api/dhcp-scopes/{scope.Id}",
+            new { name = newName }
+        );
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await AssertBothLeasesFollowAsync(client, scope, newName);
+    }
+
+    [Fact]
+    public async Task Replace_RenamingAScope_KeepsItsLeases()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string oldName = $"rename-put-{Guid.NewGuid():N}";
+        string newName = $"renamed-put-{Guid.NewGuid():N}";
+        DhcpScopeDetail scope = await CreateScopeWithTwoLeasesAsync(client, oldName);
+
+        HttpResponseMessage response = await client.PutAsJsonAsync(
+            $"/api/dhcp-scopes/{scope.Id}",
+            ScopeBody(newName)
+        );
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await AssertBothLeasesFollowAsync(client, scope, newName);
+    }
+
+    [Theory]
+    [InlineData("defaultLeaseDuration", "\"banana\"")]
+    [InlineData("defaultLeaseDuration", "42")]
+    [InlineData("defaultLeaseDuration", "\"-00:05:00\"")]
+    [InlineData("defaultLeaseDuration", "\"00:00:00\"")]
+    [InlineData("maxLeaseDuration", "\"banana\"")]
+    [InlineData("maxLeaseDuration", "42")]
+    [InlineData("maxLeaseDuration", "\"-00:05:00\"")]
+    [InlineData("maxLeaseDuration", "\"00:00:00\"")]
+    public async Task Patch_WithABadDuration_Returns400AndLeavesTheScopeAlone(
+        string field,
+        string json
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string name = $"bad-duration-{Guid.NewGuid():N}";
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            ScopeBody(name)
+        );
+        createResponse.EnsureSuccessStatusCode();
+        DhcpScopeDetail scope = await createResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        HttpResponseMessage response = await client.PatchAsync(
+            $"/api/dhcp-scopes/{scope.Id}",
+            new StringContent(
+                $"{{\"{field}\":{json}}}",
+                System.Text.Encoding.UTF8,
+                "application/merge-patch+json"
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(field, await response.Content.ReadAsStringAsync());
+        DhcpScopeDetail after = await client.GetFromJsonAsync<DhcpScopeDetail>(
+            $"/api/dhcp-scopes/{scope.Id}"
+        );
+        Assert.Equal(scope.DefaultLeaseDuration, after.DefaultLeaseDuration);
+        Assert.Equal(scope.MaxLeaseDuration, after.MaxLeaseDuration);
+    }
+
+    [Theory]
+    [InlineData("IPv4", "10.78.0.20", "10.78.0.10")]
+    [InlineData("IPv6", "fd00:78::20", "fd00:78::10")]
+    public async Task Create_Replace_AndPatch_WithStartAfterEnd_Return400(
+        string version,
+        string start,
+        string end
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string name = $"range-{Guid.NewGuid():N}";
+
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            ScopeBody(name, version, start, end)
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
+
+        // Start equal to end is a one-address range and is accepted.
+        HttpResponseMessage createOne = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            ScopeBody(name, version, end, end)
+        );
+        Assert.Equal(HttpStatusCode.Created, createOne.StatusCode);
+        DhcpScopeDetail scope = await createOne.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        HttpResponseMessage replace = await client.PutAsJsonAsync(
+            $"/api/dhcp-scopes/{scope.Id}",
+            ScopeBody(name, version, start, end)
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, replace.StatusCode);
+
+        HttpResponseMessage patch = await client.PatchAsJsonAsync(
+            $"/api/dhcp-scopes/{scope.Id}",
+            new { rangeStartAddress = start }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patch.StatusCode);
+
+        HttpResponseMessage patchOk = await client.PatchAsJsonAsync(
+            $"/api/dhcp-scopes/{scope.Id}",
+            new { rangeEndAddress = start }
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patchOk.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replace_ChangingTheProtocolVersion_Returns400()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string name = $"protocol-{Guid.NewGuid():N}";
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            ScopeBody(name)
+        );
+        createResponse.EnsureSuccessStatusCode();
+        DhcpScopeDetail scope = await createResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        HttpResponseMessage response = await client.PutAsJsonAsync(
+            $"/api/dhcp-scopes/{scope.Id}",
+            ScopeBody(name, "IPv6", "fd00:79::1", "fd00:79::9")
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        DhcpScopeDetail after = await client.GetFromJsonAsync<DhcpScopeDetail>(
+            $"/api/dhcp-scopes/{scope.Id}"
+        );
+        Assert.Equal(InternetProtocolVersionEnum.IPv4, after.ProtocolVersion);
     }
 
     private static async Task<DhcpScopeStatisticsDetail> GetStatisticsAsync(

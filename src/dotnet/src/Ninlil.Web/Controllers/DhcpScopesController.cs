@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -29,6 +30,9 @@ namespace Ninlil.Web.Controllers;
 /// <param name="scopeRepository">Reads and writes scopes.</param>
 /// <param name="reservationRepository">Removes a deleted scope's reservations (see <see cref="Delete" />).</param>
 /// <param name="customOptionRepository">Removes a deleted scope's custom options (see <see cref="Delete" />).</param>
+/// <param name="leaseRepository">
+///     Moves a renamed scope's leases to its new name (see <see cref="Replace" />).
+/// </param>
 /// <param name="zoneRepository">
 ///     Confirms a scope's <see cref="DhcpScopeWriteRequest.DnsZoneId" /> names an existing zone.
 ///     Only existence is checked here; whether the zone can take DHCP registrations is decided
@@ -42,6 +46,7 @@ public class DhcpScopesController(
     IDhcpScopeRepository scopeRepository,
     IDhcpReservationRepository reservationRepository,
     IDhcpScopeCustomOptionRepository customOptionRepository,
+    ILeaseRepository leaseRepository,
     IZoneRepository zoneRepository,
     IUnitOfWork unitOfWork,
     IDhcpScopeStatisticsService statisticsService
@@ -188,7 +193,9 @@ public class DhcpScopesController(
 
     /// <summary>
     ///     This action replaces a DHCP scope's fields. Validation and errors are as for
-    ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>dhcpscopes:write</c>.
+    ///     <see cref="Create" />, plus 404 for an unknown id and 400 when the protocol version
+    ///     differs from the scope's (create a new scope instead). Renaming the scope moves its
+    ///     leases to the new name in the same save. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -206,6 +213,12 @@ public class DhcpScopesController(
         if (!TryValidate(request, out string error))
             throw new ValidationException(error);
 
+        // Leases and reservations are bound to the address family, so it cannot change.
+        if (request.ProtocolVersion != scope.ProtocolVersion)
+            throw new ValidationException(
+                "'protocolVersion' cannot be changed; create a new scope instead."
+            );
+
         DhcpScopeEntity existingByName = await scopeRepository.FindByNameAsync(
             request.Name,
             stoppingToken
@@ -221,8 +234,8 @@ public class DhcpScopesController(
                 $"'dnsZoneId' does not name an existing zone ('{dnsZoneId}')."
             );
 
+        string oldName = scope.Name;
         scope.Name = request.Name;
-        scope.ProtocolVersion = request.ProtocolVersion;
         scope.Kind = request.Kind;
         scope.RangeStartAddress = request.RangeStartAddress;
         scope.RangeEndAddress = request.RangeEndAddress;
@@ -240,6 +253,7 @@ public class DhcpScopesController(
         scope.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
         scopeRepository.Update(scope);
+        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
@@ -249,7 +263,9 @@ public class DhcpScopesController(
     ///     This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is
     ///     unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces it.
     ///     The protocol version cannot be changed. The patched scope is checked as for
-    ///     <see cref="Create" />. Requires <c>dhcpscopes:write</c>.
+    ///     <see cref="Create" />; a lease duration must be a JSON string holding a positive
+    ///     duration (400 otherwise), and the range start must not be after the range end.
+    ///     Renaming the scope moves its leases to the new name in the same save. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -264,8 +280,12 @@ public class DhcpScopesController(
         if (scope is null)
             throw new NotFoundException("DhcpScope", id.ToString());
 
+        string oldName = scope.Name;
         if (patch.TryGetMergePatchField("name", out JsonElement name))
         {
+            if (name.ValueKind != JsonValueKind.String)
+                throw new ValidationException("'name' must be a string.");
+
             string newName = name.GetString();
             if (string.IsNullOrWhiteSpace(newName))
                 throw new ValidationException("'name' must not be empty.");
@@ -316,10 +336,10 @@ public class DhcpScopesController(
                 out JsonElement defaultLeaseDuration
             )
         )
-            scope.DefaultLeaseDuration = TimeSpan.Parse(defaultLeaseDuration.GetString());
+            scope.DefaultLeaseDuration = ReadDuration(defaultLeaseDuration, "defaultLeaseDuration");
 
         if (patch.TryGetMergePatchField("maxLeaseDuration", out JsonElement maxLeaseDuration))
-            scope.MaxLeaseDuration = TimeSpan.Parse(maxLeaseDuration.GetString());
+            scope.MaxLeaseDuration = ReadDuration(maxLeaseDuration, "maxLeaseDuration");
 
         if (patch.TryGetMergePatchField("isDisabled", out JsonElement isDisabled))
             scope.IsDisabled = isDisabled.GetBoolean();
@@ -394,6 +414,11 @@ public class DhcpScopesController(
                 "'defaultLeaseDuration' must not be greater than 'maxLeaseDuration'."
             );
 
+        if (!IsRangeInOrder(scope.RangeStartAddress, scope.RangeEndAddress))
+            throw new ValidationException(
+                "'rangeStartAddress' must not be after 'rangeEndAddress'."
+            );
+
         if (
             !TryValidateKindAndDelegatedPrefixLength(
                 scope.Kind,
@@ -406,6 +431,7 @@ public class DhcpScopesController(
 
         scope.UpdatedAtUtc = DateTimeOffset.UtcNow;
         scopeRepository.Update(scope);
+        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
@@ -511,6 +537,61 @@ public class DhcpScopesController(
     }
 
     /// <summary>
+    ///     This method moves the leases of a renamed scope to its new name, staged for the
+    ///     caller's save so the scope and its leases change together. Leases refer to their scope
+    ///     by name, so without this a rename would orphan them. The unique lease indexes cannot
+    ///     collide, because the caller has already refused a name another scope holds. A lease the
+    ///     DHCP engine writes under the old name between this load and the save stays under it.
+    /// </summary>
+    private async Task RenameLeasesAsync(
+        string oldName,
+        string newName,
+        CancellationToken stoppingToken
+    )
+    {
+        if (string.Equals(oldName, newName, StringComparison.Ordinal))
+            return;
+
+        foreach (
+            LeaseEntity lease in await leaseRepository.ListByScopeNameAsync(oldName, stoppingToken)
+        )
+        {
+            lease.ScopeName = newName;
+            leaseRepository.Update(lease);
+        }
+    }
+
+    /// <summary>
+    ///     This method reads a merge-patch lease duration: a JSON string holding a positive
+    ///     <see cref="TimeSpan" />. Anything else is a 400 that names the field.
+    /// </summary>
+    private static TimeSpan ReadDuration(JsonElement element, string fieldName)
+    {
+        if (
+            element.ValueKind != JsonValueKind.String
+            || !TimeSpan.TryParse(element.GetString(), CultureInfo.InvariantCulture, out TimeSpan d)
+            || d <= TimeSpan.Zero
+        )
+            throw new ValidationException(
+                $"'{fieldName}' must be a positive duration written as a string, such as '1.00:00:00'."
+            );
+
+        return d;
+    }
+
+    /// <summary>
+    ///     This method reports whether the start address is not after the end address, comparing
+    ///     the addresses as big-endian unsigned numbers. Both are already parsed and of one
+    ///     address family, so the byte arrays have one length.
+    /// </summary>
+    private static bool IsRangeInOrder(string start, string end) =>
+        IPAddress
+            .Parse(start)
+            .GetAddressBytes()
+            .AsSpan()
+            .SequenceCompareTo(IPAddress.Parse(end).GetAddressBytes()) <= 0;
+
+    /// <summary>
     ///     This method checks every field of a scope write request before anything is saved, so a
     ///     POST or PUT either succeeds fully or changes nothing.
     /// </summary>
@@ -535,6 +616,12 @@ public class DhcpScopesController(
             error =
                 $"'subnetPrefixLength' must be between 0 and "
                 + $"{MaxPrefixLength(request.ProtocolVersion)} for {request.ProtocolVersion}.";
+            return false;
+        }
+
+        if (!IsRangeInOrder(request.RangeStartAddress, request.RangeEndAddress))
+        {
+            error = "'rangeStartAddress' must not be after 'rangeEndAddress'.";
             return false;
         }
 
