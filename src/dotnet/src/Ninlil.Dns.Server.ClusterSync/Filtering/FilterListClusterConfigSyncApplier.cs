@@ -11,19 +11,38 @@ namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 /// <summary>
 ///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a
 ///     <see cref="DnsFilterListEntity" /> metadata; <see cref="ClusterConfigSyncApplierBase{TEntity}" />
-///     does the work and this class maps the payload.
+///     does the work and this class maps the payload. A winning deletion also removes the
+///     list's entries and its client-group and client assignments through
+///     <see cref="DnsFilterListDependents" />, as <c>FilterListsController.Delete</c> does on the
+///     node that made the change; the entry delete needs the optional transaction factory on the
+///     relational engines.
 /// </summary>
+/// <param name="repository">The repository lists are read and written through.</param>
+/// <param name="groupAssignments">Removes the client-group assignments of a deleted list.</param>
+/// <param name="clientAssignments">Removes the direct client assignments of a deleted list.</param>
+/// <param name="entries">Removes the entries of a deleted list.</param>
+/// <param name="tombstoneRepository">The repository deletions are remembered through.</param>
+/// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
+/// <param name="logger">The logger a malformed envelope is recorded to.</param>
+/// <param name="transactionFactory">
+///     Makes a deletion all-or-nothing; <see langword="null" /> on MongoDB.
+/// </param>
 public class FilterListClusterConfigSyncApplier(
     IDnsFilterListRepository repository,
+    IDnsClientGroupListAssignmentRepository groupAssignments,
+    IDnsClientListAssignmentRepository clientAssignments,
+    IDnsFilterListEntryRepository entries,
     IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
-    ILogger<FilterListClusterConfigSyncApplier> logger
+    ILogger<FilterListClusterConfigSyncApplier> logger,
+    IUnitOfWorkTransactionFactory transactionFactory = null
 )
     : ClusterConfigSyncApplierBase<DnsFilterListEntity>(
         repository,
         tombstoneRepository,
         unitOfWork,
-        logger
+        logger,
+        transactionFactory
     )
 {
     /// <summary>
@@ -33,6 +52,19 @@ public class FilterListClusterConfigSyncApplier(
 
     /// <inheritdoc />
     public override string EntityType => EntityTypeName;
+
+    /// <inheritdoc />
+    protected override Task OnRemovingAsync(
+        DnsFilterListEntity local,
+        CancellationToken stoppingToken
+    ) =>
+        DnsFilterListDependents.StageRemovalAsync(
+            local.Id,
+            groupAssignments,
+            clientAssignments,
+            entries,
+            stoppingToken
+        );
 
     /// <inheritdoc />
     protected override DnsFilterListEntity CreateFromPayload(

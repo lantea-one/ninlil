@@ -24,11 +24,18 @@ namespace Ninlil.Dns.Server.ClusterSync.Shared;
 /// <param name="tombstoneRepository">The repository deletions are remembered through.</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
 /// <param name="logger">The logger a malformed envelope is recorded to.</param>
+/// <param name="transactionFactory">
+///     When set, a winning deletion of a known row runs <see cref="OnRemovingAsync" />, the
+///     removal, the tombstone and the save inside one transaction. An applier whose hook
+///     changes data outside the change tracker passes it; the others leave it
+///     <see langword="null" />.
+/// </param>
 public abstract class ClusterConfigSyncApplierBase<TEntity>(
     IRepository<TEntity> repository,
     IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
-    ILogger logger
+    ILogger logger,
+    IUnitOfWorkTransactionFactory transactionFactory = null
 ) : IClusterConfigSyncApplier
     where TEntity : AuditableEntityBase
 {
@@ -81,6 +88,16 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
         ClusterConfigSyncEnvelope envelope,
         CancellationToken stoppingToken
     ) => Task.FromResult(true);
+
+    /// <summary>
+    ///     This method runs when a winning deletion is about to remove a known row, before
+    ///     <c>repository.Remove</c>. An implementation removes the rows that refer to the entity
+    ///     (no foreign key cascades to them). The default does nothing.
+    /// </summary>
+    /// <param name="local">The tracked local entity that is about to be removed.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    protected virtual Task OnRemovingAsync(TEntity local, CancellationToken stoppingToken) =>
+        Task.CompletedTask;
 
     /// <inheritdoc />
     public async Task ApplyAsync(
@@ -151,9 +168,17 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
 
         if (envelope.IsDeleted)
         {
+            await using IUnitOfWorkTransaction transaction = transactionFactory is null
+                ? null
+                : await transactionFactory.BeginAsync(stoppingToken);
+
+            await OnRemovingAsync(local, stoppingToken);
             repository.Remove(local);
             await RecordDeletionAsync(id, envelope, stoppingToken);
             await unitOfWork.SaveChangesAsync(stoppingToken);
+
+            if (transaction is not null)
+                await transaction.CommitAsync(stoppingToken);
             return;
         }
 

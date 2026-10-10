@@ -29,6 +29,9 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
     private readonly NinlilDnsContext _context;
     private readonly DnsFilterListRepository _repository;
     private readonly EntityFrameworkUnitOfWork _unitOfWork;
+    private readonly DnsClientGroupListAssignmentRepository _groupAssignments;
+    private readonly DnsClientListAssignmentRepository _clientAssignments;
+    private readonly DnsFilterListEntryRepository _entries;
     private readonly FilterListClusterConfigSyncApplier _applier;
 
     private static readonly Guid NodeA = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
@@ -44,11 +47,18 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
 
         _repository = new DnsFilterListRepository(_context);
         _unitOfWork = new EntityFrameworkUnitOfWork(_context);
+        _groupAssignments = new DnsClientGroupListAssignmentRepository(_context);
+        _clientAssignments = new DnsClientListAssignmentRepository(_context);
+        _entries = new DnsFilterListEntryRepository(_context);
         _applier = new FilterListClusterConfigSyncApplier(
             _repository,
+            _groupAssignments,
+            _clientAssignments,
+            _entries,
             new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
-            NullLogger<FilterListClusterConfigSyncApplier>.Instance
+            NullLogger<FilterListClusterConfigSyncApplier>.Instance,
+            new EntityFrameworkUnitOfWorkTransactionFactory(_context)
         );
     }
 
@@ -324,6 +334,105 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
 
         Assert.Null(exception);
         Assert.Null(await _repository.GetByIdAsync(listId));
+    }
+
+    /// <summary>
+    ///     Seeds a list with three entries, a group assignment and a client assignment, and
+    ///     returns its identifier.
+    /// </summary>
+    private async Task<Guid> SeedListWithDependentsAsync(DateTimeOffset created, string name)
+    {
+        Guid listId = Guid.NewGuid();
+        await _repository.AddAsync(
+            new DnsFilterListEntity
+            {
+                Id = listId,
+                Name = name,
+                Kind = DnsFilterListKindEnum.Domain,
+                Action = DnsFilterListActionEnum.Block,
+                Source = DnsFilterListSourceEnum.Local,
+                CreatedAtUtc = created,
+                OriginatingNodeId = NodeA,
+            }
+        );
+        await _entries.AddRangeAsync([
+            .. Enumerable
+                .Range(0, 3)
+                .Select(index => new DnsFilterListEntryEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ListId = listId,
+                    Value = $"{name}{index}.example",
+                }),
+        ]);
+        await _groupAssignments.AddAsync(
+            new DnsClientGroupListAssignmentEntity
+            {
+                Id = Guid.NewGuid(),
+                ClientGroupId = Guid.NewGuid(),
+                ListId = listId,
+            }
+        );
+        await _clientAssignments.AddAsync(
+            new DnsClientListAssignmentEntity
+            {
+                Id = Guid.NewGuid(),
+                ClientId = Guid.NewGuid(),
+                ListId = listId,
+            }
+        );
+        await _unitOfWork.SaveChangesAsync();
+        return listId;
+    }
+
+    /// <summary>
+    ///     This test applies a winning deletion; the list, its entries and both kinds of
+    ///     assignment go, and another list's rows stay.
+    /// </summary>
+    [Fact]
+    public async Task ApplyAsyncRemovesTheEntriesAndBothKindsOfAssignmentOfADeletedList()
+    {
+        DateTimeOffset created = DateTimeOffset.UtcNow;
+        Guid listId = await SeedListWithDependentsAsync(created, "doomed");
+        Guid otherId = await SeedListWithDependentsAsync(created, "kept");
+
+        await _applier.ApplyAsync(
+            Envelope(listId, true, created.AddMinutes(1), NodeB),
+            CancellationToken.None
+        );
+
+        Assert.Null(await _repository.GetByIdAsync(listId));
+        Assert.Empty(await _entries.ListByListIdAsync(listId));
+        Assert.Empty(await _groupAssignments.ListAsync(a => a.ListId == listId));
+        Assert.Empty(await _clientAssignments.ListAsync(a => a.ListId == listId));
+        Assert.NotNull(await _repository.GetByIdAsync(otherId));
+        Assert.Equal(3, (await _entries.ListByListIdAsync(otherId)).Count);
+        Assert.Single(await _groupAssignments.ListAsync(a => a.ListId == otherId));
+        Assert.Single(await _clientAssignments.ListAsync(a => a.ListId == otherId));
+    }
+
+    /// <summary>
+    ///     This test applies a deletion older than a local edit; it loses, so nothing is removed.
+    /// </summary>
+    [Fact]
+    public async Task ApplyAsyncKeepsTheDependentsWhenTheIncomingDeletionIsStale()
+    {
+        DateTimeOffset created = DateTimeOffset.UtcNow;
+        Guid listId = await SeedListWithDependentsAsync(created, "edited");
+        DnsFilterListEntity list = await _repository.GetByIdAsync(listId);
+        list.UpdatedAtUtc = created.AddMinutes(10);
+        _repository.Update(list);
+        await _unitOfWork.SaveChangesAsync();
+
+        await _applier.ApplyAsync(
+            Envelope(listId, true, created.AddMinutes(1), NodeB),
+            CancellationToken.None
+        );
+
+        Assert.NotNull(await _repository.GetByIdAsync(listId));
+        Assert.Equal(3, (await _entries.ListByListIdAsync(listId)).Count);
+        Assert.Single(await _groupAssignments.ListAsync(a => a.ListId == listId));
+        Assert.Single(await _clientAssignments.ListAsync(a => a.ListId == listId));
     }
 
     private static ClusterConfigSyncEnvelope Envelope(
