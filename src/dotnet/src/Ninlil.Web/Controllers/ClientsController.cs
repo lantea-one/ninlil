@@ -51,6 +51,9 @@ namespace Ninlil.Web.Controllers;
 /// </summary>
 /// <param name="clientRepository">Reads and writes clients.</param>
 /// <param name="clientAddressRepository">Creates a new client's first address and lists each client's addresses.</param>
+/// <param name="scheduleRepository">Removes a deleted client's schedules (see <see cref="Delete" />).</param>
+/// <param name="listAssignmentRepository">Removes a deleted client's filter-list assignments (see <see cref="Delete" />).</param>
+/// <param name="rewriteRepository">Removes the rewrites scoped to a deleted client (see <see cref="Delete" />).</param>
 /// <param name="clientGroupRepository">Confirms a client's <see cref="ClientCreateRequest.ClientGroupId" /> names an existing group.</param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="presenceOptions">The current presence options, whose online window decides <see cref="ClientDetail.IsOnline" />.</param>
@@ -60,6 +63,9 @@ namespace Ninlil.Web.Controllers;
 public class ClientsController(
     IDnsClientRepository clientRepository,
     IDnsClientAddressRepository clientAddressRepository,
+    IDnsClientScheduleRepository scheduleRepository,
+    IDnsClientListAssignmentRepository listAssignmentRepository,
+    IDnsRewriteRepository rewriteRepository,
     IDnsClientGroupRepository clientGroupRepository,
     IUnitOfWork unitOfWork,
     IOptionsMonitor<ClientPresenceOptions> presenceOptions,
@@ -405,9 +411,11 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action deletes a known client and its addresses. Leases and DNS records the device
-    ///     holds are not affected; the registry only describes devices. Returns 404 for an unknown
-    ///     id. Requires <c>clients:write</c>.
+    ///     This action deletes a known client with its addresses, schedules, direct filter-list
+    ///     assignments and the rewrites scoped to it (its Safe Search overrides). Leases and DNS
+    ///     records the device holds are not affected; the registry only describes devices. Scoped
+    ///     rewrites are not cluster-synced. Returns 404 for an unknown id. Requires
+    ///     <c>clients:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -428,6 +436,31 @@ public class ClientsController(
             )
         )
             clientAddressRepository.Remove(address);
+
+        foreach (
+            DnsClientScheduleEntity schedule in await scheduleRepository.ListByClientIdAsync(
+                client.Id,
+                stoppingToken
+            )
+        )
+            scheduleRepository.Remove(schedule);
+
+        foreach (
+            DnsClientListAssignmentEntity assignment in await listAssignmentRepository.ListByClientIdAsync(
+                client.Id,
+                stoppingToken
+            )
+        )
+            listAssignmentRepository.Remove(assignment);
+
+        // A scoped rewrite is deleted, never widened to global.
+        foreach (
+            DnsRewriteEntity rewrite in await rewriteRepository.ListAsync(
+                rewrite => rewrite.ClientId == client.Id,
+                stoppingToken
+            )
+        )
+            rewriteRepository.Remove(rewrite);
 
         clientRepository.Remove(client);
         await unitOfWork.SaveChangesAsync(stoppingToken);

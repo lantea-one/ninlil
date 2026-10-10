@@ -26,6 +26,9 @@ namespace Ninlil.Web.Controllers;
 /// <param name="clientGroupRepository">Reads and writes groups.</param>
 /// <param name="networkRepository">Removes a deleted group's networks (see <see cref="Delete" />).</param>
 /// <param name="listAssignmentRepository">Removes a deleted group's list assignments (see <see cref="Delete" />).</param>
+/// <param name="scheduleRepository">Removes a deleted group's schedules (see <see cref="Delete" />).</param>
+/// <param name="rewriteRepository">Removes the rewrites scoped to a deleted group (see <see cref="Delete" />).</param>
+/// <param name="clientRepository">Releases the member clients of a deleted group (see <see cref="Delete" />).</param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/client-groups")]
@@ -33,6 +36,9 @@ public class ClientGroupsController(
     IDnsClientGroupRepository clientGroupRepository,
     IDnsClientGroupNetworkRepository networkRepository,
     IDnsClientGroupListAssignmentRepository listAssignmentRepository,
+    IDnsClientGroupScheduleRepository scheduleRepository,
+    IDnsRewriteRepository rewriteRepository,
+    IDnsClientRepository clientRepository,
     IUnitOfWork unitOfWork
 ) : ControllerBase
 {
@@ -216,10 +222,13 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action deletes a client group with its networks and filter-list assignments. They
-    ///     are removed explicitly rather than by a relational cascade delete, which MongoDB lacks,
-    ///     as <see cref="ZonesController.Delete" /> does. Returns 404 for an unknown id. Requires
-    ///     <c>clientgroups:write</c>.
+    ///     This action deletes a client group with its networks, filter-list assignments,
+    ///     schedules and the rewrites scoped to it (its Safe Search overrides). Member clients are
+    ///     kept and released: their group is cleared, so network matching applies to them again.
+    ///     Dependants are removed explicitly rather than by a relational cascade delete, which
+    ///     MongoDB lacks, as <see cref="ZonesController.Delete" /> does. Scoped rewrites are
+    ///     deleted, never widened to global, and are not cluster-synced. Returns 404 for an
+    ///     unknown id. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -238,6 +247,39 @@ public class ClientGroupsController(
             await listAssignmentRepository.ListByGroupIdAsync(id, stoppingToken);
         foreach (DnsClientGroupListAssignmentEntity assignment in assignments)
             listAssignmentRepository.Remove(assignment);
+
+        foreach (
+            DnsClientGroupScheduleEntity schedule in await scheduleRepository.ListByClientGroupIdAsync(
+                id,
+                stoppingToken
+            )
+        )
+            scheduleRepository.Remove(schedule);
+
+        // A scoped rewrite points at a group that no longer exists, so it is deleted. Clearing its
+        // scope instead would turn it into a global rewrite.
+        foreach (
+            DnsRewriteEntity rewrite in await rewriteRepository.ListAsync(
+                rewrite => rewrite.ClientGroupId == id,
+                stoppingToken
+            )
+        )
+            rewriteRepository.Remove(rewrite);
+
+        // A null group means "no override, match by network" (DnsClientEntity.ClientGroupId), the
+        // only meaning left once the group is gone.
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        foreach (
+            DnsClientEntity member in await clientRepository.ListAsync(
+                client => client.ClientGroupId == id,
+                stoppingToken
+            )
+        )
+        {
+            member.ClientGroupId = null;
+            member.UpdatedAtUtc = now;
+            clientRepository.Update(member);
+        }
 
         clientGroupRepository.Remove(group);
         await unitOfWork.SaveChangesAsync(stoppingToken);
