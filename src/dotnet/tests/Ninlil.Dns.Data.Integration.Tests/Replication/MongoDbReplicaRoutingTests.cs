@@ -1,4 +1,7 @@
+using MongoDB.Bson;
+using MongoDB.Driver;
 using Ninlil.Dns.Data.Integration.Tests.Fixtures;
+using Ninlil.Dns.Data.MongoDb.Maintenance;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.Integration.Tests.Replication;
@@ -15,8 +18,21 @@ public sealed class MongoDbReplicaRoutingTests(MongoDbReplicaSetEngineFixture fi
     : ReplicaRoutingTestsBase(fixture.Replicated)
 {
     /// <inheritdoc />
-    protected override Task<string> PrepareDatabaseAsync() =>
-        Task.FromResult($"routing_{Guid.NewGuid():N}");
+    protected override async Task<string> PrepareDatabaseAsync()
+    {
+        // The health check wants every known schema step recorded on the secondaries, as the
+        // startup guard leaves them.
+        string name = $"routing_{Guid.NewGuid():N}";
+        IMongoCollection<BsonDocument> steps = new MongoClient(
+            fixture.Replicated.BuildConnectionString(name)
+        )
+            .GetDatabase(name)
+            .GetCollection<BsonDocument>("NinlilDnsSchemaSteps");
+        foreach (string step in MongoSchemaSteps.Known)
+            await steps.InsertOneAsync(new BsonDocument("_id", step));
+        await fixture.Replicated.WaitForCatchUpAsync(name);
+        return name;
+    }
 
     /// <inheritdoc />
     protected override void ConfigureSplit(Dictionary<string, string> values, string databaseName)

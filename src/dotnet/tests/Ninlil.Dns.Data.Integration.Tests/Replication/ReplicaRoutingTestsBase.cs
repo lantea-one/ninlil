@@ -51,9 +51,14 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
         );
 
     /// <summary>
-    ///     This method builds the storage services for <paramref name="databaseName" />.
+    ///     This method builds the storage services for <paramref name="databaseName" />, enables
+    ///     the router and runs one replica health check, so the replica is eligible like it is in
+    ///     a running host.
     /// </summary>
-    private ServiceProvider BuildServices(string databaseName, bool enableRouter = true)
+    private async Task<ServiceProvider> BuildServicesAsync(
+        string databaseName,
+        bool enableRouter = true
+    )
     {
         Dictionary<string, string> values = new()
         {
@@ -74,7 +79,16 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
 
         ServiceProvider provider = services.BuildServiceProvider(validateScopes: true);
         if (enableRouter)
+        {
             provider.GetRequiredService<IStorageReadRouter>().Enable();
+
+            // The replica serves reads only after a passing health check; run one now instead of
+            // waiting for the hosted service.
+            ReplicaHealthStatus health = await provider
+                .GetRequiredService<ReplicaHealthMonitor>()
+                .CheckOnceAsync(CancellationToken.None);
+            Assert.True(health.IsEligible, health.Reason);
+        }
 
         return provider;
     }
@@ -130,7 +144,7 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
     public async Task ReplicaIntentScope_WhileReplicationIsPaused_ReadsTheReplicaNotThePrimary()
     {
         string database = await PrepareDatabaseAsync();
-        await using ServiceProvider services = BuildServices(database);
+        await using ServiceProvider services = await BuildServicesAsync(database);
         IStorageReadRouter router = services.GetRequiredService<IStorageReadRouter>();
         string name = $"routing-{Guid.NewGuid():N}.test.";
 
@@ -182,7 +196,10 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
     public async Task ReplicaIntentScope_BeforeTheRouterIsEnabled_ReadsThePrimary()
     {
         string database = await PrepareDatabaseAsync();
-        await using ServiceProvider services = BuildServices(database, enableRouter: false);
+        await using ServiceProvider services = await BuildServicesAsync(
+            database,
+            enableRouter: false
+        );
 
         int seen = await WhilePausedAsync(
             database,
@@ -206,7 +223,7 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
     public async Task ReplicaIntentScope_OnAnyWrite_ThrowsAndChangesNothing()
     {
         string database = await PrepareDatabaseAsync();
-        await using ServiceProvider services = BuildServices(database);
+        await using ServiceProvider services = await BuildServicesAsync(database);
 
         await using (AsyncServiceScope scope = ReplicaScope(services))
         {
@@ -254,7 +271,7 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
     public async Task PrimaryScope_BulkWrites_RunOnThePrimary()
     {
         string database = await PrepareDatabaseAsync();
-        await using ServiceProvider services = BuildServices(database);
+        await using ServiceProvider services = await BuildServicesAsync(database);
         DateTimeOffset old = DateTimeOffset.UtcNow.AddDays(-2);
         Guid listId = Guid.NewGuid();
 
@@ -351,7 +368,7 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
     public async Task StartupWork_OnAReplicaScope_IsRefused()
     {
         string database = await PrepareDatabaseAsync();
-        await using ServiceProvider services = BuildServices(database);
+        await using ServiceProvider services = await BuildServicesAsync(database);
         StorageOptions options = services.GetRequiredService<StorageOptions>();
 
         await using (AsyncServiceScope scope = ReplicaScope(services))
