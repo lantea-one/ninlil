@@ -3,6 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 
 // Define our namespace.
 namespace Ninlil.Web.HealthChecks;
@@ -42,7 +43,8 @@ public sealed class WebhookDeliveryHealthCheck(IServiceScopeFactory scopeFactory
         CancellationToken cancellationToken = default
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        // Health is a read that tolerates replica lag; it reads the primary when no replica serves.
+        await using AsyncServiceScope scope = scopeFactory.CreateReplicaReadScope();
         IWebhookDeliveryAttemptRepository attemptRepository =
             scope.ServiceProvider.GetRequiredService<IWebhookDeliveryAttemptRepository>();
 

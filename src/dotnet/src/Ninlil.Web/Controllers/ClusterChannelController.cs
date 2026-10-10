@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 using Ninlil.Dns.Server.Cluster.Authentication;
 using Ninlil.Dns.Server.Cluster.Channel;
 using Ninlil.Dns.Server.Cluster.Heartbeat;
@@ -35,7 +36,10 @@ namespace Ninlil.Web.Controllers;
 ///     Answers <see cref="UsernameCheck" />, read directly rather than through
 ///     <c>UserManager&lt;TUser&gt;</c>.
 /// </param>
-/// <param name="queryLogRepository">Supplies the counts for <see cref="QueryStats" />.</param>
+/// <param name="scopeFactory">
+///     Opens the replica read scope in which <see cref="QueryStats" /> resolves the query log
+///     repository.
+/// </param>
 /// <param name="logger">Records unrecognized or failed config-sync envelopes.</param>
 [ApiController]
 [Route("api/cluster/channel")]
@@ -45,7 +49,7 @@ public class ClusterChannelController(
     ClusterHeartbeatReceiver heartbeatReceiver,
     IEnumerable<IClusterConfigSyncApplier> configSyncAppliers,
     IUserRepository userRepository,
-    IDnsQueryLogRepository queryLogRepository,
+    IServiceScopeFactory scopeFactory,
     ILogger<ClusterChannelController> logger
 ) : ControllerBase
 {
@@ -176,7 +180,11 @@ public class ClusterChannelController(
     ///     This action returns this node's query counts (last hour, last 24 hours, all retained)
     ///     for the cluster dashboard. A peer's <c>ClusterQueryStatsAggregator</c> calls it when an
     ///     operator opens that peer's Cluster page. The counts are computed from the query log on
-    ///     every call and not cached; a dashboard load can afford that.
+    ///     every call and not cached; a dashboard load can afford that. They are read through a
+    ///     scope of their own that uses a read replica when one is eligible: a count that is a few
+    ///     seconds old is invisible next to a query log the writer batches for up to a second.
+    ///     The request scope cannot choose a replica because the peer authentication has already
+    ///     read the registry there.
     /// </summary>
     [HttpPost("query-stats")]
     public async Task<ActionResult<ClusterQueryStatsSnapshot>> QueryStats(
@@ -185,6 +193,10 @@ public class ClusterChannelController(
     )
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        await using AsyncServiceScope scope = scopeFactory.CreateReplicaReadScope();
+        IDnsQueryLogRepository queryLogRepository =
+            scope.ServiceProvider.GetRequiredService<IDnsQueryLogRepository>();
 
         int queriesLastHour = await queryLogRepository.CountAsync(
             new DnsQueryLogSearchCriteria(FromUtc: now - TimeSpan.FromHours(1)),

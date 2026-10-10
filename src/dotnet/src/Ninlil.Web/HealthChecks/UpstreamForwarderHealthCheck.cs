@@ -3,6 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 using Ninlil.Dns.Server.Forwarding;
 
 // Define our namespace.
@@ -40,7 +41,8 @@ public sealed class UpstreamForwarderHealthCheck(
         if (!forwardingOptions.CurrentValue.Enable)
             return HealthCheckResult.Healthy("Upstream forwarding is disabled.");
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        // Health is a read that tolerates replica lag; it reads the primary when no replica serves.
+        await using AsyncServiceScope scope = scopeFactory.CreateReplicaReadScope();
         IDnsForwarderRepository forwarderRepository =
             scope.ServiceProvider.GetRequiredService<IDnsForwarderRepository>();
 
