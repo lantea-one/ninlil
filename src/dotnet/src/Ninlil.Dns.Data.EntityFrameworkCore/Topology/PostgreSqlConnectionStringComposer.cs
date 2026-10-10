@@ -294,10 +294,23 @@ internal static class PostgreSqlConnectionStringComposer
             );
     }
 
+    /// <summary>
+    ///     This method lists the hosts of the string as lowercase <c>host:port</c> entries. An
+    ///     entry without a port gets the string's <c>Port</c>, so two <c>localhost</c> strings on
+    ///     different ports are different servers.
+    /// </summary>
     private static List<string> Hosts(NpgsqlConnectionStringBuilder builder) =>
         (builder.Host ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(host => host.ToLowerInvariant())
+            .Select(host =>
+            {
+                // One colon is "host:port"; more is an IPv6 address, which carries a port only
+                // after a closing bracket.
+                bool hasPort =
+                    host.Count(character => character == ':') == 1
+                    || (host.StartsWith('[') && host.Contains("]:", StringComparison.Ordinal));
+                return (hasPort ? host : $"{host}:{builder.Port}").ToLowerInvariant();
+            })
             .ToList();
 
     private static bool SameServer(

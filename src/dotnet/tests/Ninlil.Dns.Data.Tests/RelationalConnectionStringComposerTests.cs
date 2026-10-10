@@ -284,6 +284,46 @@ public sealed class RelationalConnectionStringComposerTests
         Assert.NotNull(strings.Replica);
     }
 
+    [Theory]
+    [InlineData(
+        "Host=localhost;Port=5432;Database=ninlil",
+        "Host=localhost;Port=5433;Database=ninlil",
+        0
+    )]
+    [InlineData(
+        "Host=localhost;Port=5432;Database=ninlil",
+        "Host=localhost:5433;Database=ninlil",
+        0
+    )]
+    [InlineData("Host=localhost:5432;Database=ninlil", "Host=localhost;Database=ninlil", 1)]
+    [InlineData("Host=localhost;Database=ninlil", "Host=LOCALHOST;Port=5432;Database=ninlil", 1)]
+    public void PostgreSql_ReplicaOnTheSameHostNameWithAnotherPort_WarnsOnlyWhenThePortMatches(
+        string primary,
+        string replica,
+        int expectedWarnings
+    )
+    {
+        StorageConnectionStrings strings = StorageConnectionStringComposer.Compose(
+            Options(StorageEngineEnum.PostgreSql, primary, replica)
+        );
+
+        Assert.Equal(expectedWarnings, strings.Warnings.Count);
+    }
+
+    [Fact]
+    public void MySql_ReplicaOnTheSameHostNameWithAnotherPort_DoesNotWarn()
+    {
+        StorageConnectionStrings strings = StorageConnectionStringComposer.Compose(
+            Options(
+                StorageEngineEnum.MySql,
+                "Server=localhost;Port=3306;Database=ninlil;User=u;Password=hunter2",
+                "Server=localhost;Port=3307;Database=ninlil;User=u;Password=hunter2"
+            )
+        );
+
+        Assert.Empty(strings.Warnings);
+    }
+
     [Fact]
     public void PostgreSql_UnparseableReplicaString_IsRefusedWithoutTheString()
     {
