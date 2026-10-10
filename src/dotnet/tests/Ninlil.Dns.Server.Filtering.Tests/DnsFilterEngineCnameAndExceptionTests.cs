@@ -17,7 +17,8 @@ public partial class DnsFilterEngineTests
 {
     private static readonly IPAddress DefaultClient = IPAddress.Parse("10.0.0.5");
 
-    private static void AddException(Fixture fixture, Guid listId, string value) =>
+    private static void AddException(Fixture fixture, Guid listId, string value)
+    {
         fixture.Entries.Items.Add(
             new DnsFilterListEntryEntity
             {
@@ -27,6 +28,8 @@ public partial class DnsFilterEngineTests
                 IsException = true,
             }
         );
+        fixture.Changed();
+    }
 
     private static DnsResourceRecord Cname(string owner, string target) =>
         new(

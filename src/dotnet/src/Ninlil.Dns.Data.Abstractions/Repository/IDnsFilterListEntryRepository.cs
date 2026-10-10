@@ -13,7 +13,8 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 public interface IDnsFilterListEntryRepository : IRepository<DnsFilterListEntryEntity>
 {
     /// <summary>
-    ///     This method lists every entry of one list.
+    ///     This method lists every entry of one list. The entries are for reading: the relational
+    ///     engine returns them without change tracking, so updating one and saving does nothing.
     /// </summary>
     /// <param name="listId">The owning list's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

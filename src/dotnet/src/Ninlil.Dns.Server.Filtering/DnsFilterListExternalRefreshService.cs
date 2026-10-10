@@ -16,7 +16,9 @@ namespace Ninlil.Dns.Server.Filtering;
 ///     fetch, parses it with <see cref="DnsFilterListParser" /> (hosts-file, bare-domain and
 ///     adblock syntax) and replaces the list's entries. A list with no
 ///     <see cref="DnsFilterListEntity.RefreshInterval" />, or never fetched, counts as due on
-///     every tick.
+///     every tick. The replace raises the entry-change signal when it commits
+///     (<see cref="Ninlil.Dns.Data.Abstractions.Repository.IEntityChangeNotifier" />), which
+///     expires <see cref="DnsFilterConfigurationCache" />, so the next query uses the new entries.
 /// </summary>
 /// <param name="scopeFactory">The factory used to reach the scoped repositories, once per tick and once per refreshed list.</param>
 /// <param name="httpClientFactory">The factory used to fetch a list's subscription URL.</param>

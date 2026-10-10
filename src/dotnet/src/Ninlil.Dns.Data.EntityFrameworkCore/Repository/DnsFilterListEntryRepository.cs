@@ -39,7 +39,10 @@ public class DnsFilterListEntryRepository(
     public async Task<IReadOnlyList<DnsFilterListEntryEntity>> ListByListIdAsync(
         Guid listId,
         CancellationToken stoppingToken = default
-    ) => await Set.Where(entry => entry.ListId == listId).ToListAsync(stoppingToken);
+    ) =>
+        // Read-only: the filter cache builds its index from these rows and nothing saves them
+        // back, so tracking a list of 100,000 entries would only cost memory.
+        await Set.AsNoTracking().Where(entry => entry.ListId == listId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsFilterListEntryEntity>> SearchByListIdAsync(

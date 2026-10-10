@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
@@ -21,8 +20,11 @@ namespace Ninlil.Dns.Server.Filtering;
 ///     <see cref="DnsFilterListEntity" /> lists apply to a client and checks the client address,
 ///     the queried name, or the answer (CNAME targets and A/AAAA addresses) against them.
 ///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" /> calls it at
-///     several points in the query path (see that class). Lists, assignments and entries are
-///     read from the repositories on every check; nothing is cached except compiled patterns.
+///     several points in the query path (see that class). Groups, assignments, lists, entries
+///     and registered clients come from in-memory copies that
+///     <see cref="DnsFilterConfigurationCache" /> and <see cref="DnsClientDirectory" /> keep
+///     current, so a check opens no database scope while those copies are fresh (see those classes
+///     for how a change reaches them). Compiled patterns are cached here.
 ///     <para>
 ///         <strong>Which lists apply.</strong> A client that matches one or more non-default
 ///         <see cref="DnsClientGroupEntity" /> groups gets the union of those groups' lists; the
@@ -30,12 +32,12 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         row containing the client address, by a DNS-over-HTTPS ClientID row, or through the
 ///         client registry: when an <see cref="IClientIdentityResolver" /> is available, the
 ///         address is resolved to a client identifier and looked up in
-///         <see cref="IDnsClientRepository" />, and an enabled <see cref="DnsClientEntity" />
+///         <see cref="DnsClientDirectory" />, and an enabled <see cref="DnsClientEntity" />
 ///         adds its enabled <see cref="DnsClientEntity.ClientGroupId" /> group. That client's
 ///         direct <see cref="DnsClientListAssignmentEntity" /> rows are added as well, whether or
 ///         not it contributed a group (see <see cref="ResolveApplicableListsAsync" />). The
-///         resolver and the client repositories are optional; without them only CIDR and
-///         ClientID matching apply.
+///         resolver and the directory are optional; without them only CIDR and ClientID
+///         matching apply.
 ///     </para>
 ///     <para>
 ///         <strong>Domain entries.</strong> A <see cref="DnsFilterEntryKindEnum.Domain" /> entry
@@ -43,7 +45,9 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         <c>www.example.com</c>), the usual ad-blocker convention. A domain list may also hold
 ///         <see cref="DnsFilterEntryKindEnum.Wildcard" /> globs and
 ///         <see cref="DnsFilterEntryKindEnum.Regex" /> .NET regular expressions, matched against
-///         the full queried name. Globs are turned into anchored regexes, so one engine with one
+///         the full queried name. Plain domain entries are looked up in a hash set per list (see
+///         <see cref="DnsFilterListIndex" />), which gives the same answer as comparing every
+///         entry. Globs are turned into anchored regexes, so one engine with one
 ///         timeout handles both. Compiled patterns are cached in
 ///         <see cref="_compiledPatternCache" />, shared by every query since the engine is a
 ///         singleton. Every match runs with <see cref="RegexMatchTimeout" />, so a pathological
@@ -55,7 +59,7 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         allow list both match, <see cref="DnsFilterOptions.Precedence" /> decides.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach every scoped repository this engine needs, once per check.</param>
+/// <param name="cache">The in-memory groups, assignments, lists and list entries.</param>
 /// <param name="options">
 ///     The <see cref="DnsFilterOptions.Enable" /> switch, block-response mode, precedence and
 ///     CNAME-cloaking setting, read live through <see cref="IOptionsMonitor{TOptions}" /> rather
@@ -68,11 +72,16 @@ namespace Ninlil.Dns.Server.Filtering;
 ///     client-registry path described in the class summary. <see langword="null" /> (the
 ///     default) skips that path.
 /// </param>
+/// <param name="clientDirectory">
+///     The optional in-memory lookup from a client identifier to the registered client.
+///     <see langword="null" /> (the default) skips the client-registry path.
+/// </param>
 public sealed class DnsFilterEngine(
-    IServiceScopeFactory scopeFactory,
+    DnsFilterConfigurationCache cache,
     IOptionsMonitor<DnsFilterOptions> options,
     ILogger<DnsFilterEngine> logger,
-    IClientIdentityResolver clientIdentityResolver = null
+    IClientIdentityResolver clientIdentityResolver = null,
+    DnsClientDirectory clientDirectory = null
 ) : IDnsFilterEngine
 {
     /// <summary>
@@ -100,17 +109,14 @@ public sealed class DnsFilterEngine(
         if (!options.CurrentValue.Enable)
             return DnsFilterDecision.Allowed;
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-
-        IReadOnlyList<DnsFilterListEntity> lists = await ResolveApplicableListsAsync(
-            scope,
+        IReadOnlyList<DnsFilterList> lists = await ResolveApplicableListsAsync(
             remoteAddress,
             clientId,
             DnsFilterListKindEnum.ClientSource,
             stoppingToken
         );
 
-        return await EvaluateNetworkListsAsync(scope, lists, remoteAddress, stoppingToken);
+        return await EvaluateNetworkListsAsync(lists, remoteAddress, stoppingToken);
     }
 
     /// <inheritdoc />
@@ -124,10 +130,7 @@ public sealed class DnsFilterEngine(
         if (!options.CurrentValue.Enable)
             return DnsFilterDecision.Allowed;
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-
-        IReadOnlyList<DnsFilterListEntity> lists = await ResolveApplicableListsAsync(
-            scope,
+        IReadOnlyList<DnsFilterList> lists = await ResolveApplicableListsAsync(
             remoteAddress,
             clientId,
             DnsFilterListKindEnum.Domain,
@@ -138,12 +141,9 @@ public sealed class DnsFilterEngine(
         bool blockMatch = false;
         bool allowMatch = false;
 
-        foreach (DnsFilterListEntity list in lists)
+        foreach (DnsFilterList list in lists)
         {
-            IDnsFilterListEntryRepository entryRepository =
-                scope.ServiceProvider.GetRequiredService<IDnsFilterListEntryRepository>();
-            IReadOnlyList<DnsFilterListEntryEntity> entries =
-                await entryRepository.ListByListIdAsync(list.Id, stoppingToken);
+            DnsFilterListIndex entries = await cache.GetEntriesAsync(list, stoppingToken);
 
             if (!ListCoversDomain(queriedPresentation, entries))
                 continue;
@@ -165,12 +165,35 @@ public sealed class DnsFilterEngine(
     ///     Treating it like an allow list would let one subscribed list unblock names another
     ///     list blocks.
     /// </summary>
-    private bool ListCoversDomain(
+    private bool ListCoversDomain(string queriedPresentation, DnsFilterListIndex entries) =>
+        MatchesAnyDomainEntry(queriedPresentation, entries, isException: false)
+        && !MatchesAnyDomainEntry(queriedPresentation, entries, isException: true);
+
+    /// <summary>
+    ///     This method checks whether any ordinary entry (or, with <paramref name="isException" />,
+    ///     any exception entry) of a list covers a name: first the hashed plain entries, then the
+    ///     wildcard and regex ones one by one.
+    /// </summary>
+    private bool MatchesAnyDomainEntry(
         string queriedPresentation,
-        IReadOnlyList<DnsFilterListEntryEntity> entries
-    ) =>
-        entries.Any(entry => !entry.IsException && MatchesDomain(queriedPresentation, entry))
-        && !entries.Any(entry => entry.IsException && MatchesDomain(queriedPresentation, entry));
+        DnsFilterListIndex entries,
+        bool isException
+    )
+    {
+        if (entries.ContainsDomain(queriedPresentation, isException))
+            return true;
+
+        foreach (DnsFilterPatternEntry pattern in entries.Patterns)
+        {
+            if (
+                pattern.IsException == isException
+                && MatchesPatternEntry(queriedPresentation, pattern)
+            )
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     ///     This method resolves a block/allow match pair into a final decision, honoring
@@ -200,10 +223,7 @@ public sealed class DnsFilterEngine(
         if (!options.CurrentValue.Enable)
             return DnsFilterDecision.Allowed;
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-
         DnsFilterDecision cnameDecision = await EvaluateCnameTargetsAsync(
-            scope,
             response,
             remoteAddress,
             clientId,
@@ -213,8 +233,7 @@ public sealed class DnsFilterEngine(
         if (cnameDecision.IsDenied)
             return cnameDecision;
 
-        IReadOnlyList<DnsFilterListEntity> lists = await ResolveApplicableListsAsync(
-            scope,
+        IReadOnlyList<DnsFilterList> lists = await ResolveApplicableListsAsync(
             remoteAddress,
             clientId,
             DnsFilterListKindEnum.ResponseIp,
@@ -231,7 +250,6 @@ public sealed class DnsFilterEngine(
 
             IPAddress address = new(answer.Data);
             DnsFilterDecision decision = await EvaluateNetworkListsAsync(
-                scope,
                 lists,
                 address,
                 stoppingToken
@@ -263,7 +281,6 @@ public sealed class DnsFilterEngine(
     ///     </para>
     /// </summary>
     private async Task<DnsFilterDecision> EvaluateCnameTargetsAsync(
-        AsyncServiceScope scope,
         DnsMessage response,
         IPAddress remoteAddress,
         string clientId,
@@ -290,8 +307,7 @@ public sealed class DnsFilterEngine(
         if (targets.Count == 0)
             return DnsFilterDecision.Allowed;
 
-        IReadOnlyList<DnsFilterListEntity> lists = await ResolveApplicableListsAsync(
-            scope,
+        IReadOnlyList<DnsFilterList> lists = await ResolveApplicableListsAsync(
             remoteAddress,
             clientId,
             DnsFilterListKindEnum.Domain,
@@ -301,14 +317,11 @@ public sealed class DnsFilterEngine(
         if (lists.Count == 0)
             return DnsFilterDecision.Allowed;
 
-        IDnsFilterListEntryRepository entryRepository =
-            scope.ServiceProvider.GetRequiredService<IDnsFilterListEntryRepository>();
-        List<(DnsFilterListEntity List, IReadOnlyList<DnsFilterListEntryEntity> Entries)> loaded =
-        [];
+        List<(DnsFilterList List, DnsFilterListIndex Entries)> loaded = [];
 
-        // Load each list's entries once for the whole chain, not once per target.
-        foreach (DnsFilterListEntity list in lists)
-            loaded.Add((list, await entryRepository.ListByListIdAsync(list.Id, stoppingToken)));
+        // Fetch each list's entries once for the whole chain, not once per target.
+        foreach (DnsFilterList list in lists)
+            loaded.Add((list, await cache.GetEntriesAsync(list, stoppingToken)));
 
         if (response.Questions.Count > 0)
         {
@@ -328,12 +341,7 @@ public sealed class DnsFilterEngine(
             bool blockMatch = false;
             bool allowMatch = false;
 
-            foreach (
-                (
-                    DnsFilterListEntity list,
-                    IReadOnlyList<DnsFilterListEntryEntity> entries
-                ) in loaded
-            )
+            foreach ((DnsFilterList list, DnsFilterListIndex entries) in loaded)
             {
                 if (!ListCoversDomain(target, entries))
                     continue;
@@ -438,44 +446,28 @@ public sealed class DnsFilterEngine(
     ///     to. When no group matches, the default group's lists apply. The resolved client's direct
     ///     <see cref="DnsClientListAssignmentEntity" /> rows are always added.
     /// </summary>
-    private async Task<IReadOnlyList<DnsFilterListEntity>> ResolveApplicableListsAsync(
-        AsyncServiceScope scope,
+    private async ValueTask<IReadOnlyList<DnsFilterList>> ResolveApplicableListsAsync(
         IPAddress remoteAddress,
         string clientId,
         DnsFilterListKindEnum kind,
         CancellationToken stoppingToken
     )
     {
-        IDnsClientGroupRepository groupRepository =
-            scope.ServiceProvider.GetRequiredService<IDnsClientGroupRepository>();
-        IDnsClientGroupNetworkRepository networkRepository =
-            scope.ServiceProvider.GetRequiredService<IDnsClientGroupNetworkRepository>();
-        IDnsClientGroupListAssignmentRepository assignmentRepository =
-            scope.ServiceProvider.GetRequiredService<IDnsClientGroupListAssignmentRepository>();
-        IDnsFilterListRepository listRepository =
-            scope.ServiceProvider.GetRequiredService<IDnsFilterListRepository>();
+        DnsFilterConfiguration configuration = await cache.GetConfigurationAsync(stoppingToken);
 
-        IReadOnlyList<DnsClientGroupEntity> allGroups = await groupRepository.ListAsync(
-            group => !group.IsDisabled,
-            stoppingToken
-        );
+        List<DnsFilterGroup> matchedGroups = [];
 
-        List<DnsClientGroupEntity> matchedGroups = [];
-
-        foreach (DnsClientGroupEntity group in allGroups.Where(group => !group.IsDefault))
+        foreach (DnsFilterGroup group in configuration.MatchableGroups)
         {
-            IReadOnlyList<DnsClientGroupNetworkEntity> networks =
-                await networkRepository.ListByGroupIdAsync(group.Id, stoppingToken);
-
             // A group matches by a Cidr row containing the source address, or by a ClientId row
             // matching the ClientID from a DNS-over-HTTPS URL path (see
             // DnsClientGroupNetworkEntity.ClientId).
-            bool matchesNetwork = networks.Any(network =>
+            bool matchesNetwork = group.Networks.Any(network =>
                 ClientAddress.NetworkContains(network.Cidr, remoteAddress)
             );
             bool matchesClientId =
                 clientId is not null
-                && networks.Any(network => MatchesClientId(network.ClientId, clientId));
+                && group.Networks.Any(network => MatchesClientId(network.ClientId, clientId));
 
             if (matchesNetwork || matchesClientId)
                 matchedGroups.Add(group);
@@ -483,75 +475,42 @@ public sealed class DnsFilterEngine(
 
         // The client registry is a third way into a group, added to the matches above. A
         // disabled client contributes neither its group nor its direct list assignments.
-        DnsClientEntity resolvedClient = await ResolveClientAsync(
-            scope,
-            remoteAddress,
-            stoppingToken
-        );
+        DnsClientInfo resolvedClient = await ResolveClientAsync(remoteAddress, stoppingToken);
 
-        if (resolvedClient?.ClientGroupId is { } clientGroupId)
-        {
-            DnsClientGroupEntity clientGroup = await groupRepository.GetByIdAsync(
+        if (
+            resolvedClient?.ClientGroupId is { } clientGroupId
+            && configuration.EnabledGroups.TryGetValue(
                 clientGroupId,
-                stoppingToken
-            );
-
-            if (
-                clientGroup is not null
-                && !clientGroup.IsDisabled
-                && matchedGroups.All(group => group.Id != clientGroup.Id)
+                out DnsFilterGroup clientGroup
             )
-                matchedGroups.Add(clientGroup);
-        }
+            && matchedGroups.All(group => group.Id != clientGroup.Id)
+        )
+            matchedGroups.Add(clientGroup);
 
         // The default group applies only when no group matched by any of the three means.
-        if (matchedGroups.Count == 0)
-        {
-            DnsClientGroupEntity defaultGroup = await groupRepository.GetDefaultAsync(
-                stoppingToken
-            );
-
-            if (defaultGroup is not null && !defaultGroup.IsDisabled)
-                matchedGroups.Add(defaultGroup);
-        }
+        if (matchedGroups.Count == 0 && configuration.DefaultGroup is { } defaultGroup)
+            matchedGroups.Add(defaultGroup);
 
         HashSet<Guid> listIds = [];
 
-        foreach (DnsClientGroupEntity group in matchedGroups)
-        {
-            IReadOnlyList<DnsClientGroupListAssignmentEntity> assignments =
-                await assignmentRepository.ListByGroupIdAsync(group.Id, stoppingToken);
-
-            foreach (DnsClientGroupListAssignmentEntity assignment in assignments)
-                listIds.Add(assignment.ListId);
-        }
+        foreach (DnsFilterGroup group in matchedGroups)
+            listIds.UnionWith(group.ListIds);
 
         // The resolved client's direct list assignments apply whether or not it matched a group.
-        if (resolvedClient is not null)
-        {
-            IDnsClientListAssignmentRepository clientListAssignmentRepository =
-                scope.ServiceProvider.GetService<IDnsClientListAssignmentRepository>();
+        if (
+            resolvedClient is not null
+            && configuration.ClientListIds.TryGetValue(resolvedClient.ClientId, out Guid[] direct)
+        )
+            listIds.UnionWith(direct);
 
-            if (clientListAssignmentRepository is not null)
-            {
-                IReadOnlyList<DnsClientListAssignmentEntity> clientAssignments =
-                    await clientListAssignmentRepository.ListByClientIdAsync(
-                        resolvedClient.Id,
-                        stoppingToken
-                    );
-
-                foreach (DnsClientListAssignmentEntity assignment in clientAssignments)
-                    listIds.Add(assignment.ListId);
-            }
-        }
-
-        List<DnsFilterListEntity> lists = [];
+        List<DnsFilterList> lists = [];
 
         foreach (Guid listId in listIds)
         {
-            DnsFilterListEntity list = await listRepository.GetByIdAsync(listId, stoppingToken);
-
-            if (list is not null && !list.IsDisabled && list.Kind == kind)
+            if (
+                configuration.Lists.TryGetValue(listId, out DnsFilterList list)
+                && list.Kind == kind
+            )
                 lists.Add(list);
         }
 
@@ -559,18 +518,16 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method resolves a query's source address to its registered, enabled
-    ///     <see cref="DnsClientEntity" />. Returns <see langword="null" /> when the resolver or
-    ///     client repository is missing, the address has no mapping, no client is registered for
-    ///     it, or that client is disabled.
+    ///     This method resolves a query's source address to its registered, enabled client.
+    ///     Returns <see langword="null" /> when the resolver or the client directory is missing,
+    ///     the address has no mapping, no client is registered for it, or that client is disabled.
     /// </summary>
-    private async Task<DnsClientEntity> ResolveClientAsync(
-        AsyncServiceScope scope,
+    private async ValueTask<DnsClientInfo> ResolveClientAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken
     )
     {
-        if (clientIdentityResolver is null)
+        if (clientIdentityResolver is null || clientDirectory is null)
             return null;
 
         ClientIdentityResolution resolution = await clientIdentityResolver.ResolveAsync(
@@ -581,13 +538,7 @@ public sealed class DnsFilterEngine(
         if (resolution is null)
             return null;
 
-        IDnsClientRepository clientRepository =
-            scope.ServiceProvider.GetService<IDnsClientRepository>();
-
-        if (clientRepository is null)
-            return null;
-
-        DnsClientEntity client = await clientRepository.GetByClientIdentifierAsync(
+        DnsClientInfo client = await clientDirectory.FindAsync(
             resolution.ClientIdentifier,
             resolution.ProtocolVersion,
             stoppingToken
@@ -603,8 +554,7 @@ public sealed class DnsFilterEngine(
     ///     an IPv4-mapped IPv6 address as its IPv4 form.
     /// </summary>
     private async Task<DnsFilterDecision> EvaluateNetworkListsAsync(
-        AsyncServiceScope scope,
-        IReadOnlyList<DnsFilterListEntity> lists,
+        IReadOnlyList<DnsFilterList> lists,
         IPAddress address,
         CancellationToken stoppingToken
     )
@@ -612,18 +562,11 @@ public sealed class DnsFilterEngine(
         bool blockMatch = false;
         bool allowMatch = false;
 
-        foreach (DnsFilterListEntity list in lists)
+        foreach (DnsFilterList list in lists)
         {
-            IDnsFilterListEntryRepository entryRepository =
-                scope.ServiceProvider.GetRequiredService<IDnsFilterListEntryRepository>();
-            IReadOnlyList<DnsFilterListEntryEntity> entries =
-                await entryRepository.ListByListIdAsync(list.Id, stoppingToken);
+            DnsFilterListIndex entries = await cache.GetEntriesAsync(list, stoppingToken);
 
-            bool matches = entries.Any(entry =>
-                ClientAddress.NetworkContains(entry.Value, address)
-            );
-
-            if (!matches)
+            if (!entries.ContainsAddress(address))
                 continue;
 
             if (list.Action == DnsFilterListActionEnum.Block)
@@ -644,39 +587,22 @@ public sealed class DnsFilterEngine(
         && string.Equals(entryClientId, queryClientId, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    ///     This method checks whether a single entry covers a queried name, dispatching on the
-    ///     entry's <see cref="DnsFilterListEntryEntity.Kind" />.
+    ///     This method checks whether a wildcard or regex entry covers a queried name.
     /// </summary>
-    private bool MatchesDomain(string queriedPresentation, DnsFilterListEntryEntity entry)
-    {
-        switch (entry.Kind)
-        {
-            case DnsFilterEntryKindEnum.Wildcard:
-                return MatchesPattern(
-                    DnsFilterEntryKindEnum.Wildcard,
-                    entry.Value,
-                    queriedPresentation,
-                    BuildWildcardRegexPattern
-                );
-
-            case DnsFilterEntryKindEnum.Regex:
-                return MatchesPattern(
-                    DnsFilterEntryKindEnum.Regex,
-                    entry.Value,
-                    queriedPresentation,
-                    static pattern => pattern
-                );
-
-            default:
-                string normalizedEntry = NormalizeDomain(entry.Value);
-
-                return queriedPresentation == normalizedEntry
-                    || queriedPresentation.EndsWith(
-                        "." + normalizedEntry,
-                        StringComparison.Ordinal
-                    );
-        }
-    }
+    private bool MatchesPatternEntry(string queriedPresentation, DnsFilterPatternEntry entry) =>
+        entry.Kind == DnsFilterEntryKindEnum.Wildcard
+            ? MatchesPattern(
+                DnsFilterEntryKindEnum.Wildcard,
+                entry.Value,
+                queriedPresentation,
+                BuildWildcardRegexPattern
+            )
+            : MatchesPattern(
+                DnsFilterEntryKindEnum.Regex,
+                entry.Value,
+                queriedPresentation,
+                static pattern => pattern
+            );
 
     /// <summary>
     ///     This method matches a wildcard or regex entry against the queried name, compiling and
@@ -785,5 +711,6 @@ public sealed class DnsFilterEngine(
     ///     <see cref="DnsName.ToString" />'s always-fully-qualified form compares correctly
     ///     against an operator-entered value that may or may not have one.
     /// </summary>
-    private static string NormalizeDomain(string value) => value.TrimEnd('.').ToLowerInvariant();
+    private static string NormalizeDomain(string value) =>
+        DnsFilterListIndex.NormalizeDomain(value);
 }

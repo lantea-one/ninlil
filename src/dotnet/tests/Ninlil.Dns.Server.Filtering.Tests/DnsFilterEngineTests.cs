@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientIdentity;
 using Ninlil.Dns.Server.Filtering.Tests.Fakes;
 
@@ -21,7 +22,7 @@ namespace Ninlil.Dns.Server.Filtering.Tests;
 /// </summary>
 public partial class DnsFilterEngineTests
 {
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         public readonly InMemoryDnsFilterListRepository Lists = new();
         public readonly InMemoryDnsFilterListEntryRepository Entries = new();
@@ -29,10 +30,14 @@ public partial class DnsFilterEngineTests
         public readonly InMemoryDnsClientGroupNetworkRepository Networks = new();
         public readonly InMemoryDnsClientGroupListAssignmentRepository Assignments = new();
         public readonly InMemoryDnsClientRepository Clients = new();
+        public readonly InMemoryDnsClientAddressRepository ClientAddresses = new();
         public readonly InMemoryDnsClientListAssignmentRepository ClientListAssignments = new();
         public readonly DnsFilterOptions Options = new() { Enable = true };
         public readonly IServiceScopeFactory ScopeFactory;
         public readonly DnsFilterEngine Engine;
+        public readonly EntityChangeNotifier Notifier = new();
+        public readonly DnsFilterConfigurationCache Cache;
+        public readonly DnsClientDirectory Directory;
 
         /// <param name="identityResolver">
         ///     The optional client identity resolver to build the engine with.
@@ -70,6 +75,9 @@ public partial class DnsFilterEngineTests
                 services.AddSingleton<Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository>(
                     Clients
                 );
+                services.AddSingleton<Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository>(
+                    ClientAddresses
+                );
                 services.AddSingleton<Ninlil.Dns.Data.Abstractions.Repository.IDnsClientListAssignmentRepository>(
                     ClientListAssignments
                 );
@@ -78,18 +86,41 @@ public partial class DnsFilterEngineTests
             ScopeFactory = services
                 .BuildServiceProvider()
                 .GetRequiredService<IServiceScopeFactory>();
-            Engine = new DnsFilterEngine(
+            Cache = new DnsFilterConfigurationCache(
                 ScopeFactory,
+                Notifier,
+                NullLogger<DnsFilterConfigurationCache>.Instance
+            );
+            Directory = new DnsClientDirectory(
+                ScopeFactory,
+                Notifier,
+                NullLogger<DnsClientDirectory>.Instance
+            );
+            Engine = new DnsFilterEngine(
+                Cache,
                 Options2(),
                 NullLogger<DnsFilterEngine>.Instance,
-                identityResolver
+                identityResolver,
+                registerClientRepositories ? Directory : null
             );
+        }
+
+        /// <summary>
+        ///     This method stands in for the committed save a real repository write ends with:
+        ///     the in-memory repositories have no unit of work, so the fixture's setup helpers
+        ///     tell the caches themselves that rows changed.
+        /// </summary>
+        public void Changed()
+        {
+            Cache.ExpireAll();
+            Directory.Expire();
         }
 
         private StaticOptionsMonitor<DnsFilterOptions> Options2() => new(Options);
 
-        public DnsClientGroupEntity AddGroup(string name, bool isDefault) =>
-            AddEntity(
+        public DnsClientGroupEntity AddGroup(string name, bool isDefault)
+        {
+            DnsClientGroupEntity group = AddEntity(
                 Groups.Items,
                 new DnsClientGroupEntity
                 {
@@ -98,8 +129,12 @@ public partial class DnsFilterEngineTests
                     IsDefault = isDefault,
                 }
             );
+            Changed();
+            return group;
+        }
 
-        public void AddNetwork(Guid groupId, string cidr) =>
+        public void AddNetwork(Guid groupId, string cidr)
+        {
             Networks.Items.Add(
                 new DnsClientGroupNetworkEntity
                 {
@@ -108,8 +143,11 @@ public partial class DnsFilterEngineTests
                     Cidr = cidr,
                 }
             );
+            Changed();
+        }
 
-        public void AddClientIdNetwork(Guid groupId, string clientId) =>
+        public void AddClientIdNetwork(Guid groupId, string clientId)
+        {
             Networks.Items.Add(
                 new DnsClientGroupNetworkEntity
                 {
@@ -118,6 +156,8 @@ public partial class DnsFilterEngineTests
                     ClientId = clientId,
                 }
             );
+            Changed();
+        }
 
         public DnsFilterListEntity AddList(
             string name,
@@ -148,6 +188,7 @@ public partial class DnsFilterEngineTests
                     }
                 );
 
+            Changed();
             return list;
         }
 
@@ -180,10 +221,12 @@ public partial class DnsFilterEngineTests
                 }
             );
 
+            Changed();
             return list;
         }
 
-        public void AssignListToGroup(Guid groupId, Guid listId) =>
+        public void AssignListToGroup(Guid groupId, Guid listId)
+        {
             Assignments.Items.Add(
                 new DnsClientGroupListAssignmentEntity
                 {
@@ -192,6 +235,8 @@ public partial class DnsFilterEngineTests
                     ListId = listId,
                 }
             );
+            Changed();
+        }
 
         public DnsClientEntity AddClient(
             string clientIdentifier,
@@ -209,10 +254,21 @@ public partial class DnsFilterEngineTests
                 }
             );
             Clients.Addresses.Add((clientIdentifier, InternetProtocolVersionEnum.IPv4, client.Id));
+            ClientAddresses.Items.Add(
+                new DnsClientAddressEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ClientId = client.Id,
+                    ClientIdentifier = clientIdentifier,
+                    ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                }
+            );
+            Changed();
             return client;
         }
 
-        public void AssignListToClient(Guid clientId, Guid listId) =>
+        public void AssignListToClient(Guid clientId, Guid listId)
+        {
             ClientListAssignments.Items.Add(
                 new DnsClientListAssignmentEntity
                 {
@@ -221,6 +277,8 @@ public partial class DnsFilterEngineTests
                     ListId = listId,
                 }
             );
+            Changed();
+        }
 
         private static T AddEntity<T>(List<T> collection, T entity)
         {
@@ -787,6 +845,7 @@ public partial class DnsFilterEngineTests
         fixture.AddGroup("default", isDefault: true);
         DnsClientGroupEntity disabledGroup = fixture.AddGroup("disabled-group", isDefault: false);
         disabledGroup.IsDisabled = true;
+        fixture.Changed();
         DnsFilterListEntity groupBlockList = fixture.AddList(
             "group-block",
             DnsFilterListKindEnum.Domain,

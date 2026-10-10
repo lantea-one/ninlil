@@ -34,4 +34,13 @@
     <PackageReference Include="Ninlil.Dns.Common" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
 </Project>

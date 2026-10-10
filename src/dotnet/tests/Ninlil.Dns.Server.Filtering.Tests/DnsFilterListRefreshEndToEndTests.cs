@@ -161,7 +161,11 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
         public async Task<DnsMessage> QueryAsync(string name)
         {
             DnsFilterEngine engine = new(
-                Provider.GetRequiredService<IServiceScopeFactory>(),
+                new DnsFilterConfigurationCache(
+                    Provider.GetRequiredService<IServiceScopeFactory>(),
+                    new EntityChangeNotifier(),
+                    NullLogger<DnsFilterConfigurationCache>.Instance
+                ),
                 new StaticOptionsMonitor<DnsFilterOptions>(Options),
                 NullLogger<DnsFilterEngine>.Instance
             );

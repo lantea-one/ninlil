@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Ninlil.Dns.Server.Core.ClientIdentity;
 using Ninlil.Dns.Server.Core.Filtering;
 
 // Define our namespace.
@@ -19,7 +21,10 @@ public static class ServiceCollectionFilteringExtension
     ///     fresh install starts with it off). <see cref="DnsFilterEngine" /> checks
     ///     <see cref="DnsFilterOptions.Enable" /> live through
     ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so a disabled
-    ///     engine costs one field read per check and no database access.
+    ///     engine costs one field read per check and no database access. It also registers the
+    ///     <see cref="DnsFilterConfigurationCache" /> and the <see cref="DnsClientDirectory" /> the
+    ///     engine reads; both need an <c>IEntityChangeNotifier</c>, which the storage extensions
+    ///     register.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read filtering settings from.</param>
@@ -36,8 +41,11 @@ public static class ServiceCollectionFilteringExtension
         instance.AddHttpClient();
 
         // Singleton, because the singleton DnsQueryProcessingPipeline takes it as a constructor
-        // dependency. The engine reaches the scoped repositories by opening a short-lived scope
-        // per check through IServiceScopeFactory.
+        // dependency. The engine reads the singleton configuration cache and client directory,
+        // which open a short-lived scope only when they load. The directory uses TryAdd so another
+        // extension that needs it can register the same singleton.
+        instance.AddSingleton<DnsFilterConfigurationCache>();
+        instance.TryAddSingleton<DnsClientDirectory>();
         instance.AddSingleton<IDnsFilterEngine, DnsFilterEngine>();
         instance.AddHostedService<DnsFilterListExternalRefreshService>();
 

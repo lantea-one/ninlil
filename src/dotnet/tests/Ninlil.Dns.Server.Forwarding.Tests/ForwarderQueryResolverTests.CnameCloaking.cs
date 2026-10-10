@@ -135,7 +135,11 @@ public sealed partial class ForwarderQueryResolverTests
     )> QueryThroughPipelineAsync(DnsFilterOptions filterOptions, string name)
     {
         DnsFilterEngine engine = new(
-            _provider.GetRequiredService<IServiceScopeFactory>(),
+            new DnsFilterConfigurationCache(
+                _provider.GetRequiredService<IServiceScopeFactory>(),
+                new EntityChangeNotifier(),
+                NullLogger<DnsFilterConfigurationCache>.Instance
+            ),
             new StaticOptionsMonitor<DnsFilterOptions>(filterOptions),
             NullLogger<DnsFilterEngine>.Instance
         );

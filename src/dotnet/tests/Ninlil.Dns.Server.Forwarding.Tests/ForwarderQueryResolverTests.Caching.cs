@@ -404,7 +404,11 @@ public sealed partial class ForwarderQueryResolverTests
         )
         {
             DnsFilterEngine engine = new(
-                fixture._provider.GetRequiredService<IServiceScopeFactory>(),
+                new DnsFilterConfigurationCache(
+                    fixture._provider.GetRequiredService<IServiceScopeFactory>(),
+                    new EntityChangeNotifier(),
+                    NullLogger<DnsFilterConfigurationCache>.Instance
+                ),
                 new StaticOptionsMonitor<DnsFilterOptions>(filterOptions),
                 NullLogger<DnsFilterEngine>.Instance
             );
