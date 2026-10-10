@@ -74,6 +74,7 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     public Task AddToRoleAsync(Guid userId, Guid roleId, CancellationToken stoppingToken = default)
     {
         ChangeTracker.Stage(
+            typeof(UserRoleEntity),
             (session, token) =>
                 context.UserRoles.InsertOneWithSessionAsync(
                     session,
@@ -93,6 +94,7 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     )
     {
         ChangeTracker.Stage(
+            typeof(UserRoleEntity),
             (session, token) =>
                 context.UserRoles.DeleteOneWithSessionAsync(
                     session,
@@ -112,6 +114,7 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     )
     {
         ChangeTracker.Stage(
+            typeof(UserClaimEntity),
             (session, token) =>
                 context.UserClaims.InsertManyWithSessionAsync(
                     session,
@@ -141,6 +144,7 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         (string ClaimType, string ClaimValue)[] requested = [.. claims];
 
         ChangeTracker.Stage(
+            typeof(UserClaimEntity),
             (session, token) =>
                 context.UserClaims.DeleteManyWithSessionAsync(
                     session,
@@ -167,6 +171,7 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     )
     {
         ChangeTracker.Stage(
+            typeof(UserClaimEntity),
             (session, token) =>
                 context.UserClaims.UpdateManyWithSessionAsync(
                     session,

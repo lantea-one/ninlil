@@ -49,6 +49,7 @@ public abstract class MongoRepositoryBase<TEntity>(
     {
         // Staged, so it is written only when IUnitOfWork.SaveChangesAsync runs.
         ChangeTracker.Stage(
+            typeof(TEntity),
             (session, token) => Collection.InsertOneWithSessionAsync(session, entity, token)
         );
 
@@ -69,6 +70,7 @@ public abstract class MongoRepositoryBase<TEntity>(
         // caller may reuse its collection.
         TEntity[] documents = [.. entities];
         ChangeTracker.Stage(
+            typeof(TEntity),
             (session, token) => Collection.InsertManyWithSessionAsync(session, documents, token)
         );
 
@@ -78,6 +80,7 @@ public abstract class MongoRepositoryBase<TEntity>(
     /// <inheritdoc />
     public virtual void Update(TEntity entity) =>
         ChangeTracker.Stage(
+            typeof(TEntity),
             (session, token) =>
                 Collection.ReplaceOneWithSessionAsync(
                     session,
@@ -90,6 +93,7 @@ public abstract class MongoRepositoryBase<TEntity>(
     /// <inheritdoc />
     public virtual void Remove(TEntity entity) =>
         ChangeTracker.Stage(
+            typeof(TEntity),
             (session, token) =>
                 Collection.DeleteOneWithSessionAsync(
                     session,

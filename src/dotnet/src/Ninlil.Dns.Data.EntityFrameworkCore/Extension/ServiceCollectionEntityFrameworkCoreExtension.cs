@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -57,7 +58,25 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
         // connection in use.
         instance.AddSingleton(options);
 
-        instance.AddDbContext<NinlilDnsContext>(builder => builder.UseNinlilDnsStorage(options));
+        // One notifier and one interceptor for the process: caches subscribe to the notifier, and
+        // the interceptor raises it after each committed save on any context.
+        instance.AddSingleton<IEntityChangeNotifier>(provider => new EntityChangeNotifier(
+            exception =>
+                provider
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger<EntityChangeNotifier>()
+                    .LogError(exception, "A change subscriber threw; the save is not affected.")
+        ));
+        instance.AddSingleton<EntityChangeSaveChangesInterceptor>();
+
+        instance.AddDbContext<NinlilDnsContext>(
+            (provider, builder) =>
+                builder
+                    .UseNinlilDnsStorage(options)
+                    .AddInterceptors(
+                        provider.GetRequiredService<EntityChangeSaveChangesInterceptor>()
+                    )
+        );
 
         instance.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
         instance.AddScoped<

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -67,6 +68,16 @@ public static class ServiceCollectionMongoDbExtension
         instance.AddSingleton(provider => new NinlilDnsMongoContext(
             provider.GetRequiredService<IMongoClient>(),
             databaseName
+        ));
+
+        // One notifier for the process: caches subscribe to it, and every successful unit-of-work
+        // save raises it (see MongoChangeTracker).
+        instance.AddSingleton<IEntityChangeNotifier>(provider => new EntityChangeNotifier(
+            exception =>
+                provider
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger<EntityChangeNotifier>()
+                    .LogError(exception, "A change subscriber threw; the save is not affected.")
         ));
 
         // One answer per process: can this deployment run transactions?

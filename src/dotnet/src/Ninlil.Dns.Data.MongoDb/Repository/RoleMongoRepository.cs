@@ -38,6 +38,7 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     )
     {
         ChangeTracker.Stage(
+            typeof(RoleClaimEntity),
             (session, token) =>
                 context.RoleClaims.InsertOneWithSessionAsync(
                     session,
@@ -65,6 +66,7 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     {
         // The same claim can have been granted more than once, so remove every match.
         ChangeTracker.Stage(
+            typeof(RoleClaimEntity),
             (session, token) =>
                 context.RoleClaims.DeleteManyWithSessionAsync(
                     session,

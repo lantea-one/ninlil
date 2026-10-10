@@ -16,9 +16,15 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 ///     <see cref="NinlilDnsContext" />.
 /// </summary>
 /// <param name="context">The database context to operate against.</param>
-public class DnsFilterListEntryRepository(NinlilDnsContext context)
-    : EntityFrameworkRepositoryBase<DnsFilterListEntryEntity>(context),
-        IDnsFilterListEntryRepository
+/// <param name="changeInterceptor">
+///     The interceptor that raises the change signal. <see cref="ReplaceEntriesAsync" /> writes
+///     with raw statements that <c>SaveChanges</c> never sees, so it reports its own change
+///     through it. <see langword="null" /> (a repository built by hand) raises no signal.
+/// </param>
+public class DnsFilterListEntryRepository(
+    NinlilDnsContext context,
+    EntityChangeSaveChangesInterceptor changeInterceptor = null
+) : EntityFrameworkRepositoryBase<DnsFilterListEntryEntity>(context), IDnsFilterListEntryRepository
 {
     /// <summary>
     ///     This constant is the most parameters one insert statement carries. It is far below the
@@ -85,6 +91,10 @@ public class DnsFilterListEntryRepository(NinlilDnsContext context)
             );
 
         await InsertRowsAsync(added, stoppingToken);
+
+        // Raw statements bypass SaveChanges, so report the change here. Inside the caller's
+        // transaction the signal is held until the commit.
+        changeInterceptor?.RecordBulkChange(Context, typeof(DnsFilterListEntryEntity));
     }
 
     /// <summary>

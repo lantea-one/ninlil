@@ -70,6 +70,7 @@ public class DnsFilterListEntryMongoRepository(
         // The operation is staged outside the unit of work's transaction (OD-B11-d): it runs
         // after the transaction commits and uses no session.
         ChangeTracker.Stage(
+            typeof(DnsFilterListEntryEntity),
             async (session, token) =>
             {
                 await Collection.DeleteManyAsync(entry => entry.ListId == listId, token);

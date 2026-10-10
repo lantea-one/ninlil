@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using Ninlil.Dns.Data.Abstractions.Repository;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.MongoDb;
@@ -11,13 +12,24 @@ namespace Ninlil.Dns.Data.MongoDb;
 ///     <see cref="MongoUnitOfWork.SaveChangesAsync" /> later runs everything staged, in order.
 ///     When <see cref="MongoTransactionSupport" /> reports a replica set or sharded cluster, the
 ///     transactional writes run in one multi-document transaction, so a failure leaves none of
-///     them behind. On a standalone server they run one by one without a transaction. It is
+///     them behind. On a standalone server they run one by one without a transaction. A flush that
+///     completes reports the entity types it wrote to <see cref="IEntityChangeNotifier" />; one
+///     that throws reports nothing, even if some of its writes landed (standalone server,
+///     filter-list refresh), because the caches still expire on their time-to-live. It is
 ///     registered as scoped, so all repositories serving one request share the same pending
 ///     writes.
 /// </summary>
 /// <param name="client">The MongoDB client used to start the transaction session.</param>
 /// <param name="transactionSupport">Tells whether the deployment can run transactions.</param>
-public class MongoChangeTracker(IMongoClient client, MongoTransactionSupport transactionSupport)
+/// <param name="notifier">
+///     The notifier told which entity types a flush wrote, once every write of the flush has
+///     succeeded.
+/// </param>
+public class MongoChangeTracker(
+    IMongoClient client,
+    MongoTransactionSupport transactionSupport,
+    IEntityChangeNotifier notifier
+)
 {
     /// <summary>
     ///     This property contains every write staged so far, waiting to be flushed.
@@ -29,7 +41,9 @@ public class MongoChangeTracker(IMongoClient client, MongoTransactionSupport tra
     /// </summary>
     /// <param name="Operation">The write to perform.</param>
     /// <param name="Transactional">Whether the write runs inside the transaction.</param>
+    /// <param name="EntityType">The entity type the write changes, for the change signal.</param>
     private readonly record struct PendingOperation(
+        Type EntityType,
         Func<IClientSessionHandle, CancellationToken, Task> Operation,
         bool Transactional
     );
@@ -38,6 +52,10 @@ public class MongoChangeTracker(IMongoClient client, MongoTransactionSupport tra
     ///     This method stages a single write to be performed the next time
     ///     <see cref="FlushAsync" /> runs.
     /// </summary>
+    /// <param name="entityType">
+    ///     The type of the entity the write adds, changes or removes. It is reported to
+    ///     <see cref="IEntityChangeNotifier" /> after the flush succeeds.
+    /// </param>
     /// <param name="operation">
     ///     The write to perform, given the session of the running transaction (<see langword="null" />
     ///     when no transaction is used; see <see cref="MongoSessionWrites" />) and the cancellation
@@ -50,9 +68,10 @@ public class MongoChangeTracker(IMongoClient client, MongoTransactionSupport tra
     ///     transaction limits (a transaction lives 60 seconds by default).
     /// </param>
     public void Stage(
+        Type entityType,
         Func<IClientSessionHandle, CancellationToken, Task> operation,
         bool transactional = true
-    ) => _pendingOperations.Add(new PendingOperation(operation, transactional));
+    ) => _pendingOperations.Add(new PendingOperation(entityType, operation, transactional));
 
     /// <summary>
     ///     This method performs every write staged so far, in the order it was staged, and then
@@ -101,6 +120,9 @@ public class MongoChangeTracker(IMongoClient client, MongoTransactionSupport tra
 
         foreach (PendingOperation item in afterCommit)
             await item.Operation(null, stoppingToken);
+
+        // Every write has succeeded (an exception above skips this line), so tell the caches.
+        notifier.NotifyChanged([.. operations.Select(item => item.EntityType).Distinct()]);
 
         return operations.Length;
     }
