@@ -9,7 +9,7 @@ namespace Ninlil.Benchmarks.Storage;
 
 /// <summary>
 ///     This class measures a filter-list refresh: <c>ReplaceEntriesAsync</c> with a full
-///     subscribed list (100,000 entries at the large scale) followed by the save, as
+///     subscribed list (100,000 entries at the large scale) followed by the save inside a transaction on the relational engines, as
 ///     <c>DnsFilterListExternalRefreshService</c> does. The replacement holds the same values the
 ///     list already has, so the data set stays as seeded. Three monitored iterations, because a
 ///     refresh is slow and allocates a lot.
@@ -45,9 +45,21 @@ public class FilterRefreshBenchmarks : StorageBenchmarkBase
     public Task<int> ReplaceAndSave() =>
         InScopeAsync(async provider =>
         {
+            // The relational engines delete the old entries at once, so the refresh runs in a
+            // transaction, as DnsFilterListExternalRefreshService does. MongoDB has no factory.
+            IUnitOfWorkTransactionFactory factory =
+                provider.GetService<IUnitOfWorkTransactionFactory>();
+            await using IUnitOfWorkTransaction transaction = factory is null
+                ? null
+                : await factory.BeginAsync();
             await provider
                 .GetRequiredService<IDnsFilterListEntryRepository>()
                 .ReplaceEntriesAsync(_listId, _replacement);
-            return await provider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+            int saved = await provider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+
+            if (transaction is not null)
+                await transaction.CommitAsync();
+
+            return saved;
         });
 }
