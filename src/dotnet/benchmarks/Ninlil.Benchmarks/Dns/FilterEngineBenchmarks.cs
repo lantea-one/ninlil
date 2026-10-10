@@ -54,6 +54,11 @@ public class FilterEngineBenchmarks : DnsPathBenchmarkBase
         _blockedCnameResponse = CnameResponse(BenchmarkDataSet.FilterEntryValue(0, 5));
         _allowedCnameResponse = CnameResponse("cdn.clean.example.org");
 
+        // The first call loads the configuration copy and builds the EF model, so the footprint
+        // measured below holds only what the three lists add.
+        await ClientUnidentified();
+        long before = GC.GetTotalMemory(forceFullCollection: true);
+
         Expect(
             await DomainBlockedUnidentified(),
             "a listed name is denied for an unidentified client"
@@ -87,6 +92,12 @@ public class FilterEngineBenchmarks : DnsPathBenchmarkBase
         Expect(
             !await ResponseAllowedInTwoGroups(),
             "a CNAME to an unlisted name is allowed for a client in two groups"
+        );
+
+        // Every query so far has used the lists of both groups, so all list indexes are loaded.
+        long after = GC.GetTotalMemory(forceFullCollection: true);
+        Console.WriteLine(
+            $"// Filter list cache footprint: {(after - before) / 1024.0 / 1024.0:F1} MB retained after loading the seeded lists."
         );
     }
 
