@@ -977,6 +977,15 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
     }
 }
 
+// One line says where the data lives now (after any storage switch), without secrets.
+topologyLogger.LogInformation(
+    "{Topology}",
+    StorageTopologyDescription.Describe(
+        app.Services.GetRequiredService<StorageOptions>(),
+        app.Services.GetRequiredService<StorageConnectionStrings>()
+    )
+);
+
 // The startup migration or guard and the storage switch are done, and each ran on the primary
 // connection. From here a scope that asks for the replica may get it (no effect without a
 // configured read replica).
