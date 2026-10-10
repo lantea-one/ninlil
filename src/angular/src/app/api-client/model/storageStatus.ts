@@ -7,22 +7,26 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { StoragePrimaryStatus } from './storagePrimaryStatus';
+import { StorageReadReplicaStatus } from './storageReadReplicaStatus';
+import { PendingStorageSwitchInfo } from './pendingStorageSwitchInfo';
 import { StorageEngineEnum } from './storageEngineEnum';
+import { StorageSwitchOutcome } from './storageSwitchOutcome';
 
 
 /**
- * This record describes the active storage engine (`GET /api/storage`). It leaves out the connection string, which may contain a password, as the API does with every credential.
+ * This record describes the active storage engine and any storage switch that is waiting for the next start or has just run (`GET /api/storage`). It leaves out every connection string, which may contain a password, as the API does with every credential.
  */
 export interface StorageStatus { 
     engine?: StorageEngineEnum;
+    pendingSwitch?: PendingStorageSwitchInfo;
+    lastSwitchOutcome?: StorageSwitchOutcome;
     /**
-     * Whether a `POST /api/storage/switch` call is running in this process.
+     * The engines `POST /api/storage/switch` accepts as a target: the four relational engines Entity Framework Core serves with one model. Ninlil.Dns.Common.Enum.StorageEngineEnum.MongoDb is not among them. It uses a separate repository implementation chosen at startup.
      */
-    switchInProgress?: boolean;
-    /**
-     * The engines `POST /api/storage/switch` can switch to or from without a restart: the four relational engines Entity Framework Core serves with one model. Ninlil.Dns.Common.Enum.StorageEngineEnum.MongoDb is not among them. It uses a separate repository implementation chosen at startup, so switching to or from it means editing the configuration and restarting.
-     */
-    liveSwitchSupportedEngines?: Array<StorageEngineEnum> | null;
+    switchSupportedEngines?: Array<StorageEngineEnum> | null;
+    primary?: StoragePrimaryStatus;
+    readReplica?: StorageReadReplicaStatus;
 }
 export namespace StorageStatus {
 }

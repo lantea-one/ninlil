@@ -22,7 +22,7 @@ export interface RelationalStorageConnectionFields {
      */
     port?: number;
     /**
-     * The name of an existing database that is empty or may be overwritten.
+     * The name of an existing database that is empty or whose Ninlil data may be replaced.
      */
     databaseName?: string | null;
     /**

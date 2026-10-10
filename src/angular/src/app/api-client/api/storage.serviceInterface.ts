@@ -12,8 +12,8 @@ import { HttpHeaders }                                       from '@angular/comm
 import { Observable }                                        from 'rxjs';
 
 import { StorageEngineSwitchApiRequest } from '../model/models';
-import { StorageEngineSwitchResult } from '../model/models';
 import { StorageStatus } from '../model/models';
+import { StorageSwitchScheduled } from '../model/models';
 
 
 import { Configuration }                                     from '../configuration';
@@ -29,18 +29,25 @@ export interface StorageServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reports the active storage engine, whether a switch is in progress, and which engines a switch can target. Requires &#x60;storage:read&#x60;.
+     * This action reports the active storage engine, the switch waiting for the next start, the outcome of a switch this start applied, and which engines a switch can target. It also lists the primary\&#39;s hosts and, when a read replica is configured, whether the replica serves reads now (lag, schema, reason) and how many database scopes went to each side. Host names and ports are the only connection details it returns. Requires &#x60;storage:read&#x60;.
      * 
      * @endpoint get /api/storage
 */
     apiStorageGet(extraHttpRequestParams?: any): Observable<StorageStatus>;
 
     /**
-     * This action switches the storage engine in-process: it backs up the active engine, provisions and migrates the target, moves the running server onto it and restores the backup into it. It returns once every row is copied and the server is using the new engine, which at homelab or small-office scale takes well under a minute. Requires &#x60;storage:manage&#x60;.  The request carries per-engine connection fields (a file path for SQLite; host,     port, database, username, password and encryption mode for the others) rather than a     free-text connection string. The server builds the connection string with each     engine\&#39;s &#x60;*ConnectionStringBuilder&#x60;. A failed switch returns 400 and leaves the     previous engine active with its data untouched; a switch already in progress returns     409.
+     * This action cancels the switch waiting for the next start. Returns 204, or 404 when none is waiting. Requires &#x60;storage:manage&#x60;.
+     * 
+     * @endpoint delete /api/storage/switch
+*/
+    apiStorageSwitchDelete(extraHttpRequestParams?: any): Observable<{}>;
+
+    /**
+     * This action checks the target database and saves a switch to it, which the next start applies. It returns 202 at once: nothing is copied and the server keeps its engine. Requires &#x60;storage:manage&#x60;.  The request carries per-engine connection fields (a file path for SQLite; host,     port, database, username, password and encryption mode for the others) rather than a     free-text connection string. The server builds the connection string with each     engine\&#39;s &#x60;*ConnectionStringBuilder&#x60;. An unreachable target, a target that a     newer Ninlil upgraded, a request naming MongoDB, or a request made while a read replica     or cluster setting of the engine in use is configured returns 400 and saves nothing. A     second request replaces the first. The answer says whether Ninlil points the     runtime configuration file at the target itself, or the operator must first set     the storage environment variables.
      * 
      * @endpoint post /api/storage/switch
 * @param requestParameters
      */
-    apiStorageSwitchPost(requestParameters: ApiStorageSwitchPostRequestParams, extraHttpRequestParams?: any): Observable<StorageEngineSwitchResult>;
+    apiStorageSwitchPost(requestParameters: ApiStorageSwitchPostRequestParams, extraHttpRequestParams?: any): Observable<StorageSwitchScheduled>;
 
 }

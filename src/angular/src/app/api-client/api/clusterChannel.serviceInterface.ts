@@ -73,7 +73,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelJoinCompletePost(requestParameters: ApiClusterChannelJoinCompletePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action returns this node\&#39;s query counts (last hour, last 24 hours, all retained) for the cluster dashboard. A peer\&#39;s &#x60;ClusterQueryStatsAggregator&#x60; calls it when an operator opens that peer\&#39;s Cluster page. The counts are computed from the query log on every call and not cached; a dashboard load can afford that.
+     * This action returns this node\&#39;s query counts (last hour, last 24 hours, all retained) for the cluster dashboard. A peer\&#39;s &#x60;ClusterQueryStatsAggregator&#x60; calls it when an operator opens that peer\&#39;s Cluster page. The counts are computed from the query log on every call and not cached; a dashboard load can afford that. They are read through a scope of their own that uses a read replica when one is eligible: a count that is a few seconds old is invisible next to a query log the writer batches for up to a second. The request scope cannot choose a replica because the peer authentication has already read the registry there.
      * 
      * @endpoint post /api/cluster/channel/query-stats
 * @param requestParameters

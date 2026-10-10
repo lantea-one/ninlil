@@ -14,7 +14,7 @@
  */
 export interface SqliteStorageConnectionFields { 
     /**
-     * The path of the SQLite database file to switch onto.
+     * The path of the SQLite database file to switch to.
      */
     filePath?: string | null;
 }

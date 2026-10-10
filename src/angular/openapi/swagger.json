@@ -8723,7 +8723,7 @@
         "tags": [
           "ClusterChannel"
         ],
-        "summary": "This action returns this node's query counts (last hour, last 24 hours, all retained)\nfor the cluster dashboard. A peer's `ClusterQueryStatsAggregator` calls it when an\noperator opens that peer's Cluster page. The counts are computed from the query log on\nevery call and not cached; a dashboard load can afford that.",
+        "summary": "This action returns this node's query counts (last hour, last 24 hours, all retained)\nfor the cluster dashboard. A peer's `ClusterQueryStatsAggregator` calls it when an\noperator opens that peer's Cluster page. The counts are computed from the query log on\nevery call and not cached; a dashboard load can afford that. They are read through a\nscope of their own that uses a read replica when one is eligible: a count that is a few\nseconds old is invisible next to a query log the writer batches for up to a second.\nThe request scope cannot choose a replica because the peer authentication has already\nread the registry there.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -32495,7 +32495,7 @@
         "tags": [
           "Storage"
         ],
-        "summary": "This action reports the active storage engine, whether a switch is in progress, and\nwhich engines a switch can target. Requires `storage:read`.",
+        "summary": "This action reports the active storage engine, the switch waiting for the next start,\nthe outcome of a switch this start applied, and which engines a switch can target. It\nalso lists the primary's hosts and, when a read replica is configured, whether the\nreplica serves reads now (lag, schema, reason) and how many database scopes went to\neach side. Host names and ports are the only connection details it returns.\nRequires `storage:read`.",
         "responses": {
           "200": {
             "description": "OK",
@@ -32505,14 +32505,35 @@
                   "$ref": "#/components/schemas/StorageStatus"
                 },
                 "example": {
-                  "engine": "Sqlite",
-                  "switchInProgress": false,
-                  "liveSwitchSupportedEngines": [
+                  "engine": "PostgreSql",
+                  "pendingSwitch": null,
+                  "lastSwitchOutcome": null,
+                  "switchSupportedEngines": [
                     "Sqlite",
                     "PostgreSql",
                     "MySql",
                     "SqlServer"
-                  ]
+                  ],
+                  "primary": {
+                    "hosts": [
+                      "db-primary.example.net:5432"
+                    ]
+                  },
+                  "readReplica": {
+                    "configured": true,
+                    "eligible": true,
+                    "lagSeconds": 0.4,
+                    "schemaCurrent": true,
+                    "lastCheckedAtUtc": "2026-09-01T12:00:03+00:00",
+                    "reason": "",
+                    "readsToReplica": 18452,
+                    "readsToPrimary": 3107,
+                    "hosts": [
+                      "db-standby-1.example.net:5432",
+                      "db-standby-2.example.net:5432"
+                    ],
+                    "readPreference": null
+                  }
                 }
               },
               "application/json": {
@@ -32520,14 +32541,35 @@
                   "$ref": "#/components/schemas/StorageStatus"
                 },
                 "example": {
-                  "engine": "Sqlite",
-                  "switchInProgress": false,
-                  "liveSwitchSupportedEngines": [
+                  "engine": "PostgreSql",
+                  "pendingSwitch": null,
+                  "lastSwitchOutcome": null,
+                  "switchSupportedEngines": [
                     "Sqlite",
                     "PostgreSql",
                     "MySql",
                     "SqlServer"
-                  ]
+                  ],
+                  "primary": {
+                    "hosts": [
+                      "db-primary.example.net:5432"
+                    ]
+                  },
+                  "readReplica": {
+                    "configured": true,
+                    "eligible": true,
+                    "lagSeconds": 0.4,
+                    "schemaCurrent": true,
+                    "lastCheckedAtUtc": "2026-09-01T12:00:03+00:00",
+                    "reason": "",
+                    "readsToReplica": 18452,
+                    "readsToPrimary": 3107,
+                    "hosts": [
+                      "db-standby-1.example.net:5432",
+                      "db-standby-2.example.net:5432"
+                    ],
+                    "readPreference": null
+                  }
                 }
               },
               "text/json": {
@@ -32535,14 +32577,35 @@
                   "$ref": "#/components/schemas/StorageStatus"
                 },
                 "example": {
-                  "engine": "Sqlite",
-                  "switchInProgress": false,
-                  "liveSwitchSupportedEngines": [
+                  "engine": "PostgreSql",
+                  "pendingSwitch": null,
+                  "lastSwitchOutcome": null,
+                  "switchSupportedEngines": [
                     "Sqlite",
                     "PostgreSql",
                     "MySql",
                     "SqlServer"
-                  ]
+                  ],
+                  "primary": {
+                    "hosts": [
+                      "db-primary.example.net:5432"
+                    ]
+                  },
+                  "readReplica": {
+                    "configured": true,
+                    "eligible": true,
+                    "lagSeconds": 0.4,
+                    "schemaCurrent": true,
+                    "lastCheckedAtUtc": "2026-09-01T12:00:03+00:00",
+                    "reason": "",
+                    "readsToReplica": 18452,
+                    "readsToPrimary": 3107,
+                    "hosts": [
+                      "db-standby-1.example.net:5432",
+                      "db-standby-2.example.net:5432"
+                    ],
+                    "readPreference": null
+                  }
                 }
               }
             }
@@ -32555,7 +32618,7 @@
         "tags": [
           "Storage"
         ],
-        "summary": "This action switches the storage engine in-process: it backs up the active engine,\nprovisions and migrates the target, moves the running server onto it and restores the\nbackup into it. It returns once every row is copied and the server is using the new\nengine, which at homelab or small-office scale takes well under a minute. Requires\n`storage:manage`.\n\nThe request carries per-engine connection fields (a file path for SQLite; host,\n    port, database, username, password and encryption mode for the others) rather than a\n    free-text connection string. The server builds the connection string with each\n    engine's `*ConnectionStringBuilder`. A failed switch returns 400 and leaves the\n    previous engine active with its data untouched; a switch already in progress returns\n    409.",
+        "summary": "This action checks the target database and saves a switch to it, which the next start\napplies. It returns 202 at once: nothing is copied and the server keeps its engine.\nRequires `storage:manage`.\n\nThe request carries per-engine connection fields (a file path for SQLite; host,\n    port, database, username, password and encryption mode for the others) rather than a\n    free-text connection string. The server builds the connection string with each\n    engine's `*ConnectionStringBuilder`. An unreachable target, a target that a\n    newer Ninlil upgraded, a request naming MongoDB, or a request made while a read replica\n    or cluster setting of the engine in use is configured returns 400 and saves nothing. A\n    second request replaces the first. The answer says whether Ninlil points the\n    runtime configuration file at the target itself, or the operator must first set\n    the storage environment variables.",
         "requestBody": {
           "description": "The engine to switch to and its connection fields.",
           "content": {
@@ -32624,59 +32687,52 @@
             "content": {
               "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/StorageEngineSwitchResult"
+                  "$ref": "#/components/schemas/StorageSwitchScheduled"
                 },
                 "example": {
-                  "previousEngine": "Sqlite",
-                  "newEngine": "PostgreSql",
-                  "totalEntitiesRestored": 42,
-                  "entityCounts": {
-                    "Zones": 3,
-                    "Records": 27,
-                    "Users": 2,
-                    "Roles": 2
-                  },
-                  "startedAt": "2026-09-01T12:00:00+00:00",
-                  "completedAt": "2026-09-01T12:00:04+00:00"
+                  "targetEngine": "PostgreSql",
+                  "requestedAtUtc": "2026-09-01T12:00:00+00:00",
+                  "appliesAutomatically": false,
+                  "targetHasData": false,
+                  "note": "Set NINLIL_STORAGE_ENGINE=PostgreSql and NINLIL_STORAGE_CONNECTION_STRING to the new database (or change the environment variables), then restart. The data is copied at that start."
                 }
               },
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StorageEngineSwitchResult"
+                  "$ref": "#/components/schemas/StorageSwitchScheduled"
                 },
                 "example": {
-                  "previousEngine": "Sqlite",
-                  "newEngine": "PostgreSql",
-                  "totalEntitiesRestored": 42,
-                  "entityCounts": {
-                    "Zones": 3,
-                    "Records": 27,
-                    "Users": 2,
-                    "Roles": 2
-                  },
-                  "startedAt": "2026-09-01T12:00:00+00:00",
-                  "completedAt": "2026-09-01T12:00:04+00:00"
+                  "targetEngine": "PostgreSql",
+                  "requestedAtUtc": "2026-09-01T12:00:00+00:00",
+                  "appliesAutomatically": false,
+                  "targetHasData": false,
+                  "note": "Set NINLIL_STORAGE_ENGINE=PostgreSql and NINLIL_STORAGE_CONNECTION_STRING to the new database (or change the environment variables), then restart. The data is copied at that start."
                 }
               },
               "text/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StorageEngineSwitchResult"
+                  "$ref": "#/components/schemas/StorageSwitchScheduled"
                 },
                 "example": {
-                  "previousEngine": "Sqlite",
-                  "newEngine": "PostgreSql",
-                  "totalEntitiesRestored": 42,
-                  "entityCounts": {
-                    "Zones": 3,
-                    "Records": 27,
-                    "Users": 2,
-                    "Roles": 2
-                  },
-                  "startedAt": "2026-09-01T12:00:00+00:00",
-                  "completedAt": "2026-09-01T12:00:04+00:00"
+                  "targetEngine": "PostgreSql",
+                  "requestedAtUtc": "2026-09-01T12:00:00+00:00",
+                  "appliesAutomatically": false,
+                  "targetHasData": false,
+                  "note": "Set NINLIL_STORAGE_ENGINE=PostgreSql and NINLIL_STORAGE_CONNECTION_STRING to the new database (or change the environment variables), then restart. The data is copied at that start."
                 }
               }
             }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "This action cancels the switch waiting for the next start. Returns 204, or 404 when\nnone is waiting. Requires `storage:manage`.",
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -43608,6 +43664,30 @@
         "additionalProperties": false,
         "description": "This record is the REST shape of the outbound query settings (`OutboundQueryOptions`)\nthat `GET /api/outbound-query-settings` returns. A `PATCH` to the same endpoint\naccepts the same fields."
       },
+      "PendingStorageSwitchInfo": {
+        "type": "object",
+        "properties": {
+          "targetEngine": {
+            "$ref": "#/components/schemas/StorageEngineEnum"
+          },
+          "requestedAtUtc": {
+            "type": "string",
+            "description": "When the switch was requested.",
+            "format": "date-time"
+          },
+          "requestedBy": {
+            "type": "string",
+            "description": "The user name that requested it.",
+            "nullable": true
+          },
+          "appliesAutomatically": {
+            "type": "boolean",
+            "description": "True when the runtime configuration file decides the storage settings, so Ninlil points it\nat the target itself. False when an environment variable or another configuration source\ndecides, so the operator must change that source before the restart."
+          }
+        },
+        "additionalProperties": false,
+        "description": "This record describes a saved storage switch that has not run yet. It never carries a\nconnection string."
+      },
       "PlainTransportSettingsDetail": {
         "type": "object",
         "properties": {
@@ -44198,7 +44278,7 @@
           },
           "databaseName": {
             "type": "string",
-            "description": "The name of an existing database that is empty or may be overwritten.",
+            "description": "The name of an existing database that is empty or whose Ninlil data may be replaced.",
             "nullable": true
           },
           "userName": {
@@ -44571,7 +44651,7 @@
         "properties": {
           "filePath": {
             "type": "string",
-            "description": "The path of the SQLite database file to switch onto.",
+            "description": "The path of the SQLite database file to switch to.",
             "nullable": true
           }
         },
@@ -44673,42 +44753,79 @@
         "additionalProperties": false,
         "description": "This record is the request body of `POST /api/storage/switch`: structured connection\nfields per engine rather than a free-text connection string. Only the section matching\nNinlil.Web.Models.StorageEngineSwitchApiRequest.TargetEngine needs to be filled in;\nNinlil.Web.Services.Storage.StorageConnectionStringAssembler reads that section and\nignores the others."
       },
-      "StorageEngineSwitchResult": {
+      "StoragePrimaryStatus": {
         "type": "object",
         "properties": {
-          "previousEngine": {
-            "$ref": "#/components/schemas/StorageEngineEnum"
-          },
-          "newEngine": {
-            "$ref": "#/components/schemas/StorageEngineEnum"
-          },
-          "totalEntitiesRestored": {
-            "type": "integer",
-            "description": "The total number of rows restored into Ninlil.Web.Models.StorageEngineSwitchResult.NewEngine, across every entity type.",
-            "format": "int32"
-          },
-          "entityCounts": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer",
-              "format": "int32"
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
             },
-            "description": "How many rows of each entity type were restored, by name.",
+            "description": "The `host:port` entries of the primary connection: one per member of a multi-host\nPostgreSQL or MySQL string or a MongoDB replica set URL, the data source of a SQL Server\nstring, and none for SQLite (a file, not a server).",
             "nullable": true
-          },
-          "startedAt": {
-            "type": "string",
-            "description": "When the switch began.",
-            "format": "date-time"
-          },
-          "completedAt": {
-            "type": "string",
-            "description": "When the switch finished.",
-            "format": "date-time"
           }
         },
         "additionalProperties": false,
-        "description": "This record is returned when a storage engine switch succeeds. By then the process already\nreads and writes through Ninlil.Web.Models.StorageEngineSwitchResult.NewEngine, and the rows counted in\nNinlil.Web.Models.StorageEngineSwitchResult.TotalEntitiesRestored have been copied from Ninlil.Web.Models.StorageEngineSwitchResult.PreviousEngine."
+        "description": "This record names the servers the process writes to. It carries host names and ports\nonly, never a user name, password or database name."
+      },
+      "StorageReadReplicaStatus": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "description": "Always true; the whole object is null when no split is configured."
+          },
+          "eligible": {
+            "type": "boolean",
+            "description": "True when the replica serves reads: its last check found the lag within\n`Storage:ReadReplica:MaxLagSeconds` and the schema current. False before the first\ncheck; reads then go to the primary."
+          },
+          "lagSeconds": {
+            "type": "number",
+            "description": "The measured lag in seconds, or null when it is unknown or not yet measured.",
+            "format": "double",
+            "nullable": true
+          },
+          "schemaCurrent": {
+            "type": "boolean",
+            "description": "Whether the replica has the primary's schema version."
+          },
+          "lastCheckedAtUtc": {
+            "type": "string",
+            "description": "When the replica was last checked, or null before the first check.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the replica serves no reads, in plain words, or an empty string when it does. It never\ncontains a connection string.",
+            "nullable": true
+          },
+          "readsToReplica": {
+            "type": "integer",
+            "description": "How many requests and background reads (counted once per database scope) went to the\nreplica since the process started.",
+            "format": "int64"
+          },
+          "readsToPrimary": {
+            "type": "integer",
+            "description": "How many database scopes used the primary since the process started. This counts every\nscope that used it: writes, startup work, sign-in and DHCP as well as reads that fell\nback because the replica was not eligible or the user wrote a moment ago.",
+            "format": "int64"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The `host:port` entries of the read connection. Empty on MongoDB, where the replica\nset members are the primary's hosts and ReadPreference chooses among\nthem.",
+            "nullable": true
+          },
+          "readPreference": {
+            "type": "string",
+            "description": "The MongoDB read preference used for replica-eligible reads (for example\n`SecondaryPreferred`), or null on the relational engines.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "This record describes the read replica: whether Ninlil may read from it now and how many\nreads went where. The numbers come from the latest check of the replica health monitor\n(every `Storage:ReadReplica:LagCheckIntervalSeconds`) and from counters that start at\nzero when the process starts."
       },
       "StorageStatus": {
         "type": "object",
@@ -44716,21 +44833,89 @@
           "engine": {
             "$ref": "#/components/schemas/StorageEngineEnum"
           },
-          "switchInProgress": {
-            "type": "boolean",
-            "description": "Whether a `POST /api/storage/switch` call is running in this process."
+          "pendingSwitch": {
+            "$ref": "#/components/schemas/PendingStorageSwitchInfo"
           },
-          "liveSwitchSupportedEngines": {
+          "lastSwitchOutcome": {
+            "$ref": "#/components/schemas/StorageSwitchOutcome"
+          },
+          "switchSupportedEngines": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/StorageEngineEnum"
             },
-            "description": "The engines `POST /api/storage/switch` can switch to or from without a restart: the\nfour relational engines Entity Framework Core serves with one model.\nNinlil.Dns.Common.Enum.StorageEngineEnum.MongoDb is not among them. It uses a separate repository\nimplementation chosen at startup, so switching to or from it means editing the\nconfiguration and restarting.",
+            "description": "The engines `POST /api/storage/switch` accepts as a target: the four relational\nengines Entity Framework Core serves with one model.\nNinlil.Dns.Common.Enum.StorageEngineEnum.MongoDb is not among them. It uses a separate repository\nimplementation chosen at startup.",
+            "nullable": true
+          },
+          "primary": {
+            "$ref": "#/components/schemas/StoragePrimaryStatus"
+          },
+          "readReplica": {
+            "$ref": "#/components/schemas/StorageReadReplicaStatus"
+          }
+        },
+        "additionalProperties": false,
+        "description": "This record describes the active storage engine and any storage switch that is waiting for\nthe next start or has just run (`GET /api/storage`). It leaves out every connection\nstring, which may contain a password, as the API does with every credential."
+      },
+      "StorageSwitchOutcome": {
+        "type": "object",
+        "properties": {
+          "succeeded": {
+            "type": "boolean",
+            "description": "Whether the data was copied and the target is in use."
+          },
+          "fromEngine": {
+            "$ref": "#/components/schemas/StorageEngineEnum"
+          },
+          "toEngine": {
+            "$ref": "#/components/schemas/StorageEngineEnum"
+          },
+          "atUtc": {
+            "type": "string",
+            "description": "When the switch ended.",
+            "format": "date-time"
+          },
+          "rowsCopied": {
+            "type": "integer",
+            "description": "The number of rows copied, 0 when the switch failed.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "A short, operator-readable account of the result.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record describes the active storage engine (`GET /api/storage`). It leaves out\nthe connection string, which may contain a password, as the API does with every\ncredential."
+        "description": "This record reports how a storage switch ended during this process's startup."
+      },
+      "StorageSwitchScheduled": {
+        "type": "object",
+        "properties": {
+          "targetEngine": {
+            "$ref": "#/components/schemas/StorageEngineEnum"
+          },
+          "requestedAtUtc": {
+            "type": "string",
+            "description": "When the switch was saved.",
+            "format": "date-time"
+          },
+          "appliesAutomatically": {
+            "type": "boolean",
+            "description": "True when the runtime configuration file decides the storage settings, so Ninlil points it\nat the target itself during the copy. False when an environment variable or another\nconfiguration source decides; Note then names what to set."
+          },
+          "targetHasData": {
+            "type": "boolean",
+            "description": "Whether the target database already holds Ninlil data. The copy replaces that data."
+          },
+          "note": {
+            "type": "string",
+            "description": "What the operator does next, in plain words.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "This record is the 202 answer of `POST /api/storage/switch`: the switch is saved and\nruns at the next start. Nothing has been copied yet."
       },
       "TlsCertificateSettingsDetail": {
         "type": "object",

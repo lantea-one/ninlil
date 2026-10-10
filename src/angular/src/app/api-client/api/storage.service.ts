@@ -19,9 +19,9 @@ import { OpenApiHttpParams, QueryParamStyle } from '../query.params';
 // @ts-ignore
 import { StorageEngineSwitchApiRequest } from '../model/storageEngineSwitchApiRequest';
 // @ts-ignore
-import { StorageEngineSwitchResult } from '../model/storageEngineSwitchResult';
-// @ts-ignore
 import { StorageStatus } from '../model/storageStatus';
+// @ts-ignore
+import { StorageSwitchScheduled } from '../model/storageSwitchScheduled';
 
 // @ts-ignore
 import { BASE_PATH, COLLECTION_FORMATS }                     from '../variables';
@@ -44,7 +44,7 @@ export class StorageService extends BaseService implements StorageServiceInterfa
     }
 
     /**
-     * This action reports the active storage engine, whether a switch is in progress, and which engines a switch can target. Requires &#x60;storage:read&#x60;.
+     * This action reports the active storage engine, the switch waiting for the next start, the outcome of a switch this start applied, and which engines a switch can target. It also lists the primary\&#39;s hosts and, when a read replica is configured, whether the replica serves reads now (lag, schema, reason) and how many database scopes went to each side. Host names and ports are the only connection details it returns. Requires &#x60;storage:read&#x60;.
      * @endpoint get /api/storage
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -101,16 +101,70 @@ export class StorageService extends BaseService implements StorageServiceInterfa
     }
 
     /**
-     * This action switches the storage engine in-process: it backs up the active engine, provisions and migrates the target, moves the running server onto it and restores the backup into it. It returns once every row is copied and the server is using the new engine, which at homelab or small-office scale takes well under a minute. Requires &#x60;storage:manage&#x60;.  The request carries per-engine connection fields (a file path for SQLite; host,     port, database, username, password and encryption mode for the others) rather than a     free-text connection string. The server builds the connection string with each     engine\&#39;s &#x60;*ConnectionStringBuilder&#x60;. A failed switch returns 400 and leaves the     previous engine active with its data untouched; a switch already in progress returns     409.
+     * This action cancels the switch waiting for the next start. Returns 204, or 404 when none is waiting. Requires &#x60;storage:manage&#x60;.
+     * @endpoint delete /api/storage/switch
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public apiStorageSwitchDelete(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any>;
+    public apiStorageSwitchDelete(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<any>>;
+    public apiStorageSwitchDelete(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<any>>;
+    public apiStorageSwitchDelete(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any> {
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (Bearer) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/storage/switch`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<any>('delete', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * This action checks the target database and saves a switch to it, which the next start applies. It returns 202 at once: nothing is copied and the server keeps its engine. Requires &#x60;storage:manage&#x60;.  The request carries per-engine connection fields (a file path for SQLite; host,     port, database, username, password and encryption mode for the others) rather than a     free-text connection string. The server builds the connection string with each     engine\&#39;s &#x60;*ConnectionStringBuilder&#x60;. An unreachable target, a target that a     newer Ninlil upgraded, a request naming MongoDB, or a request made while a read replica     or cluster setting of the engine in use is configured returns 400 and saves nothing. A     second request replaces the first. The answer says whether Ninlil points the     runtime configuration file at the target itself, or the operator must first set     the storage environment variables.
      * @endpoint post /api/storage/switch
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<StorageEngineSwitchResult>;
-    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<StorageEngineSwitchResult>>;
-    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<StorageEngineSwitchResult>>;
+    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<StorageSwitchScheduled>;
+    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<StorageSwitchScheduled>>;
+    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<StorageSwitchScheduled>>;
     public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const storageEngineSwitchApiRequest = requestParameters?.storageEngineSwitchApiRequest;
 
@@ -157,7 +211,7 @@ export class StorageService extends BaseService implements StorageServiceInterfa
 
         let localVarPath = `/api/storage/switch`;
         const { basePath, withCredentials } = this.configuration;
-        return this.httpClient.request<StorageEngineSwitchResult>('post', `${basePath}${localVarPath}`,
+        return this.httpClient.request<StorageSwitchScheduled>('post', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
                 body: storageEngineSwitchApiRequest,

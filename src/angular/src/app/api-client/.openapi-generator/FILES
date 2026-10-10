@@ -370,6 +370,7 @@ model/models.ts
 model/notifySettingsDetail.ts
 model/oidcSsoSettingsDetail.ts
 model/outboundQuerySettingsDetail.ts
+model/pendingStorageSwitchInfo.ts
 model/plainTransportSettingsDetail.ts
 model/presetApplyResult.ts
 model/presetSummary.ts
@@ -407,8 +408,11 @@ model/statusComponent.ts
 model/statusResponse.ts
 model/storageEngineEnum.ts
 model/storageEngineSwitchApiRequest.ts
-model/storageEngineSwitchResult.ts
+model/storagePrimaryStatus.ts
+model/storageReadReplicaStatus.ts
 model/storageStatus.ts
+model/storageSwitchOutcome.ts
+model/storageSwitchScheduled.ts
 model/tlsCertificateSettingsDetail.ts
 model/tsigKeyCreateRequest.ts
 model/tsigKeyCreateResponse.ts
