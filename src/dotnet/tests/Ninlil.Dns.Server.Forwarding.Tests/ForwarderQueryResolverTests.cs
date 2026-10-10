@@ -41,6 +41,7 @@ namespace Ninlil.Dns.Server.Forwarding.Tests;
 public sealed partial class ForwarderQueryResolverTests : IDisposable
 {
     private readonly SqliteConnection _connection;
+    private readonly CommandCounter _commands = new();
     private readonly ServiceProvider _provider;
 
     public ForwarderQueryResolverTests()
@@ -49,7 +50,25 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         _connection.Open();
 
         ServiceCollection services = new();
-        services.AddDbContext<NinlilDnsContext>(builder => builder.UseSqlite(_connection));
+
+        // The real notifier and save interceptor, so a saved zone or forwarder expires the
+        // resolver's forwarder-set cache as it does in the host; the counter lets a test prove
+        // a cache hit reads no rows.
+        services.AddSingleton<EntityChangeNotifier>();
+        services.AddSingleton<IEntityChangeNotifier>(provider =>
+            provider.GetRequiredService<EntityChangeNotifier>()
+        );
+        services.AddSingleton<EntityChangeSaveChangesInterceptor>();
+        services.AddSingleton(_commands);
+        services.AddDbContext<NinlilDnsContext>(
+            (provider, builder) =>
+                builder
+                    .UseSqlite(_connection)
+                    .AddInterceptors(
+                        provider.GetRequiredService<EntityChangeSaveChangesInterceptor>(),
+                        provider.GetRequiredService<CommandCounter>()
+                    )
+        );
         services.AddScoped<IZoneRepository, ZoneRepository>();
         services.AddScoped<IDnsForwarderRepository, DnsForwarderRepository>();
         services.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
@@ -313,7 +332,11 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         );
 
         return new ForwarderQueryResolver(
-            _provider.GetRequiredService<IServiceScopeFactory>(),
+            new ForwarderSetCache(
+                _provider.GetRequiredService<IServiceScopeFactory>(),
+                _provider.GetRequiredService<IEntityChangeNotifier>(),
+                NullLogger<ForwarderSetCache>.Instance
+            ),
             clientList,
             new UpstreamForwarderDefinitionParser(),
             tracker,

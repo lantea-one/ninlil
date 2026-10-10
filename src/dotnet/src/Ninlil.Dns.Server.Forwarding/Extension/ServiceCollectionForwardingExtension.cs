@@ -77,6 +77,11 @@ public static class ServiceCollectionForwardingExtension
             provider.GetRequiredService<ForwardedResponseCache>()
         );
 
+        // The resolver chooses the forwarder set from this singleton copy of the forwarder zones
+        // and global forwarders; it needs an IEntityChangeNotifier, which the storage extensions
+        // register.
+        instance.AddSingleton<ForwarderSetCache>();
+
         instance.AddSingleton<IDnsQueryResolver, ForwarderQueryResolver>();
 
         // We're done, return the IServiceCollection instance.

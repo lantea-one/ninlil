@@ -73,9 +73,9 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         recursion.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">
-///     Used to open a scope per query for the scoped <see cref="IZoneRepository" /> and
-///     <see cref="IDnsForwarderRepository" />, since this resolver is a singleton.
+/// <param name="forwarderSets">
+///     The in-memory copy of the forwarder zones and global forwarders that the forwarder set of
+///     each query is chosen from.
 /// </param>
 /// <param name="clients">Every registered forwarder client, one per protocol.</param>
 /// <param name="definitionParser">Parses a forwarder's definition string.</param>
@@ -107,7 +107,7 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     <see langword="null" /> (the default) never flushes.
 /// </param>
 public sealed class ForwarderQueryResolver(
-    IServiceScopeFactory scopeFactory,
+    ForwarderSetCache forwarderSets,
     IEnumerable<IUpstreamForwarderClient> clients,
     IUpstreamForwarderDefinitionParser definitionParser,
     ForwarderHealthTracker healthTracker,
@@ -329,51 +329,25 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method finds the forwarder set for a query. It walks from the queried name up to
-    ///     the root, and the first enabled <see cref="ZoneTypeEnum.Forwarder" /> or
-    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone with addresses wins; otherwise the
-    ///     enabled global <see cref="DnsForwarderEntity" /> set is used, in order. The result also
-    ///     says whether DNSSEC validation may run for the set: a zone's
-    ///     <see cref="ZoneEntity.ValidateDnssec" />, always <see langword="true" /> for the global
-    ///     set. A
+    ///     This method finds the forwarder set for a query: the closest enabled
+    ///     <see cref="ZoneTypeEnum.Forwarder" /> or <see cref="ZoneTypeEnum.SecondaryForwarder" />
+    ///     zone with addresses, otherwise the enabled global <see cref="DnsForwarderEntity" /> set,
+    ///     in order (see <see cref="ForwarderSetCache" />). The result also says whether DNSSEC
+    ///     validation may run for the set: a zone's <see cref="ZoneEntity.ValidateDnssec" />, always
+    ///     <see langword="true" /> for the global set. A
     ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone gets its
     ///     <see cref="ZoneEntity.ForwarderAddresses" /> from <c>SecondaryZoneRefreshService</c>,
     ///     which transfers them from a forwarder-zone primary's apex TXT records; here it behaves
-    ///     like any forwarder zone. This costs one zone lookup per label on every query.
+    ///     like any forwarder zone. This reads no database rows while the cache copy is fresh.
     /// </summary>
-    private async Task<(
+    private async ValueTask<(
         IReadOnlyList<string> Definitions,
         bool Validates
     )> ResolveForwarderSetAsync(DnsName queriedName, CancellationToken stoppingToken)
     {
-        using IServiceScope scope = scopeFactory.CreateScope();
-        IZoneRepository zoneRepository =
-            scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+        ForwarderSet set = await forwarderSets.FindAsync(queriedName, stoppingToken);
 
-        for (int start = 0; start <= queriedName.Labels.Count; start++)
-        {
-            DnsName candidateZoneName = new([.. queriedName.Labels.Skip(start)]);
-            string zoneNameText = candidateZoneName.ToString().TrimEnd('.');
-
-            ZoneEntity zone = await zoneRepository.FindByNameAsync(zoneNameText, stoppingToken);
-
-            if (
-                zone
-                    is {
-                        Type: ZoneTypeEnum.Forwarder or ZoneTypeEnum.SecondaryForwarder,
-                        IsDisabled: false,
-                    }
-                && zone.ForwarderAddresses.Count > 0
-            )
-                return (zone.ForwarderAddresses, zone.ValidateDnssec);
-        }
-
-        IDnsForwarderRepository forwarderRepository =
-            scope.ServiceProvider.GetRequiredService<IDnsForwarderRepository>();
-        IReadOnlyList<DnsForwarderEntity> globalForwarders =
-            await forwarderRepository.ListEnabledOrderedAsync(stoppingToken);
-
-        return ([.. globalForwarders.Select(forwarder => forwarder.DefinitionString)], true);
+        return (set.Definitions, set.Validates);
     }
 
     /// <summary>
