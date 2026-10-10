@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
@@ -18,20 +19,27 @@ namespace Ninlil.Dns.Identity.Authentication;
 ///     account is accepted, consumes a one-time token through <see cref="IApiTokenService" />, then builds the same claims a
 ///     JWT request carries through <see cref="IUserClaimsBuilder" />, so authorization does not
 ///     depend on which credential was used.
+///     <para>
+///         The handler does all of its database work in a scope of its own, not in the request's
+///         scope. Authentication runs before the storage read intent middleware decides whether
+///         the endpoint may read a replica, and the first repository a scope resolves fixes that
+///         scope's intent. Validation, the one-time consume and the claims must read the primary
+///         (a revoked token or a changed permission has to apply at once), so they get a primary
+///         scope here and leave the request scope free for the endpoint's own choice.
+///     </para>
 /// </summary>
 /// <param name="options">The scheme's configured header name and prefix.</param>
 /// <param name="logger">The logger factory used to create this handler's diagnostic logger.</param>
 /// <param name="encoder">The URL encoder ASP.NET Core's base handler class requires.</param>
-/// <param name="apiTokenService">The service used to validate the presented token.</param>
-/// <param name="userRepository">The repository used to look up the token's owning user.</param>
-/// <param name="claimsBuilder">The service used to build the authenticated user's claims.</param>
+/// <param name="scopeFactory">
+///     Creates the scope in which the token is validated, its owner is looked up and the claims
+///     are built (see the class summary).
+/// </param>
 public class ApiTokenAuthenticationHandler(
     IOptionsMonitor<ApiTokenAuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IApiTokenService apiTokenService,
-    IUserRepository userRepository,
-    IUserClaimsBuilder claimsBuilder
+    IServiceScopeFactory scopeFactory
 ) : AuthenticationHandler<ApiTokenAuthenticationSchemeOptions>(options, logger, encoder)
 {
     /// <inheritdoc />
@@ -52,6 +60,15 @@ public class ApiTokenAuthenticationHandler(
 
         if (string.IsNullOrEmpty(rawToken))
             return AuthenticateResult.Fail("The API token header was present but empty.");
+
+        // A scope of its own, see the class summary. Its intent stays the default, the primary.
+        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        IApiTokenService apiTokenService =
+            scope.ServiceProvider.GetRequiredService<IApiTokenService>();
+        IUserRepository userRepository =
+            scope.ServiceProvider.GetRequiredService<IUserRepository>();
+        IUserClaimsBuilder claimsBuilder =
+            scope.ServiceProvider.GetRequiredService<IUserClaimsBuilder>();
 
         ApiTokenEntity token = await apiTokenService.ValidateAsync(rawToken);
 
