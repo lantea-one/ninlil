@@ -30,6 +30,9 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        // A plain scope reads the primary. This cache is reloaded only at startup and after a
+        // change event, never on a timer, so every load follows a write that a replica may not
+        // have yet. Do not use CreateReplicaReadScope here.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
@@ -135,6 +138,9 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task ReloadZoneAsync(Guid zoneId, CancellationToken stoppingToken = default)
     {
+        // A plain scope reads the primary. This cache is reloaded only at startup and after a
+        // change event, never on a timer, so every load follows a write that a replica may not
+        // have yet. Do not use CreateReplicaReadScope here.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();

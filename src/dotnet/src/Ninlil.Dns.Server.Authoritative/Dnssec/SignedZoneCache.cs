@@ -58,6 +58,9 @@ public sealed class SignedZoneCache(
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        // A plain scope reads the primary. This cache is loaded at startup and after a zone or
+        // key change, never on a timer, so a replica may not have the data yet. Do not use
+        // CreateReplicaReadScope here.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();

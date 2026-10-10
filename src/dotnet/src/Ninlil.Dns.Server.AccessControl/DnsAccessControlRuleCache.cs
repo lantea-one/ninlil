@@ -74,6 +74,9 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task ReloadAsync(CancellationToken stoppingToken = default)
     {
+        // A plain scope reads the primary. The snapshot is reloaded at startup and after a rule
+        // change event, never on a timer, so a replica may not have the change yet. Do not use
+        // CreateReplicaReadScope here.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IDnsAccessControlRuleRepository repository =
             scope.ServiceProvider.GetRequiredService<IDnsAccessControlRuleRepository>();
