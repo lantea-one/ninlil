@@ -13,11 +13,12 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Maintenance;
 ///     This class applies the pending EF Core migrations at startup and guards the database while
 ///     it does. <c>Program</c> calls <see cref="RunAsync" /> once, on the relational engines, in
 ///     place of a bare <c>MigrateAsync</c>. It stops startup with a
-///     <see cref="DatabaseStartupRefusedException" /> in two cases: the history table holds
+///     <see cref="DatabaseStartupRefusedException" /> in three cases: the history table holds
 ///     migrations this build does not know (a newer Ninlil upgraded the database, and running
-///     older code on it is unsafe), and a migration fails (the message says whether the database
-///     was left unchanged). A connection failure is not a refusal; it throws as is, so a
-///     supervisor retries while the database is still starting.
+///     older code on it is unsafe), a migration fails (the message says whether the database
+///     was left unchanged), and the MySQL server has <c>read_only</c> set (see
+///     <see cref="MySqlPrimaryCheck" />). A connection failure is not a refusal; it throws as
+///     is, so a supervisor retries while the database is still starting.
 /// </summary>
 public static class RelationalStartupMigrator
 {
@@ -53,11 +54,43 @@ public static class RelationalStartupMigrator
         // Migrations, snapshots and restores run on the primary; a context built for a replica
         // would migrate or snapshot the wrong server.
         context.EnsureWritable("The startup migration");
+        await EnsureMySqlPrimaryWritableAsync(context, storageOptions, stoppingToken);
 
         await ApplyMigrationsAsync(context, storageOptions, logger, stoppingToken);
 
         if (storageOptions.Engine == StorageEngineEnum.Sqlite)
             await TuneSqliteAsync(context, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method refuses to start on a MySQL server that is read-only. MySqlConnector does
+    ///     not detect it, so a multi-host primary string, or a failed-over cluster, can leave
+    ///     Ninlil on a replica, where the first migration or save would fail with a confusing
+    ///     error (see <see cref="MySqlPrimaryCheck" />). Other engines are not asked.
+    /// </summary>
+    private static async Task EnsureMySqlPrimaryWritableAsync(
+        NinlilDnsContext context,
+        StorageOptions storageOptions,
+        CancellationToken stoppingToken
+    )
+    {
+        if (storageOptions.Engine != StorageEngineEnum.MySql)
+            return;
+
+        if (
+            !await MySqlPrimaryCheck.IsReadOnlyAsync(
+                context.Database.GetConnectionString(),
+                stoppingToken
+            )
+        )
+            return;
+
+        throw new DatabaseStartupRefusedException(
+            "The MySQL server that Storage:ConnectionString reaches has read_only set "
+                + "(@@global.read_only = 1), so it is a replica or a node that refuses writes, and "
+                + "Ninlil needs a writable primary. Point Storage:ConnectionString at the primary, "
+                + "or fix the failover so exactly one host is writable."
+        );
     }
 
     /// <summary>

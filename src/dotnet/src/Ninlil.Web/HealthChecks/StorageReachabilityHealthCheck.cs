@@ -7,6 +7,7 @@ using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Routing;
 using Ninlil.Dns.Data.EntityFrameworkCore;
+using Ninlil.Dns.Data.EntityFrameworkCore.Maintenance;
 using Ninlil.Dns.Data.MongoDb;
 
 // Define our namespace.
@@ -24,7 +25,9 @@ namespace Ninlil.Web.HealthChecks;
 ///     </para>
 ///     <para>
 ///         The ping always goes to the primary: the scope is a plain one, which reads the primary,
-///         so an unreachable primary is Unhealthy even when a replica could still serve reads.
+///         so an unreachable primary is Unhealthy even when a replica could still serve reads. A
+///         MySQL server that has <c>read_only</c> set is Unhealthy too (see
+///         <see cref="MySqlPrimaryCheck" />).
 ///         When a read replica is configured, the check also reports it, from the latest result
 ///         of the <see cref="ReplicaHealthMonitor" /> (the check does not probe the replica
 ///         itself, the monitor does that every <c>Storage:ReadReplica:LagCheckIntervalSeconds</c>).
@@ -83,6 +86,21 @@ public sealed class StorageReachabilityHealthCheck(
                 );
 
             bool canConnect = await relationalContext.Database.CanConnectAsync(cancellationToken);
+
+            // A MySQL primary that has become read_only (a failover to a replica) answers a ping
+            // but refuses every write, so it is not healthy.
+            if (
+                canConnect
+                && storageOptions.Engine == StorageEngineEnum.MySql
+                && await MySqlPrimaryCheck.IsReadOnlyAsync(
+                    relationalContext.Database.GetConnectionString(),
+                    cancellationToken
+                )
+            )
+                return HealthCheckResult.Unhealthy(
+                    "MySql storage is reachable, but the server has read_only set, so it refuses "
+                        + "writes. Point Storage:ConnectionString at the writable primary."
+                );
 
             return canConnect
                 ? WithReplica(
