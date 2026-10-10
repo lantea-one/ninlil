@@ -161,17 +161,36 @@ public abstract class ServerMigrationSnapshotTestsBase(EngineFixtureBase fixture
             IServiceProvider services = scope.ServiceProvider;
             Guid roleId = Guid.NewGuid();
             Guid userId = Guid.NewGuid();
-            await services
-                .GetRequiredService<IZoneRepository>()
-                .AddAsync(
-                    new ZoneEntity
-                    {
-                        Id = zoneId,
-                        Name = "snap.example",
-                        Type = ZoneTypeEnum.Primary,
-                        CreatedAtUtc = DateTimeOffset.UtcNow,
-                    }
+
+            // On SQL Server the zone goes in with SQL that leaves out CloudSyncInterval: that
+            // column is `time` before the ConvertTimeSpansToTicks migration and `bigint` after
+            // it, so the repository cannot write it in both schemas. The column default fills it.
+            if (fixture.Engine == StorageEngineEnum.SqlServer)
+            {
+                await ExecAsync(
+                    context,
+                    "INSERT INTO [NinlilDnsZones] ([Id], [CreatedAtUtc], [Name], [Type], "
+                        + "[DenialOfExistenceMode], [DynamicUpdateEnabled], [IsDisabled], "
+                        + "[IsDnssecSigned], [Nsec3Iterations], [TransferTransport], "
+                        + $"[ValidateDnssec]) VALUES ('{zoneId}', SYSDATETIMEOFFSET(), "
+                        + "'snap.example', 'Primary', 0, 0, 0, 0, 0, 0, 0)"
                 );
+            }
+            else
+            {
+                await services
+                    .GetRequiredService<IZoneRepository>()
+                    .AddAsync(
+                        new ZoneEntity
+                        {
+                            Id = zoneId,
+                            Name = "snap.example",
+                            Type = ZoneTypeEnum.Primary,
+                            CreatedAtUtc = DateTimeOffset.UtcNow,
+                        }
+                    );
+            }
+
             for (int index = 0; index < 3; index++)
                 await services
                     .GetRequiredService<IRecordRepository>()
