@@ -4,9 +4,11 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.MongoDb.Configuration;
 using Ninlil.Dns.Data.MongoDb.Repository;
+using Ninlil.Dns.Data.MongoDb.Routing;
 using Ninlil.Dns.Data.MongoDb.Topology;
 
 // Define our namespace.
@@ -74,13 +76,42 @@ public static class ServiceCollectionMongoDbExtension
             ? DefaultDatabaseName
             : mongoUrl.DatabaseName;
 
-        // The client and context are thread-safe, so they are singletons.
+        // The client and the two contexts are thread-safe, so they are singletons. A read
+        // preference other than Primary is the read/write split of this engine: the replica
+        // view reads with it, the primary context always reads the primary, and writes go to
+        // the primary whatever the read preference is.
+        ReadPreference replicaReadPreference =
+            MongoClientSettingsComposer.ComposeReplicaReadPreference(options);
+        instance.AddNinlilStorageRouting(replicaReadPreference != null);
+
         instance.AddSingleton(options);
         instance.AddSingleton<IMongoClient>(new MongoClient(mongoUrl));
-        instance.AddSingleton(provider => new NinlilDnsMongoContext(
-            provider.GetRequiredService<IMongoClient>(),
-            databaseName
+        instance.AddSingleton(provider => new MongoContexts(
+            new NinlilDnsMongoContext(
+                provider.GetRequiredService<IMongoClient>(),
+                databaseName,
+                replicaReadPreference == null ? null : ReadPreference.Primary
+            ),
+            replicaReadPreference == null
+                ? null
+                : new NinlilDnsMongoContext(
+                    provider.GetRequiredService<IMongoClient>(),
+                    databaseName,
+                    replicaReadPreference,
+                    readOnly: true
+                )
         ));
+
+        // The first context of a scope fixes the intent of the whole scope, so a later attempt to
+        // change it throws instead of being ignored.
+        instance.AddScoped(provider =>
+        {
+            MongoContexts contexts = provider.GetRequiredService<MongoContexts>();
+            bool replica = provider
+                .GetRequiredService<StorageReadIntent>()
+                .ResolveUseReplica(provider.GetRequiredService<IStorageReadRouter>());
+            return replica && contexts.Replica != null ? contexts.Replica : contexts.Primary;
+        });
 
         // One notifier for the process: caches subscribe to it, and every successful unit-of-work
         // save raises it (see MongoChangeTracker).

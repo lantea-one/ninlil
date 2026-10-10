@@ -37,6 +37,9 @@ public static class MongoIndexCatalog
         CancellationToken stoppingToken = default
     )
     {
+        // Creating and dropping indexes is a schema change: primary only.
+        context.EnsureWritable("The MongoDB index setup");
+
         Stopwatch total = Stopwatch.StartNew();
         int created = 0;
 

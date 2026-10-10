@@ -18,11 +18,12 @@ public static class MigrationSnapshotStores
     /// </summary>
     /// <param name="engine">The configured storage engine.</param>
     /// <param name="context">The context whose database is snapshotted.</param>
-    public static IMigrationSnapshotStore Create(
-        StorageEngineEnum engine,
-        NinlilDnsContext context
-    ) =>
-        engine switch
+    public static IMigrationSnapshotStore Create(StorageEngineEnum engine, NinlilDnsContext context)
+    {
+        // Snapshots, restores and their catalog work run on the primary only.
+        context.EnsureWritable("A migration snapshot");
+
+        return engine switch
         {
             StorageEngineEnum.Sqlite => SqliteMigrationSnapshotStore.TryCreate(
                 context.Database.GetConnectionString()
@@ -32,4 +33,5 @@ public static class MigrationSnapshotStores
             StorageEngineEnum.SqlServer => new SqlServerMigrationSnapshotStore(context),
             _ => null,
         };
+    }
 }

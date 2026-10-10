@@ -29,12 +29,18 @@ public static class MongoStartupGuard
     /// <exception cref="DatabaseStartupRefusedException">
     ///     A recorded step is unknown to this build, or a backfill failed.
     /// </exception>
+    /// <exception cref="Abstractions.Routing.StorageReadOnlyException">
+    ///     <paramref name="context" /> is the read-only replica view.
+    /// </exception>
     public static async Task RunAsync(
         NinlilDnsMongoContext context,
         ILogger logger,
         CancellationToken stoppingToken = default
     )
     {
+        // The guard backfills and creates indexes: primary only.
+        context.EnsureWritable("The MongoDB startup guard");
+
         List<BsonDocument> storedSteps = await context
             .SchemaSteps.Find(FilterDefinition<BsonDocument>.Empty)
             .ToListAsync(stoppingToken);

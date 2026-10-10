@@ -71,6 +71,10 @@ public class DnsFilterListEntryRepository(
         CancellationToken stoppingToken = default
     )
     {
+        // Both halves write: the raw insert below runs on the context's own connection, which the
+        // read-only guard does not see, so a replica context is refused here.
+        Context.EnsureWritable("The filter list entry replace");
+
         // A refresh swaps the whole set rather than diffing it. Both halves bypass the change
         // tracker: a subscribed list can hold hundreds of thousands of entries, and tracking them
         // and building one insert command per entity through SaveChanges costs about 12 KB of

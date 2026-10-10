@@ -20,6 +20,10 @@ namespace Ninlil.Dns.Data.MongoDb;
 ///     writes.
 /// </summary>
 /// <param name="client">The MongoDB client used to start the transaction session.</param>
+/// <param name="context">
+///     The context of the scope. Staging and flushing throw when it is the read-only replica view,
+///     so a scope that reads from a replica cannot write.
+/// </param>
 /// <param name="transactionSupport">Tells whether the deployment can run transactions.</param>
 /// <param name="notifier">
 ///     The notifier told which entity types a flush wrote, once every write of the flush has
@@ -27,6 +31,7 @@ namespace Ninlil.Dns.Data.MongoDb;
 /// </param>
 public class MongoChangeTracker(
     IMongoClient client,
+    NinlilDnsMongoContext context,
     MongoTransactionSupport transactionSupport,
     IEntityChangeNotifier notifier
 )
@@ -71,7 +76,12 @@ public class MongoChangeTracker(
         Type entityType,
         Func<IClientSessionHandle, CancellationToken, Task> operation,
         bool transactional = true
-    ) => _pendingOperations.Add(new PendingOperation(entityType, operation, transactional));
+    )
+    {
+        context.EnsureWritable("Staging a MongoDB write");
+
+        _pendingOperations.Add(new PendingOperation(entityType, operation, transactional));
+    }
 
     /// <summary>
     ///     This method performs every write staged so far, in the order it was staged, and then
@@ -80,8 +90,13 @@ public class MongoChangeTracker(
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of writes that were performed.</returns>
+    /// <exception cref="Abstractions.Routing.StorageReadOnlyException">
+    ///     The scope reads from a replica.
+    /// </exception>
     public async Task<int> FlushAsync(CancellationToken stoppingToken = default)
     {
+        context.EnsureWritable("SaveChanges");
+
         // Snapshot and clear the list first, so a write staged while flushing is not run twice.
         PendingOperation[] operations = [.. _pendingOperations];
         _pendingOperations.Clear();

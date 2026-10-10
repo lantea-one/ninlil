@@ -40,6 +40,9 @@ public static class RelationalStartupMigrator
     ///     failed-migration marker, a snapshot or restore could not be done, or applying
     ///     migrations failed.
     /// </exception>
+    /// <exception cref="Ninlil.Dns.Data.Abstractions.Routing.StorageReadOnlyException">
+    ///     <paramref name="context" /> reads from a replica.
+    /// </exception>
     public static async Task RunAsync(
         NinlilDnsContext context,
         StorageOptions storageOptions,
@@ -47,6 +50,10 @@ public static class RelationalStartupMigrator
         CancellationToken stoppingToken = default
     )
     {
+        // Migrations, snapshots and restores run on the primary; a context built for a replica
+        // would migrate or snapshot the wrong server.
+        context.EnsureWritable("The startup migration");
+
         await ApplyMigrationsAsync(context, storageOptions, logger, stoppingToken);
 
         if (storageOptions.Engine == StorageEngineEnum.Sqlite)

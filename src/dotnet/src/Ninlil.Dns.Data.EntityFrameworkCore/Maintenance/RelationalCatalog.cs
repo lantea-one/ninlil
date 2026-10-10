@@ -67,6 +67,8 @@ internal sealed partial class RelationalCatalog(NinlilDnsContext context, Storag
         params (string Name, object Value)[] parameters
     )
     {
+        // A catalog statement changes the database; it must never run on a replica connection.
+        context.EnsureWritable("A snapshot or catalog statement");
         DbConnection connection = context.Database.GetDbConnection();
         bool opened = await OpenAsync(connection, stoppingToken);
         try

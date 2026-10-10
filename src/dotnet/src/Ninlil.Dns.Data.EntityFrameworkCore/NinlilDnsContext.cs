@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Routing;
+using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.EntityFrameworkCore;
@@ -66,6 +69,35 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore;
 /// <param name="options">The configured options that select and connect to a provider.</param>
 public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbContext(options)
 {
+    private bool? isReplicaView;
+
+    /// <summary>
+    ///     This property reports whether the context reads from a read-only replica. The storage
+    ///     extension builds such a context with <see cref="ReadOnlyGuardInterceptor" />, which is
+    ///     how this property recognises it. Code that writes without going through
+    ///     <c>SaveChanges</c> or an EF command (a raw command on the connection, a schema change,
+    ///     a snapshot) calls <see cref="EnsureWritable" /> first.
+    /// </summary>
+    public bool IsReplicaView =>
+        isReplicaView ??=
+            this.GetService<IDbContextOptions>()
+                .FindExtension<CoreOptionsExtension>()
+                ?.Interceptors?.OfType<ReadOnlyGuardInterceptor>()
+                .Any() == true;
+
+    /// <summary>
+    ///     This method throws when the context reads from a replica, so work that must write or
+    ///     that must run on the primary (the startup migration, snapshots, the bulk filter-list
+    ///     insert) fails before it touches the wrong server.
+    /// </summary>
+    /// <param name="attempt">A short description of the work, for the message.</param>
+    /// <exception cref="StorageReadOnlyException">The context reads from a replica.</exception>
+    public void EnsureWritable(string attempt)
+    {
+        if (IsReplicaView)
+            throw StorageReadOnlyException.For(attempt);
+    }
+
     /// <summary>
     ///     This property contains every registered user.
     /// </summary>

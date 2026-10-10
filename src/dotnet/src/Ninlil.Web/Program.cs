@@ -33,6 +33,7 @@ using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
@@ -960,6 +961,11 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
         return;
     }
 }
+
+// The startup migration or guard and the storage switch are done, and each ran on the primary
+// connection. From here a scope that asks for the replica may get it (no effect without a
+// configured read replica).
+app.Services.GetRequiredService<IStorageReadRouter>().Enable();
 
 // TSIG key names are stored in lowercase; lowercase any row written with capitals (see
 // TsigKeyNameNormalizer). It runs on every engine through the repository, after the schema is

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Routing;
 using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 using Ninlil.Dns.Data.EntityFrameworkCore.Topology;
@@ -82,6 +83,10 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
         StorageConnectionStrings composed = StorageConnectionStringComposer.Compose(options);
         instance.AddSingleton(composed);
 
+        // The router sends a scope that asked for the replica to the read connection, once the
+        // startup work is done and only when the settings describe a split.
+        instance.AddNinlilStorageRouting(composed.Replica != null);
+
         // The storage switch changes the engine and connection string of the options in place at
         // startup, so the context options compose again when the composed strings no longer match.
         StorageConnectionStrings current = composed;
@@ -93,6 +98,25 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
                 {
                     strings = StorageConnectionStringComposer.Compose(options);
                     Volatile.Write(ref current, strings);
+                }
+
+                // The first context of a scope fixes the intent of the whole scope, so a later
+                // attempt to change it throws instead of being ignored.
+                bool replica =
+                    provider
+                        .GetRequiredService<StorageReadIntent>()
+                        .ResolveUseReplica(provider.GetRequiredService<IStorageReadRouter>())
+                    && strings.Replica != null;
+
+                if (replica)
+                {
+                    // A replica context reads only: nothing is tracked, every write throws, and
+                    // the change notifier is absent because no save can happen.
+                    builder
+                        .UseNinlilDnsStorage(options.Engine, strings.Replica)
+                        .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
+                        .AddInterceptors(ReadOnlyGuardInterceptor.Instance);
+                    return;
                 }
 
                 builder

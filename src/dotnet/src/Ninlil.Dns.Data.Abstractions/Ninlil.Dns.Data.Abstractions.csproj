@@ -10,6 +10,14 @@
     <PackageId>Ninlil.Dns.Data.Abstractions</PackageId>
   </PropertyGroup>
 
+  <!-- The read router registers itself in DI and the replica-scope helper extends IServiceScopeFactory. -->
+  <ItemGroup>
+    <PackageReference
+      Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+      Version="10.0.11"
+    />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
