@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
+using Ninlil.Dns.Server.Cluster.Options;
+using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Filtering.BlockedServices;
 using Ninlil.Web.Examples.BlockedServices;
 using Ninlil.Web.Models;
@@ -42,6 +45,15 @@ namespace Ninlil.Web.Controllers;
 ///         other targets alone. Without one, <c>Disable</c> deletes the list, its entries and
 ///         every client and client-group assignment that refers to it.
 ///     </para>
+///     <para>
+///         <b>Cluster replication.</b> The managed list is an ordinary filter list, so creating or
+///         re-enabling it stamps this node's id on it and publishes a
+///         <see cref="DnsFilterListChangedEvent" />, and deleting it (untargeted <c>Disable</c>)
+///         publishes the same event with <c>IsDeleted</c>; <c>FilterListClusterSyncEventSubscriber</c>
+///         sends both to the peers, as for <see cref="FilterListsController" />. Client and
+///         client-group assignments are node-local and never replicate, so a targeted
+///         <c>Disable</c>, and an <c>Enable</c> that only adds an assignment, publish nothing.
+///     </para>
 /// </summary>
 /// <param name="filterListRepository">Reads and writes the managed filter lists.</param>
 /// <param name="listAssignmentRepository">
@@ -53,6 +65,14 @@ namespace Ninlil.Web.Controllers;
 /// <param name="clientGroupRepository">Confirms a <c>clientGroupId</c> target exists.</param>
 /// <param name="clientListAssignmentRepository">Creates and removes client assignments.</param>
 /// <param name="entryRepository">Removes the entries of a deleted list.</param>
+/// <param name="eventPublisher">
+///     Publishes <see cref="DnsFilterListChangedEvent" /> so the cluster-sync subscriber sends
+///     the list change to every peer.
+/// </param>
+/// <param name="clusterOptions">
+///     Supplies this node's cluster node id, stamped onto
+///     <c>DnsFilterListEntity.OriginatingNodeId</c> when a list is created or re-enabled.
+/// </param>
 [ApiController]
 [Route("api/blocked-services")]
 public class BlockedServicesController(
@@ -62,7 +82,9 @@ public class BlockedServicesController(
     IDnsClientRepository clientRepository,
     IDnsClientGroupRepository clientGroupRepository,
     IDnsClientListAssignmentRepository clientListAssignmentRepository,
-    IDnsFilterListEntryRepository entryRepository
+    IDnsFilterListEntryRepository entryRepository,
+    IDnsServerEventPublisher eventPublisher,
+    IOptionsMonitor<ClusterOptions> clusterOptions
 ) : ControllerBase
 {
     /// <summary>
@@ -132,6 +154,7 @@ public class BlockedServicesController(
         IReadOnlyList<DnsFilterListEntity> managedLists = await ListManagedAsync(stoppingToken);
         DnsFilterListEntity existing = FindManagedList(entry, managedLists);
         DnsFilterListEntity list;
+        bool listChanged = false;
 
         if (existing is not null)
         {
@@ -139,6 +162,8 @@ public class BlockedServicesController(
             {
                 existing.IsDisabled = false;
                 existing.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                existing.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+                listChanged = true;
                 filterListRepository.Update(existing);
             }
 
@@ -169,13 +194,18 @@ public class BlockedServicesController(
                     + "Unlicense/MIT. Do not rely on this list's own name to identify it -- toggle "
                     + "it off from the Blocked Services page instead of deleting it here.",
                 CreatedAtUtc = DateTimeOffset.UtcNow,
+                OriginatingNodeId = clusterOptions.CurrentValue.NodeId,
             };
 
             await filterListRepository.AddAsync(list, stoppingToken);
+            listChanged = true;
         }
 
         await EnsureAssignmentAsync(list.Id, clientId, clientGroupId, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        if (listChanged)
+            eventPublisher.Publish(new DnsFilterListChangedEvent(DateTimeOffset.UtcNow, list.Id));
 
         return Ok(await ToDetailAsync(entry, list, clientId, clientGroupId, stoppingToken));
     }
@@ -183,9 +213,11 @@ public class BlockedServicesController(
     /// <summary>
     ///     This action disables one catalog entry. Without a target it deletes the entry's managed
     ///     <see cref="DnsFilterListEntity" />, its entries and every client and client-group
-    ///     assignment that refers to it (as <see cref="FilterListsController.Delete" /> does). With a <c>clientId</c> or <c>clientGroupId</c> it removes only that
-    ///     target's assignment and leaves the list and every other target alone, so unblocking a
-    ///     service for one device does not unblock it for everyone. Having nothing to remove is not
+    ///     assignment that refers to it (as <see cref="FilterListsController.Delete" /> does), and
+    ///     tells the cluster peers to delete the list too. With a <c>clientId</c> or
+    ///     <c>clientGroupId</c> it removes only that target's assignment, which stays on this node,
+    ///     and leaves the list and every other target alone, so unblocking a service for one
+    ///     device does not unblock it for everyone. Having nothing to remove is not
     ///     an error. Returns 400 when both targets are given and 404 for an unknown key. Requires
     ///     <c>filterlists:write</c>.
     /// </summary>
@@ -243,7 +275,8 @@ public class BlockedServicesController(
     ///     This method deletes a managed list together with its entries and every client and
     ///     client-group assignment, as <see cref="FilterListsController.Delete" /> does. The
     ///     entry delete runs at once on the relational engines, so the removal sits in one
-    ///     transaction there; MongoDB registers no transaction factory.
+    ///     transaction there; MongoDB registers no transaction factory. The delete event is
+    ///     published only after the commit.
     /// </summary>
     private async Task DeleteManagedListAsync(
         DnsFilterListEntity list,
@@ -268,6 +301,10 @@ public class BlockedServicesController(
 
         if (transaction is not null)
             await transaction.CommitAsync(stoppingToken);
+
+        eventPublisher.Publish(
+            new DnsFilterListChangedEvent(DateTimeOffset.UtcNow, list.Id, IsDeleted: true)
+        );
     }
 
     /// <summary>
