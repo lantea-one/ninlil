@@ -1762,8 +1762,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.Property<long?>("CompletedAtUtc")
                     .HasColumnType("bigint");
 
-                b.Property<DateTimeOffset>("CreatedAtUtc")
-                    .HasColumnType("timestamp with time zone");
+                b.Property<long>("CreatedAtUtc")
+                    .HasColumnType("bigint");
 
                 b.Property<string>("EventTypeName")
                     .HasMaxLength(128)
@@ -1804,9 +1804,9 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("CompletedAtUtc");
 
-                b.HasIndex("SubscriptionId");
-
                 b.HasIndex("Status", "NextRetryDueUtc");
+
+                b.HasIndex("SubscriptionId", "CreatedAtUtc");
 
                 b.ToTable("NinlilDnsWebhookDeliveryAttempts", (string)null);
             });

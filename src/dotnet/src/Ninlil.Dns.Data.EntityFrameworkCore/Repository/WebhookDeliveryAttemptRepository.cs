@@ -40,4 +40,25 @@ public class WebhookDeliveryAttemptRepository(NinlilDnsContext context)
                 && attempt.CompletedAtUtc < cutoffUtc
             )
             .ExecuteDeleteAsync(stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> SearchBySubscriptionIdAsync(
+        Guid subscriptionId,
+        int skip,
+        int take,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Set.AsNoTracking()
+            .Where(attempt => attempt.SubscriptionId == subscriptionId)
+            .OrderByDescending(attempt => attempt.CreatedAtUtc)
+            .ThenByDescending(attempt => attempt.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<int> CountBySubscriptionIdAsync(
+        Guid subscriptionId,
+        CancellationToken stoppingToken = default
+    ) => await Set.CountAsync(attempt => attempt.SubscriptionId == subscriptionId, stoppingToken);
 }

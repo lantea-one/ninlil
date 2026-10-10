@@ -24,8 +24,9 @@ public class WebhookDeliveryAttemptConfiguration
 
         builder.HasKey(attempt => attempt.Id);
 
-        // Attempts are looked up by subscription.
-        builder.HasIndex(attempt => attempt.SubscriptionId);
+        // The attempts page of a subscription filters on SubscriptionId and orders by CreatedAtUtc
+        // (newest first), so one composite index serves both the page and the count.
+        builder.HasIndex(attempt => new { attempt.SubscriptionId, attempt.CreatedAtUtc });
 
         builder.Property(attempt => attempt.SubscriptionName).HasMaxLength(255);
 
@@ -35,8 +36,16 @@ public class WebhookDeliveryAttemptConfiguration
 
         builder.Property(attempt => attempt.LastErrorMessage).HasMaxLength(4096);
 
-        // Stored as UTC ticks so the due-for-retry comparison (NextRetryDueUtc) and the retention
-        // comparison (CompletedAtUtc) work on SQLite; see NinlilDnsContext.
+        // Stored as UTC ticks so the due-for-retry comparison (NextRetryDueUtc), the retention
+        // comparison (CompletedAtUtc) and the page order (CreatedAtUtc) work on SQLite; see
+        // NinlilDnsContext.
+        builder
+            .Property(attempt => attempt.CreatedAtUtc)
+            .HasConversion(
+                value => value.UtcTicks,
+                value => new DateTimeOffset(value, TimeSpan.Zero)
+            );
+
         builder
             .Property(attempt => attempt.NextRetryDueUtc)
             .HasConversion(

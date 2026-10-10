@@ -431,25 +431,16 @@ public class WebhooksController(
 
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // The filter by subscription runs in the storage engine, on an index (see
-        // WebhookDeliveryAttemptRepository and WebhookDeliveryAttemptMongoRepository), but ordering
-        // and the page slice happen in memory, unlike the other paged lists.
-        IReadOnlyList<WebhookDeliveryAttemptEntity> attempts = await attemptRepository.ListAsync(
-            attempt => attempt.SubscriptionId == id,
-            stoppingToken
-        );
-
-        List<WebhookDeliveryAttemptEntity> ordered =
-        [
-            .. attempts.OrderByDescending(attempt => attempt.CreatedAtUtc),
-        ];
+        IReadOnlyList<WebhookDeliveryAttemptEntity> attempts =
+            await attemptRepository.SearchBySubscriptionIdAsync(id, skip, take, stoppingToken);
+        int total = await attemptRepository.CountBySubscriptionIdAsync(id, stoppingToken);
 
         return Ok(
             new PagedResult<WebhookDeliveryAttemptDetail>(
-                [.. ordered.Skip(skip).Take(take).Select(ToDeliveryAttemptDetail)],
+                [.. attempts.Select(ToDeliveryAttemptDetail)],
                 skip,
                 take,
-                ordered.Count
+                total
             )
         );
     }

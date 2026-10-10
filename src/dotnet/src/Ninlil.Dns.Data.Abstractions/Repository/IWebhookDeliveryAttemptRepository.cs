@@ -47,4 +47,33 @@ public interface IWebhookDeliveryAttemptRepository : IRepository<WebhookDelivery
         DateTimeOffset cutoffUtc,
         CancellationToken stoppingToken = default
     );
+
+    /// <summary>
+    ///     This method returns one page of the deliveries of a subscription, newest first
+    ///     (<c>CreatedAtUtc</c> descending, then <c>Id</c> descending), sorted and sliced in the
+    ///     database. <c>WebhooksController</c> serves the delivery-attempts list with it.
+    /// </summary>
+    /// <param name="subscriptionId">The subscription whose deliveries to list.</param>
+    /// <param name="skip">The number of rows to skip.</param>
+    /// <param name="take">The maximum number of rows to return.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The requested page.</returns>
+    Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> SearchBySubscriptionIdAsync(
+        Guid subscriptionId,
+        int skip,
+        int take,
+        CancellationToken stoppingToken = default
+    );
+
+    /// <summary>
+    ///     This method counts the deliveries of a subscription, the total behind
+    ///     <see cref="SearchBySubscriptionIdAsync" />.
+    /// </summary>
+    /// <param name="subscriptionId">The subscription whose deliveries to count.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The number of deliveries of the subscription.</returns>
+    Task<int> CountBySubscriptionIdAsync(
+        Guid subscriptionId,
+        CancellationToken stoppingToken = default
+    );
 }

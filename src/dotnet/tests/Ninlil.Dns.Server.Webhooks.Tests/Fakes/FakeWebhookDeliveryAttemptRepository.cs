@@ -67,4 +67,24 @@ public sealed class FakeWebhookDeliveryAttemptRepository : IWebhookDeliveryAttem
         );
         return Task.FromResult(removed);
     }
+
+    public Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> SearchBySubscriptionIdAsync(
+        Guid subscriptionId,
+        int skip,
+        int take,
+        CancellationToken stoppingToken = default
+    ) =>
+        Task.FromResult<IReadOnlyList<WebhookDeliveryAttemptEntity>>([
+            .. Items
+                .Where(item => item.SubscriptionId == subscriptionId)
+                .OrderByDescending(item => item.CreatedAtUtc)
+                .ThenByDescending(item => item.Id)
+                .Skip(skip)
+                .Take(take),
+        ]);
+
+    public Task<int> CountBySubscriptionIdAsync(
+        Guid subscriptionId,
+        CancellationToken stoppingToken = default
+    ) => Task.FromResult(Items.Count(item => item.SubscriptionId == subscriptionId));
 }

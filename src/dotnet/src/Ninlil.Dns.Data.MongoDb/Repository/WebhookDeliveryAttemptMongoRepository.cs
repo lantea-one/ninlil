@@ -55,4 +55,30 @@ public class WebhookDeliveryAttemptMongoRepository
         );
         return (int)result.DeletedCount;
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> SearchBySubscriptionIdAsync(
+        Guid subscriptionId,
+        int skip,
+        int take,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Collection
+            .Find(attempt => attempt.SubscriptionId == subscriptionId)
+            .SortByDescending(attempt => attempt.CreatedAtUtc)
+            .ThenByDescending(attempt => attempt.Id)
+            .Skip(skip)
+            .Limit(take)
+            .ToListAsync(stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<int> CountBySubscriptionIdAsync(
+        Guid subscriptionId,
+        CancellationToken stoppingToken = default
+    ) =>
+        (int)
+            await Collection.CountDocumentsAsync(
+                attempt => attempt.SubscriptionId == subscriptionId,
+                cancellationToken: stoppingToken
+            );
 }
