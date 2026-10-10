@@ -1,3 +1,4 @@
+using Docker.DotNet.Models;
 using MongoDB.Driver;
 using Ninlil.Dns.Common.Enum;
 using Testcontainers.MongoDb;
@@ -46,10 +47,22 @@ public sealed class MongoDbEngineHost(bool replicaSet = true) : EngineHost
 
     private static MongoDbContainer CreateContainer(bool replicaSet)
     {
-        MongoDbBuilder builder = new MongoDbBuilder(Image).WithPortBinding(
-            MongoDbBuilder.MongoDbPort,
-            assignRandomHostPort: true
-        );
+        // MongoDB keeps one file per collection and per index open. A Docker daemon whose
+        // default soft limit is 1024 open files (some hosts) lets the server abort once a few
+        // databases each hold the full index set, so the container gets the limit MongoDB's
+        // production notes recommend.
+        MongoDbBuilder builder = new MongoDbBuilder(Image)
+            .WithPortBinding(MongoDbBuilder.MongoDbPort, assignRandomHostPort: true)
+            .WithCreateParameterModifier(parameters =>
+                parameters.HostConfig.Ulimits = [
+                    new Ulimit
+                    {
+                        Name = "nofile",
+                        Soft = 64000,
+                        Hard = 64000,
+                    },
+                ]
+            );
 
         return (replicaSet ? builder.WithReplicaSet() : builder).Build();
     }

@@ -9,23 +9,15 @@ namespace Ninlil.Dns.Data.MongoDb.Repository;
 /// <summary>
 ///     This class implements <see cref="IDnsQueryLogRepository" /> against MongoDB. Searches run
 ///     as MongoDB filter documents, never in memory, and bulk deletes as a single
-///     <c>deleteMany</c>, which takes effect immediately rather than at save. It creates its
-///     indexes itself (see <see cref="EnsureIndexesFireAndForget" />).
+///     <c>deleteMany</c>, which takes effect immediately rather than at save. Its indexes are
+///     created at startup by <see cref="Maintenance.MongoIndexCatalog" />.
 /// </summary>
 public class DnsQueryLogMongoRepository
     : MongoRepositoryBase<DnsQueryLogEntryEntity>,
         IDnsQueryLogRepository
 {
     /// <summary>
-    ///     This field guards <see cref="EnsureIndexesFireAndForget" /> so only the first instance in
-    ///     the process creates the indexes, instead of every scoped instance asking the server
-    ///     again.
-    /// </summary>
-    private static int _indexesEnsured;
-
-    /// <summary>
-    ///     This constructor sets up the repository and, once per process, starts a best-effort
-    ///     creation of its indexes.
+    ///     This constructor sets up the repository.
     /// </summary>
     /// <param name="context">The context to read collections from.</param>
     /// <param name="changeTracker">The change tracker to stage writes onto.</param>
@@ -33,10 +25,7 @@ public class DnsQueryLogMongoRepository
         NinlilDnsMongoContext context,
         MongoChangeTracker changeTracker
     )
-        : base(context.DnsQueryLogEntries, changeTracker)
-    {
-        EnsureIndexesFireAndForget();
-    }
+        : base(context.DnsQueryLogEntries, changeTracker) { }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<DnsQueryLogEntryEntity>> SearchAsync(
@@ -193,56 +182,5 @@ public class DnsQueryLogMongoRepository
             filter &= builder.Eq(entry => entry.ClientProtocolVersion, clientProtocolVersion);
 
         return filter;
-    }
-
-    /// <summary>
-    ///     This method starts index creation once per process and ignores any failure. A missing
-    ///     index only slows queries and never makes them wrong, so a failure must not break the
-    ///     caller whose request happened to construct the first repository.
-    /// </summary>
-    private void EnsureIndexesFireAndForget()
-    {
-        if (Interlocked.CompareExchange(ref _indexesEnsured, 1, 0) != 0)
-            return;
-
-        IMongoCollection<DnsQueryLogEntryEntity> collection = Collection;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await collection.Indexes.CreateManyAsync([
-                    new CreateIndexModel<DnsQueryLogEntryEntity>(
-                        Builders<DnsQueryLogEntryEntity>.IndexKeys.Descending(entry =>
-                            entry.OccurredAtUtc
-                        )
-                    ),
-                    new CreateIndexModel<DnsQueryLogEntryEntity>(
-                        Builders<DnsQueryLogEntryEntity>.IndexKeys.Ascending(entry =>
-                            entry.ClientAddress
-                        )
-                    ),
-                    new CreateIndexModel<DnsQueryLogEntryEntity>(
-                        Builders<DnsQueryLogEntryEntity>.IndexKeys.Ascending(entry =>
-                            entry.QueriedName
-                        )
-                    ),
-                    new CreateIndexModel<DnsQueryLogEntryEntity>(
-                        Builders<DnsQueryLogEntryEntity>.IndexKeys.Ascending(entry =>
-                            entry.ResponseCode
-                        )
-                    ),
-                    new CreateIndexModel<DnsQueryLogEntryEntity>(
-                        Builders<DnsQueryLogEntryEntity>.IndexKeys.Ascending(entry =>
-                            entry.ClientIdentifier
-                        )
-                    ),
-                ]);
-            }
-            catch
-            {
-                // Best effort only; see the method summary.
-            }
-        });
     }
 }

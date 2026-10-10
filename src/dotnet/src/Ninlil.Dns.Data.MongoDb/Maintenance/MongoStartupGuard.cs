@@ -12,14 +12,16 @@ namespace Ninlil.Dns.Data.MongoDb.Maintenance;
 ///     calls it once at startup, before anything else reads the database. It refuses to start
 ///     when the database records a schema step this build does not know (a newer version has
 ///     upgraded it), then runs each known backfill and records the step in the
-///     <c>NinlilDnsSchemaSteps</c> collection (see <see cref="MongoSchemaSteps" />). The backfills
+///     <c>NinlilDnsSchemaSteps</c> collection (see <see cref="MongoSchemaSteps" />), and finally
+///     creates the indexes (see <see cref="MongoIndexCatalog" />). The backfills
 ///     are idempotent and run on every start, so a database restored from an older backup is
 ///     repaired again. MongoDB has no migration snapshot: the backfills can be retried safely.
 /// </summary>
 public static class MongoStartupGuard
 {
     /// <summary>
-    ///     This method checks the recorded steps, runs the backfills and records the steps.
+    ///     This method checks the recorded steps, runs the backfills, records the steps and
+    ///     ensures the indexes.
     /// </summary>
     /// <param name="context">The MongoDB context of the configured database.</param>
     /// <param name="logger">The logger for the backfill results.</param>
@@ -90,6 +92,10 @@ public static class MongoStartupGuard
                 stoppingToken
             );
         }
+
+        // Indexes last: the backfills above may rewrite documents, and the indexes are the
+        // slowest step on a large existing database.
+        await MongoIndexCatalog.EnsureAsync(context, logger, stoppingToken);
     }
 
     private static string ApplicationVersion { get; } =

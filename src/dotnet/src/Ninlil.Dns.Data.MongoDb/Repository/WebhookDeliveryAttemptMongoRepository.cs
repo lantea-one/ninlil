@@ -9,22 +9,15 @@ namespace Ninlil.Dns.Data.MongoDb.Repository;
 /// <summary>
 ///     This class implements <see cref="IWebhookDeliveryAttemptRepository" /> against MongoDB.
 ///     The due-for-retry lookup and the retention delete run as MongoDB filters and commands,
-///     never in memory, because the collection can grow large; like
-///     <see cref="DnsQueryLogMongoRepository" />, it creates its own indexes.
+///     never in memory, because the collection can grow large. Its indexes are created at
+///     startup by <see cref="Maintenance.MongoIndexCatalog" />.
 /// </summary>
 public class WebhookDeliveryAttemptMongoRepository
     : MongoRepositoryBase<WebhookDeliveryAttemptEntity>,
         IWebhookDeliveryAttemptRepository
 {
     /// <summary>
-    ///     This field guards <see cref="EnsureIndexesFireAndForget" /> so only the first instance in
-    ///     the process creates the indexes.
-    /// </summary>
-    private static int _indexesEnsured;
-
-    /// <summary>
-    ///     This constructor sets up the repository and, once per process, starts a best-effort
-    ///     creation of its indexes.
+    ///     This constructor sets up the repository.
     /// </summary>
     /// <param name="context">The context to read collections from.</param>
     /// <param name="changeTracker">The change tracker to stage writes onto.</param>
@@ -32,10 +25,7 @@ public class WebhookDeliveryAttemptMongoRepository
         NinlilDnsMongoContext context,
         MongoChangeTracker changeTracker
     )
-        : base(context.WebhookDeliveryAttempts, changeTracker)
-    {
-        EnsureIndexesFireAndForget();
-    }
+        : base(context.WebhookDeliveryAttempts, changeTracker) { }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> ListDueForRetryAsync(
@@ -64,45 +54,5 @@ public class WebhookDeliveryAttemptMongoRepository
             stoppingToken
         );
         return (int)result.DeletedCount;
-    }
-
-    /// <summary>
-    ///     This method starts index creation once per process and ignores any failure, since a
-    ///     missing index only slows queries.
-    /// </summary>
-    private void EnsureIndexesFireAndForget()
-    {
-        if (Interlocked.CompareExchange(ref _indexesEnsured, 1, 0) != 0)
-            return;
-
-        IMongoCollection<WebhookDeliveryAttemptEntity> collection = Collection;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await collection.Indexes.CreateManyAsync([
-                    new CreateIndexModel<WebhookDeliveryAttemptEntity>(
-                        Builders<WebhookDeliveryAttemptEntity>
-                            .IndexKeys.Ascending(attempt => attempt.Status)
-                            .Ascending(attempt => attempt.NextRetryDueUtc)
-                    ),
-                    new CreateIndexModel<WebhookDeliveryAttemptEntity>(
-                        Builders<WebhookDeliveryAttemptEntity>.IndexKeys.Ascending(attempt =>
-                            attempt.CompletedAtUtc
-                        )
-                    ),
-                    new CreateIndexModel<WebhookDeliveryAttemptEntity>(
-                        Builders<WebhookDeliveryAttemptEntity>.IndexKeys.Ascending(attempt =>
-                            attempt.SubscriptionId
-                        )
-                    ),
-                ]);
-            }
-            catch
-            {
-                // Best effort only; see the method summary.
-            }
-        });
     }
 }
