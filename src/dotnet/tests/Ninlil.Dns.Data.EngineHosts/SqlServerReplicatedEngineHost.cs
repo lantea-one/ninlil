@@ -45,6 +45,16 @@ public sealed class SqlServerReplicatedEngineHost : ReplicatedEngineHost
         await _network.CreateAsync();
         await Task.WhenAll(_primary.StartAsync(), _secondary.StartAsync());
 
+        // The "ready" log line can come before the first-boot setup has finished, so a login
+        // can still fail for a moment on a busy machine; wait until one succeeds.
+        foreach (IContainer container in new[] { _primary, _secondary })
+        {
+            await PollAsync(
+                "SQL Server to accept the sa login",
+                async () => await ScalarAsync(container, "master", "SELECT 1") is 1
+            );
+        }
+
         string primaryCertificate = await PrepareEndpointAsync(_primary);
         string secondaryCertificate = await PrepareEndpointAsync(_secondary);
         await ExecuteAsync(
