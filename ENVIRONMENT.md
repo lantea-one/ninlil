@@ -32,9 +32,9 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **305 individual settings** across 58 bound configuration classes, plus **2 standalone**
+Total: **321 individual settings** across 58 bound configuration classes, plus **2 standalone**
 bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **314 environment variables
+variables that redirect onto .NET's own real, unprefixed equivalents — **330 environment variables
 in total**.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
@@ -78,6 +78,22 @@ Which database backend the whole application persists every DNS/DHCP/identity en
 | `NINLIL_STORAGE_MIGRATION_SAFETY_SNAPSHOTS_TO_KEEP` | How many finished snapshots are kept after a successful migration; the oldest are deleted first. Values below 1 count as 1. | `3` |
 | `NINLIL_STORAGE_MIGRATION_SAFETY_RETRY_FAILED_MIGRATION` | Whether a start may try a migration again after an earlier attempt failed and may have left the database partly migrated. By default that start is refused until the snapshot is restored. | `false` |
 | `NINLIL_STORAGE_MIGRATION_SAFETY_RESTORE_SNAPSHOT` | The id of a snapshot to restore at the next start, before anything else touches the database. Remove it after the restore; a snapshot that was already restored is not restored again. | *(empty)* |
+| `NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING` | The read-only connection string of a relational engine. PostgreSQL and MySQL may list several hosts in it; for SQL Server it names the availability group listener. Refused on SQLite and MongoDB (MongoDB uses `NINLIL_STORAGE_MONGODB_READ_PREFERENCE`). It contains a password, so set it as a secret. | *(empty — no read replica)* |
+| `NINLIL_STORAGE_READ_REPLICA_STICKY_AFTER_WRITE_SECONDS` | How many seconds a user keeps reading from the primary after saving something, so the admin console shows what was just written. Must be at least 1. | `10` |
+| `NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS` | How many seconds a replica may be behind and still receive reads. Must be below the sticky window above when a replica is configured. | `5` |
+| `NINLIL_STORAGE_READ_REPLICA_LAG_CHECK_INTERVAL_SECONDS` | How often, in seconds, the replica's lag and schema version are measured. Must be at least 1. | `5` |
+| `NINLIL_STORAGE_POSTGRESQL_TARGET_SESSION_ATTRIBUTES` | PostgreSQL only. The Npgsql `Target Session Attributes` of the primary connection: `ReadWrite` or `Primary`. A primary connection string with several hosts gets `ReadWrite` when this is empty. Refused when the connection string says something different. | *(empty)* |
+| `NINLIL_STORAGE_POSTGRESQL_REPLICA_TARGET_SESSION_ATTRIBUTES` | PostgreSQL only. The `Target Session Attributes` of the read connection: `PreferStandby`, `Standby`, `ReadOnly`, `PreferPrimary` or `Any`. `ReadWrite` and `Primary` are refused. | *(empty — `PreferStandby`)* |
+| `NINLIL_STORAGE_POSTGRESQL_LOAD_BALANCE_HOSTS` | PostgreSQL only. The Npgsql `Load Balance Hosts` value. When empty, the read connection balances and the primary connection does not. | *(empty)* |
+| `NINLIL_STORAGE_POSTGRESQL_HOST_RECHECK_SECONDS` | PostgreSQL only. The Npgsql `Host Recheck Seconds` value: how long a host's state is trusted before it is checked again. | *(empty — driver default, 10)* |
+| `NINLIL_STORAGE_MYSQL_LOAD_BALANCE` | MySQL only. The `LoadBalance` mode of the primary connection. Only `FailOver` is accepted, and only an external failover that leaves one host writable makes several hosts safe. | *(empty)* |
+| `NINLIL_STORAGE_MYSQL_REPLICA_LOAD_BALANCE` | MySQL only. The `LoadBalance` mode of the read connection: `RoundRobin`, `Random`, `LeastConnections` or `FailOver`. | *(empty — `RoundRobin` for several hosts)* |
+| `NINLIL_STORAGE_SQLSERVER_MULTI_SUBNET_FAILOVER` | SQL Server only. Sets `MultiSubnetFailover` on both connections, for a listener that spans several subnets. The read connection always gets `ApplicationIntent=ReadOnly`. | `false` |
+| `NINLIL_STORAGE_MONGODB_REPLICA_SET` | MongoDB only. The replica set name (`replicaSet`). Refused when the connection string names another one. | *(empty)* |
+| `NINLIL_STORAGE_MONGODB_READ_PREFERENCE` | MongoDB only. The read preference for work that tolerates replica lag: `Primary`, `PrimaryPreferred`, `Secondary`, `SecondaryPreferred` or `Nearest`. Work that needs the primary always uses `Primary`. | *(empty — `Primary`)* |
+| `NINLIL_STORAGE_MONGODB_MAX_STALENESS_SECONDS` | MongoDB only. The driver's `maxStalenessSeconds` for that read preference. `0` leaves it unset; otherwise at least 90. | `0` |
+| `NINLIL_STORAGE_MONGODB_WRITE_CONCERN` | MongoDB only. `Majority`, `Acknowledged` (w:1) or `W2` to `W9`. When empty, `Majority` is used on a replica set and the connection string's value otherwise. | *(empty)* |
+| `NINLIL_STORAGE_MONGODB_JOURNAL` | MongoDB only. The write concern's journal flag (`j`). When empty, `true` is used with a write concern that Ninlil applies. | *(empty)* |
 
 ## Identity, authentication & SSO
 
