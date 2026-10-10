@@ -48,12 +48,24 @@ public class RewriteClusterSyncEventSubscriber(
         return ValueTask.CompletedTask;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     This method returns the rewrite, or <see langword="null" /> (nothing is broadcast) for
+    ///     one scoped to a client or client group. <see cref="RewriteSyncPayload" /> has no scope
+    ///     and clients and groups exist only on their own node, so a peer would create a global
+    ///     rewrite from it.
+    /// </summary>
     protected override async Task<DnsRewriteEntity> FindLocalAsync(
         IServiceProvider services,
         Guid id,
         CancellationToken stoppingToken
-    ) => await services.GetRequiredService<IDnsRewriteRepository>().GetByIdAsync(id, stoppingToken);
+    )
+    {
+        DnsRewriteEntity rewrite = await services
+            .GetRequiredService<IDnsRewriteRepository>()
+            .GetByIdAsync(id, stoppingToken);
+
+        return rewrite is { ClientId: null, ClientGroupId: null } ? rewrite : null;
+    }
 
     /// <inheritdoc />
     protected override string Serialize(DnsRewriteEntity entity) =>
