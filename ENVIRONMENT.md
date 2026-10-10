@@ -32,10 +32,12 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **321 individual settings** across 58 bound configuration classes, plus **2 standalone**
-bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **330 environment variables
-in total**.
+Total: **329 individual settings** across 58 bound configuration classes, plus **3 standalone**
+variables read directly by configuration key (the two bootstrap administrator credentials and
+`NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's own real,
+unprefixed equivalents — **339 environment variables in total**. The `NINLIL_DOTNET_*` runtime
+settings in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not
+part of that total.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
 in `appsettings.json` (nested JSON mirroring the `:`-separated configuration path), and the large
@@ -69,6 +71,14 @@ for which surface to prefer for day-to-day operation versus first-boot/container
 ## Storage engine
 
 Which database backend the whole application persists every DNS/DHCP/identity entity into.
+
+How to use these settings is explained step by step in the README:
+[Switching the storage engine](./README.md#switching-the-storage-engine),
+[Upgrades and migration snapshots](./README.md#upgrades-and-migration-snapshots) (the
+`..._MIGRATION_SAFETY_*` variables) and
+[Read replicas and database clusters](./README.md#read-replicas-and-database-clusters) (the
+`..._READ_REPLICA_*` variables and the per-engine variables for PostgreSQL, MySQL, SQL Server and
+MongoDB).
 
 | Variable | Controls | Default |
 |---|---|---|
@@ -432,6 +442,7 @@ self-update service, and multi-node clustering.
 | `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY` | Where the Data Protection key ring is stored — bundled into a backup archive since every encrypted secret in the database is only decryptable with these files present. | `data/` |
 | `NINLIL_DNS_SERVER_BACKUP_MINIMUM_PASSPHRASE_LENGTH` | Minimum required length for a backup archive's own encryption passphrase. | `12` |
 | `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH` | Path to the runtime settings JSON file bundled into/restored from a backup archive. | *(empty)* |
+| `NINLIL_DNS_SERVER_BACKUP_MAXIMUM_RESTORED_PAYLOAD_BYTES` | The most decompressed bytes a restore reads from one archive, summed over all entries. It stops a zip bomb; there is no reason to change it in production. | `4294967296` (4 GiB) |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_ENABLE_AUTOMATIC_CHECK` | Whether the self-update checker runs automatically (check-only — there is no in-process "apply now" action). | `true` |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_CHECK_INTERVAL` | How often the automatic check runs (beyond the always-performed startup check). | `1.00:00:00` |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_RELEASE_FEED_URL` | The URL of the release-feed JSON document to check against. | *(empty — no default hosting location yet)* |
@@ -452,6 +463,7 @@ Advertisement content, and the PXE-boot TFTP server. Every DHCP-family transport
 |---|---|---|
 | `NINLIL_DHCP_SERVER_CORE_SERVER_IDENTIFIER_ADDRESS` | The address this DHCP server identifies itself with (auto-detected from the primary interface when unset). | *(none — auto-detected)* |
 | `NINLIL_DHCP_SERVER_CORE_SERVER_DUID` | This server's own DHCPv6 Unique Identifier (auto-generated and persisted when unset). | *(none — auto-generated)* |
+| `NINLIL_DHCP_SERVER_CORE_SERVER_IPV6_ADDRESS` | The server's own IPv6 address, used for a DHCPv6 option whose value is the server address. When unset or not a valid non-link-local IPv6 address, the first such address on an interface that is up is detected at startup. Set it when the host has several IPv6 interfaces. | *(none — auto-detected)* |
 | `NINLIL_DHCP_SERVER_CORE_OFFER_HOLD_DURATION` | How long a DHCPv4 OFFER's address is held reserved awaiting the client's REQUEST. | `00:00:30` |
 | `NINLIL_DHCP_SERVER_CORE_DECLINED_ADDRESS_QUARANTINE_DURATION` | How long an address a client DECLINEd is quarantined before being offered again. | `00:10:00` |
 | `NINLIL_DHCP_SERVER_CORE_LEASE_EXPIRY_SWEEP_INTERVAL` | How often the natural-lease-expiry sweep runs. | `00:01:00` |
