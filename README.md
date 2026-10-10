@@ -480,13 +480,293 @@ or the equivalent in `appsettings.json`:
 
 ```json
 {
-  "Storage": { "Engine": "PostgreSql" },
-  "ConnectionStrings": { "PostgreSql": "Host=localhost;Database=ninlil;Username=ninlil;Password=change-me" }
+  "Storage": {
+    "Engine": "PostgreSql",
+    "ConnectionString": "Host=localhost;Database=ninlil;Username=ninlil;Password=change-me"
+  }
 }
 ```
 
-Relational engines have their EF Core migrations applied automatically on startup; MongoDB is
-schemaless and needs no migration step at all.
+With SQLite and no connection string, Ninlil creates the database file `ninlil-dns.sqlite3` in the
+`data` directory. For the other engines, create the database and its account first with the
+scripts in [`src/script/database/`](./src/script/database/README.md).
+
+Relational engines have their EF Core migrations applied automatically on startup, after a
+snapshot of the existing data, so an upgrade can be undone (see
+[Upgrades and migration snapshots](#upgrades-and-migration-snapshots)). MongoDB is schemaless and
+needs no migration step. To move an installation to another engine later, see
+[Switching the storage engine](#switching-the-storage-engine).
+
+## Operating the database
+
+This section is for the person who runs a Ninlil installation: moving to another database engine,
+upgrading safely, and the settings that change how the database behaves. Every setting it names is
+listed in [`ENVIRONMENT.md`](./ENVIRONMENT.md#storage-engine). Where a step needs a file or a
+setting you have not met yet, the step says where to find it.
+
+Where Ninlil keeps its files depends on how you installed it. This section calls that folder the
+**data directory**:
+
+| Installed as | Data directory |
+|---|---|
+| Linux package (Deb, RPM, Arch) | `/var/lib/ninlil` |
+| Docker image | `/app/data` (the volume you mount) |
+| Windows service | the `data` folder next to the executable, such as `C:\Ninlil\data` |
+| `dotnet run` | the `data` folder next to the built program |
+
+### Switching the storage engine
+
+You can move an installation between SQLite, PostgreSQL, MySQL and SQL Server. MongoDB cannot be
+the source or the target of a switch. A switch takes effect at the **next restart**: you ask for
+it in the admin console, then restart Ninlil, and the copy runs at that start before anything else
+uses the database.
+
+The copy moves everything an administrator configured (zones, records, users, roles, filtering,
+clients, DHCP scopes, reservations and leases). It leaves out history that can grow very large:
+the query log, the operational log and metrics, the zone change journal, webhook delivery
+attempts and the cluster sync tombstones. The Data Protection key ring, the certificates and the
+configuration file stay where they are. Ninlil does not delete the old database.
+
+**Before you start**
+
+1. Create the target database and its account. For PostgreSQL, MySQL and SQL Server, the scripts
+   in [`src/script/database/`](./src/script/database/README.md) do this.
+2. Check that no read replica or cluster setting is in use (the `NINLIL_STORAGE_READ_REPLICA_*`
+   and per-engine variables in [Read replicas and database clusters](#read-replicas-and-database-clusters)).
+   Ninlil refuses to schedule a switch while one is set. Remove them, switch, then set them up again
+   for the new engine.
+3. Sign in with an account that holds the `storage:manage` permission (the bootstrap `admin` does).
+
+**Steps**
+
+1. Open **Settings**, then **Storage** (`/settings/storage`).
+2. Choose the target engine and fill in its connection fields: a file path for SQLite; host,
+   port, database, user name, password and encryption mode for the others. Choose **Schedule
+   switch**.
+3. Ninlil connects to the target at once. It refuses the request when the target cannot be
+   reached, when a newer Ninlil version has already upgraded it, or when the target engine is
+   MongoDB. When the target already holds Ninlil data, the page warns you that the copy replaces
+   that data.
+4. Ninlil saves the request and answers immediately. Nothing is copied yet and Ninlil keeps
+   running on the old database. The page shows the pending switch. **Cancel** removes it. The
+   request lives in `storage-switch.json` in the data directory, with its connection strings
+   encrypted by the Data Protection key ring, so keep the data directory across the restart.
+5. Read the note the page shows and follow the case that matches it:
+   - *Restart Ninlil to switch.* Ninlil's own configuration file (`appsettings.json`) holds the
+     storage settings. Do nothing else.
+   - *Set `NINLIL_STORAGE_ENGINE` and `NINLIL_STORAGE_CONNECTION_STRING` ...* Something other than
+     that file decides the storage, usually environment variables (Docker, the package's
+     `/etc/ninlil/ninlil.env`, a Windows service). Ninlil never overrides those. Set
+     `NINLIL_STORAGE_ENGINE` to the target engine and `NINLIL_STORAGE_CONNECTION_STRING` to the
+     target's connection string (write it yourself in that engine's format, as in
+     [Choosing a storage engine](#choosing-a-storage-engine); the page never shows one).
+6. Restart Ninlil (`sudo systemctl restart ninlil`, `docker restart ninlil`, or
+   `Restart-Service Ninlil`). At that start Ninlil migrates the target, copies the data, and, in
+   the first case, writes the new engine and connection string into `appsettings.json`.
+7. Open **Settings**, then **Storage** again. The last-outcome card shows that the copy worked and
+   how many rows it moved, or why it failed. It shows the outcome of the latest start only.
+
+**When something goes wrong**
+
+- *The configuration file decided the storage and the copy failed.* Ninlil keeps running on the old
+  database, deletes the saved request and shows the failure on the Storage page. Fix the cause and
+  schedule the switch again.
+- *Your environment variables already point at the target and the copy failed.* Ninlil cannot run
+  on an empty target, so the start is refused with exit code 78 (see
+  [When the start is refused](#when-the-start-is-refused-exit-code-78)). Point the variables back
+  at the old database, or fix the cause, and start again. The saved request stays until you cancel
+  it or the copy succeeds.
+- *Neither the old nor the new database is the one configured.* Ninlil logs a warning that names
+  the three engines, keeps the request, and changes nothing. Cancel the request on the Storage
+  page, or set the variables to one of the two databases.
+
+### Upgrades and migration snapshots
+
+A new Ninlil version can change the database layout. For SQLite, PostgreSQL, MySQL and SQL Server,
+Ninlil applies those changes itself at start (these are the *migrations*) and takes a **snapshot**
+of your data first, so a failed or unwanted upgrade can be undone.
+
+**What happens at every start, in order**
+
+1. Ninlil reads which migrations the database has already applied.
+2. If the database applied a migration this version does not know, a newer Ninlil used it. Ninlil
+   refuses to start on it (exit code 78). Run the newer version, or restore a snapshot or backup
+   taken before that upgrade.
+3. If an earlier attempt failed and may have left the database half migrated, Ninlil refuses to
+   start until you restore the snapshot of that attempt or set
+   `NINLIL_STORAGE_MIGRATION_SAFETY_RETRY_FAILED_MIGRATION=true`.
+4. If no migration is pending, startup continues.
+5. If migrations are pending and the database already holds data, Ninlil takes a snapshot and logs
+   a line that starts with `Took migration snapshot`, naming the snapshot id and where it is. A
+   brand-new database gets no snapshot.
+6. Ninlil applies the migrations. On success it deletes the oldest snapshots beyond the number to
+   keep (3 by default).
+
+**Where a snapshot lives**
+
+A snapshot id is the UTC time it was taken, as `yyyyMMddHHmmss` (for example `20261009142650`).
+
+| Engine | Where the snapshot is | How to list them |
+|---|---|---|
+| SQLite | A file `migration-snapshots/<database file name>-<id>.sqlite3` and a `.json` manifest next to it, in the folder that holds the database file (by default `<data directory>/migration-snapshots/ninlil-dns-<id>.sqlite3`). Both files are readable by the owner only. | `ls <data directory>/migration-snapshots` |
+| PostgreSQL | A schema `ninlil_snapshot_<id>` inside the Ninlil database, with a copy of every table and a manifest table `__NinlilSnapshot` | `psql -d ninlil -c '\dn ninlil_snapshot_*'` |
+| SQL Server | A schema `ninlil_snapshot_<id>` inside the Ninlil database, with a copy of every table and a manifest table `__NinlilSnapshot` | `SELECT name FROM sys.schemas WHERE name LIKE 'ninlil_snapshot_%'` |
+| MySQL | Tables named `nsnap_<id>__<table>` next to the real tables, and a manifest table `nsnap_<id>__manifest` | `SHOW TABLES LIKE 'nsnap\_%\_\_manifest'` |
+| MongoDB | None. See [MongoDB](#mongodb) below. | |
+
+A snapshot copies every table, including the query log, so it **roughly doubles the size of the
+database** until Ninlil prunes it. On a server engine it needs no extra privilege: the account
+from [`src/script/database/`](./src/script/database/README.md) already may create schemas and
+tables in its own database, which the migrations need anyway. On PostgreSQL, MySQL and SQL Server
+the snapshot is part of the database, so replicas and your own database backups carry it too.
+
+If the snapshot cannot be taken (no disk space, no permission), Ninlil leaves the database
+unchanged and refuses to start with a message that says why. Fix the cause, or set
+`NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT=false` to migrate without a snapshot (Ninlil then
+logs a warning). A SQLite database held in memory has no file to copy and gets no snapshot.
+
+**Settings**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT` | `true` | Take a snapshot before migrating a database that holds data. |
+| `NINLIL_STORAGE_MIGRATION_SAFETY_SNAPSHOTS_TO_KEEP` | `3` | Finished snapshots kept after a successful migration. The oldest go first. At least 1. |
+| `NINLIL_STORAGE_MIGRATION_SAFETY_RETRY_FAILED_MIGRATION` | `false` | Try again on the database as it is after a failure that may have left it half migrated. |
+| `NINLIL_STORAGE_MIGRATION_SAFETY_RESTORE_SNAPSHOT` | empty | The id of a snapshot to restore at the next start. |
+
+**Restoring a snapshot**
+
+Ninlil restores snapshots itself, on every relational engine, through one setting. The restore
+drops the Ninlil tables, rebuilds the layout the snapshot had and copies the rows back, so
+**everything written after the snapshot is lost**. Choose the case that fits.
+
+*Case A: go back to the previous Ninlil version* (the new version fails or misbehaves).
+
+1. Stop Ninlil.
+2. Find the snapshot id: it is in the log line `Took migration snapshot` of the upgrade start and
+   in the refusal message, or use the listing in the table above. Take the newest one.
+3. Install the previous Ninlil version. It must be a version that has the
+   `NINLIL_STORAGE_MIGRATION_SAFETY_*` settings; if it is older than that, restore a database
+   backup you took before the upgrade instead.
+4. Set `NINLIL_STORAGE_MIGRATION_SAFETY_RESTORE_SNAPSHOT=<id>` (or start with the command-line
+   argument `--Storage:MigrationSafety:RestoreSnapshot=<id>`) and start Ninlil.
+5. Read the log. Success looks like `Snapshot <id> is restored. Remove the setting ...`.
+6. Remove the setting and restart. If you forget, the next start logs a warning that the snapshot
+   was already restored and does not restore it again.
+
+*Case B: stay on the new version and try the upgrade again* (you fixed the cause of a failure).
+Follow the same steps without step 3. After the restore, the same start applies the pending
+migrations again, with a new snapshot.
+
+A restore is not atomic, but you can repeat it: if it is interrupted, start again with the same
+setting. A snapshot made by one engine cannot be restored into another.
+
+*SQLite by hand.* The refusal message for SQLite also gives a manual way: stop Ninlil, copy the
+snapshot file over the database file, delete the `-wal` and `-shm` files next to the database if
+they exist, delete the snapshot's `.json` manifest, and start Ninlil.
+
+*Deleting a snapshot by hand.* Prefer letting Ninlil prune snapshots after the next successful
+migration. To free the space sooner, delete the SQLite files, or on PostgreSQL run
+`DROP SCHEMA ninlil_snapshot_<id> CASCADE;`, on SQL Server drop the schema's tables and then
+the schema, and on MySQL drop every table that starts with `nsnap_<id>__`.
+
+#### When the start is refused (exit code 78)
+
+Whenever Ninlil must not run on the database it finds, or the storage settings contradict each
+other, it logs a critical entry that begins with `Startup refused:`, explains what to do, and exits with
+**exit code 78**. The causes are:
+
+| Message mentions | Meaning | What to do |
+|---|---|---|
+| The database was upgraded by a newer Ninlil version | A newer version applied migrations this one does not know. | Start the newer version, or restore a snapshot or backup from before that upgrade (Case A above). |
+| Applying migrations ... failed and was rolled back | PostgreSQL, SQL Server and SQLite undo a failed migration completely. The database is unchanged. | Fix the cause named in the message and start again, or start the previous version. |
+| Applying migrations ... failed and was not rolled back, or An earlier attempt ... failed | MySQL cannot undo schema changes, so a failure can leave the database half migrated. | Restore the snapshot the message names (Case A or B). Only if you know the half-migrated state is safe, set `NINLIL_STORAGE_MIGRATION_SAFETY_RETRY_FAILED_MIGRATION=true`; that reuses the snapshot. |
+| The snapshot before the migration could not be taken | Disk space or permissions. | Fix them, or set `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT=false`. |
+| There is no snapshot ... to restore | The restore setting names an id that does not exist. | Correct or remove the setting; the message lists the ids that exist. |
+| The MySQL server ... has read_only set | The connection string reaches a replica. | Point it at the writable primary. |
+| A setting under `Storage:` is wrong | A storage cluster or replica setting is out of range or contradicts the connection string. | Fix the setting the message names. |
+| MongoDB: unknown schema step, or a backfill failed | See [MongoDB](#mongodb). | |
+
+To see the message: `sudo journalctl -u ninlil -e` (Linux packages), `docker logs ninlil`, or the
+console output of `dotnet run`.
+
+The systemd units that ship with Ninlil (the Deb, RPM and Arch packages and
+[`src/script/systemd/ninlil-dns.service`](./src/script/systemd/ninlil-dns.service)) set
+`RestartPreventExitStatus=78`, so systemd stops instead of retrying a start that cannot succeed.
+`systemctl status ninlil` then shows `status=78`. After you fix the cause, run
+`sudo systemctl restart ninlil`. If you write your own unit, add the same line. Docker restart
+policies such as `unless-stopped` (as in the example `docker-compose.yml`) and the Windows
+service recovery actions restart the program whatever its exit code. The refusal then repeats on
+every try and does not change the database further, so read the log and fix the cause.
+
+#### MongoDB
+
+MongoDB has no schema migrations and no snapshots. Ninlil keeps a list of the one-off data
+changes it has made in the `NinlilDnsSchemaSteps` collection and, like the relational engines,
+refuses to start (exit code 78) on a database that records a step it does not know, which means
+a newer Ninlil version has used it. If a data change fails, the start is refused with a message
+that says it is safe to retry.
+
+Because there is no snapshot, **take a backup before upgrading**: `mongodump --uri "<connection
+string>"`, and optionally a backup file from **Backup & Restore** in the admin console (that
+backup leaves out the query log and other history, see
+[Switching the storage engine](#switching-the-storage-engine)).
+
+**Run MongoDB as a replica set.** Saving several documents at once (a zone with its records, a user
+with its roles, a restore) is only all-or-nothing on a replica set. A single-node replica set is
+enough. On a standalone server Ninlil logs this warning at every start: *MongoDB is a standalone
+server, so a save that writes several documents is not atomic; run a replica set (a single-node
+one is enough) for all-or-nothing saves.* To turn a standalone `mongod` into a single-node replica
+set:
+
+1. Stop `mongod` and start it again with `--replSet rs0` (or `replication.replSetName: rs0` in
+   its configuration file).
+2. Run this once in `mongosh`, with a host name that the machine running Ninlil can reach:
+   `rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongo1:27017" }] })`
+3. Put the replica set name in Ninlil's connection string, for example
+   `mongodb://ninlil:<password>@mongo1:27017/ninlil?replicaSet=rs0`. Ninlil then also asks the
+   server to acknowledge writes from a majority with the journal (`w=majority`, `journal=true`)
+   unless the string already says otherwise.
+4. Restart Ninlil. The warning is gone.
+
+Two operations are not atomic even on a replica set, because they can be larger than MongoDB's
+transaction limits: refreshing a filter list (a failed refresh is simply repeated by the next one)
+and restoring a backup file.
+
+A MongoDB server that holds Ninlil's indexes keeps about 150 files open per database (one for each
+collection and each index). The usual default limit of 1024 open files is too low. Raise it well
+above that: `ulimit -n 64000` before starting `mongod`, `LimitNOFILE=64000` in its systemd unit,
+or `docker run --ulimit nofile=64000:64000 ...` for the container. Without it, `mongod` can abort
+with `Too many open files`.
+
+### Behaviour worth knowing
+
+- **SQL statements are logged at Debug level.** At the default level the log shows none. To see
+  every statement, add this to `appsettings.json` (or pass
+  `--Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command=Debug` on the command line):
+
+  ```json
+  { "Logging": { "LogLevel": { "Microsoft.EntityFrameworkCore.Database.Command": "Debug" } } }
+  ```
+
+  Failed statements are always logged as errors.
+- **SQLite runs in WAL mode.** Next to `ninlil-dns.sqlite3` you will see `ninlil-dns.sqlite3-wal`
+  and `ninlil-dns.sqlite3-shm` while Ninlil runs. Do not copy only the main file of a running
+  installation: use **Backup & Restore**, or stop Ninlil first and copy all three files. Ninlil
+  sets `synchronous = NORMAL`, which keeps the database consistent after a crash; a power cut can
+  lose the last second of writes. It also runs `PRAGMA optimize` at every start and after the
+  query log cleanup deleted rows, so queries on large logs choose good indexes.
+- **Filter data is loaded when Ninlil starts.** A background service loads the clients, the filter
+  configuration and the entries of every list in use, so the first DNS query does not wait for
+  them. It does not delay readiness. It does nothing while filtering is off at start.
+- **Forwarder zone names ignore case and a trailing dot.** `Corp.Example`, `corp.example` and
+  `corp.example.` all match the same conditional forwarder zone.
+- **In a Ninlil cluster, a change made on one node reaches the others' DNS answers after a delay.**
+  Each node keeps its own database and caches. On the node where you make a change, the answer
+  changes at once. On the other nodes, filter and client settings, rewrites, client schedules and
+  forwarder zones show up after at most 60 seconds, and the entries of a filter list after at most
+  5 minutes. With a [read replica](#read-replicas-and-database-clusters), add the replica's lag
+  limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by default).
 
 ## Using the admin console
 
