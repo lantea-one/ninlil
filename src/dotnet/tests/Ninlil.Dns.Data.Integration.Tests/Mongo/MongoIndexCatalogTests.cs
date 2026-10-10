@@ -74,7 +74,7 @@ public sealed class MongoIndexCatalogTests(MongoDbEngineFixture fixture)
             "Status:1,NextRetryDueUtc:1",
             "CompletedAtUtc:1",
             "SubscriptionId:1",
-            "SubscriptionId:1,CreatedAtUtc:-1",
+            "SubscriptionId:1,CreatedAtUtc:-1,_id:-1",
         ],
         ["NinlilDnsWebhookSubscriptions"] = ["Name:1"],
         ["NinlilDhcpScopes"] = ["Name:1"],
@@ -285,5 +285,16 @@ public sealed class MongoIndexCatalogTests(MongoDbEngineFixture fixture)
             Assert.Contains("IXSCAN", plan);
             Assert.DoesNotContain("COLLSCAN", plan);
         }
+
+        // A subscription's attempts page (newest first, ties broken on the id) is read straight
+        // off the index, with no blocking sort stage.
+        string pagePlan = await ExplainFindAsync(
+            context,
+            "NinlilDnsWebhookDeliveryAttempts",
+            new BsonDocument("SubscriptionId", Guid4(Guid.NewGuid())),
+            new BsonDocument { { "CreatedAtUtc", -1 }, { "_id", -1 } }
+        );
+        Assert.Contains("IXSCAN", pagePlan);
+        Assert.DoesNotContain("SORT", pagePlan);
     }
 }

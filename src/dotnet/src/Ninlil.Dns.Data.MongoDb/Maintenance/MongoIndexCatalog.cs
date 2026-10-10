@@ -244,16 +244,22 @@ public static class MongoIndexCatalog
             "ResponseCode_1"
         );
 
-        // Webhooks: the retry queue, retention, and one subscription's attempts newest first.
+        // Webhooks: the retry queue, retention, and one subscription's attempts newest first (the index ends in
+        // the id so the page order, which breaks ties on the id, is read straight off the index).
         created += await EnsureCollectionAsync(
             context.WebhookDeliveryAttempts,
             new IndexSet<WebhookDeliveryAttemptEntity>()
                 .Asc(attempt => attempt.Status, attempt => attempt.NextRetryDueUtc)
                 .Asc(attempt => attempt.CompletedAtUtc)
                 .Asc(attempt => attempt.SubscriptionId)
-                .AscDesc(attempt => attempt.SubscriptionId, attempt => attempt.CreatedAtUtc),
+                .AscDescDesc(
+                    attempt => attempt.SubscriptionId,
+                    attempt => attempt.CreatedAtUtc,
+                    attempt => attempt.Id
+                ),
             logger,
-            stoppingToken
+            stoppingToken,
+            "SubscriptionId_1_CreatedAtUtc_-1"
         );
         created += await EnsureCollectionAsync(
             context.WebhookSubscriptions,
@@ -442,6 +448,29 @@ public static class MongoIndexCatalog
             Models.Add(
                 new CreateIndexModel<T>(
                     Builders<T>.IndexKeys.Ascending(equalityField).Descending(newestFirstField)
+                )
+            );
+            return this;
+        }
+
+        /// <summary>
+        ///     This method adds a compound index: <paramref name="equalityField" /> ascending, then
+        ///     <paramref name="newestFirstField" /> and <paramref name="tieBreakField" />
+        ///     descending. It serves an equality filter with the newest rows first and a
+        ///     deterministic tie-break.
+        /// </summary>
+        public IndexSet<T> AscDescDesc(
+            Expression<Func<T, object>> equalityField,
+            Expression<Func<T, object>> newestFirstField,
+            Expression<Func<T, object>> tieBreakField
+        )
+        {
+            Models.Add(
+                new CreateIndexModel<T>(
+                    Builders<T>
+                        .IndexKeys.Ascending(equalityField)
+                        .Descending(newestFirstField)
+                        .Descending(tieBreakField)
                 )
             );
             return this;
