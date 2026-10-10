@@ -4,9 +4,11 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
+using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Data.EntityFrameworkCore.Maintenance;
+using Ninlil.Dns.Data.EntityFrameworkCore.Topology;
 using Ninlil.Dns.Server.Backup;
 using Ninlil.Dns.Server.Backup.Model;
 using Ninlil.Dns.Server.Backup.Options;
@@ -35,8 +37,10 @@ namespace Ninlil.Web.Services.Storage;
 ///     <para>
 ///         <b>Cases.</b> (1) The configured storage is the record's source: the target is
 ///         migrated, the data is copied, and, when the runtime configuration file decides the
-///         storage settings, the file is rewritten to the target. If another source decides, the
-///         record stays and a warning says so. (2) The configured storage is the record's target
+///         storage settings, the file is rewritten to the target. If another source decides, or a
+///         read replica or cluster setting of the source engine has been added since the request,
+///         the record stays and a warning says so (replica settings belong to one engine, see
+///         <see cref="StorageTopologyValidator.HasClusterSettings" />). (2) The configured storage is the record's target
 ///         (the operator changed the environment variable): the singleton is pointed at the
 ///         source for the export, then back. (3) Neither: a warning, and the record stays.
 ///     </para>
@@ -47,6 +51,15 @@ namespace Ninlil.Web.Services.Storage;
 ///         <see cref="DatabaseStartupRefusedException" /> and the record stays, because the
 ///         process cannot run on a target that was not filled.
 ///     </para>
+///     <para>
+///         <b>Connection strings.</b> While the data moves, the cluster settings of
+///         <see cref="StorageOptions" /> are set aside, so each end of the copy uses its connection
+///         string as written (the copy never touches a replica; the read router is not enabled
+///         until <c>Program.cs</c> has finished this step). When the copy is over, the settings are
+///         put back and the shared <see cref="StorageConnectionStrings" /> singleton is composed
+///         again for the storage that is now in use, so the status API and the contexts agree with
+///         it.
+///     </para>
 /// </summary>
 /// <param name="store">Keeps the saved switch.</param>
 /// <param name="storageOptions">The singleton the database contexts read.</param>
@@ -56,6 +69,10 @@ namespace Ninlil.Web.Services.Storage;
 /// <param name="backupOptions">Read for the minimum passphrase length.</param>
 /// <param name="outcomeRecorder">Receives the outcome for the status API.</param>
 /// <param name="logger">Records progress and failures.</param>
+/// <param name="connectionStrings">
+///     The composed connection strings, replaced after the switch; null (a test that builds the
+///     applier by hand) leaves them alone.
+/// </param>
 public sealed class PendingStorageSwitchApplier(
     PendingStorageSwitchStore store,
     StorageOptions storageOptions,
@@ -64,7 +81,8 @@ public sealed class PendingStorageSwitchApplier(
     RuntimeConfigurationOptions runtimeConfigurationOptions,
     IOptions<BackupOptions> backupOptions,
     StorageSwitchOutcomeRecorder outcomeRecorder,
-    ILogger<PendingStorageSwitchApplier> logger
+    ILogger<PendingStorageSwitchApplier> logger,
+    StorageConnectionStrings connectionStrings = null
 )
 {
     /// <summary>
@@ -90,6 +108,19 @@ public sealed class PendingStorageSwitchApplier(
                     + "is {Configured}, which is neither. The switch is kept; cancel it with "
                     + "DELETE /api/storage/switch or point the configuration at one of them.",
                 pending.SourceEngine,
+                pending.TargetEngine,
+                storageOptions.Engine
+            );
+            return;
+        }
+
+        if (configuredIsSource && StorageTopologyValidator.HasClusterSettings(storageOptions))
+        {
+            logger.LogWarning(
+                "A storage switch to {Target} is pending, but read replica or cluster settings for "
+                    + "{Engine} are configured now. They belong to that engine, so Ninlil does not "
+                    + "switch. Remove them and restart, or cancel the switch with "
+                    + "DELETE /api/storage/switch.",
                 pending.TargetEngine,
                 storageOptions.Engine
             );
@@ -133,6 +164,10 @@ public sealed class PendingStorageSwitchApplier(
         StorageEngineEnum configuredEngine = storageOptions.Engine;
         string configuredConnectionString = storageOptions.ConnectionString;
         int rowsCopied = 0;
+
+        // Both ends of the copy use their connection strings as written; see the class summary.
+        StorageConnectionStrings configuredStrings = Snapshot(connectionStrings);
+        ClusterSettings clusterSettings = ClusterSettings.SetAside(storageOptions);
 
         try
         {
@@ -185,6 +220,11 @@ public sealed class PendingStorageSwitchApplier(
             }
             rowsCopied = summary.TotalEntitiesImported;
 
+            // The storage in use from here on is the target in the first case and the configured
+            // storage in the second; compose its strings with the settings back in place.
+            clusterSettings.PutBack(storageOptions);
+            connectionStrings?.Replace(StorageConnectionStringComposer.Compose(storageOptions));
+
             if (configuredIsSource)
                 await PresetConfigurationFileApplier.ApplyAsync(
                     [
@@ -223,8 +263,12 @@ public sealed class PendingStorageSwitchApplier(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Whatever the failure, the process goes back to the storage it was configured with.
-            storageOptions.Engine = configuredEngine;
-            storageOptions.ConnectionString = configuredConnectionString;
+            GoBack(
+                configuredEngine,
+                configuredConnectionString,
+                clusterSettings,
+                configuredStrings
+            );
 
             string message =
                 $"The storage switch from {pending.SourceEngine} to {pending.TargetEngine} failed: "
@@ -257,9 +301,89 @@ public sealed class PendingStorageSwitchApplier(
         }
         catch (OperationCanceledException)
         {
-            storageOptions.Engine = configuredEngine;
-            storageOptions.ConnectionString = configuredConnectionString;
+            GoBack(
+                configuredEngine,
+                configuredConnectionString,
+                clusterSettings,
+                configuredStrings
+            );
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     This method puts the options and the composed strings back to the storage the process
+    ///     was configured with, after a failure or a cancellation.
+    /// </summary>
+    private void GoBack(
+        StorageEngineEnum engine,
+        string connectionString,
+        ClusterSettings clusterSettings,
+        StorageConnectionStrings strings
+    )
+    {
+        Point(engine, connectionString);
+        clusterSettings.PutBack(storageOptions);
+        if (strings is not null)
+            connectionStrings?.Replace(strings);
+    }
+
+    /// <summary>
+    ///     This method copies the current content of the singleton, so it can be put back.
+    /// </summary>
+    private static StorageConnectionStrings Snapshot(StorageConnectionStrings strings) =>
+        strings is null
+            ? null
+            : new StorageConnectionStrings(
+                strings.Engine,
+                strings.SourceConnectionString,
+                strings.Primary,
+                strings.Replica,
+                strings.Warnings
+            );
+
+    /// <summary>
+    ///     This record holds the cluster sections of <see cref="StorageOptions" /> while the copy
+    ///     runs with empty ones.
+    /// </summary>
+    private sealed record ClusterSettings(
+        StorageReadReplicaOptions ReadReplica,
+        StoragePostgreSqlOptions PostgreSql,
+        StorageMySqlOptions MySql,
+        StorageSqlServerOptions SqlServer,
+        StorageMongoDbOptions MongoDb
+    )
+    {
+        /// <summary>
+        ///     This method takes the sections out of the options and leaves empty ones behind.
+        /// </summary>
+        public static ClusterSettings SetAside(StorageOptions options)
+        {
+            ClusterSettings aside = new(
+                options.ReadReplica,
+                options.PostgreSql,
+                options.MySql,
+                options.SqlServer,
+                options.MongoDb
+            );
+            options.ReadReplica = new StorageReadReplicaOptions();
+            options.PostgreSql = new StoragePostgreSqlOptions();
+            options.MySql = new StorageMySqlOptions();
+            options.SqlServer = new StorageSqlServerOptions();
+            options.MongoDb = new StorageMongoDbOptions();
+            return aside;
+        }
+
+        /// <summary>
+        ///     This method puts the sections back into the options.
+        /// </summary>
+        public void PutBack(StorageOptions options)
+        {
+            options.ReadReplica = ReadReplica;
+            options.PostgreSql = PostgreSql;
+            options.MySql = MySql;
+            options.SqlServer = SqlServer;
+            options.MongoDb = MongoDb;
         }
     }
 

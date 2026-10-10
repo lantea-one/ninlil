@@ -101,17 +101,14 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
             ));
 
         // The storage switch changes the engine and connection string of the options in place at
-        // startup, so the context options compose again when the composed strings no longer match.
-        StorageConnectionStrings current = composed;
+        // startup. The applier replaces the content of the singleton afterwards; a scope that finds
+        // the singleton out of date composes again itself, so no context uses stale strings.
         instance.AddDbContext<NinlilDnsContext>(
             (provider, builder) =>
             {
-                StorageConnectionStrings strings = Volatile.Read(ref current);
+                StorageConnectionStrings strings = composed;
                 if (!strings.IsComposedFrom(options))
-                {
-                    strings = StorageConnectionStringComposer.Compose(options);
-                    Volatile.Write(ref current, strings);
-                }
+                    strings.Replace(StorageConnectionStringComposer.Compose(options));
 
                 // The first context of a scope fixes the intent of the whole scope, so a later
                 // attempt to change it throws instead of being ignored. The principal of the

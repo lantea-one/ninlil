@@ -11,6 +11,7 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Server.Backup.Extension;
@@ -118,7 +119,8 @@ public sealed class PendingStorageSwitchApplierTests : IDisposable
         StorageSwitchOutcomeRecorder Outcome,
         StorageOptions Options,
         CapturingLoggerProvider Log,
-        string RuntimeFile
+        string RuntimeFile,
+        StorageConnectionStrings Strings
     );
 
     /// <summary>
@@ -180,7 +182,8 @@ public sealed class PendingStorageSwitchApplierTests : IDisposable
             runtimeOptions,
             provider.GetRequiredService<IOptions<BackupOptions>>(),
             provider.GetRequiredService<StorageSwitchOutcomeRecorder>(),
-            provider.GetRequiredService<ILogger<PendingStorageSwitchApplier>>()
+            provider.GetRequiredService<ILogger<PendingStorageSwitchApplier>>(),
+            provider.GetRequiredService<StorageConnectionStrings>()
         ));
 
         ServiceProvider built = services.BuildServiceProvider();
@@ -192,7 +195,8 @@ public sealed class PendingStorageSwitchApplierTests : IDisposable
             built.GetRequiredService<StorageSwitchOutcomeRecorder>(),
             built.GetRequiredService<StorageOptions>(),
             log,
-            runtimeFile
+            runtimeFile,
+            built.GetRequiredService<StorageConnectionStrings>()
         );
     }
 
@@ -286,6 +290,88 @@ public sealed class PendingStorageSwitchApplierTests : IDisposable
         Assert.Contains("z1.example", zones);
         Assert.DoesNotContain("z2.example", zones);
         Assert.Equal(ConnectionString(b), restarted.Options.ConnectionString);
+    }
+
+    [Fact]
+    public async Task Apply_AfterTheCopy_ComposesTheSharedConnectionStringsForTheTarget()
+    {
+        string a = DatabasePath("a");
+        string b = DatabasePath("b");
+        await MigrateAsync(a);
+        Rig rig = BuildRig(WriteRuntimeFile(a));
+        Assert.Equal(ConnectionString(a), rig.Strings.Primary);
+        await SaveRecordAsync(rig, a, b);
+
+        await rig.Applier.ApplyAsync();
+
+        // The singleton the status API and the topology log read now describes B.
+        Assert.Equal(ConnectionString(b), rig.Options.ConnectionString);
+        Assert.True(rig.Strings.IsComposedFrom(rig.Options));
+        Assert.Equal(ConnectionString(b), rig.Strings.Primary);
+        Assert.Same(rig.Strings, rig.Provider.GetRequiredService<StorageConnectionStrings>());
+    }
+
+    [Fact]
+    public async Task Apply_AfterAFailedCopy_KeepsTheConnectionStringsOfTheSource()
+    {
+        string a = DatabasePath("a");
+        string blocked = DatabasePath("blocked");
+        await MigrateAsync(a);
+        Directory.CreateDirectory(blocked);
+        Rig rig = BuildRig(WriteRuntimeFile(a));
+        await SaveRecordAsync(rig, a, blocked);
+
+        await rig.Applier.ApplyAsync();
+
+        Assert.False(rig.Outcome.Current.Succeeded);
+        Assert.Equal(ConnectionString(a), rig.Options.ConnectionString);
+        Assert.True(rig.Strings.IsComposedFrom(rig.Options));
+        Assert.Equal(ConnectionString(a), rig.Strings.Primary);
+    }
+
+    [Fact]
+    public async Task Apply_PutsTheClusterSettingsBackAfterTheCopy()
+    {
+        string a = DatabasePath("a");
+        string b = DatabasePath("b");
+        await MigrateAsync(a);
+        await MigrateAsync(b);
+        Rig rig = BuildRig(WriteRuntimeFile(a), externalStoragePath: b);
+        // A section of another engine does not block a switch (SQLite has no cluster settings).
+        rig.Options.PostgreSql.HostRecheckSeconds = 7;
+        rig.Options.ReadReplica.MaxLagSeconds = 3;
+        await SaveRecordAsync(rig, a, b);
+
+        await rig.Applier.ApplyAsync();
+
+        Assert.True(rig.Outcome.Current.Succeeded);
+        Assert.Equal(7, rig.Options.PostgreSql.HostRecheckSeconds);
+        Assert.Equal(3, rig.Options.ReadReplica.MaxLagSeconds);
+    }
+
+    [Fact]
+    public async Task Apply_WhenAReadReplicaSettingWasAddedSinceTheRequest_KeepsTheRecordAndWarns()
+    {
+        string a = DatabasePath("a");
+        string b = DatabasePath("b");
+        await MigrateAsync(a);
+        string runtime = WriteRuntimeFile(a);
+        string runtimeBefore = File.ReadAllText(runtime);
+        Rig rig = BuildRig(runtime);
+        await SaveRecordAsync(rig, a, b);
+        rig.Options.ReadReplica.ConnectionString = "Data Source=replica";
+
+        await rig.Applier.ApplyAsync();
+
+        Assert.NotNull(rig.Store.Peek());
+        Assert.Null(rig.Outcome.Current);
+        Assert.False(File.Exists(b));
+        Assert.Equal(runtimeBefore, File.ReadAllText(runtime));
+        Assert.Equal(ConnectionString(a), rig.Options.ConnectionString);
+        Assert.Contains(
+            rig.Log.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("cluster settings")
+        );
     }
 
     [Fact]

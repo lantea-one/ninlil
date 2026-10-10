@@ -26,8 +26,9 @@ public interface IStorageEngineSwitchService
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <exception cref="Ninlil.Dns.Common.Exceptions.ValidationException">
     ///     Thrown when the request is malformed, names MongoDB, already matches the active
-    ///     storage, the target cannot be reached within 15 seconds, or it holds migrations this
-    ///     build does not know. No connection string is part of the message.
+    ///     storage, a read replica or cluster setting of the engine in use is configured, the target
+    ///     cannot be reached within 15 seconds, or it holds migrations this build does not know.
+    ///     No connection string is part of the message.
     /// </exception>
     Task<StorageSwitchScheduled> ScheduleSwitchAsync(
         StorageEngineSwitchRequest request,

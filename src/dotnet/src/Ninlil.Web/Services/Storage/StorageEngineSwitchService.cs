@@ -217,12 +217,25 @@ public sealed class StorageEngineSwitchService(
     public bool CancelSwitch() => store.Delete();
 
     /// <summary>
-    ///     This method is the place that refuses a switch while read replicas are configured:
-    ///     replica settings belong to one engine, and may come from environment variables Ninlil
-    ///     cannot change, so the operator removes them before switching. No replica setting
-    ///     exists in this build, so every request passes.
+    ///     This method refuses a switch while a read replica or a cluster setting of the engine in
+    ///     use is configured: those settings belong to one engine, and may come from environment
+    ///     variables Ninlil cannot change, so the operator removes them before switching. The
+    ///     message names the settings, never a connection string.
     /// </summary>
-    private void EnsureNoReadReplicaSettings() { }
+    /// <exception cref="ValidationException">A read replica or cluster setting is configured.</exception>
+    private void EnsureNoReadReplicaSettings()
+    {
+        if (!StorageTopologyValidator.HasClusterSettings(currentOptions))
+            return;
+
+        throw new ValidationException(
+            "A storage switch is refused while read replica or cluster settings are configured "
+                + $"({StorageOptions.SectionName}:ReadReplica and the "
+                + $"{StorageOptions.SectionName}:{currentOptions.Engine} section). They belong to "
+                + $"{currentOptions.Engine}. Remove the read-replica settings, switch, then "
+                + "configure replicas for the new engine."
+        );
+    }
 
     /// <summary>
     ///     This method finds the origin of the storage settings in the running configuration.
