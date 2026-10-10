@@ -10,8 +10,8 @@ namespace Ninlil.Benchmarks.Storage;
 
 /// <summary>
 ///     This class measures the delivery-attempt page of a webhook subscription the way
-///     <c>WebhooksController</c> builds it: list every attempt of the subscription, sort by
-///     creation time and slice in memory.
+///     <c>WebhooksController</c> builds it: one page from <c>SearchBySubscriptionIdAsync</c>
+///     (sorted and sliced in the database) plus <c>CountBySubscriptionIdAsync</c>.
 /// </summary>
 [Config(typeof(StorageConfig))]
 public class WebhookAttemptBenchmarks : StorageBenchmarkBase
@@ -33,15 +33,14 @@ public class WebhookAttemptBenchmarks : StorageBenchmarkBase
     private Task<int> Page(int skip) =>
         InScopeAsync(async provider =>
         {
-            IReadOnlyList<WebhookDeliveryAttemptEntity> attempts = await provider
-                .GetRequiredService<IWebhookDeliveryAttemptRepository>()
-                .ListAsync(attempt => attempt.SubscriptionId == _subscriptionId);
+            IWebhookDeliveryAttemptRepository repository =
+                provider.GetRequiredService<IWebhookDeliveryAttemptRepository>();
 
-            return attempts
-                .OrderByDescending(attempt => attempt.CreatedAtUtc)
-                .Skip(skip)
-                .Take(50)
-                .Count();
+            IReadOnlyList<WebhookDeliveryAttemptEntity> attempts =
+                await repository.SearchBySubscriptionIdAsync(_subscriptionId, skip, 50);
+            int total = await repository.CountBySubscriptionIdAsync(_subscriptionId);
+
+            return attempts.Count + total;
         });
 
     /// <summary>The first page.</summary>
