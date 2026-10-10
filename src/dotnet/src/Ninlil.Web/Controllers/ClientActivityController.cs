@@ -46,7 +46,8 @@ public class ClientActivityController(
     /// <summary>
     ///     This action lists the query log entries attributed, when they were logged, to any of the
     ///     client's current addresses, newest first, one page at a time. Returns 404 for an unknown
-    ///     client. Requires <c>querylog:read</c>.
+    ///     client. A client with no address has no attributable entries, so it gets an empty page
+    ///     (200, total count 0) and the query log is not searched. Requires <c>querylog:read</c>.
     /// </summary>
     /// <param name="clientId">The known client whose activity to list.</param>
     /// <param name="pagination">The offset and limit of the page to return.</param>
@@ -72,12 +73,17 @@ public class ClientActivityController(
         IReadOnlyList<DnsClientAddressEntity> addresses =
             await clientAddressRepository.ListByClientIdAsync(clientId, stoppingToken);
 
+        // A device with no address cannot be matched to any entry. Searching without an identifier
+        // would return the whole log, so the page is empty.
+        if (addresses.Count == 0)
+            return Ok(new PagedResult<DnsQueryLogEntryDetail>([], skip, take, 0));
+
         // The usual case, a device with one address, is a single query run in storage.
-        if (addresses.Count <= 1)
+        if (addresses.Count == 1)
         {
             DnsQueryLogSearchCriteria singleCriteria = new(
-                ClientIdentifier: addresses.Count == 1 ? addresses[0].ClientIdentifier : null,
-                ClientProtocolVersion: addresses.Count == 1 ? addresses[0].ProtocolVersion : null
+                ClientIdentifier: addresses[0].ClientIdentifier,
+                ClientProtocolVersion: addresses[0].ProtocolVersion
             );
 
             IReadOnlyList<DnsQueryLogEntryEntity> singleEntries =

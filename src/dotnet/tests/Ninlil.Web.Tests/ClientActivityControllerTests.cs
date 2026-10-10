@@ -174,6 +174,48 @@ public class ClientActivityControllerTests(NinlilDnsWebApplicationFactory factor
         Assert.Equal("other-client.example.com", onlyEntryForB.QueriedName);
     }
 
+    /// <summary>
+    ///     This test checks that a client saved with no address gets an empty page (200, total 0)
+    ///     and not the whole query log, even when other entries exist.
+    /// </summary>
+    [Fact]
+    public async Task List_ForAClientWithNoAddresses_ReturnsAnEmptyPage()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        Guid clientId = Guid.NewGuid();
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IDnsClientRepository repository =
+                scope.ServiceProvider.GetRequiredService<IDnsClientRepository>();
+            await repository.AddAsync(
+                new DnsClientEntity
+                {
+                    Id = clientId,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    DisplayName = "no-address-client",
+                }
+            );
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        await SeedQueryLogEntryAsync(
+            "AA:99:99:99:99:99",
+            InternetProtocolVersionEnum.IPv4,
+            "someone-else.example.com",
+            DateTimeOffset.UtcNow.AddMinutes(-1)
+        );
+
+        HttpResponseMessage response = await client.GetAsync($"/api/clients/{clientId}/activity");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        PagedResult<DnsQueryLogEntryDetail> page = await response.Content.ReadFromJsonAsync<
+            PagedResult<DnsQueryLogEntryDetail>
+        >();
+        Assert.Empty(page.Items);
+        Assert.Equal(0, page.TotalCount);
+    }
+
     [Fact]
     public async Task List_ForANonexistentClient_ReturnsNotFound()
     {
