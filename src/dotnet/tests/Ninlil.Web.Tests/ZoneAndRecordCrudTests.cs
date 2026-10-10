@@ -19,7 +19,8 @@ namespace Ninlil.Web.Tests;
 ///     the per-zone CAA settings, and deleting a record and the zone. A record must keep its
 ///     identifier through a PUT or PATCH, which is the contract of
 ///     <c>IZoneUpdateService.ApplyRecordEditAsync</c> that the API relies on. Changing a record's
-///     type to or from SOA through PUT or PATCH is not tested. A zone whose <c>tsigKeyName</c>
+///     type to or from SOA, or renaming the SOA, through PUT or PATCH is refused with 409 and
+///     leaves the zone able to take new records. A zone whose <c>tsigKeyName</c>
 ///     names a cluster key (saved directly through the repository) is rejected with 400 on create,
 ///     PUT and PATCH, while an ordinary key's name is accepted. The per-zone
 ///     <c>updateTsigKeyNames</c> and <c>transferTsigKeyNames</c> lists round-trip through create,
@@ -233,6 +234,83 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
             $"/api/zones/{zone.Id}/records/{soaRecord.Id}"
         );
         Assert.Equal(HttpStatusCode.Conflict, deleteSoaResponse.StatusCode);
+
+        // An edit cannot turn an ordinary record into an SOA...
+        string aRecordUrl = $"/api/zones/{zone.Id}/records/{aRecord.Id}";
+        object soaData = new
+        {
+            primaryNameServer = $"ns1.{zoneName}",
+            responsiblePersonMailbox = $"admin.{zoneName}",
+            serial = 1,
+            refreshSeconds = 3600,
+            retrySeconds = 600,
+            expireSeconds = 604800,
+            minimumTtlSeconds = 300,
+        };
+        HttpResponseMessage putAsSoaResponse = await client.PutAsJsonAsync(
+            aRecordUrl,
+            new
+            {
+                name = aRecord.Name,
+                type = "SOA",
+                timeToLiveSeconds = 300,
+                data = soaData,
+            }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, putAsSoaResponse.StatusCode);
+
+        HttpResponseMessage patchAsSoaResponse = await client.SendAsync(
+            PatchRequest(aRecordUrl, new { type = "SOA", data = soaData })
+        );
+        Assert.Equal(HttpStatusCode.Conflict, patchAsSoaResponse.StatusCode);
+
+        RecordDetail unchangedARecord = await (
+            await client.GetAsync(aRecordUrl)
+        ).Content.ReadFromJsonAsync<RecordDetail>();
+        Assert.Equal(Ninlil.Dns.Common.Enum.DnsResourceRecordTypeEnum.A, unchangedARecord.Type);
+
+        // ...nor the SOA into another type, nor rename the SOA.
+        string soaUrl = $"/api/zones/{zone.Id}/records/{soaRecord.Id}";
+        HttpResponseMessage putSoaAsAResponse = await client.PutAsJsonAsync(
+            soaUrl,
+            new
+            {
+                name = soaRecord.Name,
+                type = "A",
+                timeToLiveSeconds = 300,
+                data = new { address = "192.0.2.99" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, putSoaAsAResponse.StatusCode);
+
+        HttpResponseMessage patchSoaAsAResponse = await client.SendAsync(
+            PatchRequest(soaUrl, new { type = "A", data = new { address = "192.0.2.99" } })
+        );
+        Assert.Equal(HttpStatusCode.Conflict, patchSoaAsAResponse.StatusCode);
+
+        HttpResponseMessage renameSoaResponse = await client.SendAsync(
+            PatchRequest(soaUrl, new { name = $"sub.{zoneName}" })
+        );
+        Assert.Equal(HttpStatusCode.Conflict, renameSoaResponse.StatusCode);
+
+        RecordDetail unchangedSoa = await (
+            await client.GetAsync(soaUrl)
+        ).Content.ReadFromJsonAsync<RecordDetail>();
+        Assert.Equal(Ninlil.Dns.Common.Enum.DnsResourceRecordTypeEnum.Soa, unchangedSoa.Type);
+        Assert.Equal(soaRecord.Name, unchangedSoa.Name);
+
+        // The SOA is intact, so the zone still accepts a new record.
+        HttpResponseMessage laterAddResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/records",
+            new
+            {
+                name = $"later.{zoneName}",
+                type = "A",
+                timeToLiveSeconds = 300,
+                data = new { address = "192.0.2.77" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, laterAddResponse.StatusCode);
 
         // Deleting the ordinary A record works and is reflected immediately.
         HttpResponseMessage deleteARecordResponse = await client.DeleteAsync(

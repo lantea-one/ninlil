@@ -176,6 +176,26 @@ public class ZoneUpdateService(
         };
 
         applyEdit(record);
+
+        // RFC 1034 §4.2.1: a zone has exactly one SOA, at its apex. An edit that adds, removes or
+        // moves it would leave the zone without a findable SOA. Nothing has been saved yet, so
+        // throwing here discards the edit.
+        bool typeChanged = beforeSnapshot.Type != record.Type;
+        bool soaInvolved =
+            beforeSnapshot.Type == DnsResourceRecordTypeEnum.Soa
+            || record.Type == DnsResourceRecordTypeEnum.Soa;
+        bool soaRenamed =
+            beforeSnapshot.Type == DnsResourceRecordTypeEnum.Soa
+            && !string.Equals(
+                NormalizeOwnerName(beforeSnapshot.Name),
+                NormalizeOwnerName(record.Name),
+                StringComparison.OrdinalIgnoreCase
+            );
+        if ((typeChanged && soaInvolved) || soaRenamed)
+            throw new InvalidOperationException(
+                "An edit cannot change a record's type to or from SOA, or rename the SOA record: a zone has exactly one SOA, at its apex. Edit the SOA's fields instead."
+            );
+
         record.UpdatedAtUtc = DateTimeOffset.UtcNow;
         recordRepository.Update(record);
 
@@ -198,6 +218,12 @@ public class ZoneUpdateService(
             stoppingToken
         );
     }
+
+    /// <summary>
+    ///     This method drops one trailing dot so that <c>example.com.</c> and <c>example.com</c>
+    ///     name the same owner.
+    /// </summary>
+    private static string NormalizeOwnerName(string name) => (name ?? string.Empty).TrimEnd('.');
 
     /// <inheritdoc />
     public async Task BumpSerialForDnssecResignAsync(

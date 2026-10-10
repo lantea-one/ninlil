@@ -170,7 +170,8 @@ public class RecordsController(
     /// <summary>
     ///     This action replaces a record's fields, keeping its id. Returns 400 when the data does
     ///     not fit the record type and 404 when the record does not exist or belongs to another
-    ///     zone. Requires <c>zones:write</c>.
+    ///     zone, and 409 when the edit would change the type to or from SOA or rename
+    ///     the SOA record (a zone has exactly one SOA). Requires <c>zones:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -185,6 +186,8 @@ public class RecordsController(
         RecordEntity existingRecord = await recordRepository.GetByIdAsync(id, stoppingToken);
         if (existingRecord is null || existingRecord.ZoneId != zoneId)
             throw new NotFoundException("Record", id.ToString());
+
+        ThrowIfEditMovesSoa(existingRecord, request.Type, request.Name);
 
         string dataJson = RecordDataValidator.EncodeDataOrThrow(request.Type, request.Data);
 
@@ -219,7 +222,8 @@ public class RecordsController(
     ///     This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a
     ///     JSON <c>null</c> clears a nullable field, and any other value replaces it. Changing
     ///     <c>type</c> without new <c>data</c> re-checks the existing data against the new type and
-    ///     returns 400 if it does not fit. Requires <c>zones:write</c>.
+    ///     returns 400 if it does not fit, and 409 when the patch would change the type to or
+    ///     from SOA or rename the SOA record. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -242,6 +246,12 @@ public class RecordsController(
             effectiveType = System.Text.Json.JsonSerializer.Deserialize<DnsResourceRecordTypeEnum>(
                 type.GetRawText()
             );
+
+        string patchedName = existingRecord.Name;
+        if (patch.TryGetMergePatchField("name", out JsonElement patchName))
+            patchedName = patchName.GetString();
+
+        ThrowIfEditMovesSoa(existingRecord, effectiveType, patchedName);
 
         string newDataJson = null;
         if (patch.TryGetMergePatchField("data", out JsonElement data))
@@ -381,6 +391,33 @@ public class RecordsController(
     }
 
     /// <summary>
+    ///     This method throws <see cref="ConflictException" /> when an edit would change a record's
+    ///     type to or from SOA, or rename the SOA record. A zone has exactly one SOA, at its apex
+    ///     (RFC 1034 §4.2.1). Owner names compare case-insensitively without a trailing dot.
+    /// </summary>
+    private static void ThrowIfEditMovesSoa(
+        RecordEntity existingRecord,
+        DnsResourceRecordTypeEnum newType,
+        string newName
+    )
+    {
+        bool isSoa = existingRecord.Type == DnsResourceRecordTypeEnum.Soa;
+        bool typeChanged = existingRecord.Type != newType;
+        bool renamed =
+            isSoa
+            && !string.Equals(
+                (existingRecord.Name ?? string.Empty).TrimEnd('.'),
+                (newName ?? string.Empty).TrimEnd('.'),
+                StringComparison.OrdinalIgnoreCase
+            );
+
+        if ((typeChanged && (isSoa || newType == DnsResourceRecordTypeEnum.Soa)) || renamed)
+            throw new ConflictException(
+                "A record's type cannot be changed to or from SOA, and the SOA record cannot be renamed: a zone has exactly one SOA, at its apex (RFC 1034 section 4.2.1). Edit the SOA's fields instead."
+            );
+    }
+
+    /// <summary>
     ///     This method maps an <see cref="InvalidOperationException" /> from
     ///     <see cref="IZoneUpdateService" /> to a REST exception by the message wording
     ///     <see cref="ZoneUpdateService" /> uses: a missing zone or record becomes
@@ -412,6 +449,9 @@ public class RecordsController(
                 StringComparison.Ordinal
             )
         )
+            return new ConflictException(message);
+
+        if (message.StartsWith("An edit cannot change", StringComparison.Ordinal))
             return new ConflictException(message);
 
         if (

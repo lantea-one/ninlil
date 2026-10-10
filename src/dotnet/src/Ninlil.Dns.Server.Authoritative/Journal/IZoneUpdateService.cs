@@ -77,7 +77,8 @@ public interface IZoneUpdateService
     /// <exception cref="InvalidOperationException">
     ///     Thrown when <paramref name="zoneId" /> does not name an existing zone, that zone has no
     ///     SOA record to advance, or <paramref name="recordId" /> does not name an existing record
-    ///     in that zone.
+    ///     in that zone, or the edit changes the record's type to or from SOA or renames the SOA
+    ///     record (message starts with "An edit cannot change"; nothing is saved).
     /// </exception>
     Task ApplyRecordEditAsync(
         Guid zoneId,

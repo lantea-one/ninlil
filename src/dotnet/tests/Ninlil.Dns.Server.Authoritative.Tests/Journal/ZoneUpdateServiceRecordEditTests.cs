@@ -137,6 +137,60 @@ public sealed class ZoneUpdateServiceRecordEditTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This test checks that an edit adding, removing or moving the SOA (RFC 1034 §4.2.1) is
+    ///     refused with the "An edit cannot change" message and saves nothing: the stored records
+    ///     and the SOA serial stay as they were.
+    /// </summary>
+    [Theory]
+    [InlineData("AToSoa")]
+    [InlineData("SoaToA")]
+    [InlineData("SoaRenamed")]
+    public async Task ApplyRecordEditAsync_RefusesAnEditThatAddsRemovesOrMovesTheSoa(string edit)
+    {
+        await using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
+        {
+            IZoneUpdateService zoneUpdateService =
+                scope.ServiceProvider.GetRequiredService<IZoneUpdateService>();
+
+            Guid recordId = edit == "AToSoa" ? _aRecordId : _soaRecordId;
+            InvalidOperationException exception =
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    zoneUpdateService.ApplyRecordEditAsync(
+                        _zoneId,
+                        recordId,
+                        record =>
+                        {
+                            if (edit == "AToSoa")
+                                record.Type = DnsResourceRecordTypeEnum.Soa;
+                            else if (edit == "SoaToA")
+                                record.Type = DnsResourceRecordTypeEnum.A;
+                            else
+                                record.Name = "moved.edit.example.com";
+                        }
+                    )
+                );
+            Assert.StartsWith("An edit cannot change", exception.Message);
+        }
+
+        await using AsyncServiceScope verifyScope = _host.Services.CreateAsyncScope();
+        IRecordRepository recordRepository =
+            verifyScope.ServiceProvider.GetRequiredService<IRecordRepository>();
+
+        Assert.Equal(
+            DnsResourceRecordTypeEnum.A,
+            (await recordRepository.GetByIdAsync(_aRecordId)).Type
+        );
+        RecordEntity soa = await recordRepository.GetByIdAsync(_soaRecordId);
+        Assert.Equal(DnsResourceRecordTypeEnum.Soa, soa.Type);
+        Assert.Equal("edit.example.com", soa.Name);
+        Assert.Equal(
+            100u,
+            Assert.IsType<SoaRecordData>(RecordEntityCodec.DecodeTypedData(soa)).Serial
+        );
+        Assert.Empty(_publishedEvents);
+    }
+
+    /// <summary>
     ///     This test edits the zone's SOA record itself through
     ///     <see cref="IZoneUpdateService.ApplyRecordEditAsync" />, which
     ///     <c>RecordsController.Replace</c> and <c>Patch</c> support. The edit must be saved even though
