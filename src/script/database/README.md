@@ -23,3 +23,39 @@ application login named `ninlil` -- using an intentionally obvious placeholder p
 Once the database and login exist, point `Storage:ConnectionString` (and set `Storage:Engine`
 appropriately) in the application's configuration at them, start the application, and Entity
 Framework Core takes over from there.
+
+## What the application account may do
+
+The accounts these scripts create hold exactly the rights Ninlil needs, and no more:
+
+| Engine | Rights of the `ninlil` account |
+| --- | --- |
+| PostgreSQL | Owner of the `ninlil` database; no right to create databases or roles |
+| MySQL / MariaDB | `ALL PRIVILEGES` on `ninlil.*` only |
+| Microsoft SQL Server | The `db_owner` role in the `ninlil` database only |
+| MongoDB | The `readWrite` role on the `ninlil` database |
+
+These rights are enough for everything Ninlil does on its own, including the **migration
+snapshots** it takes before an upgrade. A snapshot is a schema (PostgreSQL, SQL Server) or a set of
+tables (MySQL) created inside the application's own database, so it needs no extra privilege and
+no tool such as `pg_dump`. See
+[Upgrades and migration snapshots](../../../README.md#upgrades-and-migration-snapshots).
+
+## Extra grants for a read replica
+
+Only if you configure a read replica
+([Read replicas and database clusters](../../../README.md#read-replicas-and-database-clusters)),
+Ninlil also measures how far the replica is behind. That needs one more right per engine. The
+scripts do not grant it, because it widens the account beyond its own database. Run the command
+once, connected as an administrator, and restart Ninlil. Without it the replica's lag is unknown and
+Ninlil never reads from the replica.
+
+| Engine | Where to run it | Command |
+| --- | --- | --- |
+| PostgreSQL | nowhere | Nothing to grant. |
+| MySQL / MariaDB | `mysql` on the primary (account changes replicate; if yours do not, run it on each replica) | `GRANT REPLICATION CLIENT ON *.* TO 'ninlil'@'%';` |
+| Microsoft SQL Server | `sqlcmd` on every instance that can become the primary | `GRANT VIEW SERVER STATE TO [ninlil];` |
+| MongoDB | `mongosh` connected to the primary, when authentication is on | `db.getSiblingDB("ninlil").grantRolesToUser("ninlil", [{ role: "clusterMonitor", db: "admin" }])` |
+
+For SQL Server, also create the `ninlil` login on every replica instance with the same SID as on
+the primary, because a login belongs to the server and not to the replicated database.

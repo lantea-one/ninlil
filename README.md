@@ -826,7 +826,8 @@ NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING="Server=router.example;Port=6447;D
   says otherwise.
 - **Extra grant:** Ninlil measures the lag with `SHOW REPLICA STATUS`, which needs the
   `REPLICATION CLIENT` privilege. The account from `src/script/database/mysql/init.sql` does not
-  have it, so run this once as an administrator on the replicas:
+  have it, so run this once as an administrator on the primary (account changes replicate; if
+  yours do not, run it on each replica):
 
   ```sql
   GRANT REPLICATION CLIENT ON *.* TO 'ninlil'@'%';
@@ -851,7 +852,7 @@ NINLIL_STORAGE_SQLSERVER_MULTI_SUBNET_FAILOVER=true   # only for a listener that
 - **Extra grant:** Ninlil reads the secondary's lag from the primary with
   `sys.dm_hadr_database_replica_states`, which needs `VIEW SERVER STATE`. The login from
   `src/script/database/sqlserver/init.sql` does not have it, so run this once, connected as an
-  administrator, on the primary instance:
+  administrator, on every instance that can become the primary:
 
   ```sql
   GRANT VIEW SERVER STATE TO [ninlil];
