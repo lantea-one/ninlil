@@ -36,7 +36,7 @@ public static class BenchmarkDataSet
     ///     This constant contains the version of the generator; it is part of the database name
     ///     and of the marker zone name.
     /// </summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
     /// <summary>
     ///     This constant contains the seed of the random generator.
@@ -425,8 +425,7 @@ public static class BenchmarkDataSet
                             : DnsFilterListActionEnum.Block,
                     Source = DnsFilterListSourceEnum.Subscribed,
                     SubscriptionUrl = $"https://lists.invalid/{i}.txt",
-                    // Under 24 hours: SQL Server stores TimeSpan as `time`, which cannot hold a day.
-                    RefreshInterval = TimeSpan.FromHours(12),
+                    RefreshInterval = TimeSpan.FromDays(1),
                     LastFetchedAtUtc = now,
                 }),
             new DnsFilterListEntity
@@ -693,9 +692,7 @@ public static class BenchmarkDataSet
                     RangeStartAddress = $"10.{100 + s}.0.1",
                     RangeEndAddress = $"10.{100 + s}.255.254",
                     SubnetPrefixLength = 16,
-                    // Under 24 hours, for the same reason as the list refresh interval.
-                    DefaultLeaseDuration = TimeSpan.FromHours(12),
-                    MaxLeaseDuration = TimeSpan.FromHours(23),
+                    // The lease durations stay at the entity defaults (24 hours and 7 days).
                     GatewayAddresses = [$"10.{100 + s}.0.1"],
                     DnsServerAddresses = ["192.0.2.53"],
                 }),
