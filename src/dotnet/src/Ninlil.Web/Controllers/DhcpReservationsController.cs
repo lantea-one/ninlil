@@ -8,6 +8,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.DhcpReservations;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -41,6 +42,7 @@ public class DhcpReservationsController(
     ///     scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("dhcpscopes:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -76,6 +78,7 @@ public class DhcpReservationsController(
     ///     another scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("dhcpscopes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpReservationDetailExample))]
     public async Task<ActionResult<DhcpReservationDetail>> Get(

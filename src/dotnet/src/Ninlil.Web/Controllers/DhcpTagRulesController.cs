@@ -9,6 +9,7 @@ using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.DhcpTagRules;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -41,6 +42,7 @@ public class DhcpTagRulesController(
     ///     This action lists tag rules, one page at a time. Requires <c>dhcptagrules:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("dhcptagrules:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpTagRuleDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<DhcpTagRuleDetail>>> List(
@@ -67,6 +69,7 @@ public class DhcpTagRulesController(
     ///     <c>dhcptagrules:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("dhcptagrules:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpTagRuleDetailExample))]
     public async Task<ActionResult<DhcpTagRuleDetail>> Get(Guid id, CancellationToken stoppingToken)

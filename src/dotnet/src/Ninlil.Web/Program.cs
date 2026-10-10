@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration.EnvironmentVariables;
@@ -90,6 +92,7 @@ using Ninlil.Web.HealthChecks;
 using Ninlil.Web.Hubs;
 using Ninlil.Web.Middleware;
 using Ninlil.Web.Options;
+using Ninlil.Web.Routing;
 using Ninlil.Web.Services;
 using Ninlil.Web.Services.Storage;
 using Ninlil.Web.Startup;
@@ -859,6 +862,18 @@ if (reverseProxyOptions.Enable)
     app.UseForwardedHeaders();
 }
 
+// [ReadFromReplica] on an action that can receive a write would read stale rows before it writes,
+// so the host refuses to start with one.
+IReadOnlyList<string> misplacedReplicaReads = ReadFromReplicaEndpointCheck.FindMisplacedActions(
+    app.Services.GetRequiredService<IActionDescriptorCollectionProvider>()
+        .ActionDescriptors.Items.OfType<ControllerActionDescriptor>()
+);
+if (misplacedReplicaReads.Count > 0)
+    throw new InvalidOperationException(
+        "[ReadFromReplica] is allowed only on GET actions. Misplaced on: "
+            + string.Join("; ", misplacedReplicaReads)
+    );
+
 // Settings that are ignored or have no effect, found while the storage topology was composed.
 ILogger topologyLogger = app
     .Services.GetRequiredService<ILoggerFactory>()
@@ -1048,6 +1063,10 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// After authentication, so the user is known, and before the endpoint, so the request scope has
+// not resolved a database context yet. See StorageReadIntentMiddleware.
+app.UseMiddleware<StorageReadIntentMiddleware>();
 
 // The admin sign-in limiter policies (ServiceCollectionAdminLoginRateLimitingExtension's
 // AuthenticationEndpointPolicyName and PasswordResetEndpointPolicyName) apply only where

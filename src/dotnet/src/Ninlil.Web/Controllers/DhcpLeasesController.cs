@@ -6,6 +6,7 @@ using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.DhcpLeases;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -47,6 +48,7 @@ public class DhcpLeasesController(
     ///     <c>dhcpleases:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("dhcpleases:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpLeaseDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<DhcpLeaseDetail>>> List(
@@ -106,6 +108,7 @@ public class DhcpLeasesController(
     ///     <c>dhcpleases:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("dhcpleases:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpLeaseDetailExample))]
     public async Task<ActionResult<DhcpLeaseDetail>> Get(Guid id, CancellationToken stoppingToken)

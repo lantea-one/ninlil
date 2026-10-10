@@ -12,6 +12,7 @@ using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Web.Examples.Roles;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -53,6 +54,7 @@ public class RolesController(
     ///     <c>roles:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("roles:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(RoleSummaryPagedResultExample))]
     public async Task<ActionResult<PagedResult<RoleSummary>>> List(
@@ -81,6 +83,7 @@ public class RolesController(
     ///     Requires <c>roles:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("roles:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(RoleSummaryExample))]
     public async Task<ActionResult<RoleSummary>> Get(Guid id)

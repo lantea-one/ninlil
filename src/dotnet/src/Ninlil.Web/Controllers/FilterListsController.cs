@@ -12,6 +12,7 @@ using Ninlil.Dns.Server.Filtering;
 using Ninlil.Web.Examples.FilterLists;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -52,6 +53,7 @@ public class FilterListsController(
     ///     <c>filterlists:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("filterlists:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(FilterListDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<FilterListDetail>>> List(
@@ -80,6 +82,7 @@ public class FilterListsController(
     ///     <c>filterlists:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("filterlists:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(FilterListDetailExample))]
     public async Task<ActionResult<FilterListDetail>> Get(Guid id, CancellationToken stoppingToken)

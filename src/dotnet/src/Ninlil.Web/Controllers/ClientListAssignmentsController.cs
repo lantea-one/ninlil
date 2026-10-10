@@ -5,6 +5,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.ClientListAssignments;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -40,6 +41,7 @@ public class ClientListAssignmentsController(
     ///     for an unknown client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -83,6 +85,7 @@ public class ClientListAssignmentsController(
     ///     to another client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientListAssignmentDetailExample))]
     public async Task<ActionResult<ClientListAssignmentDetail>> Get(

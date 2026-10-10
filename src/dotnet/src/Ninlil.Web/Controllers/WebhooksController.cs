@@ -11,6 +11,7 @@ using Ninlil.Dns.Server.Webhooks;
 using Ninlil.Web.Examples.Webhooks;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -54,6 +55,7 @@ public class WebhooksController(
     ///     or signing secrets. Requires <c>webhooks:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("webhooks:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -88,6 +90,7 @@ public class WebhooksController(
     ///     secret. Returns 404 for an unknown id. Requires <c>webhooks:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("webhooks:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(WebhookSubscriptionDetailExample))]
     public async Task<ActionResult<WebhookSubscriptionDetail>> Get(
@@ -411,6 +414,7 @@ public class WebhooksController(
     ///     <c>webhooks:read</c>.
     /// </summary>
     [HttpGet("{id:guid}/delivery-attempts")]
+    [ReadFromReplica]
     [RequirePermission("webhooks:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,

@@ -7,6 +7,7 @@ using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Filtering.BlockedServices;
 using Ninlil.Web.Examples.BlockedServices;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -74,6 +75,7 @@ public class BlockedServicesController(
     ///     Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("filterlists:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(BlockedServiceListExample))]
     public async Task<ActionResult<IReadOnlyList<BlockedServiceDetail>>> List(

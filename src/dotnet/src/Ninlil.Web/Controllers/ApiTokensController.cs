@@ -8,6 +8,7 @@ using Ninlil.Dns.Identity.Token;
 using Ninlil.Web.Examples.ApiTokens;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -33,6 +34,7 @@ public class ApiTokensController(
     ///     This action lists the caller's API tokens, without their secret values.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ApiTokenSummaryListExample))]
     public async Task<ActionResult<IReadOnlyList<ApiTokenSummary>>> List(
         CancellationToken stoppingToken

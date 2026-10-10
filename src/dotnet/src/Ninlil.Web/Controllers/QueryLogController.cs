@@ -8,6 +8,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.QueryLog;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -56,6 +57,7 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
     /// <param name="pagination">The offset and limit of the page to return.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("querylog:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,

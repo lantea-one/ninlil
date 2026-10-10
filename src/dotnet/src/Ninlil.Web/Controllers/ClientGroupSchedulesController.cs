@@ -5,6 +5,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.ClientGroupSchedules;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -37,6 +38,7 @@ public class ClientGroupSchedulesController(
     ///     group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("clientgroups:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -72,6 +74,7 @@ public class ClientGroupSchedulesController(
     ///     another group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("clientgroups:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientGroupScheduleDetailExample))]
     public async Task<ActionResult<ClientGroupScheduleDetail>> Get(

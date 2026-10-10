@@ -9,6 +9,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.DhcpScopeCustomOptions;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -39,6 +40,7 @@ public class DhcpScopeCustomOptionsController(
     ///     unknown scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("dhcpscopes:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -74,6 +76,7 @@ public class DhcpScopeCustomOptionsController(
     ///     another scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("dhcpscopes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpScopeCustomOptionDetailExample))]
     public async Task<ActionResult<DhcpScopeCustomOptionDetail>> Get(

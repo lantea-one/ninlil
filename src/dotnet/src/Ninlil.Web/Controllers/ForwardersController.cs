@@ -14,6 +14,7 @@ using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Web.Examples.Forwarders;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -68,6 +69,7 @@ public class ForwardersController(
     ///     parsed from its definition. Requires <c>forwarders:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("forwarders:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ForwarderDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<ForwarderDetail>>> List(
@@ -101,6 +103,7 @@ public class ForwardersController(
     ///     <c>forwarders:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("forwarders:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ForwarderDetailExample))]
     public async Task<ActionResult<ForwarderDetail>> Get(Guid id, CancellationToken stoppingToken)

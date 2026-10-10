@@ -11,6 +11,7 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Web.Examples.Cluster;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -55,6 +56,7 @@ public class ClusterController(
     ///     <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("clusternodes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClusterNodeDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<ClusterNodeDetail>>> List(
@@ -83,6 +85,7 @@ public class ClusterController(
     ///     Requires <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("clusternodes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClusterNodeDetailExample))]
     public async Task<ActionResult<ClusterNodeDetail>> Get(Guid id, CancellationToken stoppingToken)
@@ -209,6 +212,7 @@ public class ClusterController(
     ///     Requires <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet("stats")]
+    [ReadFromReplica]
     [RequirePermission("clusternodes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClusterAggregateQueryStatsListExample))]
     public async Task<ActionResult<IReadOnlyList<ClusterAggregateQueryStatsDetail>>> Stats(

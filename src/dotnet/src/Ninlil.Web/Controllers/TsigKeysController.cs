@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Tsig;
 using Ninlil.Web.Examples.TsigKeys;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -60,6 +61,7 @@ public class TsigKeysController(
     ///     <c>tsigkeys:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("tsigkeys:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(TsigKeyDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<TsigKeyDetail>>> List(
@@ -88,6 +90,7 @@ public class TsigKeysController(
     ///     Requires <c>tsigkeys:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("tsigkeys:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(TsigKeyDetailExample))]
     public async Task<ActionResult<TsigKeyDetail>> Get(Guid id, CancellationToken stoppingToken)

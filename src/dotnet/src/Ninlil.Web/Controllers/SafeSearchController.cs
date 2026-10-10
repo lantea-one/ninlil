@@ -11,6 +11,7 @@ using Ninlil.Dns.Server.Rewrites.SafeSearch;
 using Ninlil.Web.Examples.SafeSearch;
 using Ninlil.Web.Models;
 using Ninlil.Web.Options;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -62,6 +63,7 @@ public class SafeSearchController(
     ///     <c>clientGroupId</c> (not both, which returns 400). Requires <c>dnsrewrites:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("dnsrewrites:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(SafeSearchListExample))]
     public async Task<ActionResult<IReadOnlyList<SafeSearchDetail>>> List(

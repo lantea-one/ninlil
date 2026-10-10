@@ -13,6 +13,7 @@ using Ninlil.Dns.Server.Rewrites;
 using Ninlil.Web.Examples.Rewrites;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -64,6 +65,7 @@ public class DnsRewritesController(
     ///     kind. Requires <c>dnsrewrites:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("dnsrewrites:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsRewriteDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<DnsRewriteDetail>>> List(
@@ -97,6 +99,7 @@ public class DnsRewritesController(
     ///     <c>dnsrewrites:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("dnsrewrites:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsRewriteDetailExample))]
     public async Task<ActionResult<DnsRewriteDetail>> Get(Guid id, CancellationToken stoppingToken)

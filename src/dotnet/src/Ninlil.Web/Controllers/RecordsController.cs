@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Authoritative.Journal;
 using Ninlil.Web.Examples.Records;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -46,6 +47,7 @@ public class RecordsController(
     ///     camelCase JSON. Returns 404 for an unknown zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("zones:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(RecordDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<RecordDetail>>> List(
@@ -80,6 +82,7 @@ public class RecordsController(
     ///     another zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("zones:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(RecordDetailExample))]
     public async Task<ActionResult<RecordDetail>> Get(

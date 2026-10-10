@@ -12,6 +12,7 @@ using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.DhcpScopes;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -50,6 +51,7 @@ public class DhcpScopesController(
     ///     This action lists DHCP scopes, one page at a time. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("dhcpscopes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpScopeDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<DhcpScopeDetail>>> List(
@@ -76,6 +78,7 @@ public class DhcpScopesController(
     ///     <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("dhcpscopes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpScopeDetailExample))]
     public async Task<ActionResult<DhcpScopeDetail>> Get(Guid id, CancellationToken stoppingToken)
@@ -96,6 +99,7 @@ public class DhcpScopesController(
     ///     Returns 404 for an unknown id. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}/statistics")]
+    [ReadFromReplica]
     [RequirePermission("dhcpscopes:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpScopeStatisticsDetailExample))]
     public async Task<ActionResult<DhcpScopeStatisticsDetail>> Statistics(

@@ -14,6 +14,7 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 using Ninlil.Web.Examples.Zones;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -75,6 +76,7 @@ public class ZonesController(
     ///     This action lists zones, one page at a time. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("zones:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ZoneDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<ZoneDetail>>> List(
@@ -101,6 +103,7 @@ public class ZonesController(
     ///     <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("zones:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ZoneDetailExample))]
     public async Task<ActionResult<ZoneDetail>> Get(Guid id, CancellationToken stoppingToken)
@@ -475,6 +478,7 @@ public class ZonesController(
     ///     Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}/catalog-members")]
+    [ReadFromReplica]
     [RequirePermission("zones:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ZoneCatalogMembersResponseExample))]
     public async Task<ActionResult<ZoneCatalogMembersResponse>> ListCatalogMembers(

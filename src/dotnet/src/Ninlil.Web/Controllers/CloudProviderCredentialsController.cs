@@ -9,6 +9,7 @@ using Ninlil.Dns.Server.Authoritative.CloudSync;
 using Ninlil.Web.Examples.CloudProviderCredentials;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -43,6 +44,7 @@ public class CloudProviderCredentialsController(
     ///     <c>cloudprovidercredentials:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("cloudprovidercredentials:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -77,6 +79,7 @@ public class CloudProviderCredentialsController(
     ///     id. Requires <c>cloudprovidercredentials:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("cloudprovidercredentials:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(CloudProviderCredentialDetailExample))]
     public async Task<ActionResult<CloudProviderCredentialDetail>> Get(

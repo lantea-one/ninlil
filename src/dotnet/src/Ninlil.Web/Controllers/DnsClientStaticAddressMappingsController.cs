@@ -8,6 +8,7 @@ using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.ClientIdentity;
 using Ninlil.Web.Examples.ClientStaticAddressMappings;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -47,6 +48,7 @@ public class DnsClientStaticAddressMappingsController(
     ///     <c>clients:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -78,6 +80,7 @@ public class DnsClientStaticAddressMappingsController(
     ///     <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,

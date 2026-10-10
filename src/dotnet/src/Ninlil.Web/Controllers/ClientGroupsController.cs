@@ -8,6 +8,7 @@ using Ninlil.Web.Examples.ClientGroups;
 using Ninlil.Web.Examples.Clients;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -39,6 +40,7 @@ public class ClientGroupsController(
     ///     This action lists client groups, one page at a time. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("clientgroups:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientGroupDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<ClientGroupDetail>>> List(
@@ -65,6 +67,7 @@ public class ClientGroupsController(
     ///     <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("clientgroups:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientGroupDetailExample))]
     public async Task<ActionResult<ClientGroupDetail>> Get(Guid id, CancellationToken stoppingToken)

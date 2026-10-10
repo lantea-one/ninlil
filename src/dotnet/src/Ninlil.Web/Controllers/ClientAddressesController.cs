@@ -6,6 +6,7 @@ using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.ClientIdentity.Vendor;
 using Ninlil.Web.Examples.ClientAddresses;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -41,6 +42,7 @@ public class ClientAddressesController(
     ///     Returns 404 for an unknown client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientAddressDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<ClientAddressDetail>>> List(
@@ -85,6 +87,7 @@ public class ClientAddressesController(
     ///     another client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientAddressDetailExample))]
     public async Task<ActionResult<ClientAddressDetail>> Get(

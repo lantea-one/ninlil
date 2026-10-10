@@ -11,6 +11,7 @@ using Ninlil.Dns.Server.ClientIdentity.Vendor;
 using Ninlil.Web.Examples.Clients;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -80,6 +81,7 @@ public class ClientsController(
     /// <param name="sort">The order to list clients in; creation order when omitted.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<ClientDetail>>> List(
@@ -140,6 +142,7 @@ public class ClientsController(
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpGet("summary")]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientSummaryDetailExample))]
     public async Task<ActionResult<ClientSummaryDetail>> Summary(
@@ -194,6 +197,7 @@ public class ClientsController(
     ///     <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("clients:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ClientDetailExample))]
     public async Task<ActionResult<ClientDetail>> Get(Guid id, CancellationToken stoppingToken)

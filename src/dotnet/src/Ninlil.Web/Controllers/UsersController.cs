@@ -17,6 +17,7 @@ using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Web.Examples.Users;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
@@ -96,6 +97,7 @@ public class UsersController(
     ///     permissions. Requires <c>users:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("users:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(UserSummaryPagedResultExample))]
     public async Task<ActionResult<PagedResult<UserSummary>>> List(
@@ -124,6 +126,7 @@ public class UsersController(
     ///     <c>users:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("users:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(UserSummaryExample))]
     public async Task<ActionResult<UserSummary>> Get(Guid id)

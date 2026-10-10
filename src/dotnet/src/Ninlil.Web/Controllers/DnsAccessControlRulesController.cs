@@ -9,6 +9,7 @@ using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Web.Examples.AccessControlRules;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -70,6 +71,7 @@ public class DnsAccessControlRulesController(
     ///     <c>accesscontrol:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("accesscontrol:read")]
     [SwaggerResponseExample(
         StatusCodes.Status200OK,
@@ -106,6 +108,7 @@ public class DnsAccessControlRulesController(
     ///     <c>accesscontrol:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("accesscontrol:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsAccessControlRuleDetailExample))]
     public async Task<ActionResult<DnsAccessControlRuleDetail>> Get(

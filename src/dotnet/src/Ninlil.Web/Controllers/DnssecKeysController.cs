@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Dnssec;
 using Ninlil.Web.Examples.DnssecKeys;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Routing;
 using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
@@ -53,6 +54,7 @@ public class DnssecKeysController(
     ///     record text. Returns 404 for an unknown zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet]
+    [ReadFromReplica]
     [RequirePermission("zones:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnssecKeyDetailPagedResultExample))]
     public async Task<ActionResult<PagedResult<DnssecKeyDetail>>> List(
@@ -92,6 +94,7 @@ public class DnssecKeysController(
     ///     the key does not exist or belongs to another zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ReadFromReplica]
     [RequirePermission("zones:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnssecKeyDetailExample))]
     public async Task<ActionResult<DnssecKeyDetail>> Get(
