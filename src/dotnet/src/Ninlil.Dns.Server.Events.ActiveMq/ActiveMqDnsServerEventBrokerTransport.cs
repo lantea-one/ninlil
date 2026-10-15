@@ -23,8 +23,16 @@ namespace Ninlil.Dns.Server.Events.ActiveMq;
 ///         reachable once. So the connect call runs on a background task, started once and kept
 ///         for the transport's lifetime, the same approach as <c>Server.Events.RabbitMq</c>.
 ///         <see cref="PublishAsync" /> never waits for it; it only checks whether a connection
-///         exists and throws if not, which <see cref="Server.Core.Events.DnsServerEventPublisher" />
+///         exists and throws if not, which <see cref="BrokerEventPublishService" />
 ///         logs before dropping the event.
+///     </para>
+///     <para>
+///         <see cref="BrokerEventPublishService" /> calls <see cref="PublishAsync" /> one event at
+///         a time, which the JMS rule that a session is used by one thread at a time requires for
+///         the shared publish session. The send itself blocks its thread (the NMS
+///         <c>IMessageProducer.Send</c>), so a slow broker delays only that service's task, never
+///         the code that raised the event. <see cref="ActiveMqEventBrokerOptions.PublishTimeout" />
+///         bounds one send.
 ///     </para>
 /// </summary>
 /// <param name="options">The connection and topology settings.</param>
@@ -145,9 +153,12 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
         IBytesMessage message = session.CreateBytesMessage();
         message.WriteBytes(body);
 
-        // Once connected, a send during a later interruption waits at most the failover: URI's
-        // "timeout" parameter (PublishTimeout) and then throws, so the event is dropped and
-        // logged, as in the never-connected case above.
+        // The caller (BrokerEventPublishService) never overlaps two sends, so this session is
+        // used by one thread at a time. Once connected, a send during a later interruption waits
+        // at most the failover: URI's "timeout" parameter (PublishTimeout) and then throws, so
+        // the event is dropped and logged, as in the never-connected case above. The ActiveMQ
+        // client's producer (Apache.NMS.ActiveMQ 2.2.0) has no SendAsync, so the blocking Send
+        // stays.
         producer.Send(message);
 
         return Task.CompletedTask;

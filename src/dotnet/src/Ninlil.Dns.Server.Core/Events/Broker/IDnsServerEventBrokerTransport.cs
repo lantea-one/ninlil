@@ -21,10 +21,11 @@ public interface IDnsServerEventBrokerTransport : IAsyncDisposable
     bool IsConnected { get; }
 
     /// <summary>
-    ///     This method publishes one envelope to the broker.
-    ///     <see cref="DnsServerEventPublisher.Publish" /> calls it without awaiting, so a slow
-    ///     broker never holds up the query path; failures are logged by the publisher and the
-    ///     event is lost to other instances.
+    ///     This method publishes one envelope to the broker. Only
+    ///     <see cref="BrokerEventPublishService" /> calls it, and one call at a time, so an
+    ///     implementation may use one session or channel without locking and a slow broker never
+    ///     holds up the query path. A thrown exception is logged by the service and the event is
+    ///     lost to other instances.
     /// </summary>
     /// <param name="envelope">The envelope to publish.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

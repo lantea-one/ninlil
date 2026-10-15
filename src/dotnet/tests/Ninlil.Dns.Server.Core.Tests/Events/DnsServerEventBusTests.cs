@@ -423,15 +423,24 @@ public class DnsServerEventBusTests
                 p.GetRequiredService<RemoteSubscriber>()
             );
 
+            services.AddSingleton<ILogger<BrokerEventPublishService>>(
+                NullLogger<BrokerEventPublishService>.Instance
+            );
             services.AddSingleton<BrokerEventConsumerService>();
+            services.AddSingleton<BrokerEventPublishService>();
             services.AddSingleton<DnsServerEventDispatcher>();
 
             Bus bus = new(services.BuildServiceProvider());
 
             if (broker)
+            {
                 await bus.StartServiceAsync(
                     bus._provider.GetRequiredService<BrokerEventConsumerService>()
                 );
+                await bus.StartServiceAsync(
+                    bus._provider.GetRequiredService<BrokerEventPublishService>()
+                );
+            }
 
             if (start)
                 await bus.StartDispatcherAsync();

@@ -82,6 +82,10 @@ public static class ServiceCollectionServerCoreExtension
         // an IDnsServerEventBrokerTransport.
         instance.AddHostedService<BrokerEventConsumerService>();
 
+        // Sends the events the publisher queued for the broker, one at a time, off the thread
+        // that raised them. Does nothing without a broker transport.
+        instance.AddHostedService<BrokerEventPublishService>();
+
         // Sweeps every IDnsCache the resolver projects register.
         instance.AddHostedService<DnsCacheEvictionService>();
 
