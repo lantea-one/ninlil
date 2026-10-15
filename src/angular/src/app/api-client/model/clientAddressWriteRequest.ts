@@ -15,7 +15,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
  */
 export interface ClientAddressWriteRequest { 
     /**
-     * A colon-separated MAC address for an IPv4 identity, or a DUID for an IPv6 one.
+     * A MAC address for an IPv4 identity, or a DUID for an IPv6 one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.
      */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;

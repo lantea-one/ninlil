@@ -322,7 +322,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
-     * This action creates a static address mapping. Returns 400 for a missing identifier, an address or network that does not parse, or a protocol version that does not match the address family. Requires &#x60;clients:write&#x60;.
+     * This action creates a static address mapping. Returns 400 for a missing or malformed identifier (accepted as &#x60;aa:bb:cc:dd:ee:ff&#x60;, &#x60;aa-bb-cc-dd-ee-ff&#x60;, &#x60;aabb.ccdd.eeff&#x60; or &#x60;aabbccddeeff&#x60;, stored and returned as &#x60;aa:bb:cc:dd:ee:ff&#x60;), an address or network that does not parse, or a protocol version that does not match the address family. Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/client-static-address-mappings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

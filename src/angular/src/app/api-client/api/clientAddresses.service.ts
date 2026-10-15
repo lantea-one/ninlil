@@ -261,7 +261,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
     }
 
     /**
-     * This action adds an address to a device. Returns 400 for a missing identifier, 404 for an unknown client, and 409 when the identifier and protocol pair already belongs to any device, this one included (the pair the address table\&#39;s unique index covers, checked first through M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository.GetByIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). Requires &#x60;clients:write&#x60;.
+     * This action adds an address to a device. Returns 400 for a missing or malformed identifier, 404 for an unknown client, and 409 when the identifier and protocol pair already belongs to any device, this one included (the pair the address table\&#39;s unique index covers, checked first through M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository.GetByIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). The identifier is accepted as &#x60;aa:bb:cc:dd:ee:ff&#x60;, &#x60;aa-bb-cc-dd-ee-ff&#x60;, &#x60;aabb.ccdd.eeff&#x60; or &#x60;aabbccddeeff&#x60; (up to 85 bytes) and is stored and returned as &#x60;aa:bb:cc:dd:ee:ff&#x60;, so the duplicate check ignores the spelling. Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/clients/{clientId}/addresses
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

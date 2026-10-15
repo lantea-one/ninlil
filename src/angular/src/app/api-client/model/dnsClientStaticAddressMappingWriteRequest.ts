@@ -19,7 +19,7 @@ export interface DnsClientStaticAddressMappingWriteRequest {
      */
     cidr?: string | null;
     /**
-     * The persistent client identifier a query from Cidr resolves to: a colon-separated MAC address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping, or a DHCP Unique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6 one.
+     * The persistent client identifier a query from Cidr resolves to: a MAC address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping, or a DHCP Unique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6 one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.
      */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;

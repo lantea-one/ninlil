@@ -2157,7 +2157,7 @@
         "tags": [
           "ClientAddresses"
         ],
-        "summary": "This action adds an address to a device. Returns 400 for a missing identifier, 404 for\nan unknown client, and 409 when the identifier and protocol pair already belongs to any\ndevice, this one included (the pair the address table's unique index covers, checked\nfirst through M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository.GetByIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). Requires\n`clients:write`.",
+        "summary": "This action adds an address to a device. Returns 400 for a missing or malformed identifier, 404 for\nan unknown client, and 409 when the identifier and protocol pair already belongs to any\ndevice, this one included (the pair the address table's unique index covers, checked\nfirst through M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository.GetByIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). The\nidentifier is accepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` or `aabbccddeeff` (up to 85 bytes) and is stored and\nreturned as `aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling.\nRequires `clients:write`.",
         "parameters": [
           {
             "name": "clientId",
@@ -5399,7 +5399,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nidentifier, an unknown client group or an unknown icon name, and 409 when a device\nalready has the same Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier and\nNinlil.Web.Models.ClientCreateRequest.ProtocolVersion (the pair the address table's unique\nindex covers, checked first through\nM:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository.GetByClientIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). Requires\n`clients:write`.",
+        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nor malformed identifier, an unknown client group or an unknown icon name, and 409 when a device\nalready has the same Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier and\nNinlil.Web.Models.ClientCreateRequest.ProtocolVersion (the pair the address table's unique\nindex covers, checked first through\nM:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository.GetByClientIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). The identifier is\naccepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff`\nor `aabbccddeeff` (up to 85 bytes) and is stored and returned as\n`aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling. Requires\n`clients:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -9431,7 +9431,7 @@
         "tags": [
           "DhcpReservations"
         ],
-        "summary": "This action adds a static reservation to a scope. Returns 400 for a prefix-delegation\nscope, a missing client identifier or an invalid IP address; 404 for an unknown scope;\nand 409 when the client identifier or the address is already reserved in this scope\n(both are unique per scope, as for leases; see\nNinlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity). The address\nis not checked against the scope's range or protocol. Requires `dhcpscopes:write`.",
+        "summary": "This action adds a static reservation to a scope. Returns 400 for a prefix-delegation\nscope, a missing or malformed client identifier or an invalid IP address; 404 for an\nunknown scope; and 409 when the client identifier or the address is already reserved\nin this scope (both are unique per scope, as for leases; see\nNinlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity). The\nidentifier is accepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` or `aabbccddeeff` (up to 85 bytes) and is stored and\nreturned as `aa:bb:cc:dd:ee:ff`; the address is stored and returned in canonical\nform, so duplicates are found whatever the spelling. The address is not checked\nagainst the scope's range or protocol. Requires `dhcpscopes:write`.",
         "parameters": [
           {
             "name": "scopeId",
@@ -14052,7 +14052,7 @@
         "tags": [
           "DnsClientStaticAddressMappings"
         ],
-        "summary": "This action creates a static address mapping. Returns 400 for a missing identifier, an\naddress or network that does not parse, or a protocol version that does not match the\naddress family. Requires `clients:write`.",
+        "summary": "This action creates a static address mapping. Returns 400 for a missing or malformed identifier (accepted as\n`aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` or\n`aabbccddeeff`, stored and returned as `aa:bb:cc:dd:ee:ff`), an\naddress or network that does not parse, or a protocol version that does not match the\naddress family. Requires `clients:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -38837,7 +38837,7 @@
         "properties": {
           "clientIdentifier": {
             "type": "string",
-            "description": "A colon-separated MAC address for an IPv4 identity, or a DUID for an IPv6 one.",
+            "description": "A MAC address for an IPv4 identity, or a DUID for an IPv6 one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.",
             "nullable": true
           },
           "protocolVersion": {
@@ -38852,7 +38852,7 @@
         "properties": {
           "clientIdentifier": {
             "type": "string",
-            "description": "A colon-separated MAC address for an IPv4 client, or a DUID for an IPv6 one.",
+            "description": "A MAC address for an IPv4 client, or a DUID for an IPv6 one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.",
             "nullable": true
           },
           "protocolVersion": {
@@ -40790,12 +40790,12 @@
         "properties": {
           "clientIdentifier": {
             "type": "string",
-            "description": "The client's identifier: a MAC address for DHCPv4, or a DUID for DHCPv6.",
+            "description": "The client's identifier: a MAC address for DHCPv4, or a DUID for DHCPv6, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.",
             "nullable": true
           },
           "ipAddress": {
             "type": "string",
-            "description": "The fixed IP address reserved for the client.",
+            "description": "The fixed IP address reserved for the client; it is stored and returned in canonical form (for example `2001:db8::10`).",
             "nullable": true
           },
           "hostName": {
@@ -41868,7 +41868,7 @@
           },
           "clientIdentifier": {
             "type": "string",
-            "description": "The persistent client identifier a query from Cidr resolves to: a\ncolon-separated MAC address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping,\nor a DHCP Unique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6\none.",
+            "description": "The persistent client identifier a query from Cidr resolves to: a\nMAC address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping, or a DHCP\nUnique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6 one, in\nhex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned\nas `aa:bb:cc:dd:ee:ff`.",
             "nullable": true
           },
           "protocolVersion": {

@@ -14,11 +14,11 @@
  */
 export interface DhcpReservationWriteRequest { 
     /**
-     * The client\'s identifier: a MAC address for DHCPv4, or a DUID for DHCPv6.
+     * The client\'s identifier: a MAC address for DHCPv4, or a DUID for DHCPv6, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.
      */
     clientIdentifier?: string | null;
     /**
-     * The fixed IP address reserved for the client.
+     * The fixed IP address reserved for the client; it is stored and returned in canonical form (for example `2001:db8::10`).
      */
     ipAddress?: string | null;
     /**
