@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -10,118 +7,121 @@ using Ninlil.Dns.Server.Authoritative.CloudSync;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CloudSync;
 
 /// <summary>
-///     This class tests <see cref="Route53DnsProvider" /> against a Kestrel-hosted, minimal REST-XML
-///     fake of the Route 53 API. The <see cref="Amazon.Route53.AmazonRoute53Client" /> still signs
-///     requests with SigV4, but the fake does not check the signatures. There is no test against a
-///     live AWS account.
+///     This class tests <see cref="Route53DnsProvider" /> against <see cref="FakeRoute53Server" />, a
+///     stateful Kestrel fake of the Route 53 API on a loopback port. The
+///     <see cref="Amazon.Route53.AmazonRoute53Client" /> still signs requests with SigV4, but the
+///     fake does not check the signatures. It covers listing (several values per set, escaped names,
+///     paging), set-level create and delete, and the skipped alias and routing-policy sets. There is
+///     no test against a live AWS account.
 /// </summary>
 public sealed class Route53DnsProviderTests : IAsyncLifetime
 {
-    private WebApplication _fakeServer;
-    private string _lastChangeRequestBody;
+    private const string ZoneId = "Z12345";
+
+    private readonly FakeRoute53Server _fake = new();
+    private readonly CapturingLogger _logger = new();
+
+    /// <summary>
+    ///     This class is an <see cref="ILogger" /> that keeps every formatted message with its level, so
+    ///     a test can assert that a skipped alias set is reported as a Warning.
+    /// </summary>
+    private sealed class CapturingLogger : ILogger<Route53DnsProvider>
+    {
+        /// <summary>The captured messages, guarded by a lock on the list itself.</summary>
+        public readonly List<(LogLevel Level, string Message)> Entries = [];
+
+        /// <inheritdoc />
+        public IDisposable BeginScope<TState>(TState state) => null;
+
+        /// <inheritdoc />
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        /// <inheritdoc />
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter
+        )
+        {
+            lock (Entries)
+                Entries.Add((logLevel, formatter(state, exception)));
+        }
+
+        /// <summary>This method returns how many messages were logged at one level.</summary>
+        public int CountAt(LogLevel level)
+        {
+            lock (Entries)
+                return Entries.Count(entry => entry.Level == level);
+        }
+    }
 
     public async Task InitializeAsync()
     {
-        WebApplicationBuilder builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Logging.ClearProviders();
-        _fakeServer = builder.Build();
+        await _fake.StartAsync();
 
-        _fakeServer.MapGet(
-            "/2013-04-01/hostedzone/{zoneId}/rrset",
-            () =>
-                Results.Content(
-                    """
-                    <?xml version="1.0"?>
-                    <ListResourceRecordSetsResponse xmlns="https://route53.amazonaws.com/doc/2013-04-01/">
-                      <ResourceRecordSets>
-                        <ResourceRecordSet>
-                          <Name>www.example.com.</Name>
-                          <Type>A</Type>
-                          <TTL>300</TTL>
-                          <ResourceRecords>
-                            <ResourceRecord>
-                              <Value>192.0.2.50</Value>
-                            </ResourceRecord>
-                          </ResourceRecords>
-                        </ResourceRecordSet>
-                        <ResourceRecordSet>
-                          <Name>_sip._tcp.example.com.</Name>
-                          <Type>SRV</Type>
-                          <TTL>300</TTL>
-                          <ResourceRecords>
-                            <ResourceRecord>
-                              <Value>10 5 5060 sipserver.example.com</Value>
-                            </ResourceRecord>
-                          </ResourceRecords>
-                        </ResourceRecordSet>
-                        <ResourceRecordSet>
-                          <Name>example.com.</Name>
-                          <Type>CAA</Type>
-                          <TTL>300</TTL>
-                          <ResourceRecords>
-                            <ResourceRecord>
-                              <Value>0 issue "letsencrypt.org"</Value>
-                            </ResourceRecord>
-                          </ResourceRecords>
-                        </ResourceRecordSet>
-                      </ResourceRecordSets>
-                      <IsTruncated>false</IsTruncated>
-                      <MaxItems>100</MaxItems>
-                    </ListResourceRecordSetsResponse>
-                    """,
-                    "text/xml"
-                )
-        );
-
-        _fakeServer.MapPost(
-            "/2013-04-01/hostedzone/{zoneId}/rrset",
-            async (HttpContext context) =>
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
             {
-                using StreamReader reader = new(context.Request.Body);
-                _lastChangeRequestBody = await reader.ReadToEndAsync();
-
-                return Results.Content(
-                    """
-                    <?xml version="1.0"?>
-                    <ChangeResourceRecordSetsResponse xmlns="https://route53.amazonaws.com/doc/2013-04-01/">
-                      <ChangeInfo>
-                        <Id>/change/C1</Id>
-                        <Status>PENDING</Status>
-                        <SubmittedAt>2026-01-01T00:00:00Z</SubmittedAt>
-                      </ChangeInfo>
-                    </ChangeResourceRecordSetsResponse>
-                    """,
-                    "text/xml"
-                );
+                Name = "www.example.com.",
+                Type = "A",
+                Values = ["192.0.2.50"],
             }
         );
-
-        await _fakeServer.StartAsync();
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "_sip._tcp.example.com.",
+                Type = "SRV",
+                Values = ["10 5 5060 sipserver.example.com"],
+            }
+        );
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "example.com.",
+                Type = "CAA",
+                Values = ["0 issue \"letsencrypt.org\""],
+            }
+        );
     }
 
-    public async Task DisposeAsync()
-    {
-        await _fakeServer.StopAsync();
-        await _fakeServer.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _fake.DisposeAsync();
 
     private Dictionary<string, string> Credentials =>
         new()
         {
             ["AccessKeyId"] = "AKIAFAKE",
             ["SecretAccessKey"] = "fake-secret",
-            ["ServiceUrl"] = _fakeServer.Urls.First(),
+            ["ServiceUrl"] = _fake.Url,
         };
+
+    /// <summary>The body of the last change request the fake received.</summary>
+    private string LastChangeRequestBody => _fake.ChangeRequests().LastOrDefault();
+
+    /// <summary>This method builds a provider that logs to <see cref="_logger" />.</summary>
+    private Route53DnsProvider CreateProvider() => new(_logger);
+
+    /// <summary>This method builds a record of one of the single-value types.</summary>
+    private static DnsResourceRecord Record(
+        DnsResourceRecordTypeEnum type,
+        string name,
+        string content,
+        uint ttl = 300
+    ) => CloudDnsRecordMapper.ToWireRecord(type, name, content, ttl);
 
     [Fact]
     public async Task ListRecordsParsesTheFakeXmlResponse()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
 
         IReadOnlyList<CloudDnsProviderRecord> records = await provider.ListRecordsAsync(
             Credentials,
-            "Z12345"
+            ZoneId
         );
 
         Assert.Equal(3, records.Count);
@@ -135,11 +135,11 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
     [Fact]
     public async Task ListRecordsParsesTheSpaceSeparatedSrvValue()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
 
         IReadOnlyList<CloudDnsProviderRecord> records = await provider.ListRecordsAsync(
             Credentials,
-            "Z12345"
+            ZoneId
         );
 
         CloudDnsProviderRecord srvRecord = Assert.Single(
@@ -159,11 +159,11 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
     [Fact]
     public async Task ListRecordsParsesTheQuotedCaaValue()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
 
         IReadOnlyList<CloudDnsProviderRecord> records = await provider.ListRecordsAsync(
             Credentials,
-            "Z12345"
+            ZoneId
         );
 
         CloudDnsProviderRecord caaRecord = Assert.Single(
@@ -183,9 +183,9 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
     [Fact]
     public async Task CreateRecordForSrvBuildsTheSpaceSeparatedValue()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
         DnsResourceRecord record = CloudDnsRecordMapper.ToSrvWireRecord(
-            "_sip._tcp.example.com",
+            "_sips._tcp.example.com",
             10,
             5,
             5060,
@@ -193,16 +193,16 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
             300
         );
 
-        await provider.CreateRecordAsync(Credentials, "Z12345", record);
+        await provider.CreateRecordAsync(Credentials, ZoneId, record);
 
-        Assert.NotNull(_lastChangeRequestBody);
-        Assert.Contains("10 5 5060 sipserver.example.com.", _lastChangeRequestBody);
+        Assert.NotNull(LastChangeRequestBody);
+        Assert.Contains("10 5 5060 sipserver.example.com.", LastChangeRequestBody);
     }
 
     [Fact]
     public async Task CreateRecordForCaaBuildsTheQuotedValueWithTheCriticalFlagBitSet()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
         DnsResourceRecord record = CloudDnsRecordMapper.ToCaaWireRecord(
             "example.com",
             isCritical: true,
@@ -211,16 +211,16 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
             300
         );
 
-        await provider.CreateRecordAsync(Credentials, "Z12345", record);
+        await provider.CreateRecordAsync(Credentials, ZoneId, record);
 
-        Assert.NotNull(_lastChangeRequestBody);
-        Assert.Contains("128 issue \"letsencrypt.org\"", _lastChangeRequestBody);
+        Assert.NotNull(LastChangeRequestBody);
+        Assert.Contains("128 issue \"letsencrypt.org\"", LastChangeRequestBody);
     }
 
     [Fact]
     public async Task CreateRecordForMxPacksPriorityIntoTheSingleValueString()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
         DnsResourceRecord record = CloudDnsRecordMapper.ToWireRecord(
             DnsResourceRecordTypeEnum.MX,
             "example.com",
@@ -229,16 +229,16 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
             10
         );
 
-        await provider.CreateRecordAsync(Credentials, "Z12345", record);
+        await provider.CreateRecordAsync(Credentials, ZoneId, record);
 
-        Assert.NotNull(_lastChangeRequestBody);
-        Assert.Contains("10 mail.example.com.", _lastChangeRequestBody);
+        Assert.NotNull(LastChangeRequestBody);
+        Assert.Contains("10 mail.example.com.", LastChangeRequestBody);
     }
 
     [Fact]
     public async Task CreateRecordForTxtWrapsTheValueInDoubleQuotes()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
         DnsResourceRecord record = CloudDnsRecordMapper.ToWireRecord(
             DnsResourceRecordTypeEnum.Txt,
             "example.com",
@@ -246,19 +246,19 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
             300
         );
 
-        await provider.CreateRecordAsync(Credentials, "Z12345", record);
+        await provider.CreateRecordAsync(Credentials, ZoneId, record);
 
-        Assert.Contains("\"hello world\"", _lastChangeRequestBody);
+        Assert.Contains("\"hello world\"", LastChangeRequestBody);
     }
 
     [Fact]
     public async Task DeleteRecordSendsADeleteChangeAction()
     {
-        Route53DnsProvider provider = new();
+        Route53DnsProvider provider = CreateProvider();
 
         await provider.DeleteRecordAsync(
             Credentials,
-            "Z12345",
+            ZoneId,
             new CloudDnsProviderRecord(
                 "www.example.com.|A",
                 CloudDnsRecordMapper.ToWireRecord(
@@ -270,6 +270,408 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
             )
         );
 
-        Assert.Contains("DELETE", _lastChangeRequestBody);
+        Assert.Contains("DELETE", LastChangeRequestBody);
+    }
+
+    /// <summary>
+    ///     This test checks that every value of a record set becomes one record with the set's TTL
+    ///     and the set's ID, instead of only the first value being read.
+    /// </summary>
+    [Fact]
+    public async Task ListRecords_ForASetWithThreeValues_ReturnsThreeRecordsWithTheSetsTtl()
+    {
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "multi.example.com.",
+                Type = "A",
+                Ttl = 120,
+                Values = ["192.0.2.1", "192.0.2.2", "192.0.2.3"],
+            }
+        );
+
+        IReadOnlyList<CloudDnsProviderRecord> records = await CreateProvider()
+            .ListRecordsAsync(Credentials, ZoneId);
+
+        List<CloudDnsProviderRecord> multi =
+        [
+            .. records.Where(r => r.ProviderRecordId == "multi.example.com.|A"),
+        ];
+        Assert.Equal(3, multi.Count);
+        Assert.All(multi, r => Assert.Equal(120u, r.Record.TimeToLive));
+        Assert.Equal(
+            3,
+            multi
+                .Select(r => CloudDnsRecordMapper.FromWireRecord(r.Record).Content)
+                .Distinct()
+                .Count()
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that a set listed across several pages is read completely.
+    /// </summary>
+    [Fact]
+    public async Task ListRecords_ForMoreSetsThanOnePage_FollowsTheNextRecordName()
+    {
+        for (int index = 0; index < 120; index++)
+            _fake.AddSet(
+                ZoneId,
+                new FakeRoute53Server.FakeRecordSet
+                {
+                    Name = $"host{index}.example.com.",
+                    Type = "A",
+                    Values = ["192.0.2.9"],
+                }
+            );
+
+        IReadOnlyList<CloudDnsProviderRecord> records = await CreateProvider()
+            .ListRecordsAsync(Credentials, ZoneId);
+
+        Assert.Equal(123, records.Count);
+    }
+
+    /// <summary>
+    ///     This test checks that Route 53's octal escape for the asterisk is read as a wildcard
+    ///     owner, not as the decimal escape <c>\052</c> (the character with value 52, "4").
+    /// </summary>
+    [Fact]
+    public async Task ListRecords_ForAnOctalEscapedWildcard_ReturnsTheWildcardOwner()
+    {
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "\\052.example.com.",
+                Type = "A",
+                Values = ["192.0.2.7"],
+            }
+        );
+
+        IReadOnlyList<CloudDnsProviderRecord> records = await CreateProvider()
+            .ListRecordsAsync(Credentials, ZoneId);
+
+        CloudDnsProviderRecord wildcard = Assert.Single(
+            records,
+            r => r.ProviderRecordId == "\\052.example.com.|A"
+        );
+        Assert.Equal("*.example.com.", wildcard.Record.Name.ToString());
+    }
+
+    /// <summary>
+    ///     This test checks the other octal escapes: <c>\100</c> is "@" and stays inside its label,
+    ///     and <c>\056</c> is a literal dot, written back as <c>\.</c> so it does not split the label.
+    /// </summary>
+    [Fact]
+    public async Task ListRecords_ForOctalEscapedAtSignAndDot_KeepsThemInsideTheLabel()
+    {
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "a\\100b.example.com.",
+                Type = "A",
+                Values = ["192.0.2.8"],
+            }
+        );
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "c\\056d.example.com.",
+                Type = "A",
+                Values = ["192.0.2.9"],
+            }
+        );
+
+        IReadOnlyList<CloudDnsProviderRecord> records = await CreateProvider()
+            .ListRecordsAsync(Credentials, ZoneId);
+
+        Assert.Contains(records, r => r.Record.Name.ToString() == "a@b.example.com.");
+        DnsResourceRecord dotted = Assert
+            .Single(
+                records,
+                r => r.ProviderRecordId.StartsWith("c\\056d", StringComparison.Ordinal)
+            )
+            .Record;
+        Assert.Equal(3, dotted.Name.Labels.Count);
+        Assert.Equal("c.d", System.Text.Encoding.ASCII.GetString(dotted.Name.Labels[0]));
+    }
+
+    /// <summary>
+    ///     This test checks that an alias set and a routing-policy set are not listed (OD-B16-d).
+    /// </summary>
+    [Fact]
+    public async Task ListRecords_ForAliasAndRoutingPolicySets_LeavesThemOut()
+    {
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "alias.example.com.",
+                Type = "A",
+                AliasDnsName = "lb.elb.amazonaws.com.",
+            }
+        );
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "weighted.example.com.",
+                Type = "A",
+                SetIdentifier = "blue",
+                Values = ["192.0.2.30"],
+            }
+        );
+
+        IReadOnlyList<CloudDnsProviderRecord> records = await CreateProvider()
+            .ListRecordsAsync(Credentials, ZoneId);
+
+        Assert.Equal(3, records.Count);
+        Assert.DoesNotContain(
+            records,
+            r =>
+                r.ProviderRecordId.StartsWith("alias.")
+                || r.ProviderRecordId.StartsWith("weighted.")
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that a second value at an existing set is added with one UPSERT of the
+    ///     whole set; a CREATE would be rejected by Route 53.
+    /// </summary>
+    [Fact]
+    public async Task CreateRecord_AtAnExistingSet_AddsTheValueWithOneUpsert()
+    {
+        await CreateProvider()
+            .CreateRecordAsync(
+                Credentials,
+                ZoneId,
+                Record(DnsResourceRecordTypeEnum.A, "www.example.com", "192.0.2.51")
+            );
+
+        FakeRoute53Server.FakeRecordSet set = Assert.Single(
+            _fake.Sets(ZoneId),
+            s => s.Name == "www.example.com." && s.Type == "A"
+        );
+        Assert.Equal(["192.0.2.50", "192.0.2.51"], set.Values.Order().ToArray());
+        string request = Assert.Single(_fake.ChangeRequests());
+        Assert.Contains("UPSERT", request);
+        Assert.DoesNotContain("CREATE", request);
+    }
+
+    /// <summary>
+    ///     This test checks that a value the set already holds, even when Route 53 quotes it
+    ///     differently, causes no request.
+    /// </summary>
+    [Fact]
+    public async Task CreateRecord_ForAValueTheSetAlreadyHolds_SendsNothing()
+    {
+        await CreateProvider()
+            .CreateRecordAsync(
+                Credentials,
+                ZoneId,
+                Record(DnsResourceRecordTypeEnum.A, "www.example.com", "192.0.2.50")
+            );
+
+        Assert.Empty(_fake.ChangeRequests());
+    }
+
+    /// <summary>
+    ///     This test checks that the wildcard owner is sent in Route 53's octal form and the set is
+    ///     found again under it (no second CREATE, which Route 53 would reject).
+    /// </summary>
+    [Fact]
+    public async Task CreateRecord_ForAWildcardOwner_SendsTheOctalEscapeAndFindsTheSetAgain()
+    {
+        Route53DnsProvider provider = CreateProvider();
+        DnsResourceRecord first = Record(
+            DnsResourceRecordTypeEnum.A,
+            "*.example.com",
+            "192.0.2.60"
+        );
+        DnsResourceRecord second = Record(
+            DnsResourceRecordTypeEnum.A,
+            "*.example.com",
+            "192.0.2.61"
+        );
+
+        await provider.CreateRecordAsync(Credentials, ZoneId, first);
+        await provider.CreateRecordAsync(Credentials, ZoneId, second);
+
+        FakeRoute53Server.FakeRecordSet set = Assert.Single(
+            _fake.Sets(ZoneId),
+            s => s.Name == "\\052.example.com."
+        );
+        Assert.Equal(2, set.Values.Count);
+        Assert.Contains("\\052.example.com.", _fake.ChangeRequests()[0]);
+    }
+
+    /// <summary>
+    ///     This test checks that deleting one of two values leaves the other under one UPSERT with the
+    ///     set's TTL; a DELETE of one value would be rejected.
+    /// </summary>
+    [Fact]
+    public async Task DeleteRecord_OfOneOfTwoValues_LeavesTheOtherWithOneUpsert()
+    {
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "two.example.com.",
+                Type = "A",
+                Ttl = 90,
+                Values = ["192.0.2.1", "192.0.2.2"],
+            }
+        );
+
+        await CreateProvider()
+            .DeleteRecordAsync(
+                Credentials,
+                ZoneId,
+                new CloudDnsProviderRecord(
+                    "two.example.com.|A",
+                    Record(DnsResourceRecordTypeEnum.A, "two.example.com", "192.0.2.1", 90)
+                )
+            );
+
+        FakeRoute53Server.FakeRecordSet set = Assert.Single(
+            _fake.Sets(ZoneId),
+            s => s.Name == "two.example.com."
+        );
+        Assert.Equal(["192.0.2.2"], set.Values);
+        Assert.Equal(90, set.Ttl);
+        string request = Assert.Single(_fake.ChangeRequests());
+        Assert.Contains("UPSERT", request);
+    }
+
+    /// <summary>
+    ///     This test checks that deleting the last value removes the set with a DELETE that repeats
+    ///     the set exactly as listed, including a TTL that differs from the record's.
+    /// </summary>
+    [Fact]
+    public async Task DeleteRecord_OfTheLastValue_DeletesTheSetWithItsListedTtl()
+    {
+        await CreateProvider()
+            .DeleteRecordAsync(
+                Credentials,
+                ZoneId,
+                new CloudDnsProviderRecord(
+                    "www.example.com.|A",
+                    Record(DnsResourceRecordTypeEnum.A, "www.example.com", "192.0.2.50", 77)
+                )
+            );
+
+        Assert.DoesNotContain(_fake.Sets(ZoneId), s => s.Name == "www.example.com.");
+        Assert.Contains("DELETE", Assert.Single(_fake.ChangeRequests()));
+    }
+
+    /// <summary>
+    ///     This test checks that deleting a value that is not in the set, or a set that does not
+    ///     exist, sends no request.
+    /// </summary>
+    [Fact]
+    public async Task DeleteRecord_OfAValueThatIsNotThere_SendsNothing()
+    {
+        Route53DnsProvider provider = CreateProvider();
+
+        await provider.DeleteRecordAsync(
+            Credentials,
+            ZoneId,
+            new CloudDnsProviderRecord(
+                "www.example.com.|A",
+                Record(DnsResourceRecordTypeEnum.A, "www.example.com", "192.0.2.99")
+            )
+        );
+        await provider.DeleteRecordAsync(
+            Credentials,
+            ZoneId,
+            new CloudDnsProviderRecord(
+                "nothing.example.com.|A",
+                Record(DnsResourceRecordTypeEnum.A, "nothing.example.com", "192.0.2.99")
+            )
+        );
+
+        Assert.Empty(_fake.ChangeRequests());
+    }
+
+    /// <summary>
+    ///     This test checks that creating a record where an alias set or a routing-policy set has the
+    ///     same name and type sends nothing and logs a Warning (OD-B16-d).
+    /// </summary>
+    [Fact]
+    public async Task CreateRecord_WhereAnAliasOrRoutingPolicySetExists_SendsNothingAndWarns()
+    {
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "alias.example.com.",
+                Type = "A",
+                AliasDnsName = "lb.elb.amazonaws.com.",
+            }
+        );
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "weighted.example.com.",
+                Type = "A",
+                SetIdentifier = "blue",
+                Values = ["192.0.2.30"],
+            }
+        );
+        Route53DnsProvider provider = CreateProvider();
+
+        await provider.CreateRecordAsync(
+            Credentials,
+            ZoneId,
+            Record(DnsResourceRecordTypeEnum.A, "alias.example.com", "192.0.2.1")
+        );
+        await provider.CreateRecordAsync(
+            Credentials,
+            ZoneId,
+            Record(DnsResourceRecordTypeEnum.A, "weighted.example.com", "192.0.2.2")
+        );
+
+        Assert.Empty(_fake.ChangeRequests());
+        Assert.Equal(2, _logger.CountAt(LogLevel.Warning));
+        Assert.Equal(
+            ["192.0.2.30"],
+            _fake.Sets(ZoneId).Single(s => s.SetIdentifier == "blue").Values
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that deleting a record where a routing-policy set has the same name and
+    ///     type sends nothing and logs a Warning.
+    /// </summary>
+    [Fact]
+    public async Task DeleteRecord_WhereARoutingPolicySetExists_SendsNothingAndWarns()
+    {
+        _fake.AddSet(
+            ZoneId,
+            new FakeRoute53Server.FakeRecordSet
+            {
+                Name = "weighted.example.com.",
+                Type = "A",
+                SetIdentifier = "blue",
+                Values = ["192.0.2.30"],
+            }
+        );
+
+        await CreateProvider()
+            .DeleteRecordAsync(
+                Credentials,
+                ZoneId,
+                new CloudDnsProviderRecord(
+                    "weighted.example.com.|A",
+                    Record(DnsResourceRecordTypeEnum.A, "weighted.example.com", "192.0.2.30")
+                )
+            );
+
+        Assert.Empty(_fake.ChangeRequests());
+        Assert.Equal(1, _logger.CountAt(LogLevel.Warning));
     }
 }
