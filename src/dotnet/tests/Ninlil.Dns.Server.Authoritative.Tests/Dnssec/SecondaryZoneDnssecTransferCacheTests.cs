@@ -36,7 +36,7 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 ///         The primary's <see cref="ZoneTransferService" /> builds a TSIG-signed AXFR of a zone
 ///         signed by <see cref="IZoneSigningService" /> with newly generated keys, and the records are
 ///         written to the secondary with <see cref="IZoneUpdateService.BootstrapZoneAsync" />, the
-///         call <see cref="Refresh.SecondaryZoneRefreshService" /> makes on a first pull, so the real
+///         call <see cref="Ninlil.Dns.Server.Authoritative.Refresh.SecondaryZoneRefreshService" /> makes on a first pull, so the real
 ///         cache update path runs.
 ///     </para>
 /// </summary>
@@ -395,7 +395,7 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
     /// <summary>
     ///     This method writes a transfer's records into the secondary's database through
     ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" /> -- the same call
-    ///     <see cref="Refresh.SecondaryZoneRefreshService" />'s initial-pull path makes, so
+    ///     <see cref="Ninlil.Dns.Server.Authoritative.Refresh.SecondaryZoneRefreshService" />'s initial-pull path makes, so
     ///     this test exercises the real production write path rather than a test-only shortcut.
     /// </summary>
     private async Task BootstrapSecondaryRecordsAsync(

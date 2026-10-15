@@ -157,7 +157,14 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
     ///     A logger provider added to the host so a test can read log output, or
     ///     <see langword="null" /> for none.
     /// </param>
-    private AuthoritativeTestZoneHost(ILoggerProvider loggerProvider)
+    /// <param name="configureServices">
+    ///     A callback that changes the service collection after the <c>Add*</c> calls (to replace
+    ///     a clock or a transfer client, for example), or <see langword="null" /> for none.
+    /// </param>
+    private AuthoritativeTestZoneHost(
+        ILoggerProvider loggerProvider,
+        Action<IServiceCollection> configureServices
+    )
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         if (loggerProvider is not null)
@@ -171,6 +178,7 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
         builder.Services.AddNinlilDnsServerTsig(builder.Configuration);
         builder.Services.AddNinlilDnsServerDnssec();
         builder.Services.AddNinlilDnsServerAuthoritative(builder.Configuration);
+        configureServices?.Invoke(builder.Services);
 
         _host = builder.Build();
     }
@@ -188,12 +196,17 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
     ///     A logger provider added to the host so a test can read log output, or
     ///     <see langword="null" /> for none.
     /// </param>
+    /// <param name="configureServices">
+    ///     A callback that changes the service collection after the <c>Add*</c> calls (to replace
+    ///     a clock or a transfer client, for example), or <see langword="null" /> for none.
+    /// </param>
     /// <returns>The host, not yet started.</returns>
     public static async Task<AuthoritativeTestZoneHost> CreateAsync(
-        ILoggerProvider loggerProvider = null
+        ILoggerProvider loggerProvider = null,
+        Action<IServiceCollection> configureServices = null
     )
     {
-        AuthoritativeTestZoneHost testHost = new(loggerProvider);
+        AuthoritativeTestZoneHost testHost = new(loggerProvider, configureServices);
 
         await using AsyncServiceScope scope = testHost._host.Services.CreateAsyncScope();
         NinlilDnsContext context = scope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
