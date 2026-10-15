@@ -40,10 +40,12 @@ namespace Ninlil.Dhcp.Server.Core;
 ///         renewal that commits between the load and the write is never overwritten.
 ///     </para>
 ///     <para>
-///         Accepted limit: if the sweep commits first and a renewal then writes the row back as
-///         active, the client keeps its lease, but an <see cref="DhcpLeaseChangeKindEnum.Expired" />
-///         and a <see cref="DhcpLeaseChangeKindEnum.Granted" /> event are both published. The
-///         subscribers run fire-and-forget, so the DNS record could end up removed.
+///         If the sweep commits first and a renewal then writes the row back as active, an
+///         <see cref="DhcpLeaseChangeKindEnum.Expired" /> and a
+///         <see cref="DhcpLeaseChangeKindEnum.Granted" /> event are both published, in either
+///         order. That is harmless: the DHCP-to-DNS integration handles lease events one at a
+///         time and acts on the lease row's state, not on the event's kind, so the DNS record
+///         follows the lease that won.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">The factory that creates a scope for each sweep.</param>

@@ -200,6 +200,92 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
         ];
     }
 
+    /// <summary>
+    ///     This method writes a new state to a lease row, as the expiry sweep, a release or a
+    ///     renewal does.
+    /// </summary>
+    private async Task SetStateAsync(LeaseEntity lease, LeaseStateEnum state)
+    {
+        lease.State = state;
+        _leaseRepository.Update(lease);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_GrantedEventForARowThatExpired_RemovesTheRecord()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("o1.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.30", "late");
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+        Assert.Single(await GetManagedRecordsAsync(zoneId));
+        await SetStateAsync(lease, LeaseStateEnum.Expired);
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.False(result.WasSkipped);
+        Assert.Empty(await GetManagedRecordsAsync(zoneId));
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_ExpiredEventForARowThatIsActiveAgain_KeepsTheRecord()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("o2.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.31", "renewed");
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Expired);
+
+        RecordEntity record = Assert.Single(await GetManagedRecordsAsync(zoneId));
+        Assert.Equal(AData("192.0.2.31"), record.DataJson);
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_ReleasedEventForARowThatIsActiveAgain_KeepsTheRecord()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("o3.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.32", "back");
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Released);
+
+        Assert.Single(await GetManagedRecordsAsync(zoneId));
+    }
+
+    [Theory]
+    [InlineData(LeaseStateEnum.Offered)]
+    [InlineData(LeaseStateEnum.Reserved)]
+    public async Task HandleLeaseChangeAsync_RowThatIsOfferedOrReserved_IsSkippedAndRecordsStay(
+        LeaseStateEnum state
+    )
+    {
+        Guid zoneId = await SeedForwardZoneAsync($"o4{state}.example.com".ToLowerInvariant());
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.33", "pending");
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+        await SetStateAsync(lease, state);
+
+        foreach (
+            DhcpLeaseChangeKindEnum kind in new[]
+            {
+                DhcpLeaseChangeKindEnum.Granted,
+                DhcpLeaseChangeKindEnum.Expired,
+            }
+        )
+        {
+            DhcpDnsRegistrationResult result = await CreateService()
+                .HandleLeaseChangeAsync(lease.Id, kind);
+
+            Assert.True(result.WasSkipped);
+            Assert.Contains(state.ToString(), result.SkipReason);
+            RecordEntity record = Assert.Single(await GetManagedRecordsAsync(zoneId));
+            Assert.Equal(AData("192.0.2.33"), record.DataJson);
+        }
+    }
+
     [Fact]
     public async Task HandleLeaseChangeAsync_Granted_RegistersARecord()
     {
@@ -293,6 +379,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         Assert.Single(await GetManagedRecordsAsync(zoneId));
+        await SetStateAsync(lease, LeaseStateEnum.Released);
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Released);
@@ -310,6 +397,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         Assert.Single(await GetManagedRecordsAsync(zoneId));
+        await SetStateAsync(lease, LeaseStateEnum.Expired);
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Expired);

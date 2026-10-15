@@ -166,6 +166,107 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
         await WaitForManagedRecordRemovalAsync(zoneId, ownerName);
     }
 
+    /// <summary>
+    ///     This test replays the race the registration must survive: the expiry sweep commits
+    ///     Expired, a renewal commits Active again, and the events reach the bus in the order
+    ///     Granted then Expired. The lease row ends Active, so its record must still exist
+    ///     whichever event is handled last.
+    /// </summary>
+    [Fact]
+    public async Task GrantedThenExpiredEvents_ForALeaseRenewedAfterTheSweep_LeaveTheRecordInPlace()
+    {
+        const string zoneName = "e2e-race.example.com";
+
+        Guid zoneId = await SeedForwardZoneAsync(zoneName);
+        await SeedDhcpScopeAsync("race", "192.0.2.30", "192.0.2.40", zoneId);
+        IDnsServerEventPublisher publisher =
+            _host.Services.GetRequiredService<IDnsServerEventPublisher>();
+        Guid leaseId = Guid.NewGuid();
+
+        await using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
+        {
+            ILeaseRepository leases = scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
+            await leases.AddAsync(
+                new LeaseEntity
+                {
+                    Id = leaseId,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeName = "race",
+                    ClientIdentifier = "aa:bb:cc:dd:ee:01",
+                    IpAddress = "192.0.2.31",
+                    HostName = "racer",
+                    State = LeaseStateEnum.Active,
+                    LeaseObtainedAtUtc = DateTimeOffset.UtcNow.AddHours(-2),
+                    LeaseExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(-1),
+                }
+            );
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        string ownerName = $"racer.{zoneName}";
+        publisher.Publish(
+            new DhcpLeaseChangedEvent(
+                DateTimeOffset.UtcNow,
+                leaseId,
+                DhcpLeaseChangeKindEnum.Granted
+            )
+        );
+        await WaitForManagedRecordAsync(zoneId, ownerName);
+
+        // The sweep expires the row, then the client renews it before either event is handled.
+        await using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
+        {
+            ILeaseRepository leases = scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
+            Assert.True(await leases.TryExpireAsync(leaseId, DateTimeOffset.UtcNow));
+        }
+
+        await using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
+        {
+            ILeaseRepository leases = scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
+            LeaseEntity lease = await leases.GetByIdAsync(leaseId);
+            lease.State = LeaseStateEnum.Active;
+            lease.LeaseExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1);
+            leases.Update(lease);
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        publisher.Publish(
+            new DhcpLeaseChangedEvent(
+                DateTimeOffset.UtcNow,
+                leaseId,
+                DhcpLeaseChangeKindEnum.Granted
+            )
+        );
+        publisher.Publish(
+            new DhcpLeaseChangedEvent(
+                DateTimeOffset.UtcNow,
+                leaseId,
+                DhcpLeaseChangeKindEnum.Expired
+            )
+        );
+
+        // Nothing signals that the bus has drained, so watch the record for a settle period
+        // that is long enough for both handlers: it must never disappear.
+        for (int attempt = 0; attempt < 30; attempt++)
+        {
+            await Task.Delay(50);
+            Assert.NotNull(await FindManagedRecordAsync(zoneId, ownerName));
+        }
+    }
+
+    private async Task<RecordEntity> FindManagedRecordAsync(Guid zoneId, string ownerName)
+    {
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        IReadOnlyList<RecordEntity> records = await recordRepository.ListByZoneIdAsync(zoneId);
+        return records.FirstOrDefault(record =>
+            record.ManagedByFeature == RecordManagedByFeatureEnum.Dhcp
+            && string.Equals(record.Name, ownerName, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
     private async Task<Guid> SeedForwardZoneAsync(string name)
     {
         Guid zoneId = Guid.NewGuid();

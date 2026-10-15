@@ -62,15 +62,23 @@ public class DhcpDnsRegistrationService(
 
     /// <summary>
     ///     This method handles one <c>DhcpLeaseChangedEvent</c>: it reads the lease (the event
-    ///     carries only its identifier) and adds, replaces or removes its A/AAAA record. It does
-    ///     nothing when the scope has no <see cref="DhcpScopeEntity.DnsZoneId" />, the zone is
-    ///     missing or not a Primary or CloudPrimary zone, the address does not parse, or, for a
-    ///     grant, the lease has no usable host name. A grant whose owner name is unavailable is
-    ///     refused (see <see cref="DhcpDnsRegistrationResult.WasRefused" />). A release or expiry
-    ///     removes the managed record for the lease's address.
+    ///     carries only its identifier) and acts on the row's state as it is now, not on the
+    ///     event's kind, so events handled out of order, or after a later change, still leave
+    ///     the record that matches the row. An <see cref="LeaseStateEnum.Active" /> lease takes
+    ///     the grant path; an <see cref="LeaseStateEnum.Expired" /> or
+    ///     <see cref="LeaseStateEnum.Released" /> one (including a <c>declined:</c> quarantine
+    ///     row) takes the removal path; an <see cref="LeaseStateEnum.Offered" /> or
+    ///     <see cref="LeaseStateEnum.Reserved" /> one is skipped and its record left as it is. The
+    ///     method does nothing when the scope has no <see cref="DhcpScopeEntity.DnsZoneId" />,
+    ///     the zone is missing or not a Primary or CloudPrimary zone, the address does not parse,
+    ///     or, for a grant, the lease has no usable host name. A grant whose owner name is
+    ///     unavailable is refused (see <see cref="DhcpDnsRegistrationResult.WasRefused" />). The
+    ///     removal path removes the managed record for the lease's address.
     /// </summary>
     /// <param name="leaseId">The identifier of the lease that changed.</param>
-    /// <param name="changeKind">What happened to the lease.</param>
+    /// <param name="changeKind">
+    ///     What triggered this handling, for the log; the row's state decides what is done.
+    /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>What was done, or why nothing was done.</returns>
     public async Task<DhcpDnsRegistrationResult> HandleLeaseChangeAsync(
@@ -83,6 +91,13 @@ public class DhcpDnsRegistrationService(
 
         if (lease is null)
             return DhcpDnsRegistrationResult.Skipped("The lease no longer exists.");
+
+        // An offer or an administrator's reservation holds no client yet: whatever record exists
+        // belongs to an earlier lease state and is left for that state's own event.
+        if (lease.State is LeaseStateEnum.Offered or LeaseStateEnum.Reserved)
+            return DhcpDnsRegistrationResult.Skipped(
+                $"The lease is {lease.State}; its DNS record is left as it is."
+            );
 
         DhcpScopeEntity scope = await scopeRepository.FindByNameAsync(
             lease.ScopeName,
@@ -123,7 +138,8 @@ public class DhcpDnsRegistrationService(
             AddressEquals(record, leaseAddress)
         );
 
-        if (changeKind is DhcpLeaseChangeKindEnum.Released or DhcpLeaseChangeKindEnum.Expired)
+        // The row decides, not changeKind: an event for an older state must not undo a newer one.
+        if (lease.State is LeaseStateEnum.Expired or LeaseStateEnum.Released)
         {
             if (existingByAddress is null)
                 return DhcpDnsRegistrationResult.Skipped(
@@ -134,7 +150,7 @@ public class DhcpDnsRegistrationService(
             return DhcpDnsRegistrationResult.Removed(existingByAddress.Name);
         }
 
-        // DhcpLeaseChangeKindEnum.Granted from here on.
+        // An Active lease from here on.
         string label = SanitizeHostNameLabel(lease.HostName);
 
         if (label is null)

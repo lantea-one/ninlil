@@ -12,13 +12,17 @@ namespace Ninlil.Dhcp.Server.DnsIntegration;
 ///     <c>Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncEventSubscriber</c>: it does database I/O and
 ///     must not hold up <c>DnsServerEventDispatcher</c>, which handles one event at a time. The
 ///     task creates its own dependency injection scope, since the dispatcher's scope is disposed
-///     once <see cref="HandleAsync" /> returns. Concurrent events for leases in the same zone run
-///     in parallel.
+///     once <see cref="HandleAsync" /> returns. The tasks take turns on
+///     <see cref="DhcpDnsRegistrationGate" />, so registrations run one at a time. Each one acts
+///     on the lease row's state when it runs, not on the event's kind, so the events of one lease
+///     may be handled in any order and the record still follows the lease row.
 /// </summary>
 /// <param name="scopeFactory">The factory that creates a scope, and a <see cref="DhcpDnsRegistrationService" />, per event.</param>
+/// <param name="gate">The gate that lets one registration run at a time.</param>
 /// <param name="logger">The logger registration failures are recorded to.</param>
 public class DhcpLeaseDnsRegistrationEventSubscriber(
     IServiceScopeFactory scopeFactory,
+    DhcpDnsRegistrationGate gate,
     ILogger<DhcpLeaseDnsRegistrationEventSubscriber> logger
 ) : IDnsServerEventSubscriber<DhcpLeaseChangedEvent>
 {
@@ -30,8 +34,9 @@ public class DhcpLeaseDnsRegistrationEventSubscriber(
     }
 
     /// <summary>
-    ///     This method creates a scope and calls <see cref="DhcpDnsRegistrationService" />. Every
-    ///     exception except cancellation is caught and logged, since nothing awaits this task.
+    ///     This method waits for <see cref="DhcpDnsRegistrationGate" />, creates a scope and calls
+    ///     <see cref="DhcpDnsRegistrationService" />, and gives the gate back. Every exception
+    ///     except cancellation is caught and logged, since nothing awaits this task.
     /// </summary>
     private async Task RegisterAsync(
         DhcpLeaseChangedEvent domainEvent,
@@ -40,15 +45,24 @@ public class DhcpLeaseDnsRegistrationEventSubscriber(
     {
         try
         {
-            await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-            DhcpDnsRegistrationService registrationService =
-                scope.ServiceProvider.GetRequiredService<DhcpDnsRegistrationService>();
+            await gate.WaitAsync(stoppingToken);
 
-            await registrationService.HandleLeaseChangeAsync(
-                domainEvent.LeaseId,
-                domainEvent.ChangeKind,
-                stoppingToken
-            );
+            try
+            {
+                await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+                DhcpDnsRegistrationService registrationService =
+                    scope.ServiceProvider.GetRequiredService<DhcpDnsRegistrationService>();
+
+                await registrationService.HandleLeaseChangeAsync(
+                    domainEvent.LeaseId,
+                    domainEvent.ChangeKind,
+                    stoppingToken
+                );
+            }
+            finally
+            {
+                gate.Release();
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

@@ -15,7 +15,8 @@ public static class ServiceCollectionDhcpDnsIntegrationExtension
     /// <summary>
     ///     This method registers the DHCP-to-DNS feature: the scoped
     ///     <see cref="DhcpDnsRegistrationService" /> and its <see cref="DhcpLeaseChangedEvent" />
-    ///     subscriber, the scoped <see cref="DhcpClientRegistryAutoPopulationService" /> and its
+    ///     subscriber, which takes turns on the singleton <see cref="DhcpDnsRegistrationGate" /> so
+    ///     registrations run one at a time, the scoped <see cref="DhcpClientRegistryAutoPopulationService" /> and its
     ///     subscriber (a second reaction to the same event that adds new clients to the client
     ///     registry), and the singleton <see cref="DhcpLeaseClientIdentityResolver" />, under its
     ///     own type only, since <c>DhcpServiceRegistration</c> builds the
@@ -44,6 +45,9 @@ public static class ServiceCollectionDhcpDnsIntegrationExtension
         // Scoped for the same reason as IZoneUpdateService itself: it depends on the scoped
         // repositories and unit of work the persistence layer registers.
         instance.AddScoped<DhcpDnsRegistrationService>();
+
+        // Singleton: one gate for the process, so every subscriber instance waits on the same one.
+        instance.AddSingleton<DhcpDnsRegistrationGate>();
 
         instance.AddScoped<
             IDnsServerEventSubscriber<DhcpLeaseChangedEvent>,
