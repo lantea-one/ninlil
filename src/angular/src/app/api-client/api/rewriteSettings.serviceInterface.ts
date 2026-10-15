@@ -28,14 +28,14 @@ export interface RewriteSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action returns the current rewrite settings. Requires &#x60;rewritesettings:read&#x60;.
+     * This action returns the current rewrite settings and which cluster node last changed them. Requires &#x60;rewritesettings:read&#x60;.
      * 
      * @endpoint get /api/rewrite-settings
 */
     apiRewriteSettingsGet(extraHttpRequestParams?: any): Observable<RewriteSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Rewrites&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Every field takes effect at once. Requires &#x60;rewritesettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Rewrites&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Every field takes effect at once, and the change is also replicated to the other cluster nodes, which apply it live as well. Requires &#x60;rewritesettings:write&#x60;.
      * 
      * @endpoint patch /api/rewrite-settings
 * @param requestParameters

@@ -56,7 +56,7 @@ export interface SafeSearchServiceInterface {
     apiSafeSearchKeyDelete(requestParameters: ApiSafeSearchKeyDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action enables one catalog entry: for each hostname mapping it creates a rewrite in the requested scope, or re-enables a disabled one. It also turns the rewrite engine on if it was off, whatever the scope. Returns 400 when both targets are given or the target does not exist, 404 for an unknown key, and 409, with nothing written, when a mapping\&#39;s hostname already has a different CNAME rewrite in the same scope; every mapping is checked before anything is written. Global rewrites that are created or re-enabled are replicated to cluster peers; scoped ones are not. Requires &#x60;dnsrewrites:write&#x60;.
+     * This action enables one catalog entry: for each hostname mapping it creates a rewrite in the requested scope, or re-enables a disabled one. It also turns the rewrite engine on if it was off, whatever the scope, and replicates that switch to the cluster peers. Returns 400 when both targets are given or the target does not exist, 404 for an unknown key, and 409, with nothing written, when a mapping\&#39;s hostname already has a different CNAME rewrite in the same scope; every mapping is checked before anything is written. Global rewrites that are created or re-enabled are replicated to cluster peers; scoped ones are not. Requires &#x60;dnsrewrites:write&#x60;.
      * 
      * @endpoint post /api/safe-search/{key}
 * @param requestParameters

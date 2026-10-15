@@ -2157,7 +2157,7 @@
         "tags": [
           "ClientAddresses"
         ],
-        "summary": "This action adds an address to a device. Returns 400 for a missing or malformed identifier, 404 for\nan unknown client, and 409 when the identifier and protocol pair already belongs to any\ndevice, this one included (the pair the address table's unique index covers, checked\nfirst through M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository.GetByIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). The\nidentifier is accepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` or `aabbccddeeff` (up to 85 bytes) and is stored and\nreturned as `aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling.\nRequires `clients:write`.",
+        "summary": "This action adds an address to a device. Returns 400 for a missing or malformed identifier,\n404 for an unknown client, and 409 when the identifier and protocol pair already belongs to any\ndevice, this one included (the pair the address table's unique index covers, checked\nfirst through M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository.GetByIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). The\nidentifier is accepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` or `aabbccddeeff` (up to 85 bytes) and is stored and\nreturned as `aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling.\nRequires `clients:write`.",
         "parameters": [
           {
             "name": "clientId",
@@ -5399,7 +5399,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nor malformed identifier, an unknown client group or an unknown icon name, and 409 when a device\nalready has the same Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier and\nNinlil.Web.Models.ClientCreateRequest.ProtocolVersion (the pair the address table's unique\nindex covers, checked first through\nM:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository.GetByClientIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). The identifier is\naccepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff`\nor `aabbccddeeff` (up to 85 bytes) and is stored and returned as\n`aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling. Requires\n`clients:write`.",
+        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nor malformed identifier, an unknown client group or an unknown icon name, and 409 when\na device already has the same Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier and\nNinlil.Web.Models.ClientCreateRequest.ProtocolVersion (the pair the address table's unique\nindex covers, checked first through\nM:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository.GetByClientIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). The identifier is\naccepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff`\nor `aabbccddeeff` (up to 85 bytes) and is stored and returned as\n`aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling. Requires\n`clients:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -14052,7 +14052,7 @@
         "tags": [
           "DnsClientStaticAddressMappings"
         ],
-        "summary": "This action creates a static address mapping. Returns 400 for a missing or malformed identifier (accepted as\n`aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` or\n`aabbccddeeff`, stored and returned as `aa:bb:cc:dd:ee:ff`), an\naddress or network that does not parse, or a protocol version that does not match the\naddress family. Requires `clients:write`.",
+        "summary": "This action creates a static address mapping. Returns 400 for a missing or malformed\nidentifier (accepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` or\n`aabbccddeeff`, stored and returned as `aa:bb:cc:dd:ee:ff`), an\naddress or network that does not parse, or a protocol version that does not match the\naddress family. Requires `clients:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -16326,7 +16326,7 @@
         "tags": [
           "EventBrokerSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Events`,\n`DnsServer:Events:RabbitMq` and `DnsServer:Events:ActiveMq` as an RFC 7396\nmerge patch at every level, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A\nfield absent at the top level or within `rabbitMq` or `activeMq` keeps its\nvalue, including `password`, so an operator can change only `hostName` without\nresupplying a password M:Ninlil.Web.Controllers.EventBrokerSettingsController.Get(System.Threading.CancellationToken) never shows. The change needs a restart.\nReturns 400 for a field of the wrong JSON type (nested fields are named like\n`rabbitMq.port`), an unknown transport, a port outside 1-65535, a reconnect delay\nor publish timeout that is not positive or exceeds the timer limit, or a maximum\nreconnect delay below the initial delay in the same patch. Requires\n`eventbroker:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Events`,\n`DnsServer:Events:RabbitMq` and `DnsServer:Events:ActiveMq` as an RFC 7396\nmerge patch at every level, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A\nfield absent at the top level or within `rabbitMq` or `activeMq` keeps its\nvalue, including `password`, so an operator can change only `hostName` without\nresupplying a password M:Ninlil.Web.Controllers.EventBrokerSettingsController.Get(System.Threading.CancellationToken) never shows. A password is stored encrypted\nwith this node's key ring (as `passwordEncrypted` in the file) and sent as entered\nto the other cluster nodes, which encrypt it with their own key ring. The change needs\na restart.\nReturns 400 for a field of the wrong JSON type (nested fields are named like\n`rabbitMq.port`), an unknown transport, a port outside 1-65535, a reconnect delay\nor publish timeout that is not positive or exceeds the timer limit, or a maximum\nreconnect delay below the initial delay in the same patch. Requires\n`eventbroker:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -30680,7 +30680,7 @@
         "tags": [
           "ReverseProxySettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:ReverseProxy` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `sharedSecret`, which is\nalways operator-supplied and so can be replaced in place. `knownProxies` and\n`knownNetworks` are each replaced as a whole array when present. An optional\n`dnsOverTls` sub-object is merged the same way into\n`DnsServer:Protocol:DnsOverTls:ProxyProtocol`; it has no shared secret (see\n`DnsOverTlsProxyProtocolSettingsDetail`). Returns 400 for an invalid IP address or\nCIDR network. Requires `reverseproxy:write`.",
+        "summary": "This action merges a partial update into `DnsServer:ReverseProxy` as an RFC 7396\nmerge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `sharedSecret`, which is\nalways operator-supplied and so can be replaced in place. The secret is stored\nencrypted with this node's key ring (`sharedSecretEncrypted` in the file) and is\nsent as entered to the other cluster nodes, which encrypt it with their own key ring.\n`knownProxies` and `knownNetworks` are each replaced as a whole array when present. An optional\n`dnsOverTls` sub-object is merged the same way into\n`DnsServer:Protocol:DnsOverTls:ProxyProtocol`; it has no shared secret (see\n`DnsOverTlsProxyProtocolSettingsDetail`). Returns 400 for an invalid IP address or\nCIDR network. Requires `reverseproxy:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -30780,7 +30780,7 @@
         "tags": [
           "RewriteSettings"
         ],
-        "summary": "This action returns the current rewrite settings. Requires `rewritesettings:read`.",
+        "summary": "This action returns the current rewrite settings and which cluster node last changed\nthem. Requires `rewritesettings:read`.",
         "responses": {
           "200": {
             "description": "OK",
@@ -30791,7 +30791,9 @@
                 },
                 "example": {
                   "enable": true,
-                  "timeToLiveSeconds": 300
+                  "timeToLiveSeconds": 300,
+                  "lastModifiedUtc": "2026-10-15T09:30:00+00:00",
+                  "originatingNodeId": "3f2a8c1e-5b7d-4e9a-8c61-0d4f2b9a7e13"
                 }
               },
               "application/json": {
@@ -30800,7 +30802,9 @@
                 },
                 "example": {
                   "enable": true,
-                  "timeToLiveSeconds": 300
+                  "timeToLiveSeconds": 300,
+                  "lastModifiedUtc": "2026-10-15T09:30:00+00:00",
+                  "originatingNodeId": "3f2a8c1e-5b7d-4e9a-8c61-0d4f2b9a7e13"
                 }
               },
               "text/json": {
@@ -30809,7 +30813,9 @@
                 },
                 "example": {
                   "enable": true,
-                  "timeToLiveSeconds": 300
+                  "timeToLiveSeconds": 300,
+                  "lastModifiedUtc": "2026-10-15T09:30:00+00:00",
+                  "originatingNodeId": "3f2a8c1e-5b7d-4e9a-8c61-0d4f2b9a7e13"
                 }
               }
             }
@@ -30820,7 +30826,7 @@
         "tags": [
           "RewriteSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Rewrites` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. Every field takes effect at once. Requires\n`rewritesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Rewrites` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. Every field takes effect at once, and the\nchange is also replicated to the other cluster nodes, which apply it live as well.\nRequires `rewritesettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -31502,7 +31508,7 @@
         "tags": [
           "SafeSearch"
         ],
-        "summary": "This action enables one catalog entry: for each hostname mapping it creates a rewrite in\nthe requested scope, or re-enables a disabled one. It also turns the rewrite engine on\nif it was off, whatever the scope. Returns 400 when both targets are given or the target\ndoes not exist, 404 for an unknown key, and 409, with nothing written, when a mapping's\nhostname already has a different CNAME rewrite in the same scope; every mapping is\nchecked before anything is written. Global rewrites that are created or re-enabled are\nreplicated to cluster peers; scoped ones are not. Requires `dnsrewrites:write`.",
+        "summary": "This action enables one catalog entry: for each hostname mapping it creates a rewrite in\nthe requested scope, or re-enables a disabled one. It also turns the rewrite engine on\nif it was off, whatever the scope, and replicates that switch to the cluster peers.\nReturns 400 when both targets are given or the target\ndoes not exist, 404 for an unknown key, and 409, with nothing written, when a mapping's\nhostname already has a different CNAME rewrite in the same scope; every mapping is\nchecked before anything is written. Global rewrites that are created or re-enabled are\nreplicated to cluster peers; scoped ones are not. Requires `dnsrewrites:write`.",
         "parameters": [
           {
             "name": "key",
@@ -35387,7 +35393,7 @@
         "tags": [
           "Webhooks"
         ],
-        "summary": "This action creates a webhook subscription. When HMAC signing is enabled and no secret\nis supplied, a random 32-byte secret is generated. The plaintext credentials and signing\nsecret are returned in this response only; later reads never include them. Returns 400\nfor a missing name, a target that is not an absolute http(s) URL, an unknown event type,\ncredentials that do not fit the auth mode, or a non-positive attempt limit, and 409 when\nthe name is taken. Requires `webhooks:write`.",
+        "summary": "This action creates a webhook subscription. When HMAC signing is enabled and no secret\nis supplied, a random 32-byte secret is generated. The plaintext credentials and signing\nsecret are returned in this response only; later reads never include them. Returns 400\nfor a missing name, a target that is not an absolute http(s) URL, an event type webhooks do not deliver,\ncredentials that do not fit the auth mode, or a non-positive attempt limit, and 409 when\nthe name is taken. Requires `webhooks:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -44362,10 +44368,22 @@
             "type": "integer",
             "description": "The TTL, in seconds, of a synthesized rewrite answer. Defaults to 300.",
             "format": "int32"
+          },
+          "lastModifiedUtc": {
+            "type": "string",
+            "description": "When the settings were last written, or null if never.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "originatingNodeId": {
+            "type": "string",
+            "description": "The cluster node the last write came from, or null if never written.",
+            "format": "uuid",
+            "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the rewrite engine settings (`DnsRewriteOptions`)\nthat `GET /api/rewrite-settings` returns. A `PATCH` to the same endpoint accepts\nthe same fields. The rewrites themselves are a separate resource\n(`DnsRewritesController`); this record holds the on/off switch and the TTL of\nsynthesized answers, which apply to all of them."
+        "description": "This record is the REST shape of the rewrite engine settings (`DnsRewriteOptions`)\nthat `GET /api/rewrite-settings` returns. A `PATCH` to the same endpoint accepts\nthe same fields. The rewrites themselves are a separate resource\n(`DnsRewritesController`); this record holds the on/off switch and the TTL of\nsynthesized answers, which apply to all of them. Both fields are replicated to every\ncluster node, so the record also reports which node last wrote them."
       },
       "RolePermissionRequest": {
         "type": "object",
@@ -45618,7 +45636,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The event types to deliver, by their `DnsServerEventTypeRegistry` name (for example\n`\"DnsZoneChanged\"`). Each is checked against the registry before saving.",
+            "description": "The event types to deliver, by their `DnsServerEventTypeRegistry` name. Only the\nseven types webhooks deliver are accepted: `DnsZoneChanged`, `DnsCacheEvicted`,\n`DnssecZoneResigningCompleted`, `AcmeCertificateRenewalSucceeded`,\n`AcmeCertificateRenewalFailed`, `CloudDnsZoneSyncFailed` and\n`TrustAnchorRollover`; any other name returns 400.",
             "nullable": true
           },
           "authMode": {
@@ -45794,7 +45812,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The event types to deliver, replacing the whole set.",
+            "description": "The event types to deliver, replacing the whole set. Only the seven types webhooks deliver are accepted; any other name returns 400.",
             "nullable": true
           },
           "authMode": {

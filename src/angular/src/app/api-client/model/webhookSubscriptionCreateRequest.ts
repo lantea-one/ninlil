@@ -23,7 +23,7 @@ export interface WebhookSubscriptionCreateRequest {
      */
     targetUrl?: string | null;
     /**
-     * The event types to deliver, by their `DnsServerEventTypeRegistry` name (for example `\"DnsZoneChanged\"`). Each is checked against the registry before saving.
+     * The event types to deliver, by their `DnsServerEventTypeRegistry` name. Only the seven types webhooks deliver are accepted: `DnsZoneChanged`, `DnsCacheEvicted`, `DnssecZoneResigningCompleted`, `AcmeCertificateRenewalSucceeded`, `AcmeCertificateRenewalFailed`, `CloudDnsZoneSyncFailed` and `TrustAnchorRollover`; any other name returns 400.
      */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;

@@ -487,7 +487,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action creates a webhook subscription. When HMAC signing is enabled and no secret is supplied, a random 32-byte secret is generated. The plaintext credentials and signing secret are returned in this response only; later reads never include them. Returns 400 for a missing name, a target that is not an absolute http(s) URL, an unknown event type, credentials that do not fit the auth mode, or a non-positive attempt limit, and 409 when the name is taken. Requires &#x60;webhooks:write&#x60;.
+     * This action creates a webhook subscription. When HMAC signing is enabled and no secret is supplied, a random 32-byte secret is generated. The plaintext credentials and signing secret are returned in this response only; later reads never include them. Returns 400 for a missing name, a target that is not an absolute http(s) URL, an event type webhooks do not deliver, credentials that do not fit the auth mode, or a non-positive attempt limit, and 409 when the name is taken. Requires &#x60;webhooks:write&#x60;.
      * @endpoint post /api/webhooks
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

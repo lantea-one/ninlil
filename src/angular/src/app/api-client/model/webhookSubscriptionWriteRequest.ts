@@ -23,7 +23,7 @@ export interface WebhookSubscriptionWriteRequest {
      */
     targetUrl?: string | null;
     /**
-     * The event types to deliver, replacing the whole set.
+     * The event types to deliver, replacing the whole set. Only the seven types webhooks deliver are accepted; any other name returns 400.
      */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;
