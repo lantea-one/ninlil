@@ -15,7 +15,7 @@ namespace Ninlil.Dns.Server.Authoritative.Resolution;
 ///     This class is the authoritative engine, the <see cref="IDnsQueryResolver" /> that answers
 ///     from hosted zones. It finds the zone for the query name in
 ///     <see cref="AuthoritativeZoneCache" /> and answers fully: an exact match, a CNAME (followed
-///     one hop inside the zone), a wildcard, a referral, or a negative answer with the SOA. A
+///     one hop inside the zone), a wildcard (only the one at the closest encloser applies, RFC 4592), a referral, or a negative answer with the SOA. A
 ///     name in no hosted zone is declined (<see cref="DnsQueryResolution.NotHandled" />) so the
 ///     dispatcher offers it to the forwarding and recursive resolvers. It also answers CHAOS
 ///     <c>version.bind</c>-style queries when enabled.
@@ -220,8 +220,23 @@ public class AuthoritativeQueryResolver(
                 signedData
             );
 
-        IReadOnlyList<RecordEntity> wildcardMatches = zone.GetWildcardRecords(
-            question.Name,
+        // The name does not exist, so only the wildcard at its closest encloser can answer
+        // (RFC 4592 §3.3.1). A wildcard further up is shadowed, and no wildcard means NXDOMAIN.
+        DnsName closestEncloser = zone.FindClosestEncloser(question.Name);
+        IReadOnlyList<RecordEntity> source = zone.GetSourceOfSynthesisRecords(closestEncloser);
+
+        if (source.Count == 0)
+            return BuildNegativeResponse(
+                request,
+                zone,
+                isNxDomain: true,
+                question.Name,
+                dnssecOk,
+                signedData
+            );
+
+        IReadOnlyList<RecordEntity> wildcardMatches = zone.GetSourceOfSynthesisRecords(
+            closestEncloser,
             question.Type
         );
 
@@ -235,16 +250,35 @@ public class AuthoritativeQueryResolver(
                 signedData
             );
 
-        // A wildcard with other types still makes the name exist: NODATA, not NXDOMAIN.
-        bool nameCoveredByAnyWildcard = zone.GetWildcardRecords(question.Name).Count > 0;
+        // A wildcard CNAME answers every type, like a CNAME at an existing name (RFC 4592 §2.2).
+        IReadOnlyList<RecordEntity> wildcardCnames = zone.GetSourceOfSynthesisRecords(
+            closestEncloser,
+            DnsResourceRecordTypeEnum.Cname
+        );
 
+        if (wildcardCnames.Count > 0)
+            return BuildCnameChaseResponse(
+                request,
+                question,
+                wildcardCnames[0],
+                zone,
+                dnssecOk,
+                signedData,
+                wildcardSource: new DnsName([
+                    [(byte)'*'],
+                    .. closestEncloser.Labels,
+                ])
+            );
+
+        // The wildcard exists but lacks the type: NODATA, proven against the wildcard.
         return BuildNegativeResponse(
             request,
             zone,
-            isNxDomain: !nameCoveredByAnyWildcard,
+            isNxDomain: false,
             question.Name,
             dnssecOk,
-            signedData
+            signedData,
+            wildcardClosestEncloser: closestEncloser
         );
     }
 
@@ -452,27 +486,46 @@ public class AuthoritativeQueryResolver(
     /// <summary>
     ///     This method builds the answer for a name that has a CNAME, adding the target's records
     ///     (one hop only) when the target is in the same zone, with RRSIGs when DNSSEC applies.
+    ///     For a wildcard CNAME, the CNAME is served under the queried name, its RRSIG is looked
+    ///     up under the wildcard name (RFC 4035 §3.1.3.3) and the proof that no closer match
+    ///     exists goes in the Authority section.
     /// </summary>
+    /// <param name="wildcardSource">
+    ///     The wildcard name the CNAME is stored under, or <see langword="null" /> when the CNAME
+    ///     is at the queried name itself.
+    /// </param>
     private DnsMessage BuildCnameChaseResponse(
         DnsMessage request,
         DnsQuestion question,
         RecordEntity cnameRecord,
         CachedZone zone,
         bool dnssecOk,
-        SignedZoneData signedData
+        SignedZoneData signedData,
+        DnsName wildcardSource = null
     )
     {
         DnsMessage response = CreateAnswerHeader(request, isAuthoritative: true);
         response.Answers.AddRange(ToWireRecords([cnameRecord], question.Name));
 
         if (dnssecOk && signedData is not null)
+        {
             AppendRewrittenSignatures(
                 response.Answers,
                 signedData,
-                question.Name,
+                wildcardSource ?? question.Name,
                 DnsResourceRecordTypeEnum.Cname,
                 question.Name
             );
+
+            if (wildcardSource is not null)
+                response.AuthorityRecords.AddRange(
+                    DenialOfExistenceProofBuilder.BuildWildcardProof(
+                        signedData,
+                        zone.ApexName,
+                        question.Name
+                    )
+                );
+        }
 
         if (
             DecodeTypedData(cnameRecord) is CnameRecordData cnameData
@@ -515,9 +568,10 @@ public class AuthoritativeQueryResolver(
         SignedZoneData signedData
     )
     {
+        // A name covered by the wildcard at its closest encloser exists too (RFC 4592 §2.2.1).
         bool nameExists =
             zone.NameExistsOrIsEmptyNonTerminal(question.Name)
-            || zone.GetWildcardRecords(question.Name).Count > 0;
+            || zone.GetSourceOfSynthesisRecords(zone.FindClosestEncloser(question.Name)).Count > 0;
 
         if (!nameExists)
             return BuildNegativeResponse(
@@ -553,13 +607,19 @@ public class AuthoritativeQueryResolver(
     ///     existence proof (RFC 4035 §3.1.3) are added: the NODATA proof, or the closest encloser
     ///     and wildcard proof for NXDOMAIN.
     /// </summary>
+    /// <param name="wildcardClosestEncloser">
+    ///     The closest encloser when a wildcard covers the name but lacks the type; the NODATA
+    ///     proof then also shows the wildcard (RFC 4035 §3.1.3.4, RFC 5155 §7.2.5). Otherwise
+    ///     <see langword="null" />.
+    /// </param>
     private DnsMessage BuildNegativeResponse(
         DnsMessage request,
         CachedZone zone,
         bool isNxDomain,
         DnsName queryName,
         bool dnssecOk,
-        SignedZoneData signedData
+        SignedZoneData signedData,
+        DnsName wildcardClosestEncloser = null
     )
     {
         DnsMessage response = CreateAnswerHeader(request, isAuthoritative: true);
@@ -604,11 +664,18 @@ public class AuthoritativeQueryResolver(
                         zone.ApexName,
                         queryName
                     )
-                    : DenialOfExistenceProofBuilder.BuildNoDataProof(
+                : wildcardClosestEncloser is not null
+                    ? DenialOfExistenceProofBuilder.BuildWildcardNoDataProof(
                         signedData,
                         zone.ApexName,
-                        queryName
+                        queryName,
+                        wildcardClosestEncloser
                     )
+                : DenialOfExistenceProofBuilder.BuildNoDataProof(
+                    signedData,
+                    zone.ApexName,
+                    queryName
+                )
             );
         }
 

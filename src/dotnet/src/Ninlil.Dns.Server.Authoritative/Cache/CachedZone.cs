@@ -9,7 +9,7 @@ namespace Ninlil.Dns.Server.Authoritative.Cache;
 /// <summary>
 ///     This class holds one zone's enabled records in memory, indexed for the lookups
 ///     <see cref="Resolution.AuthoritativeQueryResolver" /> makes on every query: exact name,
-///     wildcard and delegation (zone cut). <see cref="AuthoritativeZoneCache" /> rebuilds it in
+///     wildcard (the source of synthesis at the closest encloser) and delegation (zone cut). <see cref="AuthoritativeZoneCache" /> rebuilds it in
 ///     full whenever the zone changes; zones are small enough that a rebuild is cheap, and it
 ///     keeps this class simple.
 /// </summary>
@@ -198,37 +198,49 @@ public sealed class CachedZone
     public bool NameExistsOrIsEmptyNonTerminal(DnsName name) => _existingNames.Contains(name);
 
     /// <summary>
-    ///     This method looks for wildcard records that could answer for <paramref name="name" />
-    ///     (RFC 1035 §4.3.3): it tries <c>*.parent</c> for each ancestor from the immediate parent
-    ///     up to the apex and returns the first match. With <paramref name="type" /> set, it
-    ///     returns the first wildcard that has that type. It does not stop at the closest
-    ///     existing ancestor (the RFC 4592 closest encloser).
+    ///     This method finds the closest encloser of a name that does not exist (RFC 4592 §3.3.1):
+    ///     the longest ancestor that exists in this zone, meaning it owns records or is an empty
+    ///     non-terminal. The apex always exists, so the walk ends there at the latest. The caller
+    ///     passes only a name that does not exist and is not at or below a zone cut.
     /// </summary>
-    /// <param name="name">The name being queried for, which itself has no exact match.</param>
-    /// <param name="type">
-    ///     An optional record type filter; when <see langword="null" />, every type at the
-    ///     matching wildcard is returned.
-    /// </param>
-    /// <returns>The matching wildcard's records, or an empty list if no wildcard applies.</returns>
-    public IReadOnlyList<RecordEntity> GetWildcardRecords(
-        DnsName name,
-        DnsResourceRecordTypeEnum? type = null
-    )
+    /// <param name="name">The name being queried for.</param>
+    /// <returns>The closest encloser, or the apex if no closer ancestor exists.</returns>
+    public DnsName FindClosestEncloser(DnsName name)
     {
-        for (int start = 1; start <= name.Labels.Count - ApexName.Labels.Count; start++)
+        for (int depth = name.Labels.Count - 1; depth > ApexName.Labels.Count; depth--)
         {
-            DnsName wildcardName = new([
-                [(byte)'*'],
-                .. name.Labels.Skip(start),
-            ]);
-            IReadOnlyList<RecordEntity> records = GetRecords(wildcardName, type);
+            DnsName ancestor = new([.. name.Labels.Skip(name.Labels.Count - depth)]);
 
-            if (records.Count > 0)
-                return records;
+            if (_existingNames.Contains(ancestor))
+                return ancestor;
         }
 
-        return [];
+        return ApexName;
     }
+
+    /// <summary>
+    ///     This method looks up the records at the source of synthesis for a name, the wildcard
+    ///     <c>*.closestEncloser</c> (RFC 4592 §3.3.1). Only this one wildcard can answer for the
+    ///     name: a wildcard further up never applies, because the closest encloser stops the
+    ///     search (RFC 4592 §2.1.3).
+    /// </summary>
+    /// <param name="closestEncloser">The closest encloser from <see cref="FindClosestEncloser" />.</param>
+    /// <param name="type">
+    ///     An optional record type filter; when <see langword="null" />, every type at the
+    ///     wildcard is returned.
+    /// </param>
+    /// <returns>The wildcard's records, or an empty list if the wildcard does not exist.</returns>
+    public IReadOnlyList<RecordEntity> GetSourceOfSynthesisRecords(
+        DnsName closestEncloser,
+        DnsResourceRecordTypeEnum? type = null
+    ) =>
+        GetRecords(
+            new DnsName([
+                [(byte)'*'],
+                .. closestEncloser.Labels,
+            ]),
+            type
+        );
 
     /// <summary>
     ///     This method rotates a multi-record answer, advancing a per-(name, type) counter each

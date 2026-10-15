@@ -94,6 +94,39 @@ public static class DenialOfExistenceProofBuilder
     ) => CanProve(signed) ? Deduplicate(BuildCoveringProof(signed, apexName, queryName)) : [];
 
     /// <summary>
+    ///     This method builds the proof for a wildcard NODATA answer: the name does not exist, but
+    ///     the wildcard <c>*.closestEncloser</c> does and lacks the queried type (RFC 4035
+    ///     §3.1.3.4, RFC 5155 §7.2.5). It holds the "no exact match" proof for the name plus the
+    ///     chain record matching the wildcard, whose bitmap shows the type and CNAME absent.
+    /// </summary>
+    /// <param name="signed">The zone's signed content.</param>
+    /// <param name="apexName">The zone's apex name.</param>
+    /// <param name="queryName">The name that does not exist.</param>
+    /// <param name="closestEncloser">The closest encloser of the name, whose wildcard matched.</param>
+    /// <returns>The proof records, deduplicated.</returns>
+    public static List<DnsResourceRecord> BuildWildcardNoDataProof(
+        SignedZoneData signed,
+        DnsName apexName,
+        DnsName queryName,
+        DnsName closestEncloser
+    )
+    {
+        if (!CanProve(signed))
+            return [];
+
+        List<DnsResourceRecord> proof = BuildCoveringProof(signed, apexName, queryName);
+        proof.AddRange(
+            WithSignature(
+                signed,
+                FindExactMatch(signed, apexName, WildcardNameFor(closestEncloser)),
+                CoveringType(signed)
+            )
+        );
+
+        return Deduplicate(proof);
+    }
+
+    /// <summary>
     ///     This method builds the proof that goes with an insecure referral (RFC 4035 §3.1.4): the
     ///     delegation point's NSEC or NSEC3 record, whose bitmap lacks DS, with its RRSIG. For a
     ///     secure delegation it returns an empty list, since the signed DS is sent instead.
