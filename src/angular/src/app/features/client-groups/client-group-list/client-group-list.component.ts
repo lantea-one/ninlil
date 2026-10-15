@@ -135,14 +135,14 @@ export class ClientGroupListComponent {
     }
   }
 
-  /** This method asks for confirmation, then deletes a group; the backend also deletes its networks and list assignments. */
+  /** This method asks for confirmation, then deletes a group; the backend also deletes its networks, schedules, list assignments and Safe Search overrides. */
   async deleteGroup(group: ClientGroupDetail): Promise<void> {
     if (!group.id) return;
 
     const confirmed = await this.confirm({
       title: `Delete ${group.name}?`,
       message:
-        'This permanently deletes the client group, every network it matches, and every filter list assigned to it. This cannot be undone.',
+        'This permanently deletes the group, its networks, schedules and filter-list assignments, and its Safe Search overrides. Member clients fall back to network matching. This cannot be undone.',
     });
 
     if (!confirmed) return;

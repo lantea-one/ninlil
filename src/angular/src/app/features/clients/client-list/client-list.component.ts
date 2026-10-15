@@ -263,7 +263,7 @@ export class ClientListComponent {
     const confirmed = await this.confirm({
       title: `Delete ${row.title}?`,
       message:
-        'This permanently removes this client, and every address it answers to, from the known-client registry. This cannot be undone.',
+        'This permanently removes this client, its addresses, schedules, filter-list assignments and Safe Search overrides. This cannot be undone.',
     });
 
     if (!confirmed) return;

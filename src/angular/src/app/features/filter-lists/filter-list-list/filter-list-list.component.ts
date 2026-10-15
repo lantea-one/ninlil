@@ -122,7 +122,7 @@ export class FilterListListComponent {
     const confirmed = await this.confirm({
       title: `Delete ${list.name}?`,
       message:
-        'This permanently deletes the filter list, every entry it contains, and removes it from any client group it is currently assigned to. This cannot be undone.',
+        'This permanently deletes the filter list and every entry it contains, and removes it from every client and client group it is assigned to. This cannot be undone.',
     });
 
     if (!confirmed) return;
