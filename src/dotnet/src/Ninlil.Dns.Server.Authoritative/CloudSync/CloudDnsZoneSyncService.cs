@@ -19,7 +19,8 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 ///     the provider; CloudSecondary zones pull the provider's records in through
 ///     <see cref="IZoneUpdateService" />. Records are matched by content, like the full-transfer
 ///     branch of <c>SecondaryZoneRefreshService</c>, because each provider has its record IDs.
-///     The SOA, apex NS and ExcludeFromSync records are never synced.
+///     The SOA, apex NS and ExcludeFromSync records are never synced, and the provider's own apex NS
+///     and SOA records are ignored on both sides.
 /// </summary>
 /// <param name="scopeFactory">The factory used to create a scope per zone sync.</param>
 /// <param name="providers">Every registered <see cref="ICloudDnsProvider" /> implementation.</param>
@@ -195,11 +196,29 @@ public sealed class CloudDnsZoneSyncService(
             credential.CredentialsEncrypted
         );
 
-        IReadOnlyList<CloudDnsProviderRecord> remoteRecords = await provider.ListRecordsAsync(
-            credentials,
-            zone.CloudProviderZoneId,
-            stoppingToken
-        );
+        // The provider owns its apex NS set (Route 53 refuses to delete it) and its SOA. Dropping
+        // them here, before either direction runs, means a CloudPrimary never deletes them and a
+        // CloudSecondary never re-adds them locally on every pass.
+        IReadOnlyList<CloudDnsProviderRecord> remoteRecords =
+        [
+            .. (
+                await provider.ListRecordsAsync(
+                    credentials,
+                    zone.CloudProviderZoneId,
+                    stoppingToken
+                )
+            ).Where(remote =>
+                remote.Record.Type != DnsResourceRecordTypeEnum.Soa
+                && !(
+                    remote.Record.Type == DnsResourceRecordTypeEnum.NS
+                    && string.Equals(
+                        remote.Record.Name.ToString().TrimEnd('.'),
+                        zone.Name.TrimEnd('.'),
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+            ),
+        ];
 
         IReadOnlyList<RecordEntity> localRecords = await recordRepository.ListByZoneIdAsync(
             zone.Id,
