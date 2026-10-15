@@ -40,7 +40,7 @@ export class ClientActivityService extends BaseService implements ClientActivity
     }
 
     /**
-     * This action lists the query log entries attributed, when they were logged, to any of the client\&#39;s current addresses, newest first, one page at a time. Returns 404 for an unknown client. Requires &#x60;querylog:read&#x60;.
+     * This action lists the query log entries attributed, when they were logged, to any of the client\&#39;s current addresses, newest first, one page at a time. Returns 404 for an unknown client. A client with no address has no attributable entries, so it gets an empty page (200, total count 0) and the query log is not searched. Requires &#x60;querylog:read&#x60;.
      * @endpoint get /api/clients/{clientId}/activity
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

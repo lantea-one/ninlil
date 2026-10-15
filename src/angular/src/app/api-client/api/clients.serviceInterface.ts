@@ -74,7 +74,7 @@ export interface ClientsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists known clients, one page at a time, optionally narrowed by favorite star (&#x60;isFavorite&#x60;), online or offline (&#x60;presence&#x60;) and registration time (&#x60;createdSinceUtc&#x60;), in the requested order (&#x60;sort&#x60;; creation order by default). Presence uses the online window at the moment of the request, the same cutoff each device\&#39;s Ninlil.Web.Models.ClientDetail.IsOnline uses. Filtering, ordering and paging run in the storage engine. Requires &#x60;clients:read&#x60;.
+     * This action lists known clients, one page at a time, optionally narrowed by favorite star (&#x60;isFavorite&#x60;), online or offline (&#x60;presence&#x60;) and registration time (&#x60;createdSinceUtc&#x60;), in the requested order (&#x60;sort&#x60;; creation order by default). Presence uses the online window at the moment of the request, the same cutoff each device\&#39;s Ninlil.Web.Models.ClientDetail.IsOnline uses. Filtering, ordering and paging run in the storage engine; each listed client\&#39;s addresses are then loaded one client at a time. Requires &#x60;clients:read&#x60;.
      * 
      * @endpoint get /api/clients
 * @param requestParameters
@@ -82,7 +82,7 @@ export interface ClientsServiceInterface {
     apiClientsGet(requestParameters: ApiClientsGetRequestParams, extraHttpRequestParams?: any): Observable<ClientDetailPagedResult>;
 
     /**
-     * This action deletes a known client and its addresses. Leases and DNS records the device holds are not affected; the registry only describes devices. Returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
+     * This action deletes a known client with its addresses, schedules, direct filter-list assignments and the rewrites scoped to it (its Safe Search overrides). Leases and DNS records the device holds are not affected; the registry only describes devices. Scoped rewrites are not cluster-synced. Returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * 
      * @endpoint delete /api/clients/{id}
 * @param requestParameters

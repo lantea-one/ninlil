@@ -1690,7 +1690,7 @@
         "tags": [
           "BlockedServices"
         ],
-        "summary": "This action disables one catalog entry. Without a target it deletes the entry's managed\nNinlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity and every client and client-group assignment that\nrefers to it (as M:Ninlil.Web.Controllers.FilterListsController.Delete(System.Guid,System.Threading.CancellationToken) does for group\nassignments). With a `clientId` or `clientGroupId` it removes only that\ntarget's assignment and leaves the list and every other target alone, so unblocking a\nservice for one device does not unblock it for everyone. Having nothing to remove is not\nan error. Returns 400 when both targets are given and 404 for an unknown key. Requires\n`filterlists:write`.",
+        "summary": "This action disables one catalog entry. Without a target it deletes the entry's managed\nNinlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity, its entries and every client and client-group\nassignment that refers to it (as M:Ninlil.Web.Controllers.FilterListsController.Delete(System.Guid,System.Threading.CancellationToken) does), and\ntells the cluster peers to delete the list too. With a `clientId` or\n`clientGroupId` it removes only that target's assignment, which stays on this node,\nand leaves the list and every other target alone, so unblocking a service for one\ndevice does not unblock it for everyone. Having nothing to remove is not\nan error. Returns 400 when both targets are given and 404 for an unknown key. Requires\n`filterlists:write`.",
         "parameters": [
           {
             "name": "key",
@@ -1887,7 +1887,7 @@
         "tags": [
           "ClientActivity"
         ],
-        "summary": "This action lists the query log entries attributed, when they were logged, to any of the\nclient's current addresses, newest first, one page at a time. Returns 404 for an unknown\nclient. Requires `querylog:read`.",
+        "summary": "This action lists the query log entries attributed, when they were logged, to any of the\nclient's current addresses, newest first, one page at a time. Returns 404 for an unknown\nclient. A client with no address has no attributable entries, so it gets an empty page\n(200, total count 0) and the query log is not searched. Requires `querylog:read`.",
         "parameters": [
           {
             "name": "clientId",
@@ -3907,7 +3907,7 @@
         "tags": [
           "ClientGroups"
         ],
-        "summary": "This action deletes a client group with its networks and filter-list assignments. They\nare removed explicitly rather than by a relational cascade delete, which MongoDB lacks,\nas M:Ninlil.Web.Controllers.ZonesController.Delete(System.Guid,System.Threading.CancellationToken) does. Returns 404 for an unknown id. Requires\n`clientgroups:write`.",
+        "summary": "This action deletes a client group with its networks, filter-list assignments,\nschedules and the rewrites scoped to it (its Safe Search overrides). Member clients are\nkept and released: their group is cleared, so network matching applies to them again.\nDependants are removed explicitly rather than by a relational cascade delete, which\nMongoDB lacks, as M:Ninlil.Web.Controllers.ZonesController.Delete(System.Guid,System.Threading.CancellationToken) does. Scoped rewrites are\ndeleted, never widened to global, and are not cluster-synced. Returns 404 for an\nunknown id. Requires `clientgroups:write`.",
         "parameters": [
           {
             "name": "id",
@@ -5093,7 +5093,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action lists known clients, one page at a time, optionally narrowed by favorite\nstar (`isFavorite`), online or offline (`presence`) and registration time\n(`createdSinceUtc`), in the requested order (`sort`; creation order by\ndefault). Presence uses the online window at the moment of the request, the same cutoff\neach device's Ninlil.Web.Models.ClientDetail.IsOnline uses. Filtering, ordering and paging\nrun in the storage engine. Requires `clients:read`.",
+        "summary": "This action lists known clients, one page at a time, optionally narrowed by favorite\nstar (`isFavorite`), online or offline (`presence`) and registration time\n(`createdSinceUtc`), in the requested order (`sort`; creation order by\ndefault). Presence uses the online window at the moment of the request, the same cutoff\neach device's Ninlil.Web.Models.ClientDetail.IsOnline uses. Filtering, ordering and paging\nrun in the storage engine; each listed client's addresses are then loaded one client at a\ntime. Requires `clients:read`.",
         "parameters": [
           {
             "name": "Skip",
@@ -6153,7 +6153,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action deletes a known client and its addresses. Leases and DNS records the device\nholds are not affected; the registry only describes devices. Returns 404 for an unknown\nid. Requires `clients:write`.",
+        "summary": "This action deletes a known client with its addresses, schedules, direct filter-list\nassignments and the rewrites scoped to it (its Safe Search overrides). Leases and DNS\nrecords the device holds are not affected; the registry only describes devices. Scoped\nrewrites are not cluster-synced. Returns 404 for an unknown id. Requires\n`clients:write`.",
         "parameters": [
           {
             "name": "id",
@@ -10588,7 +10588,7 @@
         "tags": [
           "DhcpScopes"
         ],
-        "summary": "This action replaces a DHCP scope's fields. Validation and errors are as for\nM:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires `dhcpscopes:write`.",
+        "summary": "This action replaces a DHCP scope's fields. Validation and errors are as for\nM:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id and 400 when the protocol version\ndiffers from the scope's (create a new scope instead). Renaming the scope moves its\nleases to the new name in the same save. Requires `dhcpscopes:write`.",
         "parameters": [
           {
             "name": "id",
@@ -10695,7 +10695,7 @@
         "tags": [
           "DhcpScopes"
         ],
-        "summary": "This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is\nunchanged, a JSON `null` clears a nullable field, and any other value replaces it.\nThe protocol version cannot be changed. The patched scope is checked as for\nM:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken). Requires `dhcpscopes:write`.",
+        "summary": "This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is\nunchanged, a JSON `null` clears a nullable field, and any other value replaces it.\nThe protocol version cannot be changed. The patched scope is checked as for\nM:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken); a lease duration must be a JSON string holding a positive\nduration (400 otherwise), and the range start must not be after the range end.\nRenaming the scope moves its leases to the new name in the same save. Requires `dhcpscopes:write`.",
         "parameters": [
           {
             "name": "id",
@@ -18127,7 +18127,7 @@
         "tags": [
           "FilterLists"
         ],
-        "summary": "This action deletes a list and the client-group assignments that refer to it (see\nNinlil.Web.Controllers.ClientGroupListAssignmentsController). Ninlil.Dns.Server.Filtering.DnsFilterEngine\nwould skip a missing list anyway, but the assignments are removed so join rows do not\npile up. The list's entries and any direct client assignments are not removed. Returns\n404 for an unknown id. Requires `filterlists:write`.",
+        "summary": "This action deletes a list together with its entries and every assignment that refers\nto it: client-group assignments (see Ninlil.Web.Controllers.ClientGroupListAssignmentsController)\nand direct client assignments (see Ninlil.Web.Controllers.ClientListAssignmentsController).\nNothing is left behind. The removal runs in one transaction on the relational engines.\nReturns 404 for an unknown id. Requires `filterlists:write`.",
         "parameters": [
           {
             "name": "id",
@@ -28252,7 +28252,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action replaces a record's fields, keeping its id. Returns 400 when the data does\nnot fit the record type and 404 when the record does not exist or belongs to another\nzone. Requires `zones:write`.",
+        "summary": "This action replaces a record's fields, keeping its id. Returns 400 when the data does\nnot fit the record type and 404 when the record does not exist or belongs to another\nzone, and 409 when the edit would change the type to or from SOA or rename\nthe SOA record (a zone has exactly one SOA). Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -30321,7 +30321,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a\nJSON `null` clears a nullable field, and any other value replaces it. Changing\n`type` without new `data` re-checks the existing data against the new type and\nreturns 400 if it does not fit. Requires `zones:write`.",
+        "summary": "This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a\nJSON `null` clears a nullable field, and any other value replaces it. Changing\n`type` without new `data` re-checks the existing data against the new type and\nreturns 400 if it does not fit, and 409 when the patch would change the type to or\nfrom SOA or rename the SOA record. Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -31502,7 +31502,7 @@
         "tags": [
           "SafeSearch"
         ],
-        "summary": "This action enables one catalog entry: for each hostname mapping it creates a rewrite in\nthe requested scope, or re-enables a disabled one. It also turns the rewrite engine on\nif it was off, whatever the scope. Returns 400 when both targets are given or the target\ndoes not exist, 404 for an unknown key, and 409, with nothing written, when a mapping's\nhostname already has a different CNAME rewrite in the same scope; every mapping is\nchecked before anything is written. Requires `dnsrewrites:write`.",
+        "summary": "This action enables one catalog entry: for each hostname mapping it creates a rewrite in\nthe requested scope, or re-enables a disabled one. It also turns the rewrite engine on\nif it was off, whatever the scope. Returns 400 when both targets are given or the target\ndoes not exist, 404 for an unknown key, and 409, with nothing written, when a mapping's\nhostname already has a different CNAME rewrite in the same scope; every mapping is\nchecked before anything is written. Global rewrites that are created or re-enabled are\nreplicated to cluster peers; scoped ones are not. Requires `dnsrewrites:write`.",
         "parameters": [
           {
             "name": "key",
@@ -31580,7 +31580,7 @@
         "tags": [
           "SafeSearch"
         ],
-        "summary": "This action disables one catalog entry: it removes every rewrite in the requested scope\nwhose domain and target match one of the entry's mappings, including an identical one an\noperator configured by hand, and leaves other scopes alone. It does not turn the rewrite\nengine off. Having nothing to remove, or naming a target that does not exist, is not an\nerror. Returns 400 when both targets are given and 404 for an unknown key. Requires\n`dnsrewrites:write`.",
+        "summary": "This action disables one catalog entry: it removes every rewrite in the requested scope\nwhose domain and target match one of the entry's mappings, including an identical one an\noperator configured by hand, and leaves other scopes alone. It does not turn the rewrite\nengine off. Having nothing to remove, or naming a target that does not exist, is not an\nerror. Removing global rewrites tells the cluster peers to delete them too; removing\nscoped ones does not. Returns 400 when both targets are given and 404 for an unknown\nkey. Requires `dnsrewrites:write`.",
         "parameters": [
           {
             "name": "key",
@@ -32115,7 +32115,7 @@
         "tags": [
           "Services"
         ],
-        "summary": "This action starts one service now: it binds a transport's socket or resumes a\nbackground loop. It does not check whether the service is already running; the service's\nstart logic is called either way. Returns 404 for an unknown name. Requires\n`services:manage`.",
+        "summary": "This action starts one service now: it binds a transport's socket or resumes a\nbackground loop. Starting a service that is already running returns its state and changes\nnothing. A service that was started but is down, such as a transport that declined to\nbind, is stopped and started again, which retries it. Returns 404 for an unknown name. Requires\n`services:manage`.",
         "parameters": [
           {
             "name": "name",

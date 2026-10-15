@@ -123,7 +123,7 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
     }
 
     /**
-     * This action disables one catalog entry: it removes every rewrite in the requested scope whose domain and target match one of the entry\&#39;s mappings, including an identical one an operator configured by hand, and leaves other scopes alone. It does not turn the rewrite engine off. Having nothing to remove, or naming a target that does not exist, is not an error. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;dnsrewrites:write&#x60;.
+     * This action disables one catalog entry: it removes every rewrite in the requested scope whose domain and target match one of the entry\&#39;s mappings, including an identical one an operator configured by hand, and leaves other scopes alone. It does not turn the rewrite engine off. Having nothing to remove, or naming a target that does not exist, is not an error. Removing global rewrites tells the cluster peers to delete them too; removing scoped ones does not. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;dnsrewrites:write&#x60;.
      * @endpoint delete /api/safe-search/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -205,7 +205,7 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
     }
 
     /**
-     * This action enables one catalog entry: for each hostname mapping it creates a rewrite in the requested scope, or re-enables a disabled one. It also turns the rewrite engine on if it was off, whatever the scope. Returns 400 when both targets are given or the target does not exist, 404 for an unknown key, and 409, with nothing written, when a mapping\&#39;s hostname already has a different CNAME rewrite in the same scope; every mapping is checked before anything is written. Requires &#x60;dnsrewrites:write&#x60;.
+     * This action enables one catalog entry: for each hostname mapping it creates a rewrite in the requested scope, or re-enables a disabled one. It also turns the rewrite engine on if it was off, whatever the scope. Returns 400 when both targets are given or the target does not exist, 404 for an unknown key, and 409, with nothing written, when a mapping\&#39;s hostname already has a different CNAME rewrite in the same scope; every mapping is checked before anything is written. Global rewrites that are created or re-enabled are replicated to cluster peers; scoped ones are not. Requires &#x60;dnsrewrites:write&#x60;.
      * @endpoint post /api/safe-search/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

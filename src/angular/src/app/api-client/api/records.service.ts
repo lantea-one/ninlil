@@ -263,7 +263,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
-     * This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Changing &#x60;type&#x60; without new &#x60;data&#x60; re-checks the existing data against the new type and returns 400 if it does not fit. Requires &#x60;zones:write&#x60;.
+     * This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Changing &#x60;type&#x60; without new &#x60;data&#x60; re-checks the existing data against the new type and returns 400 if it does not fit, and 409 when the patch would change the type to or from SOA or rename the SOA record. Requires &#x60;zones:write&#x60;.
      * @endpoint patch /api/zones/{zoneId}/records/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -339,7 +339,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
-     * This action replaces a record\&#39;s fields, keeping its id. Returns 400 when the data does not fit the record type and 404 when the record does not exist or belongs to another zone. Requires &#x60;zones:write&#x60;.
+     * This action replaces a record\&#39;s fields, keeping its id. Returns 400 when the data does not fit the record type and 404 when the record does not exist or belongs to another zone, and 409 when the edit would change the type to or from SOA or rename the SOA record (a zone has exactly one SOA). Requires &#x60;zones:write&#x60;.
      * @endpoint put /api/zones/{zoneId}/records/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

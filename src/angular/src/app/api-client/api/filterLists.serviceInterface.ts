@@ -60,7 +60,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsGet(requestParameters: ApiFilterListsGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListDetailPagedResult>;
 
     /**
-     * This action deletes a list and the client-group assignments that refer to it (see Ninlil.Web.Controllers.ClientGroupListAssignmentsController). Ninlil.Dns.Server.Filtering.DnsFilterEngine would skip a missing list anyway, but the assignments are removed so join rows do not pile up. The list\&#39;s entries and any direct client assignments are not removed. Returns 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
+     * This action deletes a list together with its entries and every assignment that refers to it: client-group assignments (see Ninlil.Web.Controllers.ClientGroupListAssignmentsController) and direct client assignments (see Ninlil.Web.Controllers.ClientListAssignmentsController). Nothing is left behind. The removal runs in one transaction on the relational engines. Returns 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint delete /api/filter-lists/{id}
 * @param requestParameters

@@ -50,7 +50,7 @@ export interface ServicesServiceInterface {
     apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, extraHttpRequestParams?: any): Observable<ManagedServiceSummary>;
 
     /**
-     * This action starts one service now: it binds a transport\&#39;s socket or resumes a background loop. It does not check whether the service is already running; the service\&#39;s start logic is called either way. Returns 404 for an unknown name. Requires &#x60;services:manage&#x60;.
+     * This action starts one service now: it binds a transport\&#39;s socket or resumes a background loop. Starting a service that is already running returns its state and changes nothing. A service that was started but is down, such as a transport that declined to bind, is stopped and started again, which retries it. Returns 404 for an unknown name. Requires &#x60;services:manage&#x60;.
      * 
      * @endpoint post /api/services/{name}/start
 * @param requestParameters

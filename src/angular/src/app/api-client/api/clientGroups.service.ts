@@ -134,7 +134,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action deletes a client group with its networks and filter-list assignments. They are removed explicitly rather than by a relational cascade delete, which MongoDB lacks, as M:Ninlil.Web.Controllers.ZonesController.Delete(System.Guid,System.Threading.CancellationToken) does. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
+     * This action deletes a client group with its networks, filter-list assignments, schedules and the rewrites scoped to it (its Safe Search overrides). Member clients are kept and released: their group is cleared, so network matching applies to them again. Dependants are removed explicitly rather than by a relational cascade delete, which MongoDB lacks, as M:Ninlil.Web.Controllers.ZonesController.Delete(System.Guid,System.Threading.CancellationToken) does. Scoped rewrites are deleted, never widened to global, and are not cluster-synced. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint delete /api/client-groups/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -254,7 +254,7 @@ export class DhcpScopesService extends BaseService implements DhcpScopesServiceI
     }
 
     /**
-     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken). Requires &#x60;dhcpscopes:write&#x60;.
+     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken); a lease duration must be a JSON string holding a positive duration (400 otherwise), and the range start must not be after the range end. Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint patch /api/dhcp-scopes/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -326,7 +326,7 @@ export class DhcpScopesService extends BaseService implements DhcpScopesServiceI
     }
 
     /**
-     * This action replaces a DHCP scope\&#39;s fields. Validation and errors are as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action replaces a DHCP scope\&#39;s fields. Validation and errors are as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id and 400 when the protocol version differs from the scope\&#39;s (create a new scope instead). Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint put /api/dhcp-scopes/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
