@@ -227,6 +227,28 @@ public class ZoneTransferResponseAssemblerTests
     }
 
     [Fact]
+    public void AddMessage_AnIncrementalStep_KeepsTheStepsNewSoaRecord()
+    {
+        ZoneTransferResponseAssembler assembler = new(10);
+        DnsResourceRecord newSoa = Soa(11);
+
+        // Leading SOA 11, then the step: old SOA 10, removed record, new SOA 11, added record, closing SOA 11.
+        Assert.Null(
+            assembler.AddMessage([
+                Soa(11),
+                Soa(10),
+                A("gone.example.test.", "192.0.2.9"),
+                newSoa,
+                A("new.example.test.", "192.0.2.10"),
+                Soa(11),
+            ])
+        );
+
+        ZoneTransferDiffStep step = Assert.Single(assembler.BuildResult().DiffSteps);
+        Assert.Equal(newSoa, step.NewSoa);
+    }
+
+    [Fact]
     public void AddMessage_AnIncrementalAnswerOverSeveralMessages_CompletesAtTheLastOne()
     {
         ZoneTransferResponseAssembler assembler = new(10);

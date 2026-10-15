@@ -36,13 +36,19 @@ public sealed class SecondaryZoneExpiryTests
 
     /// <summary>
     ///     This class is a transfer client for the Plain transport whose primary the test controls:
-    ///     the SOA serial it reports (or <see langword="null" /> for an unreachable primary). A pull
-    ///     is never needed because the reported serial never exceeds the local one.
+    ///     the SOA serial it reports (or <see langword="null" /> for an unreachable primary) and the
+    ///     result of a pull. Most tests never pull because the reported serial does not exceed the
+    ///     local one; the SOA transfer tests set <see cref="PullResult" /> to what the primary sends.
     /// </summary>
     private sealed class ScriptedZoneTransferClient : IZoneTransferClient
     {
         /// <summary>The serial the primary reports, or <see langword="null" /> when unreachable.</summary>
         public uint? SoaSerial { get; set; }
+
+        /// <summary>
+        ///     The result every pull returns, or <see langword="null" /> for a failed pull.
+        /// </summary>
+        public ZoneTransferPullResult PullResult { get; set; }
 
         /// <inheritdoc />
         public ZoneTransferTransportEnum Transport => ZoneTransferTransportEnum.Plain;
@@ -62,7 +68,10 @@ public sealed class SecondaryZoneExpiryTests
             uint? currentSerial,
             string tsigKeyName,
             CancellationToken stoppingToken = default
-        ) => Task.FromResult(ZoneTransferPullResult.Failure("The scripted client does not pull."));
+        ) =>
+            Task.FromResult(
+                PullResult ?? ZoneTransferPullResult.Failure("The scripted client does not pull.")
+            );
     }
 
     /// <summary>
@@ -337,6 +346,38 @@ public sealed class SecondaryZoneExpiryTests
         public Task<DnsMessage> QueryWwwAsync() =>
             _host.QueryAsync($"www.{ZoneName}", DnsResourceRecordTypeEnum.A);
 
+        /// <summary>
+        ///     This method resolves the zone's SOA query and decodes the answer. The zone cache reloads
+        ///     from a <c>DnsZoneChangedEvent</c> that a background dispatcher delivers after the
+        ///     transfer is saved, so the call polls (at most 10 s) until the served serial is the
+        ///     expected one; it returns the last answer when it never is, and the caller's assertions
+        ///     then name the difference.
+        /// </summary>
+        /// <param name="expectedSerial">The serial the secondary should serve after the pass.</param>
+        /// <returns>The served SOA data and the answer record's TTL.</returns>
+        public async Task<(SoaRecordData Data, uint Ttl)> QueryServedSoaAsync(uint expectedSerial)
+        {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            while (true)
+            {
+                DnsMessage response = await _host.QueryAsync(
+                    ZoneName,
+                    DnsResourceRecordTypeEnum.Soa
+                );
+                DnsResourceRecord answer = Assert.Single(
+                    response.Answers,
+                    record => record.Type == DnsResourceRecordTypeEnum.Soa
+                );
+                SoaRecordData data = Assert.IsType<SoaRecordData>(
+                    DnsRecordDataCodecRegistry.Decode(answer.Type, answer.Data)
+                );
+                if (data.Serial == expectedSerial || timeout.IsCancellationRequested)
+                    return (data, answer.TimeToLive);
+
+                await Task.Delay(20);
+            }
+        }
+
         /// <summary>This method resolves one query in the host.</summary>
         public Task<DnsMessage> QueryAsync(string name) =>
             _host.QueryAsync(name, DnsResourceRecordTypeEnum.A);
@@ -604,42 +645,157 @@ public sealed class SecondaryZoneExpiryTests
     }
 
     /// <summary>
-    ///     The expiry after a success is computed from the SOA the zone holds then: with the Expire
-    ///     field changed to 60 s the next expiry is 60 s after the refresh. The test edits the stored
-    ///     SOA row, which stands for any change of the local SOA (an operator edit of the SOA record).
+    ///     This method builds the primary's SOA record for <see cref="ZoneName" />.
+    /// </summary>
+    private static DnsResourceRecord PrimarySoa(
+        uint serial,
+        uint refresh = 600,
+        uint retry = 120,
+        uint expire = 3600,
+        uint minimum = 300,
+        string mailbox = "admin",
+        uint ttl = 300
+    ) =>
+        new(
+            DnsName.Parse(ZoneName),
+            DnsResourceRecordTypeEnum.Soa,
+            DnsClassEnum.Internet,
+            ttl,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.Soa,
+                new SoaRecordData(
+                    DnsName.Parse($"ns1.{ZoneName}"),
+                    DnsName.Parse($"{mailbox}.{ZoneName}"),
+                    serial,
+                    refresh,
+                    retry,
+                    expire,
+                    minimum
+                )
+            )
+        );
+
+    /// <summary>
+    ///     This method builds the <c>www</c> A record the zone is seeded with, as the primary sends it.
+    /// </summary>
+    private static DnsResourceRecord PrimaryWww() =>
+        new(
+            DnsName.Parse($"www.{ZoneName}"),
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            300,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.A,
+                new ARecordData(IPAddress.Parse("192.0.2.10"))
+            )
+        );
+
+    /// <summary>
+    ///     After a full transfer whose SOA has new Refresh, Retry, Expire, Minimum, mailbox and TTL
+    ///     values, the secondary serves exactly that SOA (all seven fields and the TTL), not the SOA it
+    ///     had at its first transfer.
     /// </summary>
     [Fact]
-    public async Task Pass_AfterTheLocalSoaExpireChanges_UsesTheNewExpire()
+    public async Task Pass_AfterAFullTransferWithChangedSoaFields_ServesThePrimarysSoa()
     {
         await using Harness harness = await Harness.CreateAsync();
         await harness.StartAsync();
-        await using (AsyncServiceScope scope = harness.Services.CreateAsyncScope())
-        {
-            IRecordRepository records =
-                scope.ServiceProvider.GetRequiredService<IRecordRepository>();
-            RecordEntity soa = (
-                await records.FindByNameAsync(
-                    harness.ZoneId,
-                    ZoneName,
-                    DnsResourceRecordTypeEnum.Soa
-                )
-            ).Single();
-            soa.DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
-                new SoaRecordData(
-                    DnsName.Parse($"ns1.{ZoneName}"),
-                    DnsName.Parse($"admin.{ZoneName}"),
-                    1,
-                    600,
-                    120,
-                    60,
-                    300
-                )
-            );
-            records.Update(soa);
-            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
-        }
+        harness.Primary.SoaSerial = 2;
+        harness.Primary.PullResult = ZoneTransferPullResult.Full(
+            2,
+            [PrimarySoa(2, 1000, 200, 7200, 900, "hostmaster", 1800), PrimaryWww()]
+        );
 
-        harness.Primary.SoaSerial = 1;
+        await harness.PassAsync();
+
+        (SoaRecordData soa, uint ttl) = await harness.QueryServedSoaAsync(2);
+        Assert.Equal(DnsName.Parse($"ns1.{ZoneName}"), soa.PrimaryNameServer);
+        Assert.Equal(DnsName.Parse($"hostmaster.{ZoneName}"), soa.ResponsiblePersonMailbox);
+        Assert.Equal(2u, soa.Serial);
+        Assert.Equal(1000u, soa.RefreshSeconds);
+        Assert.Equal(200u, soa.RetrySeconds);
+        Assert.Equal(7200u, soa.ExpireSeconds);
+        Assert.Equal(900u, soa.MinimumTtlSeconds);
+        Assert.Equal(1800u, ttl);
+        Assert.Equal(DnsResponseCodeEnum.NoError, (await harness.QueryWwwAsync()).ResponseCode);
+    }
+
+    /// <summary>
+    ///     The same holds for an incremental transfer: the step's new SOA replaces the stored one, and
+    ///     the records the step adds arrive with it.
+    /// </summary>
+    [Fact]
+    public async Task Pass_AfterAnIncrementalTransferWithChangedSoaFields_ServesThePrimarysSoa()
+    {
+        await using Harness harness = await Harness.CreateAsync();
+        await harness.StartAsync();
+        harness.Primary.SoaSerial = 2;
+        harness.Primary.PullResult = ZoneTransferPullResult.Incremental(
+            2,
+            [
+                new ZoneTransferDiffStep(
+                    1,
+                    [],
+                    2,
+                    [],
+                    PrimarySoa(2, 1000, 200, 7200, 900, "hostmaster", 1800)
+                ),
+            ]
+        );
+
+        await harness.PassAsync();
+
+        (SoaRecordData soa, uint ttl) = await harness.QueryServedSoaAsync(2);
+        Assert.Equal(DnsName.Parse($"hostmaster.{ZoneName}"), soa.ResponsiblePersonMailbox);
+        Assert.Equal(2u, soa.Serial);
+        Assert.Equal(1000u, soa.RefreshSeconds);
+        Assert.Equal(200u, soa.RetrySeconds);
+        Assert.Equal(7200u, soa.ExpireSeconds);
+        Assert.Equal(900u, soa.MinimumTtlSeconds);
+        Assert.Equal(1800u, ttl);
+    }
+
+    /// <summary>
+    ///     A transfer whose SOA differs from the stored one only in the serial leaves every other
+    ///     field and the TTL as they were.
+    /// </summary>
+    [Fact]
+    public async Task Pass_AfterATransferThatOnlyBumpsTheSerial_KeepsTheOtherSoaFields()
+    {
+        await using Harness harness = await Harness.CreateAsync();
+        await harness.StartAsync();
+        harness.Primary.SoaSerial = 2;
+        harness.Primary.PullResult = ZoneTransferPullResult.Full(2, [PrimarySoa(2), PrimaryWww()]);
+
+        await harness.PassAsync();
+
+        (SoaRecordData soa, uint ttl) = await harness.QueryServedSoaAsync(2);
+        Assert.Equal(2u, soa.Serial);
+        Assert.Equal(600u, soa.RefreshSeconds);
+        Assert.Equal(120u, soa.RetrySeconds);
+        Assert.Equal(3600u, soa.ExpireSeconds);
+        Assert.Equal(300u, soa.MinimumTtlSeconds);
+        Assert.Equal(DnsName.Parse($"admin.{ZoneName}"), soa.ResponsiblePersonMailbox);
+        Assert.Equal(300u, ttl);
+    }
+
+    /// <summary>
+    ///     The expiry after a success is computed from the SOA the zone holds then. The primary
+    ///     changes the Expire field to 60 s and bumps the serial; after the transfer the next expiry is
+    ///     60 s after the refresh (through a full transfer here; the incremental form is covered by
+    ///     <see cref="Pass_AfterAnIncrementalTransferWithChangedSoaFields_ServesThePrimarysSoa" />).
+    /// </summary>
+    [Fact]
+    public async Task Pass_AfterThePrimaryChangesTheExpire_UsesTheNewExpire()
+    {
+        await using Harness harness = await Harness.CreateAsync();
+        await harness.StartAsync();
+        harness.Primary.SoaSerial = 2;
+        harness.Primary.PullResult = ZoneTransferPullResult.Full(
+            2,
+            [PrimarySoa(2, expire: 60), PrimaryWww()]
+        );
+
         await harness.PassAsync();
 
         Assert.Equal(
