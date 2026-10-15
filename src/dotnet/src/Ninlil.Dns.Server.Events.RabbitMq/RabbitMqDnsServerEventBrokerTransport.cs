@@ -79,8 +79,21 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                 TaskCreationOptions.RunContinuationsAsynchronously
             );
 
+            // Declared before the try so the finally can close whatever was opened, including
+            // when the exchange declaration or the handler wiring fails half way.
+            IConnection connection = null;
+            IChannel publishChannel = null;
+            AsyncEventHandler<ShutdownEventArgs> shutdownHandler = (_, _) =>
+            {
+                connectionLost.TrySetResult(true);
+                return Task.CompletedTask;
+            };
+
             try
             {
+                // This loop owns reconnection. With the library's automatic recovery on, a
+                // connection this loop abandoned would reconnect by itself and stay open next to
+                // the loop's new connection, untracked and never disposed.
                 ConnectionFactory factory = new()
                 {
                     HostName = _options.HostName,
@@ -88,10 +101,13 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                     UserName = _options.UserName,
                     Password = _options.Password,
                     VirtualHost = _options.VirtualHost,
+                    AutomaticRecoveryEnabled = false,
+                    TopologyRecoveryEnabled = false,
                 };
 
-                IConnection connection = await factory.CreateConnectionAsync(stoppingToken);
-                IChannel publishChannel = await connection.CreateChannelAsync(
+                connection = await factory.CreateConnectionAsync(stoppingToken);
+                connection.ConnectionShutdownAsync += shutdownHandler;
+                publishChannel = await connection.CreateChannelAsync(
                     cancellationToken: stoppingToken
                 );
 
@@ -102,12 +118,6 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                     autoDelete: false,
                     cancellationToken: stoppingToken
                 );
-
-                connection.ConnectionShutdownAsync += (_, _) =>
-                {
-                    connectionLost.TrySetResult(true);
-                    return Task.CompletedTask;
-                };
 
                 lock (_connectionLock)
                 {
@@ -151,6 +161,8 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                     _publishChannel = null;
                     _connection = null;
                 }
+
+                await CloseAsync(publishChannel, connection, shutdownHandler);
             }
 
             if (stoppingToken.IsCancellationRequested)
@@ -166,6 +178,44 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
             }
 
             delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, _options.MaxReconnectDelay.Ticks));
+        }
+    }
+
+    // Disposes the channel, then the connection, each in its own try so one failure cannot skip
+    // the other. A connection the broker already closed throws on dispose; that is expected.
+    // Closing the connection also makes the broker delete the exclusive, auto-delete queue of any
+    // consumer that used it (AMQP 0-9-1), so the old consumer disappears with it.
+    private async Task CloseAsync(
+        IChannel channel,
+        IConnection connection,
+        AsyncEventHandler<ShutdownEventArgs> shutdownHandler
+    )
+    {
+        if (connection is not null)
+            connection.ConnectionShutdownAsync -= shutdownHandler;
+
+        if (channel is not null)
+        {
+            try
+            {
+                await channel.DisposeAsync();
+            }
+            catch (Exception exception)
+            {
+                logger.LogDebug(exception, "Disposing a RabbitMQ channel failed.");
+            }
+        }
+
+        if (connection is not null)
+        {
+            try
+            {
+                await connection.DisposeAsync();
+            }
+            catch (Exception exception)
+            {
+                logger.LogDebug(exception, "Disposing a RabbitMQ connection failed.");
+            }
         }
     }
 
@@ -223,6 +273,14 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                 TaskCreationOptions.RunContinuationsAsynchronously
             );
 
+            // Kept in a local so the finally can remove it: an iteration that fails without a
+            // connection loss retries on the same connection and must not stack handlers.
+            AsyncEventHandler<ShutdownEventArgs> shutdownHandler = (_, _) =>
+            {
+                connectionLost.TrySetResult(true);
+                return Task.CompletedTask;
+            };
+
             try
             {
                 // The channel must be disposed whenever this iteration ends (cancellation, a
@@ -277,11 +335,7 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                     }
                 };
 
-                connection.ConnectionShutdownAsync += (_, _) =>
-                {
-                    connectionLost.TrySetResult(true);
-                    return Task.CompletedTask;
-                };
+                connection.ConnectionShutdownAsync += shutdownHandler;
 
                 await consumeChannel.BasicConsumeAsync(
                     queue.QueueName,
@@ -319,6 +373,10 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                 {
                     break;
                 }
+            }
+            finally
+            {
+                connection.ConnectionShutdownAsync -= shutdownHandler;
             }
         }
     }
