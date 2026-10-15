@@ -1,3 +1,4 @@
+using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
 
 // Define our namespace.
@@ -29,6 +30,12 @@ public interface IZoneUpdateService
     ///     applying a transfer passes the primary's serial so the two stay equal.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <param name="replacementSoa">
+    ///     The primary's SOA record after the change, or <see langword="null" /> to keep the
+    ///     stored SOA's fields. A secondary applying a transfer passes it so the stored SOA (all
+    ///     seven fields and the TTL) equals the primary's; the serial is still
+    ///     <paramref name="explicitNewSerial" /> when that is set.
+    /// </param>
     /// <exception cref="InvalidOperationException">
     ///     Thrown when <paramref name="zoneId" /> does not name an existing zone, or that zone
     ///     has no SOA record to advance.
@@ -38,7 +45,8 @@ public interface IZoneUpdateService
         IReadOnlyList<RecordEntity> recordsToAdd,
         IReadOnlyList<RecordEntity> recordsToRemove,
         uint? explicitNewSerial = null,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        DnsResourceRecord replacementSoa = null
     );
 
     /// <summary>

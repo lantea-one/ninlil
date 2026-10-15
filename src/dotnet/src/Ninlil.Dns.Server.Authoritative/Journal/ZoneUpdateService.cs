@@ -1,4 +1,5 @@
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -38,7 +39,8 @@ public class ZoneUpdateService(
         IReadOnlyList<RecordEntity> recordsToAdd,
         IReadOnlyList<RecordEntity> recordsToRemove,
         uint? explicitNewSerial = null,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        DnsResourceRecord replacementSoa = null
     )
     {
         // Hold the zone's lock from reading the SOA to saving, or a concurrent change could
@@ -65,7 +67,8 @@ public class ZoneUpdateService(
             newSerial,
             recordsToAdd,
             recordsToRemove,
-            stoppingToken
+            stoppingToken,
+            replacementSoa
         );
     }
 
@@ -281,7 +284,8 @@ public class ZoneUpdateService(
     /// <summary>
     ///     This method finishes a change: it writes the new serial into the SOA, adds the journal
     ///     entry, saves everything in one <see cref="IUnitOfWork.SaveChangesAsync" /> call and
-    ///     then publishes <see cref="DnsZoneChangedEvent" />.
+    ///     then publishes <see cref="DnsZoneChangedEvent" />. When <paramref name="replacementSoa" />
+    ///     is set, the SOA's other fields and its TTL are replaced by that record's too.
     /// </summary>
     private async Task FinalizeChangeAsync(
         ZoneEntity zone,
@@ -290,13 +294,28 @@ public class ZoneUpdateService(
         long newSerial,
         IReadOnlyList<RecordEntity> added,
         IReadOnlyList<RecordEntity> removed,
-        CancellationToken stoppingToken
+        CancellationToken stoppingToken,
+        DnsResourceRecord replacementSoa = null
     )
     {
         if (RecordEntityCodec.DecodeTypedData(soaRecord) is not SoaRecordData soaData)
             throw new InvalidOperationException(
                 $"Zone '{zone.Name}' has an SOA record that could not be decoded."
             );
+
+        if (replacementSoa is not null)
+        {
+            // The stored SOA must equal the primary's (RFC 1034 §4.3.5), so its data and TTL come
+            // from the transferred record. The serial below stays the caller's explicit one.
+            RecordEntity replacement = RecordEntityCodec.FromWireRecord(replacementSoa, zone.Id);
+            if (RecordEntityCodec.DecodeTypedData(replacement) is not SoaRecordData replacementData)
+                throw new InvalidOperationException(
+                    $"The replacement SOA for zone '{zone.Name}' could not be decoded."
+                );
+
+            soaData = replacementData;
+            soaRecord.TimeToLiveSeconds = replacement.TimeToLiveSeconds;
+        }
 
         soaRecord.DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
             soaData with

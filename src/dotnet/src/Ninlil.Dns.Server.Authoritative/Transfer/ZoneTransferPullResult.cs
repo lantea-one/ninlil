@@ -13,11 +13,17 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 /// <param name="Removed">The records this step removes.</param>
 /// <param name="NewSerial">The serial this step ends at.</param>
 /// <param name="Added">The records this step adds.</param>
+/// <param name="NewSoa">
+///     The SOA record that opens the step's added section (the primary's SOA at
+///     <paramref name="NewSerial" />), or <see langword="null" /> when the producer did not keep it.
+///     A secondary stores it so its SOA fields follow the primary's.
+/// </param>
 public sealed record ZoneTransferDiffStep(
     uint OldSerial,
     IReadOnlyList<DnsResourceRecord> Removed,
     uint NewSerial,
-    IReadOnlyList<DnsResourceRecord> Added
+    IReadOnlyList<DnsResourceRecord> Added,
+    DnsResourceRecord NewSoa = null
 );
 
 /// <summary>

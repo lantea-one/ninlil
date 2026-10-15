@@ -81,6 +81,9 @@ internal sealed class ZoneTransferResponseAssembler(uint? requestedSerial)
     /// <summary>The open step's added records.</summary>
     private List<DnsResourceRecord> stepAdded = [];
 
+    /// <summary>The open step's new SOA record, which carries the primary's SOA fields.</summary>
+    private DnsResourceRecord stepNewSoa;
+
     /// <summary>
     ///     This property is true once the closing SOA, or an IXFR "up to date" single SOA, has
     ///     been read.
@@ -233,6 +236,7 @@ internal sealed class ZoneTransferResponseAssembler(uint? requestedSerial)
                 }
 
                 stepNewSerial = serial;
+                stepNewSoa = record;
                 phase = Phase.Added;
                 return null;
 
@@ -247,7 +251,13 @@ internal sealed class ZoneTransferResponseAssembler(uint? requestedSerial)
                 // a valid chain never repeats it before its end; any other serial is the old SOA
                 // of the next step.
                 steps.Add(
-                    new ZoneTransferDiffStep(stepOldSerial, stepRemoved, stepNewSerial, stepAdded)
+                    new ZoneTransferDiffStep(
+                        stepOldSerial,
+                        stepRemoved,
+                        stepNewSerial,
+                        stepAdded,
+                        stepNewSoa
+                    )
                 );
                 stepRemoved = [];
                 stepAdded = [];

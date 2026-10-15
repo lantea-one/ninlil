@@ -714,7 +714,10 @@ public sealed class SecondaryZoneRefreshService(
                     toAdd,
                     toRemove,
                     step.NewSerial,
-                    stoppingToken
+                    stoppingToken,
+                    // The step's new SOA carries the primary's Refresh, Retry, Expire, Minimum, names
+                    // and TTL; without it the stored SOA would keep its first values forever.
+                    step.NewSoa
                 );
             }
         }
@@ -725,8 +728,9 @@ public sealed class SecondaryZoneRefreshService(
                 stoppingToken
             );
 
-            // Leave the SOA out of the diff: ApplyChangesAsync sets the existing SOA to
-            // explicitNewSerial, and adding the incoming SOA would duplicate it.
+            // Leave the SOA out of the diff: adding the incoming SOA would duplicate the stored one.
+            // It goes to ApplyChangesAsync as the replacement SOA instead, so the stored SOA takes
+            // all of the primary's fields and its TTL (RFC 1034 §4.3.5), not only the serial.
             List<(RecordEntity Entity, DnsResourceRecord Wire)> currentNonSoa =
             [
                 .. currentRecords
@@ -769,7 +773,10 @@ public sealed class SecondaryZoneRefreshService(
                 toAdd,
                 toRemove,
                 pullResult.FinalSerial,
-                stoppingToken
+                stoppingToken,
+                pullResult.FullRecordSet.FirstOrDefault(record =>
+                    record.Type == DnsResourceRecordTypeEnum.Soa
+                )
             );
         }
 
