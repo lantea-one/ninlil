@@ -13,8 +13,12 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 /// <summary>
 ///     This class tests the RFC 1035 §4.2.2 framing and the full, incremental and already-current
 ///     result detection that the <see cref="IZoneTransferClient" />s share through
-///     <c>ZoneTransferPullCodec</c>. It goes through <see cref="TcpZoneTransferClient.PullAsync" />, the
-///     plain TCP transport, against a loopback TCP listener acting as the primary.
+///     <c>ZoneTransferPullCodec</c> and <c>ZoneTransferPullOverStream</c>, including that a pull ends
+///     at the closing SOA (RFC 5936 §2.2, RFC 1995 §4) and that a cut or malformed answer fails. It
+///     goes through <see cref="TcpZoneTransferClient.PullAsync" />, the plain TCP transport, against
+///     a loopback TCP listener on an OS-assigned port acting as the primary. The "kept open" tests
+///     use a primary that never closes, so a pull that waited for the close would run into the
+///     read timeout (30 s) and the 10 s test token.
 /// </summary>
 public class ZoneTransferPullCodecTests
 {
@@ -127,32 +131,39 @@ public class ZoneTransferPullCodecTests
         );
 
     /// <summary>
-    ///     This method starts a real loopback TCP listener, accepts one connection, reads
-    ///     the framed query <see cref="TcpZoneTransferClient" /> sends (discarded -- these tests
-    ///     only care about the response side), and writes back <paramref name="answers" /> as a
-    ///     single, real, RFC 1035 §4.2.2-framed transfer response message. Single-message only --
-    ///     see the multi-message overload below for a scenario that needs a genuine completion
-    ///     bookend SOA, which this project's server never emits in a single-message response
-    ///     (<c>ZoneTransferService</c>'s producer gates that append on <c>chunks.Count &gt; 1</c>).
+    ///     This method starts a loopback TCP primary that answers with <paramref name="answers" />
+    ///     as one framed message; see the overload below.
     /// </summary>
     private static Task<int> StartFakePrimaryAsync(
         List<DnsResourceRecord> answers,
-        CancellationToken stoppingToken
-    ) => StartFakePrimaryAsync([answers], stoppingToken);
+        CancellationToken stoppingToken,
+        bool keepConnectionOpen = false
+    ) => StartFakePrimaryAsync([answers], stoppingToken, keepConnectionOpen);
 
     /// <summary>
-    ///     This method starts a real loopback TCP listener, accepts one connection, reads
-    ///     the framed query <see cref="TcpZoneTransferClient" /> sends (discarded -- these tests
-    ///     only care about the response side), and writes back each entry of
-    ///     <paramref name="messages" /> as its separate, real, RFC 1035 §4.2.2-framed transfer
-    ///     response message -- a genuine multi-TCP-message transfer, needed to exercise
-    ///     <c>ZoneTransferPullCodec.BuildResult</c>'s <c>wasMultiMessage</c>-gated bookend-SOA
-    ///     stripping realistically (see that parameter's doc comment for why a single combined
-    ///     write, however many records it logically contains, cannot stand in for this).
+    ///     This method starts a real loopback TCP listener on an OS-assigned port, accepts one
+    ///     connection, reads the framed query <see cref="TcpZoneTransferClient" /> sends (discarded
+    ///     -- these tests only care about the response side), and writes back each entry of
+    ///     <paramref name="messages" /> as its separate, RFC 1035 §4.2.2-framed transfer response
+    ///     message.
     /// </summary>
+    /// <param name="messages">The answer section of each response message, in order.</param>
+    /// <param name="stoppingToken">Ends a primary that is kept open, and the accept.</param>
+    /// <param name="keepConnectionOpen">
+    ///     Whether the primary leaves the connection open after the last message (until
+    ///     <paramref name="stoppingToken" /> is cancelled) instead of closing it, as a primary that
+    ///     serves further queries on the connection does.
+    /// </param>
+    /// <param name="rawFrameAfter">
+    ///     Bytes sent as one more frame (with a length prefix) after the messages, to deliver
+    ///     something that is not a DNS message. Null sends nothing.
+    /// </param>
+    /// <returns>The port the primary listens on.</returns>
     private static async Task<int> StartFakePrimaryAsync(
         List<List<DnsResourceRecord>> messages,
-        CancellationToken stoppingToken
+        CancellationToken stoppingToken,
+        bool keepConnectionOpen = false,
+        byte[] rawFrameAfter = null
     )
     {
         TcpListener listener = new(IPAddress.Loopback, 0);
@@ -161,41 +172,66 @@ public class ZoneTransferPullCodecTests
 
         _ = Task.Run(async () =>
         {
-            using TcpClient accepted = await listener.AcceptTcpClientAsync(stoppingToken);
-            await using NetworkStream stream = accepted.GetStream();
-
-            byte[] queryLengthPrefix = new byte[2];
-            await stream.ReadExactlyAsync(queryLengthPrefix, stoppingToken);
-            byte[] queryBytes = new byte[(queryLengthPrefix[0] << 8) | queryLengthPrefix[1]];
-            await stream.ReadExactlyAsync(queryBytes, stoppingToken);
-            DnsMessage query = DnsMessageReader.Read(queryBytes);
-
-            foreach (List<DnsResourceRecord> answers in messages)
+            try
             {
-                DnsMessage response = new()
+                using TcpClient accepted = await listener.AcceptTcpClientAsync(stoppingToken);
+                await using NetworkStream stream = accepted.GetStream();
+
+                byte[] queryLengthPrefix = new byte[2];
+                await stream.ReadExactlyAsync(queryLengthPrefix, stoppingToken);
+                byte[] queryBytes = new byte[(queryLengthPrefix[0] << 8) | queryLengthPrefix[1]];
+                await stream.ReadExactlyAsync(queryBytes, stoppingToken);
+                DnsMessage query = DnsMessageReader.Read(queryBytes);
+
+                foreach (List<DnsResourceRecord> answers in messages)
                 {
-                    Id = query.Id,
-                    IsResponse = true,
-                    Opcode = DnsOpcodeEnum.Query,
-                    ResponseCode = DnsResponseCodeEnum.NoError,
-                    Questions = { query.Questions[0] },
-                };
-                response.Answers.AddRange(answers);
+                    DnsMessage response = new()
+                    {
+                        Id = query.Id,
+                        IsResponse = true,
+                        Opcode = DnsOpcodeEnum.Query,
+                        ResponseCode = DnsResponseCodeEnum.NoError,
+                        Questions = { query.Questions[0] },
+                    };
+                    response.Answers.AddRange(answers);
 
-                byte[] responseBytes = DnsMessageWriter.Write(response);
-                byte[] responseLengthPrefix =
-                [
-                    (byte)(responseBytes.Length >> 8),
-                    (byte)responseBytes.Length,
-                ];
-                await stream.WriteAsync(responseLengthPrefix, stoppingToken);
-                await stream.WriteAsync(responseBytes, stoppingToken);
+                    await WriteFrameAsync(stream, DnsMessageWriter.Write(response), stoppingToken);
+                }
+
+                if (rawFrameAfter is not null)
+                    await WriteFrameAsync(stream, rawFrameAfter, stoppingToken);
+
+                // Held open until the test ends: the pull must stop at the closing SOA, not here.
+                if (keepConnectionOpen)
+                    await Task.Delay(Timeout.Infinite, stoppingToken);
             }
-
-            listener.Stop();
+            catch (OperationCanceledException)
+            {
+                // The test ended while the primary was waiting.
+            }
+            finally
+            {
+                listener.Stop();
+            }
         });
 
         return port;
+    }
+
+    /// <summary>
+    ///     This method writes one length-prefixed frame of <paramref name="bytes" />.
+    /// </summary>
+    private static async Task WriteFrameAsync(
+        NetworkStream stream,
+        byte[] bytes,
+        CancellationToken stoppingToken
+    )
+    {
+        await stream.WriteAsync(
+            new[] { (byte)(bytes.Length >> 8), (byte)bytes.Length },
+            stoppingToken
+        );
+        await stream.WriteAsync(bytes, stoppingToken);
     }
 
     [Fact]
@@ -203,9 +239,7 @@ public class ZoneTransferPullCodecTests
     {
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
 
-        // Two real TCP messages, not one -- this project's server never emits a completion
-        // bookend SOA in a single-message response (see StartFakePrimaryAsync's doc comment),
-        // so exercising the stripping logic needs a real multi-message transfer.
+        // Two real TCP messages: the closing SOA arrives in the last one.
         int port = await StartFakePrimaryAsync(
             [
                 [
@@ -226,8 +260,8 @@ public class ZoneTransferPullCodecTests
         Assert.False(result.IsAlreadyCurrent);
         Assert.Equal((uint)10, result.FinalSerial);
 
-        // 3, not 4: the duplicate trailing bookend SOA is stripped, but the meaningful leading
-        // SOA is retained -- FullRecordSet documents itself as including the zone's SOA.
+        // 3, not 4: the closing SOA is dropped, but the leading SOA is retained -- FullRecordSet
+        // documents itself as including the zone's SOA.
         Assert.Equal(3, result.FullRecordSet.Count);
         Assert.Equal(DnsResourceRecordTypeEnum.Soa, result.FullRecordSet[0].Type);
     }
@@ -237,7 +271,7 @@ public class ZoneTransferPullCodecTests
     {
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
 
-        // Two real TCP messages, not one -- see the AXFR test above's comment for why.
+        // Two real TCP messages: the closing SOA arrives in the last one.
         int port = await StartFakePrimaryAsync(
             [
                 [
@@ -295,6 +329,248 @@ public class ZoneTransferPullCodecTests
         Assert.DoesNotContain("Could not connect", result.FailureReason);
     }
 
+    /// <summary>
+    ///     This method builds a client whose read timeout (30 s) is far beyond the 10 s test token,
+    ///     so a pull that waits for a close it never gets fails the test by the token.
+    /// </summary>
+    private static TcpZoneTransferClient CreateKeptOpenClient(int port) =>
+        CreateClient(port, TimeSpan.FromSeconds(30));
+
+    [Fact]
+    public async Task PullAsync_AnAxfrInOneMessageOnAConnectionKeptOpen_StopsAtTheClosingSoa()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync(
+            [
+                Soa(10),
+                ARecord("host1.example.test.", "192.0.2.1"),
+                ARecord("host2.example.test.", "192.0.2.2"),
+                Soa(10),
+            ],
+            cts.Token,
+            keepConnectionOpen: true
+        );
+
+        ZoneTransferPullResult result = await SendAsync(
+            CreateKeptOpenClient(port),
+            null,
+            cts.Token
+        );
+        await cts.CancelAsync();
+
+        Assert.True(result.Succeeded, result.FailureReason);
+        Assert.False(result.IsIncremental);
+        Assert.Equal(3, result.FullRecordSet.Count);
+        Assert.Equal(DnsResourceRecordTypeEnum.Soa, result.FullRecordSet[0].Type);
+        Assert.Equal(DnsResourceRecordTypeEnum.A, result.FullRecordSet[^1].Type);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnIncrementalIxfrInOneMessageOnAConnectionKeptOpen_ReturnsItsSteps()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync(
+            [
+                Soa(12),
+                Soa(10),
+                ARecord("removed.example.test.", "192.0.2.9"),
+                Soa(12),
+                ARecord("added.example.test.", "192.0.2.10"),
+                Soa(12),
+            ],
+            cts.Token,
+            keepConnectionOpen: true
+        );
+
+        ZoneTransferPullResult result = await SendAsync(CreateKeptOpenClient(port), 10, cts.Token);
+        await cts.CancelAsync();
+
+        Assert.True(result.Succeeded, result.FailureReason);
+        Assert.True(result.IsIncremental);
+        ZoneTransferDiffStep step = Assert.Single(result.DiffSteps);
+        Assert.Single(step.Removed);
+        Assert.Single(step.Added);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnIxfrSingleSoaEqualToTheRequestedSerialOnAConnectionKeptOpen_ReportsAlreadyCurrent()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync([Soa(10)], cts.Token, keepConnectionOpen: true);
+
+        ZoneTransferPullResult result = await SendAsync(CreateKeptOpenClient(port), 10, cts.Token);
+        await cts.CancelAsync();
+
+        Assert.True(result.Succeeded, result.FailureReason);
+        Assert.True(result.IsAlreadyCurrent);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnSoaOnlyZoneAxfr_ReturnsTheSoaAlone()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync([Soa(10), Soa(10)], cts.Token);
+
+        ZoneTransferPullResult result = await SendAsync(CreateClient(port), null, cts.Token);
+
+        Assert.True(result.Succeeded, result.FailureReason);
+        Assert.Single(result.FullRecordSet);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnAxfrWithoutAClosingSoaThenClose_FailsAndAppliesNothing()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync(
+            [Soa(10), ARecord("host1.example.test.", "192.0.2.1")],
+            cts.Token
+        );
+
+        ZoneTransferPullResult result = await SendAsync(CreateClient(port), null, cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("closing SOA", result.FailureReason);
+        Assert.Empty(result.FullRecordSet);
+    }
+
+    [Fact]
+    public async Task PullAsync_ATwoMessageAxfrCutAfterTheFirstMessage_Fails()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync(
+            [
+                [
+                    Soa(10),
+                    ARecord("host1.example.test.", "192.0.2.1"),
+                    ARecord("host2.example.test.", "192.0.2.2"),
+                ],
+            ],
+            cts.Token
+        );
+
+        ZoneTransferPullResult result = await SendAsync(CreateClient(port), null, cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("closing SOA", result.FailureReason);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnIxfrSingleSoaOlderThanRequestedThenClose_ReportsAlreadyCurrent()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync([Soa(9)], cts.Token);
+
+        ZoneTransferPullResult result = await SendAsync(CreateClient(port), 10, cts.Token);
+
+        // Never a full transfer of one SOA, which would remove every other record.
+        Assert.True(result.Succeeded, result.FailureReason);
+        Assert.True(result.IsAlreadyCurrent);
+        Assert.Empty(result.FullRecordSet);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnIxfrSingleSoaNewerThanRequestedThenClose_Fails()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync([Soa(12)], cts.Token);
+
+        ZoneTransferPullResult result = await SendAsync(CreateClient(port), 10, cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(result.FullRecordSet);
+    }
+
+    [Fact]
+    public async Task PullAsync_RecordsAfterTheClosingSoaInTheSameMessage_Fails()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync(
+            [
+                Soa(10),
+                ARecord("host1.example.test.", "192.0.2.1"),
+                Soa(10),
+                ARecord("late.example.test.", "192.0.2.3"),
+            ],
+            cts.Token,
+            keepConnectionOpen: true
+        );
+
+        ZoneTransferPullResult result = await SendAsync(
+            CreateKeptOpenClient(port),
+            null,
+            cts.Token
+        );
+        await cts.CancelAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("after its closing SOA", result.FailureReason);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnAxfrWhoseClosingSoaHasAnotherSerial_Fails()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync(
+            [Soa(10), ARecord("host1.example.test.", "192.0.2.1"), Soa(11)],
+            cts.Token,
+            keepConnectionOpen: true
+        );
+
+        ZoneTransferPullResult result = await SendAsync(
+            CreateKeptOpenClient(port),
+            null,
+            cts.Token
+        );
+        await cts.CancelAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("different serial", result.FailureReason);
+    }
+
+    [Fact]
+    public async Task PullAsync_AnAxfrAnsweredInTheIncrementalForm_Fails()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        int port = await StartFakePrimaryAsync(
+            [Soa(12), Soa(10), Soa(12), Soa(12)],
+            cts.Token,
+            keepConnectionOpen: true
+        );
+
+        ZoneTransferPullResult result = await SendAsync(
+            CreateKeptOpenClient(port),
+            null,
+            cts.Token
+        );
+        await cts.CancelAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("incremental", result.FailureReason);
+    }
+
+    [Fact]
+    public async Task PullAsync_AFrameOfRandomBytesAfterAValidMessage_FailsWithoutAnException()
+    {
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
+        byte[] garbage = new byte[40];
+        new Random(7).NextBytes(garbage);
+        // A header claiming 65535 questions makes the decoder run off the end of the message.
+        garbage[4] = 0xFF;
+        garbage[5] = 0xFF;
+        int port = await StartFakePrimaryAsync(
+            [
+                [Soa(10), ARecord("host1.example.test.", "192.0.2.1")],
+            ],
+            cts.Token,
+            rawFrameAfter: garbage
+        );
+
+        ZoneTransferPullResult result = await SendAsync(CreateClient(port), null, cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("could not be decoded", result.FailureReason);
+    }
+
     [Fact]
     public async Task PullAsync_NoPrimaryListeningAtAll_ReturnsAConnectFailure()
     {
@@ -315,6 +591,9 @@ public class ZoneTransferPullCodecTests
         Assert.Contains("Could not connect", result.FailureReason);
     }
 
+    /// <summary>
+    ///     This method runs one pull through <paramref name="client" /> against the loopback primary.
+    /// </summary>
     private static Task<ZoneTransferPullResult> SendAsync(
         TcpZoneTransferClient client,
         uint? currentSerial,

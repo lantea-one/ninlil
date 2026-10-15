@@ -9,9 +9,11 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     This class runs the AXFR/IXFR exchange over a connected <see cref="Stream" />
 ///     (<see cref="System.Net.Sockets.NetworkStream" />, <see cref="System.Net.Security.SslStream" />
 ///     or <see cref="System.Net.Quic.QuicStream" />), shared by the <see cref="IZoneTransferClient" />s:
-///     write the framed query, read framed responses until the primary closes the connection,
-///     verify TSIG when a key is set, and interpret the result with
-///     <see cref="ZoneTransferPullCodec.BuildResult" />.
+///     write the framed query, read framed responses, verify TSIG when a key is set, and stop at
+///     the closing SOA (RFC 5936 §2.2, RFC 1995 §4) with the result of
+///     <see cref="ZoneTransferResponseAssembler" />. The pull never waits for the primary to
+///     close the connection, and a connection that closes before the closing SOA fails the pull,
+///     so a cut transfer is never applied.
 ///     <para>
 ///     The first response is verified against the request MAC
 ///     (<see cref="ITsigService.VerifyResponseAsync" />, RFC 8945 §5.3). Each later signed message
@@ -44,7 +46,7 @@ internal static class ZoneTransferPullOverStream
     ///     The MAC of the query's TSIG record, used to verify the first response (RFC 8945 §5.3), or
     ///     <see langword="null" /> when <paramref name="tsigKeyName" /> is <see langword="null" />.
     /// </param>
-    /// <param name="currentSerial">This server's current serial, passed to <see cref="ZoneTransferPullCodec.BuildResult" /> unchanged.</param>
+    /// <param name="currentSerial">This server's current serial, the serial an IXFR asked from (<see langword="null" /> for an AXFR), which decides how the answer is read.</param>
     /// <param name="tsigService">The service used to verify each response's TSIG.</param>
     /// <param name="readTimeout">How long to wait for each response message.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -83,8 +85,9 @@ internal static class ZoneTransferPullOverStream
     ) => ZoneTransferPullCodec.WriteFramedMessageAsync(stream, queryBytes, stoppingToken);
 
     /// <summary>
-    ///     This method reads framed responses until the connection closes, verifies TSIG when
-    ///     required, and interprets the result: the read half of <see cref="PullAsync" />.
+    ///     This method reads framed responses until the closing SOA, verifies TSIG when required,
+    ///     and returns the assembled result: the read half of <see cref="PullAsync" />. A message
+    ///     that cannot be decoded, and a connection that closes first, give a failure.
     /// </summary>
     /// <param name="stream">The already-connected stream to read the transfer response over.</param>
     /// <param name="tsigKeyName">
@@ -95,7 +98,7 @@ internal static class ZoneTransferPullOverStream
     ///     The MAC of the query's TSIG record, used to verify the first response (RFC 8945 §5.3), or
     ///     <see langword="null" /> when <paramref name="tsigKeyName" /> is <see langword="null" />.
     /// </param>
-    /// <param name="currentSerial">This server's current serial, passed to <see cref="ZoneTransferPullCodec.BuildResult" /> unchanged.</param>
+    /// <param name="currentSerial">This server's current serial, the serial an IXFR asked from (<see langword="null" /> for an AXFR), which decides how the answer is read.</param>
     /// <param name="tsigService">The service used to verify each response's TSIG.</param>
     /// <param name="readTimeout">How long to wait for each response message.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -109,7 +112,7 @@ internal static class ZoneTransferPullOverStream
         CancellationToken stoppingToken
     )
     {
-        List<DnsResourceRecord> flatAnswers = [];
+        ZoneTransferResponseAssembler assembler = new(currentSerial);
         int messageCount = 0;
 
         // RFC 8945 §5.3.1 chain state: the MAC of the last signed message (the request MAC to
@@ -139,12 +142,27 @@ internal static class ZoneTransferPullOverStream
                 );
             }
 
-            // Null means the primary closed the connection, which ends the transfer.
+            // Null means the primary closed the connection before the closing SOA.
             if (responseBytes is null)
-                break;
+                return ZoneTransferPullResult.Failure(
+                    "The primary closed the connection before the closing SOA (RFC 5936 §2.2); the transfer is incomplete and was not applied."
+                );
 
             messageCount++;
-            DnsMessage response = DnsMessageReader.Read(responseBytes, out int tsigOffset);
+
+            DnsMessage response;
+            int tsigOffset;
+
+            try
+            {
+                response = DnsMessageReader.Read(responseBytes, out tsigOffset);
+            }
+            catch (FormatException exception)
+            {
+                return ZoneTransferPullResult.Failure(
+                    $"A transfer response message could not be decoded: {exception.Message}"
+                );
+            }
 
             // An error reply is not verified: the primary does not sign BADKEY or BADSIG answers
             // (RFC 8945 §5.3.2). The extended TSIG error, when there is one, says why.
@@ -171,54 +189,55 @@ internal static class ZoneTransferPullOverStream
                         return ZoneTransferPullResult.Failure(
                             $"Primary sent more than {MaxConsecutiveUnsignedMessages} consecutive unsigned messages within a TSIG-protected transfer."
                         );
-
-                    flatAnswers.AddRange(response.Answers);
-                    continue;
                 }
+                else
+                {
+                    TsigVerificationResult tsigResult =
+                        messageCount == 1
+                            ? await tsigService.VerifyResponseAsync(
+                                responseBytes,
+                                tsigOffset,
+                                response,
+                                requestMac,
+                                tsigKeyName,
+                                stoppingToken
+                            )
+                            : await tsigService.VerifyContinuationAsync(
+                                responseBytes,
+                                tsigOffset,
+                                response,
+                                priorMac,
+                                pendingUnsignedMessageBytes,
+                                tsigKeyName,
+                                stoppingToken
+                            );
 
-                TsigVerificationResult tsigResult =
-                    messageCount == 1
-                        ? await tsigService.VerifyResponseAsync(
-                            responseBytes,
-                            tsigOffset,
-                            response,
-                            requestMac,
-                            tsigKeyName,
-                            stoppingToken
-                        )
-                        : await tsigService.VerifyContinuationAsync(
-                            responseBytes,
-                            tsigOffset,
-                            response,
-                            priorMac,
-                            pendingUnsignedMessageBytes,
-                            tsigKeyName,
-                            stoppingToken
+                    if (!tsigResult.IsValid)
+                        return ZoneTransferPullResult.Failure(
+                            $"Primary's response failed TSIG verification: {tsigResult.Error}."
                         );
 
-                if (!tsigResult.IsValid)
-                    return ZoneTransferPullResult.Failure(
-                        $"Primary's response failed TSIG verification: {tsigResult.Error}."
-                    );
-
-                priorMac = response.Tsig.Mac;
-                pendingUnsignedMessageBytes = [];
+                    priorMac = response.Tsig.Mac;
+                    pendingUnsignedMessageBytes = [];
+                }
             }
 
-            flatAnswers.AddRange(response.Answers);
+            string assemblyFailure = assembler.AddMessage(response.Answers);
+
+            if (assemblyFailure is not null)
+                return ZoneTransferPullResult.Failure(assemblyFailure);
+
+            if (!assembler.IsComplete)
+                continue;
+
+            // RFC 8945 §5.3.1: the last message must be signed too, so unsigned messages still
+            // pending at the closing SOA fail the pull.
+            if (!string.IsNullOrEmpty(tsigKeyName) && pendingUnsignedMessageBytes.Count > 0)
+                return ZoneTransferPullResult.Failure(
+                    "Primary's transfer ended without a signed final message, but a TSIG key is configured for this zone."
+                );
+
+            return assembler.BuildResult();
         }
-
-        // RFC 8945 §5.3.1: the last message must be signed too, so unsigned messages still
-        // pending at the end fail the pull.
-        if (!string.IsNullOrEmpty(tsigKeyName) && pendingUnsignedMessageBytes.Count > 0)
-            return ZoneTransferPullResult.Failure(
-                "Primary's transfer ended without a signed final message, but a TSIG key is configured for this zone."
-            );
-
-        return ZoneTransferPullCodec.BuildResult(
-            flatAnswers,
-            currentSerial,
-            wasMultiMessage: messageCount > 1
-        );
     }
 }

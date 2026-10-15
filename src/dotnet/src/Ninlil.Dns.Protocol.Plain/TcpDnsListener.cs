@@ -177,12 +177,10 @@ public sealed class TcpDnsListener(
     ///     limits (16 queries in flight, one writer task); a query still outstanding when the
     ///     connection goes idle is answered first.
     ///     <para>
-    ///         Closing after a transfer is required, although RFC 7766 would allow further pipelined
-    ///         queries: the pull client in
-    ///         <see cref="ZoneTransferPullOverStream.ReadResponsesAsync" /> (used by
-    ///         <c>TcpZoneTransferClient</c> for secondary zones) treats the connection closing as
-    ///         the end of the transfer, so a connection left open would make it wait until its
-    ///         read timeout. An ordinary query leaves the connection open for pipelining.
+    ///         The connection closes after a transfer: the session serves one transfer per
+    ///         connection. Pull clients (<c>TcpZoneTransferClient</c> for secondary zones) do not
+    ///         depend on the close, because a transfer ends at its closing SOA (RFC 5936 §2.2). An
+    ///         ordinary query leaves the connection open for pipelining.
     ///     </para>
     /// </summary>
     private async Task HandleConnectionAsync(Socket connection, CancellationToken stoppingToken)

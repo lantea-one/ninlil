@@ -454,6 +454,74 @@ public sealed class ZoneSigningServiceExternalDsTests
     [Fact]
     public async Task Axfr_OfASignedSecondary_SendsEveryRecordOnce()
     {
+        await RunOnSignedSecondaryAsync(
+            async (primary, secondary, zoneName, keys, fromPrimary) =>
+            {
+                List<DnsResourceRecord> fromSecondary = await PullAxfrAsync(
+                    secondary,
+                    zoneName,
+                    keys.Secondary
+                );
+
+                Assert.Equal(
+                    fromSecondary.Count,
+                    fromSecondary.Select(RecordKey).Distinct().Count()
+                );
+                Assert.Equal(
+                    fromPrimary.Select(RecordKey).Distinct().Order().ToList(),
+                    fromSecondary.Select(RecordKey).Distinct().Order().ToList()
+                );
+            }
+        );
+    }
+
+    [Fact]
+    public async Task Ixfr_FullAnswerOfASignedSecondary_SendsEveryRecordOnce()
+    {
+        await RunOnSignedSecondaryAsync(
+            async (primary, secondary, zoneName, keys, fromPrimary) =>
+            {
+                // Client serial 0 is behind the zone; a signed zone has no journal, so the answer is
+                // the full fallback, which must hold each record once like the AXFR does.
+                List<DnsResourceRecord> fromSecondary = await PullTransferAsync(
+                    secondary,
+                    zoneName,
+                    keys.Secondary,
+                    DnsResourceRecordTypeEnum.Ixfr,
+                    0
+                );
+
+                Assert.Equal(DnsResourceRecordTypeEnum.Soa, fromSecondary[0].Type);
+                Assert.NotEqual(DnsResourceRecordTypeEnum.Soa, fromSecondary[1].Type);
+                Assert.Equal(
+                    fromSecondary.Count,
+                    fromSecondary.Select(RecordKey).Distinct().Count()
+                );
+                Assert.Equal(
+                    fromPrimary.Select(RecordKey).Distinct().Order().ToList(),
+                    fromSecondary.Select(RecordKey).Distinct().Order().ToList()
+                );
+            }
+        );
+    }
+
+    /// <summary>
+    ///     This method builds a signed primary and a signed secondary host for one zone, copies the
+    ///     primary's AXFR into the secondary (so the secondary's cache holds the transferred DNSSEC
+    ///     rows as ordinary records, as after a first pull) and runs <paramref name="body" /> with
+    ///     both hosts, the zone name, the two transfer key names and the primary's AXFR records.
+    /// </summary>
+    private static async Task RunOnSignedSecondaryAsync(
+        Func<
+            AuthoritativeTestZoneHost,
+            AuthoritativeTestZoneHost,
+            string,
+            (string Primary, string Secondary),
+            List<DnsResourceRecord>,
+            Task
+        > body
+    )
+    {
         const string zoneName = "dup-secondary.test";
         string primaryKey = $"primary-key-{Guid.NewGuid()}";
         string secondaryKey = $"secondary-key-{Guid.NewGuid()}";
@@ -529,17 +597,7 @@ public sealed class ZoneSigningServiceExternalDsTests
                 await Task.Delay(100);
             Assert.NotNull(cache.GetSignedData(secondaryZoneId));
 
-            List<DnsResourceRecord> fromSecondary = await PullAxfrAsync(
-                secondary,
-                zoneName,
-                secondaryKey
-            );
-
-            Assert.Equal(fromSecondary.Count, fromSecondary.Select(RecordKey).Distinct().Count());
-            Assert.Equal(
-                fromPrimary.Select(RecordKey).Distinct().Order().ToList(),
-                fromSecondary.Select(RecordKey).Distinct().Order().ToList()
-            );
+            await body(primary, secondary, zoneName, (primaryKey, secondaryKey), fromPrimary);
         }
     }
 
@@ -585,12 +643,31 @@ public sealed class ZoneSigningServiceExternalDsTests
 
     /// <summary>
     ///     This method performs a TSIG-signed AXFR of a zone against the host and returns every
-    ///     wire record of the transfer.
+    ///     wire record of the transfer except its closing SOA (see
+    ///     <see cref="PullTransferAsync" />).
     /// </summary>
-    private static async Task<List<DnsResourceRecord>> PullAxfrAsync(
+    private static Task<List<DnsResourceRecord>> PullAxfrAsync(
         AuthoritativeTestZoneHost host,
         string zoneName,
         string keyName
+    ) => PullTransferAsync(host, zoneName, keyName, DnsResourceRecordTypeEnum.Axfr, null);
+
+    /// <summary>
+    ///     This method performs a TSIG-signed AXFR or IXFR of a zone against the host. A transfer
+    ///     ends with a repeat of its leading SOA (RFC 5936 §2.2, RFC 1995 §4); the method checks
+    ///     that and returns every record without it, so callers can compare records.
+    /// </summary>
+    /// <param name="host">The host to transfer from.</param>
+    /// <param name="zoneName">The zone to transfer.</param>
+    /// <param name="keyName">The TSIG key bound to the zone's transfers.</param>
+    /// <param name="type">Axfr, or Ixfr to send the client SOA below.</param>
+    /// <param name="ixfrClientSerial">The serial of the client SOA an IXFR carries.</param>
+    private static async Task<List<DnsResourceRecord>> PullTransferAsync(
+        AuthoritativeTestZoneHost host,
+        string zoneName,
+        string keyName,
+        DnsResourceRecordTypeEnum type,
+        uint? ixfrClientSerial
     )
     {
         await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
@@ -602,15 +679,22 @@ public sealed class ZoneSigningServiceExternalDsTests
         {
             Id = 1,
             Opcode = DnsOpcodeEnum.Query,
-            Questions =
-            {
-                new DnsQuestion(
-                    DnsName.Parse(zoneName),
-                    DnsResourceRecordTypeEnum.Axfr,
-                    DnsClassEnum.Internet
-                ),
-            },
+            Questions = { new DnsQuestion(DnsName.Parse(zoneName), type, DnsClassEnum.Internet) },
         };
+
+        if (ixfrClientSerial is { } clientSerial)
+            request.AuthorityRecords.Add(
+                new DnsResourceRecord(
+                    DnsName.Parse(zoneName),
+                    DnsResourceRecordTypeEnum.Soa,
+                    DnsClassEnum.Internet,
+                    3600,
+                    DnsRecordDataCodecRegistry.Encode(
+                        DnsResourceRecordTypeEnum.Soa,
+                        new SoaRecordData(DnsName.Root, DnsName.Root, clientSerial, 0, 0, 0, 0)
+                    )
+                )
+            );
 
         DnsMessage signed = await tsigService.SignAsync(request, keyName, request.Id);
         byte[] rawMessage = DnsMessageWriter.Write(signed);
@@ -627,11 +711,20 @@ public sealed class ZoneSigningServiceExternalDsTests
 
         List<DnsResourceRecord> records = [];
 
-        await foreach (DnsMessage message in transferService.CreateAxfrResponseAsync(context))
+        await foreach (
+            DnsMessage message in type == DnsResourceRecordTypeEnum.Ixfr
+                ? transferService.CreateIxfrResponseAsync(context)
+                : transferService.CreateAxfrResponseAsync(context)
+        )
         {
             Assert.Equal(DnsResponseCodeEnum.NoError, message.ResponseCode);
             records.AddRange(message.Answers);
         }
+
+        Assert.True(records.Count > 1);
+        Assert.Equal(DnsResourceRecordTypeEnum.Soa, records[^1].Type);
+        Assert.Equal(records[0].Data, records[^1].Data);
+        records.RemoveAt(records.Count - 1);
 
         return records;
     }

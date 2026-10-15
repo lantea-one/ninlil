@@ -15,7 +15,8 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     carries the bytes (TCP, TLS or QUIC): building the AXFR/IXFR query, RFC 1035 §4.2.2
 ///     two-octet length framing over any <see cref="Stream" /> (<see cref="NetworkStream" />,
 ///     <see cref="System.Net.Security.SslStream" /> and <see cref="System.Net.Quic.QuicStream" /> are
-///     all streams), the UDP SOA check, and interpreting the reassembled answer.
+///     all streams), and the UDP SOA check. The answer itself is interpreted by
+///     <see cref="ZoneTransferResponseAssembler" />.
 /// </summary>
 internal static class ZoneTransferPullCodec
 {
@@ -167,124 +168,6 @@ internal static class ZoneTransferPullCodec
     }
 
     /// <summary>
-    ///     This method interprets the reassembled answer records, using the same rule
-    ///     <see cref="ZoneTransferService" /> produces them by: in an incremental answer the leading
-    ///     SOA is followed by another, older SOA; in a full one it is not.
-    /// </summary>
-    /// <param name="flatAnswers">Every answer record from every response message, in order, flattened into one list.</param>
-    /// <param name="requestedSerial">The serial this client's pull request carried, if any (an IXFR).</param>
-    /// <param name="wasMultiMessage">
-    ///     Whether the answer spanned more than one message. Only then does
-    ///     <see cref="ZoneTransferService" /> add a closing SOA to strip. In a single-message IXFR whose
-    ///     last step only removes records, the step's closing SOA equals the leading SOA, so equality
-    ///     alone cannot tell it from a closing bookend; stripping it there would break the diff.
-    /// </param>
-    public static ZoneTransferPullResult BuildResult(
-        List<DnsResourceRecord> flatAnswers,
-        uint? requestedSerial,
-        bool wasMultiMessage
-    )
-    {
-        if (flatAnswers.Count == 0 || flatAnswers[0].Type != DnsResourceRecordTypeEnum.Soa)
-            return ZoneTransferPullResult.Failure(
-                "The transfer response did not begin with an SOA record."
-            );
-
-        if (
-            DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Soa, flatAnswers[0].Data)
-            is not SoaRecordData leadingSoaData
-        )
-            return ZoneTransferPullResult.Failure(
-                "The transfer response's leading SOA record could not be decoded."
-            );
-
-        uint finalSerial = leadingSoaData.Serial;
-
-        // A multi-message answer ends with a repeat of the leading SOA; strip it. Only for
-        // multi-message answers (see wasMultiMessage).
-        if (
-            wasMultiMessage
-            && flatAnswers.Count > 1
-            && flatAnswers[^1].Type == DnsResourceRecordTypeEnum.Soa
-        )
-        {
-            DnsResourceRecord lastRecord = flatAnswers[^1];
-
-            if (lastRecord == flatAnswers[0])
-                flatAnswers.RemoveAt(flatAnswers.Count - 1);
-        }
-
-        if (flatAnswers.Count == 1 && requestedSerial == finalSerial)
-            return ZoneTransferPullResult.AlreadyCurrent(finalSerial);
-
-        bool isIncrementalShape =
-            flatAnswers.Count > 1 && flatAnswers[1].Type == DnsResourceRecordTypeEnum.Soa;
-
-        if (!isIncrementalShape)
-            return ZoneTransferPullResult.Full(finalSerial, flatAnswers);
-
-        List<ZoneTransferDiffStep> steps = [];
-        int index = 1;
-
-        while (index < flatAnswers.Count)
-        {
-            if (
-                flatAnswers[index].Type != DnsResourceRecordTypeEnum.Soa
-                || DnsRecordDataCodecRegistry.Decode(
-                    DnsResourceRecordTypeEnum.Soa,
-                    flatAnswers[index].Data
-                )
-                    is not SoaRecordData oldSoaData
-            )
-                return ZoneTransferPullResult.Failure(
-                    "The incremental transfer response was malformed (expected an old-serial SOA)."
-                );
-
-            index++;
-            List<DnsResourceRecord> removed = [];
-
-            while (
-                index < flatAnswers.Count
-                && flatAnswers[index].Type != DnsResourceRecordTypeEnum.Soa
-            )
-            {
-                removed.Add(flatAnswers[index]);
-                index++;
-            }
-
-            if (
-                index >= flatAnswers.Count
-                || DnsRecordDataCodecRegistry.Decode(
-                    DnsResourceRecordTypeEnum.Soa,
-                    flatAnswers[index].Data
-                )
-                    is not SoaRecordData newSoaData
-            )
-                return ZoneTransferPullResult.Failure(
-                    "The incremental transfer response was malformed (expected a new-serial SOA)."
-                );
-
-            index++;
-            List<DnsResourceRecord> added = [];
-
-            while (
-                index < flatAnswers.Count
-                && flatAnswers[index].Type != DnsResourceRecordTypeEnum.Soa
-            )
-            {
-                added.Add(flatAnswers[index]);
-                index++;
-            }
-
-            steps.Add(
-                new ZoneTransferDiffStep(oldSoaData.Serial, removed, newSoaData.Serial, added)
-            );
-        }
-
-        return ZoneTransferPullResult.Incremental(finalSerial, steps);
-    }
-
-    /// <summary>
     ///     This method writes one length-prefixed DNS message (RFC 1035 §4.2.2) to a stream.
     /// </summary>
     public static async Task WriteFramedMessageAsync(
@@ -305,7 +188,8 @@ internal static class ZoneTransferPullCodec
     /// </summary>
     /// <returns>
     ///     The message bytes, or <see langword="null" /> if the connection closed before the next
-    ///     message, which is how the pull detects the end of a transfer.
+    ///     message. A closed connection is not the end of a transfer: a transfer ends at its closing
+    ///     SOA (see <see cref="ZoneTransferResponseAssembler" />).
     /// </returns>
     /// <exception cref="TimeoutException">Thrown when no data arrives within <paramref name="readTimeout" />.</exception>
     /// <exception cref="IOException">
@@ -365,7 +249,7 @@ internal static class ZoneTransferPullCodec
     /// <param name="buffer">The buffer to fill completely.</param>
     /// <param name="allowGracefulEmptyClose">
     ///     Whether a close before the first byte returns <see langword="false" /> instead of
-    ///     throwing. True only when reading a length prefix, where a close ends the transfer.
+    ///     throwing. True only when reading a length prefix, where a close between messages is reported to the caller as a closed connection.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public static async Task<bool> ReadExactAsync(

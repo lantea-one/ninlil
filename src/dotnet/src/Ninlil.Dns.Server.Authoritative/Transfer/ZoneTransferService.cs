@@ -21,7 +21,10 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     name. For a signed zone it adds the DNSKEY, RRSIG, NSEC or NSEC3, NSEC3PARAM and generated
 ///     DS records from <see cref="SignedZoneCache" />; nothing is signed here. Records marked
 ///     <c>ExcludeFromSync</c> are left out. Every response message is TSIG-signed, chained as RFC
-///     8945 §5.3.1 describes.
+///     8945 §5.3.1 describes. Every AXFR, and every IXFR answer longer than the single "current"
+///     SOA, ends with the zone's SOA (RFC 5936 §2.2, RFC 1995 §4), so a pull client
+///     (<see cref="ZoneTransferResponseAssembler" />) knows the transfer is complete without
+///     waiting for the connection to close.
 /// </summary>
 /// <param name="zoneCache">The cache this service transfers zones out of.</param>
 /// <param name="signedZoneCache">
@@ -122,10 +125,9 @@ public class ZoneTransferService(
 
         chunks[0].Insert(0, soaWireRecord);
 
-        // The closing SOA is added only when the answer spans several messages; a single-message
-        // answer ends with the connection. RFC 5936 §2.2 expects the closing SOA in every AXFR.
-        if (chunks.Count > 1)
-            chunks[^1].Add(soaWireRecord);
+        // RFC 5936 §2.2: every AXFR ends with the SOA, however many messages it spans. A pull
+        // client ends the transfer there instead of waiting for the connection to close.
+        chunks[^1].Add(soaWireRecord);
 
         // RFC 8945 §5.3.1: the first message chains from the request MAC and each later one from
         // the previous message's MAC. Every message is signed, so no unsigned bytes are ever added.
@@ -299,29 +301,37 @@ public class ZoneTransferService(
         {
             // No usable history (too old, not journaled, or a gap): send a full transfer. The client
             // recognizes it because the record after the first SOA is not an older SOA.
-            recordSequence.AddRange(
-                zone.GetAllRecords()
+            List<DnsResourceRecord> fullRecords =
+            [
+                .. zone.GetAllRecords()
                     .Where(record =>
                         record.Type != DnsResourceRecordTypeEnum.Soa && !record.ExcludeFromSync
                     )
                     .Select(record =>
                         RecordEntityCodec.ToWireRecord(record, DnsName.Parse(record.Name))
-                    )
-            );
-        }
+                    ),
+            ];
 
-        // Only the full-transfer branch can run for a signed zone, so this adds the signed records
-        // to a full answer.
-        if (signedData is not null)
-            recordSequence.AddRange(FlattenSignedZoneContent(signedData));
+            // Only this branch runs for a signed zone, so the signed records join a full answer
+            // here.
+            if (signedData is not null)
+                fullRecords.AddRange(FlattenSignedZoneContent(signedData));
+
+            // An RRset holds no duplicate records (RFC 2181 §5). A signed secondary's cache already
+            // holds the transferred DNSSEC rows, so repeats are dropped as in the AXFR answer. The
+            // incremental branch is not deduplicated: SOAs and records legitimately repeat across
+            // steps.
+            recordSequence.AddRange(DeduplicateRecords(fullRecords));
+        }
 
         List<List<DnsResourceRecord>> chunks = Chunk(
             recordSequence,
             Math.Max(1, options.CurrentValue.RecordsPerMessage)
         );
 
-        if (chunks.Count > 1)
-            chunks[^1].Add(currentSoaWireRecord);
+        // RFC 1995 §4: an incremental or full answer ends with the current SOA, in one message
+        // or many. The sequence always holds the leading SOA, so there is at least one chunk.
+        chunks[^1].Add(currentSoaWireRecord);
 
         // Chained as in CreateAxfrResponseAsync.
         byte[] priorMac = null;
