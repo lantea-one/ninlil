@@ -103,6 +103,35 @@ public class RewriteSettingsControllerTests(NinlilDnsWebApplicationFactory facto
     }
 
     [Fact]
+    public async Task Get_AfterAPatch_ReportsWhenAndByWhichNodeTheSectionWasLastWritten()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DateTimeOffset beforeWrite = DateTimeOffset.UtcNow;
+
+        try
+        {
+            (
+                await client.SendAsync(
+                    PatchRequest("/api/rewrite-settings", new { timeToLiveSeconds = 600 })
+                )
+            ).EnsureSuccessStatusCode();
+
+            RewriteSettingsDetail detail = await client.GetFromJsonAsync<RewriteSettingsDetail>(
+                "/api/rewrite-settings"
+            );
+
+            // The sync bookkeeping is a database row, so it follows the write at once.
+            Assert.NotNull(detail.LastModifiedUtc);
+            Assert.True(detail.LastModifiedUtc >= beforeWrite);
+            Assert.NotNull(detail.OriginatingNodeId);
+        }
+        finally
+        {
+            await client.SendAsync(PatchRequest("/api/rewrite-settings", new { enable = false }));
+        }
+    }
+
+    [Fact]
     public async Task Patch_WithAnEmptyBody_ReturnsOkWithoutWritingAnything()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();

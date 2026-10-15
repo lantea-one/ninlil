@@ -11,6 +11,7 @@ using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Rewrites;
 using Ninlil.Dns.Server.Rewrites.SafeSearch;
+using Ninlil.Web.ClusterSync;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Options;
 
@@ -113,7 +114,13 @@ public sealed class BlockedServicesAndSafeSearchClusterEventTests : IDisposable
             _clients,
             _groups,
             _publisher,
-            _clusterOptions
+            _clusterOptions,
+            new ClusterConfigSyncSettingsRecorder(
+                new SettingsClusterSyncRoundTripTests.FakeStateRepository(),
+                new SettingsClusterSyncRoundTripTests.FakeUnitOfWork(),
+                _clusterOptions,
+                _publisher
+            )
         );
 
     private async Task<Guid> AddClientAsync()

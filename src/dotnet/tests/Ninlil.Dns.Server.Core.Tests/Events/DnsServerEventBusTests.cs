@@ -129,6 +129,50 @@ public class DnsServerEventBusTests
         Assert.Empty(bus.Remote.Zones);
     }
 
+    /// <summary>
+    ///     The rewrite settings section is cluster-synced over the cluster channel only: its
+    ///     settings event stays in this process and never reaches the broker.
+    /// </summary>
+    [Fact]
+    public async Task Publish_OfTheRewriteSettingsChange_IsDeliveredLocallyAndNeverSentToTheBroker()
+    {
+        await using Bus bus = await Bus.StartAsync(broker: true);
+
+        bus.Publisher.Publish(
+            new ClusterConfigSettingsChangedEvent(
+                DateTimeOffset.UtcNow,
+                "DnsServer:Rewrites",
+                """[{"SectionPath":"DnsServer:Rewrites","Key":"Enable","Value":true}]"""
+            )
+        );
+        await bus.DrainAsync();
+
+        Assert.Single(bus.Local.Settings);
+        Assert.Empty(bus.Transport.PublishedExceptMarker);
+    }
+
+    /// <summary>
+    ///     A rewrite settings envelope from another instance must not drive a settings write: the
+    ///     codec refuses the type, so no subscriber sees it.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveFromBroker_OfAnotherInstancesRewriteSettingsChange_CallsNobody()
+    {
+        await using Bus bus = await Bus.StartAsync(broker: true);
+
+        await bus.Transport.PushAsync(
+            new DnsServerEventEnvelope(
+                "ClusterConfigSettingsChanged",
+                """{"OccurredAtUtc":"2026-01-01T00:00:00+00:00","SectionName":"DnsServer:Rewrites","SettingsJson":"[{\"SectionPath\":\"DnsServer:Rewrites\",\"Key\":\"Enable\",\"Value\":true}]"}""",
+                Guid.NewGuid()
+            )
+        );
+        await bus.DrainAsync();
+
+        Assert.Empty(bus.Remote.Settings);
+        Assert.Empty(bus.Local.Settings);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
