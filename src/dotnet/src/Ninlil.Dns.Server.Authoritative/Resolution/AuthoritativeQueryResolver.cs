@@ -15,8 +15,8 @@ namespace Ninlil.Dns.Server.Authoritative.Resolution;
 ///     This class is the authoritative engine, the <see cref="IDnsQueryResolver" /> that answers
 ///     from hosted zones. It finds the zone for the query name in
 ///     <see cref="AuthoritativeZoneCache" /> and answers fully: an exact match, a CNAME (followed
-///     one hop inside the zone), a wildcard (only the one at the closest encloser applies, RFC 4592), a referral, or a negative answer with the SOA. A
-///     name in no hosted zone is declined (<see cref="DnsQueryResolution.NotHandled" />) so the
+///     one hop inside the zone), a wildcard (only the one at the closest encloser applies,
+///     RFC 4592), a referral, or a negative answer with the SOA. A name in no hosted zone is declined (<see cref="DnsQueryResolution.NotHandled" />) so the
 ///     dispatcher offers it to the forwarding and recursive resolvers. It also answers CHAOS
 ///     <c>version.bind</c>-style queries when enabled.
 ///     <para>
@@ -488,12 +488,10 @@ public class AuthoritativeQueryResolver(
     ///     (one hop only) when the target is in the same zone, with RRSIGs when DNSSEC applies.
     ///     For a wildcard CNAME, the CNAME is served under the queried name, its RRSIG is looked
     ///     up under the wildcard name (RFC 4035 §3.1.3.3) and the proof that no closer match
-    ///     exists goes in the Authority section.
+    ///     exists goes in the Authority section. <c>wildcardSource</c> is the wildcard name the
+    ///     CNAME is stored under, or <see langword="null" /> when the CNAME is at the queried
+    ///     name itself.
     /// </summary>
-    /// <param name="wildcardSource">
-    ///     The wildcard name the CNAME is stored under, or <see langword="null" /> when the CNAME
-    ///     is at the queried name itself.
-    /// </param>
     private DnsMessage BuildCnameChaseResponse(
         DnsMessage request,
         DnsQuestion question,
@@ -605,13 +603,10 @@ public class AuthoritativeQueryResolver(
     ///     Authority section with its TTL capped at the SOA minimum, which tells resolvers how
     ///     long to cache the negative answer. With DNSSEC, the SOA's RRSIG and the denial of
     ///     existence proof (RFC 4035 §3.1.3) are added: the NODATA proof, or the closest encloser
-    ///     and wildcard proof for NXDOMAIN.
+    ///     and wildcard proof for NXDOMAIN. <c>wildcardClosestEncloser</c> is set when a wildcard
+    ///     covers the name but lacks the type; the NODATA proof then also shows the wildcard
+    ///     (RFC 4035 §3.1.3.4, RFC 5155 §7.2.5). Otherwise it is <see langword="null" />.
     /// </summary>
-    /// <param name="wildcardClosestEncloser">
-    ///     The closest encloser when a wildcard covers the name but lacks the type; the NODATA
-    ///     proof then also shows the wildcard (RFC 4035 §3.1.3.4, RFC 5155 §7.2.5). Otherwise
-    ///     <see langword="null" />.
-    /// </param>
     private DnsMessage BuildNegativeResponse(
         DnsMessage request,
         CachedZone zone,
