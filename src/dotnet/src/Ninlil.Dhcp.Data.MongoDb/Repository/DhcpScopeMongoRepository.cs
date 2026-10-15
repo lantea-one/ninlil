@@ -45,4 +45,14 @@ public class DhcpScopeMongoRepository(
                 FilterDefinition<DhcpScopeEntity>.Empty,
                 cancellationToken: stoppingToken
             );
+
+    /// <inheritdoc />
+    public async Task<string> GetCurrentNameAsync(
+        Guid scopeId,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Collection
+            .Find(scope => scope.Id == scopeId)
+            .Project(scope => scope.Name)
+            .FirstOrDefaultAsync(stoppingToken);
 }

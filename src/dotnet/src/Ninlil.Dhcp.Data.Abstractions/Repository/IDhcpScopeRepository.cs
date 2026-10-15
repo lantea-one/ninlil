@@ -41,4 +41,15 @@ public interface IDhcpScopeRepository : IRepository<DhcpScopeEntity>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of scopes.</returns>
     Task<int> CountAsync(CancellationToken stoppingToken = default);
+
+    /// <summary>
+    ///     This method reads a scope's current name from the database, never from a tracked
+    ///     instance, so an engine that holds a stale scope object can see a rename that has
+    ///     committed since (<c>Dhcpv4LeaseAllocationService</c> and
+    ///     <c>Dhcpv6LeaseAllocationService</c> use it after each lease write).
+    /// </summary>
+    /// <param name="scopeId">The identifier of the scope.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The committed scope name, or <see langword="null" /> if the scope is gone.</returns>
+    Task<string> GetCurrentNameAsync(Guid scopeId, CancellationToken stoppingToken = default);
 }

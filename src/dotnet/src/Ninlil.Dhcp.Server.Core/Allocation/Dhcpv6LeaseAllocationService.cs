@@ -41,6 +41,10 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 /// </summary>
 /// <param name="leaseRepository">The repository leases are read and written through.</param>
 /// <param name="reservationRepository">The repository reservations are read through.</param>
+/// <param name="scopeRepository">
+///     The repository the scope's current name is read through after each lease write, so a row
+///     follows a scope rename that committed meanwhile (see <c>FollowScopeRenameAsync</c>).
+/// </param>
 /// <param name="unitOfWork">The unit of work every change is saved through.</param>
 /// <param name="options">The server engine configuration (offer hold and quarantine times).</param>
 /// <param name="eventPublisher">
@@ -53,6 +57,7 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 public sealed class Dhcpv6LeaseAllocationService(
     ILeaseRepository leaseRepository,
     IDhcpReservationRepository reservationRepository,
+    IDhcpScopeRepository scopeRepository,
     IUnitOfWork unitOfWork,
     IOptions<DhcpServerOptions> options,
     IDnsServerEventPublisher eventPublisher,
@@ -79,7 +84,10 @@ public sealed class Dhcpv6LeaseAllocationService(
 
         // A quarantine an older build stored on the client's own row is moved off the client, so
         // the request continues as for a client without a row.
-        if (existing is not null && await DetachQuarantineAsync(existing, now, cancellationToken))
+        if (
+            existing is not null
+            && await DetachQuarantineAsync(scope, existing, now, cancellationToken)
+        )
             existing = null;
 
         // Order (RFC 8415 Section 18.3.9, the same as DHCPv4): the client's reservation, the
@@ -132,7 +140,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         lease.State = LeaseStateEnum.Offered;
         lease.LeaseExpiresAtUtc = now.Add(options.Value.OfferHoldDuration);
 
-        await SaveAsync(lease, isNewLease, now, cancellationToken);
+        await SaveAsync(scope, lease, isNewLease, now, cancellationToken);
         return lease;
     }
 
@@ -192,7 +200,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         // client, so the address stays blocked for it and the caller answers NoBinding.
         if (
             existingByClient is not null
-            && await DetachQuarantineAsync(existingByClient, now, cancellationToken)
+            && await DetachQuarantineAsync(scope, existingByClient, now, cancellationToken)
         )
             existingByClient = null;
 
@@ -221,7 +229,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         if (!string.IsNullOrWhiteSpace(hostName))
             lease.HostName = hostName;
 
-        await SaveAsync(lease, isNewLease, now, cancellationToken);
+        await SaveAsync(scope, lease, isNewLease, now, cancellationToken);
 
         eventPublisher.Publish(
             new DhcpLeaseChangedEvent(now, lease.Id, DhcpLeaseChangeKindEnum.Granted)
@@ -269,7 +277,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         lease.State = LeaseStateEnum.Expired;
         lease.LeaseExpiresAtUtc = now.Add(options.Value.DeclinedAddressQuarantineDuration);
 
-        await SaveAsync(lease, isNewLease: false, now, cancellationToken);
+        await SaveAsync(scope, lease, isNewLease: false, now, cancellationToken);
 
         // The row may have been Active, so its DNS record and client identity go with it.
         eventPublisher.Publish(
@@ -306,7 +314,10 @@ public sealed class Dhcpv6LeaseAllocationService(
 
         // A quarantine row of an older build is moved off the client (a prefix cannot be
         // declined, so this only guards a row that is shaped like one).
-        if (existing is not null && await DetachQuarantineAsync(existing, now, cancellationToken))
+        if (
+            existing is not null
+            && await DetachQuarantineAsync(scope, existing, now, cancellationToken)
+        )
             existing = null;
 
         IPAddress candidate;
@@ -356,7 +367,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         lease.State = LeaseStateEnum.Offered;
         lease.LeaseExpiresAtUtc = now.Add(options.Value.OfferHoldDuration);
 
-        await SaveAsync(lease, isNewLease, now, cancellationToken);
+        await SaveAsync(scope, lease, isNewLease, now, cancellationToken);
         return lease;
     }
 
@@ -422,7 +433,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         lease.LeaseObtainedAtUtc ??= now;
         lease.LeaseExpiresAtUtc = now.Add(leaseTimes.Valid);
 
-        await SaveAsync(lease, isNewLease, now, cancellationToken);
+        await SaveAsync(scope, lease, isNewLease, now, cancellationToken);
 
         eventPublisher.Publish(
             new DhcpLeaseChangedEvent(now, lease.Id, DhcpLeaseChangeKindEnum.Granted)
@@ -460,6 +471,7 @@ public sealed class Dhcpv6LeaseAllocationService(
 
         leaseRepository.Update(lease);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await FollowScopeRenameAsync(scope, lease, cancellationToken);
 
         eventPublisher.Publish(
             new DhcpLeaseChangedEvent(now, lease.Id, DhcpLeaseChangeKindEnum.Released)
@@ -776,6 +788,7 @@ public sealed class Dhcpv6LeaseAllocationService(
     /// </summary>
     /// <returns><see langword="true" /> when the row was re-keyed and saved.</returns>
     private async Task<bool> DetachQuarantineAsync(
+        DhcpScopeEntity scope,
         LeaseEntity lease,
         DateTimeOffset now,
         CancellationToken cancellationToken
@@ -792,7 +805,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         lease.ClientIdentifier = DhcpDeclinedAddress.KeyFor(address);
         lease.HostName = null;
 
-        await SaveAsync(lease, isNewLease: false, now, cancellationToken);
+        await SaveAsync(scope, lease, isNewLease: false, now, cancellationToken);
 
         eventPublisher.Publish(
             new DhcpLeaseChangedEvent(now, lease.Id, DhcpLeaseChangeKindEnum.Expired)
@@ -848,6 +861,7 @@ public sealed class Dhcpv6LeaseAllocationService(
     ///     <c>Dhcpv4LeaseAllocationService.SaveAsync</c> does.
     /// </summary>
     private async Task SaveAsync(
+        DhcpScopeEntity scope,
         LeaseEntity lease,
         bool isNewLease,
         DateTimeOffset now,
@@ -864,6 +878,42 @@ public sealed class Dhcpv6LeaseAllocationService(
             leaseRepository.Update(lease);
         }
 
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await FollowScopeRenameAsync(scope, lease, cancellationToken);
+    }
+
+    /// <summary>
+    ///     This method closes the race with a scope rename. <c>DhcpScopesController</c> moves the
+    ///     leases of a renamed scope to the new name, but a lease written under the old name
+    ///     after that move's read would stay there. After each lease write this method reads the
+    ///     scope's current name from the database; when it differs from the row's, the row is
+    ///     corrected and saved again. If the rename commits after this check, the controller's
+    ///     second pass moves the row instead. The request's own scope object keeps its stale
+    ///     name; only the row changes. A scope deleted meanwhile leaves the row as it is.
+    /// </summary>
+    private async Task FollowScopeRenameAsync(
+        DhcpScopeEntity scope,
+        LeaseEntity lease,
+        CancellationToken cancellationToken
+    )
+    {
+        string currentName = await scopeRepository.GetCurrentNameAsync(scope.Id, cancellationToken);
+
+        if (
+            currentName is null
+            || string.Equals(currentName, lease.ScopeName, StringComparison.Ordinal)
+        )
+            return;
+
+        logger.LogInformation(
+            "Moving lease {LeaseId} from scope '{OldName}' to '{NewName}': the scope was renamed while the lease was written.",
+            lease.Id,
+            lease.ScopeName,
+            currentName
+        );
+
+        lease.ScopeName = currentName;
+        leaseRepository.Update(lease);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

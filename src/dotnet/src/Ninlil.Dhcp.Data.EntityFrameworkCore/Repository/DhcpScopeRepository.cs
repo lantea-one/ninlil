@@ -38,4 +38,14 @@ public class DhcpScopeRepository(NinlilDnsContext context)
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>
         await Set.CountAsync(stoppingToken);
+
+    /// <inheritdoc />
+    public Task<string> GetCurrentNameAsync(
+        Guid scopeId,
+        CancellationToken stoppingToken = default
+    ) =>
+        Set.AsNoTracking()
+            .Where(scope => scope.Id == scopeId)
+            .Select(scope => scope.Name)
+            .FirstOrDefaultAsync(stoppingToken);
 }

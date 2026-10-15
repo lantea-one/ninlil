@@ -256,6 +256,10 @@ public class DhcpScopesController(
         await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
+        // Second pass: moves a lease the engine wrote under the old name after the first load.
+        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+
         return NoContent();
     }
 
@@ -434,6 +438,10 @@ public class DhcpScopesController(
         await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
+        // Second pass: moves a lease the engine wrote under the old name after the first load.
+        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+
         return NoContent();
     }
 
@@ -540,8 +548,13 @@ public class DhcpScopesController(
     ///     This method moves the leases of a renamed scope to its new name, staged for the
     ///     caller's save so the scope and its leases change together. Leases refer to their scope
     ///     by name, so without this a rename would orphan them. The unique lease indexes cannot
-    ///     collide, because the caller has already refused a name another scope holds. A lease the
-    ///     DHCP engine writes under the old name between this load and the save stays under it.
+    ///     collide, because the caller has already refused a name another scope holds. A lease
+    ///     the DHCP engine writes under the old name while the rename is in flight is moved by one
+    ///     of two parties. The caller runs this method a second time after its save, which moves
+    ///     a row written before that save committed. For a row written after it, the allocation
+    ///     services read the scope's current name after each lease write
+    ///     (<see cref="IDhcpScopeRepository.GetCurrentNameAsync" />) and correct the row
+    ///     themselves. A scope deleted mid-request leaves its row under the old name.
     /// </summary>
     private async Task RenameLeasesAsync(
         string oldName,
