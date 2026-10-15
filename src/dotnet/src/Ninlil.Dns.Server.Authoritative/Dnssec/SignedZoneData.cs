@@ -32,10 +32,12 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     <see langword="null" /> when the zone uses <see cref="DnssecDenialOfExistenceModeEnum.Nsec" />
 ///     instead.
 /// </param>
-/// <param name="generatedDsRecordsByDelegationName">
-///     The <see cref="Common.Wire.Records.DsRecordData" /> records generated for delegations to
-///     signed child zones this server also hosts, keyed by delegation point. The parent
-///     publishes the DS, not the child.
+/// <param name="dsRecordsByDelegationName">
+///     The <see cref="Common.Wire.Records.DsRecordData" /> RRset of each delegation point, keyed
+///     by delegation point: for a signed primary, the union of the DS records generated for a
+///     signed child this server hosts and the DS records stored at that name, without
+///     duplicates; for a secondary, the DS records as transferred. The parent publishes the DS,
+///     not the child.
 /// </param>
 /// <param name="signatureExpiresAtUtc">
 ///     When the signatures expire. Every signature from one signing pass shares the same
@@ -51,10 +53,7 @@ public sealed class SignedZoneData(
     > rrsigsByCoveredRrset,
     IReadOnlyList<DnsResourceRecord> denialOfExistenceRecords,
     DnsResourceRecord nsec3ParamRecord,
-    IReadOnlyDictionary<
-        DnsName,
-        IReadOnlyList<DnsResourceRecord>
-    > generatedDsRecordsByDelegationName,
+    IReadOnlyDictionary<DnsName, IReadOnlyList<DnsResourceRecord>> dsRecordsByDelegationName,
     DateTimeOffset signatureExpiresAtUtc
 )
 {
@@ -102,13 +101,14 @@ public sealed class SignedZoneData(
         DetermineNsec3Parameters(nsec3ParamRecord, denialOfExistenceRecords);
 
     /// <summary>
-    ///     This property contains the DS records generated for delegations to signed child zones
-    ///     this server hosts, keyed by delegation point.
+    ///     This property contains the DS RRset of each delegation point (generated and stored
+    ///     records without duplicates, or the transferred records on a secondary), keyed by
+    ///     delegation point.
     /// </summary>
     public IReadOnlyDictionary<
         DnsName,
         IReadOnlyList<DnsResourceRecord>
-    > GeneratedDsRecordsByDelegationName { get; } = generatedDsRecordsByDelegationName;
+    > DsRecordsByDelegationName { get; } = dsRecordsByDelegationName;
 
     /// <summary>
     ///     This property contains when the signatures from this pass expire.

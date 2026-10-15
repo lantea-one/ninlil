@@ -148,8 +148,8 @@ public static class TransferredSignedZoneDataBuilder
             : RecordEntityCodec.ToWireRecord(nsec3ParamEntity, apexName);
 
         // DS records for the zone's delegations, as transferred, grouped by delegation name
-        // for SignedZoneData.GeneratedDsRecordsByDelegationName.
-        Dictionary<DnsName, IReadOnlyList<DnsResourceRecord>> generatedDsRecordsByDelegationName =
+        // for SignedZoneData.DsRecordsByDelegationName.
+        Dictionary<DnsName, IReadOnlyList<DnsResourceRecord>> dsRecordsByDelegationName =
             activeRecords
                 .Where(record => record.Type == DnsResourceRecordTypeEnum.DS)
                 .GroupBy(record => DnsName.Parse(record.Name))
@@ -174,7 +174,7 @@ public static class TransferredSignedZoneDataBuilder
             ),
             denialOfExistenceRecords,
             nsec3ParamRecord,
-            generatedDsRecordsByDelegationName,
+            dsRecordsByDelegationName,
             // A DNSKEY with no RRSIGs means a malformed transfer; use "now" rather than throw.
             earliestSignatureExpiresAtUtc ?? DateTimeOffset.UtcNow
         );

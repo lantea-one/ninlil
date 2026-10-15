@@ -303,10 +303,7 @@ public class AuthoritativeQueryResolver(
         if (dnssecOk && signedData is not null)
         {
             IReadOnlyList<DnsResourceRecord> dsRecords =
-                signedData.GeneratedDsRecordsByDelegationName.GetValueOrDefault(
-                    delegationPoint,
-                    []
-                );
+                signedData.DsRecordsByDelegationName.GetValueOrDefault(delegationPoint, []);
 
             if (dsRecords.Count > 0)
             {
@@ -447,8 +444,9 @@ public class AuthoritativeQueryResolver(
     /// <summary>
     ///     This method answers a DS query at a delegation point. DS is the one type at that name
     ///     the parent is authoritative for (RFC 4035 §2.7), so it is answered instead of referred.
-    ///     Only DS records generated for child zones this server signs are known; otherwise the
-    ///     answer is NODATA.
+    ///     A signed zone answers its DS RRset (generated and stored records) with RRSIGs; an
+    ///     unsigned zone answers the stored DS records (RFC 4035 §2.4). With no DS the answer is
+    ///     NODATA.
     /// </summary>
     private DnsMessage BuildDsResponse(
         DnsMessage request,
@@ -458,9 +456,14 @@ public class AuthoritativeQueryResolver(
         SignedZoneData signedData
     )
     {
-        IReadOnlyList<DnsResourceRecord> dsRecords =
-            signedData?.GeneratedDsRecordsByDelegationName.GetValueOrDefault(delegationPoint, [])
-            ?? [];
+        // A zone without signed data (unsigned, or a signed zone served unsigned) still answers
+        // the stored DS records: the parent is authoritative for them either way.
+        IReadOnlyList<DnsResourceRecord> dsRecords = signedData is not null
+            ? signedData.DsRecordsByDelegationName.GetValueOrDefault(delegationPoint, [])
+            : ToWireRecords(
+                zone.GetRecords(delegationPoint, DnsResourceRecordTypeEnum.DS),
+                delegationPoint
+            );
 
         if (dsRecords.Count == 0)
             return BuildNegativeResponse(
@@ -475,7 +478,7 @@ public class AuthoritativeQueryResolver(
         DnsMessage response = CreateAnswerHeader(request, isAuthoritative: true);
         response.Answers.AddRange(dsRecords);
 
-        if (dnssecOk)
+        if (dnssecOk && signedData is not null)
             response.Answers.AddRange(
                 signedData.GetSignatures(delegationPoint, DnsResourceRecordTypeEnum.DS)
             );

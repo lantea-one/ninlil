@@ -235,7 +235,7 @@ public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
         DnsName delegationName = DnsName.Parse(ChildZoneName);
 
         Assert.True(
-            beforeCutover.GeneratedDsRecordsByDelegationName.TryGetValue(
+            beforeCutover.DsRecordsByDelegationName.TryGetValue(
                 delegationName,
                 out IReadOnlyList<DnsResourceRecord> dsBeforeCutover
             )
@@ -272,7 +272,7 @@ public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
         SignedZoneData afterCutover = await signingService.SignZoneAsync(_parentZoneId);
 
         Assert.True(
-            afterCutover.GeneratedDsRecordsByDelegationName.TryGetValue(
+            afterCutover.DsRecordsByDelegationName.TryGetValue(
                 delegationName,
                 out IReadOnlyList<DnsResourceRecord> dsAfterCutover
             )

@@ -107,6 +107,11 @@ public class ZoneTransferService(
         )
             otherRecords.AddRange(FlattenSignedZoneContent(signedData));
 
+        // An RRset holds no duplicate records (RFC 2181 §5). A signed secondary's cache already
+        // holds the transferred DNSSEC rows, and a stored DS is also in the signed content, so
+        // the first occurrence of each (owner, type, class, RDATA) is kept.
+        otherRecords = DeduplicateRecords(otherRecords);
+
         List<List<DnsResourceRecord>> chunks = Chunk(
             otherRecords,
             Math.Max(1, options.CurrentValue.RecordsPerMessage)
@@ -550,8 +555,9 @@ public class ZoneTransferService(
 
     /// <summary>
     ///     This method lists a zone's signed content from <see cref="SignedZoneCache" /> for a full
-    ///     transfer: the DNSKEY records, the NSEC or NSEC3 chain and NSEC3PARAM, generated DS
-    ///     records, and the RRSIGs over all of them.
+    ///     transfer: the DNSKEY records, the NSEC or NSEC3 chain and NSEC3PARAM, the DS records of
+    ///     the delegations, and the RRSIGs over all of them. The caller removes records that the
+    ///     zone cache already holds as ordinary rows.
     /// </summary>
     private static List<DnsResourceRecord> FlattenSignedZoneContent(SignedZoneData signedData)
     {
@@ -566,7 +572,7 @@ public class ZoneTransferService(
 
         foreach (
             IReadOnlyList<DnsResourceRecord> dsRecords in signedData
-                .GeneratedDsRecordsByDelegationName
+                .DsRecordsByDelegationName
                 .Values
         )
             records.AddRange(dsRecords);
@@ -575,6 +581,32 @@ public class ZoneTransferService(
             records.AddRange(rrsigs);
 
         return records;
+    }
+
+    /// <summary>
+    ///     This method removes repeated records from a transfer's record list, keeping the first
+    ///     occurrence and the original order. Records are equal when owner, type, class and RDATA
+    ///     match; the TTL is not compared, since an RRset has one TTL (RFC 2181 §5.2).
+    /// </summary>
+    private static List<DnsResourceRecord> DeduplicateRecords(
+        IReadOnlyList<DnsResourceRecord> records
+    )
+    {
+        HashSet<(
+            DnsName Name,
+            DnsResourceRecordTypeEnum Type,
+            DnsClassEnum Class,
+            string Data
+        )> seen = [];
+        List<DnsResourceRecord> result = [];
+
+        foreach (DnsResourceRecord record in records)
+            if (
+                seen.Add((record.Name, record.Type, record.Class, Convert.ToHexString(record.Data)))
+            )
+                result.Add(record);
+
+        return result;
     }
 
     /// <summary>

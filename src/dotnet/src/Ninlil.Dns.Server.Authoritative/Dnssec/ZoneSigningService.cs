@@ -149,6 +149,11 @@ public class ZoneSigningService(
 
         Dictionary<DnsName, List<DnsResourceRecord>> generatedDs =
             await ComputeDelegationDsRecordsAsync(delegationPoints, stoppingToken);
+        Dictionary<DnsName, List<DnsResourceRecord>> delegationDs = MergeStoredDs(
+            generatedDs,
+            recordsByName,
+            delegationPoints
+        );
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
         uint inception = (uint)(now - options.CurrentValue.InceptionOffset).ToUnixTimeSeconds();
@@ -213,8 +218,8 @@ public class ZoneSigningService(
             )
             {
                 // NS at a delegation point is the child's data and is not signed by the parent
-                // (RFC 4035 §2.2). Every other stored type there is skipped too, including a
-                // stored DS record; only the generated DS below is signed.
+                // (RFC 4035 §2.2). Every other stored type there is skipped too; the DS RRset
+                // (generated and stored) is signed below.
                 if (isDelegation)
                     continue;
 
@@ -241,8 +246,10 @@ public class ZoneSigningService(
                 );
             }
 
+            // The RRSIG's Original TTL equals the DS RRset's TTL (RFC 4034 §3.1.4).
             if (
-                isDelegation && generatedDs.TryGetValue(name, out List<DnsResourceRecord> dsRecords)
+                isDelegation
+                && delegationDs.TryGetValue(name, out List<DnsResourceRecord> dsRecords)
             )
                 SignRrset(
                     apexName,
@@ -252,7 +259,7 @@ public class ZoneSigningService(
                     ordinarySigners,
                     inception,
                     expiration,
-                    dnsKeyTtl,
+                    dsRecords[0].TimeToLive,
                     rrsigs
                 );
         }
@@ -267,7 +274,7 @@ public class ZoneSigningService(
                     signableNames,
                     recordsByName,
                     delegationPoints,
-                    generatedDs,
+                    delegationDs,
                     ordinarySigners,
                     inception,
                     expiration,
@@ -281,7 +288,7 @@ public class ZoneSigningService(
                         signableNames,
                         recordsByName,
                         delegationPoints,
-                        generatedDs,
+                        delegationDs,
                         ordinarySigners,
                         inception,
                         expiration,
@@ -296,7 +303,7 @@ public class ZoneSigningService(
             rrsigs,
             denialRecords,
             nsec3ParamRecord,
-            generatedDs.ToDictionary(
+            delegationDs.ToDictionary(
                 pair => pair.Key,
                 pair => (IReadOnlyList<DnsResourceRecord>)pair.Value
             ),
@@ -374,6 +381,66 @@ public class ZoneSigningService(
 
             if (dsRecords.Count > 0)
                 result[delegationPoint] = dsRecords;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///     This method builds the DS RRset of each delegation point: the generated DS records
+    ///     plus the DS records stored at that name, without duplicates (same RDATA). The union
+    ///     keeps a child that moves between providers, or is signed by two, resolvable. The RRset
+    ///     takes the TTL of the first stored DS record when there is one, otherwise the generated
+    ///     TTL, because the records of an RRset share one TTL (RFC 2181 §5.2).
+    /// </summary>
+    /// <param name="generatedDs">The generated DS records, by delegation point.</param>
+    /// <param name="recordsByName">The zone's enabled records outside delegated data.</param>
+    /// <param name="delegationPoints">The zone's topmost cuts.</param>
+    /// <returns>The DS RRsets of the delegation points that have at least one DS record.</returns>
+    private static Dictionary<DnsName, List<DnsResourceRecord>> MergeStoredDs(
+        Dictionary<DnsName, List<DnsResourceRecord>> generatedDs,
+        Dictionary<DnsName, List<RecordEntity>> recordsByName,
+        HashSet<DnsName> delegationPoints
+    )
+    {
+        Dictionary<DnsName, List<DnsResourceRecord>> result = [];
+
+        foreach (DnsName delegationPoint in delegationPoints)
+        {
+            List<DnsResourceRecord> stored =
+            [
+                .. recordsByName
+                    .GetValueOrDefault(delegationPoint, [])
+                    .Where(record => record.Type == DnsResourceRecordTypeEnum.DS)
+                    .Select(record => RecordEntityCodec.ToWireRecord(record, delegationPoint))
+                    .Where(record => record is not null),
+            ];
+            List<DnsResourceRecord> generated = generatedDs.GetValueOrDefault(delegationPoint, []);
+
+            if (stored.Count == 0 && generated.Count == 0)
+                continue;
+
+            uint ttl = stored.Count > 0 ? stored[0].TimeToLive : generated[0].TimeToLive;
+            HashSet<string> seen = [];
+            List<DnsResourceRecord> union = [];
+
+            foreach (DnsResourceRecord record in generated.Concat(stored))
+            {
+                if (!seen.Add(Convert.ToHexString(record.Data)))
+                    continue;
+
+                union.Add(
+                    new DnsResourceRecord(
+                        delegationPoint,
+                        DnsResourceRecordTypeEnum.DS,
+                        DnsClassEnum.Internet,
+                        ttl,
+                        record.Data
+                    )
+                );
+            }
+
+            result[delegationPoint] = union;
         }
 
         return result;
@@ -495,7 +562,7 @@ public class ZoneSigningService(
 
     /// <summary>
     ///     This method lists the types for a name's NSEC or NSEC3 type bitmap. At a delegation point
-    ///     only NS is listed (RFC 4035 §2.2), plus DS when one was generated.
+    ///     only NS is listed (RFC 4035 §2.2), plus DS when the delegation has a DS RRset.
     /// </summary>
     private static List<DnsResourceRecordTypeEnum> ComputePresentTypes(
         DnsName name,
@@ -622,8 +689,8 @@ public class ZoneSigningService(
             ? []
             : Convert.FromHexString(zone.Nsec3SaltHex);
 
-        // RFC 5155 §7.1: Opt-Out applies to the whole zone. If any delegation has no generated
-        // DS (a child not hosted and signed here), every NSEC3 record gets the flag. With no
+        // RFC 5155 §7.1: Opt-Out applies to the whole zone. If any delegation has no DS
+        // (neither generated nor stored), every NSEC3 record gets the flag. With no
         // insecure delegations the flag stays clear, which per §3.1.2.1 means no record covers
         // an unsigned delegation.
         bool useOptOut = delegationPoints.Any(delegationPoint =>

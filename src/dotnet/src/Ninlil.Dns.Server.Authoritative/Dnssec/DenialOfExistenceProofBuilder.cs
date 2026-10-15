@@ -141,10 +141,7 @@ public static class DenialOfExistenceProofBuilder
         DnsName delegationPoint
     )
     {
-        if (
-            !CanProve(signed)
-            || signed.GeneratedDsRecordsByDelegationName.ContainsKey(delegationPoint)
-        )
+        if (!CanProve(signed) || signed.DsRecordsByDelegationName.ContainsKey(delegationPoint))
             return [];
 
         return WithSignature(
