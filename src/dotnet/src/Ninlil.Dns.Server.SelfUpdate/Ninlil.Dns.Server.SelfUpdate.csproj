@@ -14,6 +14,11 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
   </ItemGroup>
 
+  <!-- The tests check the due rule in SelfUpdateCheckService directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.SelfUpdate.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />

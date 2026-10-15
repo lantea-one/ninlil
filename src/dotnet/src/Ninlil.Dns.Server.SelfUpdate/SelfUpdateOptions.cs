@@ -54,6 +54,7 @@ public sealed class SelfUpdateOptions
     ///     <see cref="ReleaseFeedUrl" /> for a newer release. The default of 24 hours shows a notice
     ///     within about a day of a release without loading the feed's host. The service wakes every
     ///     15 minutes to see whether a check is due, so this is effectively rounded up to the next
+    ///     15-minute tick. A failed check does not wait this long: it is retried at the next
     ///     15-minute tick.
     /// </summary>
     public TimeSpan CheckInterval { get; set; } = TimeSpan.FromHours(24);

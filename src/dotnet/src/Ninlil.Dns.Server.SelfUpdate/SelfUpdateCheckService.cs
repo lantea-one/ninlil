@@ -21,6 +21,11 @@ namespace Ninlil.Dns.Server.SelfUpdate;
 ///         <c>Controllers.SelfUpdateSettingsController.Patch</c> (turning checking on, or
 ///         shortening the interval) applies on the next tick without a restart.
 ///     </para>
+///     <para>
+///         A successful check waits <see cref="SelfUpdateOptions.CheckInterval" /> for the next
+///         one. A failed check is retried at the next <see cref="TickInterval" /> tick, so a feed
+///         outage at startup does not hide an update for a whole interval.
+///     </para>
 /// </summary>
 /// <param name="httpClientFactory">The factory this service fetches the release feed document through.</param>
 /// <param name="options">The self-update settings, re-read on every tick.</param>
@@ -39,9 +44,9 @@ public sealed class SelfUpdateCheckService(
     ///     This field contains how often the service wakes to see whether a check is due under
     ///     the current <see cref="SelfUpdateOptions.CheckInterval" />. It is much shorter than the
     ///     24-hour default, so a shortened interval takes effect promptly instead of after the
-    ///     previous interval has run out.
+    ///     previous interval has run out. It is also how long a failed check waits for its retry.
     /// </summary>
-    private static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(15);
+    internal static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(15);
 
     /// <summary>
     ///     This constant contains the name of the <see cref="HttpClient" /> this service gets from
@@ -53,7 +58,7 @@ public sealed class SelfUpdateCheckService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Check once at startup, before the first tick (see the class summary).
-        await RunOneCheckIfDueAsync(force: true, stoppingToken);
+        await RunOneCheckIfDueAsync(force: true, DateTimeOffset.UtcNow, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -66,7 +71,7 @@ public sealed class SelfUpdateCheckService(
                 break;
             }
 
-            await RunOneCheckIfDueAsync(force: false, stoppingToken);
+            await RunOneCheckIfDueAsync(force: false, DateTimeOffset.UtcNow, stoppingToken);
         }
     }
 
@@ -154,26 +159,47 @@ public sealed class SelfUpdateCheckService(
     }
 
     /// <summary>
-    ///     This method runs <see cref="CheckNowAsync" /> if checking is enabled and, unless
-    ///     <paramref name="force" /> is set, a full <see cref="SelfUpdateOptions.CheckInterval" />
-    ///     has passed since the last recorded check, successful or not.
+    ///     This method decides whether a check is due. A check is due when none has been recorded.
+    ///     After a failed check it is due once one <see cref="TickInterval" /> has passed, so a
+    ///     feed outage at startup does not hide an update for a whole
+    ///     <see cref="SelfUpdateOptions.CheckInterval" />. After a successful check it is due once
+    ///     <paramref name="checkInterval" /> has passed.
     /// </summary>
-    private async Task RunOneCheckIfDueAsync(bool force, CancellationToken stoppingToken)
+    /// <param name="status">The status the last check recorded.</param>
+    /// <param name="checkInterval">The configured <see cref="SelfUpdateOptions.CheckInterval" />.</param>
+    /// <param name="nowUtc">The current time.</param>
+    /// <returns><see langword="true" /> when a check should run now.</returns>
+    internal static bool IsCheckDue(
+        SelfUpdateStatus status,
+        TimeSpan checkInterval,
+        DateTimeOffset nowUtc
+    )
+    {
+        if (status.LastCheckedAtUtc is null)
+            return true;
+
+        TimeSpan wait = status.LastCheckError is not null ? TickInterval : checkInterval;
+        return nowUtc - status.LastCheckedAtUtc.Value >= wait;
+    }
+
+    /// <summary>
+    ///     This method runs <see cref="CheckNowAsync" /> if checking is enabled and, unless
+    ///     <paramref name="force" /> is set, <see cref="IsCheckDue" /> says a check is due.
+    /// </summary>
+    /// <param name="force">Whether to skip the due test (the startup check).</param>
+    /// <param name="nowUtc">The time the due test uses.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    internal async Task RunOneCheckIfDueAsync(
+        bool force,
+        DateTimeOffset nowUtc,
+        CancellationToken stoppingToken
+    )
     {
         if (!options.CurrentValue.EnableAutomaticCheck)
             return;
 
-        if (!force)
-        {
-            DateTimeOffset? lastCheckedAtUtc = statusCache.Current.LastCheckedAtUtc;
-            bool isDue =
-                lastCheckedAtUtc is null
-                || DateTimeOffset.UtcNow - lastCheckedAtUtc.Value
-                    >= options.CurrentValue.CheckInterval;
-
-            if (!isDue)
-                return;
-        }
+        if (!force && !IsCheckDue(statusCache.Current, options.CurrentValue.CheckInterval, nowUtc))
+            return;
 
         try
         {
