@@ -294,6 +294,117 @@ public sealed class TsigTransferHost : IAsyncDisposable
     }
 
     /// <summary>
+    ///     This method builds an IXFR query for the hosted zone that carries a client SOA with
+    ///     <paramref name="clientSerial" /> in its Authority section (RFC 1995 §3), signs it with
+    ///     <paramref name="keyName" /> and returns it as a receiver would see it.
+    /// </summary>
+    public async Task<(DnsMessage Request, byte[] Raw, int TsigOffset)> SignedIxfrQueryAsync(
+        uint clientSerial,
+        string keyName
+    )
+    {
+        DnsMessage query = new()
+        {
+            Id = (ushort)Random.Shared.Next(1, ushort.MaxValue),
+            Opcode = DnsOpcodeEnum.Query,
+            Questions =
+            {
+                new DnsQuestion(
+                    DnsName.Parse(ZoneName),
+                    DnsResourceRecordTypeEnum.Ixfr,
+                    DnsClassEnum.Internet
+                ),
+            },
+        };
+        query.AuthorityRecords.Add(
+            new DnsResourceRecord(
+                DnsName.Parse(ZoneName),
+                DnsResourceRecordTypeEnum.Soa,
+                DnsClassEnum.Internet,
+                3600,
+                DnsRecordDataCodecRegistry.Encode(
+                    DnsResourceRecordTypeEnum.Soa,
+                    new SoaRecordData(
+                        DnsName.Parse($"ns1.{ZoneName}"),
+                        DnsName.Parse($"admin.{ZoneName}"),
+                        clientSerial,
+                        3600,
+                        900,
+                        604800,
+                        3600
+                    )
+                )
+            )
+        );
+
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
+        DnsMessage signed = await tsigService.SignAsync(query, keyName, query.Id);
+        byte[] raw = DnsMessageWriter.Write(signed);
+        DnsMessage request = DnsMessageReader.Read(raw, out int tsigOffset);
+
+        return (request, raw, tsigOffset);
+    }
+
+    /// <summary>
+    ///     This method runs an IXFR for the request through <see cref="IZoneTransferService" />
+    ///     over a TCP context and returns every message it yields.
+    /// </summary>
+    public async Task<List<DnsMessage>> TransferIxfrAsync(
+        DnsMessage request,
+        byte[] raw,
+        int tsigOffset
+    )
+    {
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IZoneTransferService service =
+            scope.ServiceProvider.GetRequiredService<IZoneTransferService>();
+        DnsQueryContext context = new(
+            request,
+            DnsTransportProtocolEnum.Tcp,
+            IPAddress.Loopback,
+            DateTimeOffset.UtcNow,
+            raw,
+            tsigOffset
+        );
+
+        List<DnsMessage> messages = [];
+        await foreach (DnsMessage message in service.CreateIxfrResponseAsync(context))
+            messages.Add(message);
+
+        return messages;
+    }
+
+    /// <summary>
+    ///     This method stores one journal entry for the hosted zone, with no added or removed
+    ///     records, so a test can build a serial chain for IXFR to find or miss.
+    /// </summary>
+    public async Task AddJournalEntryAsync(long oldSerial, long newSerial)
+    {
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IZoneRepository zoneRepository =
+            scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+        IZoneChangeJournalRepository journalRepository =
+            scope.ServiceProvider.GetRequiredService<IZoneChangeJournalRepository>();
+        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        ZoneEntity zone = await zoneRepository.FindByNameAsync(ZoneName);
+
+        await journalRepository.AddAsync(
+            new ZoneChangeJournalEntryEntity
+            {
+                Id = Guid.NewGuid(),
+                ZoneId = zone.Id,
+                OldSerial = oldSerial,
+                NewSerial = newSerial,
+                RemovedRecordsJson = "[]",
+                AddedRecordsJson = "[]",
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        await unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
     ///     This method runs <paramref name="action" /> with the TSIG service from a fresh scope.
     /// </summary>
     public async Task<T> WithTsigAsync<T>(Func<ITsigService, Task<T>> action)

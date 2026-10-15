@@ -156,6 +156,19 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
+    ///     This method decides whether a primary's serial calls for a transfer, using RFC 1982 §3.2
+    ///     arithmetic so a primary whose serial has wrapped still counts as ahead.
+    /// </summary>
+    /// <param name="localSerial">The zone's serial here, or <see langword="null" /> when there is no copy.</param>
+    /// <param name="primarySerial">The serial the primary reported.</param>
+    /// <returns>
+    ///     <see langword="true" /> when there is no local copy or the primary is ahead; equal serials
+    ///     and the undefined pair (2^31 apart) are not.
+    /// </returns>
+    internal static bool IsPrimaryAhead(uint? localSerial, uint primarySerial) =>
+        localSerial is not { } local || SoaSerialArithmetic.IsGreaterThan(primarySerial, local);
+
+    /// <summary>
     ///     This method checks a zone against its primaries in order until one answers, and pulls and
     ///     applies a transfer if that primary is ahead. Stub zones go to
     ///     <see cref="RefreshStubZoneAsync" />.
@@ -220,7 +233,7 @@ public sealed class SecondaryZoneRefreshService(
                 continue;
             }
 
-            if (localSerial is { } existingSerial && existingSerial >= primarySerial)
+            if (!IsPrimaryAhead(localSerial, primarySerial.Value))
             {
                 await RescheduleFromLocalSoaAsync(zone, recordRepository, stoppingToken);
                 return;

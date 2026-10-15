@@ -225,11 +225,11 @@ public class ZoneTransferService(
         long clientSerial = clientSoaData.Serial;
         long serverSerial = currentSoaData.Serial;
 
-        if (clientSerial >= serverSerial)
+        if (!SoaSerialArithmetic.IsGreaterThan(currentSoaData.Serial, clientSoaData.Serial))
         {
-            // The client is current (or claims a newer serial): answer with the current SOA alone, a
-            // single-message answer signed from the request MAC. The comparison is a plain integer
-            // comparison, not RFC 1982 serial arithmetic.
+            // The client is current, claims a newer serial, or is exactly 2^31 away (undefined in
+            // RFC 1982 §3.2, treated as not newer): answer with the current SOA alone, a
+            // single-message answer signed from the request MAC.
             yield return await tsigService.SignResponseAsync(
                 BuildMessage(request, question, [currentSoaWireRecord]),
                 tsigResult.Key.Name,
@@ -255,6 +255,8 @@ public class ZoneTransferService(
             )
             : [];
 
+        // The journal orders and filters by the raw serial, so a chain that crosses a serial wrap is
+        // never found and the answer falls back to a full transfer, which RFC 1995 §4 allows.
         bool journalCoversRequestedRange =
             // Signed zones always get a full transfer: every signing pass recomputes all RRSIGs, so no
             // signed diff is journaled. RFC 1995 §4 allows answering IXFR with a full transfer.
