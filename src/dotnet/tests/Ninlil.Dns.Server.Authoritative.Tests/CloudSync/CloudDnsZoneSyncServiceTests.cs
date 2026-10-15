@@ -135,6 +135,16 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
                                 ttl = 300,
                                 priority = (int?)null,
                             },
+                            // The provider's own apex NS record -- the sync must leave it alone.
+                            new
+                            {
+                                id = "provider-apex-ns",
+                                type = "NS",
+                                name = "push.example.com",
+                                content = "ns1.cloudflare.example",
+                                ttl = 300,
+                                priority = (int?)null,
+                            },
                         },
                         result_info = new { total_pages = 1 },
                     }
@@ -184,6 +194,35 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
                                 type = "A",
                                 name = "remote-only",
                                 data = "192.0.2.77",
+                                ttl = 300,
+                                priority = (int?)null,
+                            },
+                            // The provider's own apex NS records -- the sync must not add them locally.
+                            new
+                            {
+                                id = 5002,
+                                type = "NS",
+                                name = "@",
+                                data = "ns1.digitalocean.example.",
+                                ttl = 1800,
+                                priority = (int?)null,
+                            },
+                            new
+                            {
+                                id = 5003,
+                                type = "NS",
+                                name = "@",
+                                data = "ns2.digitalocean.example.",
+                                ttl = 1800,
+                                priority = (int?)null,
+                            },
+                            // A delegation below the apex -- an ordinary record that must be pulled in.
+                            new
+                            {
+                                id = 5004,
+                                type = "NS",
+                                name = "sub",
+                                data = "ns.sub.example.net.",
                                 ttl = 300,
                                 priority = (int?)null,
                             },
@@ -315,6 +354,12 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
         );
         await AddRecordAsync(
             _pushZoneId,
+            "sub.push.example.com",
+            DnsResourceRecordTypeEnum.NS,
+            new NsRecordData(DnsName.Parse("ns.sub.example.net"))
+        );
+        await AddRecordAsync(
+            _pushZoneId,
             "local-only.push.example.com",
             DnsResourceRecordTypeEnum.A,
             new ARecordData(System.Net.IPAddress.Parse("192.0.2.11")),
@@ -356,10 +401,19 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
         await unitOfWork.SaveChangesAsync();
     }
 
-    private async Task RunOneSyncPassAsync(Func<bool> completed = null)
+    /// <summary>
+    ///     This method runs one sync pass over every cloud zone and waits for it to settle.
+    /// </summary>
+    /// <param name="completed">An optional condition that tells the pass has landed.</param>
+    /// <param name="freshService">
+    ///     When <see langword="true" />, the pass runs on a new service instance, because a stopped
+    ///     <see cref="BackgroundService" /> cannot be started again (its token stays cancelled).
+    /// </param>
+    private async Task RunOneSyncPassAsync(Func<bool> completed = null, bool freshService = false)
     {
-        CloudDnsZoneSyncService syncService =
-            _host.Services.GetRequiredService<CloudDnsZoneSyncService>();
+        CloudDnsZoneSyncService syncService = freshService
+            ? ActivatorUtilities.CreateInstance<CloudDnsZoneSyncService>(_host.Services)
+            : _host.Services.GetRequiredService<CloudDnsZoneSyncService>();
 
         await syncService.StartAsync(CancellationToken.None);
 
@@ -387,7 +441,75 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
     {
         await RunOneSyncPassAsync();
 
-        Assert.Single(_cloudflareCreateRequests);
+        Assert.Single(_cloudflareCreateRequests, request => request.ToString().Contains("www"));
+    }
+
+    /// <summary>
+    ///     This test checks that a CloudPrimary pass does not delete the NS record the provider lists
+    ///     at the zone apex (Route 53, for one, refuses that delete and fails the pass).
+    /// </summary>
+    [Fact]
+    public async Task CloudPrimaryZoneLeavesTheProvidersApexNsRecordAlone()
+    {
+        await RunOneSyncPassAsync();
+
+        Assert.Contains("stale-record", _cloudflareDeletedIds);
+        Assert.DoesNotContain("provider-apex-ns", _cloudflareDeletedIds);
+    }
+
+    /// <summary>
+    ///     This test is the guard that an NS record below the apex (a delegation) is still pushed.
+    /// </summary>
+    [Fact]
+    public async Task CloudPrimaryZoneStillPushesALocalDelegation()
+    {
+        await RunOneSyncPassAsync();
+
+        Assert.Single(_cloudflareCreateRequests, request => request.ToString().Contains("sub."));
+    }
+
+    /// <summary>
+    ///     This test checks that repeated CloudSecondary passes do not add the provider's apex NS
+    ///     records to the local zone, so the local apex NS rows stay as they were (none here).
+    /// </summary>
+    [Fact]
+    public async Task CloudSecondaryZoneDoesNotAddTheProvidersApexNsRecordsOnAnyPass()
+    {
+        await RunOneSyncPassAsync();
+        await RunOneSyncPassAsync(freshService: true);
+
+        using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        IReadOnlyList<RecordEntity> records = await recordRepository.ListByZoneIdAsync(_pullZoneId);
+
+        Assert.Equal(
+            0,
+            records.Count(r =>
+                r.Type == DnsResourceRecordTypeEnum.NS && r.Name == "pull.example.com"
+            )
+        );
+    }
+
+    /// <summary>
+    ///     This test is the guard that an NS record below the apex (a delegation) is still pulled in,
+    ///     once, however many passes run.
+    /// </summary>
+    [Fact]
+    public async Task CloudSecondaryZoneStillPullsInARemoteDelegationOnce()
+    {
+        await RunOneSyncPassAsync();
+        await RunOneSyncPassAsync(freshService: true);
+
+        using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        IReadOnlyList<RecordEntity> records = await recordRepository.ListByZoneIdAsync(_pullZoneId);
+
+        Assert.Single(
+            records,
+            r => r.Type == DnsResourceRecordTypeEnum.NS && r.Name == "sub.pull.example.com"
+        );
     }
 
     [Fact]
