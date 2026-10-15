@@ -226,7 +226,7 @@ public sealed class SecondaryZoneRefreshService(
             if (primarySerial is null)
             {
                 logger.LogWarning(
-                    "Could not reach primary {Address} for zone '{ZoneName}'.",
+                    "No usable SOA answer from primary {Address} for zone '{ZoneName}' (no reply, or the reply was rejected).",
                     primaryAddress,
                     zone.Name
                 );

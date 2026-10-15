@@ -28,8 +28,14 @@ internal static class ZoneTransferPullCodec
     /// <summary>
     ///     This method queries a primary's current SOA serial over plain UDP. Every client uses it,
     ///     including the TLS and QUIC ones: the serial is not sensitive, while the zone content the
-    ///     pull carries is.
+    ///     pull carries is. Only a datagram from the primary's own address and port with the query's
+    ///     message ID counts; others are dropped while the wait continues. With a TSIG key, an
+    ///     unsigned or wrongly signed reply is logged at Warning and yields no serial.
     /// </summary>
+    /// <returns>
+    ///     The serial, or null when no acceptable reply arrived within <paramref name="timeout" />,
+    ///     the reply was rejected, or it holds no SOA.
+    /// </returns>
     public static async Task<uint?> QuerySoaSerialOverUdpAsync(
         IPAddress primaryAddress,
         DnsName zoneName,
@@ -68,19 +74,68 @@ internal static class ZoneTransferPullCodec
             using CancellationTokenSource linkedCts =
                 CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, timeoutCts.Token);
 
-            UdpReceiveResult result = await client.ReceiveAsync(linkedCts.Token);
-            DnsMessage response = DnsMessageReader.Read(result.Buffer, out int tsigOffset);
+            // Wait for the primary's own reply. An unconnected UDP socket accepts a datagram from
+            // anyone, so a datagram from another address or port, with another ID, or that does not
+            // decode is dropped and the wait goes on until the timeout. Otherwise an off-path
+            // sender that only guesses the 16-bit ID could feed this zone a serial.
+            UdpReceiveResult result;
+            DnsMessage response;
+            int tsigOffset;
 
-            // With a key configured the answer must be signed by that key over the query's MAC;
-            // an unsigned or wrongly signed answer could be spoofed, so it yields no serial.
+            while (true)
+            {
+                result = await client.ReceiveAsync(linkedCts.Token);
+
+                if (!result.RemoteEndPoint.Equals(remoteEndPoint))
+                {
+                    logger?.LogDebug(
+                        "Ignored a SOA answer for {Zone} from {Sender}, which is not the primary {Primary}.",
+                        zoneName,
+                        result.RemoteEndPoint,
+                        remoteEndPoint
+                    );
+                    continue;
+                }
+
+                try
+                {
+                    response = DnsMessageReader.Read(result.Buffer, out tsigOffset);
+                }
+                catch (FormatException)
+                {
+                    logger?.LogDebug(
+                        "Ignored an undecodable SOA answer for {Zone} from {Primary}.",
+                        zoneName,
+                        remoteEndPoint
+                    );
+                    continue;
+                }
+
+                if (response.Id == query.Id)
+                    break;
+
+                logger?.LogDebug(
+                    "Ignored a SOA answer for {Zone} from {Primary} with message ID {Id}, expected {Expected}.",
+                    zoneName,
+                    remoteEndPoint,
+                    response.Id,
+                    query.Id
+                );
+            }
+
+            // With a key configured the answer must be signed by that key over the query's MAC
+            // (RFC 8945 §5.3); an unsigned or wrongly signed answer could be spoofed, so it yields
+            // no serial. It is logged at Warning because it is a security or configuration fault
+            // (a wrong key, or a primary that does not sign), not routine noise.
             if (!string.IsNullOrEmpty(tsigKeyName))
             {
                 if (response.Tsig is null)
                 {
-                    logger?.LogDebug(
-                        "The SOA answer from {Primary} for {Zone} was not signed, but a TSIG key is configured.",
+                    logger?.LogWarning(
+                        "The SOA answer from {Primary} for zone {Zone} was rejected: it is not signed, but TSIG key {Key} is configured.",
                         primaryAddress,
-                        zoneName
+                        zoneName,
+                        tsigKeyName
                     );
                     return null;
                 }
@@ -96,10 +151,11 @@ internal static class ZoneTransferPullCodec
 
                 if (!tsigResult.IsValid)
                 {
-                    logger?.LogDebug(
-                        "The SOA answer from {Primary} for {Zone} failed TSIG verification: {Error}.",
+                    logger?.LogWarning(
+                        "The SOA answer from {Primary} for zone {Zone} was rejected: it failed TSIG verification with key {Key}: {Error}.",
                         primaryAddress,
                         zoneName,
+                        tsigKeyName,
                         tsigResult.Error
                     );
                     return null;
@@ -107,8 +163,7 @@ internal static class ZoneTransferPullCodec
             }
 
             return
-                response.Id == query.Id
-                && response.ResponseCode == DnsResponseCodeEnum.NoError
+                response.ResponseCode == DnsResponseCodeEnum.NoError
                 && response.Answers.Count > 0
                 && response.Answers[0].Type == DnsResourceRecordTypeEnum.Soa
                 && DnsRecordDataCodecRegistry.Decode(
