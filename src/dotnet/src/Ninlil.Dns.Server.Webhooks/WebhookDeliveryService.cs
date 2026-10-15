@@ -290,6 +290,7 @@ public sealed class WebhookDeliveryService(
     {
         DeliveryAttemptOutcome[] outcomes = new DeliveryAttemptOutcome[subscriptions.Count];
 
+        // Each iteration writes only its own slot of the array, so no lock is needed.
         await Parallel.ForEachAsync(
             Enumerable.Range(0, subscriptions.Count),
             new ParallelOptions
@@ -442,6 +443,8 @@ public sealed class WebhookDeliveryService(
                 $"received non-success status {(int)response.StatusCode}"
             );
         }
+        // An HttpClient timeout also surfaces as an OperationCanceledException, but the stopping
+        // token is not cancelled then: that is a failed attempt to record, not a shutdown.
         catch (Exception exception)
             when (exception is not OperationCanceledException
                 || !stoppingToken.IsCancellationRequested

@@ -103,8 +103,8 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This action creates a static address mapping. Returns 400 for a missing or malformed identifier (accepted as
-    ///     <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> or
+    ///     This action creates a static address mapping. Returns 400 for a missing or malformed
+    ///     identifier (accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> or
     ///     <c>aabbccddeeff</c>, stored and returned as <c>aa:bb:cc:dd:ee:ff</c>), an
     ///     address or network that does not parse, or a protocol version that does not match the
     ///     address family. Requires <c>clients:write</c>.
@@ -213,7 +213,8 @@ public class DnsClientStaticAddressMappingsController(
     ///     or a CIDR network (the two forms the resolver matches),
     ///     <see cref="DnsClientStaticAddressMappingWriteRequest.ClientIdentifier" /> must be an
     ///     identifier <see cref="ClientIdentifierFormat.TryNormalize" /> accepts (it is stored in
-    ///     normal form, <c>aa:bb:cc:dd:ee:ff</c>), and <see cref="DnsClientStaticAddressMappingWriteRequest.ProtocolVersion" /> must
+    ///     normal form, <c>aa:bb:cc:dd:ee:ff</c>), and
+    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.ProtocolVersion" /> must
     ///     match the address family, since an IPv4 network cannot map into the IPv6 identifier
     ///     space or the reverse (see
     ///     <see cref="DnsClientStaticAddressMappingEntity.ProtocolVersion" />).

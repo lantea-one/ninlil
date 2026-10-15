@@ -82,8 +82,8 @@ public sealed class Dhcpv6LeaseAllocationService(
             Dhcpv4ClientIdentifier.AreEqual(lease.ClientIdentifier, clientKey)
         );
 
-        // A quarantine an older build stored on the client's own row is moved off the client, so
-        // the request continues as for a client without a row.
+        // A quarantine left on the client's own key is moved off the client, so the request
+        // continues as for a client without a row.
         if (
             existing is not null
             && await DetachQuarantineAsync(scope, existing, now, cancellationToken)
@@ -174,6 +174,8 @@ public sealed class Dhcpv6LeaseAllocationService(
 
         if (!addressMatchesOwnReservation)
         {
+            // A reserved address may lie outside the dynamic range, so only other addresses are
+            // range-checked.
             if (!IsWithinScopeRange(scope, address))
                 return null;
 
@@ -196,8 +198,8 @@ public sealed class Dhcpv6LeaseAllocationService(
             Dhcpv4ClientIdentifier.AreEqual(lease.ClientIdentifier, clientKey)
         );
 
-        // A quarantine an older build stored on the client's own row no longer belongs to the
-        // client, so the address stays blocked for it and the caller answers NoBinding.
+        // A quarantine left on the client's own key no longer belongs to the client, so the
+        // address stays blocked for it and the caller answers NoBinding.
         if (
             existingByClient is not null
             && await DetachQuarantineAsync(scope, existingByClient, now, cancellationToken)
@@ -213,6 +215,8 @@ public sealed class Dhcpv6LeaseAllocationService(
             if (IsLeaseBlocking(existingByAddress, now))
                 return null;
 
+            // A non-blocking row of another client is deleted first, in its own SaveChanges, so
+            // claiming the address does not hit the (ScopeName, IpAddress) unique index.
             leaseRepository.Remove(existingByAddress);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
@@ -312,8 +316,8 @@ public sealed class Dhcpv6LeaseAllocationService(
             Dhcpv4ClientIdentifier.AreEqual(lease.ClientIdentifier, clientKey)
         );
 
-        // A quarantine row of an older build is moved off the client (a prefix cannot be
-        // declined, so this only guards a row that is shaped like one).
+        // A prefix cannot be declined, so a quarantine-shaped row on the client's key should not
+        // exist. It is moved off the client anyway, so it cannot be reused as a prefix lease.
         if (
             existing is not null
             && await DetachQuarantineAsync(scope, existing, now, cancellationToken)
@@ -399,7 +403,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         );
 
         // A blocking prefix row of another client, of any length, that overlaps the confirmed
-        // prefix refuses it (an older DelegatedPrefixLength can leave such a row).
+        // prefix refuses it (changing the scope's DelegatedPrefixLength can leave such a row).
         if (
             leases.Any(lease =>
                 !ReferenceEquals(lease, existingByClient)
@@ -660,6 +664,7 @@ public sealed class Dhcpv6LeaseAllocationService(
     ///     first aligned prefix in the pool scan that overlaps no blocking row. The client's own
     ///     row (<paramref name="own" />) never blocks, because the offer overwrites it.
     /// </summary>
+    // Returns a Task without being async because it does no I/O: the lease list is already loaded.
     private Task<IPAddress> ResolveCandidatePrefixAsync(
         DhcpScopeEntity scope,
         Dhcpv6IdentityAssociationPrefix hint,
@@ -781,9 +786,9 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method re-keys a client's own row when it is a quarantine stored by an older
-    ///     build (<c>Expired</c> with an expiry still ahead), keeping its expiry, and reports it
-    ///     as an <c>Expired</c> lease change. A naturally expired row has a past expiry and stays
+    ///     This method re-keys a client's own row when it is a quarantine (<c>Expired</c> with an
+    ///     expiry still ahead) that still carries the client's key, keeping its expiry, and
+    ///     reports it as an <c>Expired</c> lease change. A naturally expired row has a past expiry and stays
     ///     the client's row.
     /// </summary>
     /// <returns><see langword="true" /> when the row was re-keyed and saved.</returns>

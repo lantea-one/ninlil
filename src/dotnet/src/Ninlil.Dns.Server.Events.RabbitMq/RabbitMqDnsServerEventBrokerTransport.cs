@@ -21,8 +21,8 @@ namespace Ninlil.Dns.Server.Events.RabbitMq;
 ///         with exponential backoff whenever the connection is lost, so a restarted broker is
 ///         picked up again without operator action. That is the only resilience: an event
 ///         published while disconnected is not buffered or replayed. <see cref="PublishAsync" />
-///         throws at once, and <see cref="DnsServerEventPublisher" /> logs and drops the event,
-///         as the in-memory transport drops events when its queue is full.
+///         throws at once, and <see cref="BrokerEventPublishService" /> logs the failure and drops the
+///         event for other instances; local subscribers already have it.
 ///     </para>
 /// </summary>
 /// <param name="options">The connection and topology settings.</param>
@@ -224,6 +224,8 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
     {
         await EnsureConnectionLoopStartedAsync();
 
+        // Read without the lock: a channel the connection loop has just closed makes the publish
+        // throw, which the caller treats like any other failed publish.
         IChannel channel =
             _publishChannel
             ?? throw new InvalidOperationException(
@@ -339,6 +341,8 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
 
                 await consumeChannel.BasicConsumeAsync(
                     queue.QueueName,
+                    // No acknowledgement: events are best effort, so a message lost with the
+                    // connection is not redelivered.
                     autoAck: true,
                     consumer,
                     cancellationToken: stoppingToken

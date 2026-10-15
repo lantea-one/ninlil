@@ -12,8 +12,8 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.Startup;
 
 /// <summary>
-///     This class encrypts the secrets of <see cref="ConfigurationSecretSettings" /> that an
-///     earlier version left in plaintext in the runtime configuration file. At startup it moves
+///     This class encrypts the secrets of <see cref="ConfigurationSecretSettings" /> that sit in
+///     plaintext in the runtime configuration file. At startup it moves
 ///     each plaintext key into its encrypted sibling and empties the plaintext key, so the secret
 ///     does not stay on disk and in every backup until someone happens to save the setting again.
 ///     It follows <see cref="SmtpPasswordMigrationService" />.

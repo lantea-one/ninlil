@@ -13,8 +13,8 @@ namespace Ninlil.Web.Startup;
 ///     This class rewrites client identifiers stored in another form (such as <c>AA-BB-CC-DD-EE-FF</c>
 ///     or <c>aabb.ccdd.eeff</c>) into the normal form of <see cref="ClientIdentifierFormat" />
 ///     (lowercase hex pairs joined by colons). The write APIs normalise on input, and the DHCP
-///     engine and the client matcher compare the normal form exactly, so a row written in another
-///     form earlier never matches. <c>Program.cs</c> runs this once per startup after the schema is
+///     engine and the client matcher compare the normal form exactly, so a row stored in another
+///     form never matches. <c>Program.cs</c> runs this once per startup after the schema is
 ///     ready; it does nothing when every row is already in normal form.
 ///     <para>
 ///         It covers DHCP reservations (the identifier, plus the address in its canonical

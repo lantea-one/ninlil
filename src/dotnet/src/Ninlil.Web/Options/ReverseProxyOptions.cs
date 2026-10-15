@@ -26,7 +26,7 @@ public sealed class ReverseProxyOptions
 
     /// <summary>
     ///     This constant contains the Data Protection purpose string <see cref="SharedSecretEncrypted" />
-    ///     is protected with. A purpose of its own keeps a payload protected for another secret
+    ///     is protected with. A separate purpose keeps a payload protected for another secret
     ///     from decrypting as this one, so a value copied between two settings fails closed.
     /// </summary>
     public const string SharedSecretProtectorPurpose = "Ninlil.Web.ReverseProxy.SharedSecret";
@@ -85,8 +85,8 @@ public sealed class ReverseProxyOptions
     ///     This property contains the shared secret as a Data Protection payload that only this
     ///     node's key ring can read. <c>ReverseProxySettingsController</c> and cluster sync write
     ///     it (each node encrypts the secret with its own key ring), and
-    ///     <c>ConfigurationSecretMigrationService</c> writes it for a plaintext secret an earlier
-    ///     version left in the file. It is not set by hand: a payload from another node's key ring
+    ///     <c>ConfigurationSecretMigrationService</c> writes it for a plaintext secret it finds in
+    ///     the file. It is not set by hand: a payload from another node's key ring
     ///     cannot be decrypted. A non-empty <see cref="SharedSecret" /> from the configuration
     ///     wins over it.
     /// </summary>

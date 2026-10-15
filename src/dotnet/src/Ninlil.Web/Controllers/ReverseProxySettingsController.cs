@@ -109,8 +109,8 @@ public class ReverseProxySettingsController(
     ///     <paramref name="patch" /> keeps its value, including <c>sharedSecret</c>, which is
     ///     always operator-supplied and so can be replaced in place. The secret is stored
     ///     encrypted with this node's key ring (<c>sharedSecretEncrypted</c> in the file) and is
-    ///     sent as entered to the other cluster nodes, which encrypt it with their own key ring. <c>knownProxies</c> and
-    ///     <c>knownNetworks</c> are each replaced as a whole array when present. An optional
+    ///     sent as entered to the other cluster nodes, which encrypt it with their own key ring.
+    ///     <c>knownProxies</c> and <c>knownNetworks</c> are each replaced as a whole array when present. An optional
     ///     <c>dnsOverTls</c> sub-object is merged the same way into
     ///     <c>DnsServer:Protocol:DnsOverTls:ProxyProtocol</c>; it has no shared secret (see
     ///     <c>DnsOverTlsProxyProtocolSettingsDetail</c>). Returns 400 for an invalid IP address or

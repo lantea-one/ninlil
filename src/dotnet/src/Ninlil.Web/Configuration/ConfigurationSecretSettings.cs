@@ -12,7 +12,7 @@ namespace Ninlil.Web.Configuration;
 ///     purpose protects it.
 /// </summary>
 /// <param name="SectionPath">The configuration section both keys belong to, for example <c>DnsServer:ReverseProxy</c>.</param>
-/// <param name="PlainKey">The key that holds the plaintext (an environment variable, or an old file).</param>
+/// <param name="PlainKey">The key that holds the plaintext (an environment variable, or a configuration file edited by hand).</param>
 /// <param name="EncryptedKey">The key that holds the Data Protection payload.</param>
 /// <param name="ProtectorPurpose">The purpose string the payload is protected with.</param>
 public sealed record ConfigurationSecretSetting(
@@ -59,7 +59,7 @@ public static class ConfigurationSecretSettings
 {
     /// <summary>
     ///     This field contains every catalogued secret. The reverse-proxy shared secret is the
-    ///     only entry so far.
+    ///     only entry.
     /// </summary>
     private static readonly ConfigurationSecretSetting[] Entries =
     [

@@ -12,7 +12,8 @@ namespace Ninlil.Dns.Server.Webhooks;
 ///     <c>AcmeCertificateRenewalSucceededEvent</c>, <c>AcmeCertificateRenewalFailedEvent</c>,
 ///     <c>CloudDnsZoneSyncFailedEvent</c>, <c>TrustAnchorRolloverEvent</c>; see
 ///     <c>ServiceCollectionWebhooksExtension</c>); <see cref="WebhookEventCatalog" /> lists
-///     them and is what a subscription's event type names are checked against. One generic class is enough because
+///     them and is what a subscription's event type names are checked against. One generic class
+///     is enough because
 ///     <see cref="Ninlil.Dns.Server.Core.Events.DnsServerEventDispatcher" /> resolves subscribers
 ///     for an event's exact runtime type.
 ///     <para>
@@ -36,6 +37,8 @@ public sealed class WebhookDeliverySubscriber<TEvent>(
     /// <inheritdoc />
     public ValueTask HandleAsync(TEvent domainEvent, CancellationToken stoppingToken)
     {
+        // Fire and forget on purpose: DeliverAsync catches and logs its own failures, so the
+        // discarded task cannot fault unobserved.
         _ = DeliverAsync(domainEvent, stoppingToken);
         return ValueTask.CompletedTask;
     }

@@ -166,6 +166,11 @@ public sealed class DnsServerEventPublisher(
             "The broker publish queue was full and {DroppedCount} events were not sent to the message broker; the broker is slower than the event rate. Raise DnsServer:Events:Capacity or check the broker."
         );
 
+    // The drop callbacks of the bounded channels run on whichever thread publishes, so the counter
+    // and the last-warning time are shared without a lock. Only the single reader (the dispatcher
+    // or the broker publish service) calls this method, so the check-then-reset below cannot race
+    // with another reporter; a concurrent drop only lands in the next window, because Exchange
+    // takes the count and zeroes it in one step. A last-warning time of 0 means "never warned".
     private void ReportDrops(ref long dropped, ref long lastWarningTicks, string message)
     {
         if (Interlocked.Read(ref dropped) == 0)
@@ -178,12 +183,15 @@ public sealed class DnsServerEventPublisher(
             return;
 
         long count = Interlocked.Exchange(ref dropped, 0);
+        // TickCount64 can in theory be 0; store 1 so the value never reads as "never warned".
         Interlocked.Exchange(ref lastWarningTicks, now == 0 ? 1 : now);
 
         if (count > 0)
             logger.LogWarning(message, count);
     }
 
+    // The drop callback fires when DropOldest evicts an item, which is the only place a drop is
+    // visible; ReportDroppedEvents turns the count into one warning.
     private Channel<QueuedDnsServerEvent> CreateLossyChannel() =>
         Channel.CreateBounded<QueuedDnsServerEvent>(
             new BoundedChannelOptions(options.Value.Capacity)
@@ -206,6 +214,8 @@ public sealed class DnsServerEventPublisher(
             _ => Interlocked.Increment(ref _brokerDroppedSinceLastWarning)
         );
 
+    // The registry's Lossy flag decides the queue, so a per-query burst can never push out a
+    // control event.
     private void Enqueue(QueuedDnsServerEvent item)
     {
         Type eventType = item.Event.GetType();

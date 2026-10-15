@@ -6,7 +6,7 @@ namespace Ninlil.Dns.Server.Core.Events.Broker;
 /// <summary>
 ///     This class converts between an <see cref="IDnsServerEvent" /> and its
 ///     <see cref="DnsServerEventEnvelope" /> wire form. <see cref="BrokerEventConsumerService" />
-///     and the publish path of <see cref="DnsServerEventPublisher" /> use it, so the transports
+///     (decode) and <see cref="BrokerEventPublishService" /> (encode) use it, so the transports
 ///     only move envelopes.
 /// </summary>
 public static class DnsServerEventEnvelopeCodec

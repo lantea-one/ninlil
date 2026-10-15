@@ -37,9 +37,10 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" /> ahead and clears its
 ///         host name. No client owns that row, so the address stays blocked for every client,
 ///         the declining client included, and the client's next DISCOVER starts a new row. A
-///         DECLINE of an address that is free or leased to another client changes nothing. A row
-///         that an older build stored as the client's own <c>Expired</c> row with a future expiry
-///         is re-keyed the same way when the client next sends a DISCOVER or REQUEST.
+///         DECLINE of an address that is free or leased to another client changes nothing. An
+///         <c>Expired</c> row with a future expiry on the client's own key is treated as a
+///         quarantine and re-keyed the same way when the client next sends a DISCOVER or
+///         REQUEST (see <c>DetachQuarantineAsync</c>).
 ///     </para>
 ///     <para>
 ///         <b>Offer order</b> (RFC 2131 Section 4.3.1): the client's enabled reservation (the
@@ -96,8 +97,8 @@ public sealed class Dhcpv4LeaseAllocationService(
             Dhcpv4ClientIdentifier.AreEqual(lease.ClientIdentifier, clientKey)
         );
 
-        // A quarantine an older build stored on the client's own row is moved off the client, so
-        // the request continues as for a client without a row.
+        // A quarantine left on the client's own key is moved off the client, so the request
+        // continues as for a client without a row.
         if (
             existing is not null
             && await DetachQuarantineAsync(scope, existing, now, cancellationToken)
@@ -214,8 +215,8 @@ public sealed class Dhcpv4LeaseAllocationService(
             Dhcpv4ClientIdentifier.AreEqual(lease.ClientIdentifier, clientKey)
         );
 
-        // A quarantine an older build stored on the client's own row no longer belongs to the
-        // client, so the address stays blocked for it and the NAK below follows.
+        // A quarantine left on the client's own key no longer belongs to the client, so the
+        // address stays blocked for it and the NAK below follows.
         if (
             existingByClient is not null
             && await DetachQuarantineAsync(scope, existingByClient, now, cancellationToken)
@@ -560,9 +561,9 @@ public sealed class Dhcpv4LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method re-keys a client's own row when it is a quarantine stored by an older
-    ///     build (<c>Expired</c> with an expiry still ahead), keeping its expiry, and reports it
-    ///     as an <c>Expired</c> lease change. A naturally expired row has a past expiry and stays
+    ///     This method re-keys a client's own row when it is a quarantine (<c>Expired</c> with an
+    ///     expiry still ahead) that still carries the client's key, keeping its expiry, and
+    ///     reports it as an <c>Expired</c> lease change. A naturally expired row has a past expiry and stays
     ///     the client's row.
     /// </summary>
     /// <returns><see langword="true" /> when the row was re-keyed and saved.</returns>

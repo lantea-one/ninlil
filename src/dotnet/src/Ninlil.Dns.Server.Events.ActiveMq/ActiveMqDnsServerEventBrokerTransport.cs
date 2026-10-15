@@ -60,6 +60,8 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
         }
     }
 
+    // The three options map to the failover transport's own parameters. "timeout" bounds a send
+    // on an interrupted connection, so a broker outage cannot block the publish service forever.
     private Uri BuildFailoverUri() =>
         new(
             $"failover:(tcp://{_options.HostName}:{_options.Port})"

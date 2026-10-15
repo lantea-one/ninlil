@@ -1356,8 +1356,8 @@ public sealed class Dhcpv6RequestHandler(
     ///     The reply says the server performs the AAAA update (S=1, N=0) only when an address was
     ///     granted, the client offered a host name and
     ///     <see cref="IDhcpDnsUpdatePolicy.RegistersHostNamesAsync" /> says this server registers
-    ///     names for the granting scope; otherwise it says the server performs none (S=0, N=1), and
-    ///     sets O=1 when the client had asked for S=1 (RFC 4704 Section 4.1). S=1 promises an
+    ///     names for the granting scope; otherwise it says the server performs none (S=0, N=1). O=1
+    ///     is set whenever the reply's S differs from the client's (RFC 4704 Section 4.1). S=1 promises an
     ///     attempt, not a result: <c>DhcpDnsRegistrationService</c> can still refuse a name that
     ///     belongs to a static record or another active client, or fail the update (RFC 4704
     ///     Section 6), and the client is not told. The policy is not asked when the request had no

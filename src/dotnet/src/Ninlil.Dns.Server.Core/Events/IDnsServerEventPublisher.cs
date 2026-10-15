@@ -4,8 +4,8 @@ namespace Ninlil.Dns.Server.Core.Events;
 /// <summary>
 ///     This interface publishes an <see cref="IDnsServerEvent" /> for later delivery to the
 ///     <see cref="IDnsServerEventSubscriber{TEvent}" />s registered for it. Publishing is
-///     synchronous and never blocks: it writes to an in-memory queue (and starts a broker
-///     publish without waiting when a broker is configured), so it is safe to call while
+///     synchronous and never blocks: it writes to an in-memory queue (and to a second queue for
+///     the broker publisher when a broker is configured), so it is safe to call while
 ///     answering a query. Only per-query events can be dropped; see
 ///     <see cref="DnsServerEventPublisherOptions.Capacity" />.
 /// </summary>

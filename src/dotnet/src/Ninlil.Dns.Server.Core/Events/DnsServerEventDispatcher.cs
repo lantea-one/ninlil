@@ -111,6 +111,8 @@ public sealed class DnsServerEventDispatcher(
         Type eventType = domainEvent.GetType();
         Type subscriberInterface = typeof(IDnsServerEventSubscriber<>).MakeGenericType(eventType);
 
+        // The subscriber interface is generic over the runtime type, so the call goes through
+        // reflection; the method lookup is cached per type.
         MethodInfo handleMethod = HandleMethodCache.GetOrAdd(
             eventType,
             _ =>
@@ -123,6 +125,8 @@ public sealed class DnsServerEventDispatcher(
 
         foreach (object subscriber in scope.ServiceProvider.GetServices(subscriberInterface))
         {
+            // Each node has its own database, so a foreign event reaches only the subscribers
+            // that opted in; the rest would act on ids that mean nothing here.
             if (item.IsRemote && subscriber is not IDnsServerRemoteEventSubscriber)
                 continue;
 
@@ -140,6 +144,8 @@ public sealed class DnsServerEventDispatcher(
                     ? wrapped.InnerException
                     : exception;
 
+                // Shutdown is not a subscriber failure: stop the loop instead of logging an error
+                // for every remaining subscriber. A subscriber's own cancellation stays a failure.
                 if (reported is OperationCanceledException && stoppingToken.IsCancellationRequested)
                     throw new OperationCanceledException(stoppingToken);
 

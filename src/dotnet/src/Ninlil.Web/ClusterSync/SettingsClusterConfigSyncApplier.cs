@@ -57,8 +57,8 @@ public class SettingsClusterConfigSyncApplier(
             stoppingToken
         );
 
-        // A section with no local state row has never been written here, so it counts as as old
-        // as possible and any incoming write wins, as for a missing entity row in
+        // A section with no local state row has never been written here, so it counts as old as
+        // possible and any incoming write wins, as for a missing entity row in
         // ClusterConfigSyncApplierBase<TEntity>.
         DateTimeOffset localLastModifiedUtc =
             state?.GetLastModifiedUtc() ?? DateTimeOffset.MinValue;

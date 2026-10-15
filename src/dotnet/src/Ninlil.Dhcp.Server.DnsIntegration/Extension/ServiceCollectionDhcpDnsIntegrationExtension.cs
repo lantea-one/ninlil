@@ -13,19 +13,31 @@ namespace Ninlil.Dhcp.Server.DnsIntegration.Extension;
 public static class ServiceCollectionDhcpDnsIntegrationExtension
 {
     /// <summary>
-    ///     This method registers the DHCP-to-DNS feature: the scoped
-    ///     <see cref="DhcpDnsRegistrationService" /> and its <see cref="DhcpLeaseChangedEvent" />
-    ///     subscriber, which takes turns on the singleton <see cref="DhcpDnsRegistrationGate" /> so
-    ///     registrations run one at a time, the scoped <see cref="DhcpClientRegistryAutoPopulationService" /> and its
-    ///     subscriber (a second reaction to the same event that adds new clients to the client
-    ///     registry), and the singleton <see cref="DhcpLeaseClientIdentityResolver" />, under its
-    ///     own type only, since <c>DhcpServiceRegistration</c> builds the
-    ///     <c>CompositeClientIdentityResolver</c> itself, with the
-    ///     <see cref="DhcpLeaseIdentitySnapshotInvalidator" /> subscriber that refreshes its
-    ///     lease snapshot on every lease change, and the scoped
-    ///     <see cref="DhcpDnsUpdatePolicy" />, which replaces the engine's default
-    ///     <see cref="IDhcpDnsUpdatePolicy" /> so a DHCPv6 Client FQDN reply says S=1 for a scope
-    ///     with an eligible DNS zone.
+    ///     This method registers the DHCP-to-DNS feature. It adds, all reacting to
+    ///     <see cref="DhcpLeaseChangedEvent" /> unless noted:
+    ///     <list type="bullet">
+    ///         <item>
+    ///             the scoped <see cref="DhcpDnsRegistrationService" /> and its subscriber, which
+    ///             takes turns on the singleton <see cref="DhcpDnsRegistrationGate" /> so
+    ///             registrations run one at a time;
+    ///         </item>
+    ///         <item>
+    ///             the scoped <see cref="DhcpClientRegistryAutoPopulationService" /> and its
+    ///             subscriber, which adds new clients to the client registry;
+    ///         </item>
+    ///         <item>
+    ///             the singleton <see cref="DhcpLeaseClientIdentityResolver" />, under its own type
+    ///             only, since <c>DhcpServiceRegistration</c> builds the
+    ///             <c>CompositeClientIdentityResolver</c> itself, and the
+    ///             <see cref="DhcpLeaseIdentitySnapshotInvalidator" /> subscriber that refreshes its
+    ///             lease snapshot on every lease change;
+    ///         </item>
+    ///         <item>
+    ///             the scoped <see cref="DhcpDnsUpdatePolicy" />, which replaces the engine's
+    ///             default <see cref="IDhcpDnsUpdatePolicy" /> so a DHCPv6 Client FQDN reply says
+    ///             S=1 for a scope with an eligible DNS zone.
+    ///         </item>
+    ///     </list>
     ///     <para>
     ///         The caller must already have registered the <c>Ninlil.Dns.Server.Core</c> event bus,
     ///         the DHCP and DNS repositories and <c>IZoneUpdateService</c>, as with other features

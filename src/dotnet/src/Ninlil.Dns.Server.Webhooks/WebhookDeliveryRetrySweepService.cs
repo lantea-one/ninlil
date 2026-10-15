@@ -108,9 +108,9 @@ public sealed class WebhookDeliveryRetrySweepService(
     }
 
     /// <summary>
-    ///     This method runs one sweep in a new scope: it resumes every delivery due for a retry,
-    ///     (the HTTP attempts in parallel), then removes completed deliveries past the retention period. It is
-    ///     public so tests can run one sweep without waiting for
+    ///     This method runs one sweep in a new scope: it resumes every delivery due for a retry
+    ///     (the HTTP attempts run in parallel), then removes completed deliveries past the
+    ///     retention period. It is public so tests can run one sweep without waiting for
     ///     <see cref="WebhookDeliveryOptions.SweepInterval" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

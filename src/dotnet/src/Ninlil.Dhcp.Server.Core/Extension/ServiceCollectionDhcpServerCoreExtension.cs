@@ -28,7 +28,8 @@ public static class ServiceCollectionDhcpServerCoreExtension
     ///     This method binds <see cref="DhcpServerOptions" /> and registers the DHCPv4 engine:
     ///     <see cref="IDhcpServerIdentifierProvider" /> (singleton), the scoped
     ///     <see cref="IDhcpv4ScopeResolver" />, <see cref="IDhcpv4LeaseAllocationService" /> and
-    ///     <see cref="IDhcpv4OptionOverlayService" />, the default <see cref="IDhcpDnsUpdatePolicy" />, and <see cref="Dhcpv4RequestHandler" /> as the
+    ///     <see cref="IDhcpv4OptionOverlayService" />, the default
+    ///     <see cref="IDhcpDnsUpdatePolicy" />, and <see cref="Dhcpv4RequestHandler" /> as the
     ///     singleton <see cref="IDhcpv4RequestHandler" /> that <see cref="Dhcpv4UdpListener" />
     ///     calls.
     ///     <para>
@@ -69,7 +70,8 @@ public static class ServiceCollectionDhcpServerCoreExtension
     ///     singleton <see cref="IDhcpv6ServerIdentifierProvider" /> and
     ///     <see cref="IDhcpv6ServerAddressProvider" />, the scoped
     ///     <see cref="IDhcpv6ScopeResolver" />, <see cref="IDhcpv6LeaseAllocationService" /> and
-    ///     <see cref="IDhcpv6OptionOverlayService" />, the default <see cref="IDhcpDnsUpdatePolicy" />, and one singleton
+    ///     <see cref="IDhcpv6OptionOverlayService" />, the default
+    ///     <see cref="IDhcpDnsUpdatePolicy" />, and one singleton
     ///     <see cref="Dhcpv6RequestHandler" /> serving as both <see cref="IDhcpv6RequestHandler" />
     ///     and <see cref="IDhcpv6RelayMessageHandler" /> for <see cref="Dhcpv6UdpListener" />.
     ///     <para>

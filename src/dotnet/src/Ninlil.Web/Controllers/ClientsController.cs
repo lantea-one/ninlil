@@ -220,8 +220,8 @@ public class ClientsController(
 
     /// <summary>
     ///     This action registers a client device with its first address. Returns 400 for a missing
-    ///     or malformed identifier, an unknown client group or an unknown icon name, and 409 when a device
-    ///     already has the same <see cref="ClientCreateRequest.ClientIdentifier" /> and
+    ///     or malformed identifier, an unknown client group or an unknown icon name, and 409 when
+    ///     a device already has the same <see cref="ClientCreateRequest.ClientIdentifier" /> and
     ///     <see cref="ClientCreateRequest.ProtocolVersion" /> (the pair the address table's unique
     ///     index covers, checked first through
     ///     <see cref="IDnsClientRepository.GetByClientIdentifierAsync" />). The identifier is

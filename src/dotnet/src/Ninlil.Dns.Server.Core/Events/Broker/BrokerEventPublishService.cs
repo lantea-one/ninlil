@@ -91,6 +91,10 @@ public sealed class BrokerEventPublishService(
         }
     }
 
+    // The fields below are plain, not Interlocked: this method runs only on the single pump loop
+    // in ExecuteAsync. The first failure after a quiet minute warns at once; later ones are
+    // counted into the next warning. A last-warning time of 0 means "never warned", hence the
+    // 1 stored when TickCount64 is 0.
     private void RecordFailure(Exception exception, string eventType)
     {
         _failuresSinceLastWarning++;
