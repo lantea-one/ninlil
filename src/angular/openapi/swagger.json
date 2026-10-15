@@ -21199,7 +21199,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken), and later records go through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken). Returns 400 when the first record\nis not an SOA or the data does not fit the record type, 404 for an unknown zone, and 409\nfor a second SOA. Requires `zones:write`.",
+        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken), and later records go through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken,Ninlil.Dns.Common.Wire.DnsResourceRecord). Returns 400 when the first record\nis not an SOA or the data does not fit the record type, 404 for an unknown zone, and 409\nfor a second SOA. Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -44532,7 +44532,7 @@
           },
           "defaultRetryInterval": {
             "type": "string",
-            "description": "How long to wait before retrying a zone with no local SOA (so no Retry value), whose primaries were all unreachable, or that is a stub zone. Defaults to 30 seconds.",
+            "description": "How long to wait before the next check of a zone with no local SOA yet (so no Retry value) or of a stub zone. Any other zone whose primaries were all unreachable is retried after its own SOA Retry value. Defaults to 30 seconds.",
             "format": "date-span"
           }
         },

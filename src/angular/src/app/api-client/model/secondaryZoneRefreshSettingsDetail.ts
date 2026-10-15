@@ -18,7 +18,7 @@ export interface SecondaryZoneRefreshSettingsDetail {
      */
     pollInterval?: string;
     /**
-     * How long to wait before retrying a zone with no local SOA (so no Retry value), whose primaries were all unreachable, or that is a stub zone. Defaults to 30 seconds.
+     * How long to wait before the next check of a zone with no local SOA yet (so no Retry value) or of a stub zone. Any other zone whose primaries were all unreachable is retried after its own SOA Retry value. Defaults to 30 seconds.
      */
     defaultRetryInterval?: string;
 }
