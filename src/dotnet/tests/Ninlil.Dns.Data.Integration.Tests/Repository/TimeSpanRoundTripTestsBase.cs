@@ -15,6 +15,7 @@ namespace Ninlil.Dns.Data.Integration.Tests.Repository;
 ///     engine, one subclass per engine. SQL Server would map a <see cref="TimeSpan" /> to
 ///     <c>time</c>, which holds less than 24 hours, so each test saves spans of 1 day and 7 days
 ///     (the DHCP scope defaults and a daily filter list refresh) and reads them back exactly.
+///     MySQL <c>time(6)</c> stops at 838:59:59, so one test saves 40 days.
 /// </summary>
 public abstract class TimeSpanRoundTripTestsBase(EngineFixtureBase fixture)
 {
@@ -127,6 +128,100 @@ public abstract class TimeSpanRoundTripTestsBase(EngineFixtureBase fixture)
         );
     }
 
+    /// <summary>
+    ///     Spans of 40 days, above the 838:59:59 limit of a MySQL <c>time(6)</c> column, round-trip
+    ///     exactly for a scope, a filter list and a zone, with and without a fraction of a second.
+    /// </summary>
+    [Fact]
+    public async Task AllThreeEntities_SpansOfFortyDays_RoundTripExactly()
+    {
+        TimeSpan forty = TimeSpan.FromDays(40);
+        TimeSpan fortyWithMicroseconds = new(40, 3, 4, 5, 678, 901);
+
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+
+        await using (AsyncServiceScope seed = database.Services.CreateAsyncScope())
+        {
+            await seed
+                .ServiceProvider.GetRequiredService<IDhcpScopeRepository>()
+                .AddAsync(NewScope("forty", forty, fortyWithMicroseconds));
+            await seed
+                .ServiceProvider.GetRequiredService<IDnsFilterListRepository>()
+                .AddAsync(NewList("forty", forty));
+            await seed
+                .ServiceProvider.GetRequiredService<IDnsFilterListRepository>()
+                .AddAsync(NewList("forty-fraction", fortyWithMicroseconds));
+            await seed
+                .ServiceProvider.GetRequiredService<IZoneRepository>()
+                .AddAsync(NewZone("forty.example", forty));
+            await seed.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        await using AsyncServiceScope scope = database.Services.CreateAsyncScope();
+        DhcpScopeEntity loadedScope = await scope
+            .ServiceProvider.GetRequiredService<IDhcpScopeRepository>()
+            .FindByNameAsync("forty");
+        Assert.Equal(forty, loadedScope.DefaultLeaseDuration);
+        Assert.Equal(fortyWithMicroseconds, loadedScope.MaxLeaseDuration);
+
+        IDnsFilterListRepository lists =
+            scope.ServiceProvider.GetRequiredService<IDnsFilterListRepository>();
+        Assert.Equal(forty, (await lists.FindByNameAsync("forty")).RefreshInterval);
+        Assert.Equal(
+            fortyWithMicroseconds,
+            (await lists.FindByNameAsync("forty-fraction")).RefreshInterval
+        );
+
+        Assert.Equal(
+            forty,
+            (
+                await scope
+                    .ServiceProvider.GetRequiredService<IZoneRepository>()
+                    .FindByNameAsync("forty.example")
+            ).CloudSyncInterval
+        );
+    }
+
+    /// <summary>
+    ///     A span with a 100 ns tick (finer than a microsecond) reads back exactly on every engine
+    ///     that stores ticks or text; PostgreSQL <c>interval</c> keeps microseconds only, so its
+    ///     subclass turns this off.
+    /// </summary>
+    [Fact]
+    public async Task FilterList_SpanWithSubMicrosecondTicks_RoundTripsExactlyWhereTheEngineAllowsIt()
+    {
+        if (!KeepsSubMicrosecondTicks)
+            return;
+
+        TimeSpan fine = new TimeSpan(40, 3, 4, 5, 678, 901) + TimeSpan.FromTicks(2);
+
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+
+        await using (AsyncServiceScope seed = database.Services.CreateAsyncScope())
+        {
+            await seed
+                .ServiceProvider.GetRequiredService<IDnsFilterListRepository>()
+                .AddAsync(NewList("fine", fine));
+            await seed.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        await using AsyncServiceScope scope = database.Services.CreateAsyncScope();
+        Assert.Equal(
+            fine,
+            (
+                await scope
+                    .ServiceProvider.GetRequiredService<IDnsFilterListRepository>()
+                    .FindByNameAsync("fine")
+            ).RefreshInterval
+        );
+    }
+
+    /// <summary>
+    ///     This property says whether the engine stores a span finer than one microsecond. It is
+    ///     true except on PostgreSQL, whose <c>interval</c> has microsecond precision.
+    /// </summary>
+    protected virtual bool KeepsSubMicrosecondTicks => true;
+
     private static DhcpScopeEntity NewScope(string name, TimeSpan? defaultLease, TimeSpan? maxLease)
     {
         DhcpScopeEntity scope = new()
@@ -189,7 +284,11 @@ public sealed class SqliteTimeSpanRoundTripTests(SqliteEngineFixture fixture)
 [Collection(PostgreSqlCollection.Name)]
 [Trait("Category", "RequiresDocker")]
 public sealed class PostgreSqlTimeSpanRoundTripTests(PostgreSqlEngineFixture fixture)
-    : TimeSpanRoundTripTestsBase(fixture);
+    : TimeSpanRoundTripTestsBase(fixture)
+{
+    /// <summary>PostgreSQL <c>interval</c> keeps microseconds, not 100 ns ticks.</summary>
+    protected override bool KeepsSubMicrosecondTicks => false;
+}
 
 /// <summary>This class runs <see cref="TimeSpanRoundTripTestsBase" /> on MySQL (Docker).</summary>
 [Collection(MySqlCollection.Name)]
