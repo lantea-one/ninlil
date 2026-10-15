@@ -34,8 +34,9 @@ public interface IDnssecSigningAlgorithm
     /// </summary>
     /// <param name="keySizeBits">
     ///     The key size in bits. Only <see cref="RsaSigningAlgorithm" /> uses it, where <c>0</c>
-    ///     means its default. The others ignore it: DSA always uses the largest RFC 2536 size, and
-    ///     ECDSA and EdDSA have fixed sizes.
+    ///     means its default and any other value is range-checked (see
+    ///     <see cref="RsaSigningAlgorithm.IsValidKeySize" />). The others ignore it: DSA always
+    ///     uses the largest RFC 2536 size, and ECDSA and EdDSA have fixed sizes.
     /// </param>
     /// <returns>The generated key pair.</returns>
     DnssecKeyPair GenerateKeyPair(int keySizeBits = 0);

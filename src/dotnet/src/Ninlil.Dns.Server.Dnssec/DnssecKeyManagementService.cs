@@ -115,6 +115,18 @@ public class DnssecKeyManagementService(
                 $"DNSSEC algorithm '{algorithm}' is not supported for signing."
             );
 
+        // Check the size here so the caller gets a 400 and not an ArgumentOutOfRangeException.
+        // Only the RSA algorithms use the size; every other algorithm ignores it.
+        if (
+            signingAlgorithm is RsaSigningAlgorithm
+            && !RsaSigningAlgorithm.IsValidKeySize(keySizeBits)
+        )
+            throw new ValidationException(
+                $"RSA key size must be a multiple of {RsaSigningAlgorithm.KeySizeStepBits} between "
+                    + $"{RsaSigningAlgorithm.MinimumKeySizeBits} and "
+                    + $"{RsaSigningAlgorithm.MaximumKeySizeBits} bits; 0 means 2048."
+            );
+
         DnssecKeyPair keyPair = signingAlgorithm.GenerateKeyPair(keySizeBits);
         byte[] dnsKeyRdata = BuildDnsKeyRdata(role, algorithm, keyPair.PublicKeyWireFormat);
 

@@ -34,7 +34,7 @@ public class DnssecKeyTagAndDsDigestTests
         );
         byte[] dnsKeyRdata = BuildDnsKeyRdata(
             DnssecAlgorithmEnum.RsaSha256,
-            rsaSha256.GenerateKeyPair(1024).PublicKeyWireFormat
+            rsaSha256.GenerateKeyPair(2048).PublicKeyWireFormat
         );
 
         ushort first = DnssecKeyTag.Compute(DnssecAlgorithmEnum.RsaSha256, dnsKeyRdata);
@@ -52,7 +52,7 @@ public class DnssecKeyTagAndDsDigestTests
         );
         byte[] dnsKeyRdata = BuildDnsKeyRdata(
             DnssecAlgorithmEnum.RsaSha256,
-            rsaSha256.GenerateKeyPair(1024).PublicKeyWireFormat
+            rsaSha256.GenerateKeyPair(2048).PublicKeyWireFormat
         );
         byte[] tamperedRdata = [.. dnsKeyRdata];
         tamperedRdata[^1] ^= 0x01;
@@ -75,7 +75,7 @@ public class DnssecKeyTagAndDsDigestTests
             DnssecAlgorithmEnum.RsaMd5,
             out IDnssecSigningAlgorithm rsaMd5
         );
-        byte[] publicKey = rsaMd5.GenerateKeyPair(1024).PublicKeyWireFormat;
+        byte[] publicKey = rsaMd5.GenerateKeyPair(2048).PublicKeyWireFormat;
         byte[] dnsKeyRdata = BuildDnsKeyRdata(DnssecAlgorithmEnum.RsaMd5, publicKey);
 
         int exponentLength = publicKey[0] == 0 ? (publicKey[1] << 8) | publicKey[2] : publicKey[0];
@@ -98,7 +98,7 @@ public class DnssecKeyTagAndDsDigestTests
         );
         byte[] dnsKeyRdata = BuildDnsKeyRdata(
             DnssecAlgorithmEnum.RsaSha256,
-            rsaSha256.GenerateKeyPair(1024).PublicKeyWireFormat
+            rsaSha256.GenerateKeyPair(2048).PublicKeyWireFormat
         );
         DnsName owner = DnsName.Parse("child.example.com");
 
@@ -116,7 +116,7 @@ public class DnssecKeyTagAndDsDigestTests
         );
         byte[] dnsKeyRdata = BuildDnsKeyRdata(
             DnssecAlgorithmEnum.RsaSha256,
-            rsaSha256.GenerateKeyPair(1024).PublicKeyWireFormat
+            rsaSha256.GenerateKeyPair(2048).PublicKeyWireFormat
         );
         DnsName owner = DnsName.Parse("child.example.com");
 
@@ -144,7 +144,7 @@ public class DnssecKeyTagAndDsDigestTests
         );
         byte[] dnsKeyRdata = BuildDnsKeyRdata(
             DnssecAlgorithmEnum.RsaSha256,
-            rsaSha256.GenerateKeyPair(1024).PublicKeyWireFormat
+            rsaSha256.GenerateKeyPair(2048).PublicKeyWireFormat
         );
 
         byte[] digestOne = DsDigestCodec.Compute(
@@ -170,7 +170,7 @@ public class DnssecKeyTagAndDsDigestTests
         );
         byte[] dnsKeyRdata = BuildDnsKeyRdata(
             DnssecAlgorithmEnum.RsaSha256,
-            rsaSha256.GenerateKeyPair(1024).PublicKeyWireFormat
+            rsaSha256.GenerateKeyPair(2048).PublicKeyWireFormat
         );
         DnsName owner = DnsName.Parse("child.example.com");
 

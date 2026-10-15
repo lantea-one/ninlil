@@ -118,7 +118,9 @@ public class DnssecKeysController(
     /// <summary>
     ///     This action generates a new DNSSEC key for the zone, active at once, and has the zone
     ///     re-signed. Returns 400 for an algorithm the server's policy disallows, cannot sign
-    ///     with or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST), and 404 for an unknown zone. Requires <c>zones:write</c>.
+    ///     with or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST),
+    ///     and for an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits, and
+    ///     404 for an unknown zone. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -271,7 +273,8 @@ public class DnssecKeysController(
     ///     This action starts an automated RFC 6781 rollover of an active key and returns the new
     ///     key. The scheme (Pre-Publish or Double-Signature) follows from the key's role; see
     ///     <see cref="IDnssecKeyManagementService.StartRolloverAsync" /> for the steps. Returns
-    ///     400, 404 or 409 as that method reports. Requires <c>zones:write</c>.
+    ///     400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a
+    ///     multiple of 64 between 2048 and 4096 bits. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/roll")]
     [RequirePermission("zones:write")]

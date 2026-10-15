@@ -26,12 +26,57 @@ public class RsaSigningAlgorithm(
     /// </summary>
     private const int DefaultKeySizeBits = 2048;
 
+    /// <summary>
+    ///     This constant contains the smallest RSA key size, in bits, that a new key may have.
+    ///     Keys that are already stored with a smaller modulus keep signing and verifying; only
+    ///     generation enforces the floor.
+    /// </summary>
+    public const int MinimumKeySizeBits = 2048;
+
+    /// <summary>
+    ///     This constant contains the largest RSA key size, in bits, that a new key may have. The
+    ///     RSA/SHA-256 and RSA/SHA-512 algorithms allow moduli up to 4096 bits (RFC 5702 §2.1,
+    ///     §2.2).
+    /// </summary>
+    public const int MaximumKeySizeBits = 4096;
+
+    /// <summary>
+    ///     This constant contains the step, in bits, that a new key's size must be a multiple of.
+    ///     Windows CNG only generates RSA keys in steps of 64 bits, while OpenSSL accepts any
+    ///     size, so the rule keeps one answer on every platform.
+    /// </summary>
+    public const int KeySizeStepBits = 64;
+
+    /// <summary>
+    ///     This method tells whether <paramref name="keySizeBits" /> is a size a new RSA key may
+    ///     have: 0 (the default size), or a multiple of <see cref="KeySizeStepBits" /> between
+    ///     <see cref="MinimumKeySizeBits" /> and <see cref="MaximumKeySizeBits" />.
+    /// </summary>
+    public static bool IsValidKeySize(int keySizeBits) =>
+        keySizeBits == 0
+        || (
+            keySizeBits is >= MinimumKeySizeBits and <= MaximumKeySizeBits
+            && keySizeBits % KeySizeStepBits == 0
+        );
+
     /// <inheritdoc />
     public DnssecAlgorithmEnum AlgorithmNumber { get; } = algorithmNumber;
 
     /// <inheritdoc />
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     <paramref name="keySizeBits" /> is not 0 and not a multiple of
+    ///     <see cref="KeySizeStepBits" /> between <see cref="MinimumKeySizeBits" /> and
+    ///     <see cref="MaximumKeySizeBits" />.
+    /// </exception>
     public DnssecKeyPair GenerateKeyPair(int keySizeBits = 0)
     {
+        if (!IsValidKeySize(keySizeBits))
+            throw new ArgumentOutOfRangeException(
+                nameof(keySizeBits),
+                keySizeBits,
+                $"RSA key size must be a multiple of {KeySizeStepBits} between {MinimumKeySizeBits} and {MaximumKeySizeBits} bits; 0 means {DefaultKeySizeBits}."
+            );
+
         using RSA rsa = RSA.Create(keySizeBits > 0 ? keySizeBits : DefaultKeySizeBits);
 
         return new DnssecKeyPair(

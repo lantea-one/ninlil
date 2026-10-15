@@ -12,7 +12,8 @@ namespace Ninlil.Web.Models;
 /// <param name="Algorithm">The key's signing algorithm. Algorithms prohibited for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST) are rejected with 400.</param>
 /// <param name="KeySizeBits">
 ///     The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default)
-///     means 2048; ignored by every other algorithm.
+///     means 2048 and any other value must be a multiple of 64 between 2048 and 4096, else the
+///     request is rejected with 400; ignored by every other algorithm.
 /// </param>
 /// <param name="Comments">Free-form operator notes about the key.</param>
 public record DnssecKeyCreateRequest(
@@ -110,6 +111,7 @@ public record DnssecKeyDetail(
 /// </param>
 /// <param name="KeySizeBits">
 ///     The new key's size, in bits. Used only by the RSA algorithms, where 0 (the default) means
-///     2048.
+///     2048 and any other value must be a multiple of 64 between 2048 and 4096, else the request
+///     is rejected with 400.
 /// </param>
 public record DnssecKeyRolloverRequest(DnssecAlgorithmEnum? Algorithm = null, int KeySizeBits = 0);

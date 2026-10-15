@@ -25,14 +25,16 @@ public interface IDnssecKeyManagementService
     /// <param name="algorithm">The key's signing algorithm.</param>
     /// <param name="keySizeBits">
     ///     The key size in bits, passed to
-    ///     <see cref="Algorithms.IDnssecSigningAlgorithm.GenerateKeyPair" />. Only RSA uses it.
+    ///     <see cref="Algorithms.IDnssecSigningAlgorithm.GenerateKeyPair" />. Only RSA uses it: 0
+    ///     means 2048, any other value must be a multiple of 64 between 2048 and 4096.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The newly created key.</returns>
     /// <exception cref="ValidationException">
     ///     Thrown when <paramref name="algorithm" /> is excluded by
     ///     <see cref="DnssecAlgorithmPolicyOptions" />, or has no
-    ///     <see cref="Algorithms.IDnssecSigningAlgorithm" /> (such as algorithm 12, ECC-GOST).
+    ///     <see cref="Algorithms.IDnssecSigningAlgorithm" /> (such as algorithm 12, ECC-GOST), or
+    ///     when an RSA <paramref name="keySizeBits" /> is outside the bounds above.
     /// </exception>
     Task<DnssecKeyEntity> GenerateKeyAsync(
         Guid zoneId,
@@ -85,7 +87,8 @@ public interface IDnssecKeyManagementService
     ///     different value also changes the algorithm.
     /// </param>
     /// <param name="keySizeBits">
-    ///     The new key's size in bits. Only RSA uses it.
+    ///     The new key's size in bits. Only RSA uses it: 0 means 2048, any other value must be a
+    ///     multiple of 64 between 2048 and 4096 (otherwise <see cref="ValidationException" />).
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The newly created, incoming key.</returns>
