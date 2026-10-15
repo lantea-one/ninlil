@@ -15,6 +15,13 @@ public sealed class ActiveMqEventBrokerOptions
     public const string SectionName = "DnsServer:Events:ActiveMq";
 
     /// <summary>
+    ///     This constant contains the Data Protection purpose string <see cref="PasswordEncrypted" />
+    ///     is protected with. A purpose of its own keeps a payload protected for another secret
+    ///     from decrypting as this one, so a value copied between two settings fails closed.
+    /// </summary>
+    public const string PasswordProtectorPurpose = "Ninlil.Dns.Server.Events.ActiveMq.Password";
+
+    /// <summary>
     ///     This property contains the broker's host name or address.
     /// </summary>
     public string HostName { get; set; } = "localhost";
@@ -30,9 +37,26 @@ public sealed class ActiveMqEventBrokerOptions
     public string UserName { get; set; } = "admin";
 
     /// <summary>
-    ///     This property contains the password this transport authenticates with.
+    ///     This property contains the password this transport authenticates with. The file stores
+    ///     the password in <see cref="PasswordEncrypted" />, not here, so it is not readable from
+    ///     the file or from a backup of it. A non-empty value from the configuration (for example
+    ///     the <c>NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PASSWORD</c> variable) wins over
+    ///     <see cref="PasswordEncrypted" />. At startup the host replaces this value with the
+    ///     decrypted password. When the stored password cannot be decrypted it is set to an empty
+    ///     password, so the broker refuses the login and the failure is logged, while the server
+    ///     keeps running. Without any configured password the default <c>admin</c> stays.
     /// </summary>
     public string Password { get; set; } = "admin";
+
+    /// <summary>
+    ///     This property contains the password as a Data Protection payload that only this node's
+    ///     key ring can read. The settings API and cluster sync write it (each node encrypts the
+    ///     password with its own key ring), and the host's startup step writes it for a plaintext
+    ///     password an earlier version left in the file. It is not set by hand: a payload from
+    ///     another node's key ring cannot be decrypted. A non-empty <see cref="Password" /> from
+    ///     the configuration wins over it.
+    /// </summary>
+    public string PasswordEncrypted { get; set; } = "";
 
     /// <summary>
     ///     This property contains the name of the shared topic every connected Ninlil instance

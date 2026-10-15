@@ -989,7 +989,8 @@ two-factor authentication setup (via the account menu in the top-right corner).
 
 ### Single sign-on and e-mail secrets
 
-The SSO client secret and the SMTP password can come from two places. Each is stored encrypted
+The SSO client secret, the SMTP password, the reverse-proxy shared secret and the event broker
+passwords can come from two places. Each is stored encrypted
 with this server's Data Protection key ring when you save it in the admin console, or it can be
 supplied in plaintext from outside the application. The plaintext source wins.
 
@@ -998,6 +999,8 @@ supplied in plaintext from outside the application. The plaintext source wins.
 | SSO client secret | `NINLIL_IDENTITY_SSO_CLIENT_SECRET` | Single sign-on |
 | SMTP password | `NINLIL_EMAIL_PASSWORD` | SMTP |
 | Reverse-proxy shared secret | `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET` | Reverse proxy |
+| RabbitMQ password | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PASSWORD` | Event broker |
+| ActiveMQ password | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PASSWORD` | Event broker |
 
 **Supply a secret from the environment** (containers, secret stores):
 
@@ -1010,8 +1013,9 @@ supplied in plaintext from outside the application. The plaintext source wins.
 A plaintext secret typed into the configuration file is encrypted at startup and the plaintext is
 removed. A secret from the environment is never written to disk.
 
-The reverse-proxy shared secret is also replicated in a cluster. The node you save it on sends it
-to the other nodes over the encrypted, signed cluster channel, and each node encrypts it with its
+The reverse-proxy shared secret and the event broker passwords are also replicated in a cluster.
+The node you save one on sends it to
+the other nodes over the encrypted, signed cluster channel, and each node encrypts it with its
 own key ring before it writes its file. It never goes through the event broker.
 
 **If the key ring is lost.** The Data Protection key ring lives in the data directory. If it is
@@ -1022,13 +1026,15 @@ is sent (SMTP). The settings page shows that the saved secret cannot be decrypte
 then fails at the identity provider and sends the user back to the sign-in page with an error.
 An unreadable reverse-proxy shared secret fails closed: Ninlil logs an Error at startup and trusts
 no reverse proxy, so every request is treated as coming from its own connection address, until you
-enter the secret again and restart.
+enter the secret again and restart. An unreadable broker password becomes an empty password: the
+broker refuses the login, Ninlil logs an Error at startup and keeps running, and the event broker
+stays disconnected until you enter the password again and restart.
 
 To recover:
 
-1. Open the SSO, SMTP or Reverse proxy settings page, or set the plaintext variable above.
+1. Open the SSO, SMTP, Reverse proxy or Event broker settings page, or set the plaintext variable above.
 2. Enter the secret again and save (or restart with the variable set).
-3. For SSO and the reverse proxy, restart Ninlil so the new secret is read.
+3. For SSO, the reverse proxy and the event broker, restart Ninlil so the new secret is read.
 
 An SMTP user name needs a password: Ninlil rejects a save that would leave a user name without
 one, and logs a warning at startup if the configuration already has that state. Clear the user

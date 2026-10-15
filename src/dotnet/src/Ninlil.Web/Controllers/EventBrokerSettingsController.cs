@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -12,6 +13,7 @@ using Ninlil.Dns.Server.Core.Events.Broker;
 using Ninlil.Dns.Server.Events.ActiveMq;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.ClusterSync;
+using Ninlil.Web.Configuration;
 using Ninlil.Web.Examples.EventBroker;
 using Ninlil.Web.Examples.Settings;
 using Ninlil.Web.Extension;
@@ -52,6 +54,10 @@ namespace Ninlil.Web.Controllers;
 ///     <see cref="EventBrokerSettingsDetail.LastModifiedUtc" /> and
 ///     <see cref="EventBrokerSettingsDetail.OriginatingNodeId" />.
 /// </param>
+/// <param name="dataProtectionProvider">
+///     Supplies this node's key ring, which encrypts a broker password before it is written to the
+///     file (see <see cref="ConfigurationSecretSettings.ProtectForFile" />).
+/// </param>
 [ApiController]
 [Route("api/event-broker-settings")]
 public class EventBrokerSettingsController(
@@ -61,7 +67,8 @@ public class EventBrokerSettingsController(
     IOptions<ActiveMqEventBrokerOptions> activeMqOptions,
     RuntimeConfigurationOptions runtimeConfigurationOptions,
     ClusterConfigSyncSettingsRecorder clusterSyncRecorder,
-    IClusterSyncedSettingsStateRepository stateRepository
+    IClusterSyncedSettingsStateRepository stateRepository,
+    IDataProtectionProvider dataProtectionProvider
 ) : ControllerBase
 {
     /// <summary>
@@ -132,7 +139,10 @@ public class EventBrokerSettingsController(
     ///     merge patch at every level, through <see cref="PresetConfigurationFileApplier" />. A
     ///     field absent at the top level or within <c>rabbitMq</c> or <c>activeMq</c> keeps its
     ///     value, including <c>password</c>, so an operator can change only <c>hostName</c> without
-    ///     resupplying a password <see cref="Get" /> never shows. The change needs a restart.
+    ///     resupplying a password <see cref="Get" /> never shows. A password is stored encrypted
+    ///     with this node's key ring (as <c>passwordEncrypted</c> in the file) and sent as entered
+    ///     to the other cluster nodes, which encrypt it with their own key ring. The change needs
+    ///     a restart.
     ///     Returns 400 for a field of the wrong JSON type (nested fields are named like
     ///     <c>rabbitMq.port</c>), an unknown transport, a port outside 1-65535, a reconnect delay
     ///     or publish timeout that is not positive or exceeds the timer limit, or a maximum
@@ -185,8 +195,11 @@ public class EventBrokerSettingsController(
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
+        // The file gets the password encrypted with this node's key ring. The cluster payload
+        // keeps the password as entered, because a peer can only open what its own key ring
+        // protected; it travels on the TLS and TSIG protected cluster channel, never the broker.
         await PresetConfigurationFileApplier.ApplyAsync(
-            settings,
+            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
             runtimeConfigurationOptions.ConfigurationFilePath
         );
 

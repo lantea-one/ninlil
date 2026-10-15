@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Ninlil.Dns.Server.Events.ActiveMq;
+using Ninlil.Dns.Server.Events.RabbitMq;
 using Ninlil.Web.Configuration;
 using Ninlil.Web.Options;
 
@@ -33,6 +35,15 @@ namespace Ninlil.Web.Startup;
 ///         forwarded headers of every request are ignored. Falling back to no secret would instead
 ///         let any request from an allowlisted address through without it, which is the
 ///         opposite of what the operator configured.
+///     </para>
+///     <para>
+///         <b>Broker passwords.</b> The same order applies to the RabbitMQ and ActiveMQ passwords,
+///         and the class defaults (<c>guest</c>, <c>admin</c>) stay when nothing is configured. An
+///         unreadable password becomes an empty password: the broker refuses the login, the
+///         transport logs it and keeps retrying, and the server keeps running. A random value
+///         would fail the same way and hide the cause, so the empty value is used. The broker
+///         options classes live in projects that do not reference this one, so they are reached
+///         only through the post-configuration below.
 ///     </para>
 /// </summary>
 public static class ConfigurationSecretResolution
@@ -85,7 +96,80 @@ public static class ConfigurationSecretResolution
                 }
             );
 
+        AddBrokerPassword<RabbitMqEventBrokerOptions>(
+            services,
+            configuration,
+            RabbitMqEventBrokerOptions.PasswordProtectorPurpose,
+            "Ninlil.Web.EventBroker.RabbitMq",
+            options => options.PasswordEncrypted,
+            (options, password) => options.Password = password
+        );
+        AddBrokerPassword<ActiveMqEventBrokerOptions>(
+            services,
+            configuration,
+            ActiveMqEventBrokerOptions.PasswordProtectorPurpose,
+            "Ninlil.Web.EventBroker.ActiveMq",
+            options => options.PasswordEncrypted,
+            (options, password) => options.Password = password
+        );
+
         return services;
+    }
+
+    /// <summary>
+    ///     This method registers the post-configuration of one broker options class: it resolves
+    ///     the password as described on the class and writes the result into the plaintext
+    ///     property. An unreadable password becomes an empty one.
+    /// </summary>
+    /// <typeparam name="TOptions">The broker options class.</typeparam>
+    /// <param name="services">The service collection to add to.</param>
+    /// <param name="configuration">Read for the plaintext value, so a class default does not count.</param>
+    /// <param name="protectorPurpose">Finds the catalog entry of this broker's password.</param>
+    /// <param name="loggerCategory">The category of the Error logged for an unreadable password.</param>
+    /// <param name="getEncrypted">Reads the bound encrypted value.</param>
+    /// <param name="setPassword">Writes the resolved plaintext password.</param>
+    private static void AddBrokerPassword<TOptions>(
+        IServiceCollection services,
+        IConfiguration configuration,
+        string protectorPurpose,
+        string loggerCategory,
+        Func<TOptions, string> getEncrypted,
+        Action<TOptions, string> setPassword
+    )
+        where TOptions : class
+    {
+        ConfigurationSecretSetting secret = ConfigurationSecretSettings.All.Single(entry =>
+            entry.ProtectorPurpose == protectorPurpose
+        );
+
+        services
+            .AddOptions<TOptions>()
+            .PostConfigure<IDataProtectionProvider, ILoggerFactory>(
+                (options, dataProtectionProvider, loggerFactory) =>
+                {
+                    switch (
+                        Resolve(
+                            configuration,
+                            secret,
+                            getEncrypted(options),
+                            dataProtectionProvider,
+                            loggerFactory.CreateLogger(loggerCategory),
+                            out string plaintext
+                        )
+                    )
+                    {
+                        case SecretResolutionOutcome.Decrypted:
+                            setPassword(options, plaintext);
+                            break;
+                        case SecretResolutionOutcome.Unreadable:
+                            // An empty password: the broker refuses the login and the server
+                            // keeps running. Falling back to the class default would try a
+                            // well-known credential the operator did not choose.
+                            setPassword(options, string.Empty);
+                            break;
+                    }
+                }
+            );
     }
 
     /// <summary>

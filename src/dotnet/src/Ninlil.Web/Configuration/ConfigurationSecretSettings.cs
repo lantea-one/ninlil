@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
+using Ninlil.Dns.Server.Events.ActiveMq;
+using Ninlil.Dns.Server.Events.RabbitMq;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.Options;
 
@@ -58,8 +60,8 @@ public sealed record ConfigurationSecretSetting(
 public static class ConfigurationSecretSettings
 {
     /// <summary>
-    ///     This field contains every catalogued secret. The reverse-proxy shared secret is the
-    ///     only entry.
+    ///     This field contains every catalogued secret: the reverse-proxy shared secret and the
+    ///     RabbitMQ and ActiveMQ broker passwords.
     /// </summary>
     private static readonly ConfigurationSecretSetting[] Entries =
     [
@@ -68,6 +70,18 @@ public static class ConfigurationSecretSettings
             nameof(ReverseProxyOptions.SharedSecret),
             nameof(ReverseProxyOptions.SharedSecretEncrypted),
             ReverseProxyOptions.SharedSecretProtectorPurpose
+        ),
+        new(
+            RabbitMqEventBrokerOptions.SectionName,
+            nameof(RabbitMqEventBrokerOptions.Password),
+            nameof(RabbitMqEventBrokerOptions.PasswordEncrypted),
+            RabbitMqEventBrokerOptions.PasswordProtectorPurpose
+        ),
+        new(
+            ActiveMqEventBrokerOptions.SectionName,
+            nameof(ActiveMqEventBrokerOptions.Password),
+            nameof(ActiveMqEventBrokerOptions.PasswordEncrypted),
+            ActiveMqEventBrokerOptions.PasswordProtectorPurpose
         ),
     ];
 
@@ -112,7 +126,7 @@ public static class ConfigurationSecretSettings
     ///     <para>
     ///         An incoming value for an encrypted key is dropped. A payload made by another node's
     ///         key ring cannot be read here, and writing it would replace a working secret with an
-    ///         unreadable one (which makes the reverse proxy fail closed). Only the plaintext
+    ///         unreadable one (the reverse proxy then fails closed and a broker password is empty). Only the plaintext
     ///         travels between nodes.
     ///     </para>
     /// </summary>

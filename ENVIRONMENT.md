@@ -32,10 +32,10 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **330 individual settings** across 58 bound configuration classes, plus **3 standalone**
+Total: **332 individual settings** across 58 bound configuration classes, plus **3 standalone**
 variables read directly by configuration key (the two bootstrap administrator credentials and
 `NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's own real,
-unprefixed equivalents — **340 environment variables in total**. The `NINLIL_DOTNET_*` runtime
+unprefixed equivalents — **342 environment variables in total**. The `NINLIL_DOTNET_*` runtime
 settings in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not
 part of that total.
 
@@ -348,14 +348,16 @@ when `NINLIL_DNS_SERVER_EVENTS_TRANSPORT` selects one of them).
 | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PORT` | RabbitMQ broker port. | `5672` |
 | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_VIRTUAL_HOST` | RabbitMQ virtual host. | `/` |
 | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_USER_NAME` | RabbitMQ auth username. | `guest` |
-| `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PASSWORD` | RabbitMQ auth password. | `guest` |
+| `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PASSWORD` | RabbitMQ auth password. Set it from outside the application only. When set and not empty, it overrides a password saved in the admin console. The admin console and cluster sync never write it to the configuration file: they store the password in the `..._ENCRYPTED` variable below. | `guest` |
+| `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PASSWORD_ENCRYPTED` | The RabbitMQ password encrypted with this node's Data Protection key ring. Written by the server (admin console, cluster sync, and the startup step that encrypts a plaintext password left in the file); each cluster node encrypts it with its own key ring. Do not set it by hand: a value from another key ring cannot be decrypted, and the server then logs an Error and uses an empty password, which the broker refuses, until the password is entered again. | *(empty)* |
 | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_EXCHANGE_NAME` | The fanout exchange events are published to. | `ninlil-dns-events` |
 | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_INITIAL_RECONNECT_DELAY` | Initial delay before a reconnect attempt after a dropped connection. | `00:00:01` |
 | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_MAX_RECONNECT_DELAY` | Maximum backoff delay between reconnect attempts. | `00:00:30` |
 | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_HOST_NAME` | ActiveMQ broker hostname. | `localhost` |
 | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PORT` | ActiveMQ broker port. | `61616` |
 | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_USER_NAME` | ActiveMQ auth username. | `admin` |
-| `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PASSWORD` | ActiveMQ auth password. | `admin` |
+| `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PASSWORD` | ActiveMQ auth password. Set it from outside the application only. When set and not empty, it overrides a password saved in the admin console. The admin console and cluster sync never write it to the configuration file: they store the password in the `..._ENCRYPTED` variable below. | `admin` |
+| `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PASSWORD_ENCRYPTED` | The ActiveMQ password encrypted with this node's Data Protection key ring. Written by the server (admin console, cluster sync, and the startup step that encrypts a plaintext password left in the file); each cluster node encrypts it with its own key ring. Do not set it by hand: a value from another key ring cannot be decrypted, and the server then logs an Error and uses an empty password, which the broker refuses, until the password is entered again. | *(empty)* |
 | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_TOPIC_NAME` | The topic events are published to. | `ninlil-dns-events` |
 | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PUBLISH_TIMEOUT` | Per-publish timeout. | `00:00:02` |
 | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_INITIAL_RECONNECT_DELAY` | Initial delay before a reconnect attempt. | `00:00:01` |
