@@ -334,7 +334,7 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NinlilDnsContext).Assembly);
 
-        if (Database.IsSqlServer())
+        if (Database.IsSqlServer() || Database.IsMySql())
         {
             StoreTimeSpansAsTicks(modelBuilder);
         }
@@ -344,8 +344,11 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
 
     /// <summary>
     ///     This method stores every <see cref="TimeSpan" /> and <c>TimeSpan?</c> property of the
-    ///     model as ticks. It scans the model instead of listing properties, so a new
-    ///     <see cref="TimeSpan" /> property needs no extra registration on SQL Server.
+    ///     model as ticks on SQL Server and MySQL. SQL Server <c>time</c> holds less than 24 hours;
+    ///     MySQL <c>time(6)</c> holds up to 838:59:59 (about 34.9 days) and whole microseconds, so
+    ///     longer or finer spans would fail or round. Ticks (100 ns) in a <c>bigint</c> have no such
+    ///     limit. It scans the model instead of listing properties, so a new
+    ///     <see cref="TimeSpan" /> property needs no extra registration.
     /// </summary>
     /// <param name="modelBuilder">The model builder being configured.</param>
     private static void StoreTimeSpansAsTicks(ModelBuilder modelBuilder)

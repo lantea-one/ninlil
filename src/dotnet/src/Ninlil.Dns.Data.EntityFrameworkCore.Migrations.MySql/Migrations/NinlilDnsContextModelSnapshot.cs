@@ -137,8 +137,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.Property<DateTimeOffset>("CreatedAtUtc")
                     .HasColumnType("datetime(6)");
 
-                b.Property<TimeSpan>("DefaultLeaseDuration")
-                    .HasColumnType("time(6)");
+                b.Property<long>("DefaultLeaseDuration")
+                    .HasColumnType("bigint");
 
                 b.Property<int?>("DelegatedPrefixLength")
                     .HasColumnType("int");
@@ -160,8 +160,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(32)
                     .HasColumnType("varchar(32)");
 
-                b.Property<TimeSpan>("MaxLeaseDuration")
-                    .HasColumnType("time(6)");
+                b.Property<long>("MaxLeaseDuration")
+                    .HasColumnType("bigint");
 
                 b.Property<string>("Name")
                     .IsRequired()
@@ -1021,8 +1021,8 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.Property<Guid?>("OriginatingNodeId")
                     .HasColumnType("char(36)");
 
-                b.Property<TimeSpan?>("RefreshInterval")
-                    .HasColumnType("time(6)");
+                b.Property<long?>("RefreshInterval")
+                    .HasColumnType("bigint");
 
                 b.Property<string>("Source")
                     .IsRequired()
@@ -1925,10 +1925,10 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(255)
                     .HasColumnType("varchar(255)");
 
-                b.Property<TimeSpan>("CloudSyncInterval")
+                b.Property<long>("CloudSyncInterval")
                     .ValueGeneratedOnAdd()
-                    .HasColumnType("time(6)")
-                    .HasDefaultValue(new TimeSpan(0, 0, 5, 0, 0));
+                    .HasColumnType("bigint")
+                    .HasDefaultValue(3000000000L);
 
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
