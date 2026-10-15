@@ -18,7 +18,7 @@ export interface DnssecKeyCreateRequest {
     role?: DnssecKeyRoleEnum;
     algorithm?: DnssecAlgorithmEnum;
     /**
-     * The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default) means 2048; ignored by every other algorithm.
+     * The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default) means 2048 and any other value must be a multiple of 64 between 2048 and 4096, else the request is rejected with 400; ignored by every other algorithm.
      */
     keySizeBits?: number;
     /**

@@ -15284,7 +15284,7 @@
         "tags": [
           "DnssecKeys"
         ],
-        "summary": "This action generates a new DNSSEC key for the zone, active at once, and has the zone\nre-signed. Returns 400 for an algorithm the server's policy disallows, cannot sign\nwith or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST), and 404 for an unknown zone. Requires `zones:write`.",
+        "summary": "This action generates a new DNSSEC key for the zone, active at once, and has the zone\nre-signed. Returns 400 for an algorithm the server's policy disallows, cannot sign\nwith or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST),\nand for an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits, and\n404 for an unknown zone. Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -15876,7 +15876,7 @@
         "tags": [
           "DnssecKeys"
         ],
-        "summary": "This action starts an automated RFC 6781 rollover of an active key and returns the new\nkey. The scheme (Pre-Publish or Double-Signature) follows from the key's role; see\nM:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.StartRolloverAsync(System.Guid,System.Guid,System.Nullable{Ninlil.Dns.Common.Enum.DnssecAlgorithmEnum},System.Int32,System.Threading.CancellationToken) for the steps. Returns\n400, 404 or 409 as that method reports. Requires `zones:write`.",
+        "summary": "This action starts an automated RFC 6781 rollover of an active key and returns the new\nkey. The scheme (Pre-Publish or Double-Signature) follows from the key's role; see\nM:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.StartRolloverAsync(System.Guid,System.Guid,System.Nullable{Ninlil.Dns.Common.Enum.DnssecAlgorithmEnum},System.Int32,System.Threading.CancellationToken) for the steps. Returns\n400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a\nmultiple of 64 between 2048 and 4096 bits. Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -42542,7 +42542,7 @@
           },
           "keySizeBits": {
             "type": "integer",
-            "description": "The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default)\nmeans 2048; ignored by every other algorithm.",
+            "description": "The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default)\nmeans 2048 and any other value must be a multiple of 64 between 2048 and 4096, else the\nrequest is rejected with 400; ignored by every other algorithm.",
             "format": "int32"
           },
           "comments": {
@@ -42697,7 +42697,7 @@
           },
           "keySizeBits": {
             "type": "integer",
-            "description": "The new key's size, in bits. Used only by the RSA algorithms, where 0 (the default) means\n2048.",
+            "description": "The new key's size, in bits. Used only by the RSA algorithms, where 0 (the default) means\n2048 and any other value must be a multiple of 64 between 2048 and 4096, else the request\nis rejected with 400.",
             "format": "int32"
           }
         },

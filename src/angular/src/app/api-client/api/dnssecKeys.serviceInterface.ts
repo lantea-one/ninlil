@@ -119,7 +119,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdPut(requestParameters: ApiZonesZoneIdDnssecKeysIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action starts an automated RFC 6781 rollover of an active key and returns the new key. The scheme (Pre-Publish or Double-Signature) follows from the key\&#39;s role; see M:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.StartRolloverAsync(System.Guid,System.Guid,System.Nullable{Ninlil.Dns.Common.Enum.DnssecAlgorithmEnum},System.Int32,System.Threading.CancellationToken) for the steps. Returns 400, 404 or 409 as that method reports. Requires &#x60;zones:write&#x60;.
+     * This action starts an automated RFC 6781 rollover of an active key and returns the new key. The scheme (Pre-Publish or Double-Signature) follows from the key\&#39;s role; see M:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.StartRolloverAsync(System.Guid,System.Guid,System.Nullable{Ninlil.Dns.Common.Enum.DnssecAlgorithmEnum},System.Int32,System.Threading.CancellationToken) for the steps. Returns 400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones/{zoneId}/dnssec-keys/{id}/roll
 * @param requestParameters
@@ -127,7 +127,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, extraHttpRequestParams?: any): Observable<DnssecKeyDetail>;
 
     /**
-     * This action generates a new DNSSEC key for the zone, active at once, and has the zone re-signed. Returns 400 for an algorithm the server\&#39;s policy disallows, cannot sign with or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST), and 404 for an unknown zone. Requires &#x60;zones:write&#x60;.
+     * This action generates a new DNSSEC key for the zone, active at once, and has the zone re-signed. Returns 400 for an algorithm the server\&#39;s policy disallows, cannot sign with or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST), and for an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits, and 404 for an unknown zone. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones/{zoneId}/dnssec-keys
 * @param requestParameters
