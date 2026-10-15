@@ -175,6 +175,42 @@ internal static class Dhcpv6NetworkHelper
     }
 
     /// <summary>
+    ///     This method reports whether a prefix is aligned: none of the bits beyond
+    ///     <paramref name="prefixLength" /> are set, so the address is the base of its block. A
+    ///     delegated prefix must be aligned (RFC 8415 §6.3 delegates whole prefixes).
+    /// </summary>
+    /// <param name="prefix">The prefix base address to check.</param>
+    /// <param name="prefixLength">The prefix length, in bits (0-128).</param>
+    /// <returns><see langword="true" /> when the address has no host bits set.</returns>
+    public static bool IsAlignedPrefix(IPAddress prefix, int prefixLength)
+    {
+        if (prefixLength is < 0 or > 128)
+            throw new ArgumentOutOfRangeException(
+                nameof(prefixLength),
+                prefixLength,
+                "A prefix length must be between 0 and 128, inclusive."
+            );
+
+        return (ToBigInteger(prefix) & ComputeMask(prefixLength)) == ToBigInteger(prefix);
+    }
+
+    /// <summary>
+    ///     This method reports whether two prefixes overlap: both, cut to the shorter of the two
+    ///     lengths, are the same block. Equal and nested prefixes overlap; disjoint ones do not.
+    /// </summary>
+    /// <param name="first">The first prefix address.</param>
+    /// <param name="firstLength">The first prefix length, in bits (0-128).</param>
+    /// <param name="second">The second prefix address.</param>
+    /// <param name="secondLength">The second prefix length, in bits (0-128).</param>
+    /// <returns><see langword="true" /> when the two prefixes share any address.</returns>
+    public static bool PrefixesOverlap(
+        IPAddress first,
+        int firstLength,
+        IPAddress second,
+        int secondLength
+    ) => AreInSameNetwork(first, second, Math.Min(firstLength, secondLength));
+
+    /// <summary>
     ///     This method computes the 128-bit mask for a prefix length (for <c>64</c>, the top 64
     ///     bits set). <see cref="Statistics.DhcpScopeStatisticsService" /> also uses it, so its
     ///     prefix count rounds the same way as <see cref="EnumeratePrefixes" />.

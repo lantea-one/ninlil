@@ -274,6 +274,205 @@ public sealed class Dhcpv6AllocationIntegrityTests : IAsyncLifetime
         Assert.Equal(LeaseStateEnum.Offered, own.State);
     }
 
+    [Fact]
+    public async Task Solicit_ForPrefixDelegationWithAMisalignedHint_AdvertisesAnAlignedPrefix()
+    {
+        await _host.SeedPrefixDelegationScopeAsync(
+            "v6-integrity-pd-misaligned",
+            "2001:db8::",
+            "2001:db8:0:ffff:ffff:ffff:ffff:ffff",
+            delegatedPrefixLength: 56
+        );
+
+        Dhcpv6IdentityAssociationPrefix granted = await SolicitPrefixAsync(
+            Duid(20),
+            IPAddress.Parse("2001:db8:0:1::"),
+            56
+        );
+
+        Assert.Equal(IPAddress.Parse("2001:db8::"), granted.Prefix);
+        Assert.Equal(56, granted.PrefixLength);
+    }
+
+    [Fact]
+    public async Task Solicit_ForPrefixDelegationWithAnAlignedHint_AdvertisesTheHint()
+    {
+        await _host.SeedPrefixDelegationScopeAsync(
+            "v6-integrity-pd-aligned",
+            "2001:db8::",
+            "2001:db8:0:ffff:ffff:ffff:ffff:ffff",
+            delegatedPrefixLength: 56
+        );
+
+        Dhcpv6IdentityAssociationPrefix granted = await SolicitPrefixAsync(
+            Duid(21),
+            IPAddress.Parse("2001:db8:0:100::"),
+            56
+        );
+
+        Assert.Equal(IPAddress.Parse("2001:db8:0:100::"), granted.Prefix);
+    }
+
+    [Fact]
+    public async Task Solicit_ForPrefixDelegationWithAHintOfAnotherLength_IgnoresTheHint()
+    {
+        await _host.SeedPrefixDelegationScopeAsync(
+            "v6-integrity-pd-length",
+            "2001:db8::",
+            "2001:db8:0:ffff:ffff:ffff:ffff:ffff",
+            delegatedPrefixLength: 56
+        );
+
+        Dhcpv6IdentityAssociationPrefix granted = await SolicitPrefixAsync(
+            Duid(22),
+            IPAddress.Parse("2001:db8:0:100::"),
+            60
+        );
+
+        Assert.Equal(IPAddress.Parse("2001:db8::"), granted.Prefix);
+        Assert.Equal(56, granted.PrefixLength);
+    }
+
+    [Fact]
+    public async Task Solicit_ForPrefixDelegationWithABlockingShorterPrefixRow_SkipsEveryPrefixInsideIt()
+    {
+        DhcpScopeEntity scope = await _host.SeedPrefixDelegationScopeAsync(
+            "v6-integrity-pd-overlap",
+            "2001:db8::",
+            "2001:db8:0:ffff:ffff:ffff:ffff:ffff",
+            delegatedPrefixLength: 56
+        );
+
+        // A /52 left from an older DelegatedPrefixLength covers sixteen /56 blocks.
+        await SeedLeaseAsync(
+            scope,
+            FormatDuid(Duid(23)),
+            "2001:db8::",
+            52,
+            LeaseStateEnum.Active,
+            TimeSpan.FromHours(1)
+        );
+
+        Dhcpv6IdentityAssociationPrefix granted = await SolicitPrefixAsync(Duid(24), null, 0);
+
+        Assert.Equal(IPAddress.Parse("2001:db8:0:1000::"), granted.Prefix);
+    }
+
+    [Fact]
+    public async Task Request_ForAMisalignedPrefix_RepliesNoBindingAndCreatesNoRow()
+    {
+        DhcpScopeEntity scope = await _host.SeedPrefixDelegationScopeAsync(
+            "v6-integrity-pd-request-misaligned",
+            "2001:db8::",
+            "2001:db8:0:ffff:ffff:ffff:ffff:ffff",
+            delegatedPrefixLength: 56
+        );
+
+        Dhcpv6IdentityAssociationForPrefixDelegation reply = await RequestPrefixAsync(
+            Duid(25),
+            IPAddress.Parse("2001:db8:0:1::"),
+            56
+        );
+
+        Assert.Empty(reply.Prefixes);
+        Assert.True(reply.Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum status, out string _));
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoBinding, status);
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, FormatDuid(Duid(25))));
+    }
+
+    [Fact]
+    public async Task Request_ForAPrefixInsideAnotherClientsBlockingRow_RepliesNoBinding()
+    {
+        DhcpScopeEntity scope = await _host.SeedPrefixDelegationScopeAsync(
+            "v6-integrity-pd-request-overlap",
+            "2001:db8::",
+            "2001:db8:0:ffff:ffff:ffff:ffff:ffff",
+            delegatedPrefixLength: 56
+        );
+        await SeedLeaseAsync(
+            scope,
+            FormatDuid(Duid(26)),
+            "2001:db8::",
+            52,
+            LeaseStateEnum.Active,
+            TimeSpan.FromHours(1)
+        );
+
+        Dhcpv6IdentityAssociationForPrefixDelegation reply = await RequestPrefixAsync(
+            Duid(27),
+            IPAddress.Parse("2001:db8:0:100::"),
+            56
+        );
+
+        Assert.Empty(reply.Prefixes);
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, FormatDuid(Duid(27))));
+    }
+
+    /// <summary>
+    ///     This method sends a SOLICIT with an IA_PD (carrying an IAPREFIX hint when an address is
+    ///     given) and returns the one prefix the ADVERTISE grants.
+    /// </summary>
+    private async Task<Dhcpv6IdentityAssociationPrefix> SolicitPrefixAsync(
+        byte[] client,
+        IPAddress hint,
+        int hintLength
+    )
+    {
+        Dhcpv6Message solicit = NewSolicit(client, 0x40);
+        Dhcpv6IdentityAssociationForPrefixDelegation pd = new() { IdentityAssociationId = 1 };
+
+        if (hint is not null)
+            pd.Prefixes.Add(
+                new Dhcpv6IdentityAssociationPrefix
+                {
+                    Prefix = hint,
+                    PrefixLength = (byte)hintLength,
+                }
+            );
+
+        solicit.AddIdentityAssociationForPrefixDelegation(pd);
+        Dhcpv6Message advertise = await SendAsync(solicit);
+
+        Assert.NotNull(advertise);
+        Assert.True(
+            advertise.TryGetIdentityAssociationsForPrefixDelegation(
+                out IReadOnlyList<Dhcpv6IdentityAssociationForPrefixDelegation> associations
+            )
+        );
+        return Assert.Single(Assert.Single(associations).Prefixes);
+    }
+
+    /// <summary>
+    ///     This method sends a REQUEST naming one prefix and returns the reply's IA_PD.
+    /// </summary>
+    private async Task<Dhcpv6IdentityAssociationForPrefixDelegation> RequestPrefixAsync(
+        byte[] client,
+        IPAddress prefix,
+        int prefixLength
+    )
+    {
+        Dhcpv6Message request = NewMessage(Dhcpv6MessageTypeEnum.Request, client, 0x41);
+        request.SetServerIdentifier(await GetServerDuidAsync());
+        Dhcpv6IdentityAssociationForPrefixDelegation pd = new() { IdentityAssociationId = 1 };
+        pd.Prefixes.Add(
+            new Dhcpv6IdentityAssociationPrefix
+            {
+                Prefix = prefix,
+                PrefixLength = (byte)prefixLength,
+            }
+        );
+        request.AddIdentityAssociationForPrefixDelegation(pd);
+        Dhcpv6Message reply = await SendAsync(request);
+
+        Assert.NotNull(reply);
+        Assert.True(
+            reply.TryGetIdentityAssociationsForPrefixDelegation(
+                out IReadOnlyList<Dhcpv6IdentityAssociationForPrefixDelegation> associations
+            )
+        );
+        return Assert.Single(associations);
+    }
+
     /// <summary>
     ///     This method saves a lease row through the repository with an expiry relative to now.
     /// </summary>

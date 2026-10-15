@@ -1,4 +1,5 @@
 using System.Net;
+using System.Numerics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Wire;
@@ -26,9 +27,11 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         when it is in range and not reserved for another client; otherwise the IAADDR hint from
 ///         the client's IA_NA when it is free, in range and not reserved; otherwise the first free
 ///         pool address (see <see cref="Dhcpv6NetworkHelper" /> for the bounded scan). A prefix
-///         offer is the same without the reservation step, with the sticky and hint rules
-///         unchanged: the sticky prefix must not be on an <c>Expired</c> row, and the hint is
-///         checked only for being inside the pool range.
+///         offer is the same without the reservation step. Delegated prefixes are aligned to
+///         <c>DelegatedPrefixLength</c> and never overlap a blocking row of any length: the sticky
+///         prefix must be aligned and not on an <c>Expired</c> row, and the IAPREFIX hint is used
+///         only when it has the scope's length, is aligned, is a prefix the pool scan could
+///         yield and overlaps no blocking row (RFC 8415 §18.3.1: hints are advisory).
 ///     </para>
 ///     <para>
 ///         Address and prefix allocation are separate methods rather than one generic version:
@@ -119,7 +122,6 @@ public sealed class Dhcpv6LeaseAllocationService(
         await RemoveOccupyingLeaseIfAnyAsync(
             leases,
             candidate.ToString(),
-            null,
             existing,
             cancellationToken
         );
@@ -314,13 +316,18 @@ public sealed class Dhcpv6LeaseAllocationService(
             && existing.PrefixLength == scope.DelegatedPrefixLength
             && IPAddress.TryParse(existing.IpAddress, out IPAddress existingPrefix)
             && IsWithinPrefixPool(scope, existingPrefix)
+            && Dhcpv6NetworkHelper.IsAlignedPrefix(
+                existingPrefix,
+                scope.DelegatedPrefixLength.Value
+            )
         )
             candidate = existingPrefix;
         else
             candidate = await ResolveCandidatePrefixAsync(
                 scope,
-                association.Prefixes.FirstOrDefault()?.Prefix,
+                association.Prefixes.FirstOrDefault(),
                 leases,
+                existing,
                 cancellationToken
             );
 
@@ -339,7 +346,6 @@ public sealed class Dhcpv6LeaseAllocationService(
         await RemoveOccupyingLeaseIfAnyAsync(
             leases,
             candidate.ToString(),
-            scope.DelegatedPrefixLength,
             existing,
             cancellationToken
         );
@@ -366,7 +372,11 @@ public sealed class Dhcpv6LeaseAllocationService(
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        if (!IsWithinPrefixPool(scope, prefix) || prefixLength != scope.DelegatedPrefixLength)
+        if (
+            !IsWithinPrefixPool(scope, prefix)
+            || prefixLength != scope.DelegatedPrefixLength
+            || !Dhcpv6NetworkHelper.IsAlignedPrefix(prefix, prefixLength)
+        )
             return null;
 
         IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeNameAsync(
@@ -376,9 +386,22 @@ public sealed class Dhcpv6LeaseAllocationService(
         LeaseEntity existingByClient = leases.FirstOrDefault(lease =>
             Dhcpv4ClientIdentifier.AreEqual(lease.ClientIdentifier, clientKey)
         );
+
+        // A blocking prefix row of another client, of any length, that overlaps the confirmed
+        // prefix refuses it (an older DelegatedPrefixLength can leave such a row).
+        if (
+            leases.Any(lease =>
+                !ReferenceEquals(lease, existingByClient)
+                && PrefixRowOverlaps(lease, prefix, prefixLength)
+                && IsLeaseBlocking(lease, now)
+            )
+        )
+            return null;
+
+        // The unique index is on (ScopeName, IpAddress), so a non-blocking row holding exactly
+        // this base is removed whatever its length.
         LeaseEntity existingByPrefix = leases.FirstOrDefault(lease =>
             string.Equals(lease.IpAddress, prefix.ToString(), StringComparison.OrdinalIgnoreCase)
-            && lease.PrefixLength == prefixLength
         );
 
         if (existingByPrefix is not null && !ReferenceEquals(existingByPrefix, existingByClient))
@@ -621,28 +644,19 @@ public sealed class Dhcpv6LeaseAllocationService(
 
     /// <summary>
     ///     This method chooses a prefix for a client that cannot keep its current one: the
-    ///     IAPREFIX hint when its address is in the pool range and no blocking lease holds it
-    ///     (alignment is not checked), otherwise the first free prefix in the pool scan.
+    ///     IAPREFIX hint when it is usable (see <see cref="IsUsablePrefixHint" />), otherwise the
+    ///     first aligned prefix in the pool scan that overlaps no blocking row. The client's own
+    ///     row (<paramref name="own" />) never blocks, because the offer overwrites it.
     /// </summary>
     private Task<IPAddress> ResolveCandidatePrefixAsync(
         DhcpScopeEntity scope,
-        IPAddress hint,
+        Dhcpv6IdentityAssociationPrefix hint,
         IReadOnlyList<LeaseEntity> leases,
+        LeaseEntity own,
         CancellationToken cancellationToken
     )
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
-
-        if (hint is not null && IsWithinPrefixPool(scope, hint))
-        {
-            LeaseEntity conflicting = leases.FirstOrDefault(lease =>
-                string.Equals(lease.IpAddress, hint.ToString(), StringComparison.OrdinalIgnoreCase)
-                && lease.PrefixLength == scope.DelegatedPrefixLength
-            );
-
-            if (conflicting is null || !IsLeaseBlocking(conflicting, now))
-                return Task.FromResult(hint);
-        }
 
         if (
             scope.DelegatedPrefixLength is not { } delegatedPrefixLength
@@ -660,13 +674,22 @@ public sealed class Dhcpv6LeaseAllocationService(
             return Task.FromResult<IPAddress>(null);
         }
 
-        Dictionary<string, LeaseEntity> leasesByPrefix = leases
-            .Where(lease => lease.PrefixLength == delegatedPrefixLength)
-            .ToDictionary(
-                lease => lease.IpAddress,
-                lease => lease,
-                StringComparer.OrdinalIgnoreCase
-            );
+        List<LeaseEntity> blocking = leases
+            .Where(lease =>
+                !ReferenceEquals(lease, own)
+                && lease.PrefixLength is not null
+                && IsLeaseBlocking(lease, now)
+            )
+            .ToList();
+
+        bool Free(IPAddress candidate) =>
+            !blocking.Any(lease => PrefixRowOverlaps(lease, candidate, delegatedPrefixLength));
+
+        if (
+            IsUsablePrefixHint(hint, delegatedPrefixLength, rangeStart, rangeEnd)
+            && Free(hint.Prefix)
+        )
+            return Task.FromResult(hint.Prefix);
 
         foreach (
             IPAddress candidate in Dhcpv6NetworkHelper.EnumeratePrefixes(
@@ -676,30 +699,59 @@ public sealed class Dhcpv6LeaseAllocationService(
             )
         )
         {
-            string candidateKey = candidate.ToString();
-
-            if (
-                leasesByPrefix.TryGetValue(candidateKey, out LeaseEntity occupyingLease)
-                && IsLeaseBlocking(occupyingLease, now)
-            )
-                continue;
-
-            return Task.FromResult(candidate);
+            if (Free(candidate))
+                return Task.FromResult(candidate);
         }
 
         return Task.FromResult<IPAddress>(null);
     }
 
     /// <summary>
+    ///     This method reports whether an IAPREFIX hint can be granted as is: it has the scope's
+    ///     delegated length, is aligned, and is a base the pool scan would yield (at or above the
+    ///     range start rounded down to a prefix boundary, and not above the range end).
+    /// </summary>
+    private static bool IsUsablePrefixHint(
+        Dhcpv6IdentityAssociationPrefix hint,
+        int delegatedPrefixLength,
+        IPAddress rangeStart,
+        IPAddress rangeEnd
+    )
+    {
+        if (
+            hint?.Prefix is null
+            || hint.PrefixLength != delegatedPrefixLength
+            || !Dhcpv6NetworkHelper.IsAlignedPrefix(hint.Prefix, delegatedPrefixLength)
+        )
+            return false;
+
+        BigInteger value = Dhcpv6NetworkHelper.ToBigInteger(hint.Prefix);
+        BigInteger firstBase =
+            Dhcpv6NetworkHelper.ToBigInteger(rangeStart)
+            & Dhcpv6NetworkHelper.ComputeMask(delegatedPrefixLength);
+
+        return value >= firstBase && value <= Dhcpv6NetworkHelper.ToBigInteger(rangeEnd);
+    }
+
+    /// <summary>
+    ///     This method reports whether a lease row is a prefix row (it has a
+    ///     <c>PrefixLength</c> and a parseable address) that overlaps the given prefix.
+    /// </summary>
+    private static bool PrefixRowOverlaps(LeaseEntity lease, IPAddress prefix, int prefixLength) =>
+        lease.PrefixLength is { } rowLength
+        && IPAddress.TryParse(lease.IpAddress, out IPAddress rowPrefix)
+        && Dhcpv6NetworkHelper.PrefixesOverlap(rowPrefix, rowLength, prefix, prefixLength);
+
+    /// <summary>
     ///     This method deletes, in its own <c>SaveChanges</c>, another client's non-blocking row
     ///     that holds a value the client's row is about to claim (the client's own row, <paramref name="own" />,
     ///     is never removed), so the save does not hit the
-    ///     <c>(ScopeName, IpAddress)</c> unique index (see <c>Dhcpv4LeaseAllocationService</c>).
+    ///     <c>(ScopeName, IpAddress)</c> unique index. The match ignores <c>PrefixLength</c>
+    ///     because the index does not include it (see <c>Dhcpv4LeaseAllocationService</c>).
     /// </summary>
     private async Task RemoveOccupyingLeaseIfAnyAsync(
         IReadOnlyList<LeaseEntity> leases,
         string value,
-        int? prefixLength,
         LeaseEntity own,
         CancellationToken cancellationToken
     )
@@ -707,7 +759,6 @@ public sealed class Dhcpv6LeaseAllocationService(
         LeaseEntity occupying = leases.FirstOrDefault(lease =>
             !ReferenceEquals(lease, own)
             && string.Equals(lease.IpAddress, value, StringComparison.OrdinalIgnoreCase)
-            && lease.PrefixLength == prefixLength
         );
 
         if (occupying is null)
@@ -767,7 +818,8 @@ public sealed class Dhcpv6LeaseAllocationService(
 
     /// <summary>
     ///     This method reports whether a prefix base address is within the pool range. It does
-    ///     not check alignment.
+    ///     not check alignment; callers pair it with
+    ///     <see cref="Dhcpv6NetworkHelper.IsAlignedPrefix" />.
     /// </summary>
     private static bool IsWithinPrefixPool(DhcpScopeEntity scope, IPAddress prefix) =>
         IsWithinScopeRange(scope, prefix);
