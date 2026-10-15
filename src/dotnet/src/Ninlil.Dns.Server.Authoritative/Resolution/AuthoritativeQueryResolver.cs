@@ -133,10 +133,11 @@ public class AuthoritativeQueryResolver(
             ? signedZoneCache.GetSignedData(zone.Zone.Id)
             : null;
 
-        // Below a delegation this zone is not authoritative, so refer the client to the child's
-        // servers. Two exceptions at the delegation point itself: an NS query (those NS records
-        // are in this zone), and a DS query, since the DS RRset belongs to the parent (RFC 4035
-        // §2.7).
+        // At or below a delegation this zone is not authoritative, so refer the client to the
+        // child's servers. FindEnclosingDelegation returns the topmost cut, so names under a
+        // nested cut are referred to the outer one. Two exceptions, only at a cut that is
+        // itself reached: an NS query (those NS records are in this zone), and a DS query, since
+        // the DS RRset belongs to the parent (RFC 4035 §2.7).
         if (zone.FindEnclosingDelegation(question.Name) is { } delegation)
         {
             if (delegation.DelegationPoint == question.Name)
@@ -209,7 +210,7 @@ public class AuthoritativeQueryResolver(
 
         // The name exists (records of another type, or an empty non-terminal), so this is
         // NODATA. A wildcard only covers names that do not exist.
-        if (zone.NameExists(question.Name) || zone.HasDescendantRecords(question.Name))
+        if (zone.NameExistsOrIsEmptyNonTerminal(question.Name))
             return BuildNegativeResponse(
                 request,
                 zone,
@@ -477,6 +478,9 @@ public class AuthoritativeQueryResolver(
         if (
             DecodeTypedData(cnameRecord) is CnameRecordData cnameData
             && IsWithinZone(cnameData.Target, zone)
+            // A target at or below a cut is the child's data, not authoritative here. The client
+            // follows the CNAME itself (RFC 1034 §4.3.2 step 3a).
+            && zone.FindEnclosingDelegation(cnameData.Target) is null
         )
         {
             IReadOnlyList<RecordEntity> targetRecords = zone.GetRecords(
@@ -513,8 +517,7 @@ public class AuthoritativeQueryResolver(
     )
     {
         bool nameExists =
-            zone.NameExists(question.Name)
-            || zone.HasDescendantRecords(question.Name)
+            zone.NameExistsOrIsEmptyNonTerminal(question.Name)
             || zone.GetWildcardRecords(question.Name).Count > 0;
 
         if (!nameExists)

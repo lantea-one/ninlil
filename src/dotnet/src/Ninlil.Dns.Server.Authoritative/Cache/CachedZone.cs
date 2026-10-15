@@ -31,6 +31,19 @@ public sealed class CachedZone
     private readonly Dictionary<DnsName, List<RecordEntity>> _recordsByName;
 
     /// <summary>
+    ///     This field holds every owner name with an enabled record plus each of its ancestors
+    ///     down to the apex (the empty non-terminals), for <see cref="NameExistsOrIsEmptyNonTerminal" />.
+    /// </summary>
+    private readonly HashSet<DnsName> _existingNames;
+
+    /// <summary>
+    ///     This field maps each topmost zone cut (a non-apex owner of NS records with no
+    ///     NS-owning ancestor below the apex) to its NS records, for
+    ///     <see cref="FindEnclosingDelegation" />.
+    /// </summary>
+    private readonly Dictionary<DnsName, List<RecordEntity>> _delegationPoints;
+
+    /// <summary>
     ///     This field counts, per (name, type) with more than one record, how often the set was
     ///     served, so <see cref="GetRecords" /> can rotate which record comes first (round-robin,
     ///     as most authoritative servers do).
@@ -54,13 +67,57 @@ public sealed class CachedZone
             .Where(record => !record.IsDisabled)
             .GroupBy(record => DnsName.Parse(record.Name))
             .ToDictionary(group => group.Key, group => group.ToList());
+
+        _existingNames = [];
+        foreach (DnsName owner in _recordsByName.Keys)
+        {
+            // Add the owner and every ancestor down to the apex. Stop at the first name already
+            // present: its ancestors were added with it.
+            for (int depth = owner.Labels.Count; depth >= ApexName.Labels.Count; depth--)
+                if (
+                    !_existingNames.Add(
+                        new DnsName([.. owner.Labels.Skip(owner.Labels.Count - depth)])
+                    )
+                )
+                    break;
+        }
+
+        // Collect every non-apex NS owner, then drop the ones below another NS owner: only the
+        // topmost cuts stay, because data below a cut is the child's (RFC 1034 §4.2.1).
+        Dictionary<DnsName, List<RecordEntity>> nsOwners = _recordsByName
+            .Where(entry => entry.Key != ApexName)
+            .Select(entry =>
+                (
+                    Name: entry.Key,
+                    NameServers: entry
+                        .Value.Where(record => record.Type == DnsResourceRecordTypeEnum.NS)
+                        .ToList()
+                )
+            )
+            .Where(entry => entry.NameServers.Count > 0)
+            .ToDictionary(entry => entry.Name, entry => entry.NameServers);
+
+        _delegationPoints = nsOwners
+            .Where(entry =>
+                !Enumerable
+                    .Range(
+                        ApexName.Labels.Count + 1,
+                        entry.Key.Labels.Count - ApexName.Labels.Count - 1
+                    )
+                    .Any(depth =>
+                        nsOwners.ContainsKey(
+                            new DnsName([.. entry.Key.Labels.Skip(entry.Key.Labels.Count - depth)])
+                        )
+                    )
+            )
+            .ToDictionary(entry => entry.Key, entry => entry.Value);
     }
 
     /// <summary>
-    ///     This method finds a delegation (NS records at <paramref name="name" /> or an ancestor,
-    ///     below the apex) that the query must be referred across rather than answered (the
-    ///     RFC 1035 §4.3.2 zone cut). It checks from <paramref name="name" /> upward and returns
-    ///     the first NS set found, which is the deepest one if several are nested.
+    ///     This method finds the topmost zone cut at or above <paramref name="name" />: the
+    ///     shallowest name below the apex that owns NS records (RFC 1034 §4.2.1, §4.3.2 step 3b).
+    ///     Everything at or below a cut belongs to the child, so a cut nested inside another
+    ///     (<c>a.b.example</c> under <c>b.example</c>) is occluded and is never returned.
     /// </summary>
     /// <param name="name">The name to check for an enclosing delegation.</param>
     /// <returns>
@@ -72,19 +129,14 @@ public sealed class CachedZone
         IReadOnlyList<RecordEntity> NameServers
     )? FindEnclosingDelegation(DnsName name)
     {
-        // Start at name itself, which may be the delegation point, and stop below the apex: the
-        // apex NS records name this zone's servers, not a delegation.
-        for (int start = 0; start < name.Labels.Count - ApexName.Labels.Count; start++)
+        // Walk from the label just below the apex down to name itself, which may be the cut.
+        // The apex NS records name this zone's servers, not a delegation, so the walk starts
+        // below it. The first hit is the topmost cut.
+        for (int depth = ApexName.Labels.Count + 1; depth <= name.Labels.Count; depth++)
         {
-            DnsName ancestor = new([.. name.Labels.Skip(start)]);
+            DnsName ancestor = new([.. name.Labels.Skip(name.Labels.Count - depth)]);
 
-            if (
-                _recordsByName.TryGetValue(ancestor, out List<RecordEntity> recordsAtAncestor)
-                && recordsAtAncestor
-                    .Where(record => record.Type == DnsResourceRecordTypeEnum.NS)
-                    .ToList()
-                    is { Count: > 0 } nameServers
-            )
+            if (_delegationPoints.TryGetValue(ancestor, out List<RecordEntity> nameServers))
                 return (ancestor, nameServers);
         }
 
@@ -132,24 +184,18 @@ public sealed class CachedZone
     public bool NameExists(DnsName name) => _recordsByName.ContainsKey(name);
 
     /// <summary>
-    ///     This method checks whether any stored name is below <paramref name="name" />, which
-    ///     makes a name with no records of its an empty non-terminal (for example
-    ///     <c>b.example.com</c> when only <c>a.b.example.com</c> has records). Such a name answers
-    ///     NODATA, not NXDOMAIN, and no wildcard is synthesized for it. It scans every name in the
-    ///     zone.
+    ///     This method checks whether a name exists in this zone: it owns an enabled record, or it
+    ///     is an empty non-terminal because a stored name lies below it (for example
+    ///     <c>b.example.com</c> when only <c>a.b.example.com</c> has records, RFC 4592 §2.2.2).
+    ///     Such a name answers NODATA, not NXDOMAIN, and no wildcard is synthesized for it. The
+    ///     answer comes from an index built when the zone was cached, so the lookup is O(1).
     /// </summary>
-    /// <param name="name">The exact owner name to check.</param>
+    /// <param name="name">The exact name to check.</param>
     /// <returns>
-    ///     A <see langword="bool" /> indicating whether any stored name in this zone is a proper
-    ///     descendant of <paramref name="name" />.
+    ///     A <see langword="bool" /> indicating whether the name owns records or is an empty
+    ///     non-terminal.
     /// </returns>
-    public bool HasDescendantRecords(DnsName name) =>
-        _recordsByName
-            .Keys.Where(candidate => candidate.Labels.Count > name.Labels.Count)
-            .Any(candidate =>
-                new DnsName([.. candidate.Labels.Skip(candidate.Labels.Count - name.Labels.Count)])
-                == name
-            );
+    public bool NameExistsOrIsEmptyNonTerminal(DnsName name) => _existingNames.Contains(name);
 
     /// <summary>
     ///     This method looks for wildcard records that could answer for <paramref name="name" />
