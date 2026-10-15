@@ -46,7 +46,11 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/clients",
-            new { clientIdentifier = $"AA:BB:CC:{suffix}", protocolVersion = "IPv4" }
+            new
+            {
+                clientIdentifier = $"aa:bb:cc:{suffix[..2]}:{suffix[2..4]}:{suffix[4..]}",
+                protocolVersion = "IPv4",
+            }
         );
         response.EnsureSuccessStatusCode();
         ClientDetail created = await response.Content.ReadFromJsonAsync<ClientDetail>();

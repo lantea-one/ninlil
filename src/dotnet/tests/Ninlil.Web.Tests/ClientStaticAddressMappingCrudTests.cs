@@ -45,7 +45,7 @@ public class ClientStaticAddressMappingCrudTests(NinlilDnsWebApplicationFactory 
     public async Task MappingLifecycle_CreateListGetReplaceAndDelete_WorksEndToEnd()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"aa:bb:cc:dd:{Guid.NewGuid():N}"[..17];
+        string identifier = $"aa:bb:cc:dd:{TestClientIdentifiers.Tail(2)}";
 
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/client-static-address-mappings",
@@ -132,7 +132,7 @@ public class ClientStaticAddressMappingCrudTests(NinlilDnsWebApplicationFactory 
         StaticAddressMappingClientIdentityResolver resolver =
             factory.Services.GetRequiredService<StaticAddressMappingClientIdentityResolver>();
         IPAddress address = IPAddress.Parse("203.0.113.77");
-        string identifier = $"aa:bb:cc:dd:{Guid.NewGuid():N}"[..17];
+        string identifier = $"aa:bb:cc:dd:{TestClientIdentifiers.Tail(2)}";
 
         // Load the snapshot first, so the mapping must arrive by refresh and not by first load.
         Assert.Null(await resolver.ResolveAsync(address));

@@ -32,9 +32,11 @@ public class DnsClientAddressEntity : AuditableEntityBase
     public Guid ClientId { get; set; }
 
     /// <summary>
-    ///     This property contains the persistent identifier: a colon-separated MAC address for an
+    ///     This property contains the persistent identifier: a MAC address for an
     ///     <see cref="InternetProtocolVersionEnum.IPv4" /> identity, or a DUID for an
-    ///     <see cref="InternetProtocolVersionEnum.IPv6" /> one.
+    ///     <see cref="InternetProtocolVersionEnum.IPv6" /> one. It is stored in the normal form
+    ///     of <c>ClientIdentifierFormat</c> (lowercase, colon-separated hex), which the
+    ///     controllers write.
     /// </summary>
     public string ClientIdentifier { get; set; }
 

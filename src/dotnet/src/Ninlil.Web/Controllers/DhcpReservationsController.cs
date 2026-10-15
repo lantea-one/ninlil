@@ -4,6 +4,7 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Enum;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.DhcpReservations;
@@ -99,11 +100,15 @@ public class DhcpReservationsController(
 
     /// <summary>
     ///     This action adds a static reservation to a scope. Returns 400 for a prefix-delegation
-    ///     scope, a missing client identifier or an invalid IP address; 404 for an unknown scope;
-    ///     and 409 when the client identifier or the address is already reserved in this scope
-    ///     (both are unique per scope, as for leases; see
-    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity" />). The address
-    ///     is not checked against the scope's range or protocol. Requires <c>dhcpscopes:write</c>.
+    ///     scope, a missing or malformed client identifier or an invalid IP address; 404 for an
+    ///     unknown scope; and 409 when the client identifier or the address is already reserved
+    ///     in this scope (both are unique per scope, as for leases; see
+    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity" />). The
+    ///     identifier is accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>,
+    ///     <c>aabb.ccdd.eeff</c> or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and
+    ///     returned as <c>aa:bb:cc:dd:ee:ff</c>; the address is stored and returned in canonical
+    ///     form, so duplicates are found whatever the spelling. The address is not checked
+    ///     against the scope's range or protocol. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -128,39 +133,42 @@ public class DhcpReservationsController(
                     + "defines no delegated-prefix reservation shape of its own."
             );
 
-        if (!TryValidate(request, out string error))
+        if (
+            !TryValidate(
+                request,
+                out string clientIdentifier,
+                out string ipAddress,
+                out string error
+            )
+        )
             throw new ValidationException(error);
 
         if (
             await reservationRepository.FindByClientIdentifierAsync(
                 scopeId,
-                request.ClientIdentifier,
+                clientIdentifier,
                 stoppingToken
             )
             is not null
         )
             throw new ConflictException(
-                $"Client '{request.ClientIdentifier}' already has a reservation in this scope."
+                $"Client '{clientIdentifier}' already has a reservation in this scope."
             );
 
         if (
-            await reservationRepository.FindByIpAddressAsync(
-                scopeId,
-                request.IpAddress,
-                stoppingToken
-            )
+            await reservationRepository.FindByIpAddressAsync(scopeId, ipAddress, stoppingToken)
             is not null
         )
             throw new ConflictException(
-                $"Address '{request.IpAddress}' is already reserved in this scope."
+                $"Address '{ipAddress}' is already reserved in this scope."
             );
 
         DhcpReservationEntity reservation = new()
         {
             Id = Guid.NewGuid(),
             ScopeId = scopeId,
-            ClientIdentifier = request.ClientIdentifier,
-            IpAddress = request.IpAddress,
+            ClientIdentifier = clientIdentifier,
+            IpAddress = ipAddress,
             HostName = request.HostName,
             IsDisabled = request.IsDisabled,
             Comments = request.Comments,
@@ -208,32 +216,39 @@ public class DhcpReservationsController(
                     + "defines no delegated-prefix reservation shape of its own."
             );
 
-        if (!TryValidate(request, out string error))
+        if (
+            !TryValidate(
+                request,
+                out string clientIdentifier,
+                out string ipAddress,
+                out string error
+            )
+        )
             throw new ValidationException(error);
 
         DhcpReservationEntity existingByClient =
             await reservationRepository.FindByClientIdentifierAsync(
                 scopeId,
-                request.ClientIdentifier,
+                clientIdentifier,
                 stoppingToken
             );
         if (existingByClient is not null && existingByClient.Id != id)
             throw new ConflictException(
-                $"Client '{request.ClientIdentifier}' already has a reservation in this scope."
+                $"Client '{clientIdentifier}' already has a reservation in this scope."
             );
 
         DhcpReservationEntity existingByAddress = await reservationRepository.FindByIpAddressAsync(
             scopeId,
-            request.IpAddress,
+            ipAddress,
             stoppingToken
         );
         if (existingByAddress is not null && existingByAddress.Id != id)
             throw new ConflictException(
-                $"Address '{request.IpAddress}' is already reserved in this scope."
+                $"Address '{ipAddress}' is already reserved in this scope."
             );
 
-        reservation.ClientIdentifier = request.ClientIdentifier;
-        reservation.IpAddress = request.IpAddress;
+        reservation.ClientIdentifier = clientIdentifier;
+        reservation.IpAddress = ipAddress;
         reservation.HostName = request.HostName;
         reservation.IsDisabled = request.IsDisabled;
         reservation.Comments = request.Comments;
@@ -267,12 +282,22 @@ public class DhcpReservationsController(
     }
 
     /// <summary>
-    ///     This method checks that a reservation request has a client identifier and a valid IP
-    ///     address.
+    ///     This method checks that a reservation request has a client identifier that
+    ///     <see cref="ClientIdentifierFormat.TryNormalize" /> accepts and a valid IP address, and
+    ///     returns both in the form stored: the identifier in normal form and the address as
+    ///     <see cref="IPAddress.ToString()" /> writes it, which is the form the DHCP engine
+    ///     compares.
     /// </summary>
-    private static bool TryValidate(DhcpReservationWriteRequest request, out string error)
+    private static bool TryValidate(
+        DhcpReservationWriteRequest request,
+        out string clientIdentifier,
+        out string ipAddress,
+        out string error
+    )
     {
         error = null;
+        clientIdentifier = null;
+        ipAddress = null;
 
         if (request is null || string.IsNullOrWhiteSpace(request.ClientIdentifier))
         {
@@ -280,15 +305,22 @@ public class DhcpReservationsController(
             return false;
         }
 
+        if (!ClientIdentifierFormat.TryNormalize(request.ClientIdentifier, out clientIdentifier))
+        {
+            error = ClientIdentifierFormat.AcceptedFormsMessage;
+            return false;
+        }
+
         if (
             string.IsNullOrWhiteSpace(request.IpAddress)
-            || !IPAddress.TryParse(request.IpAddress, out _)
+            || !IPAddress.TryParse(request.IpAddress, out IPAddress parsed)
         )
         {
             error = $"'{request.IpAddress}' is not a valid IP address.";
             return false;
         }
 
+        ipAddress = parsed.ToString();
         return true;
     }
 

@@ -205,7 +205,11 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/clients",
-            new { clientIdentifier = $"AA:BB:DD:{suffix}", protocolVersion = "IPv4" }
+            new
+            {
+                clientIdentifier = $"aa:bb:dd:{suffix[..2]}:{suffix[2..4]}:{suffix[4..]}",
+                protocolVersion = "IPv4",
+            }
         );
         response.EnsureSuccessStatusCode();
         ClientDetail created = await response.Content.ReadFromJsonAsync<ClientDetail>();

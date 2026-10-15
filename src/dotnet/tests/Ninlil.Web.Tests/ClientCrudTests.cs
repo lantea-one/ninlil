@@ -58,7 +58,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task ClientLifecycle_CreateEditAndDelete_WorksEndToEnd()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"AA:BB:CC:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"aa:bb:cc:{TestClientIdentifiers.Tail(3)}";
 
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/clients",
@@ -149,7 +149,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
         ClientGroupDetail group =
             await groupResponse.Content.ReadFromJsonAsync<ClientGroupDetail>();
 
-        string identifier = $"BB:CC:DD:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"bb:cc:dd:{TestClientIdentifiers.Tail(3)}";
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/clients",
             new
@@ -168,7 +168,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task CreateClient_WithANonexistentClientGroupId_ReturnsBadRequest()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"CC:DD:EE:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"cc:dd:ee:{TestClientIdentifiers.Tail(3)}";
 
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/clients",
@@ -200,7 +200,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task CreateClient_DuplicateIdentifierAndProtocolVersion_ReturnsConflict()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"DD:EE:FF:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"dd:ee:ff:{TestClientIdentifiers.Tail(3)}";
 
         HttpResponseMessage firstResponse = await client.PostAsJsonAsync(
             "/api/clients",
@@ -228,7 +228,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task DeleteClient_ThenReRegisterTheSameIdentifier_Succeeds()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"DE:1E:7E:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"de:1e:7e:{TestClientIdentifiers.Tail(3)}";
 
         HttpResponseMessage firstResponse = await client.PostAsJsonAsync(
             "/api/clients",
@@ -254,7 +254,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task ReplaceClient_WithANonexistentClientGroupId_ReturnsBadRequest()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"EE:FF:00:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"ee:ff:00:{TestClientIdentifiers.Tail(3)}";
 
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/clients",
@@ -274,13 +274,13 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task Clients_Pagination_ReturnsRealPages()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string prefix = Guid.NewGuid().ToString("N")[..8];
+        string prefix = TestClientIdentifiers.Tail(4);
 
         for (int i = 0; i < 5; i++)
         {
             HttpResponseMessage response = await client.PostAsJsonAsync(
                 "/api/clients",
-                new { clientIdentifier = $"{prefix}-{i:00}", protocolVersion = "IPv4" }
+                new { clientIdentifier = $"{prefix}:{i:00}", protocolVersion = "IPv4" }
             );
             response.EnsureSuccessStatusCode();
         }
@@ -325,7 +325,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task ClientPause_PauseThenResume_WorksEndToEnd()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"AA:11:22:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"aa:11:22:{TestClientIdentifiers.Tail(3)}";
 
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/clients",
@@ -378,7 +378,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task ClientPause_WithANonPositiveDuration_ReturnsBadRequest(int durationMinutes)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"BB:11:22:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"bb:11:22:{TestClientIdentifiers.Tail(3)}";
 
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/clients",

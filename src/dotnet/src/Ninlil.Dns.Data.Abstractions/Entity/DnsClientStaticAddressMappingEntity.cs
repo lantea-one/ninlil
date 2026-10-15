@@ -46,8 +46,9 @@ public class DnsClientStaticAddressMappingEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property contains the persistent client identifier a matching query resolves to: a
-    ///     colon-separated MAC address for an <see cref="InternetProtocolVersionEnum.IPv4" /> mapping,
-    ///     or a DUID for an <see cref="InternetProtocolVersionEnum.IPv6" /> one, in the same format as
+    ///     MAC address for an <see cref="InternetProtocolVersionEnum.IPv4" /> mapping, or a DUID
+    ///     for an <see cref="InternetProtocolVersionEnum.IPv6" /> one, stored in the normal form
+    ///     of <c>ClientIdentifierFormat</c> (lowercase, colon-separated hex), the same format as
     ///     <see cref="DnsClientAddressEntity.ClientIdentifier" />.
     /// </summary>
     public string ClientIdentifier { get; set; }

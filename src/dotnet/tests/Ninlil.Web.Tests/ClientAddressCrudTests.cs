@@ -57,8 +57,8 @@ public class ClientAddressCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task AddAddress_ToAnExistingClient_MergesUnderOneDevice()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string ipv4Identifier = $"AA:BB:CC:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
-        string ipv6Identifier = $"00:03:00:01:{Guid.NewGuid():N}"[..29];
+        string ipv4Identifier = $"aa:bb:cc:{TestClientIdentifiers.Tail(3)}";
+        string ipv6Identifier = $"00:03:00:01:{TestClientIdentifiers.Tail(8)}";
 
         ClientDetail created = await CreateClientAsync(client, ipv4Identifier);
         Assert.Single(created.Addresses);
@@ -85,12 +85,12 @@ public class ClientAddressCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task AddAddress_WithADuplicateIdentifierAndProtocolVersion_ReturnsConflict()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"DD:EE:FF:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"dd:ee:ff:{TestClientIdentifiers.Tail(3)}";
 
         ClientDetail firstClient = await CreateClientAsync(client, identifier);
         ClientDetail secondClient = await CreateClientAsync(
             client,
-            $"11:22:33:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}"
+            $"11:22:33:{TestClientIdentifiers.Tail(3)}"
         );
 
         HttpResponseMessage duplicateResponse = await client.PostAsJsonAsync(
@@ -119,7 +119,7 @@ public class ClientAddressCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task DeleteAddress_TheDeviceSOwnLastRemainingAddress_ReturnsConflict()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string identifier = $"EE:FF:00:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string identifier = $"ee:ff:00:{TestClientIdentifiers.Tail(3)}";
 
         ClientDetail created = await CreateClientAsync(client, identifier);
         ClientAddressDetail onlyAddress = Assert.Single(created.Addresses);
@@ -135,8 +135,8 @@ public class ClientAddressCrudTests(NinlilDnsWebApplicationFactory factory)
     public async Task DeleteAddress_WhenAnotherAddressRemains_Succeeds()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-        string ipv4Identifier = $"FF:00:11:{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
-        string ipv6Identifier = $"00:03:00:01:{Guid.NewGuid():N}"[..29];
+        string ipv4Identifier = $"ff:00:11:{TestClientIdentifiers.Tail(3)}";
+        string ipv6Identifier = $"00:03:00:01:{TestClientIdentifiers.Tail(8)}";
 
         ClientDetail created = await CreateClientAsync(client, ipv4Identifier);
         HttpResponseMessage addResponse = await client.PostAsJsonAsync(

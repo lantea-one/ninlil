@@ -12,7 +12,7 @@ namespace Ninlil.Web.Models;
 ///     <see cref="Controllers.ClientAddressesController.Create" />. The device fields that stay
 ///     editable are in <see cref="ClientWriteRequest" />, used by <c>PUT</c> and <c>PATCH</c>.
 /// </summary>
-/// <param name="ClientIdentifier">A colon-separated MAC address for an IPv4 client, or a DUID for an IPv6 one.</param>
+/// <param name="ClientIdentifier">A MAC address for an IPv4 client, or a DUID for an IPv6 one, in hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned as <c>aa:bb:cc:dd:ee:ff</c>.</param>
 /// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs to.</param>
 /// <param name="DisplayName">An optional, operator-chosen, human-readable name for the client.</param>
 /// <param name="ClientGroupId">
@@ -221,7 +221,7 @@ public record ClientAddressDetail(
 ///     belongs to any device, this one included, matching the unique composite index on
 ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity" />.
 /// </summary>
-/// <param name="ClientIdentifier">A colon-separated MAC address for an IPv4 identity, or a DUID for an IPv6 one.</param>
+/// <param name="ClientIdentifier">A MAC address for an IPv4 identity, or a DUID for an IPv6 one, in hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned as <c>aa:bb:cc:dd:ee:ff</c>.</param>
 /// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs to.</param>
 public record ClientAddressWriteRequest(
     string ClientIdentifier,

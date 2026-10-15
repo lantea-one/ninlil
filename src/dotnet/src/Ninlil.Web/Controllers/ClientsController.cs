@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
@@ -219,11 +220,14 @@ public class ClientsController(
 
     /// <summary>
     ///     This action registers a client device with its first address. Returns 400 for a missing
-    ///     identifier, an unknown client group or an unknown icon name, and 409 when a device
+    ///     or malformed identifier, an unknown client group or an unknown icon name, and 409 when a device
     ///     already has the same <see cref="ClientCreateRequest.ClientIdentifier" /> and
     ///     <see cref="ClientCreateRequest.ProtocolVersion" /> (the pair the address table's unique
     ///     index covers, checked first through
-    ///     <see cref="IDnsClientRepository.GetByClientIdentifierAsync" />). Requires
+    ///     <see cref="IDnsClientRepository.GetByClientIdentifierAsync" />). The identifier is
+    ///     accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c>
+    ///     or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and returned as
+    ///     <c>aa:bb:cc:dd:ee:ff</c>, so the duplicate check ignores the spelling. Requires
     ///     <c>clients:write</c>.
     /// </summary>
     [HttpPost]
@@ -239,15 +243,23 @@ public class ClientsController(
             throw new ValidationException("'clientIdentifier' is required.");
 
         if (
-            await clientRepository.GetByClientIdentifierAsync(
+            !ClientIdentifierFormat.TryNormalize(
                 request.ClientIdentifier,
+                out string clientIdentifier
+            )
+        )
+            throw new ValidationException(ClientIdentifierFormat.AcceptedFormsMessage);
+
+        if (
+            await clientRepository.GetByClientIdentifierAsync(
+                clientIdentifier,
                 request.ProtocolVersion,
                 stoppingToken
             )
             is not null
         )
             throw new ConflictException(
-                $"A client already exists for identifier '{request.ClientIdentifier}' ({request.ProtocolVersion})."
+                $"A client already exists for identifier '{clientIdentifier}' ({request.ProtocolVersion})."
             );
 
         if (
@@ -277,7 +289,7 @@ public class ClientsController(
         {
             Id = Guid.NewGuid(),
             ClientId = client.Id,
-            ClientIdentifier = request.ClientIdentifier,
+            ClientIdentifier = clientIdentifier,
             ProtocolVersion = request.ProtocolVersion,
             FirstSeenUtc = now,
             CreatedAtUtc = now,

@@ -95,10 +95,8 @@ public class ClientActivityControllerTests(NinlilDnsWebApplicationFactory factor
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        string identifierA =
-            $"AA:11:22:33:44:{Guid.NewGuid().ToString("N")[..2].ToUpperInvariant()}";
-        string identifierB =
-            $"AA:11:22:33:55:{Guid.NewGuid().ToString("N")[..2].ToUpperInvariant()}";
+        string identifierA = $"aa:11:22:33:44:{TestClientIdentifiers.Tail(1)}";
+        string identifierB = $"aa:11:22:33:55:{TestClientIdentifiers.Tail(1)}";
 
         ClientDetail clientA = await CreateClientAsync(client, identifierA);
         ClientDetail clientB = await CreateClientAsync(client, identifierB);

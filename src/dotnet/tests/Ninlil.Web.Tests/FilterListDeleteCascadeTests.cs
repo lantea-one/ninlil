@@ -47,7 +47,11 @@ public class FilterListDeleteCascadeTests(NinlilDnsWebApplicationFactory factory
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/clients",
-            new { clientIdentifier = $"AA:BB:CD:{suffix}", protocolVersion = "IPv4" }
+            new
+            {
+                clientIdentifier = $"aa:bb:cd:{suffix[..2]}:{suffix[2..4]}:{suffix[4..]}",
+                protocolVersion = "IPv4",
+            }
         );
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<ClientDetail>()).Id;

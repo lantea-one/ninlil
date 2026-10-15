@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
@@ -102,7 +103,9 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This action creates a static address mapping. Returns 400 for a missing identifier, an
+    ///     This action creates a static address mapping. Returns 400 for a missing or malformed identifier (accepted as
+    ///     <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> or
+    ///     <c>aabbccddeeff</c>, stored and returned as <c>aa:bb:cc:dd:ee:ff</c>), an
     ///     address or network that does not parse, or a protocol version that does not match the
     ///     address family. Requires <c>clients:write</c>.
     /// </summary>
@@ -121,14 +124,14 @@ public class DnsClientStaticAddressMappingsController(
         CancellationToken stoppingToken
     )
     {
-        if (!TryValidate(request, out string error))
+        if (!TryValidate(request, out string clientIdentifier, out string error))
             throw new ValidationException(error);
 
         DnsClientStaticAddressMappingEntity mapping = new()
         {
             Id = Guid.NewGuid(),
             Cidr = request.Cidr,
-            ClientIdentifier = request.ClientIdentifier,
+            ClientIdentifier = clientIdentifier,
             ProtocolVersion = request.ProtocolVersion,
             IsDisabled = request.IsDisabled,
             Comments = request.Comments,
@@ -165,11 +168,11 @@ public class DnsClientStaticAddressMappingsController(
         if (mapping is null)
             throw new NotFoundException("ClientStaticAddressMapping", id.ToString());
 
-        if (!TryValidate(request, out string error))
+        if (!TryValidate(request, out string clientIdentifier, out string error))
             throw new ValidationException(error);
 
         mapping.Cidr = request.Cidr;
-        mapping.ClientIdentifier = request.ClientIdentifier;
+        mapping.ClientIdentifier = clientIdentifier;
         mapping.ProtocolVersion = request.ProtocolVersion;
         mapping.IsDisabled = request.IsDisabled;
         mapping.Comments = request.Comments;
@@ -208,22 +211,31 @@ public class DnsClientStaticAddressMappingsController(
     ///     This method checks a write request before anything is saved:
     ///     <see cref="DnsClientStaticAddressMappingWriteRequest.Cidr" /> must be a bare IP address
     ///     or a CIDR network (the two forms the resolver matches),
-    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.ClientIdentifier" /> must not be
-    ///     empty, and <see cref="DnsClientStaticAddressMappingWriteRequest.ProtocolVersion" /> must
+    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.ClientIdentifier" /> must be an
+    ///     identifier <see cref="ClientIdentifierFormat.TryNormalize" /> accepts (it is stored in
+    ///     normal form, <c>aa:bb:cc:dd:ee:ff</c>), and <see cref="DnsClientStaticAddressMappingWriteRequest.ProtocolVersion" /> must
     ///     match the address family, since an IPv4 network cannot map into the IPv6 identifier
     ///     space or the reverse (see
     ///     <see cref="DnsClientStaticAddressMappingEntity.ProtocolVersion" />).
     /// </summary>
     private static bool TryValidate(
         DnsClientStaticAddressMappingWriteRequest request,
+        out string clientIdentifier,
         out string error
     )
     {
         error = null;
+        clientIdentifier = null;
 
         if (request is null || string.IsNullOrWhiteSpace(request.ClientIdentifier))
         {
             error = "'clientIdentifier' is required.";
+            return false;
+        }
+
+        if (!ClientIdentifierFormat.TryNormalize(request.ClientIdentifier, out clientIdentifier))
+        {
+            error = ClientIdentifierFormat.AcceptedFormsMessage;
             return false;
         }
 

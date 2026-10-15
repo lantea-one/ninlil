@@ -20,9 +20,11 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="ClientIdentifier">
 ///     The persistent client identifier a query from <paramref name="Cidr" /> resolves to: a
-///     colon-separated MAC address for an <see cref="InternetProtocolVersionEnum.IPv4" /> mapping,
-///     or a DHCP Unique Identifier (DUID) for an <see cref="InternetProtocolVersionEnum.IPv6" />
-///     one.
+///     MAC address for an <see cref="InternetProtocolVersionEnum.IPv4" /> mapping, or a DHCP
+///     Unique Identifier (DUID) for an <see cref="InternetProtocolVersionEnum.IPv6" /> one, in
+///     hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>,
+///     <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned
+///     as <c>aa:bb:cc:dd:ee:ff</c>.
 /// </param>
 /// <param name="ProtocolVersion">
 ///     Which identifier space <paramref name="ClientIdentifier" /> belongs to. It must match the

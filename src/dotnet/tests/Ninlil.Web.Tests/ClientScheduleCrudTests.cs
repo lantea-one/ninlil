@@ -43,7 +43,7 @@ public class ClientScheduleCrudTests(NinlilDnsWebApplicationFactory factory)
 
     private async Task<Guid> CreateClientAsync(HttpClient client)
     {
-        string identifier = $"AA:11:{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+        string identifier = $"aa:11:{TestClientIdentifiers.Tail(4)}";
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/clients",
             new { clientIdentifier = identifier, protocolVersion = "IPv4" }

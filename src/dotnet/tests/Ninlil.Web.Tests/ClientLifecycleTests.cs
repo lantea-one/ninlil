@@ -46,7 +46,7 @@ public class ClientLifecycleTests(NinlilDnsWebApplicationFactory factory)
 
     private static async Task<Guid> CreateClientAsync(HttpClient client, Guid? groupId = null)
     {
-        string identifier = $"AA:12:{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+        string identifier = $"aa:12:{TestClientIdentifiers.Tail(4)}";
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/clients",
             new

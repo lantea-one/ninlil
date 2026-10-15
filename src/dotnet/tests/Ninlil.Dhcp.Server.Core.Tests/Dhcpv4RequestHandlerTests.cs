@@ -3,6 +3,7 @@ using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Core.Tests;
@@ -120,6 +121,35 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
 
         Assert.NotNull(offer);
         Assert.Equal(IPAddress.Parse("192.0.2.99"), offer.YourIpAddress);
+    }
+
+    /// <summary>
+    ///     This test pins the contract between the web API and the engine: a reservation stored
+    ///     with the identifier <see cref="ClientIdentifierFormat.TryNormalize" /> produces for a
+    ///     hyphenated uppercase MAC is honored for that client's DISCOVER.
+    /// </summary>
+    [Fact]
+    public async Task Discover_ForAReservationStoredInTheNormalizedForm_OffersTheReservedAddress()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "normalized-reservation-scope",
+            "192.0.2.50",
+            "192.0.2.52"
+        );
+        Assert.True(ClientIdentifierFormat.TryNormalize("AA-BB-CC-DD-EE-04", out string stored));
+        await _host.SeedReservationAsync(scope.Id, stored, "192.0.2.98");
+
+        Dhcpv4Message discover = NewMessage([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x04], 0x3100);
+        discover.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
+
+        Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
+            discover,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(offer);
+        Assert.Equal(IPAddress.Parse("192.0.2.98"), offer.YourIpAddress);
     }
 
     [Fact]

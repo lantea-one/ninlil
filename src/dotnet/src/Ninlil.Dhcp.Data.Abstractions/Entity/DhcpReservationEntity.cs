@@ -21,15 +21,19 @@ public class DhcpReservationEntity : AuditableEntityBase
     /// <summary>
     ///     This property contains the client's identifier: for DHCPv4 the MAC address (or the
     ///     Client-identifier option bytes, for a client that sends one), for DHCPv6 the DHCP
-    ///     Unique Identifier (DUID). The lease allocation services look reservations up with
+    ///     Unique Identifier (DUID). It is stored in the normal form of
+    ///     <c>ClientIdentifierFormat</c> (lowercase, colon-separated hex, for example
+    ///     <c>aa:bb:cc:dd:ee:ff</c>), which the reservations controller writes. The lease
+    ///     allocation services look reservations up with
     ///     <see cref="Repository.IDhcpReservationRepository.FindByClientIdentifierAsync" />, an
-    ///     exact string match against the lowercase, colon-separated hex form
-    ///     <c>Dhcpv4ClientIdentifier</c> produces (for example <c>aa:bb:cc:dd:ee:ff</c>).
+    ///     exact string match against that form.
     /// </summary>
     public string ClientIdentifier { get; set; }
 
     /// <summary>
-    ///     This property contains the fixed IP address reserved for this client.
+    ///     This property contains the fixed IP address reserved for this client, in the canonical
+    ///     text form <see cref="System.Net.IPAddress.ToString()" /> writes (for example
+    ///     <c>2001:db8::10</c>), which the reservations controller stores.
     /// </summary>
     public string IpAddress { get; set; }
 

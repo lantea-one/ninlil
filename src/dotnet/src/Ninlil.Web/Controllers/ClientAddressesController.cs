@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
@@ -107,11 +108,14 @@ public class ClientAddressesController(
     }
 
     /// <summary>
-    ///     This action adds an address to a device. Returns 400 for a missing identifier, 404 for
+    ///     This action adds an address to a device. Returns 400 for a missing or malformed identifier, 404 for
     ///     an unknown client, and 409 when the identifier and protocol pair already belongs to any
     ///     device, this one included (the pair the address table's unique index covers, checked
-    ///     first through <see cref="IDnsClientAddressRepository.GetByIdentifierAsync" />). Requires
-    ///     <c>clients:write</c>.
+    ///     first through <see cref="IDnsClientAddressRepository.GetByIdentifierAsync" />). The
+    ///     identifier is accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>,
+    ///     <c>aabb.ccdd.eeff</c> or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and
+    ///     returned as <c>aa:bb:cc:dd:ee:ff</c>, so the duplicate check ignores the spelling.
+    ///     Requires <c>clients:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clients:write")]
@@ -133,15 +137,23 @@ public class ClientAddressesController(
             throw new ValidationException("'clientIdentifier' is required.");
 
         if (
-            await clientAddressRepository.GetByIdentifierAsync(
+            !ClientIdentifierFormat.TryNormalize(
                 request.ClientIdentifier,
+                out string clientIdentifier
+            )
+        )
+            throw new ValidationException(ClientIdentifierFormat.AcceptedFormsMessage);
+
+        if (
+            await clientAddressRepository.GetByIdentifierAsync(
+                clientIdentifier,
                 request.ProtocolVersion,
                 stoppingToken
             )
             is not null
         )
             throw new ConflictException(
-                $"An address already exists for identifier '{request.ClientIdentifier}' ({request.ProtocolVersion})."
+                $"An address already exists for identifier '{clientIdentifier}' ({request.ProtocolVersion})."
             );
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -150,7 +162,7 @@ public class ClientAddressesController(
         {
             Id = Guid.NewGuid(),
             ClientId = clientId,
-            ClientIdentifier = request.ClientIdentifier,
+            ClientIdentifier = clientIdentifier,
             ProtocolVersion = request.ProtocolVersion,
             FirstSeenUtc = now,
             CreatedAtUtc = now,

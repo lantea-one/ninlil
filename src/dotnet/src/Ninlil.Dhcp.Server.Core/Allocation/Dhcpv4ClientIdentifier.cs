@@ -1,4 +1,5 @@
 using Ninlil.Dhcp.Common.Wire;
+using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Core.Allocation;
@@ -16,12 +17,12 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         reserve by plain MAC address, as a packet capture or router client list shows it.
 ///     </para>
 ///     <para>
-///         The key is stored as colon-separated lowercase hex (<c>aa:bb:cc:dd:ee:ff</c>).
-///         Reservations are found by exact string match on that form (see
-///         <see cref="Data.Abstractions.Repository.IDhcpReservationRepository.FindByClientIdentifierAsync" />),
-///         so a reservation entered in another case or with other separators does not match.
-///         <see cref="AreEqual" />, which ignores separators and case, is used only when the
-///         allocation services compare a stored lease's key with the request's.
+///         The key is stored as colon-separated lowercase hex (<c>aa:bb:cc:dd:ee:ff</c>), the
+///         normal form of <see cref="ClientIdentifierFormat" />. The web API normalises
+///         reservation, client and static-mapping identifiers to that form on write, so
+///         reservations are found by exact string match (see
+///         <see cref="Data.Abstractions.Repository.IDhcpReservationRepository.FindByClientIdentifierAsync" />).
+///         <see cref="AreEqual" /> compares a stored lease's key with the request's.
 ///     </para>
 /// </summary>
 internal static class Dhcpv4ClientIdentifier
@@ -50,12 +51,14 @@ internal static class Dhcpv4ClientIdentifier
     /// </summary>
     /// <param name="identifier">The raw identifier bytes to format.</param>
     /// <returns>The formatted client identifier string.</returns>
-    public static string Format(byte[] identifier) =>
-        string.Join(':', identifier.Select(b => b.ToString("x2")));
+    public static string Format(byte[] identifier) => ClientIdentifierFormat.Format(identifier);
 
     /// <summary>
-    ///     This method reports whether two client identifier strings have the same hex digits,
-    ///     ignoring separators and case. Empty or whitespace strings never match.
+    ///     This method reports whether two client identifier strings name the same identifier
+    ///     under <see cref="ClientIdentifierFormat.AreEqual" />, so separators and case do not
+    ///     matter. Identical strings also match, which keeps an identifier longer than
+    ///     <see cref="ClientIdentifierFormat.MaximumBytes" /> matching itself. Empty or
+    ///     whitespace strings never match.
     /// </summary>
     /// <param name="first">The first client identifier string to compare.</param>
     /// <param name="second">The second client identifier string to compare.</param>
@@ -63,11 +66,8 @@ internal static class Dhcpv4ClientIdentifier
     public static bool AreEqual(string first, string second) =>
         !string.IsNullOrWhiteSpace(first)
         && !string.IsNullOrWhiteSpace(second)
-        && string.Equals(Normalize(first), Normalize(second), StringComparison.Ordinal);
-
-    /// <summary>
-    ///     This method keeps only the hex digits of an identifier string, lowercased.
-    /// </summary>
-    private static string Normalize(string value) =>
-        new(value.Where(Uri.IsHexDigit).Select(char.ToLowerInvariant).ToArray());
+        && (
+            string.Equals(first, second, StringComparison.Ordinal)
+            || ClientIdentifierFormat.AreEqual(first, second)
+        );
 }

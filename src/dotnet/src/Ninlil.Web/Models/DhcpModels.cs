@@ -131,8 +131,8 @@ public record DhcpScopeStatisticsDetail(
 ///     This class carries the fields used to create or fully replace a static reservation
 ///     in a DHCP scope (<c>POST</c> and <c>PUT</c> under <c>/api/dhcp-scopes/{scopeId}/reservations</c>).
 /// </summary>
-/// <param name="ClientIdentifier">The client's identifier: a MAC address for DHCPv4, or a DUID for DHCPv6.</param>
-/// <param name="IpAddress">The fixed IP address reserved for the client.</param>
+/// <param name="ClientIdentifier">The client's identifier: a MAC address for DHCPv4, or a DUID for DHCPv6, in hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned as <c>aa:bb:cc:dd:ee:ff</c>.</param>
+/// <param name="IpAddress">The fixed IP address reserved for the client; it is stored and returned in canonical form (for example <c>2001:db8::10</c>).</param>
 /// <param name="HostName">An operator-supplied host name for the reservation, or <see langword="null" /> for none.</param>
 /// <param name="IsDisabled">Whether the reservation is disabled.</param>
 /// <param name="Comments">Free-form operator notes about the reservation.</param>
