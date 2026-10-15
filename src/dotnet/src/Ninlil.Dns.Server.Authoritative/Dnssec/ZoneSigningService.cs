@@ -131,17 +131,21 @@ public class ZoneSigningService(
             .GroupBy(record => DnsName.Parse(record.Name))
             .ToDictionary(group => group.Key, group => group.ToList());
 
-        // A delegation point is any non-apex name with NS records; the apex NS records name
-        // this zone's servers.
-        HashSet<DnsName> delegationPoints =
-        [
-            .. recordsByName
+        // A delegation point is a topmost zone cut (the apex NS records name this zone's own
+        // servers). Everything strictly below a cut is the child's data: it is dropped here so
+        // it is neither signed nor chained (RFC 4035 §2.2, §2.3). Glue stays in the zone data
+        // and in transfers, unsigned.
+        HashSet<DnsName> delegationPoints = ZoneCuts.FindTopmostCuts(
+            apexName,
+            recordsByName
                 .Where(pair =>
-                    pair.Key != apexName
-                    && pair.Value.Any(record => record.Type == DnsResourceRecordTypeEnum.NS)
+                    pair.Value.Any(record => record.Type == DnsResourceRecordTypeEnum.NS)
                 )
-                .Select(pair => pair.Key),
-        ];
+                .Select(pair => pair.Key)
+        );
+        recordsByName = recordsByName
+            .Where(pair => !ZoneCuts.IsBelowACut(pair.Key, apexName, delegationPoints))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
 
         Dictionary<DnsName, List<DnsResourceRecord>> generatedDs =
             await ComputeDelegationDsRecordsAsync(delegationPoints, stoppingToken);
@@ -162,6 +166,19 @@ public class ZoneSigningService(
             .Select(record => record.TimeToLiveSeconds)
             .DefaultIfEmpty(3600u)
             .First();
+
+        // NSEC and NSEC3 records use the negative-caching TTL: the lesser of the SOA's TTL and
+        // its MINIMUM field (RFC 9077 §3, RFC 2308 §5). Without a SOA they use the DNSKEY TTL.
+        uint chainTtl = dnsKeyTtl;
+        RecordEntity soaRecord = storedRecords.FirstOrDefault(record =>
+            record.Type == DnsResourceRecordTypeEnum.Soa && !record.IsDisabled
+        );
+        if (
+            soaRecord is not null
+            && RecordEntityCodec.DecodeTypedData(soaRecord) is SoaRecordData soa
+        )
+            chainTtl = Math.Min(soaRecord.TimeToLiveSeconds, soa.MinimumTtlSeconds);
+
         List<DnsResourceRecord> dnsKeyRecords =
         [
             .. activeKeys.Select(key => new DnsResourceRecord(
@@ -254,6 +271,7 @@ public class ZoneSigningService(
                     ordinarySigners,
                     inception,
                     expiration,
+                    chainTtl,
                     dnsKeyTtl,
                     rrsigs
                 )
@@ -267,7 +285,7 @@ public class ZoneSigningService(
                         ordinarySigners,
                         inception,
                         expiration,
-                        dnsKeyTtl,
+                        chainTtl,
                         rrsigs
                     ),
                     null
@@ -458,7 +476,8 @@ public class ZoneSigningService(
     /// <summary>
     ///     This method lists every owner name that needs an NSEC or NSEC3 record: each name with
     ///     records, plus each ancestor between it and the apex (empty non-terminals, which exist
-    ///     but have no data and still need a denial record). The apex is included.
+    ///     but have no data and still need a denial record). The apex is included. The caller has
+    ///     already removed names below a zone cut, so none is chained (RFC 4035 §2.3).
     /// </summary>
     private static List<DnsName> ComputeSignableOwnerNames(
         DnsName apexName,
@@ -505,6 +524,7 @@ public class ZoneSigningService(
     /// <summary>
     ///     This method builds the zone's NSEC chain (RFC 4034 §4): one record per owner name in
     ///     canonical order, each naming the next and the last naming the first, each signed.
+    ///     <c>ttl</c> is the negative-caching TTL (RFC 9077 §3).
     /// </summary>
     private List<DnsResourceRecord> BuildNsecChain(
         DnsName apexName,
@@ -575,7 +595,8 @@ public class ZoneSigningService(
     /// <summary>
     ///     This method builds the zone's NSEC3 chain (RFC 5155 §7.1): one record per owner name's
     ///     hash, in hash order, each naming the next hash and the last naming the first, plus the
-    ///     NSEC3PARAM record. The Opt-Out flag is set on every record when the zone has any
+    ///     NSEC3PARAM record. The NSEC3 records use <c>ttl</c> (the negative-caching TTL, RFC 9077
+    ///     §3) and NSEC3PARAM uses <c>paramTtl</c> (RFC 5155 §4 sets no TTL rule for it). The Opt-Out flag is set on every record when the zone has any
     ///     delegation without a DS (see <c>useOptOut</c>). Insecure delegations stay in the chain.
     /// </summary>
     private (List<DnsResourceRecord> Records, DnsResourceRecord Nsec3ParamRecord) BuildNsec3Chain(
@@ -589,6 +610,7 @@ public class ZoneSigningService(
         uint inception,
         uint expiration,
         uint ttl,
+        uint paramTtl,
         Dictionary<
             (DnsName Name, DnsResourceRecordTypeEnum Type),
             IReadOnlyList<DnsResourceRecord>
@@ -674,7 +696,7 @@ public class ZoneSigningService(
             apexName,
             DnsResourceRecordTypeEnum.Nsec3Param,
             DnsClassEnum.Internet,
-            ttl,
+            paramTtl,
             DnsRecordDataCodecRegistry.Encode(
                 DnsResourceRecordTypeEnum.Nsec3Param,
                 new Nsec3ParamRecordData(hashAlgorithm, zone.Nsec3Iterations, salt)
@@ -688,7 +710,7 @@ public class ZoneSigningService(
             signers,
             inception,
             expiration,
-            ttl,
+            paramTtl,
             rrsigs
         );
 

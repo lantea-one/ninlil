@@ -82,8 +82,8 @@ public sealed class CachedZone
                     break;
         }
 
-        // Collect every non-apex NS owner, then drop the ones below another NS owner: only the
-        // topmost cuts stay, because data below a cut is the child's (RFC 1034 §4.2.1).
+        // Collect every non-apex NS owner, then keep the topmost cuts only (ZoneCuts), because
+        // data below a cut is the child's (RFC 1034 §4.2.1).
         Dictionary<DnsName, List<RecordEntity>> nsOwners = _recordsByName
             .Where(entry => entry.Key != ApexName)
             .Select(entry =>
@@ -97,19 +97,9 @@ public sealed class CachedZone
             .Where(entry => entry.NameServers.Count > 0)
             .ToDictionary(entry => entry.Name, entry => entry.NameServers);
 
+        HashSet<DnsName> cuts = ZoneCuts.FindTopmostCuts(ApexName, nsOwners.Keys);
         _delegationPoints = nsOwners
-            .Where(entry =>
-                !Enumerable
-                    .Range(
-                        ApexName.Labels.Count + 1,
-                        entry.Key.Labels.Count - ApexName.Labels.Count - 1
-                    )
-                    .Any(depth =>
-                        nsOwners.ContainsKey(
-                            new DnsName([.. entry.Key.Labels.Skip(entry.Key.Labels.Count - depth)])
-                        )
-                    )
-            )
+            .Where(entry => cuts.Contains(entry.Key))
             .ToDictionary(entry => entry.Key, entry => entry.Value);
     }
 
