@@ -182,6 +182,70 @@ describe('RecordFormComponent', () => {
     expect(fixture.componentInstance.form.controls.type.disabled).toBeTrue();
   });
 
+  it('create mode: does not offer SOA among the types when the zone already has records', async () => {
+    const fixture = await createComponent({ zoneId: 'zone-1' });
+
+    expect(fixture.componentInstance.typeOptions()).not.toContain(DnsResourceRecordTypeEnum.Soa);
+    expect(fixture.componentInstance.typeOptions()).toContain(DnsResourceRecordTypeEnum.A);
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('#record-type option'),
+    ).map((option) => option.textContent?.trim());
+    expect(options).not.toContain('SOA');
+  });
+
+  it('edit mode: does not offer SOA among the types when editing an A record', async () => {
+    const fixture = await createComponent({ zoneId: 'zone-1', recordId: 'record-1' }, () => {
+      recordsApiSpy.apiZonesZoneIdRecordsIdGet.and.returnValue(
+        of({
+          id: 'record-1',
+          zoneId: 'zone-1',
+          name: 'www',
+          type: DnsResourceRecordTypeEnum.A,
+          timeToLiveSeconds: 300,
+          data: { address: '203.0.113.9' },
+          isDisabled: false,
+          excludeFromSync: false,
+        }),
+      );
+    });
+
+    expect(fixture.componentInstance.typeOptions()).not.toContain(DnsResourceRecordTypeEnum.Soa);
+    expect(fixture.componentInstance.typeOptions()).toContain(DnsResourceRecordTypeEnum.A);
+  });
+
+  it('create mode: offers only SOA, selected and disabled, for an empty zone', async () => {
+    const fixture = await createComponent({ zoneId: 'zone-1' }, () => {
+      recordsApiSpy.apiZonesZoneIdRecordsGet.and.returnValue(
+        of({ items: [], skip: 0, take: 1, totalCount: 0 }),
+      );
+    });
+
+    expect(fixture.componentInstance.typeOptions()).toEqual([DnsResourceRecordTypeEnum.Soa]);
+    expect(fixture.componentInstance.form.controls.type.value).toBe(DnsResourceRecordTypeEnum.Soa);
+    expect(fixture.componentInstance.form.controls.type.disabled).toBeTrue();
+  });
+
+  it('edit mode: offers only SOA, selected and disabled, when editing the SOA', async () => {
+    const fixture = await createComponent({ zoneId: 'zone-1', recordId: 'record-1' }, () => {
+      recordsApiSpy.apiZonesZoneIdRecordsIdGet.and.returnValue(
+        of({
+          id: 'record-1',
+          zoneId: 'zone-1',
+          name: '@',
+          type: DnsResourceRecordTypeEnum.Soa,
+          timeToLiveSeconds: 3600,
+          data: {},
+          isDisabled: false,
+          excludeFromSync: false,
+        }),
+      );
+    });
+
+    expect(fixture.componentInstance.typeOptions()).toEqual([DnsResourceRecordTypeEnum.Soa]);
+    expect(fixture.componentInstance.form.controls.type.value).toBe(DnsResourceRecordTypeEnum.Soa);
+    expect(fixture.componentInstance.form.controls.type.disabled).toBeTrue();
+  });
+
   it("save() in create mode POSTs the common fields plus the mounted type form's own data, then navigates to the record list", async () => {
     const fixture = await createComponent({ zoneId: 'zone-1' }, () => {
       recordsApiSpy.apiZonesZoneIdRecordsPost.and.returnValue(

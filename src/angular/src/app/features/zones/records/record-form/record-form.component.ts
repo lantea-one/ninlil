@@ -94,6 +94,9 @@ export class RecordFormComponent implements OnInit {
   /** Whether this is the very first record being added to an empty zone (create mode only). */
   readonly isFirstRecordInZone = signal(false);
 
+  /** Whether this instance is editing the zone's SOA record (edit mode only). */
+  readonly isEditingSoa = signal(false);
+
   /** Whether the initial data (the zone, and, in edit mode, the record itself) is still loading. */
   readonly loading = signal(true);
 
@@ -115,6 +118,17 @@ export class RecordFormComponent implements OnInit {
     excludeFromSync: [false],
     comments: [''],
   });
+
+  /**
+   * The types the type select offers. The SOA is the zone's one apex SOA (RFC 1034 §4.2.1), so an
+   * empty zone and an edit of the SOA offer only SOA, and every other case offers every supported
+   * type except SOA; the backend answers 409 when an edit moves the SOA.
+   */
+  readonly typeOptions = computed(() =>
+    this.isFirstRecordInZone() || this.isEditingSoa()
+      ? [DnsResourceRecordTypeEnum.Soa]
+      : this.supportedTypes.filter((type) => type !== DnsResourceRecordTypeEnum.Soa),
+  );
 
   /** The selected record type, mirrored into a signal since `valueChanges` is not one. */
   readonly selectedType = signal<DnsResourceRecordTypeEnum>(DnsResourceRecordTypeEnum.A);
@@ -261,6 +275,7 @@ export class RecordFormComponent implements OnInit {
         // The SOA cannot change type here. RecordsController would accept it and leave the zone
         // with no SOA.
         if (record.type === DnsResourceRecordTypeEnum.Soa) {
+          this.isEditingSoa.set(true);
           this.form.controls.type.disable();
         }
       }

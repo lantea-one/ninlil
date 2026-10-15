@@ -34,7 +34,7 @@
           <div class="field">
             <label cLabel for="record-type">Type</label>
             <select cSelect id="record-type" formControlName="type">
-              @for (type of supportedTypes; track type) {
+              @for (type of typeOptions(); track type) {
                 <option [value]="type">{{ type }}</option>
               }
             </select>
