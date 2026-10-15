@@ -138,8 +138,8 @@ public sealed class SqliteMigrationSnapshotStore : IMigrationSnapshotStore
         }
         catch
         {
-            File.Delete(snapshotPath);
             File.Delete(ManifestPath(id));
+            DeleteSnapshotFiles(snapshotPath);
             throw;
         }
     }
@@ -201,8 +201,18 @@ public sealed class SqliteMigrationSnapshotStore : IMigrationSnapshotStore
         // The manifest goes first: a snapshot without a manifest is never offered, a manifest
         // without a snapshot would be.
         File.Delete(ManifestPath(manifest.Id));
-        File.Delete(SnapshotPath(manifest.Id));
+        DeleteSnapshotFiles(SnapshotPath(manifest.Id));
         return Task.CompletedTask;
+    }
+
+    // The snapshot inherits WAL mode from the database, so opening it (the table count, a
+    // restore) creates <snapshot>-wal and <snapshot>-shm next to it. They go with the snapshot;
+    // File.Delete ignores a file that does not exist.
+    private static void DeleteSnapshotFiles(string snapshotPath)
+    {
+        File.Delete(snapshotPath);
+        File.Delete(snapshotPath + "-wal");
+        File.Delete(snapshotPath + "-shm");
     }
 
     /// <inheritdoc />

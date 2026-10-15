@@ -396,6 +396,107 @@ public sealed class SqliteMigrationSnapshotTests(SqliteEngineFixture fixture)
         );
     }
 
+    // Lists the files in the snapshot directory whose name starts with the database name and id.
+    private static string[] FilesOfSnapshot(string connectionString, string id) =>
+        Directory.Exists(SnapshotDirectory(connectionString))
+            ? Directory.GetFiles(
+                SnapshotDirectory(connectionString),
+                Path.GetFileNameWithoutExtension(DatabasePath(connectionString)) + "-" + id + "*"
+            )
+            : [];
+
+    private static string[] SnapshotDirectoryFiles(string connectionString) =>
+        Directory.Exists(SnapshotDirectory(connectionString))
+            ? [.. Directory.GetFiles(SnapshotDirectory(connectionString)).Order()]
+            : [];
+
+    /// <summary>
+    ///     Snapshots of a WAL-mode database get WAL sidecars when they are opened. Deleting the
+    ///     snapshot removes the snapshot file, the sidecars and the manifest, so nothing with the
+    ///     snapshot's id stays in the directory.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAsync_ForASnapshotOfAWalDatabase_RemovesTheSidecarsToo()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync(
+            createSchema: false
+        );
+        (NinlilDnsContext context, List<string> migrations) = await OneBehindAsync(database);
+        string connectionString = database.ConnectionString;
+        SqliteMigrationSnapshotStore store = SqliteMigrationSnapshotStore.TryCreate(
+            connectionString
+        );
+        MigrationSnapshotManifest manifest = await store.CreateAsync(
+            migrations[..^1],
+            migrations[^1],
+            default
+        );
+        // Opening a WAL-mode snapshot creates the sidecars. SQLite removes them when the last
+        // connection closes cleanly, so copies are put back to stand for a snapshot that was
+        // opened and never closed cleanly.
+        await using (
+            SqliteConnection connection = new($"Data Source={manifest.Location};Pooling=False")
+        )
+        {
+            await connection.OpenAsync();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "PRAGMA journal_mode=WAL";
+            Assert.Equal("wal", (string)await command.ExecuteScalarAsync());
+            command.CommandText = "SELECT COUNT(*) FROM \"NinlilDnsRewrites\"";
+            await command.ExecuteScalarAsync();
+            Assert.True(File.Exists(manifest.Location + "-wal"));
+            Assert.True(File.Exists(manifest.Location + "-shm"));
+            // Copy the sidecars: they vanish when the last connection closes cleanly.
+            File.Copy(manifest.Location + "-wal", manifest.Location + "-wal.keep", true);
+            File.Copy(manifest.Location + "-shm", manifest.Location + "-shm.keep", true);
+        }
+        File.Move(manifest.Location + "-wal.keep", manifest.Location + "-wal", true);
+        File.Move(manifest.Location + "-shm.keep", manifest.Location + "-shm", true);
+        Assert.True(FilesOfSnapshot(connectionString, manifest.Id).Length >= 4);
+
+        await store.DeleteAsync(manifest, default);
+
+        Assert.Empty(FilesOfSnapshot(connectionString, manifest.Id));
+    }
+
+    /// <summary>
+    ///     A migration that fails and is rolled back discards its snapshot, and the discard
+    ///     leaves no file of that snapshot behind, not even the WAL sidecars the table count
+    ///     created when it opened the snapshot.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WhenAMigrationIsRolledBack_LeavesNoFileOfTheDiscardedSnapshot()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync(
+            createSchema: false
+        );
+        NinlilDnsContext context = database.CreateContext();
+        List<string> migrations = [.. context.Database.GetMigrations()];
+        int failing = migrations.FindIndex(name => name.EndsWith("_AddZoneValidateDnssec"));
+        Assert.True(failing >= 2, "The failing migration is missing from the SQLite assembly.");
+        await context.GetService<IMigrator>().MigrateAsync(migrations[failing - 2]);
+        // The column the next migration adds exists already, so that migration fails.
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"NinlilDnsZones\" ADD \"ValidateDnssec\" INTEGER NULL"
+        );
+
+        // The directory is shared by this collection's tests, so compare against its state now.
+        string[] filesBefore = SnapshotDirectoryFiles(database.ConnectionString);
+
+        DatabaseStartupRefusedException refusal =
+            await Assert.ThrowsAsync<DatabaseStartupRefusedException>(() =>
+                RelationalStartupMigrator.RunAsync(
+                    context,
+                    Options(database.ConnectionString),
+                    new ListLogger()
+                )
+            );
+
+        Assert.Contains("was rolled back; the database is unchanged", refusal.Message);
+        Assert.Empty(await ListAsync(database.ConnectionString));
+        Assert.Equal(filesBefore, SnapshotDirectoryFiles(database.ConnectionString));
+    }
+
     /// <summary>
     ///     A restore setting that names no snapshot refuses the start and lists the ids that
     ///     exist.
