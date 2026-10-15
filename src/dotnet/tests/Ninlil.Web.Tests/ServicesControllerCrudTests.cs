@@ -281,4 +281,26 @@ public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
             await startResponse.Content.ReadFromJsonAsync<ManagedServiceSummary>();
         Assert.True(started.IsRunning);
     }
+
+    /// <summary>
+    ///     This test starts a background loop that is already running. The call answers 200 with
+    ///     the state still running; that no second loop starts is proved by
+    ///     <c>ManagedServiceRegistrationTests</c>.
+    /// </summary>
+    [Fact]
+    public async Task Start_OnABackgroundServiceThatIsAlreadyRunning_ReturnsItRunning()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsync(
+            "/api/services/query-log-cleanup/start",
+            null
+        );
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True((await response.Content.ReadFromJsonAsync<ManagedServiceSummary>()).IsRunning);
+
+        response = await client.PostAsync("/api/services/query-log-cleanup/start", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True((await response.Content.ReadFromJsonAsync<ManagedServiceSummary>()).IsRunning);
+    }
 }

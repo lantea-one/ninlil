@@ -119,4 +119,129 @@ public sealed class ManagedServiceRegistrationTests
         probeState = true;
         Assert.True(registration.IsRunning);
     }
+
+    /// <summary>
+    ///     This class is a fake <see cref="BackgroundService" /> that counts how many
+    ///     <c>ExecuteAsync</c> loops have started and how many run at once, so a test can prove a
+    ///     repeated start never gives the service a second loop.
+    /// </summary>
+    private sealed class CountingBackgroundService : BackgroundService
+    {
+        private int current;
+        private int executions;
+        private int maxConcurrent;
+
+        public int Executions => Volatile.Read(ref executions);
+        public int MaxConcurrent => Volatile.Read(ref maxConcurrent);
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            Interlocked.Increment(ref executions);
+            int now = Interlocked.Increment(ref current);
+            int seen;
+
+            while (now > (seen = Volatile.Read(ref maxConcurrent)))
+                Interlocked.CompareExchange(ref maxConcurrent, now, seen);
+
+            try
+            {
+                await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                Interlocked.Decrement(ref current);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_OnAServiceThatIsRunning_DoesNotStartItAgain()
+    {
+        CountingBackgroundService service = new();
+        ManagedServiceRegistration registration = new(
+            "fake",
+            ManagedServiceCategoryEnum.Background,
+            service
+        );
+
+        await registration.StartAsync(CancellationToken.None);
+        await registration.StartAsync(CancellationToken.None);
+        await Task.Delay(100);
+
+        Assert.True(registration.IsRunning);
+        Assert.Equal(1, service.Executions);
+        Assert.Equal(1, service.MaxConcurrent);
+        await registration.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task StartAsync_CalledConcurrently_StartsTheServiceOnce()
+    {
+        CountingBackgroundService service = new();
+        ManagedServiceRegistration registration = new(
+            "fake",
+            ManagedServiceCategoryEnum.Background,
+            service
+        );
+
+        await Task.WhenAll(
+            Enumerable
+                .Range(0, 8)
+                .Select(_ => Task.Run(() => registration.StartAsync(CancellationToken.None)))
+        );
+        await Task.Delay(100);
+
+        Assert.Equal(1, service.Executions);
+        Assert.Equal(1, service.MaxConcurrent);
+        await registration.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task StartAsync_AfterStop_StartsTheServiceAgainWithoutTwoLoopsAtOnce()
+    {
+        CountingBackgroundService service = new();
+        ManagedServiceRegistration registration = new(
+            "fake",
+            ManagedServiceCategoryEnum.Background,
+            service
+        );
+
+        await registration.StartAsync(CancellationToken.None);
+
+        // BackgroundService runs ExecuteAsync off the start call's thread, so wait until the
+        // first loop has begun; a stop before that would cancel it before it ever ran.
+        while (service.Executions < 1)
+            await Task.Delay(10);
+
+        await registration.StopAsync(CancellationToken.None);
+        await registration.StartAsync(CancellationToken.None);
+        await Task.Delay(100);
+
+        Assert.True(registration.IsRunning);
+        Assert.Equal(2, service.Executions);
+        Assert.Equal(1, service.MaxConcurrent);
+        await registration.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task StartAsync_OnAStartedServiceWhoseProbeSaysDown_StopsThenStartsIt()
+    {
+        CountingBackgroundService service = new();
+        ManagedServiceRegistration registration = new(
+            "fake",
+            ManagedServiceCategoryEnum.Transport,
+            service,
+            () => false
+        );
+
+        // The probe stays false, so each start waits out its poll timeout (2 seconds).
+        await registration.StartAsync(CancellationToken.None);
+        await registration.StartAsync(CancellationToken.None);
+        await Task.Delay(100);
+
+        Assert.Equal(2, service.Executions);
+        Assert.Equal(1, service.MaxConcurrent);
+        await registration.StopAsync(CancellationToken.None);
+    }
 }

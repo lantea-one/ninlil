@@ -39,6 +39,12 @@ public sealed class ManagedServiceRegistration : IManagedServiceRegistration
     private volatile bool _startedNotYetStopped;
 
     /// <summary>
+    ///     This field is the gate that lets only one <see cref="StartAsync" /> or
+    ///     <see cref="StopAsync" /> run at a time.
+    /// </summary>
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>
     ///     This constructor wraps an existing <see cref="IHostedService" /> with a name and
     ///     category.
     /// </summary>
@@ -94,8 +100,41 @@ public sealed class ManagedServiceRegistration : IManagedServiceRegistration
     /// </summary>
     private static readonly TimeSpan StartupProbePollInterval = TimeSpan.FromMilliseconds(10);
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     This method starts the wrapped service unless it is already running. A service that was
+    ///     started but reports down is stopped first, so the wrapped service never has two
+    ///     <c>ExecuteAsync</c> loops at once.
+    /// </summary>
+    /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (_startedNotYetStopped)
+            {
+                if (IsRunning)
+                    return;
+
+                // Started, but the probe says it is down: stop it before starting again.
+                await _service.StopAsync(cancellationToken);
+                _startedNotYetStopped = false;
+            }
+
+            await StartLockedAsync(cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    ///     This method starts the wrapped service and waits for the probe. The caller holds the
+    ///     gate.
+    /// </summary>
+    private async Task StartLockedAsync(CancellationToken cancellationToken)
     {
         await _service.StartAsync(cancellationToken);
         _startedNotYetStopped = true;
@@ -116,7 +155,16 @@ public sealed class ManagedServiceRegistration : IManagedServiceRegistration
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _service.StopAsync(cancellationToken);
-        _startedNotYetStopped = false;
+        await _gate.WaitAsync(cancellationToken);
+
+        try
+        {
+            await _service.StopAsync(cancellationToken);
+            _startedNotYetStopped = false;
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 }

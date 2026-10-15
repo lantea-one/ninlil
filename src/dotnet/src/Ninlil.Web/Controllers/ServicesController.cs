@@ -53,8 +53,9 @@ public class ServicesController(IManagedServiceRegistry registry) : ControllerBa
 
     /// <summary>
     ///     This action starts one service now: it binds a transport's socket or resumes a
-    ///     background loop. It does not check whether the service is already running; the service's
-    ///     start logic is called either way. Returns 404 for an unknown name. Requires
+    ///     background loop. Starting a service that is already running returns its state and changes
+    ///     nothing. A service that was started but is down, such as a transport that declined to
+    ///     bind, is stopped and started again, which retries it. Returns 404 for an unknown name. Requires
     ///     <c>services:manage</c>.
     /// </summary>
     /// <param name="name">The service to start.</param>
