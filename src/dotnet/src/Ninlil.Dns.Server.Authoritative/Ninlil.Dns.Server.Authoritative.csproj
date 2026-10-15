@@ -9,6 +9,11 @@
     <PackageId>Ninlil.Dns.Server.Authoritative</PackageId>
   </PropertyGroup>
 
+  <!-- The tests call the internal DnssecKeyRolloverBackgroundService.FindLocalParent directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.Authoritative.Tests" />
+  </ItemGroup>
+
   <!--
       QuicZoneTransferClient.cs uses System.Net.Quic's own types (QuicConnection/QuicStream),
       which carry [SupportedOSPlatform] attributes for linux/macOS/windows, exactly the platforms

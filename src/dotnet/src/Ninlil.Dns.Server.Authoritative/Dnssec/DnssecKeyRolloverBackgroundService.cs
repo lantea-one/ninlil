@@ -6,6 +6,7 @@ using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Dnssec;
 
 // Define our namespace.
@@ -35,8 +36,9 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///         one.) The incoming key is promoted to Active after the DNSKEY TTL plus propagation
 ///         delay, and only once the parent can publish its DS:
 ///         <list type="bullet">
-///             <item>If the parent zone is hosted and signed here, at once; this service then
-///             re-signs the parent, which regenerates its DS for the new Active KSK
+///             <item>If the zone that answers the child's DS query is a signed Primary or
+///             CloudPrimary hosted here, at any distance above the child, at once; this service
+///             then re-signs that parent, which regenerates its DS for the new Active KSK
 ///             (<see cref="ZoneSigningService.ComputeDelegationDsRecordsAsync" />).</item>
 ///             <item>Otherwise only after an operator confirms the parent's DS was updated
 ///             (<c>IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync</c>). The server
@@ -44,8 +46,10 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///             validation.</item>
 ///         </list>
 ///         On promotion the old KSK goes back to DoubleSignature and keeps signing the DNSKEY
-///         RRset. It is removed after the DS TTL plus propagation delay: 3600 seconds for a parent
-///         hosted here, or <see cref="DnssecKeyRolloverOptions.ExternalParentDsTtl" /> otherwise.
+///         RRset. It is removed after the DS TTL plus propagation delay: the parent's real DS TTL
+///         for a parent hosted here (at least 3600 seconds, more when a stored DS record sets a
+///         longer TTL; see <see cref="FindLocalParent" />), or
+///         <see cref="DnssecKeyRolloverOptions.ExternalParentDsTtl" /> otherwise.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">The factory used to create a scope per zone for the repositories.</param>
@@ -58,17 +62,23 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     every iteration so changes apply without a restart.
 /// </param>
 /// <param name="logger">The logger this service records a rollover transition, or a per-zone failure, to.</param>
+/// <param name="zoneCache">
+///     The cache of the zones hosted here, which <see cref="FindLocalParent" /> reads to find the
+///     zone that answers a child's DS query.
+/// </param>
 public class DnssecKeyRolloverBackgroundService(
     IServiceScopeFactory scopeFactory,
     SignedZoneCache signedZoneCache,
     IOptionsMonitor<DnssecKeyRolloverOptions> options,
-    ILogger<DnssecKeyRolloverBackgroundService> logger
+    ILogger<DnssecKeyRolloverBackgroundService> logger,
+    AuthoritativeZoneCache zoneCache
 ) : BackgroundService
 {
     /// <summary>
     ///     This field contains the TTL <see cref="ZoneSigningService.ComputeDelegationDsRecordsAsync" />
-    ///     gives generated DS records, used as the DS TTL when the parent is hosted here. The two
-    ///     values must stay equal.
+    ///     gives generated DS records, the floor of the DS TTL when the parent is hosted here
+    ///     (<see cref="FindLocalParent" /> raises it to a longer stored DS TTL). The two values
+    ///     must stay equal.
     /// </summary>
     private static readonly TimeSpan LocalDelegationDsTtl = TimeSpan.FromSeconds(3600);
 
@@ -239,7 +249,7 @@ public class DnssecKeyRolloverBackgroundService(
         }
 
         // -- Key-Signing Key, Double-Signature (RFC 6781 §4.1.2) --
-        (Guid Id, bool IsLocalParent, Guid? LocalParentZoneId)? localParent = null;
+        (bool IsLocalParent, Guid? ParentZoneId, TimeSpan DsTtl)? localParent = null;
 
         foreach (
             DnssecKeyEntity ksk in keys.Where(key =>
@@ -248,12 +258,7 @@ public class DnssecKeyRolloverBackgroundService(
             )
         )
         {
-            localParent ??= await FindLocalSignedParentZoneAsync(
-                zoneRepository,
-                recordRepository,
-                zone,
-                stoppingToken
-            );
+            localParent ??= FindLocalParent(zone);
 
             // RetiredAtUtc is null only for the incoming key; the outgoing key got it when it was
             // demoted. See the class summary.
@@ -294,13 +299,13 @@ public class DnssecKeyRolloverBackgroundService(
                 changed = true;
 
                 if (localParent.Value.IsLocalParent)
-                    promotedKskLocalParentZoneId = localParent.Value.LocalParentZoneId;
+                    promotedKskLocalParentZoneId = localParent.Value.ParentZoneId;
             }
             else
             {
                 // Outgoing KSK: remove it once the old DS has expired from caches.
                 TimeSpan dsTtl = localParent.Value.IsLocalParent
-                    ? LocalDelegationDsTtl
+                    ? localParent.Value.DsTtl
                     : options.CurrentValue.ExternalParentDsTtl;
                 TimeSpan wait2 = dsTtl + propagationDelay;
 
@@ -371,56 +376,54 @@ public class DnssecKeyRolloverBackgroundService(
     }
 
     /// <summary>
-    ///     This method looks for a signed Primary or CloudPrimary zone hosted here that delegates
-    ///     to <paramref name="childZone" />, since only then is the DS generated automatically
-    ///     (<see cref="ZoneSigningService.ComputeDelegationDsRecordsAsync" />). The parent must
-    ///     also have NS records for the child; a zone that merely has the parent's name would
-    ///     otherwise skip the operator confirmation an external parent needs. Only the zone one
-    ///     label up is checked, not more distant ancestors.
+    ///     This method finds the local parent of <paramref name="childZone" />: the zone this
+    ///     server answers the child's DS query from
+    ///     (<see cref="AuthoritativeZoneCache.FindZone" /> with type DS), at any label distance
+    ///     above the child. It counts only when that zone is a signed Primary or CloudPrimary and
+    ///     its topmost zone cut at the child's name is the child itself, so a child hidden below a
+    ///     higher cut is external. Only then is the DS generated automatically
+    ///     (<see cref="ZoneSigningService.ComputeDelegationDsRecordsAsync" />). It reads the
+    ///     in-memory cache, which every zone write reloads, so it does not query the database.
     /// </summary>
-    private static async Task<(
-        Guid Id,
-        bool IsLocalParent,
-        Guid? LocalParentZoneId
-    )> FindLocalSignedParentZoneAsync(
-        IZoneRepository zoneRepository,
-        IRecordRepository recordRepository,
-        ZoneEntity childZone,
-        CancellationToken stoppingToken
+    /// <param name="childZone">The zone whose KSK is rolling.</param>
+    /// <returns>
+    ///     Whether the parent is hosted here, the parent's zone identifier (null when it is not),
+    ///     and the DS TTL to wait for: at least <see cref="LocalDelegationDsTtl" />, or the
+    ///     longest TTL of a DS record stored at the child's name in the parent when that is
+    ///     longer, because the signer gives the DS RRset the stored TTL (RFC 4034 §3.1.4 needs
+    ///     the RRSIG to carry the same TTL). For an external parent the TTL is the 3600-second
+    ///     floor and the caller does not use it.
+    /// </returns>
+    internal (bool IsLocalParent, Guid? ParentZoneId, TimeSpan DsTtl) FindLocalParent(
+        ZoneEntity childZone
     )
     {
         DnsName childName = DnsName.Parse(childZone.Name);
+        CachedZone parent = zoneCache.FindZone(childName, DnsResourceRecordTypeEnum.DS);
 
-        if (childName.Labels.Count <= 1)
-            return (childZone.Id, false, null);
+        if (
+            parent is null
+            || parent.Zone.Id == childZone.Id
+            || !parent.Zone.IsDnssecSigned
+            || parent.Zone.Type is not (ZoneTypeEnum.Primary or ZoneTypeEnum.CloudPrimary)
+        )
+            return (false, null, LocalDelegationDsTtl);
 
-        DnsName parentName = new([.. childName.Labels.Skip(1)]);
+        // A cut above the child occludes it (RFC 1034 §4.2.1): the parent then does not
+        // delegate the child itself and publishes no DS for it.
+        if (parent.FindEnclosingDelegation(childName)?.DelegationPoint != childName)
+            return (false, null, LocalDelegationDsTtl);
 
-        ZoneEntity parent = (
-            await zoneRepository.ListAsync(
-                zone =>
-                    zone.Name == parentName.ToString().TrimEnd('.')
-                    && zone.IsDnssecSigned
-                    && (
-                        zone.Type == ZoneTypeEnum.Primary || zone.Type == ZoneTypeEnum.CloudPrimary
-                    ),
-                stoppingToken
-            )
-        ).FirstOrDefault();
+        uint storedTtlSeconds = parent
+            .GetRecords(childName, DnsResourceRecordTypeEnum.DS)
+            .Select(record => record.TimeToLiveSeconds)
+            .DefaultIfEmpty(0u)
+            .Max();
 
-        if (parent is null)
-            return (childZone.Id, false, null);
-
-        IReadOnlyList<RecordEntity> parentRecords = await recordRepository.ListByZoneIdAsync(
-            parent.Id,
-            stoppingToken
+        return (
+            true,
+            parent.Zone.Id,
+            TimeSpan.FromSeconds(Math.Max(LocalDelegationDsTtl.TotalSeconds, storedTtlSeconds))
         );
-        bool actuallyDelegates = parentRecords.Any(record =>
-            !record.IsDisabled
-            && record.Type == DnsResourceRecordTypeEnum.NS
-            && DnsName.Parse(record.Name) == childName
-        );
-
-        return actuallyDelegates ? (childZone.Id, true, parent.Id) : (childZone.Id, false, null);
     }
 }
