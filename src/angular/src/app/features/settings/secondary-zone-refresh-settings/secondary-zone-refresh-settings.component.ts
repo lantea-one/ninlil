@@ -24,7 +24,8 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  * It edits `SecondaryZoneRefreshOptions` through `GET` and
  * `PATCH /api/secondary-zone-refresh-settings` (`secondaryzonerefreshsettings:read`,
  * `secondaryzonerefreshsettings:write`): how often the loop that checks whether a secondary zone
- * is due for a refresh wakes up, and the default retry interval. Changes are hot-reloaded.
+ * is due for a refresh wakes up, and the retry interval for a zone with no SOA yet or a stub
+ * zone (other zones use their own SOA Retry value). Changes are hot-reloaded.
  */
 @Component({
   selector: 'app-secondary-zone-refresh-settings',

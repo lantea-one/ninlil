@@ -33,8 +33,10 @@
               placeholder="00:00:30"
             />
             <div cFormText>
-              How long to wait before retrying a zone with no local SOA yet, or an unreachable
-              primary.
+              How long to wait before the next check of a zone that has no SOA yet, or of a stub
+              zone. Every other zone whose primaries were unreachable retries after its own SOA
+              Retry value, and stops answering once its SOA Expire value passes without a successful
+              refresh.
             </div>
           </div>
         </div>
