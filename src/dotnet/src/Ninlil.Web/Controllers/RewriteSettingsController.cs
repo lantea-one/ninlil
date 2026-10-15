@@ -1,9 +1,12 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Dns.Server.Rewrites;
+using Ninlil.Web.ClusterSync;
 using Ninlil.Web.Examples.RewriteSettings;
 using Ninlil.Web.Examples.Settings;
 using Ninlil.Web.Extension;
@@ -18,7 +21,9 @@ namespace Ninlil.Web.Controllers;
 ///     This controller reads and writes <see cref="DnsRewriteOptions" />: whether the rewrite
 ///     engine is on and the TTL of the answers it builds. The rewrites themselves are managed by
 ///     <c>DnsRewritesController</c>. Reading needs <c>rewritesettings:read</c> and writing needs
-///     <c>rewritesettings:write</c>.
+///     <c>rewritesettings:write</c>. A write is also replicated to the other cluster nodes, as for
+///     the event broker, rate limiting, DNS Cookies and reverse proxy settings; see
+///     <see cref="ClusterConfigSyncSettingsRecorder" />.
 ///     <para>
 ///         <b>Every field takes effect at once, with no restart.</b> <c>DnsRewriteEngine</c> reads
 ///         <see cref="DnsRewriteOptions" /> through <see cref="IOptionsMonitor{TOptions}" /> and is
@@ -28,26 +33,48 @@ namespace Ninlil.Web.Controllers;
 /// </summary>
 /// <param name="rewriteOptions">The current rewrite settings.</param>
 /// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
+/// <param name="clusterSyncRecorder">
+///     Records a successful write and sends it to every cluster peer.
+/// </param>
+/// <param name="stateRepository">
+///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
+///     <see cref="RewriteSettingsDetail.LastModifiedUtc" /> and
+///     <see cref="RewriteSettingsDetail.OriginatingNodeId" />.
+/// </param>
 [ApiController]
 [Route("api/rewrite-settings")]
 public class RewriteSettingsController(
     IOptionsMonitor<DnsRewriteOptions> rewriteOptions,
-    RuntimeConfigurationOptions runtimeConfigurationOptions
+    RuntimeConfigurationOptions runtimeConfigurationOptions,
+    ClusterConfigSyncSettingsRecorder clusterSyncRecorder,
+    IClusterSyncedSettingsStateRepository stateRepository
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action returns the current rewrite settings. Requires <c>rewritesettings:read</c>.
+    ///     This action returns the current rewrite settings and which cluster node last changed
+    ///     them. Requires <c>rewritesettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("rewritesettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(RewriteSettingsDetailExample))]
-    public ActionResult<RewriteSettingsDetail> Get() => Ok(ToDetail(rewriteOptions.CurrentValue));
+    public async Task<ActionResult<RewriteSettingsDetail>> Get(CancellationToken stoppingToken)
+    {
+        // No [ReadFromReplica]: the state row is written by Patch and by cluster sync, so a
+        // replica could still show the previous writer.
+        ClusterSyncedSettingsStateEntity state = await stateRepository.FindBySectionNameAsync(
+            DnsRewriteOptions.SectionName,
+            stoppingToken
+        );
+
+        return Ok(ToDetail(rewriteOptions.CurrentValue, state));
+    }
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Rewrites</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
-    ///     <paramref name="patch" /> keeps its value. Every field takes effect at once. Requires
-    ///     <c>rewritesettings:write</c>.
+    ///     <paramref name="patch" /> keeps its value. Every field takes effect at once, and the
+    ///     change is also replicated to the other cluster nodes, which apply it live as well.
+    ///     Requires <c>rewritesettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("rewritesettings:write")]
@@ -91,13 +118,27 @@ public class RewriteSettingsController(
             runtimeConfigurationOptions.ConfigurationFilePath
         );
 
+        await clusterSyncRecorder.RecordAndPublishAsync(
+            DnsRewriteOptions.SectionName,
+            settings,
+            HttpContext.RequestAborted
+        );
+
         return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
     }
 
     /// <summary>
     ///     This method builds <see cref="RewriteSettingsDetail" /> from the current
-    ///     <see cref="DnsRewriteOptions" />.
+    ///     <see cref="DnsRewriteOptions" /> and the section's sync state row (null if never written).
     /// </summary>
-    private static RewriteSettingsDetail ToDetail(DnsRewriteOptions options) =>
-        new(options.Enable, options.TimeToLiveSeconds);
+    private static RewriteSettingsDetail ToDetail(
+        DnsRewriteOptions options,
+        ClusterSyncedSettingsStateEntity state
+    ) =>
+        new(
+            options.Enable,
+            options.TimeToLiveSeconds,
+            state?.GetLastModifiedUtc(),
+            state?.OriginatingNodeId
+        );
 }

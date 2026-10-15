@@ -11,11 +11,12 @@ using Ninlil.Dns.Server.Presets;
 namespace Ninlil.Web.ClusterSync;
 
 /// <summary>
-///     This class is the sending side of cluster sync for settings sections. The four settings
+///     This class is the sending side of cluster sync for settings sections. The five settings
 ///     controllers that sync across a cluster (<c>EventBrokerSettingsController</c>,
-///     <c>RateLimitingSettingsController</c>, <c>DnsCookieSettingsController</c> and
-///     <c>ReverseProxySettingsController</c>) call it after merging a write into the runtime
-///     configuration file with <c>PresetConfigurationFileApplier</c>. It records the section's
+///     <c>RateLimitingSettingsController</c>, <c>DnsCookieSettingsController</c>,
+///     <c>ReverseProxySettingsController</c> and <c>RewriteSettingsController</c>) call it, as
+///     does <c>SafeSearchController</c> when it turns the rewrite engine on, after merging a
+///     write into the runtime configuration file with <c>PresetConfigurationFileApplier</c>. It records the section's
 ///     last-write-wins state (<see cref="ClusterSyncedSettingsStateEntity" />) and publishes a
 ///     <see cref="ClusterConfigSettingsChangedEvent" />, which
 ///     <c>SettingsClusterSyncEventSubscriber</c> forwards to every peer, where

@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Dns.Server.Rewrites;
 using Ninlil.Dns.Server.Rewrites.SafeSearch;
+using Ninlil.Web.ClusterSync;
 using Ninlil.Web.Examples.SafeSearch;
 using Ninlil.Web.Models;
 using Ninlil.Web.Options;
@@ -49,7 +50,10 @@ namespace Ninlil.Web.Controllers;
 ///         client or client group stays on this node and publishes nothing: the cluster payload
 ///         has no scope, and clients and groups exist only on the node that made them, so a peer
 ///         would otherwise create a global rewrite. The <see cref="DnsRewriteOptions.Enable" />
-///         switch is written to this node's configuration file only and is not replicated.
+///         switch is different: it is a cluster-synced setting, so turning it on here, for any
+///         scope, also turns it on for every peer through <see cref="ClusterConfigSyncSettingsRecorder" />.
+///         Peers then apply their own rewrites, and the global Safe Search rewrites that
+///         replicate to them.
 ///     </para>
 /// </summary>
 /// <param name="rewriteRepository">Reads and writes rewrites.</param>
@@ -66,6 +70,10 @@ namespace Ninlil.Web.Controllers;
 ///     Supplies this node's cluster node id, stamped onto
 ///     <c>DnsRewriteEntity.OriginatingNodeId</c> on a global rewrite that is created or re-enabled.
 /// </param>
+/// <param name="clusterSyncRecorder">
+///     Records the <see cref="DnsRewriteOptions.Enable" /> switch and sends it to every cluster
+///     peer when enabling an entry turns it on.
+/// </param>
 [ApiController]
 [Route("api/safe-search")]
 public class SafeSearchController(
@@ -76,7 +84,8 @@ public class SafeSearchController(
     IDnsClientRepository clientRepository,
     IDnsClientGroupRepository clientGroupRepository,
     IDnsServerEventPublisher eventPublisher,
-    IOptionsMonitor<ClusterOptions> clusterOptions
+    IOptionsMonitor<ClusterOptions> clusterOptions,
+    ClusterConfigSyncSettingsRecorder clusterSyncRecorder
 ) : ControllerBase
 {
     /// <summary>
@@ -108,7 +117,8 @@ public class SafeSearchController(
     /// <summary>
     ///     This action enables one catalog entry: for each hostname mapping it creates a rewrite in
     ///     the requested scope, or re-enables a disabled one. It also turns the rewrite engine on
-    ///     if it was off, whatever the scope. Returns 400 when both targets are given or the target
+    ///     if it was off, whatever the scope, and replicates that switch to the cluster peers.
+    ///     Returns 400 when both targets are given or the target
     ///     does not exist, 404 for an unknown key, and 409, with nothing written, when a mapping's
     ///     hostname already has a different CNAME rewrite in the same scope; every mapping is
     ///     checked before anything is written. Global rewrites that are created or re-enabled are
@@ -204,16 +214,29 @@ public class SafeSearchController(
         // The engine switch gates every rewrite whatever its scope, so a scoped rewrite is as inert
         // as a global one while it is off; the check does not depend on clientId or clientGroupId.
         if (!rewriteOptions.CurrentValue.Enable)
+        {
+            List<PresetConfigurationSetting> engineSwitch =
+            [
+                new PresetConfigurationSetting(
+                    DnsRewriteOptions.SectionName,
+                    nameof(DnsRewriteOptions.Enable),
+                    true
+                ),
+            ];
+
             await PresetConfigurationFileApplier.ApplyAsync(
-                [
-                    new PresetConfigurationSetting(
-                        DnsRewriteOptions.SectionName,
-                        nameof(DnsRewriteOptions.Enable),
-                        true
-                    ),
-                ],
+                engineSwitch,
                 runtimeConfigurationOptions.ConfigurationFilePath
             );
+
+            // The switch is a cluster-synced setting, so enabling Safe Search anywhere means
+            // "rewrites are used" everywhere. The peers apply it to their own files.
+            await clusterSyncRecorder.RecordAndPublishAsync(
+                DnsRewriteOptions.SectionName,
+                engineSwitch,
+                stoppingToken
+            );
+        }
 
         IReadOnlyList<DnsRewriteEntity> refreshed = FilterByScope(
             await rewriteRepository.ListAsync(stoppingToken: stoppingToken),

@@ -377,8 +377,8 @@ query log.
 | `NINLIL_DNS_SERVER_FILTERING_SINKHOLE_ADDRESS_V6` | The IPv6 address returned for a blocked AAAA query when sinkhole mode is active. | `::` |
 | `NINLIL_DNS_SERVER_FILTERING_SINKHOLE_TIME_TO_LIVE_SECONDS` | The TTL attached to a sinkhole response. | `60` |
 | `NINLIL_DNS_SERVER_FILTERING_BLOCK_CNAME_CLOAKING` | Whether an answer is also blocked when a CNAME target in it matches the client's domain block lists (catches trackers hidden behind a site's own subdomain). A name on an allow list is never blocked for where it points. | `true` |
-| `NINLIL_DNS_SERVER_REWRITES_ENABLE` | Whether DNS rewrites (domain-to-address/CNAME overrides) are applied. | `false` |
-| `NINLIL_DNS_SERVER_REWRITES_TIME_TO_LIVE_SECONDS` | The TTL attached to a rewritten answer. | `300` |
+| `NINLIL_DNS_SERVER_REWRITES_ENABLE` | Whether DNS rewrites (domain-to-address/CNAME overrides) are applied. Cluster-synced: a write on one node reaches every peer, and enabling Safe Search turns it on everywhere; a variable pins the value on its node. | `false` |
+| `NINLIL_DNS_SERVER_REWRITES_TIME_TO_LIVE_SECONDS` | The TTL attached to a rewritten answer. Cluster-synced like `NINLIL_DNS_SERVER_REWRITES_ENABLE`. | `300` |
 | `NINLIL_DNS_SERVER_RATE_LIMITING_ENABLE` | Whether per-client-IP query rate limiting is enforced. | `false` |
 | `NINLIL_DNS_SERVER_RATE_LIMITING_QUERIES_PER_SECOND` | The sustained per-client token-bucket refill rate. | `20` |
 | `NINLIL_DNS_SERVER_RATE_LIMITING_BURST_SIZE` | The token-bucket burst capacity above the sustained rate. | `40` |

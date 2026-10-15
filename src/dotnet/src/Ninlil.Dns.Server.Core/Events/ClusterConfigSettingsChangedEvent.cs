@@ -3,8 +3,8 @@ namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
 ///     This event is published when an operator writes one of the settings sections that
-///     cluster config sync covers: event broker, rate limiting, DNS cookies and reverse-proxy
-///     trust. <c>ClusterConfigSyncSettingsRecorder</c> (Ninlil.Web) publishes it and
+///     cluster config sync covers: event broker, rate limiting, DNS cookies, reverse-proxy
+///     trust and rewrite settings. <c>ClusterConfigSyncSettingsRecorder</c> (Ninlil.Web) publishes it and
 ///     <c>SettingsClusterSyncEventSubscriber</c> forwards it to every peer, where it is applied
 ///     through <c>PresetConfigurationFileApplier</c>, the same writer the local change used.
 ///     <para>

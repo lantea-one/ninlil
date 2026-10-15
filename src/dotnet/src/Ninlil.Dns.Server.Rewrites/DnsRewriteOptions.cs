@@ -4,7 +4,9 @@ namespace Ninlil.Dns.Server.Rewrites;
 /// <summary>
 ///     This class binds to the <c>DnsServer:Rewrites</c> configuration section and controls
 ///     <see cref="DnsRewriteEngine" />. <c>RewriteSettingsController</c> edits it at runtime, and
-///     the engine reads it live.
+///     the engine reads it live. The section is cluster-synced: a write on one node, including the
+///     switch that enabling Safe Search turns on, is applied to every peer's configuration file,
+///     where the engine picks it up at once. An environment variable pins a value on its node.
 /// </summary>
 public sealed class DnsRewriteOptions
 {
