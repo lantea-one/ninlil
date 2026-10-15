@@ -17,6 +17,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using Ninlil.Common.Configuration;
 using Ninlil.Common.Serializer.Converter;
+using Ninlil.Dhcp.Data.Abstractions.Repository;
 using Ninlil.Dhcp.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dhcp.Data.MongoDb.Extension;
 using Ninlil.Dhcp.Protocol.Dhcpv4.Extension;
@@ -1003,6 +1004,26 @@ app.Services.GetRequiredService<IStorageReadRouter>().Enable();
     );
     if (normalizedTsigKeys > 0)
         app.Logger.LogInformation("Lowercased the names of {Count} TSIG keys.", normalizedTsigKeys);
+}
+
+// Client identifiers (DHCP reservations, client addresses, static address mappings) are stored
+// in one normal form; rewrite rows stored in another form (see StoredClientIdentifierNormalizer).
+// It runs on every engine through the repositories, on the primary, and does nothing once every
+// row is in normal form.
+{
+    await using AsyncServiceScope identifierNormalizerScope = app.Services.CreateAsyncScope();
+    int normalizedIdentifiers = await StoredClientIdentifierNormalizer.RunAsync(
+        identifierNormalizerScope.ServiceProvider.GetRequiredService<IDhcpReservationRepository>(),
+        identifierNormalizerScope.ServiceProvider.GetRequiredService<IDnsClientAddressRepository>(),
+        identifierNormalizerScope.ServiceProvider.GetRequiredService<IDnsClientStaticAddressMappingRepository>(),
+        identifierNormalizerScope.ServiceProvider.GetRequiredService<IUnitOfWork>(),
+        app.Logger
+    );
+    if (normalizedIdentifiers > 0)
+        app.Logger.LogInformation(
+            "Normalised the client identifier of {Count} stored rows.",
+            normalizedIdentifiers
+        );
 }
 
 await AdministratorBootstrapper.EnsureBootstrapAdministratorAsync(app.Services, app.Configuration);
