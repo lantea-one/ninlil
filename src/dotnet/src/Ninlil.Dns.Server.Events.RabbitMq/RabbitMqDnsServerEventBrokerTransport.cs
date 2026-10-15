@@ -170,7 +170,7 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
     }
 
     /// <inheritdoc />
-    public async Task PublishAsync(IDnsServerEvent domainEvent, CancellationToken stoppingToken)
+    public async Task PublishAsync(DnsServerEventEnvelope envelope, CancellationToken stoppingToken)
     {
         await EnsureConnectionLoopStartedAsync();
 
@@ -180,7 +180,6 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                 "Not currently connected to the RabbitMQ event broker; the event was not published."
             );
 
-        DnsServerEventEnvelope envelope = DnsServerEventEnvelopeCodec.Encode(domainEvent);
         byte[] body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope));
 
         await channel.BasicPublishAsync(
@@ -193,7 +192,7 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
 
     /// <inheritdoc />
     public async Task StartConsumingAsync(
-        Func<IDnsServerEvent, CancellationToken, Task> onEventReceived,
+        Func<DnsServerEventEnvelope, CancellationToken, Task> onEnvelopeReceived,
         CancellationToken stoppingToken
     )
     {
@@ -266,9 +265,8 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
                         string json = Encoding.UTF8.GetString(eventArgs.Body.Span);
                         DnsServerEventEnvelope envelope =
                             JsonSerializer.Deserialize<DnsServerEventEnvelope>(json);
-                        IDnsServerEvent domainEvent = DnsServerEventEnvelopeCodec.Decode(envelope);
 
-                        await onEventReceived(domainEvent, stoppingToken);
+                        await onEnvelopeReceived(envelope, stoppingToken);
                     }
                     catch (Exception exception)
                     {

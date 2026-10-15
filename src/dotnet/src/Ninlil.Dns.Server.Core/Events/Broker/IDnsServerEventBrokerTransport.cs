@@ -4,10 +4,12 @@ namespace Ninlil.Dns.Server.Core.Events.Broker;
 /// <summary>
 ///     This interface is implemented once per supported message broker
 ///     (<c>Ninlil.Dns.Server.Events.RabbitMq</c>, <c>Ninlil.Dns.Server.Events.ActiveMq</c>). When
-///     configured, it replaces the in-memory transport. Both publish to and consume from one
-///     shared fanout/topic destination, so every connected instance, including the publisher,
-///     receives every event. That keeps the broadcast behavior of the in-memory transport; a
-///     work queue, where one instance handles each event, would not.
+///     configured, it adds an outward event stream to the in-process delivery: every connected
+///     instance publishes to and consumes from one shared fanout/topic destination, so every
+///     instance, including the publisher, receives every envelope. The transport only moves
+///     <see cref="DnsServerEventEnvelope" />s; <see cref="DnsServerEventEnvelopeCodec" /> runs in
+///     Core. Local subscribers always get this process's events directly, and
+///     <see cref="BrokerEventConsumerService" /> drops an envelope the process published itself.
 /// </summary>
 public interface IDnsServerEventBrokerTransport : IAsyncDisposable
 {
@@ -19,24 +21,25 @@ public interface IDnsServerEventBrokerTransport : IAsyncDisposable
     bool IsConnected { get; }
 
     /// <summary>
-    ///     This method publishes one event to the broker.
+    ///     This method publishes one envelope to the broker.
     ///     <see cref="DnsServerEventPublisher.Publish" /> calls it without awaiting, so a slow
     ///     broker never holds up the query path; failures are logged by the publisher and the
-    ///     event is lost.
+    ///     event is lost to other instances.
     /// </summary>
-    /// <param name="domainEvent">The event to publish.</param>
+    /// <param name="envelope">The envelope to publish.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    Task PublishAsync(IDnsServerEvent domainEvent, CancellationToken stoppingToken);
+    Task PublishAsync(DnsServerEventEnvelope envelope, CancellationToken stoppingToken);
 
     /// <summary>
-    ///     This method consumes events from the broker until <paramref name="stoppingToken" /> is
-    ///     cancelled or the connection fails for good, calling <paramref name="onEventReceived" />
-    ///     once per event, including events this process published.
+    ///     This method consumes envelopes from the broker until <paramref name="stoppingToken" />
+    ///     is cancelled or the connection fails for good, calling
+    ///     <paramref name="onEnvelopeReceived" /> once per envelope, including envelopes this
+    ///     process published.
     /// </summary>
-    /// <param name="onEventReceived">The callback invoked once per received event.</param>
+    /// <param name="onEnvelopeReceived">The callback invoked once per received envelope.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task StartConsumingAsync(
-        Func<IDnsServerEvent, CancellationToken, Task> onEventReceived,
+        Func<DnsServerEventEnvelope, CancellationToken, Task> onEnvelopeReceived,
         CancellationToken stoppingToken
     );
 }

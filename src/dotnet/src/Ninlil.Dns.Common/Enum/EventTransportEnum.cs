@@ -6,10 +6,11 @@ namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
 ///     This enumeration lists how the <c>Server.Core</c> event bus delivers a published
-///     <c>IDnsServerEvent</c> to its subscribers. <see cref="InMemory" /> is the default and never
-///     leaves the process. A broker option replaces in-process delivery instead of adding to it:
-///     every subscriber, including those in the publishing process, receives the event only after
-///     a round trip through the broker, so several Ninlil instances can share one event stream.
+///     <c>IDnsServerEvent</c> to its subscribers. Local subscribers always get this process's
+///     events directly. <see cref="InMemory" /> is the default and never leaves the process. A
+///     broker option adds an outward stream: the process also publishes its events to the broker,
+///     so several Ninlil instances and outside consumers can share one event stream. Events from
+///     other instances reach only the admin console's live feed.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<EventTransportEnum>>]
 public enum EventTransportEnum

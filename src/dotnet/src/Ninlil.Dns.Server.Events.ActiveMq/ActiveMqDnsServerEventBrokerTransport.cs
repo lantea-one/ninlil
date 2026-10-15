@@ -122,7 +122,7 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
     }
 
     /// <inheritdoc />
-    public Task PublishAsync(IDnsServerEvent domainEvent, CancellationToken stoppingToken)
+    public Task PublishAsync(DnsServerEventEnvelope envelope, CancellationToken stoppingToken)
     {
         _ = EnsureConnectTaskStarted();
 
@@ -140,7 +140,6 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
                 "Not currently connected to the ActiveMQ event broker; the event was not published."
             );
 
-        DnsServerEventEnvelope envelope = DnsServerEventEnvelopeCodec.Encode(domainEvent);
         byte[] body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope));
 
         IBytesMessage message = session.CreateBytesMessage();
@@ -156,7 +155,7 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
 
     /// <inheritdoc />
     public async Task StartConsumingAsync(
-        Func<IDnsServerEvent, CancellationToken, Task> onEventReceived,
+        Func<DnsServerEventEnvelope, CancellationToken, Task> onEnvelopeReceived,
         CancellationToken stoppingToken
     )
     {
@@ -198,9 +197,8 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
                 string json = Encoding.UTF8.GetString(body);
                 DnsServerEventEnvelope envelope =
                     JsonSerializer.Deserialize<DnsServerEventEnvelope>(json);
-                IDnsServerEvent domainEvent = DnsServerEventEnvelopeCodec.Decode(envelope);
 
-                onEventReceived(domainEvent, stoppingToken).GetAwaiter().GetResult();
+                onEnvelopeReceived(envelope, stoppingToken).GetAwaiter().GetResult();
             }
             catch (Exception exception)
             {

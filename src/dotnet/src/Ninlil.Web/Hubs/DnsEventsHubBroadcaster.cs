@@ -8,14 +8,15 @@ namespace Ninlil.Web.Hubs;
 ///     This class connects the Server.Core event bus to <see cref="DnsEventsHub" />: it
 ///     subscribes (<see cref="IDnsServerEventSubscriber{TEvent}" />) to each event type the hub
 ///     carries and forwards each event unchanged to the connected clients whose user holds the
-///     permission that event type requires (see <see cref="DnsEventsHub" />). It works the same
-///     whether <c>DnsServer:Events:Transport</c> is <c>InMemory</c>, <c>RabbitMq</c> or
-///     <c>ActiveMq</c>, because <c>BrokerEventConsumerService</c> feeds events received from a
-///     broker into the same local dispatch as in-process events.
+///     permission that event type requires (see <see cref="DnsEventsHub" />). It implements
+///     <see cref="IDnsServerRemoteEventSubscriber" />, so with a broker transport the live feed
+///     shows the events of every instance that shares the broker; this process's own events
+///     always arrive directly, whatever <c>DnsServer:Events:Transport</c> is.
 /// </summary>
 /// <param name="hubContext">The hub context events are broadcast through.</param>
 public sealed class DnsEventsHubBroadcaster(IHubContext<DnsEventsHub> hubContext)
-    : IDnsServerEventSubscriber<DnsQueryReceivedEvent>,
+    : IDnsServerRemoteEventSubscriber,
+        IDnsServerEventSubscriber<DnsQueryReceivedEvent>,
         IDnsServerEventSubscriber<DnsQueryAnsweredEvent>,
         IDnsServerEventSubscriber<DnsZoneChangedEvent>,
         IDnsServerEventSubscriber<DnsCacheEvictedEvent>

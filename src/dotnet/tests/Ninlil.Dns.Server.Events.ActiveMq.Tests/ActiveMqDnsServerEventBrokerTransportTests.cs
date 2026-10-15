@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Server.Core.Events;
+using Ninlil.Dns.Server.Core.Events.Broker;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.ActiveMq.Tests;
@@ -35,7 +36,10 @@ public class ActiveMqDnsServerEventBrokerTransportTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             transport.PublishAsync(
-                new DnsCacheEvictedEvent(DateTimeOffset.UtcNow, "test", 1),
+                DnsServerEventEnvelopeCodec.Encode(
+                    new DnsCacheEvictedEvent(DateTimeOffset.UtcNow, "test", 1),
+                    Guid.NewGuid()
+                ),
                 CancellationToken.None
             )
         );

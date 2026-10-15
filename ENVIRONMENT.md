@@ -270,7 +270,7 @@ Cookies, source-port pooling, EDNS Client Subnet, and DNS64.
 | `NINLIL_DNS_SERVER_PIPELINE_MAX_UDP_PAYLOAD_SIZE_OCTETS` | Maximum UDP response size before truncation/EDNS fragmentation logic applies. | `1232` |
 | `NINLIL_DNS_SERVER_PIPELINE_MIN_UDP_AMPLIFICATION_FLOOR_SIZE_OCTETS` | The minimum request size below which the amplification-factor check is skipped entirely. | `512` |
 | `NINLIL_DNS_SERVER_PIPELINE_MAX_UDP_AMPLIFICATION_FACTOR` | The maximum allowed response-to-request size ratio over UDP, an anti-DNS-amplification-attack guard. | `20` |
-| `NINLIL_DNS_SERVER_EVENTS_CAPACITY` | The in-memory event bus's own bounded channel capacity. | `10000` |
+| `NINLIL_DNS_SERVER_EVENTS_CAPACITY` | How many per-query events (`DnsQueryReceived`, `DnsQueryAnswered`) may wait for delivery or for the broker publisher; when full, the oldest are dropped and one warning per minute reports how many. Other events are never dropped. | `10000` |
 | `NINLIL_DNS_SERVER_EVENTS_TRANSPORT` | Which event transport is active: `InMemory`, `RabbitMq`, or `ActiveMq` (needs a restart to change — selected before DI is built). | `InMemory` |
 | `NINLIL_DNS_SERVER_COOKIES_ENABLE` | Whether RFC 7873 DNS Cookies are supported. | `true` |
 | `NINLIL_DNS_SERVER_COOKIES_REQUIRE` | Whether a valid cookie is required to answer a query (stricter anti-spoofing posture). | `false` |
