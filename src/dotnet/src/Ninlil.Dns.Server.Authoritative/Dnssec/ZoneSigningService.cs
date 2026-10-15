@@ -16,7 +16,9 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     This class implements <see cref="IZoneSigningService" />. It reads a zone's records and
 ///     keys from storage and computes the DNSSEC content RFC 4034 and RFC 5155 require: the
 ///     DNSKEY RRset, an RRSIG over each authoritative RRset, the full NSEC or NSEC3 chain, and DS
-///     records for delegations to signed child zones this server also hosts.
+///     records for delegations to signed child zones this server also hosts. A key with a
+///     prohibited algorithm is neither published nor used; with no key left that signs, the
+///     service returns <see langword="null" /> and the zone is served unsigned.
 ///     <para>
 ///         At a delegation point only the generated DS RRset is signed; NS records and any other
 ///         stored records there (including a hand-entered DS) are skipped. Names below a
@@ -65,24 +67,26 @@ public class ZoneSigningService(
 
         DnsName apexName = DnsName.Parse(zone.Name);
 
-        // Every key except Removed goes in the DNSKEY RRset, including keys that do not sign:
-        // Published (waiting to take over) and Retired (kept so cached signatures still
-        // verify). RFC 6781 rollovers depend on both being published.
-        List<DnssecKeyEntity> activeKeys =
+        // Every key except Removed and except those with a prohibited algorithm goes in the
+        // DNSKEY RRset, including keys that do not sign: Published (waiting to take over) and
+        // Retired (kept so cached signatures still verify). RFC 6781 rollovers depend on both
+        // being published. A prohibited-algorithm key is never published: it signs nothing, and
+        // RFC 4035 §2.2 requires every algorithm in the apex DNSKEY RRset to sign the zone.
+        List<DnssecKeyEntity> storedKeys =
         [
             .. (await keyRepository.ListByZoneIdAsync(zoneId, stoppingToken)).Where(key =>
                 key.LifecycleState != DnssecKeyLifecycleStateEnum.Removed
             ),
         ];
 
-        if (activeKeys.Count == 0)
+        if (storedKeys.Count == 0)
             throw new InvalidOperationException(
                 $"Zone '{zone.Name}' is marked signed but has no active DNSSEC key."
             );
 
         // Only Active and DoubleSignature keys sign, and never with a prohibited algorithm. Such
-        // a key can exist when it was created before the prohibition; it stays in the DNSKEY
-        // RRset but makes no signatures.
+        // a key can exist when it was created before the prohibition; it is not published and
+        // makes no signatures.
         static bool Signs(DnssecKeyEntity key) =>
             key.LifecycleState
                 is DnssecKeyLifecycleStateEnum.Active
@@ -90,7 +94,7 @@ public class ZoneSigningService(
             && !DnssecAlgorithmRegistry.IsSigningProhibited(key.Algorithm);
 
         foreach (
-            DnssecKeyEntity skipped in activeKeys.Where(key =>
+            DnssecKeyEntity skipped in storedKeys.Where(key =>
                 key.LifecycleState
                     is DnssecKeyLifecycleStateEnum.Active
                         or DnssecKeyLifecycleStateEnum.DoubleSignature
@@ -98,11 +102,21 @@ public class ZoneSigningService(
             )
         )
             logger?.LogWarning(
-                "Zone {Zone}: DNSSEC key {KeyTag} uses algorithm {Algorithm}, which is prohibited for signing (RFC 8624 §3.1); it signs nothing. Roll the key over to a current algorithm.",
+                "Zone {Zone}: DNSSEC key {KeyTag} uses algorithm {Algorithm}, which is prohibited for signing (RFC 8624 §3.1); it is not published and signs nothing. Roll the key over to a current algorithm.",
                 zone.Name,
                 skipped.KeyTag,
                 skipped.Algorithm
             );
+
+        List<DnssecKeyEntity> activeKeys =
+        [
+            .. storedKeys.Where(key => !DnssecAlgorithmRegistry.IsSigningProhibited(key.Algorithm)),
+        ];
+
+        // With no key left that signs, the zone cannot be served signed: a DNSKEY RRset without
+        // signatures makes validators treat the zone as bogus. The caller serves it unsigned.
+        if (!activeKeys.Any(Signs))
+            return null;
 
         List<DnssecKeyEntity> activeKsks =
         [
@@ -340,7 +354,9 @@ public class ZoneSigningService(
                 stoppingToken
             );
 
-            // One DS per Active KSK of the child. In a Double-Signature KSK rollover (RFC 6781
+            // One DS per Active KSK of the child with a permitted algorithm; a child whose keys
+            // are all prohibited is served unsigned, so its parent publishes an insecure
+            // delegation. In a Double-Signature KSK rollover (RFC 6781
             // §4.1.2) the parent swaps the DS at the "DS change" stage rather than publishing
             // both, so a KSK in DoubleSignature (incoming or outgoing) gets no DS here.
             // DnssecKeyRolloverBackgroundService promotes the incoming KSK to Active, which moves
@@ -351,6 +367,7 @@ public class ZoneSigningService(
                     .Where(key =>
                         key.LifecycleState == DnssecKeyLifecycleStateEnum.Active
                         && key.Role == DnssecKeyRoleEnum.Ksk
+                        && !DnssecAlgorithmRegistry.IsSigningProhibited(key.Algorithm)
                     )
                     .Select(childKsk =>
                     {

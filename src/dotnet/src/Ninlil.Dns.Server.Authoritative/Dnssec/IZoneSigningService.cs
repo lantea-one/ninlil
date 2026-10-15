@@ -14,7 +14,11 @@ public interface IZoneSigningService
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to sign.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The zone's signed content.</returns>
+    /// <returns>
+    ///     The zone's signed content, or <see langword="null" /> when the zone is marked signed
+    ///     but no key can sign (every key uses an algorithm prohibited for signing, or none is
+    ///     Active or in DoubleSignature). The zone is then served unsigned.
+    /// </returns>
     /// <exception cref="InvalidOperationException">
     ///     Thrown when no zone with <paramref name="zoneId" /> exists, the zone is not marked
     ///     <c>IsDnssecSigned</c>, or the zone has no active DNSSEC key at all.

@@ -45,6 +45,16 @@ public sealed class SignedZoneCache(
     private readonly ConcurrentDictionary<Guid, SignedZoneData> _signedZonesByZoneId = new();
 
     /// <summary>
+    ///     This field contains the IDs of zones that are marked signed and signed here, but have
+    ///     no key that can sign (<see cref="IZoneSigningService.SignZoneAsync" /> returned
+    ///     <see langword="null" />). They have no entry in <see cref="_signedZonesByZoneId" />, so
+    ///     they are served unsigned, yet <see cref="CachedZoneIds" /> still lists them: the
+    ///     rollover and re-signing services keep visiting them, so adding or rolling to a key with
+    ///     a permitted algorithm makes the zone signed again.
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, byte> _unsignableZoneIds = new();
+
+    /// <summary>
     ///     This field contains secondary zones whose DNSSEC records arrived signed by a zone
     ///     transfer (Secondary, SecondaryCatalog, CloudSecondary), rebuilt by
     ///     <see cref="TransferredSignedZoneDataBuilder" />. They are kept apart so
@@ -122,11 +132,13 @@ public sealed class SignedZoneCache(
             : _transferredSignedZonesByZoneId.GetValueOrDefault(zoneId);
 
     /// <summary>
-    ///     This property contains the IDs of the zones signed here (not the transferred ones).
+    ///     This property contains the IDs of the zones signed here (not the transferred ones),
+    ///     including those marked signed that have no key able to sign and are served unsigned.
     ///     <see cref="DnssecResigningBackgroundService" /> and
     ///     <see cref="DnssecKeyRolloverBackgroundService" /> walk it.
     /// </summary>
-    public IReadOnlyCollection<Guid> CachedZoneIds => [.. _signedZonesByZoneId.Keys];
+    public IReadOnlyCollection<Guid> CachedZoneIds =>
+        [.. _signedZonesByZoneId.Keys.Union(_unsignableZoneIds.Keys)];
 
     /// <summary>
     ///     This method reloads one zone: it re-signs a Primary or CloudPrimary zone, or re-reads a
@@ -164,11 +176,13 @@ public sealed class SignedZoneCache(
         )
         {
             _signedZonesByZoneId.TryRemove(zoneId, out _);
+            _unsignableZoneIds.TryRemove(zoneId, out _);
             await TryLoadTransferredSignedDataAsync(zoneId, zone.Name, stoppingToken);
         }
         else
         {
             _signedZonesByZoneId.TryRemove(zoneId, out _);
+            _unsignableZoneIds.TryRemove(zoneId, out _);
             _transferredSignedZonesByZoneId.TryRemove(zoneId, out _);
         }
     }
@@ -218,7 +232,10 @@ public sealed class SignedZoneCache(
     /// <summary>
     ///     This method signs one zone, stores the result and publishes
     ///     <see cref="DnssecZoneResigningCompletedEvent" />. A failure (usually a signed zone with
-    ///     no key) is logged, not thrown, and the previous signed data is kept.
+    ///     no key) is logged, not thrown, and the previous signed data is kept. When the signing
+    ///     service returns <see langword="null" /> (no key can sign), the zone's signed data is
+    ///     removed, the zone ID is kept in <see cref="_unsignableZoneIds" />, one Warning is
+    ///     logged and no event is published.
     /// </summary>
     private async Task TrySignAndStoreAsync(
         Guid zoneId,
@@ -234,7 +251,23 @@ public sealed class SignedZoneCache(
 
             SignedZoneData signedData = await signingService.SignZoneAsync(zoneId, stoppingToken);
 
+            if (signedData is null)
+            {
+                // Serve the zone unsigned: a DNSKEY RRset with no signatures would be bogus. The
+                // ID stays listed so a later key change signs the zone again. The remedy for an
+                // external parent is in the message because its DS cannot match any served key.
+                _signedZonesByZoneId.TryRemove(zoneId, out _);
+                _unsignableZoneIds[zoneId] = 0;
+                logger.LogWarning(
+                    "Zone '{ZoneName}' ({ZoneId}) is marked signed but has no key with a permitted algorithm; it is served unsigned until a key is added. If a parent zone published a DS record for it, replace or remove that DS.",
+                    zoneName,
+                    zoneId
+                );
+                return;
+            }
+
             _signedZonesByZoneId[zoneId] = signedData;
+            _unsignableZoneIds.TryRemove(zoneId, out _);
 
             // Published only after a successful sign.
             eventPublisher?.Publish(
