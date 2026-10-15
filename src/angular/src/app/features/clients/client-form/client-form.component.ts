@@ -30,6 +30,11 @@ import {
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { InstantPauseComponent } from '../../../shared/instant-pause/instant-pause.component';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import {
+  CLIENT_IDENTIFIER_ERROR,
+  CLIENT_IDENTIFIER_HINT,
+  clientIdentifierValidator,
+} from '../../../shared/validators/client-identifier.validator';
 import { BlockedServicesComponent } from '../../settings/blocked-services/blocked-services.component';
 import { SafeSearchComponent } from '../../settings/safe-search/safe-search.component';
 import { DeviceIconPickerComponent } from '../device-icon-picker/device-icon-picker.component';
@@ -114,8 +119,14 @@ export class ClientFormComponent implements OnInit {
   /** The client groups offered in the group select (up to 500). */
   readonly clientGroups = signal<ClientGroupDetail[]>([]);
 
+  /** The hint under the identifier field: the accepted forms and the stored form. */
+  readonly clientIdentifierHint = CLIENT_IDENTIFIER_HINT;
+
+  /** The message shown when the identifier is not in an accepted form. */
+  readonly clientIdentifierError = CLIENT_IDENTIFIER_ERROR;
+
   readonly form = this.formBuilder.group({
-    clientIdentifier: ['', [Validators.required]],
+    clientIdentifier: ['', [Validators.required, clientIdentifierValidator()]],
     protocolVersion: this.formBuilder.control<InternetProtocolVersionEnum>(
       InternetProtocolVersionEnum.Ipv4,
       [Validators.required],

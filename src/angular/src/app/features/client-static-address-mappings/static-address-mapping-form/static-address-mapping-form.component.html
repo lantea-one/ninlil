@@ -43,7 +43,10 @@
             @if (form.controls.clientIdentifier.hasError('required')) {
               <div class="field-error">A client identifier is required.</div>
             }
-            <p class="hint">A MAC address for IPv4, or a DHCP Unique Identifier (DUID) for IPv6.</p>
+            @if (form.controls.clientIdentifier.hasError('clientIdentifier')) {
+              <div class="field-error">{{ clientIdentifierError }}</div>
+            }
+            <p class="hint">{{ clientIdentifierHint }}</p>
           </div>
 
           <div class="field">

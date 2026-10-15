@@ -247,4 +247,25 @@ describe('ClientFormComponent', () => {
       }),
     });
   });
+
+  it('create mode: refuses an identifier in no accepted form, and accepts every accepted spelling', async () => {
+    const fixture = await createComponent(null);
+    const form = fixture.componentInstance.form;
+    form.patchValue({ clientIdentifier: 'aabbc' });
+
+    expect(form.controls.clientIdentifier.hasError('clientIdentifier')).toBeTrue();
+    expect(form.invalid).toBeTrue();
+    await fixture.componentInstance.save();
+    expect(clientsApiSpy.apiClientsPost).not.toHaveBeenCalled();
+
+    for (const value of [
+      'AA:BB:CC:DD:EE:FF',
+      'aa-bb-cc-dd-ee-ff',
+      'aabb.ccdd.eeff',
+      'aabbccddeeff',
+    ]) {
+      form.patchValue({ clientIdentifier: value });
+      expect(form.controls.clientIdentifier.valid).withContext(value).toBeTrue();
+    }
+  });
 });

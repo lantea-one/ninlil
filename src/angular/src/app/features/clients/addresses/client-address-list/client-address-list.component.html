@@ -30,9 +30,13 @@
             : undefined
         "
       />
-      <div cFormText>
-        A colon-separated MAC address for IPv4, or a DUID (hex, colon-separated) for IPv6.
-      </div>
+      @if (
+        form.controls.clientIdentifier.touched &&
+        form.controls.clientIdentifier.hasError('clientIdentifier')
+      ) {
+        <div class="field-error">{{ clientIdentifierError }}</div>
+      }
+      <div cFormText>{{ clientIdentifierHint }}</div>
     </div>
     <div class="add-field">
       <label cLabel for="address-protocol">Protocol</label>

@@ -186,4 +186,24 @@ describe('ClientAddressListComponent', () => {
     expect(fixture.nativeElement.querySelector('form')).toBeNull();
     expect(fixture.nativeElement.querySelector('[data-testid="remove-address"]')).toBeNull();
   });
+
+  it('does not submit an identifier in no accepted form, and accepts every accepted spelling', async () => {
+    const fixture = await createComponent();
+    const form = fixture.componentInstance.form;
+    form.patchValue({ clientIdentifier: 'zz:bb' });
+
+    expect(form.controls.clientIdentifier.hasError('clientIdentifier')).toBeTrue();
+    await fixture.componentInstance.addAddress();
+    expect(addressesApiSpy.apiClientsClientIdAddressesPost).not.toHaveBeenCalled();
+
+    for (const value of [
+      'AA:BB:CC:DD:EE:FF',
+      'aa-bb-cc-dd-ee-ff',
+      'aabb.ccdd.eeff',
+      'aabbccddeeff',
+    ]) {
+      form.patchValue({ clientIdentifier: value });
+      expect(form.controls.clientIdentifier.valid).withContext(value).toBeTrue();
+    }
+  });
 });

@@ -158,4 +158,25 @@ describe('DhcpReservationFormComponent', () => {
 
     expect(reservationsApiSpy.apiDhcpScopesScopeIdReservationsPost).not.toHaveBeenCalled();
   });
+
+  it('refuses an identifier in no accepted form, and accepts every accepted spelling', async () => {
+    const fixture = await createComponent(null);
+    const form = fixture.componentInstance.form;
+    form.patchValue({ ipAddress: '192.168.1.50', clientIdentifier: 'aa:bb-cc' });
+
+    expect(form.controls.clientIdentifier.hasError('clientIdentifier')).toBeTrue();
+    expect(form.invalid).toBeTrue();
+    await fixture.componentInstance.save();
+    expect(reservationsApiSpy.apiDhcpScopesScopeIdReservationsPost).not.toHaveBeenCalled();
+
+    for (const value of [
+      'AA:BB:CC:DD:EE:FF',
+      'aa-bb-cc-dd-ee-ff',
+      'aabb.ccdd.eeff',
+      'aabbccddeeff',
+    ]) {
+      form.patchValue({ clientIdentifier: value });
+      expect(form.controls.clientIdentifier.valid).withContext(value).toBeTrue();
+    }
+  });
 });

@@ -15,6 +15,7 @@ import {
   FormControlDirective,
   FormDirective,
   FormLabelDirective,
+  FormTextDirective,
   SpinnerComponent,
 } from '@coreui/angular';
 import {
@@ -24,6 +25,11 @@ import {
 } from '../../../../../api-client';
 import { extractErrorMessage } from '../../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../../shared/notification/notification.service';
+import {
+  CLIENT_IDENTIFIER_ERROR,
+  CLIENT_IDENTIFIER_HINT,
+  clientIdentifierValidator,
+} from '../../../../../shared/validators/client-identifier.validator';
 
 /**
  * This component is the add and edit page for a DHCP reservation
@@ -53,6 +59,7 @@ import { NotificationService } from '../../../../../shared/notification/notifica
     FormControlDirective,
     FormDirective,
     FormLabelDirective,
+    FormTextDirective,
     SpinnerComponent,
   ],
   templateUrl: './dhcp-reservation-form.component.html',
@@ -79,8 +86,14 @@ export class DhcpReservationFormComponent implements OnInit {
   /** Whether the scope is a Prefix Delegation scope; see the class comment. */
   readonly isPrefixDelegationScope = signal(false);
 
+  /** The hint under the identifier field: the accepted forms and the stored form. */
+  readonly clientIdentifierHint = CLIENT_IDENTIFIER_HINT;
+
+  /** The message shown when the identifier is not in an accepted form. */
+  readonly clientIdentifierError = CLIENT_IDENTIFIER_ERROR;
+
   readonly form = this.formBuilder.group({
-    clientIdentifier: ['', [Validators.required]],
+    clientIdentifier: ['', [Validators.required, clientIdentifierValidator()]],
     ipAddress: ['', [Validators.required]],
     hostName: [''],
     isDisabled: [false],

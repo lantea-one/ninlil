@@ -83,3 +83,8 @@
   margin: 0 var(--ninlil-space-5) var(--ninlil-space-2);
   color: var(--cui-danger, #e55353);
 }
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}

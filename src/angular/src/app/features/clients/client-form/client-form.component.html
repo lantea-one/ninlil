@@ -24,10 +24,14 @@
             @if (form.controls.clientIdentifier.hasError('required')) {
               <div class="field-error">A client identifier is required.</div>
             }
+            @if (form.controls.clientIdentifier.hasError('clientIdentifier')) {
+              <div class="field-error">{{ clientIdentifierError }}</div>
+            }
+            <div cFormText>{{ clientIdentifierHint }}</div>
             @if (isEditMode) {
               <div cFormText>
-                A colon-separated MAC address (IPv4) or DHCP Unique Identifier (IPv6) -- permanent,
-                and never editable once a client is registered.
+                A MAC address (IPv4) or DHCP Unique Identifier (IPv6) -- permanent, and never
+                editable once a client is registered.
               </div>
             }
           </div>

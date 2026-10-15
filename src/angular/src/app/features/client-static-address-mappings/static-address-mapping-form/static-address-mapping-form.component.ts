@@ -24,6 +24,11 @@ import {
 } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import {
+  CLIENT_IDENTIFIER_ERROR,
+  CLIENT_IDENTIFIER_HINT,
+  clientIdentifierValidator,
+} from '../../../shared/validators/client-identifier.validator';
 
 /**
  * This component is the create and edit page for a static address mapping
@@ -72,9 +77,15 @@ export class StaticAddressMappingFormComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
+  /** The hint under the identifier field: the accepted forms and the stored form. */
+  readonly clientIdentifierHint = CLIENT_IDENTIFIER_HINT;
+
+  /** The message shown when the identifier is not in an accepted form. */
+  readonly clientIdentifierError = CLIENT_IDENTIFIER_ERROR;
+
   readonly form = this.formBuilder.group({
     cidr: ['', [Validators.required]],
-    clientIdentifier: ['', [Validators.required]],
+    clientIdentifier: ['', [Validators.required, clientIdentifierValidator()]],
     protocolVersion: [InternetProtocolVersionEnum.Ipv4 as InternetProtocolVersionEnum],
     isDisabled: [false],
     comments: [''],

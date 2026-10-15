@@ -30,6 +30,11 @@ import {
 } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
+import {
+  CLIENT_IDENTIFIER_ERROR,
+  CLIENT_IDENTIFIER_HINT,
+  clientIdentifierValidator,
+} from '../../../../shared/validators/client-identifier.validator';
 import { formatRelativeTime } from '../../shared/relative-time.util';
 
 /**
@@ -109,9 +114,15 @@ export class ClientAddressListComponent {
   /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
+  /** The hint under the identifier field: the accepted forms and the stored form. */
+  readonly clientIdentifierHint = CLIENT_IDENTIFIER_HINT;
+
+  /** The message shown when the identifier is not in an accepted form. */
+  readonly clientIdentifierError = CLIENT_IDENTIFIER_ERROR;
+
   /** The add form: the identifier and the protocol (IPv4 MAC or IPv6 DUID) it belongs to. */
   readonly form = this.formBuilder.group({
-    clientIdentifier: ['', [Validators.required, Validators.maxLength(256)]],
+    clientIdentifier: ['', [Validators.required, clientIdentifierValidator()]],
     protocolVersion: [InternetProtocolVersionEnum.Ipv4 as InternetProtocolVersionEnum],
   });
 
