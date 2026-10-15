@@ -28,6 +28,9 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 /// </summary>
 public sealed class ZoneSigningServiceOcclusionTests
 {
+    /// <summary>
+    ///     The apex of the signed test zone every test builds.
+    /// </summary>
     private const string ZoneName = "occ.test";
 
     /// <summary>
@@ -88,6 +91,10 @@ public sealed class ZoneSigningServiceOcclusionTests
     private static DnsName ChainOwner(string name, bool useNsec3) =>
         useNsec3 ? Nsec3Owner(name) : DnsName.Parse(name);
 
+    /// <summary>
+    ///     This method returns the NSEC3 owner name of <paramref name="name"/> in the test zone,
+    ///     hashed with SHA-1, no salt and no extra iterations (RFC 5155 §5).
+    /// </summary>
     private static DnsName Nsec3Owner(string name) =>
         Nsec3Hasher.ToOwnerName(
             Nsec3Hasher.ComputeHash(1, DnsName.Parse(name), 0, []),
@@ -333,6 +340,10 @@ public sealed class ZoneSigningServiceOcclusionTests
         }
     }
 
+    /// <summary>
+    ///     This method decodes the RDATA of an RRSIG record, so tests can compare signatures
+    ///     before and after a re-sign.
+    /// </summary>
     private static RrSigRecordData Decode(DnsResourceRecord record) =>
         (RrSigRecordData)DnsRecordDataCodecRegistry.Decode(record.Type, record.Data);
 
