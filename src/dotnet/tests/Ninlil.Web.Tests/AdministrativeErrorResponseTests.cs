@@ -1083,7 +1083,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         JsonElement body = await ParseBodyAsync(response);
         Assert.Equal(400, body.GetProperty("status").GetInt32());
         Assert.Contains(
-            "is not a registered event type",
+            "is not an event type webhooks deliver",
             body.GetProperty("detail").GetString(),
             StringComparison.Ordinal
         );

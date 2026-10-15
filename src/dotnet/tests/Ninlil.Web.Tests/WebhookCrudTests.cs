@@ -18,12 +18,14 @@ namespace Ninlil.Web.Tests;
 ///     over HTTP on the shared in-process host, signed in as the bootstrap administrator: the
 ///     create, list, get, replace, patch and delete lifecycle, the authentication credentials and
 ///     HMAC signing secret being returned once on creation and left out of every later response,
-///     validation of event type names against <c>DnsServerEventTypeRegistry</c> and of the target
+///     validation of event type names against the seven deliverable types (a registered but
+///     undeliverable name such as <c>DnsQueryAnswered</c> is rejected) and of the target
 ///     URL and authentication mode, and rejection without a token. It also covers
 ///     <c>GET /api/webhooks/{id}/delivery-attempts</c>, with attempt rows saved directly through
 ///     <see cref="IWebhookDeliveryAttemptRepository" />; the delivery engine that writes them is
-///     covered in the <c>Server.Webhooks</c> tests. Some subscriptions created here are left
-///     enabled, pointing at <c>https://example.invalid/hook</c>.
+///     covered in the <c>Server.Webhooks</c> tests. Every subscription created here is disabled
+///     (so a zone change made by a parallel test cannot add delivery rows to it) and the ones
+///     that are not needed afterwards are deleted.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -79,6 +81,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
                 authCredentials = new Dictionary<string, string> { ["BearerToken"] = "s3cr3t" },
                 enableHmacSigning = true,
                 maxDeliveryAttempts = 3,
+                isDisabled = true,
                 comments = "created by test",
             }
         );
@@ -91,7 +94,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(WebhookAuthModeEnum.Bearer, created.Subscription.AuthMode);
         Assert.True(created.Subscription.HasHmacSigningSecret);
         Assert.Equal(3, created.Subscription.MaxDeliveryAttempts);
-        Assert.False(created.Subscription.IsDisabled);
+        Assert.True(created.Subscription.IsDisabled);
         Assert.Equal("s3cr3t", created.AuthCredentials["BearerToken"]);
         Assert.False(string.IsNullOrWhiteSpace(created.HmacSigningSecret));
 
@@ -103,6 +106,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
                 name,
                 targetUrl = "https://example.invalid/other",
                 eventTypeNames = new[] { "DnsZoneChanged" },
+                isDisabled = true,
             }
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
@@ -206,6 +210,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
                 name = $"plain-{Guid.NewGuid():N}",
                 targetUrl = "https://example.invalid/hook",
                 eventTypeNames = new[] { "DnsZoneChanged" },
+                isDisabled = true,
             }
         );
 
@@ -216,6 +221,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.False(created.Subscription.HasHmacSigningSecret);
         Assert.Null(created.AuthCredentials);
         Assert.Null(created.HmacSigningSecret);
+        await client.DeleteAsync($"/api/webhooks/{created.Subscription.Id}");
     }
 
     [Fact]
@@ -234,6 +240,127 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     Names the registry knows but no subscriber delivers: per-query events and the user
+    ///     and role events (which never reach a webhook).
+    /// </summary>
+    public static TheoryData<string> UndeliverableEventTypeNames =>
+        ["DnsQueryAnswered", "DnsQueryReceived", "UserAccountChanged"];
+
+    [Theory]
+    [MemberData(nameof(UndeliverableEventTypeNames))]
+    public async Task Create_WithARegisteredButUndeliverableEventTypeName_ReturnsBadRequestListingTheAcceptedNames(
+        string eventTypeName
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/webhooks",
+            new
+            {
+                name = $"undeliverable-{Guid.NewGuid():N}",
+                targetUrl = "https://example.invalid/hook",
+                eventTypeNames = new[] { eventTypeName },
+                isDisabled = true,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("DnsZoneChanged", body);
+        Assert.Contains("TrustAnchorRollover", body);
+    }
+
+    [Theory]
+    [MemberData(nameof(UndeliverableEventTypeNames))]
+    public async Task ReplaceAndPatch_WithAnUndeliverableEventTypeName_ReturnBadRequestAndKeepTheSubscription(
+        string eventTypeName
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string name = $"keep-{Guid.NewGuid():N}";
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/webhooks",
+            new
+            {
+                name,
+                targetUrl = "https://example.invalid/hook",
+                eventTypeNames = new[] { "DnsZoneChanged" },
+                isDisabled = true,
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        WebhookSubscriptionCreateResponse created =
+            await createResponse.Content.ReadFromJsonAsync<WebhookSubscriptionCreateResponse>();
+
+        try
+        {
+            HttpResponseMessage putResponse = await client.PutAsJsonAsync(
+                $"/api/webhooks/{created.Subscription.Id}",
+                new
+                {
+                    name,
+                    targetUrl = "https://example.invalid/hook",
+                    eventTypeNames = new[] { eventTypeName },
+                    maxDeliveryAttempts = 5,
+                    isDisabled = true,
+                }
+            );
+            Assert.Equal(HttpStatusCode.BadRequest, putResponse.StatusCode);
+
+            HttpResponseMessage patchResponse = await client.SendAsync(
+                PatchRequest(
+                    $"/api/webhooks/{created.Subscription.Id}",
+                    new { eventTypeNames = new[] { eventTypeName } }
+                )
+            );
+            Assert.Equal(HttpStatusCode.BadRequest, patchResponse.StatusCode);
+
+            WebhookSubscriptionDetail fetched =
+                await client.GetFromJsonAsync<WebhookSubscriptionDetail>(
+                    $"/api/webhooks/{created.Subscription.Id}"
+                );
+            Assert.Equal(["DnsZoneChanged"], fetched.EventTypeNames);
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/webhooks/{created.Subscription.Id}");
+        }
+    }
+
+    [Fact]
+    public async Task Create_WithEveryDeliverableEventTypeName_ReturnsCreated()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string[] names =
+        [
+            "DnsZoneChanged",
+            "DnsCacheEvicted",
+            "DnssecZoneResigningCompleted",
+            "AcmeCertificateRenewalSucceeded",
+            "AcmeCertificateRenewalFailed",
+            "CloudDnsZoneSyncFailed",
+            "TrustAnchorRollover",
+        ];
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/webhooks",
+            new
+            {
+                name = $"all-types-{Guid.NewGuid():N}",
+                targetUrl = "https://example.invalid/hook",
+                eventTypeNames = names,
+                isDisabled = true,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        WebhookSubscriptionCreateResponse created =
+            await response.Content.ReadFromJsonAsync<WebhookSubscriptionCreateResponse>();
+        await client.DeleteAsync($"/api/webhooks/{created.Subscription.Id}");
     }
 
     [Fact]
@@ -290,7 +417,9 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         string name = $"delivery-history-{Guid.NewGuid():N}";
 
         // Create a subscription through the API, as an operator would; the attempt rows below
-        // refer to its identifier.
+        // refer to its identifier. It is disabled: an enabled one would also receive a delivery
+        // row for every zone change another test makes in parallel, and the count below would
+        // vary.
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/webhooks",
             new
@@ -298,6 +427,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
                 name,
                 targetUrl = "https://example.invalid/hook",
                 eventTypeNames = new[] { "DnsZoneChanged" },
+                isDisabled = true,
             }
         );
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);

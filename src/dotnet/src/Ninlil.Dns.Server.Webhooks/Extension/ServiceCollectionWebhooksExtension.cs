@@ -66,7 +66,8 @@ public static class ServiceCollectionWebhooksExtension
 
         // One WebhookDeliverySubscriber<TEvent> per webhook event type. DnsServerEventDispatcher
         // resolves subscribers for an event's exact runtime type, so the generic class closed
-        // over each type is enough.
+        // over each type is enough. These seven registrations must match
+        // WebhookEventCatalog.EventTypes, which decides what a subscription may name.
         instance.AddSingleton<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
             WebhookDeliverySubscriber<DnsZoneChangedEvent>

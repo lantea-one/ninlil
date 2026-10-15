@@ -11,8 +11,11 @@ namespace Ninlil.Web.Models;
 /// <param name="Name">An operator-chosen, human-readable, unique name for the subscription.</param>
 /// <param name="TargetUrl">The absolute http or https URL every matching event is POSTed to.</param>
 /// <param name="EventTypeNames">
-///     The event types to deliver, by their <c>DnsServerEventTypeRegistry</c> name (for example
-///     <c>"DnsZoneChanged"</c>). Each is checked against the registry before saving.
+///     The event types to deliver, by their <c>DnsServerEventTypeRegistry</c> name. Only the
+///     seven types webhooks deliver are accepted: <c>DnsZoneChanged</c>, <c>DnsCacheEvicted</c>,
+///     <c>DnssecZoneResigningCompleted</c>, <c>AcmeCertificateRenewalSucceeded</c>,
+///     <c>AcmeCertificateRenewalFailed</c>, <c>CloudDnsZoneSyncFailed</c> and
+///     <c>TrustAnchorRollover</c>; any other name returns 400.
 /// </param>
 /// <param name="AuthMode">The authentication the delivery POST uses, if any. Defaults to none.</param>
 /// <param name="AuthCredentials">
@@ -63,7 +66,7 @@ public record WebhookSubscriptionCreateRequest(
 /// </summary>
 /// <param name="Name">The subscription's name.</param>
 /// <param name="TargetUrl">The absolute URL every matching event is POSTed to.</param>
-/// <param name="EventTypeNames">The event types to deliver, replacing the whole set.</param>
+/// <param name="EventTypeNames">The event types to deliver, replacing the whole set. Only the seven types webhooks deliver are accepted; any other name returns 400.</param>
 /// <param name="AuthMode">The authentication the delivery POST uses, if any.</param>
 /// <param name="AuthCredentials">The delivery POST's credentials, replacing the stored ones.</param>
 /// <param name="MaxDeliveryAttempts">How many times one event is attempted. Must be positive; defaults to 5.</param>

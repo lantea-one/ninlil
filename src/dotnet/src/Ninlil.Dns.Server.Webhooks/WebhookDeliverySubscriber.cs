@@ -11,7 +11,8 @@ namespace Ninlil.Dns.Server.Webhooks;
 ///     <c>DnsCacheEvictedEvent</c>, <c>DnssecZoneResigningCompletedEvent</c>,
 ///     <c>AcmeCertificateRenewalSucceededEvent</c>, <c>AcmeCertificateRenewalFailedEvent</c>,
 ///     <c>CloudDnsZoneSyncFailedEvent</c>, <c>TrustAnchorRolloverEvent</c>; see
-///     <c>ServiceCollectionWebhooksExtension</c>). One generic class is enough because
+///     <c>ServiceCollectionWebhooksExtension</c>); <see cref="WebhookEventCatalog" /> lists
+///     them and is what a subscription's event type names are checked against. One generic class is enough because
 ///     <see cref="Ninlil.Dns.Server.Core.Events.DnsServerEventDispatcher" /> resolves subscribers
 ///     for an event's exact runtime type.
 ///     <para>

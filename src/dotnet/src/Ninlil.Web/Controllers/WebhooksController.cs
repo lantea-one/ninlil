@@ -112,7 +112,7 @@ public class WebhooksController(
     ///     This action creates a webhook subscription. When HMAC signing is enabled and no secret
     ///     is supplied, a random 32-byte secret is generated. The plaintext credentials and signing
     ///     secret are returned in this response only; later reads never include them. Returns 400
-    ///     for a missing name, a target that is not an absolute http(s) URL, an unknown event type,
+    ///     for a missing name, a target that is not an absolute http(s) URL, an event type webhooks do not deliver,
     ///     credentials that do not fit the auth mode, or a non-positive attempt limit, and 409 when
     ///     the name is taken. Requires <c>webhooks:write</c>.
     /// </summary>
@@ -497,9 +497,10 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This method checks every event type name against
-    ///     <see cref="DnsServerEventTypeRegistry" />, so an unknown name returns 400 at once
-    ///     instead of saving a subscription that could never match an event.
+    ///     This method checks every event type name against <see cref="WebhookEventCatalog" />,
+    ///     so a name no webhook delivers (unknown, or registered but never sent to webhooks, such
+    ///     as <c>DnsQueryAnswered</c>) returns 400 at once, naming the accepted types, instead of
+    ///     saving a subscription that could never match an event.
     /// </summary>
     private static bool TryValidateEventTypeNames(List<string> eventTypeNames, out string error)
     {
@@ -513,13 +514,10 @@ public class WebhooksController(
 
         foreach (string eventTypeName in eventTypeNames)
         {
-            try
+            if (!WebhookEventCatalog.IsDeliverable(eventTypeName))
             {
-                DnsServerEventTypeRegistry.GetType(eventTypeName);
-            }
-            catch (InvalidOperationException)
-            {
-                error = $"'{eventTypeName}' is not a registered event type.";
+                error =
+                    $"'{eventTypeName}' is not an event type webhooks deliver. Accepted: {string.Join(", ", WebhookEventCatalog.EventTypeNames)}.";
                 return false;
             }
         }
