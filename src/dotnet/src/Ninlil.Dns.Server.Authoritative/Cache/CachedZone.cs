@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 
 // Define our namespace.
@@ -11,7 +12,11 @@ namespace Ninlil.Dns.Server.Authoritative.Cache;
 ///     <see cref="Resolution.AuthoritativeQueryResolver" /> makes on every query: exact name,
 ///     wildcard (the source of synthesis at the closest encloser) and delegation (zone cut). <see cref="AuthoritativeZoneCache" /> rebuilds it in
 ///     full whenever the zone changes; zones are small enough that a rebuild is cheap, and it
-///     keeps this class simple.
+///     keeps this class simple. In a secondary zone, the owner names of the transferred NSEC3
+///     chain (and the RRSIGs that cover only NSEC3) are transfer-only: <see cref="GetAllRecords" />
+///     returns them, so a zone transfer stays complete, but no lookup sees them. The hashed
+///     names are not names of the zone, so a query for one answers NXDOMAIN with the NSEC3 proof
+///     (RFC 5155 §7.2.8), as a Ninlil-signed primary does.
 /// </summary>
 public sealed class CachedZone
 {
@@ -29,6 +34,12 @@ public sealed class CachedZone
     ///     This field indexes every enabled record by its owner name.
     /// </summary>
     private readonly Dictionary<DnsName, List<RecordEntity>> _recordsByName;
+
+    /// <summary>
+    ///     This field holds the records at transfer-only owner names (see the class summary).
+    ///     They are served by <see cref="GetAllRecords" /> only.
+    /// </summary>
+    private readonly List<RecordEntity> _transferOnlyRecords = [];
 
     /// <summary>
     ///     This field holds every owner name with an enabled record plus each of its ancestors
@@ -63,10 +74,22 @@ public sealed class CachedZone
         Zone = zone;
         ApexName = DnsName.Parse(zone.Name);
 
-        _recordsByName = records
-            .Where(record => !record.IsDisabled)
-            .GroupBy(record => DnsName.Parse(record.Name))
-            .ToDictionary(group => group.Key, group => group.ToList());
+        bool isSecondary = zone.Type is ZoneTypeEnum.Secondary or ZoneTypeEnum.SecondaryCatalog;
+
+        _recordsByName = [];
+        foreach (
+            IGrouping<DnsName, RecordEntity> group in records
+                .Where(record => !record.IsDisabled)
+                .GroupBy(record => DnsName.Parse(record.Name))
+        )
+        {
+            List<RecordEntity> atName = group.ToList();
+
+            if (isSecondary && atName.All(IsNsec3ChainRecord))
+                _transferOnlyRecords.AddRange(atName);
+            else
+                _recordsByName[group.Key] = atName;
+        }
 
         _existingNames = [];
         foreach (DnsName owner in _recordsByName.Keys)
@@ -161,10 +184,11 @@ public sealed class CachedZone
     /// <summary>
     ///     This method lists every enabled record in the zone without rotation or filtering, for
     ///     a full zone transfer (AXFR), which needs the complete set rather than the rotated view
-    ///     of <see cref="GetRecords" />.
+    ///     of <see cref="GetRecords" />. It includes the transfer-only NSEC3 chain of a secondary.
     /// </summary>
     /// <returns>Every enabled record stored in the zone.</returns>
-    public IEnumerable<RecordEntity> GetAllRecords() => _recordsByName.Values.SelectMany(x => x);
+    public IEnumerable<RecordEntity> GetAllRecords() =>
+        _recordsByName.Values.SelectMany(x => x).Concat(_transferOnlyRecords);
 
     /// <summary>
     ///     This method checks whether any enabled record exists at an owner name, of any type.
@@ -230,6 +254,19 @@ public sealed class CachedZone
                 .. closestEncloser.Labels,
             ]),
             type
+        );
+
+    /// <summary>
+    ///     This method checks whether a record can only belong to a transferred NSEC3 chain: an
+    ///     NSEC3 record, or an RRSIG whose type-covered field is NSEC3. A hashed owner name holds
+    ///     nothing else.
+    /// </summary>
+    private static bool IsNsec3ChainRecord(RecordEntity record) =>
+        record.Type == DnsResourceRecordTypeEnum.Nsec3
+        || (
+            record.Type == DnsResourceRecordTypeEnum.RrSig
+            && RecordEntityCodec.DecodeTypedData(record)
+                is RrSigRecordData { TypeCovered: DnsResourceRecordTypeEnum.Nsec3 }
         );
 
     /// <summary>
