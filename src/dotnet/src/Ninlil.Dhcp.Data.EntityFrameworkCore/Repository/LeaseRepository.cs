@@ -107,4 +107,30 @@ public class LeaseRepository(NinlilDnsContext context)
         string scopeName,
         CancellationToken stoppingToken = default
     ) => await Set.CountAsync(lease => lease.ScopeName == scopeName, stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<bool> TryExpireAsync(
+        Guid leaseId,
+        DateTimeOffset nowUtc,
+        CancellationToken stoppingToken = default
+    )
+    {
+        // One UPDATE with the condition in its WHERE clause: the check and the write are atomic
+        // on every engine. The lease instants are UTC ticks, so the comparison translates.
+        int rows = await Set.Where(lease =>
+                lease.Id == leaseId
+                && lease.State == LeaseStateEnum.Active
+                && lease.LeaseExpiresAtUtc != null
+                && lease.LeaseExpiresAtUtc <= nowUtc
+            )
+            .ExecuteUpdateAsync(
+                setters =>
+                    setters
+                        .SetProperty(lease => lease.State, LeaseStateEnum.Expired)
+                        .SetProperty(lease => lease.UpdatedAtUtc, nowUtc),
+                stoppingToken
+            );
+
+        return rows == 1;
+    }
 }

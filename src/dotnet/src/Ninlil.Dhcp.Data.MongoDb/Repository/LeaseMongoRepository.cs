@@ -112,4 +112,28 @@ public class LeaseMongoRepository(NinlilDnsMongoContext context, MongoChangeTrac
                 lease => lease.ScopeName == scopeName,
                 cancellationToken: stoppingToken
             );
+
+    /// <inheritdoc />
+    public async Task<bool> TryExpireAsync(
+        Guid leaseId,
+        DateTimeOffset nowUtc,
+        CancellationToken stoppingToken = default
+    )
+    {
+        // One atomic update-one with the condition in its filter, not staged in the change
+        // tracker, so a renewal that committed first is never overwritten.
+        UpdateResult result = await Collection.UpdateOneAsync(
+            lease =>
+                lease.Id == leaseId
+                && lease.State == LeaseStateEnum.Active
+                && lease.LeaseExpiresAtUtc != null
+                && lease.LeaseExpiresAtUtc <= nowUtc,
+            Builders<LeaseEntity>
+                .Update.Set(lease => lease.State, LeaseStateEnum.Expired)
+                .Set(lease => lease.UpdatedAtUtc, nowUtc),
+            cancellationToken: stoppingToken
+        );
+
+        return result.ModifiedCount == 1;
+    }
 }

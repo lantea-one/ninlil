@@ -141,4 +141,24 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of leases in the scope.</returns>
     Task<int> CountByScopeNameAsync(string scopeName, CancellationToken stoppingToken = default);
+
+    /// <summary>
+    ///     This method marks one lease <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum.Expired" />
+    ///     only if it is still <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum.Active" /> and its
+    ///     expiry is at or before <paramref name="nowUtc" />. It runs at once as a single
+    ///     conditional write, not staged in the unit of work, so a renewal that commits first wins
+    ///     and is never overwritten (the expiry sweep relies on this).
+    /// </summary>
+    /// <param name="leaseId">The identifier of the lease to expire.</param>
+    /// <param name="nowUtc">The instant the lease's expiry must not be after.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>
+    ///     <see langword="true" /> if this call changed the lease; <see langword="false" /> if it
+    ///     does not exist or no longer meets the condition.
+    /// </returns>
+    Task<bool> TryExpireAsync(
+        Guid leaseId,
+        DateTimeOffset nowUtc,
+        CancellationToken stoppingToken = default
+    );
 }

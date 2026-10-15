@@ -28,13 +28,22 @@ namespace Ninlil.Dhcp.Server.Core;
 ///     <para>
 ///         Like <c>Ninlil.Dns.Server.Webhooks.WebhookDeliveryRetrySweepService</c>, the first
 ///         sweep runs at startup and a failed sweep is logged without stopping the service. The
-///         delay sits inside the same <c>try</c>, so after a failure the next sweep starts at once
-///         rather than one interval later.
+///         delay follows the sweep in every case, so a persistent error costs one warning per
+///         interval and never a busy loop. An interval of zero or less would spin or throw, so
+///         it is replaced by the default of one minute, with one warning per service start.
 ///     </para>
 ///     <para>
 ///         The query filters by state and expiry in the database: the lease instants are stored as
 ///         UTC ticks, so the comparison translates on every engine. Only the leases that have
-///         expired are loaded.
+///         expired are loaded. Each one is then expired with
+///         <see cref="ILeaseRepository.TryExpireAsync" />, a single conditional write, so a
+///         renewal that commits between the load and the write is never overwritten.
+///     </para>
+///     <para>
+///         Accepted limit: if the sweep commits first and a renewal then writes the row back as
+///         active, the client keeps its lease, but an <see cref="DhcpLeaseChangeKindEnum.Expired" />
+///         and a <see cref="DhcpLeaseChangeKindEnum.Granted" /> event are both published. The
+///         subscribers run fire-and-forget, so the DNS record could end up removed.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">The factory that creates a scope for each sweep.</param>
@@ -46,24 +55,57 @@ public sealed class Dhcpv4LeaseExpirySweepService(
     ILogger<Dhcpv4LeaseExpirySweepService> logger
 ) : BackgroundService
 {
+    /// <summary>
+    ///     This field is the interval used when the configured one is zero or negative.
+    /// </summary>
+    private static readonly TimeSpan DefaultSweepInterval = TimeSpan.FromMinutes(1);
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        bool warnedAboutInterval = false;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await SweepAsync(stoppingToken);
-                await Task.Delay(options.CurrentValue.LeaseExpirySweepInterval, stoppingToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 // Expected on shutdown.
+                break;
             }
             catch (Exception exception)
             {
                 // A failed sweep must not stop the service; the next pass picks the leases up.
                 logger.LogWarning(exception, "A DHCP lease expiry sweep failed unexpectedly.");
+            }
+
+            TimeSpan interval = options.CurrentValue.LeaseExpirySweepInterval;
+
+            if (interval <= TimeSpan.Zero)
+            {
+                // Task.Delay would spin on zero and throw on a negative value.
+                if (!warnedAboutInterval)
+                    logger.LogWarning(
+                        "The DHCP lease expiry sweep interval {Interval} is not positive; using {Default} instead.",
+                        interval,
+                        DefaultSweepInterval
+                    );
+
+                warnedAboutInterval = true;
+                interval = DefaultSweepInterval;
+            }
+
+            try
+            {
+                await Task.Delay(interval, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected on shutdown.
+                break;
             }
         }
     }
@@ -82,13 +124,12 @@ public sealed class Dhcpv4LeaseExpirySweepService(
 
         ILeaseRepository leaseRepository =
             scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
-        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         IDnsServerEventPublisher eventPublisher =
             scope.ServiceProvider.GetRequiredService<IDnsServerEventPublisher>();
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        IReadOnlyList<LeaseEntity> expiredLeases = await leaseRepository.ListAsync(
+        IReadOnlyList<LeaseEntity> candidates = await leaseRepository.ListAsync(
             lease =>
                 lease.State == LeaseStateEnum.Active
                 && lease.LeaseExpiresAtUtc != null
@@ -96,27 +137,24 @@ public sealed class Dhcpv4LeaseExpirySweepService(
             stoppingToken
         );
 
-        List<LeaseEntity> expired = [.. expiredLeases];
+        int expired = 0;
 
-        if (expired.Count == 0)
-            return 0;
-
-        foreach (LeaseEntity lease in expired)
+        foreach (LeaseEntity lease in candidates)
         {
-            lease.State = LeaseStateEnum.Expired;
-            lease.UpdatedAtUtc = now;
-            leaseRepository.Update(lease);
-        }
+            // The conditional write loses to a renewal that committed first; then nothing is
+            // expired and nothing is published for that lease.
+            if (!await leaseRepository.TryExpireAsync(lease.Id, now, stoppingToken))
+                continue;
 
-        await unitOfWork.SaveChangesAsync(stoppingToken);
-
-        foreach (LeaseEntity lease in expired)
+            expired++;
             eventPublisher.Publish(
                 new DhcpLeaseChangedEvent(now, lease.Id, DhcpLeaseChangeKindEnum.Expired)
             );
+        }
 
-        logger.LogInformation("DHCP lease expiry sweep expired {Count} lease(s).", expired.Count);
+        if (expired > 0)
+            logger.LogInformation("DHCP lease expiry sweep expired {Count} lease(s).", expired);
 
-        return expired.Count;
+        return expired;
     }
 }
