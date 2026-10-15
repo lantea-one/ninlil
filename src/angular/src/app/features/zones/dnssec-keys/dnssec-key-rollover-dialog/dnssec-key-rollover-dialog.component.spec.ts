@@ -93,6 +93,28 @@ describe('DnssecKeyRolloverDialogComponent', () => {
     expect(keySizeField()).not.toBeNull();
   });
 
+  it('rejects a rollover RSA key size that is out of range or not a multiple of 64', async () => {
+    const fixture = await createComponent();
+    const control = fixture.componentInstance.form.controls.keySizeBits;
+    fixture.componentInstance.form.controls.algorithm.setValue(DnssecAlgorithmEnum.Rsasha256);
+
+    for (const size of [512, 2056, 8192]) {
+      control.setValue(size);
+      expect(control.valid).withContext(`size ${size}`).toBeFalse();
+    }
+  });
+
+  it('accepts for a rollover 0, the 2048 minimum and the 4096 maximum as an RSA key size', async () => {
+    const fixture = await createComponent();
+    const control = fixture.componentInstance.form.controls.keySizeBits;
+    fixture.componentInstance.form.controls.algorithm.setValue(DnssecAlgorithmEnum.Rsasha256);
+
+    for (const size of [0, 2048, 4096]) {
+      control.setValue(size);
+      expect(control.valid).withContext(`size ${size}`).toBeTrue();
+    }
+  });
+
   it('sends the key size for an RSA rollover', async () => {
     const fixture = await createComponent();
     apiSpy.apiZonesZoneIdDnssecKeysIdRollPost.and.returnValue(of({ id: 'key-2' }));

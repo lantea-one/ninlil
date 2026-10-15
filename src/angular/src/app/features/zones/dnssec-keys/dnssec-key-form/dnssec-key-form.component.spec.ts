@@ -85,6 +85,28 @@ describe('DnssecKeyFormComponent', () => {
     expect(rendered).toContain(DnssecAlgorithmEnum.Ecdsap256Sha256);
   });
 
+  it('rejects an RSA key size that is out of range or not a multiple of 64', async () => {
+    const fixture = await createComponent(null);
+    const control = fixture.componentInstance.form.controls.keySizeBits;
+    fixture.componentInstance.form.controls.algorithm.setValue(DnssecAlgorithmEnum.Rsasha256);
+
+    for (const size of [512, 2056, 8192]) {
+      control.setValue(size);
+      expect(control.valid).withContext(`size ${size}`).toBeFalse();
+    }
+  });
+
+  it('accepts 0, the 2048 minimum and the 4096 maximum as an RSA key size', async () => {
+    const fixture = await createComponent(null);
+    const control = fixture.componentInstance.form.controls.keySizeBits;
+    fixture.componentInstance.form.controls.algorithm.setValue(DnssecAlgorithmEnum.Rsasha256);
+
+    for (const size of [0, 2048, 4096]) {
+      control.setValue(size);
+      expect(control.valid).withContext(`size ${size}`).toBeTrue();
+    }
+  });
+
   it('showKeySize() is true only for an RSA-family algorithm', async () => {
     const fixture = await createComponent(null);
 

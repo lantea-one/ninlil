@@ -105,6 +105,39 @@ describe('DnssecKeyListComponent', () => {
     expect(fixture.componentInstance.keys().length).toBe(1);
   });
 
+  it('warns that the zone is served unsigned when its only Active keys use a prohibited algorithm', async () => {
+    const fixture = await createComponent([
+      {
+        id: 'key-1',
+        zoneId: 'zone-1',
+        role: DnssecKeyRoleEnum.Zsk,
+        algorithm: DnssecAlgorithmEnum.Rsasha1,
+        isRetired: false,
+        lifecycleState: DnssecKeyLifecycleStateEnum.Active,
+      },
+    ]);
+
+    const warning = (fixture.nativeElement as HTMLElement).querySelector('.no-signing-key-warning');
+    expect(warning).not.toBeNull();
+    expect(warning?.textContent).toContain('served unsigned');
+  });
+
+  it('shows no unsigned warning for a zone with an Active ECDSA key', async () => {
+    const fixture = await createComponent();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.no-signing-key-warning'),
+    ).toBeNull();
+  });
+
+  it('shows no unsigned warning for a zone without any key', async () => {
+    const fixture = await createComponent([]);
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.no-signing-key-warning'),
+    ).toBeNull();
+  });
+
   it('onPageChange() requests the correctly offset skip/take, per the chosen page size', async () => {
     const fixture = await createComponent();
 

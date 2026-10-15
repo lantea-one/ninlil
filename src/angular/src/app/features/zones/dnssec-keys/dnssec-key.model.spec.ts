@@ -1,3 +1,4 @@
+import { FormControl } from '@angular/forms';
 import {
   DnssecAlgorithmEnum,
   DnssecKeyDetail,
@@ -8,11 +9,13 @@ import {
   awaitingParentDsConfirmation,
   canStartRollover,
   dnssecAlgorithmNumber,
+  hasNoSigningKey,
   isRsaAlgorithm,
   isSigningProhibited,
   SIGNING_DNSSEC_ALGORITHMS,
   SIGNING_PROHIBITED_DNSSEC_ALGORITHMS,
   lifecycleStateBadgeColor,
+  rsaKeySizeValidator,
 } from './dnssec-key.model';
 
 /** This helper builds a valid Active ZSK, with the given fields overridden. */
@@ -151,5 +154,53 @@ describe('signing-prohibited DNSSEC algorithms', () => {
     ]);
     expect(isSigningProhibited(DnssecAlgorithmEnum.Rsasha1)).toBeTrue();
     expect(isSigningProhibited(DnssecAlgorithmEnum.Ed25519)).toBeFalse();
+  });
+});
+
+describe('rsaKeySizeValidator', () => {
+  const error = (value: number | null) => rsaKeySizeValidator(new FormControl(value));
+
+  it('accepts 0, the bounds and the multiples of 64 between them', () => {
+    for (const size of [0, 2048, 2112, 3072, 4096]) expect(error(size)).toBeNull();
+  });
+
+  it('rejects sizes below, above or between the 64-bit steps, and an empty field', () => {
+    for (const size of [512, 1024, 2047, 2056, 4160, 8192, -64, 2048.5, null]) {
+      expect(error(size)).toEqual({ rsaKeySize: true });
+    }
+  });
+});
+
+describe('hasNoSigningKey', () => {
+  it('is false for a zone without keys', () => {
+    expect(hasNoSigningKey([])).toBeFalse();
+  });
+
+  it('is true when the only Active and DoubleSignature keys use a prohibited algorithm', () => {
+    expect(
+      hasNoSigningKey([
+        key({ algorithm: DnssecAlgorithmEnum.Rsasha1 }),
+        key({
+          algorithm: DnssecAlgorithmEnum.Rsasha1Nsec3Sha1,
+          lifecycleState: DnssecKeyLifecycleStateEnum.DoubleSignature,
+        }),
+      ]),
+    ).toBeTrue();
+  });
+
+  it('is true when the only permitted keys are Published or Retired', () => {
+    expect(
+      hasNoSigningKey([
+        key({ lifecycleState: DnssecKeyLifecycleStateEnum.Published }),
+        key({ lifecycleState: DnssecKeyLifecycleStateEnum.Retired }),
+      ]),
+    ).toBeTrue();
+  });
+
+  it('is false when one Active or DoubleSignature key has a permitted algorithm', () => {
+    expect(hasNoSigningKey([key({ algorithm: DnssecAlgorithmEnum.Rsasha1 }), key({})])).toBeFalse();
+    expect(
+      hasNoSigningKey([key({ lifecycleState: DnssecKeyLifecycleStateEnum.DoubleSignature })]),
+    ).toBeFalse();
   });
 });
