@@ -20,10 +20,11 @@ namespace Ninlil.Dhcp.Server.DnsIntegration;
 ///     <c>DhcpLeaseChangedEvent</c>. Writes go through <see cref="IZoneUpdateService" />, like every
 ///     other feature that changes zone content, and only records marked
 ///     <see cref="RecordEntity.ManagedByFeature" /> = <see cref="RecordManagedByFeatureEnum.Dhcp" />
-///     are touched, as <see cref="Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncService" /> and
-///     <c>CaaRecordReconciliationService</c> do for theirs. Conflicts are checked only against
-///     these managed records: a client's name replaces another DHCP client's record of the same
-///     name, and is added next to a static record of the same name.
+///     are removed or replaced, as <see cref="Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncService" /> and
+///     <c>CaaRecordReconciliationService</c> do for theirs. A client's name replaces another DHCP
+///     client's record of the same name only when no active lease still holds that record's address. A name that holds any record
+///     DHCP does not manage (an operator's A, AAAA, CNAME, NS or TXT) is refused and logged as a
+///     Warning, so a client can never shadow a static record or take a live client's name.
 ///     <para>
 ///         <b>PTR records.</b> Only the forward record is written here.
 ///         <see cref="IZoneUpdateService.ApplyChangesAsync" /> publishes a <c>DnsZoneChangedEvent</c>,
@@ -64,8 +65,9 @@ public class DhcpDnsRegistrationService(
     ///     carries only its identifier) and adds, replaces or removes its A/AAAA record. It does
     ///     nothing when the scope has no <see cref="DhcpScopeEntity.DnsZoneId" />, the zone is
     ///     missing or not a Primary or CloudPrimary zone, the address does not parse, or, for a
-    ///     grant, the lease has no usable host name. A release or expiry removes the managed
-    ///     record for the lease's address.
+    ///     grant, the lease has no usable host name. A grant whose owner name is unavailable is
+    ///     refused (see <see cref="DhcpDnsRegistrationResult.WasRefused" />). A release or expiry
+    ///     removes the managed record for the lease's address.
     /// </summary>
     /// <param name="leaseId">The identifier of the lease that changed.</param>
     /// <param name="changeKind">What happened to the lease.</param>
@@ -141,15 +143,67 @@ public class DhcpDnsRegistrationService(
             );
 
         string ownerName = $"{label}.{zone.Name}";
-        RecordEntity existingByName = managedRecords.FirstOrDefault(record =>
-            !ReferenceEquals(record, existingByAddress)
-            && NormalizeName(record.Name) == NormalizeName(ownerName)
-        );
+        string normalizedOwnerName = NormalizeName(ownerName);
+
+        // Static wins: any record at the name that DHCP does not manage (an operator's A or
+        // AAAA, a CNAME that RFC 1034 Section 3.6.2 forbids sharing a name with other data, an
+        // NS delegation, a TXT) makes the name unavailable.
+        List<RecordEntity> unmanagedAtName =
+        [
+            .. zoneRecords.Where(record =>
+                record.ManagedByFeature != RecordManagedByFeatureEnum.Dhcp
+                && NormalizeName(record.Name) == normalizedOwnerName
+            ),
+        ];
+
+        if (unmanagedAtName.Count > 0)
+        {
+            string types = string.Join(
+                ", ",
+                unmanagedAtName.Select(record => record.Type).Distinct().OrderBy(type => type)
+            );
+            return await RefuseAsync(
+                zone.Id,
+                lease,
+                label,
+                ownerName,
+                existingByAddress,
+                $"the name holds static records of type {types}",
+                stoppingToken
+            );
+        }
+
+        List<RecordEntity> existingByName =
+        [
+            .. managedRecords.Where(record =>
+                !ReferenceEquals(record, existingByAddress)
+                && NormalizeName(record.Name) == normalizedOwnerName
+            ),
+        ];
+
+        // A live client keeps its name: a managed record of this name for another address
+        // belongs to the lease that still holds that address. When no live lease holds it, the
+        // record is stale (or this client is moving to a new address) and is replaced.
+        foreach (RecordEntity candidate in existingByName)
+        {
+            LeaseEntity holder = await FindLiveHolderAsync(candidate, lease, stoppingToken);
+
+            if (holder is not null)
+                return await RefuseAsync(
+                    zone.Id,
+                    lease,
+                    label,
+                    ownerName,
+                    existingByAddress,
+                    $"the name is held by the active lease of client {holder.ClientIdentifier}",
+                    stoppingToken
+                );
+        }
 
         if (
             existingByAddress is not null
-            && existingByName is null
-            && NormalizeName(existingByAddress.Name) == NormalizeName(ownerName)
+            && existingByName.Count == 0
+            && NormalizeName(existingByAddress.Name) == normalizedOwnerName
         )
             // Already correct: skip the write, which would publish a DnsZoneChangedEvent and
             // set off PtrSyncEventSubscriber and the other zone subscribers for nothing.
@@ -158,13 +212,77 @@ public class DhcpDnsRegistrationService(
         List<RecordEntity> recordsToRemove = [];
         if (existingByAddress is not null)
             recordsToRemove.Add(existingByAddress);
-        if (existingByName is not null)
-            recordsToRemove.Add(existingByName);
+        recordsToRemove.AddRange(existingByName);
 
         RecordEntity newRecord = BuildRecord(zone.Id, ownerName, recordType, leaseAddress);
         await ApplyAsync(zone.Id, [newRecord], recordsToRemove, stoppingToken);
 
         return DhcpDnsRegistrationResult.Registered(ownerName);
+    }
+
+    /// <summary>
+    ///     This method refuses a host name: it removes the lease's previous registration at its
+    ///     address, if any (the lease has no name it may use now), logs a Warning that names the
+    ///     client, the host name, the owner name and the reason, and returns the refusal. The
+    ///     Warning repeats on every renewal of a refused lease so the operator keeps seeing it.
+    /// </summary>
+    private async Task<DhcpDnsRegistrationResult> RefuseAsync(
+        Guid zoneId,
+        LeaseEntity lease,
+        string label,
+        string ownerName,
+        RecordEntity existingByAddress,
+        string reason,
+        CancellationToken stoppingToken
+    )
+    {
+        if (existingByAddress is not null)
+            await ApplyAsync(zoneId, [], [existingByAddress], stoppingToken);
+
+        logger.LogWarning(
+            "DHCP->DNS registration refused for client {ClientIdentifier} with host name {HostName}: owner name {OwnerName} is unavailable because {Reason}.",
+            lease.ClientIdentifier,
+            label,
+            ownerName,
+            reason
+        );
+
+        return DhcpDnsRegistrationResult.Refused(ownerName, reason);
+    }
+
+    /// <summary>
+    ///     This method finds the other client's lease that keeps a managed record alive: the
+    ///     Active lease for the record's address, when it is not <paramref name="lease" /> and
+    ///     has no expiry or an expiry in the future. It returns <see langword="null" /> for a
+    ///     stale record, whose address no live lease holds.
+    /// </summary>
+    private async Task<LeaseEntity> FindLiveHolderAsync(
+        RecordEntity record,
+        LeaseEntity lease,
+        CancellationToken stoppingToken
+    )
+    {
+        IPAddress recordAddress = RecordEntityCodec.DecodeTypedData(record) switch
+        {
+            ARecordData a => a.Address,
+            AaaaRecordData aaaa => aaaa.Address,
+            _ => null,
+        };
+
+        if (recordAddress is null)
+            return null;
+
+        LeaseEntity holder = await leaseRepository.FindActiveByIpAddressAsync(
+            recordAddress.ToString(),
+            stoppingToken
+        );
+
+        if (holder is null || holder.Id == lease.Id)
+            return null;
+
+        return holder.LeaseExpiresAtUtc is null || holder.LeaseExpiresAtUtc > DateTimeOffset.UtcNow
+            ? holder
+            : null;
     }
 
     /// <summary>

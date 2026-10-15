@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
@@ -78,7 +79,9 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     ///     new dependency injection scope for each call, as <c>PtrSyncServiceTests.CreateService</c>
     ///     does, so no tracked entity from an earlier step is reused.
     /// </summary>
-    private DhcpDnsRegistrationService CreateService()
+    private DhcpDnsRegistrationService CreateService(
+        ILogger<DhcpDnsRegistrationService> logger = null
+    )
     {
         IServiceScope scope = _host.Services.CreateScope();
         return new DhcpDnsRegistrationService(
@@ -87,7 +90,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             scope.ServiceProvider.GetRequiredService<IZoneRepository>(),
             scope.ServiceProvider.GetRequiredService<IRecordRepository>(),
             scope.ServiceProvider.GetRequiredService<IZoneUpdateService>(),
-            NullLogger<DhcpDnsRegistrationService>.Instance
+            logger ?? NullLogger<DhcpDnsRegistrationService>.Instance
         );
     }
 
@@ -162,21 +165,24 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
         string scopeName,
         string ipAddress,
         string hostName,
-        LeaseStateEnum state = LeaseStateEnum.Active
+        LeaseStateEnum state = LeaseStateEnum.Active,
+        string clientIdentifier = "aa:bb:cc:dd:ee:ff",
+        DateTimeOffset? expiresAtUtc = null,
+        InternetProtocolVersionEnum protocol = InternetProtocolVersionEnum.IPv4
     )
     {
         LeaseEntity lease = new()
         {
             Id = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
-            ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+            ProtocolVersion = protocol,
             ScopeName = scopeName,
-            ClientIdentifier = "aa:bb:cc:dd:ee:ff",
+            ClientIdentifier = clientIdentifier,
             IpAddress = ipAddress,
             HostName = hostName,
             State = state,
             LeaseObtainedAtUtc = DateTimeOffset.UtcNow,
-            LeaseExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1),
+            LeaseExpiresAtUtc = expiresAtUtc ?? DateTimeOffset.UtcNow.AddHours(1),
         };
 
         await _leaseRepository.AddAsync(lease);
@@ -373,6 +379,314 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             .HandleLeaseChangeAsync(Guid.NewGuid(), DhcpLeaseChangeKindEnum.Granted);
 
         Assert.True(result.WasSkipped);
+    }
+
+    /// <summary>
+    ///     This method stores one record at a name: an operator's (static) record, or one DHCP
+    ///     manages, depending on <paramref name="managedBy" />.
+    /// </summary>
+    private async Task SeedRecordAsync(
+        Guid zoneId,
+        string name,
+        DnsResourceRecordTypeEnum type,
+        string dataJson,
+        RecordManagedByFeatureEnum? managedBy
+    )
+    {
+        await _recordRepository.AddAsync(
+            new RecordEntity
+            {
+                Id = Guid.NewGuid(),
+                ZoneId = zoneId,
+                Name = name,
+                Type = type,
+                Class = DnsClassEnum.Internet,
+                TimeToLiveSeconds = 300,
+                DataJson = dataJson,
+                ManagedByFeature = managedBy,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    private static string AData(string address) =>
+        Ninlil.Common.Serializer.JsonSerializer.Serialize(
+            typeof(ARecordData),
+            new ARecordData(System.Net.IPAddress.Parse(address))
+        );
+
+    private static string AaaaData(string address) =>
+        Ninlil.Common.Serializer.JsonSerializer.Serialize(
+            typeof(AaaaRecordData),
+            new AaaaRecordData(System.Net.IPAddress.Parse(address))
+        );
+
+    private static string TxtData(string text) =>
+        Ninlil.Common.Serializer.JsonSerializer.Serialize(
+            typeof(TxtRecordData),
+            new TxtRecordData([text])
+        );
+
+    private static string CnameData(string target) =>
+        Ninlil.Common.Serializer.JsonSerializer.Serialize(
+            typeof(CnameRecordData),
+            new CnameRecordData(DnsName.Parse(target))
+        );
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_StaticARecordAtTheName_IsRefusedAndLogged()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c1.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        await SeedRecordAsync(
+            zoneId,
+            "nas.c1.example.com",
+            DnsResourceRecordTypeEnum.A,
+            AData("192.0.2.200"),
+            null
+        );
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.30", "nas");
+        CapturingLogger logger = new();
+
+        DhcpDnsRegistrationResult result = await CreateService(logger)
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.True(result.WasRefused);
+        Assert.True(result.WasSkipped);
+        Assert.Empty(await GetManagedRecordsAsync(zoneId));
+        IReadOnlyList<RecordEntity> all = await _recordRepository.ListByZoneIdAsync(zoneId);
+        RecordEntity staticRecord = Assert.Single(
+            all,
+            record => record.Name == "nas.c1.example.com"
+        );
+        Assert.Equal(AData("192.0.2.200"), staticRecord.DataJson);
+        string warning = Assert.Single(logger.Warnings);
+        Assert.Contains("aa:bb:cc:dd:ee:ff", warning);
+        Assert.Contains("nas.c1.example.com", warning);
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_StaticAaaaRecordAtTheName_IsRefused()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c1b.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan6", zoneId);
+        await SeedRecordAsync(
+            zoneId,
+            "nas.c1b.example.com",
+            DnsResourceRecordTypeEnum.Aaaa,
+            AaaaData("2001:db8::200"),
+            null
+        );
+        LeaseEntity lease = await SeedLeaseAsync(
+            scope.Name,
+            "2001:db8::30",
+            "nas",
+            protocol: InternetProtocolVersionEnum.IPv6
+        );
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.True(result.WasRefused);
+        Assert.Empty(await GetManagedRecordsAsync(zoneId));
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_StaticCnameAtTheName_IsRefused()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c2.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        await SeedRecordAsync(
+            zoneId,
+            "web.c2.example.com",
+            DnsResourceRecordTypeEnum.Cname,
+            CnameData("www.c2.example.com"),
+            null
+        );
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.31", "web");
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.True(result.WasRefused);
+        Assert.Empty(await GetManagedRecordsAsync(zoneId));
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_StaticTxtAtTheName_IsRefused()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c3.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        await SeedRecordAsync(
+            zoneId,
+            "note.c3.example.com",
+            DnsResourceRecordTypeEnum.Txt,
+            TxtData("reserved"),
+            null
+        );
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.32", "note");
+        CapturingLogger logger = new();
+
+        DhcpDnsRegistrationResult result = await CreateService(logger)
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.True(result.WasRefused);
+        Assert.Empty(await GetManagedRecordsAsync(zoneId));
+        Assert.Contains("Txt", Assert.Single(logger.Warnings));
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_NameOfAnotherClientsActiveLease_IsRefusedAndTheirRecordKept()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c4.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        LeaseEntity first = await SeedLeaseAsync(
+            scope.Name,
+            "192.0.2.40",
+            "printer",
+            clientIdentifier: "11:11:11:11:11:11"
+        );
+        await CreateService().HandleLeaseChangeAsync(first.Id, DhcpLeaseChangeKindEnum.Granted);
+        LeaseEntity second = await SeedLeaseAsync(
+            scope.Name,
+            "192.0.2.41",
+            "printer",
+            clientIdentifier: "22:22:22:22:22:22"
+        );
+        CapturingLogger logger = new();
+
+        DhcpDnsRegistrationResult result = await CreateService(logger)
+            .HandleLeaseChangeAsync(second.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.True(result.WasRefused);
+        RecordEntity kept = Assert.Single(await GetManagedRecordsAsync(zoneId));
+        Assert.Equal(AData("192.0.2.40"), kept.DataJson);
+        Assert.Contains("11:11:11:11:11:11", Assert.Single(logger.Warnings));
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_NameOfAnotherClientWhoseLeaseExpired_IsReplaced()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c5.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        LeaseEntity first = await SeedLeaseAsync(
+            scope.Name,
+            "192.0.2.50",
+            "printer",
+            clientIdentifier: "11:11:11:11:11:11"
+        );
+        await CreateService().HandleLeaseChangeAsync(first.Id, DhcpLeaseChangeKindEnum.Granted);
+        first.LeaseExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5);
+        _leaseRepository.Update(first);
+        await _unitOfWork.SaveChangesAsync();
+        LeaseEntity second = await SeedLeaseAsync(
+            scope.Name,
+            "192.0.2.51",
+            "printer",
+            clientIdentifier: "22:22:22:22:22:22"
+        );
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(second.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.False(result.WasRefused);
+        RecordEntity record = Assert.Single(await GetManagedRecordsAsync(zoneId));
+        Assert.Equal(AData("192.0.2.51"), record.DataJson);
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_NameOfARecordWithNoLiveLease_IsReplaced()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c6.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        await SeedRecordAsync(
+            zoneId,
+            "camera.c6.example.com",
+            DnsResourceRecordTypeEnum.A,
+            AData("192.0.2.60"),
+            RecordManagedByFeatureEnum.Dhcp
+        );
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.61", "camera");
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.False(result.WasRefused);
+        RecordEntity record = Assert.Single(await GetManagedRecordsAsync(zoneId));
+        Assert.Equal(AData("192.0.2.61"), record.DataJson);
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_OneClientMovingToANewAddress_KeepsItsName()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c7.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.10", "laptop");
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        lease.IpAddress = "192.0.2.11";
+        _leaseRepository.Update(lease);
+        await _unitOfWork.SaveChangesAsync();
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.False(result.WasRefused);
+        RecordEntity record = Assert.Single(await GetManagedRecordsAsync(zoneId));
+        Assert.Equal(AData("192.0.2.11"), record.DataJson);
+    }
+
+    [Fact]
+    public async Task HandleLeaseChangeAsync_RefusedNameForAClientRegisteredUnderAnotherName_RemovesTheOldRecord()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("c8.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
+        await SeedRecordAsync(
+            zoneId,
+            "nas.c8.example.com",
+            DnsResourceRecordTypeEnum.A,
+            AData("192.0.2.201"),
+            null
+        );
+        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.70", "old");
+        await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+        Assert.Single(await GetManagedRecordsAsync(zoneId));
+
+        lease.HostName = "nas";
+        _leaseRepository.Update(lease);
+        await _unitOfWork.SaveChangesAsync();
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.True(result.WasRefused);
+        Assert.Empty(await GetManagedRecordsAsync(zoneId));
+    }
+
+    /// <summary>
+    ///     This class is a logger that keeps the formatted text of every Warning, so a test can
+    ///     check what the operator is told.
+    /// </summary>
+    private sealed class CapturingLogger : ILogger<DhcpDnsRegistrationService>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable BeginScope<TState>(TState state) => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter
+        )
+        {
+            if (logLevel == LogLevel.Warning)
+                Warnings.Add(formatter(state, exception));
+        }
     }
 
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher
