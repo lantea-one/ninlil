@@ -1,7 +1,9 @@
+using System.Text;
 using Amazon;
 using Amazon.Route53;
 using Amazon.Route53.Model;
 using Amazon.Runtime;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 
@@ -16,8 +18,29 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 ///     Route 53 stores each value as one string whose format depends on the type: MX packs the
 ///     preference with the exchange, TXT is quoted, and SRV and CAA pack several space-separated
 ///     fields. <see cref="ToRoute53Value" />, <see cref="ParseRoute53Record" /> and
-///     <see cref="FromRoute53Value" /> handle these formats. Each record set is treated as one
-///     record (see <see cref="ListRecordsAsync" />).
+///     <see cref="FromRoute53Value" /> handle these formats.
+///     </para>
+///     <para>
+///     A Route 53 record set holds all values of one name and type under one TTL (RFC 2181 §5.2).
+///     <see cref="ListRecordsAsync" /> returns one record per value, all with the set's TTL and the
+///     same ID (<c>name|TYPE</c>). <see cref="CreateRecordAsync" /> and
+///     <see cref="DeleteRecordAsync" /> read the current set first and change it as a whole: CREATE
+///     for a new set, UPSERT when values remain, DELETE with the set exactly as listed when the last
+///     value goes, because Route 53 rejects a CREATE of an existing set and a DELETE that does not
+///     match the set. The sync service runs zones one at a time, so the read and the change do not
+///     race with each other.
+///     </para>
+///     <para>
+///     Route 53 writes every octet outside <c>a-z 0-9 - _</c> in a name as a backslash and three
+///     octal digits (<c>*</c> is <c>\052</c>). Names are decoded to presentation form on the way in
+///     (<see cref="DecodeRoute53Name" />) and encoded the same way on the way out
+///     (<see cref="EncodeRoute53Name" />).
+///     </para>
+///     <para>
+///     Alias record sets (<c>AliasTarget</c>) and routing-policy record sets (<c>SetIdentifier</c>:
+///     weighted, latency, failover, geolocation, multi-value) cannot be represented as plain
+///     records. They are never listed, and a create or delete for the same name and type does
+///     nothing and logs a Warning, so a sync never overwrites them.
 ///     </para>
 ///     <para>
 ///     A <c>ServiceUrl</c> credential field replaces the AWS endpoint; tests use it to point at a
@@ -25,7 +48,12 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 ///     live AWS account.
 ///     </para>
 /// </summary>
-public sealed class Route53DnsProvider : ICloudDnsProvider
+/// <param name="logger">
+///     The logger that records skipped alias and routing-policy record sets. With
+///     <see langword="null" />, nothing is logged.
+/// </param>
+public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null)
+    : ICloudDnsProvider
 {
     /// <inheritdoc />
     public CloudDnsProviderTypeEnum ProviderType => CloudDnsProviderTypeEnum.Route53;
@@ -53,30 +81,28 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
             foreach (ResourceRecordSet recordSet in response.ResourceRecordSets ?? [])
             {
                 if (
-                    !TryParseType(recordSet.Type, out DnsResourceRecordTypeEnum type)
+                    !IsPlainRecordSet(recordSet)
+                    || !TryParseType(recordSet.Type, out DnsResourceRecordTypeEnum type)
                     || !CloudDnsSyncSupportedRecordTypes.Types.Contains(type)
                 )
                     continue;
 
-                // A Route 53 record set can hold several values; only the first is read, so a set with more
-                // values appears as one record.
-                string rawValue = recordSet.ResourceRecords.FirstOrDefault()?.Value;
-
-                if (rawValue is null)
-                    continue;
-
-                DnsResourceRecord wireRecord = ParseRoute53Record(
-                    type,
-                    recordSet.Name,
-                    rawValue,
-                    (uint)(recordSet.TTL ?? 0)
-                );
-
                 // Route 53 has no record ID; name and type identify a record set within a hosted zone, so
-                // they are used as the ID.
-                records.Add(
-                    new CloudDnsProviderRecord($"{recordSet.Name}|{recordSet.Type}", wireRecord)
-                );
+                // they are used as the ID. Every value of the set shares it.
+                string ownerName = DecodeRoute53Name(recordSet.Name);
+
+                foreach (ResourceRecord value in recordSet.ResourceRecords ?? [])
+                    records.Add(
+                        new CloudDnsProviderRecord(
+                            $"{recordSet.Name}|{recordSet.Type}",
+                            ParseRoute53Record(
+                                type,
+                                ownerName,
+                                value.Value,
+                                (uint)(recordSet.TTL ?? 0)
+                            )
+                        )
+                    );
             }
 
             if (response.IsTruncated != true)
@@ -98,32 +124,63 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     )
     {
         using AmazonRoute53Client client = CreateClient(credentials);
+        string name = EncodeRoute53Name(record.Name);
+        string type = record.Type.ToString().ToUpperInvariant();
+        string newValue = ToRoute53Value(record);
 
-        await client.ChangeResourceRecordSetsAsync(
-            new ChangeResourceRecordSetsRequest
-            {
-                HostedZoneId = providerZoneId,
-                ChangeBatch = new ChangeBatch
-                {
-                    Changes =
-                    [
-                        new Change
-                        {
-                            Action = ChangeAction.CREATE,
-                            ResourceRecordSet = new ResourceRecordSet
-                            {
-                                Name = record.Name.ToString(),
-                                Type = record.Type.ToString().ToUpperInvariant(),
-                                TTL = record.TimeToLive,
-                                ResourceRecords =
-                                [
-                                    new ResourceRecord { Value = ToRoute53Value(record) },
-                                ],
-                            },
-                        },
-                    ],
-                },
-            },
+        ResourceRecordSet existing = await FindRecordSetAsync(
+            client,
+            providerZoneId,
+            name,
+            record.Name,
+            type,
+            stoppingToken
+        );
+
+        if (existing is null)
+        {
+            await ChangeAsync(
+                client,
+                providerZoneId,
+                ChangeAction.CREATE,
+                name,
+                type,
+                record.TimeToLive,
+                [newValue],
+                stoppingToken
+            );
+            return;
+        }
+
+        if (!IsPlainRecordSet(existing))
+        {
+            logger?.LogWarning(
+                "Route 53 record set '{Name}' ({Type}) in hosted zone '{ZoneId}' is an alias or routing-policy set; it is left alone and the local record is not created there.",
+                existing.Name,
+                type,
+                providerZoneId
+            );
+            return;
+        }
+
+        List<string> values = [.. (existing.ResourceRecords ?? []).Select(value => value.Value)];
+        bool present = values.Any(value => ValueMatches(record, value));
+
+        if (present && existing.TTL == record.TimeToLive)
+            return;
+
+        if (!present)
+            values.Add(newValue);
+
+        // UPSERT carries the whole set; one TTL applies to all values (RFC 2181 §5.2).
+        await ChangeAsync(
+            client,
+            providerZoneId,
+            ChangeAction.UPSERT,
+            existing.Name,
+            type,
+            record.TimeToLive,
+            values,
             stoppingToken
         );
     }
@@ -137,8 +194,110 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     )
     {
         using AmazonRoute53Client client = CreateClient(credentials);
+        DnsResourceRecord record = existingRecord.Record;
+        string type = record.Type.ToString().ToUpperInvariant();
 
-        await client.ChangeResourceRecordSetsAsync(
+        ResourceRecordSet existing = await FindRecordSetAsync(
+            client,
+            providerZoneId,
+            EncodeRoute53Name(record.Name),
+            record.Name,
+            type,
+            stoppingToken
+        );
+
+        if (existing is null)
+            return;
+
+        if (!IsPlainRecordSet(existing))
+        {
+            logger?.LogWarning(
+                "Route 53 record set '{Name}' ({Type}) in hosted zone '{ZoneId}' is an alias or routing-policy set; it is left alone and no record is deleted from it.",
+                existing.Name,
+                type,
+                providerZoneId
+            );
+            return;
+        }
+
+        List<string> values = [.. (existing.ResourceRecords ?? []).Select(value => value.Value)];
+        List<string> remaining = [.. values.Where(value => !ValueMatches(record, value))];
+
+        // The value is already gone, so there is nothing to change.
+        if (remaining.Count == values.Count)
+            return;
+
+        // Route 53 accepts a DELETE only when it matches the set exactly (values and TTL), so the
+        // last value goes with the set as listed; otherwise the rest stays under an UPSERT.
+        await ChangeAsync(
+            client,
+            providerZoneId,
+            remaining.Count == 0 ? ChangeAction.DELETE : ChangeAction.UPSERT,
+            existing.Name,
+            type,
+            existing.TTL ?? 0,
+            remaining.Count == 0 ? values : remaining,
+            stoppingToken
+        );
+    }
+
+    /// <summary>
+    ///     This method reads the record set with the given name and type, the way Route 53 documents
+    ///     it: ListResourceRecordSets starts at the name and type and returns the first set at or
+    ///     after them, so the result is checked against both.
+    /// </summary>
+    /// <param name="client">The client to read with.</param>
+    /// <param name="providerZoneId">The hosted zone's ID.</param>
+    /// <param name="encodedName">The name in Route 53's escaped form, used as the start name.</param>
+    /// <param name="name">The same name, used to compare with the returned set's decoded name.</param>
+    /// <param name="type">The record type, in upper case.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The record set, or <see langword="null" /> when there is none.</returns>
+    private static async Task<ResourceRecordSet> FindRecordSetAsync(
+        AmazonRoute53Client client,
+        string providerZoneId,
+        string encodedName,
+        DnsName name,
+        string type,
+        CancellationToken stoppingToken
+    )
+    {
+        ListResourceRecordSetsResponse response = await client.ListResourceRecordSetsAsync(
+            new ListResourceRecordSetsRequest
+            {
+                HostedZoneId = providerZoneId,
+                StartRecordName = encodedName,
+                StartRecordType = type,
+                MaxItems = "1",
+            },
+            stoppingToken
+        );
+
+        ResourceRecordSet found = (response.ResourceRecordSets ?? []).FirstOrDefault();
+
+        return
+            found is not null
+            && string.Equals(found.Type?.Value, type, StringComparison.OrdinalIgnoreCase)
+            && DnsName.TryParse(DecodeRoute53Name(found.Name), out DnsName foundName)
+            && foundName == name
+            ? found
+            : null;
+    }
+
+    /// <summary>
+    ///     This method sends one change for one whole record set.
+    /// </summary>
+    private static Task ChangeAsync(
+        AmazonRoute53Client client,
+        string providerZoneId,
+        ChangeAction action,
+        string name,
+        string type,
+        long timeToLive,
+        IEnumerable<string> values,
+        CancellationToken stoppingToken
+    ) =>
+        client.ChangeResourceRecordSetsAsync(
             new ChangeResourceRecordSetsRequest
             {
                 HostedZoneId = providerZoneId,
@@ -148,18 +307,15 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
                     [
                         new Change
                         {
-                            Action = ChangeAction.DELETE,
+                            Action = action,
                             ResourceRecordSet = new ResourceRecordSet
                             {
-                                Name = existingRecord.Record.Name.ToString(),
-                                Type = existingRecord.Record.Type.ToString().ToUpperInvariant(),
-                                TTL = existingRecord.Record.TimeToLive,
+                                Name = name,
+                                Type = type,
+                                TTL = timeToLive,
                                 ResourceRecords =
                                 [
-                                    new ResourceRecord
-                                    {
-                                        Value = ToRoute53Value(existingRecord.Record),
-                                    },
+                                    .. values.Select(value => new ResourceRecord { Value = value }),
                                 ],
                             },
                         },
@@ -168,7 +324,128 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
             },
             stoppingToken
         );
+
+    /// <summary>
+    ///     This method tells whether a record set is a plain one Ninlil can sync: not an alias and
+    ///     without a set identifier (routing policies need one).
+    /// </summary>
+    private static bool IsPlainRecordSet(ResourceRecordSet recordSet) =>
+        recordSet.AliasTarget is null && string.IsNullOrEmpty(recordSet.SetIdentifier);
+
+    /// <summary>
+    ///     This method tells whether a set's value string holds the same RDATA as a record. Parsing
+    ///     makes quoting and trailing-dot variants match; the exact string is the fallback for a value
+    ///     that does not parse.
+    /// </summary>
+    private static bool ValueMatches(DnsResourceRecord record, string rawValue)
+    {
+        if (string.Equals(rawValue, ToRoute53Value(record), StringComparison.Ordinal))
+            return true;
+
+        try
+        {
+            return ParseRoute53Record(record.Type, record.Name.ToString(), rawValue, 0)
+                .Data.AsSpan()
+                .SequenceEqual(record.Data);
+        }
+        catch (Exception exception)
+            when (exception
+                    is FormatException
+                        or ArgumentException
+                        or IndexOutOfRangeException
+                        or OverflowException
+                        or NotSupportedException
+            )
+        {
+            return false;
+        }
     }
+
+    /// <summary>
+    ///     This method turns a name from Route 53 into RFC 1035 §5.1 presentation form. Route 53
+    ///     writes an octet outside <c>a-z 0-9 - _</c> as a backslash and three octal digits (the
+    ///     Developer Guide's "DNS domain name format": <c>\052</c> is <c>*</c>). The octet is written
+    ///     back as itself, as <c>\.</c> or <c>\</c> for a literal dot or backslash, or as three
+    ///     decimal digits for a non-printable octet, which is what <see cref="DnsName.Parse" /> reads.
+    /// </summary>
+    private static string DecodeRoute53Name(string name)
+    {
+        StringBuilder builder = new();
+
+        for (int i = 0; i < name.Length; i++)
+        {
+            if (
+                name[i] == '\\'
+                && i + 3 < name.Length
+                && IsOctalDigit(name[i + 1])
+                && IsOctalDigit(name[i + 2])
+                && IsOctalDigit(name[i + 3])
+                && Convert.ToInt32(name.Substring(i + 1, 3), 8) is int octet
+                && octet <= 255
+            )
+            {
+                if (octet is '.' or '\\')
+                    builder.Append('\\').Append((char)octet);
+                else if (octet is < 0x20 or > 0x7E)
+                    builder.Append('\\').Append(octet.ToString("D3"));
+                else
+                    builder.Append((char)octet);
+
+                i += 3;
+            }
+            else if (name[i] == '\\' && i + 1 < name.Length)
+            {
+                // Any other escape is already presentation form (for example an escaped dot); keep
+                // both characters so the escaped character is not read as a separator.
+                builder.Append(name[i]).Append(name[i + 1]);
+                i++;
+            }
+            else
+            {
+                builder.Append(name[i]);
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    ///     This method writes a name in Route 53's form: letters, digits, hyphen and underscore as
+    ///     they are, every other octet (including a literal dot inside a label) as a backslash and
+    ///     three octal digits, and a trailing dot.
+    /// </summary>
+    private static string EncodeRoute53Name(DnsName name)
+    {
+        if (name.IsRoot)
+            return ".";
+
+        StringBuilder builder = new();
+
+        foreach (byte[] label in name.Labels)
+        {
+            foreach (byte octet in label)
+            {
+                if (
+                    octet is >= (byte)'a' and <= (byte)'z'
+                    || octet is >= (byte)'A' and <= (byte)'Z'
+                    || octet is >= (byte)'0' and <= (byte)'9'
+                    || octet is (byte)'-' or (byte)'_'
+                )
+                    builder.Append((char)octet);
+                else
+                    builder.Append('\\').Append(Convert.ToString(octet, 8).PadLeft(3, '0'));
+            }
+
+            builder.Append('.');
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    ///     This method tells whether a character is an octal digit.
+    /// </summary>
+    private static bool IsOctalDigit(char c) => c is >= '0' and <= '7';
 
     /// <summary>
     ///     This method builds a client from the credentials' <c>AccessKeyId</c> and
@@ -291,7 +568,7 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     /// </summary>
     /// <param name="type">The record's type.</param>
     /// <param name="name">The record's owner name.</param>
-    /// <param name="rawValue">The record set's first <c>Value</c> string.</param>
+    /// <param name="rawValue">One <c>Value</c> string of the record set.</param>
     /// <param name="ttl">The record's time-to-live, in seconds.</param>
     private static DnsResourceRecord ParseRoute53Record(
         DnsResourceRecordTypeEnum type,
