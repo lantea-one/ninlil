@@ -65,4 +65,46 @@ public class Nsec3HasherTests
         Assert.EndsWith(".example.com.", ownerName.ToString());
         Assert.Equal(hash, Nsec3Hasher.ExtractHashFromOwnerName(ownerName));
     }
+
+    [Theory]
+    [InlineData("0w")]
+    [InlineData("0-")]
+    [InlineData("0=")]
+    [InlineData("01")]
+    [InlineData("0")]
+    public void TryFromBase32Hex_InvalidText_ReturnsFalse(string text)
+    {
+        // "0w", "0-" and "0=" hold characters outside the alphabet; "01" leaves non-zero
+        // leftover bits; "0" is a length no whole number of bytes encodes.
+        Assert.False(Nsec3Hasher.TryFromBase32Hex(text, out byte[] bytes));
+        Assert.Null(bytes);
+    }
+
+    [Fact]
+    public void TryFromBase32Hex_UpperAndLowerCase_DecodeToTheSameBytes()
+    {
+        byte[] hash = Nsec3Hasher.ComputeHash(1, DnsName.Parse("www.example.com"), 2, [0x01]);
+        string encoded = Nsec3Hasher.ToBase32Hex(hash);
+
+        Assert.True(Nsec3Hasher.TryFromBase32Hex(encoded.ToUpperInvariant(), out byte[] upper));
+        Assert.True(Nsec3Hasher.TryFromBase32Hex(encoded.ToLowerInvariant(), out byte[] lower));
+        Assert.Equal(hash, upper);
+        Assert.Equal(hash, lower);
+    }
+
+    [Fact]
+    public void FromBase32Hex_InvalidText_ThrowsFormatException()
+    {
+        Assert.Throws<FormatException>(() => Nsec3Hasher.FromBase32Hex("0w"));
+    }
+
+    [Fact]
+    public void TryExtractHashFromOwnerName_LabelOutsideTheAlphabet_ReturnsFalse()
+    {
+        DnsName badName = new([new string('w', 32).Select(c => (byte)c).ToArray(), [1, 2, 3]]);
+
+        Assert.False(Nsec3Hasher.TryExtractHashFromOwnerName(badName, out byte[] hash));
+        Assert.Null(hash);
+        Assert.Throws<FormatException>(() => Nsec3Hasher.ExtractHashFromOwnerName(badName));
+    }
 }

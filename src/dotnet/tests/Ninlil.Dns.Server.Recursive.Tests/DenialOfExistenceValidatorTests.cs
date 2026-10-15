@@ -1138,4 +1138,36 @@ public class DenialOfExistenceValidatorTests
             )
         );
     }
+
+    [Fact]
+    public void VerifyNxDomainNsec3_OnlyCoveringRecordHasAnInvalidOwnerLabel_IsNotProven()
+    {
+        // The owner label is 32 'w' characters, outside the base32hex alphabet. A decoder that
+        // ORs the failed lookup into the bit buffer reads it as the all-0xFF hash, and a record
+        // from that hash to the same hash then covers every other hash. The validator must skip it.
+        byte[] allFf = Enumerable.Repeat((byte)0xFF, 20).ToArray();
+        byte[] apexHash = Hash("example.com");
+        byte[] apexNext = (byte[])apexHash.Clone();
+        apexNext[^1] ^= 0x01;
+        DnsResourceRecord apexRecord = BuildNsec3(apexHash, apexNext, false, 1, 0, ApexTypes);
+        DnsResourceRecord bad = new(
+            new DnsName([new string('w', 32).Select(c => (byte)c).ToArray(), .. Apex.Labels]),
+            DnsResourceRecordTypeEnum.Nsec3,
+            DnsClassEnum.Internet,
+            3600,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.Nsec3,
+                new Nsec3RecordData(1, false, 0, [], allFf, [DnsResourceRecordTypeEnum.A])
+            )
+        );
+
+        Assert.Equal(
+            NotProven,
+            DenialOfExistenceValidator.VerifyNxDomainNsec3(
+                DnsName.Parse("a.example.com"),
+                Apex,
+                [apexRecord, bad]
+            )
+        );
+    }
 }
