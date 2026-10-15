@@ -46,6 +46,7 @@ public sealed class MongoIndexCatalogTests(MongoDbEngineFixture fixture)
         ["NinlilDnsTsigKeys"] = ["Name:1"],
         ["NinlilDnsDnssecKeys"] = ["ZoneId:1"],
         ["NinlilDnsZoneChangeJournalEntries"] = ["ZoneId:1,OldSerial:1"],
+        ["NinlilDnsSecondaryZoneRefreshStates"] = ["ZoneId:1"],
         ["NinlilDnsCloudDnsProviderCredentials"] = ["Name:1"],
         ["NinlilDnsFilterLists"] = ["Name:1"],
         ["NinlilDnsFilterListEntries"] = ["ListId:1,Value:1"],
