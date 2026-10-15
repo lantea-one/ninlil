@@ -6,6 +6,7 @@ using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Dnssec;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
@@ -114,6 +115,47 @@ public class DnssecKeyRolloverBackgroundService(
     private async Task ProcessZoneAsync(Guid zoneId, CancellationToken stoppingToken)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+
+        // A manual rollover start must not interleave with this read-modify-save: it would see
+        // keys this pass is about to change, or this pass would overwrite its new key's state.
+        // The gate is released before the zone reload, which can take long.
+        DnssecZoneKeyGate zoneKeyGate =
+            scope.ServiceProvider.GetRequiredService<DnssecZoneKeyGate>();
+        Guid? parentToReload;
+        bool changed;
+
+        using (IDisposable zoneLease = await zoneKeyGate.EnterAsync(zoneId, stoppingToken))
+        {
+            (changed, parentToReload) = await AdvanceKeysAsync(scope, zoneId, stoppingToken);
+        }
+
+        if (!changed)
+            return;
+
+        // Re-sign now rather than waiting for the event bus: the DNSKEY RRset and the signing
+        // keys just changed.
+        await signedZoneCache.ReloadZoneAsync(zoneId, stoppingToken);
+
+        // Re-sign a parent hosted here too, since its DS for the new KSK is only generated when
+        // the parent is signed.
+        if (parentToReload.HasValue)
+            await signedZoneCache.ReloadZoneAsync(parentToReload.Value, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method reads one zone's keys, applies every due rollover step and saves. It runs
+    ///     under the zone's <see cref="DnssecZoneKeyGate" /> lease.
+    /// </summary>
+    /// <returns>
+    ///     Whether any key changed, and the parent zone to re-sign when a KSK was promoted under
+    ///     a parent hosted here.
+    /// </returns>
+    private async Task<(bool Changed, Guid? ParentZoneToReload)> AdvanceKeysAsync(
+        AsyncServiceScope scope,
+        Guid zoneId,
+        CancellationToken stoppingToken
+    )
+    {
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
         IRecordRepository recordRepository =
@@ -127,7 +169,7 @@ public class DnssecKeyRolloverBackgroundService(
         // The zone may have been deleted or unsigned since it was cached; SignedZoneCache drops
         // it on its next reload.
         if (zone is not { IsDnssecSigned: true })
-            return;
+            return (false, null);
 
         List<DnssecKeyEntity> keys =
         [
@@ -273,21 +315,11 @@ public class DnssecKeyRolloverBackgroundService(
         }
 
         if (!changed)
-            return;
+            return (false, null);
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // Re-sign now rather than waiting for the event bus: the DNSKEY RRset and the signing
-        // keys just changed.
-        await signedZoneCache.ReloadZoneAsync(zoneId, stoppingToken);
-
-        // Re-sign a parent hosted here too, since its DS for the new KSK is only generated when
-        // the parent is signed.
-        if (promotedKskLocalParentZoneId.HasValue)
-            await signedZoneCache.ReloadZoneAsync(
-                promotedKskLocalParentZoneId.Value,
-                stoppingToken
-            );
+        return (true, promotedKskLocalParentZoneId);
     }
 
     /// <summary>

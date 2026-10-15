@@ -65,11 +65,14 @@ public interface IDnssecKeyManagementService
 
     /// <summary>
     ///     This method starts an RFC 6781 rollover of <paramref name="currentKeyId" />. It generates
-    ///     a replacement key as <see cref="GenerateKeyAsync" /> does, then puts it in the first
-    ///     rollover state: <see cref="DnssecKeyLifecycleStateEnum.Published" /> for a
+    ///     a replacement key with the checks of <see cref="GenerateKeyAsync" /> and saves it once,
+    ///     directly in the first rollover state, so it never exists as a second Active key:
+    ///     <see cref="DnssecKeyLifecycleStateEnum.Published" /> for a
     ///     <see cref="DnssecKeyRoleEnum.Zsk" /> (Pre-Publish, RFC 6781 §4.1.1.1) or
     ///     <see cref="DnssecKeyLifecycleStateEnum.DoubleSignature" /> for a
     ///     <see cref="DnssecKeyRoleEnum.Ksk" /> (Double-Signature, RFC 6781 §4.1.2).
+    ///     Concurrent starts for one zone are serialised, so exactly one of them succeeds and the
+    ///     others throw <see cref="ConflictException" />.
     ///     <c>Server.Authoritative.Dnssec.DnssecKeyRolloverBackgroundService</c> does the rest:
     ///     promoting the new key, stepping the old one down and finally removing it.
     /// </summary>

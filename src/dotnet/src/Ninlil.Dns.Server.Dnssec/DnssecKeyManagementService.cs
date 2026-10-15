@@ -28,11 +28,17 @@ namespace Ninlil.Dns.Server.Dnssec;
 ///     each call because <see cref="IOptions{TOptions}" /> caches its value for the life of the
 ///     process, even for a scoped service, and would miss configuration changes.
 /// </param>
+/// <param name="zoneKeyGate">
+///     The gate that serialises <see cref="StartRolloverAsync" /> per zone. Dependency injection
+///     passes the singleton shared by every scope; when <see langword="null" /> the service uses a
+///     gate of its own, which only serialises calls on this instance.
+/// </param>
 public class DnssecKeyManagementService(
     IDnssecKeyRepository keyRepository,
     IUnitOfWork unitOfWork,
     IDataProtectionProvider dataProtectionProvider,
-    IOptionsMonitor<DnssecAlgorithmPolicyOptions> algorithmPolicy = null
+    IOptionsMonitor<DnssecAlgorithmPolicyOptions> algorithmPolicy = null,
+    DnssecZoneKeyGate zoneKeyGate = null
 ) : IDnssecKeyManagementService
 {
     /// <summary>
@@ -42,13 +48,41 @@ public class DnssecKeyManagementService(
         "Ninlil.Dns.Server.Dnssec.PrivateKey"
     );
 
+    /// <summary>
+    ///     This field contains the gate that serialises key-state changes of one zone.
+    /// </summary>
+    private readonly DnssecZoneKeyGate _zoneKeyGate = zoneKeyGate ?? new DnssecZoneKeyGate();
+
     /// <inheritdoc />
-    public async Task<DnssecKeyEntity> GenerateKeyAsync(
+    public Task<DnssecKeyEntity> GenerateKeyAsync(
         Guid zoneId,
         DnssecKeyRoleEnum role,
         DnssecAlgorithmEnum algorithm,
         int keySizeBits = 0,
         CancellationToken stoppingToken = default
+    ) =>
+        CreateKeyAsync(
+            zoneId,
+            role,
+            algorithm,
+            keySizeBits,
+            DnssecKeyLifecycleStateEnum.Active,
+            stoppingToken
+        );
+
+    /// <summary>
+    ///     This method runs every check, generates the key pair and saves the new key in
+    ///     <paramref name="initialState" /> with one save, so the key never exists in any other
+    ///     state. A rollover passes Published or DoubleSignature; saving it as Active first would
+    ///     show a second Active key to a concurrent signer or reader.
+    /// </summary>
+    private async Task<DnssecKeyEntity> CreateKeyAsync(
+        Guid zoneId,
+        DnssecKeyRoleEnum role,
+        DnssecAlgorithmEnum algorithm,
+        int keySizeBits,
+        DnssecKeyLifecycleStateEnum initialState,
+        CancellationToken stoppingToken
     )
     {
         // Prohibited algorithms come first: no policy, not even an empty one, can allow them.
@@ -95,7 +129,7 @@ public class DnssecKeyManagementService(
                 Convert.ToBase64String(keyPair.PrivateKeyPkcs8)
             ),
             KeyTag = DnssecKeyTag.Compute(algorithm, dnsKeyRdata),
-            LifecycleState = DnssecKeyLifecycleStateEnum.Active,
+            LifecycleState = initialState,
             PublishedAtUtc = DateTimeOffset.UtcNow,
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
@@ -133,6 +167,10 @@ public class DnssecKeyManagementService(
         CancellationToken stoppingToken = default
     )
     {
+        // The in-progress check and the insert must be one step per zone. Without the gate two
+        // concurrent starts both see no Published key and both insert one.
+        using IDisposable zoneLease = await _zoneKeyGate.EnterAsync(zoneId, stoppingToken);
+
         DnssecKeyEntity current =
             await keyRepository.GetByIdAsync(currentKeyId, stoppingToken)
             ?? throw new NotFoundException("DnssecKey", currentKeyId.ToString());
@@ -166,26 +204,18 @@ public class DnssecKeyManagementService(
                 $"A {current.Role} rollover is already in progress for zone '{zoneId}'."
             );
 
-        DnssecKeyEntity replacement = await GenerateKeyAsync(
+        // A KSK skips Published (see DnssecKeyLifecycleStateEnum); a ZSK is Pre-Published
+        // (RFC 6781 §4.1.1.1). A KSK starts in DoubleSignature (§4.1.2).
+        return await CreateKeyAsync(
             zoneId,
             current.Role,
             algorithm ?? current.Algorithm,
             keySizeBits,
-            stoppingToken
-        );
-
-        // GenerateKeyAsync saves the key as Active. A rollover's incoming key starts earlier:
-        // Published for a ZSK (RFC 6781 §4.1.1.1) or DoubleSignature for a KSK (§4.1.2); see
-        // DnssecKeyLifecycleStateEnum for why a KSK skips Published. The key is briefly Active
-        // between the two saves.
-        replacement.LifecycleState =
             current.Role == DnssecKeyRoleEnum.Ksk
                 ? DnssecKeyLifecycleStateEnum.DoubleSignature
-                : DnssecKeyLifecycleStateEnum.Published;
-        keyRepository.Update(replacement);
-        await unitOfWork.SaveChangesAsync(stoppingToken);
-
-        return replacement;
+                : DnssecKeyLifecycleStateEnum.Published,
+            stoppingToken
+        );
     }
 
     /// <inheritdoc />

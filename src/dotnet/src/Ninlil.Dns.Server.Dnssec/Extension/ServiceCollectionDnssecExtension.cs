@@ -12,7 +12,8 @@ namespace Ninlil.Dns.Server.Dnssec.Extension;
 public static class ServiceCollectionDnssecExtension
 {
     /// <summary>
-    ///     This method registers <see cref="IDnssecKeyManagementService" /> (scoped) and Data
+    ///     This method registers <see cref="IDnssecKeyManagementService" /> (scoped), the singleton
+    ///     <see cref="DnssecZoneKeyGate" /> and Data
     ///     Protection. The caller must also register an
     ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IDnssecKeyRepository" /> and an
     ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IUnitOfWork" />.
@@ -37,6 +38,9 @@ public static class ServiceCollectionDnssecExtension
                 configuration.GetSection(DnssecAlgorithmPolicyOptions.SectionName)
             );
 
+        // One gate for the whole process: scoped services and the rollover background service
+        // must share it to serialise a zone's key changes.
+        instance.AddSingleton<DnssecZoneKeyGate>();
         instance.AddScoped<IDnssecKeyManagementService, DnssecKeyManagementService>();
 
         return instance;
