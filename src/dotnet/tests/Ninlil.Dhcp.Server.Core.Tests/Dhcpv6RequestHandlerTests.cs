@@ -501,7 +501,10 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         );
 
         Assert.Equal(Dhcpv6StatusCodeEnum.Success, NaStatus(reply));
-        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, FormatDuid(duid));
+
+        // The quarantine row belongs to no client, so the owner's own slot is free again.
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, FormatDuid(duid)));
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, "declined:" + active.IpAddress);
         Assert.Equal(LeaseStateEnum.Expired, after.State);
         Assert.True(after.LeaseExpiresAtUtc > DateTimeOffset.UtcNow);
     }
