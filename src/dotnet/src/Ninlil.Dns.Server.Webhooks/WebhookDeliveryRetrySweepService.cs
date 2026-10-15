@@ -13,8 +13,8 @@ namespace Ninlil.Dns.Server.Webhooks;
 ///     times are saved in <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> instead of
 ///     being kept in an in-memory timer. Every <see cref="WebhookDeliveryOptions.SweepInterval" />
 ///     it asks <see cref="IWebhookDeliveryAttemptRepository.ListDueForRetryAsync" /> for the
-///     deliveries that are due and resumes each one through
-///     <see cref="WebhookDeliveryService.ResumeAttemptAsync" />.
+///     deliveries that are due and resumes them through
+///     <see cref="WebhookDeliveryService.ResumeDueAsync" />.
 ///     <para>
 ///         <b>Restarts.</b> A delivery interrupted by a restart, while waiting out its backoff or
 ///         during a retry, stays saved as
@@ -27,6 +27,9 @@ namespace Ninlil.Dns.Server.Webhooks;
 ///     <para>
 ///         <b>No overlap.</b> Each sweep finishes, including every delivery it resumes, before
 ///         the next wait starts, so one process never resumes the same delivery twice at once.
+///         Within a sweep the HTTP attempts run in parallel and the database work in sequence
+///         (see <see cref="WebhookDeliveryService" />). A sweep that fails waits the interval
+///         before the next one.
 ///         There is no cross-process locking: this assumes one Ninlil process per database.
 ///         Cluster nodes each have their own storage (see <c>Ninlil.Dns.Server.Cluster</c>).
 ///     </para>
@@ -46,9 +49,27 @@ public sealed class WebhookDeliveryRetrySweepService(
     ILogger<WebhookDeliveryRetrySweepService> logger
 ) : BackgroundService
 {
+    /// <summary>
+    ///     This field contains the wait between sweeps used when
+    ///     <see cref="WebhookDeliveryOptions.SweepInterval" /> is zero or negative, which would
+    ///     otherwise make the loop spin. It matches the option's default.
+    /// </summary>
+    private static readonly TimeSpan DefaultSweepInterval = TimeSpan.FromSeconds(5);
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        TimeSpan sweepInterval = options.CurrentValue.SweepInterval;
+
+        if (sweepInterval <= TimeSpan.Zero)
+        {
+            logger.LogWarning(
+                "The webhook delivery SweepInterval {SweepInterval} is not positive; using {DefaultInterval} instead.",
+                sweepInterval,
+                DefaultSweepInterval
+            );
+        }
+
         // The first sweep runs at once, not after one SweepInterval, so deliveries left by a
         // previous process are resumed promptly.
         while (!stoppingToken.IsCancellationRequested)
@@ -56,25 +77,39 @@ public sealed class WebhookDeliveryRetrySweepService(
             try
             {
                 await SweepAsync(stoppingToken);
-                await Task.Delay(options.CurrentValue.SweepInterval, stoppingToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 // Expected during a graceful shutdown.
+                break;
             }
             catch (Exception exception)
             {
                 // A failed sweep (for example a SQLite write-lock conflict) must not stop the
-                // service. The loop goes straight to the next sweep without waiting, and a due
-                // delivery stays saved, so nothing is lost.
+                // service, and must not be retried at once: the wait below runs after a
+                // failure too, so a persistent failure does not spin. A due delivery stays
+                // saved, so nothing is lost.
                 logger.LogWarning(exception, "A webhook delivery retry sweep failed unexpectedly.");
+            }
+
+            try
+            {
+                TimeSpan interval = options.CurrentValue.SweepInterval;
+                await Task.Delay(
+                    interval > TimeSpan.Zero ? interval : DefaultSweepInterval,
+                    stoppingToken
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during a graceful shutdown.
             }
         }
     }
 
     /// <summary>
     ///     This method runs one sweep in a new scope: it resumes every delivery due for a retry,
-    ///     concurrently, then removes completed deliveries past the retention period. It is
+    ///     (the HTTP attempts in parallel), then removes completed deliveries past the retention period. It is
     ///     public so tests can run one sweep without waiting for
     ///     <see cref="WebhookDeliveryOptions.SweepInterval" />.
     /// </summary>
@@ -101,9 +136,7 @@ public sealed class WebhookDeliveryRetrySweepService(
                 due.Count
             );
 
-            await Task.WhenAll(
-                due.Select(attempt => deliveryService.ResumeAttemptAsync(attempt, stoppingToken))
-            );
+            await deliveryService.ResumeDueAsync(due, stoppingToken);
         }
 
         int removed = 0;

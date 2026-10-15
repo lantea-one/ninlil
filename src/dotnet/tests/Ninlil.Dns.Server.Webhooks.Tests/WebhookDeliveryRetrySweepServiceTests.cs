@@ -4,10 +4,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.Events;
+using Ninlil.Dns.Server.Webhooks.Tests.Fakes;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Webhooks.Tests;
@@ -17,7 +19,8 @@ namespace Ninlil.Dns.Server.Webhooks.Tests;
 ///     <see cref="WebhookTestHost" /> with a local Kestrel server as the webhook receiver. Each
 ///     test calls <see cref="WebhookDeliveryRetrySweepService.SweepAsync" /> once instead of
 ///     waiting for <see cref="WebhookDeliveryOptions.SweepInterval" />. It covers resuming a
-///     due delivery to success or dead letter, and the retention query that removes old
+///     due delivery to success or dead letter, three due rows resumed in parallel on one
+///     context, the service loop surviving a failing sweep, and the retention query that removes old
 ///     completed rows.
 /// </summary>
 public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
@@ -29,6 +32,12 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
     );
     private WebApplication _fakeServer;
     private int _failuresBeforeSuccess;
+    private int _barrierArrivals;
+    private int _barrierConcurrent;
+    private int _barrierMaxConcurrent;
+    private readonly TaskCompletionSource _barrierOpen = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     public async Task InitializeAsync()
     {
@@ -46,6 +55,33 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
                 return requestNumber <= _failuresBeforeSuccess
                     ? Results.StatusCode(StatusCodes.Status500InternalServerError)
                     : Results.Ok();
+            }
+        );
+
+        // Holds each response until three requests are in flight, which proves that the sweep
+        // sends them in parallel. If they were sent one by one the third would never arrive, so
+        // the wait times out and the test fails on its concurrency assertion.
+        _fakeServer.MapPost(
+            "/barrier",
+            async () =>
+            {
+                int concurrent = Interlocked.Increment(ref _barrierConcurrent);
+                int seen;
+                do
+                {
+                    seen = Volatile.Read(ref _barrierMaxConcurrent);
+                } while (
+                    concurrent > seen
+                    && Interlocked.CompareExchange(ref _barrierMaxConcurrent, concurrent, seen)
+                        != seen
+                );
+
+                if (Interlocked.Increment(ref _barrierArrivals) >= 3)
+                    _barrierOpen.TrySetResult();
+
+                await Task.WhenAny(_barrierOpen.Task, Task.Delay(TimeSpan.FromSeconds(3)));
+                Interlocked.Decrement(ref _barrierConcurrent);
+                return Results.Ok();
             }
         );
 
@@ -110,6 +146,75 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
         WebhookDeliveryAttemptEntity attempt = await GetAttemptAsync(attemptId);
         Assert.Equal(WebhookDeliveryAttemptStatusEnum.DeadLettered, attempt.Status);
         Assert.Equal(2, attempt.AttemptCount);
+    }
+
+    [Fact]
+    public async Task SweepAsync_WithThreeDueRowsOfThreeSubscriptions_ResumesThemInParallelAndSavesAll()
+    {
+        List<Guid> attemptIds = [];
+        for (int index = 0; index < 3; index++)
+            attemptIds.Add(
+                await SeedFirstAttemptAsync($"parallel-{index}", MaxDeliveryAttempts: 5, "/barrier")
+            );
+
+        (int resumed, _) = await GetSweepService().SweepAsync();
+
+        Assert.Equal(3, resumed);
+        Assert.Equal(3, _barrierMaxConcurrent);
+        foreach (Guid attemptId in attemptIds)
+        {
+            WebhookDeliveryAttemptEntity attempt = await GetAttemptAsync(attemptId);
+            Assert.Equal(WebhookDeliveryAttemptStatusEnum.Succeeded, attempt.Status);
+            Assert.Equal(2, attempt.AttemptCount);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenEverySweepThrows_WaitsTheIntervalAndWarnsOncePerSweep()
+    {
+        ThrowingScopeFactory scopeFactory = new();
+        CapturingLogger<WebhookDeliveryRetrySweepService> logger = new();
+        WebhookDeliveryRetrySweepService service = new(
+            scopeFactory,
+            new StaticOptionsMonitor<WebhookDeliveryOptions>(
+                new WebhookDeliveryOptions { SweepInterval = TimeSpan.FromMilliseconds(200) }
+            ),
+            logger
+        );
+
+        await service.StartAsync(CancellationToken.None);
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.InRange(scopeFactory.Calls, 3, 7);
+        Assert.Equal(
+            scopeFactory.Calls,
+            logger.Entries.Count(entry => entry.Level == LogLevel.Warning)
+        );
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithAZeroSweepInterval_WaitsTheDefaultAndWarnsOnceAboutIt()
+    {
+        ThrowingScopeFactory scopeFactory = new();
+        CapturingLogger<WebhookDeliveryRetrySweepService> logger = new();
+        WebhookDeliveryRetrySweepService service = new(
+            scopeFactory,
+            new StaticOptionsMonitor<WebhookDeliveryOptions>(
+                new WebhookDeliveryOptions { SweepInterval = TimeSpan.Zero }
+            ),
+            logger
+        );
+
+        await service.StartAsync(CancellationToken.None);
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.InRange(scopeFactory.Calls, 1, 2);
+        Assert.Single(
+            logger.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("SweepInterval")
+        );
     }
 
     [Fact]
@@ -204,7 +309,11 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
     ///     waiting across a restart would be. The next <see cref="WebhookDeliveryRetrySweepService.SweepAsync" />
     ///     picks it up without any waiting.
     /// </summary>
-    private async Task<Guid> SeedFirstAttemptAsync(string subscriptionName, int MaxDeliveryAttempts)
+    private async Task<Guid> SeedFirstAttemptAsync(
+        string subscriptionName,
+        int MaxDeliveryAttempts,
+        string path = "/webhook"
+    )
     {
         await using AsyncServiceScope scope = _testHost.Host.Services.CreateAsyncScope();
         IWebhookSubscriptionRepository subscriptionRepository =
@@ -217,7 +326,7 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
         {
             Id = Guid.NewGuid(),
             Name = subscriptionName,
-            TargetUrl = TargetUrl,
+            TargetUrl = $"{_fakeServer.Urls.First()}{path}",
             EventTypeNames = ["DnsZoneChanged"],
             MaxDeliveryAttempts = MaxDeliveryAttempts,
         };
@@ -267,4 +376,23 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
             .Host.Services.GetServices<IHostedService>()
             .OfType<WebhookDeliveryRetrySweepService>()
             .Single();
+
+    /// <summary>
+    ///     This class is an <see cref="IServiceScopeFactory" /> whose every scope request throws,
+    ///     which makes each sweep fail before it reads anything, and counts the requests.
+    /// </summary>
+    private sealed class ThrowingScopeFactory : IServiceScopeFactory
+    {
+        private int _calls;
+
+        /// <summary>The number of sweeps that tried to start.</summary>
+        public int Calls => Volatile.Read(ref _calls);
+
+        /// <inheritdoc />
+        public IServiceScope CreateScope()
+        {
+            Interlocked.Increment(ref _calls);
+            throw new InvalidOperationException("The sweep always fails.");
+        }
+    }
 }

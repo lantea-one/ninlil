@@ -26,10 +26,18 @@ namespace Ninlil.Dns.Server.Webhooks;
 ///         It is made at once, which keeps delivery fast when the endpoint is up, and its outcome
 ///         is then saved as a <see cref="WebhookDeliveryAttemptEntity" />. Every later attempt is
 ///         made by <see cref="WebhookDeliveryRetrySweepService" /> through
-///         <see cref="ResumeAttemptAsync" /> when the saved <c>NextRetryDueUtc</c> is reached;
+///         <see cref="ResumeDueAsync" /> when the saved <c>NextRetryDueUtc</c> is reached;
 ///         nothing here waits out a backoff in memory. So a pending retry, and the wait before it,
-///         survive a restart. Nothing is saved before the first attempt completes (see
-///         <see cref="DeliverToSubscriptionAsync" /> for that gap).
+///         survive a restart. Nothing is saved before the first attempts complete (see
+///         <see cref="DeliverAsync" /> for that gap).
+///     </para>
+///     <para>
+///         <b>Database work runs in sequence, HTTP calls in parallel.</b> This class holds one
+///         scoped <c>DbContext</c>, which allows one operation at a time, so every read and write
+///         happens on the calling task, one after the other. Only the HTTP attempts, which touch
+///         no repository, run in parallel, at most <see cref="MaxConcurrentAttempts" /> at once.
+///         The outcomes of one event or one sweep are saved together with one
+///         <c>SaveChangesAsync</c>.
 ///     </para>
 ///     <para>
 ///         This class is scoped because its repositories are. The event dispatcher never calls it
@@ -76,6 +84,12 @@ public sealed class WebhookDeliveryService(
     public const string SignatureHeaderName = "X-Ninlil-Signature";
 
     /// <summary>
+    ///     This constant bounds how many HTTP attempts one event or one sweep has in flight at
+    ///     once, so a large batch cannot open an unbounded number of outbound sockets.
+    /// </summary>
+    private const int MaxConcurrentAttempts = 16;
+
+    /// <summary>
     ///     This field contains the JSON options every payload is serialized with: the web
     ///     defaults, so property names are camelCase like the REST API's JSON.
     /// </summary>
@@ -85,8 +99,20 @@ public sealed class WebhookDeliveryService(
 
     /// <summary>
     ///     This method makes the first delivery attempt of an event to every enabled subscription
-    ///     whose event-type filter matches it. The subscriptions are attempted concurrently, so a
-    ///     slow or unreachable target does not delay the others.
+    ///     whose event-type filter matches it, then saves one
+    ///     <see cref="WebhookDeliveryAttemptEntity" /> per subscription: succeeded, pending with a
+    ///     retry time, or dead-lettered at once when <c>MaxDeliveryAttempts</c> is <c>1</c> or the
+    ///     subscription's credentials cannot be decrypted. The attempts run in parallel, so a slow
+    ///     or unreachable target does not delay the others; the rows are added and saved together
+    ///     afterwards. HTTP failures are recorded in the rows, not thrown.
+    ///     <para>
+    ///         <b>Accepted gap</b>: if the process stops during the attempts, before the rows are
+    ///         saved, the delivery is lost without a record. Events are not durable before this
+    ///         point either (they live in an in-memory queue), so saving a row before the request
+    ///         would only move the gap earlier, and would risk a duplicate delivery if the process
+    ///         stopped between that write and the attempt. From the saved rows on, every wait and
+    ///         retry survives a restart.
+    ///     </para>
     /// </summary>
     /// <param name="domainEvent">The event to deliver.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -109,125 +135,177 @@ public sealed class WebhookDeliveryService(
 
         string body = BuildPayload(domainEvent, eventTypeName);
 
-        await Task.WhenAll(
-            matchingSubscriptions.Select(subscription =>
-                DeliverToSubscriptionAsync(subscription, eventTypeName, body, stoppingToken)
-            )
-        );
-    }
-
-    /// <summary>
-    ///     This method makes the first delivery attempt for one subscription and then saves the
-    ///     resulting <see cref="WebhookDeliveryAttemptEntity" />: succeeded, pending with a retry
-    ///     time, or dead-lettered at once when <c>MaxDeliveryAttempts</c> is <c>1</c>. HTTP
-    ///     failures are recorded in the row, not thrown.
-    ///     <para>
-    ///         <b>Accepted gap</b>: if the process stops during this first attempt, before the row
-    ///         is saved, the delivery is lost without a record. Events are not durable before this
-    ///         point either (they live in an in-memory queue), so saving a row before the request
-    ///         would only move the gap earlier, and would risk a duplicate delivery if the process
-    ///         stopped between that write and the attempt. From the saved row on, every wait and
-    ///         retry survives a restart.
-    ///     </para>
-    /// </summary>
-    private async Task DeliverToSubscriptionAsync(
-        WebhookSubscriptionEntity subscription,
-        string eventTypeName,
-        string body,
-        CancellationToken stoppingToken
-    )
-    {
-        int maxAttempts = Math.Max(1, subscription.MaxDeliveryAttempts);
-
-        DeliveryAttemptOutcome outcome = await TryDeliverOnceAsync(
-            subscription,
-            body,
+        DeliveryAttemptOutcome[] outcomes = await AttemptAllAsync(
+            matchingSubscriptions,
+            _ => body,
             stoppingToken
         );
 
-        WebhookDeliveryAttemptEntity attempt = new()
+        for (int index = 0; index < matchingSubscriptions.Count; index++)
         {
-            Id = Guid.NewGuid(),
-            CreatedAtUtc = DateTimeOffset.UtcNow,
-            SubscriptionId = subscription.Id,
-            SubscriptionName = subscription.Name,
-            EventTypeName = eventTypeName,
-            PayloadJson = body,
-            AttemptCount = 1,
-            MaxAttempts = maxAttempts,
-            LastAttemptedAtUtc = DateTimeOffset.UtcNow,
-            LastHttpStatusCode = outcome.StatusCode,
-            LastErrorMessage = outcome.ErrorMessage,
-        };
+            WebhookSubscriptionEntity subscription = matchingSubscriptions[index];
+            DeliveryAttemptOutcome outcome = outcomes[index];
 
-        ApplyOutcome(attempt, outcome, subscription.Name);
+            WebhookDeliveryAttemptEntity attempt = new()
+            {
+                Id = Guid.NewGuid(),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                SubscriptionId = subscription.Id,
+                SubscriptionName = subscription.Name,
+                EventTypeName = eventTypeName,
+                PayloadJson = body,
+                AttemptCount = 1,
+                MaxAttempts = Math.Max(1, subscription.MaxDeliveryAttempts),
+                LastAttemptedAtUtc = DateTimeOffset.UtcNow,
+                LastHttpStatusCode = outcome.StatusCode,
+                LastErrorMessage = outcome.ErrorMessage,
+            };
 
-        await attemptRepository.AddAsync(attempt, stoppingToken);
+            ApplyOutcome(attempt, outcome, subscription.Name);
+            await attemptRepository.AddAsync(attempt, stoppingToken);
+        }
+
         await unitOfWork.SaveChangesAsync(stoppingToken);
     }
 
     /// <summary>
-    ///     This method resumes one saved delivery that <see cref="WebhookDeliveryRetrySweepService" />
-    ///     found due. It reads the subscription again, so a changed URL, credential or enabled
-    ///     state since the last attempt is used, makes one more attempt and saves the updated row.
-    ///     If the subscription has been deleted, the delivery is dead-lettered instead of retried.
+    ///     This method resumes one saved delivery. It is <see cref="ResumeDueAsync" /> for a single
+    ///     row.
     /// </summary>
     /// <param name="attempt">The persisted delivery to resume, as read by the sweep.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task ResumeAttemptAsync(
         WebhookDeliveryAttemptEntity attempt,
         CancellationToken stoppingToken
+    ) => await ResumeDueAsync([attempt], stoppingToken);
+
+    /// <summary>
+    ///     This method resumes the saved deliveries that <see cref="WebhookDeliveryRetrySweepService" />
+    ///     found due. It reads each distinct subscription again, one after the other, so a changed
+    ///     URL, credential or enabled state since the last attempt is used. A delivery whose
+    ///     subscription has been deleted is dead-lettered; one whose subscription is disabled is
+    ///     deferred by one sweep interval without an attempt. The others are attempted in
+    ///     parallel, their outcomes applied, and every changed row saved with one
+    ///     <c>SaveChangesAsync</c>.
+    ///     <para>
+    ///         Accepted: the outcomes of one call are saved together, so a process stop during
+    ///         the HTTP phase saves none of them. The rows stay due and are attempted again, which
+    ///         delivery already allows (it is at least once).
+    ///     </para>
+    /// </summary>
+    /// <param name="due">The persisted deliveries to resume, as read by the sweep.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>How many deliveries were attempted (not deferred or dead-lettered for a missing subscription).</returns>
+    public async Task<int> ResumeDueAsync(
+        IReadOnlyList<WebhookDeliveryAttemptEntity> due,
+        CancellationToken stoppingToken
     )
     {
-        WebhookSubscriptionEntity subscription = await subscriptionRepository.GetByIdAsync(
-            attempt.SubscriptionId,
-            stoppingToken
-        );
-
-        if (subscription is null)
-        {
-            attempt.Status = WebhookDeliveryAttemptStatusEnum.DeadLettered;
-            attempt.LastErrorMessage = "The target subscription no longer exists.";
-            attempt.NextRetryDueUtc = null;
-            attempt.CompletedAtUtc = DateTimeOffset.UtcNow;
-
-            logger.LogWarning(
-                "Dead-lettering webhook delivery {AttemptId} (subscription '{SubscriptionName}'): the target subscription has been deleted.",
-                attempt.Id,
-                attempt.SubscriptionName
+        Dictionary<Guid, WebhookSubscriptionEntity> subscriptions = [];
+        foreach (Guid subscriptionId in due.Select(attempt => attempt.SubscriptionId).Distinct())
+            subscriptions[subscriptionId] = await subscriptionRepository.GetByIdAsync(
+                subscriptionId,
+                stoppingToken
             );
 
-            attemptRepository.Update(attempt);
-            await unitOfWork.SaveChangesAsync(stoppingToken);
-            return;
-        }
+        List<(
+            WebhookDeliveryAttemptEntity Attempt,
+            WebhookSubscriptionEntity Subscription
+        )> toAttempt = [];
 
-        // A disabled subscription is deferred, neither attempted nor dead-lettered: no attempt
-        // is spent on a target the operator turned off, and the delivery becomes due again one
-        // sweep interval later in case the subscription is re-enabled.
-        if (subscription.IsDisabled)
+        foreach (WebhookDeliveryAttemptEntity attempt in due)
         {
-            attempt.NextRetryDueUtc = DateTimeOffset.UtcNow.Add(options.CurrentValue.SweepInterval);
-            attemptRepository.Update(attempt);
-            await unitOfWork.SaveChangesAsync(stoppingToken);
-            return;
+            WebhookSubscriptionEntity subscription = subscriptions[attempt.SubscriptionId];
+
+            if (subscription is null)
+            {
+                attempt.Status = WebhookDeliveryAttemptStatusEnum.DeadLettered;
+                attempt.LastErrorMessage = "The target subscription no longer exists.";
+                attempt.NextRetryDueUtc = null;
+                attempt.CompletedAtUtc = DateTimeOffset.UtcNow;
+
+                logger.LogWarning(
+                    "Dead-lettering webhook delivery {AttemptId} (subscription '{SubscriptionName}'): the target subscription has been deleted.",
+                    attempt.Id,
+                    attempt.SubscriptionName
+                );
+
+                attemptRepository.Update(attempt);
+                continue;
+            }
+
+            // A disabled subscription is deferred, neither attempted nor dead-lettered: no
+            // attempt is spent on a target the operator turned off, and the delivery becomes due
+            // again one sweep interval later in case the subscription is re-enabled.
+            if (subscription.IsDisabled)
+            {
+                attempt.NextRetryDueUtc = DateTimeOffset.UtcNow.Add(
+                    options.CurrentValue.SweepInterval
+                );
+                attemptRepository.Update(attempt);
+                continue;
+            }
+
+            toAttempt.Add((attempt, subscription));
         }
 
-        DeliveryAttemptOutcome outcome = await TryDeliverOnceAsync(
-            subscription,
-            attempt.PayloadJson,
+        DeliveryAttemptOutcome[] outcomes = await AttemptAllAsync(
+            [.. toAttempt.Select(item => item.Subscription)],
+            index => toAttempt[index].Attempt.PayloadJson,
             stoppingToken
         );
 
-        attempt.AttemptCount++;
-        attempt.LastAttemptedAtUtc = DateTimeOffset.UtcNow;
-        attempt.LastHttpStatusCode = outcome.StatusCode;
-        attempt.LastErrorMessage = outcome.ErrorMessage;
+        for (int index = 0; index < toAttempt.Count; index++)
+        {
+            WebhookDeliveryAttemptEntity attempt = toAttempt[index].Attempt;
+            DeliveryAttemptOutcome outcome = outcomes[index];
 
-        ApplyOutcome(attempt, outcome, subscription.Name);
+            attempt.AttemptCount++;
+            attempt.LastAttemptedAtUtc = DateTimeOffset.UtcNow;
+            attempt.LastHttpStatusCode = outcome.StatusCode;
+            attempt.LastErrorMessage = outcome.ErrorMessage;
 
-        attemptRepository.Update(attempt);
+            ApplyOutcome(attempt, outcome, toAttempt[index].Subscription.Name);
+            attemptRepository.Update(attempt);
+        }
+
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        return toAttempt.Count;
+    }
+
+    /// <summary>
+    ///     This method makes one HTTP attempt per subscription in parallel, at most
+    ///     <see cref="MaxConcurrentAttempts" /> at a time, and returns the outcomes in the order
+    ///     of <paramref name="subscriptions" />. It touches no repository, so it is safe to run
+    ///     while the caller owns the scope's <c>DbContext</c>.
+    /// </summary>
+    /// <param name="subscriptions">The subscriptions to attempt.</param>
+    /// <param name="body">Gives the request body for the subscription at an index.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    private async Task<DeliveryAttemptOutcome[]> AttemptAllAsync(
+        IReadOnlyList<WebhookSubscriptionEntity> subscriptions,
+        Func<int, string> body,
+        CancellationToken stoppingToken
+    )
+    {
+        DeliveryAttemptOutcome[] outcomes = new DeliveryAttemptOutcome[subscriptions.Count];
+
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, subscriptions.Count),
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = MaxConcurrentAttempts,
+                CancellationToken = stoppingToken,
+            },
+            async (index, token) =>
+                outcomes[index] = await TryDeliverOnceAsync(
+                    subscriptions[index],
+                    body(index),
+                    token
+                )
+        );
+
+        return outcomes;
     }
 
     /// <summary>
@@ -235,8 +313,10 @@ public sealed class WebhookDeliveryService(
     ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> and
     ///     <see cref="WebhookDeliveryAttemptEntity.CompletedAtUtc" /> of
     ///     <paramref name="attempt" /> from an attempt's outcome and logs it. Both
-    ///     <see cref="DeliverToSubscriptionAsync" /> and <see cref="ResumeAttemptAsync" /> use it, so
-    ///     they agree on when a delivery has succeeded or run out of attempts.
+    ///     <see cref="DeliverAsync" /> and <see cref="ResumeDueAsync" /> use it, so they agree on
+    ///     when a delivery has succeeded or run out of attempts. A permanent failure (see
+    ///     <see cref="DeliveryAttemptOutcome.IsPermanent" />) dead-letters the delivery at once,
+    ///     whatever its attempt count, because no retry can succeed.
     /// </summary>
     private void ApplyOutcome(
         WebhookDeliveryAttemptEntity attempt,
@@ -260,7 +340,7 @@ public sealed class WebhookDeliveryService(
             return;
         }
 
-        if (attempt.AttemptCount < attempt.MaxAttempts)
+        if (!outcome.IsPermanent && attempt.AttemptCount < attempt.MaxAttempts)
         {
             attempt.Status = WebhookDeliveryAttemptStatusEnum.Pending;
             attempt.NextRetryDueUtc = DateTimeOffset.UtcNow.Add(
@@ -282,6 +362,17 @@ public sealed class WebhookDeliveryService(
         attempt.NextRetryDueUtc = null;
         attempt.CompletedAtUtc = DateTimeOffset.UtcNow;
 
+        if (outcome.IsPermanent)
+        {
+            logger.LogError(
+                "Dead-lettering webhook subscription '{Name}' delivery at attempt {Attempt}: {Reason}",
+                subscriptionName,
+                attempt.AttemptCount,
+                outcome.ErrorMessage
+            );
+            return;
+        }
+
         logger.LogError(
             "Giving up on webhook subscription '{Name}' after {MaxAttempts} delivery attempts ({Reason}).",
             subscriptionName,
@@ -295,9 +386,11 @@ public sealed class WebhookDeliveryService(
     ///     <paramref name="subscription" />, used for both first attempts and retries. The auth
     ///     header and signature are built on every call, so a credential rotated between two
     ///     attempts is used by the next one. Transport failures, timeouts and non-2xx responses
-    ///     are returned in the <see cref="DeliveryAttemptOutcome" />. Cancellation through
-    ///     <paramref name="stoppingToken" /> propagates, and so does a failure to decrypt the
-    ///     credentials or signing secret, which happens before the request is sent.
+    ///     are returned in the <see cref="DeliveryAttemptOutcome" />, and so is a credential or
+    ///     signing secret that cannot be decrypted (the key ring that wrote it is gone), as a
+    ///     permanent failure with no request sent. Cancellation through
+    ///     <paramref name="stoppingToken" /> propagates. It touches no repository, so several
+    ///     calls may run at once.
     /// </summary>
     private async Task<DeliveryAttemptOutcome> TryDeliverOnceAsync(
         WebhookSubscriptionEntity subscription,
@@ -305,8 +398,23 @@ public sealed class WebhookDeliveryService(
         CancellationToken stoppingToken
     )
     {
-        AuthenticationHeaderValue authHeader = BuildAuthHeader(subscription);
-        string signature = BuildSignature(subscription, body);
+        AuthenticationHeaderValue authHeader;
+        string signature;
+
+        try
+        {
+            authHeader = BuildAuthHeader(subscription);
+            signature = BuildSignature(subscription, body);
+        }
+        catch (Exception exception) when (exception is CryptographicException or JsonException)
+        {
+            return new DeliveryAttemptOutcome(
+                false,
+                null,
+                "The subscription's credentials or signing secret cannot be decrypted (the key ring changed); re-enter them and recreate the subscription if it signs.",
+                IsPermanent: true
+            );
+        }
 
         HttpClient httpClient = httpClientFactory.CreateClient(HttpClientName);
 
@@ -458,9 +566,11 @@ public sealed class WebhookDeliveryService(
     /// <param name="Success">Whether the endpoint returned a 2xx response.</param>
     /// <param name="StatusCode">The HTTP status code received, or <see langword="null" /> if the attempt failed before a response was ever received.</param>
     /// <param name="ErrorMessage">A short, human-readable failure description, or <see langword="null" /> on success.</param>
+    /// <param name="IsPermanent">Whether no retry can succeed, so the delivery is dead-lettered at once.</param>
     private sealed record DeliveryAttemptOutcome(
         bool Success,
         int? StatusCode,
-        string ErrorMessage
+        string ErrorMessage,
+        bool IsPermanent = false
     );
 }
