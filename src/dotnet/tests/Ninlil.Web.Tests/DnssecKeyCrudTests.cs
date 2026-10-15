@@ -287,6 +287,50 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(512)]
+    [InlineData(2056)]
+    [InlineData(8192)]
+    public async Task CreateDnssecKey_ForAnRsaSizeOutsideTheBounds_ReturnsBadRequest(
+        int keySizeBits
+    )
+    {
+        (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys",
+            new
+            {
+                role = "ZSK",
+                algorithm = "RSASHA256",
+                keySizeBits,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RollDnssecKey_ToAnRsaSizeBelowTheFloor_ReturnsBadRequest()
+    {
+        (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
+
+        // An Ed25519 key rolled to RSA exercises the size check without generating a big RSA key.
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys",
+            new { role = "ZSK", algorithm = "ED25519" }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        DnssecKeyDetail key = await createResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
+
+        HttpResponseMessage rollResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys/{key.Id}/roll",
+            new { algorithm = "RSASHA256", keySizeBits = 512 }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, rollResponse.StatusCode);
+    }
+
     [Fact]
     public async Task DnssecKeyEndpoints_WithoutAToken_ReturnUnauthorized()
     {
