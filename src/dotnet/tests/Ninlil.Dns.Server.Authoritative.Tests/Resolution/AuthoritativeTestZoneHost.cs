@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
@@ -152,9 +153,15 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
     ///     This constructor builds the host. Use <see cref="CreateAsync" />, which also creates
     ///     the schema.
     /// </summary>
-    private AuthoritativeTestZoneHost()
+    /// <param name="loggerProvider">
+    ///     A logger provider added to the host so a test can read log output, or
+    ///     <see langword="null" /> for none.
+    /// </param>
+    private AuthoritativeTestZoneHost(ILoggerProvider loggerProvider)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+        if (loggerProvider is not null)
+            builder.Logging.AddProvider(loggerProvider);
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
@@ -177,10 +184,16 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
     /// <summary>
     ///     This method builds a host and creates its database schema.
     /// </summary>
+    /// <param name="loggerProvider">
+    ///     A logger provider added to the host so a test can read log output, or
+    ///     <see langword="null" /> for none.
+    /// </param>
     /// <returns>The host, not yet started.</returns>
-    public static async Task<AuthoritativeTestZoneHost> CreateAsync()
+    public static async Task<AuthoritativeTestZoneHost> CreateAsync(
+        ILoggerProvider loggerProvider = null
+    )
     {
-        AuthoritativeTestZoneHost testHost = new();
+        AuthoritativeTestZoneHost testHost = new(loggerProvider);
 
         await using AsyncServiceScope scope = testHost._host.Services.CreateAsyncScope();
         NinlilDnsContext context = scope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
@@ -197,11 +210,16 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
     /// <param name="name">The zone name.</param>
     /// <param name="records">The records to seed, with full owner names.</param>
     /// <param name="signing">How to sign the zone; <see langword="null" /> means unsigned.</param>
+    /// <param name="generateKeys">
+    ///     Whether to generate the ED25519 KSK and ZSK of a signed zone. A test that stores its
+    ///     own keys passes <see langword="false" />.
+    /// </param>
     /// <returns>The identifier of the new zone.</returns>
     public async Task<Guid> AddZoneAsync(
         string name,
         IEnumerable<TestRecord> records,
-        TestZoneSigning signing = null
+        TestZoneSigning signing = null,
+        bool generateKeys = true
     )
     {
         signing ??= TestZoneSigning.None;
@@ -280,7 +298,7 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
             );
         await unitOfWork.SaveChangesAsync();
 
-        if (isSigned)
+        if (isSigned && generateKeys)
         {
             IDnssecKeyManagementService keyManagement =
                 scope.ServiceProvider.GetRequiredService<IDnssecKeyManagementService>();

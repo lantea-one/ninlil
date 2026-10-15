@@ -22,7 +22,8 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
 ///     This class tests that <see cref="ZoneSigningService" /> never signs with a key whose
-///     algorithm <see cref="DnssecAlgorithmRegistry.IsSigningProhibited" /> names. It runs the
+///     algorithm <see cref="DnssecAlgorithmRegistry.IsSigningProhibited" /> names and never
+///     publishes it in the DNSKEY RRset. It runs the
 ///     service against a real SQLite database and a zone holding an ECDSA P-256 key and a legacy
 ///     RSASHA1 key (written to storage directly, because key generation now refuses RSASHA1), and
 ///     captures log output to count the warnings.
@@ -195,7 +196,7 @@ public sealed class ZoneSigningServiceProhibitedAlgorithmTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SignZoneAsync_WithAnRsaSha1KeyAndAnEcdsaKey_SignsWithEcdsaOnlyAndWarnsOnce()
+    public async Task SignZoneAsync_WithAnRsaSha1KeyAndAnEcdsaKey_PublishesAndSignsWithEcdsaOnlyAndWarnsOnce()
     {
         await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
         IZoneSigningService signingService =
@@ -203,7 +204,7 @@ public sealed class ZoneSigningServiceProhibitedAlgorithmTests : IAsyncLifetime
 
         SignedZoneData signed = await signingService.SignZoneAsync(_zoneId);
 
-        // Both keys stay in the DNSKEY RRset: the RSASHA1 key is only barred from signing.
+        // The RSASHA1 key is not published, so the DNSKEY RRset holds the ECDSA key only.
         List<DnsKeyRecordData> published =
         [
             .. signed.DnsKeyRecords.Select(record =>
@@ -211,7 +212,8 @@ public sealed class ZoneSigningServiceProhibitedAlgorithmTests : IAsyncLifetime
                     DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.DnsKey, record.Data)
             ),
         ];
-        Assert.Contains(published, key => key.Algorithm == DnssecAlgorithmEnum.RsaSha1);
+        Assert.DoesNotContain(published, key => key.Algorithm == DnssecAlgorithmEnum.RsaSha1);
+        Assert.Contains(published, key => key.Algorithm == DnssecAlgorithmEnum.EcdsaP256Sha256);
 
         List<RrSigRecordData> signatures =
         [
@@ -236,6 +238,7 @@ public sealed class ZoneSigningServiceProhibitedAlgorithmTests : IAsyncLifetime
         // One Warning for the key, not one per RRset.
         Assert.Single(_warnings.Warnings);
         Assert.Contains("prohibited", _warnings.Warnings[0], StringComparison.Ordinal);
+        Assert.Contains("not published", _warnings.Warnings[0], StringComparison.Ordinal);
         Assert.Contains(ZoneName, _warnings.Warnings[0], StringComparison.Ordinal);
     }
 }
