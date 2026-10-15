@@ -380,6 +380,12 @@ builder.Services.AddHostedService<SmtpPasswordMigrationService>();
 // The same for an SSO client secret typed into that file in plaintext.
 builder.Services.AddHostedService<OidcClientSecretMigrationService>();
 
+// The same for the secrets of the synced settings sections (today the reverse-proxy shared
+// secret), and the matching read side: the options classes get the decrypted value, or a
+// fail-closed one when the stored secret cannot be decrypted.
+builder.Services.AddHostedService<ConfigurationSecretMigrationService>();
+builder.Services.AddNinlilConfigurationSecretResolution(builder.Configuration);
+
 // The default appearance (palette and mode). AppearanceSettingsController reads it through
 // IOptionsMonitor, so a write to the runtime configuration file takes effect at once (see
 // AppearanceOptions for why that is safe here).

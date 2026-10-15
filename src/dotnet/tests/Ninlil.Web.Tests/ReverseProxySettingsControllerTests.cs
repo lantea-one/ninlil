@@ -4,8 +4,11 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
+using Ninlil.Web.Options;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -15,7 +18,8 @@ namespace Ninlil.Web.Tests;
 ///     in-process host, signed in as the bootstrap administrator: the compiled-in defaults,
 ///     patches checked by reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), keeping the
-///     shared secret out of responses, and input validation. The trust decision of
+///     shared secret out of responses and out of the file in the clear (it is stored encrypted
+///     with the host's key ring), and input validation. The trust decision of
 ///     <see cref="Middleware.ReverseProxyTrustGatingMiddleware" /> is tested on a constructed
 ///     <see cref="Microsoft.AspNetCore.Http.DefaultHttpContext" /> in
 ///     <see cref="ReverseProxyTrustGatingMiddlewareTests" />, because the middleware is only added
@@ -47,6 +51,16 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
 
         return client;
     }
+
+    /// <summary>
+    ///     This method decrypts the stored shared secret with the host's own key ring, which is
+    ///     the key ring the controller encrypted it with.
+    /// </summary>
+    private string DecryptStoredSecret(string payload) =>
+        factory
+            .Services.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector(ReverseProxyOptions.SharedSecretProtectorPurpose)
+            .Unprotect(payload);
 
     private static HttpRequestMessage PatchRequest(string url, object body) =>
         new(HttpMethod.Patch, url)
@@ -110,7 +124,11 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
         Assert.Equal("203.0.113.10", section["KnownProxies"][0].GetValue<string>());
         Assert.Equal("10.0.0.0/24", section["KnownNetworks"][0].GetValue<string>());
         Assert.Equal("X-Test-Proxy-Secret", section["SharedSecretHeaderName"].GetValue<string>());
-        Assert.Equal("correct-horse-battery-staple", section["SharedSecret"].GetValue<string>());
+        Assert.Equal("", section["SharedSecret"].GetValue<string>());
+        Assert.Equal(
+            "correct-horse-battery-staple",
+            DecryptStoredSecret(section["SharedSecretEncrypted"].GetValue<string>())
+        );
     }
 
     [Fact]
@@ -224,7 +242,10 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
         JsonObject section = (JsonObject)root["DnsServer"]["ReverseProxy"];
-        Assert.Equal("the-original-value", section["SharedSecret"].GetValue<string>());
+        Assert.Equal(
+            "the-original-value",
+            DecryptStoredSecret(section["SharedSecretEncrypted"].GetValue<string>())
+        );
         Assert.Equal("X-Renamed", section["SharedSecretHeaderName"].GetValue<string>());
     }
 

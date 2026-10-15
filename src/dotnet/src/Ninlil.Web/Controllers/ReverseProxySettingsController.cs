@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Exceptions;
@@ -10,6 +11,7 @@ using Ninlil.Dns.Protocol.DnsOverTls;
 using Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.ClusterSync;
+using Ninlil.Web.Configuration;
 using Ninlil.Web.Examples.ReverseProxy;
 using Ninlil.Web.Examples.Settings;
 using Ninlil.Web.Extension;
@@ -51,6 +53,10 @@ namespace Ninlil.Web.Controllers;
 ///     <see cref="ReverseProxySettingsDetail.LastModifiedUtc" /> and
 ///     <see cref="ReverseProxySettingsDetail.OriginatingNodeId" />.
 /// </param>
+/// <param name="dataProtectionProvider">
+///     Supplies this node's key ring, which encrypts the shared secret before it is written to
+///     the file.
+/// </param>
 [ApiController]
 [Route("api/reverse-proxy-settings")]
 public class ReverseProxySettingsController(
@@ -58,7 +64,8 @@ public class ReverseProxySettingsController(
     IOptions<DnsOverTlsOptions> dnsOverTlsOptions,
     RuntimeConfigurationOptions runtimeConfigurationOptions,
     ClusterConfigSyncSettingsRecorder clusterSyncRecorder,
-    IClusterSyncedSettingsStateRepository stateRepository
+    IClusterSyncedSettingsStateRepository stateRepository,
+    IDataProtectionProvider dataProtectionProvider
 ) : ControllerBase
 {
     /// <summary>
@@ -100,7 +107,9 @@ public class ReverseProxySettingsController(
     ///     This action merges a partial update into <c>DnsServer:ReverseProxy</c> as an RFC 7396
     ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value, including <c>sharedSecret</c>, which is
-    ///     always operator-supplied and so can be replaced in place. <c>knownProxies</c> and
+    ///     always operator-supplied and so can be replaced in place. The secret is stored
+    ///     encrypted with this node's key ring (<c>sharedSecretEncrypted</c> in the file) and is
+    ///     sent as entered to the other cluster nodes, which encrypt it with their own key ring. <c>knownProxies</c> and
     ///     <c>knownNetworks</c> are each replaced as a whole array when present. An optional
     ///     <c>dnsOverTls</c> sub-object is merged the same way into
     ///     <c>DnsServer:Protocol:DnsOverTls:ProxyProtocol</c>; it has no shared secret (see
@@ -264,8 +273,13 @@ public class ReverseProxySettingsController(
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
+        // The shared secret reaches the file only encrypted with this node's key ring, so a copy
+        // of the file or of a backup does not expose it. The cluster peers get the plaintext
+        // instead (over the TLS and TSIG protected cluster channel only, never the message
+        // broker), because they can open only what their own key ring protected: each peer
+        // encrypts it again on arrival.
         await PresetConfigurationFileApplier.ApplyAsync(
-            settings,
+            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
             runtimeConfigurationOptions.ConfigurationFilePath
         );
 

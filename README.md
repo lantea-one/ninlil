@@ -997,6 +997,7 @@ supplied in plaintext from outside the application. The plaintext source wins.
 |---|---|---|
 | SSO client secret | `NINLIL_IDENTITY_SSO_CLIENT_SECRET` | Single sign-on |
 | SMTP password | `NINLIL_EMAIL_PASSWORD` | SMTP |
+| Reverse-proxy shared secret | `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET` | Reverse proxy |
 
 **Supply a secret from the environment** (containers, secret stores):
 
@@ -1009,18 +1010,25 @@ supplied in plaintext from outside the application. The plaintext source wins.
 A plaintext secret typed into the configuration file is encrypted at startup and the plaintext is
 removed. A secret from the environment is never written to disk.
 
+The reverse-proxy shared secret is also replicated in a cluster. The node you save it on sends it
+to the other nodes over the encrypted, signed cluster channel, and each node encrypts it with its
+own key ring before it writes its file. It never goes through the event broker.
+
 **If the key ring is lost.** The Data Protection key ring lives in the data directory. If it is
 recreated, or the configuration file is copied to another host without it, a stored secret can no
 longer be decrypted. The same happens if you put a plaintext value into a
 `..._ENCRYPTED` variable. Ninlil keeps running and logs an Error at startup (SSO) or when a mail
 is sent (SMTP). The settings page shows that the saved secret cannot be decrypted. SSO sign-in
 then fails at the identity provider and sends the user back to the sign-in page with an error.
+An unreadable reverse-proxy shared secret fails closed: Ninlil logs an Error at startup and trusts
+no reverse proxy, so every request is treated as coming from its own connection address, until you
+enter the secret again and restart.
 
 To recover:
 
-1. Open the SSO or SMTP settings page, or set the plaintext variable above.
+1. Open the SSO, SMTP or Reverse proxy settings page, or set the plaintext variable above.
 2. Enter the secret again and save (or restart with the variable set).
-3. For SSO, restart Ninlil so the new secret is read.
+3. For SSO and the reverse proxy, restart Ninlil so the new secret is read.
 
 An SMTP user name needs a password: Ninlil rejects a save that would leave a user name without
 one, and logs a warning at startup if the configuration already has that state. Clear the user

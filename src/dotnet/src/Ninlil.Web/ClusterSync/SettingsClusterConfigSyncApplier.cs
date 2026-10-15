@@ -1,10 +1,12 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.ClusterSync.Settings;
 using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Dns.Server.Presets;
+using Ninlil.Web.Configuration;
 using Ninlil.Web.Options;
 
 // Define our namespace.
@@ -24,11 +26,16 @@ namespace Ninlil.Web.ClusterSync;
 /// <param name="stateRepository">Reads and writes the sync state of a section.</param>
 /// <param name="unitOfWork">Commits the state write.</param>
 /// <param name="runtimeConfigurationOptions">The JSON configuration file an incoming write is merged into.</param>
+/// <param name="dataProtectionProvider">
+///     Supplies this node's key ring, which encrypts a secret in an incoming write before it
+///     reaches the file (see <see cref="ConfigurationSecretSettings.ProtectForFile" />).
+/// </param>
 /// <param name="logger">The logger a malformed envelope is recorded to.</param>
 public class SettingsClusterConfigSyncApplier(
     IClusterSyncedSettingsStateRepository stateRepository,
     IUnitOfWork unitOfWork,
     RuntimeConfigurationOptions runtimeConfigurationOptions,
+    IDataProtectionProvider dataProtectionProvider,
     ILogger<SettingsClusterConfigSyncApplier> logger
 ) : IClusterConfigSyncApplier
 {
@@ -99,6 +106,17 @@ public class SettingsClusterConfigSyncApplier(
                 entry.Key,
                 entry.Value
             )),
+        ];
+
+        // A secret travels in the clear on the cluster channel (TLS and TSIG protected, see
+        // ClusterConfigSyncSettingsRecorder) because a Data Protection payload only opens with
+        // the key ring that made it. It must not reach this node's file in the clear: a copy of
+        // the file or of a backup would expose it. Encrypting it here, with this node's own key
+        // ring, keeps each node's file readable only by that node, and an older peer that
+        // already sent plaintext is protected on arrival the same way.
+        settings =
+        [
+            .. ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
         ];
 
         // Merge the values into the runtime configuration file through the same atomic

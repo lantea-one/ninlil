@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -178,7 +179,10 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
         Assert.Equal(["192.0.2.1", "2001:db8::1"], bound.KnownProxies);
         Assert.Equal(["198.51.100.0/24"], bound.KnownNetworks);
         Assert.True(bound.Enable);
-        Assert.Null(bound.SharedSecret);
+        // A cleared secret is written as empty plaintext and empty encrypted keys, never as the
+        // old plaintext.
+        Assert.True(string.IsNullOrEmpty(bound.SharedSecret));
+        Assert.True(string.IsNullOrEmpty(bound.SharedSecretEncrypted));
     }
 
     [Fact]
@@ -257,6 +261,7 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
             new FakeStateRepository(),
             new FakeUnitOfWork(),
             new RuntimeConfigurationOptions { ConfigurationFilePath = peerFilePath },
+            new EphemeralDataProtectionProvider(),
             NullLogger<SettingsClusterConfigSyncApplier>.Instance
         );
 
@@ -273,8 +278,8 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
         );
     }
 
-    /// <summary>This class captures the one event the recorder publishes.</summary>
-    private sealed class CapturingPublisher : IDnsServerEventPublisher
+    /// <summary>This class captures the one event the recorder publishes.Internal so ConfigurationSecretReverseProxyTests reuses it.</summary>
+    internal sealed class CapturingPublisher : IDnsServerEventPublisher
     {
         public ClusterConfigSettingsChangedEvent Published { get; private set; }
 
@@ -282,8 +287,8 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
             Published = (ClusterConfigSettingsChangedEvent)domainEvent;
     }
 
-    /// <summary>This class is an in-memory state repository holding rows by section name.</summary>
-    private sealed class FakeStateRepository : IClusterSyncedSettingsStateRepository
+    /// <summary>This class is an in-memory state repository holding rows by section name.Internal so ConfigurationSecretReverseProxyTests reuses it.</summary>
+    internal sealed class FakeStateRepository : IClusterSyncedSettingsStateRepository
     {
         private readonly List<ClusterSyncedSettingsStateEntity> rows = [];
 
@@ -316,15 +321,15 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
         public void Remove(ClusterSyncedSettingsStateEntity entity) => rows.Remove(entity);
     }
 
-    /// <summary>This class is a unit of work whose save does nothing.</summary>
-    private sealed class FakeUnitOfWork : IUnitOfWork
+    /// <summary>This class is a unit of work whose save does nothing.Internal so ConfigurationSecretReverseProxyTests reuses it.</summary>
+    internal sealed class FakeUnitOfWork : IUnitOfWork
     {
         public Task<int> SaveChangesAsync(CancellationToken stoppingToken = default) =>
             Task.FromResult(0);
     }
 
-    /// <summary>This class is an options monitor that always returns one value.</summary>
-    private sealed class FakeClusterOptionsMonitor(ClusterOptions value)
+    /// <summary>This class is an options monitor that always returns one value.Internal so ConfigurationSecretReverseProxyTests reuses it.</summary>
+    internal sealed class FakeClusterOptionsMonitor(ClusterOptions value)
         : IOptionsMonitor<ClusterOptions>
     {
         public ClusterOptions CurrentValue => value;

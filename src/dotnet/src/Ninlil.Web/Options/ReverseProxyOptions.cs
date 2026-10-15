@@ -25,6 +25,13 @@ public sealed class ReverseProxyOptions
     public const string DefaultSharedSecretHeaderName = "X-Ninlil-Proxy-Secret";
 
     /// <summary>
+    ///     This constant contains the Data Protection purpose string <see cref="SharedSecretEncrypted" />
+    ///     is protected with. A purpose of its own keeps a payload protected for another secret
+    ///     from decrypting as this one, so a value copied between two settings fails closed.
+    /// </summary>
+    public const string SharedSecretProtectorPurpose = "Ninlil.Web.ReverseProxy.SharedSecret";
+
+    /// <summary>
     ///     This property controls whether forwarded headers are honored. When
     ///     <see langword="false" /> (the default), requests use the TCP peer address and the
     ///     forwarded-headers middleware is not added to the pipeline.
@@ -60,6 +67,28 @@ public sealed class ReverseProxyOptions
     ///     misconfigured internal network) without passing through the proxy, which should be the
     ///     only thing that adds the header. <see langword="null" /> or empty means the allowlist
     ///     alone decides.
+    ///     <para>
+    ///         The file stores the secret in <see cref="SharedSecretEncrypted" />, not here, so the
+    ///         secret is not readable from the file or from a backup of it. A non-empty value in
+    ///         this property from the configuration (for example the
+    ///         <c>NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET</c> variable) wins over
+    ///         <see cref="SharedSecretEncrypted" />. At startup
+    ///         <c>ConfigurationSecretResolution</c> replaces the value of this property with the
+    ///         decrypted secret, so the middleware reads the plaintext here. When the stored secret
+    ///         cannot be decrypted, it is set to a random value nobody can present, so no proxy is
+    ///         trusted (fail closed).
+    ///     </para>
     /// </summary>
     public string SharedSecret { get; set; }
+
+    /// <summary>
+    ///     This property contains the shared secret as a Data Protection payload that only this
+    ///     node's key ring can read. <c>ReverseProxySettingsController</c> and cluster sync write
+    ///     it (each node encrypts the secret with its own key ring), and
+    ///     <c>ConfigurationSecretMigrationService</c> writes it for a plaintext secret an earlier
+    ///     version left in the file. It is not set by hand: a payload from another node's key ring
+    ///     cannot be decrypted. A non-empty <see cref="SharedSecret" /> from the configuration
+    ///     wins over it.
+    /// </summary>
+    public string SharedSecretEncrypted { get; set; } = "";
 }

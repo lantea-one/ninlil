@@ -32,10 +32,10 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **329 individual settings** across 58 bound configuration classes, plus **3 standalone**
+Total: **330 individual settings** across 58 bound configuration classes, plus **3 standalone**
 variables read directly by configuration key (the two bootstrap administrator credentials and
 `NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's own real,
-unprefixed equivalents — **339 environment variables in total**. The `NINLIL_DOTNET_*` runtime
+unprefixed equivalents — **340 environment variables in total**. The `NINLIL_DOTNET_*` runtime
 settings in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not
 part of that total.
 
@@ -519,7 +519,8 @@ appearance/branding.
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
 | `NINLIL_DNS_SERVER_REVERSE_PROXY_ENABLE` | Whether this host trusts `X-Forwarded-*` headers from a reverse proxy (independent from DNS-over-TLS's own separate PROXY-protocol trust list). | `false` |
 | `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET_HEADER_NAME` | The header name a trusted reverse proxy must present a shared secret in. | `X-Ninlil-Proxy-Secret` |
-| `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET` | The shared secret value the header above must match. | *(none)* |
+| `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET` | The shared secret value the header above must match. Set it from outside the application only. When set and not empty, it overrides a secret saved in the admin console. The admin console and cluster sync never write it to the configuration file: they store the secret in the `..._ENCRYPTED` variable below. | *(none)* |
+| `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET_ENCRYPTED` | The shared secret encrypted with this node's Data Protection key ring. Written by the server (admin console, cluster sync, and the startup step that encrypts a plaintext secret left in the file); each cluster node encrypts it with its own key ring. Do not set it by hand: a value from another key ring cannot be decrypted, and the server then logs an Error and trusts no reverse proxy (it fails closed) until the secret is entered again. | *(empty)* |
 | `NINLIL_DNS_SERVER_APPEARANCE_MODE` | The admin console's default theme mode: `Light`, `Dark`, or `System`. | `System` |
 | `NINLIL_DNS_SERVER_APPEARANCE_PALETTE` | The admin console's default color palette: `Teal`, `Indigo`, `Amber`, `Rose`, or `Emerald`. | `Teal` |
 | `NINLIL_DNS_SERVER_BRANDING_SITE_TITLE` | A custom browser-tab/header title overriding the default "Ninlil". | *(none)* |
