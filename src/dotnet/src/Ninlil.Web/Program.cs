@@ -572,64 +572,11 @@ builder.Services.Configure<DnsOverHttpsOptions>(
 builder.Services.AddNinlilDnsProtocolDnsOverQuic(builder.Configuration);
 builder.Services.AddNinlilDnsProtocolDnsCrypt();
 
-// The DHCPv4 UDP transport is registered always, like the optional DNS transports above.
-// Dhcpv4ListenerHostedService checks Dhcpv4ProtocolOptions.Enable once at boot; the listener
-// (Dhcpv4UdpListener) can still be started and stopped later whatever the flag says (see
-// IDhcpProtocolService). The flag is off by default because a second DHCP server on a network
-// that already has one causes real disruption.
-//
-// The request handler is an either/or choice: the server either answers from its own scopes and
-// leases (Ninlil.Dhcp.Server.Core) or forwards to an upstream DHCPv4 server as an RFC 3046 relay
-// agent (Ninlil.Dhcp.Server.Relay), never both. Dhcpv4RelayOptions.Enable is read here, before
-// dependency injection is built, as DnsServerEventPublisherOptions.Transport is above, rather than
-// registering both and letting the last registration win. Either branch must come after the DHCP
-// repository registration above, since AddNinlilDhcpServerCore depends on those repositories
-// (AddNinlilDhcpv4Relay depends on none).
-bool dhcpv4RelayEnabled =
-    builder
-        .Configuration.GetSection(Dhcpv4RelayOptions.SectionName)
-        .Get<Dhcpv4RelayOptions>()
-        ?.Enable
-    ?? false;
-
-if (dhcpv4RelayEnabled)
-{
-    builder.Services.AddNinlilDhcpv4Relay(builder.Configuration);
-}
-else
-{
-    builder.Services.AddNinlilDhcpServerCore(builder.Configuration);
-
-    // DHCP-to-DNS integration (registering a lease's host name as an A/AAAA record in the scope's
-    // DnsZoneId) needs the local lease engine; a relay grants no leases and publishes no
-    // DhcpLeaseChangedEvent, so it is registered only in this branch.
-    builder.Services.AddNinlilDhcpDnsIntegration();
-}
-
+// The DHCPv4 and DHCPv6 engine choices (local engine or relay agent), the DHCP-to-DNS integration
+// and the DHCP-lease client identity resolver live in DhcpServiceRegistration so a test can build
+// them on a plain ServiceCollection. They come after the DHCP repository registration above.
+builder.Services.AddNinlilDhcpEngines(builder.Configuration);
 builder.Services.AddNinlilDhcpProtocolDhcpv4(builder.Configuration);
-
-// The DHCPv6 UDP transport is registered always, independently of the DHCPv4 choice above.
-// Dhcpv6ListenerHostedService checks Dhcpv6ProtocolOptions.Enable once at boot, off by default
-// for the same reason as DHCPv4. The DHCPv6 handler is its own either/or choice: the local engine
-// (Ninlil.Dhcp.Server.Core) or a single-hop RFC 8415 relay agent (Ninlil.Dhcp.Server.Relay),
-// decided from Dhcpv6RelayOptions.Enable before dependency injection is built. The DHCPv4 and
-// DHCPv6 choices are independent of each other.
-bool dhcpv6RelayEnabled =
-    builder
-        .Configuration.GetSection(Dhcpv6RelayOptions.SectionName)
-        .Get<Dhcpv6RelayOptions>()
-        ?.Enable
-    ?? false;
-
-if (dhcpv6RelayEnabled)
-{
-    builder.Services.AddNinlilDhcpv6Relay(builder.Configuration);
-}
-else
-{
-    builder.Services.AddNinlilDhcpv6ServerCore(builder.Configuration);
-}
-
 builder.Services.AddNinlilDhcpProtocolDhcpv6(builder.Configuration);
 
 // The only service that notices a lease's natural expiry (see Dhcpv4LeaseExpirySweepService).
@@ -663,34 +610,7 @@ builder.Services.AddNinlilDhcpProtocolRa(builder.Configuration);
 // operator configuration.
 builder.Services.AddNinlilDnsServerClientIdentity(builder.Configuration);
 
-// The static-address-mapping resolver is always tried first, so an operator's explicit mapping
-// wins over ARP or DHCP data (see StaticAddressMappingClientIdentityResolver).
-//
-// The DHCP-lease resolver only makes sense with the local DHCPv4 engine (dhcpv4RelayEnabled,
-// read above), since a relay grants no leases to look up; this is the same condition as
-// AddNinlilDhcpDnsIntegration. When present it comes second, as the more authoritative source
-// when this server issued the lease. The ARP resolver is the last fallback, since only it covers
-// a client whose lease came from another DHCP server. The choice is made here, before dependency
-// injection is built, like the broker, OIDC and DHCP engine choices.
-if (!dhcpv4RelayEnabled)
-{
-    builder.Services.AddSingleton<IClientIdentityResolver>(
-        provider => new CompositeClientIdentityResolver([
-            provider.GetRequiredService<StaticAddressMappingClientIdentityResolver>(),
-            provider.GetRequiredService<DhcpLeaseClientIdentityResolver>(),
-            provider.GetRequiredService<ArpNeighborTableClientIdentityResolver>(),
-        ])
-    );
-}
-else
-{
-    builder.Services.AddSingleton<IClientIdentityResolver>(
-        provider => new CompositeClientIdentityResolver([
-            provider.GetRequiredService<StaticAddressMappingClientIdentityResolver>(),
-            provider.GetRequiredService<ArpNeighborTableClientIdentityResolver>(),
-        ])
-    );
-}
+builder.Services.AddNinlilClientIdentityResolverChain(builder.Configuration);
 
 // DnsOverHttpsTransportGate gives DNS-over-HTTPS (mapped onto the shared Kestrel after Build()
 // rather than hosting its own) the same start and stop lifecycle as the socket transports, since
