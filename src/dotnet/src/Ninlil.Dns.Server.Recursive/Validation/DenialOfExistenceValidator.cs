@@ -742,7 +742,9 @@ public static class DenialOfExistenceValidator
             )
                 continue;
 
-            byte[] ownerHash = Nsec3Hasher.ExtractHashFromOwnerName(record.Name);
+            // A label that is not base32hex is unusable, like a length mismatch.
+            if (!Nsec3Hasher.TryExtractHashFromOwnerName(record.Name, out byte[] ownerHash))
+                continue;
 
             if (ownerHash.Length == 0 || ownerHash.Length != data.NextHashedOwnerName.Length)
                 continue;

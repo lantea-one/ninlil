@@ -224,11 +224,22 @@ public static class DenialOfExistenceProofBuilder
         byte[] targetHash = HashFor(signed, name);
         IReadOnlyList<DnsResourceRecord> chain = signed.DenialOfExistenceRecords;
 
-        for (int i = chain.Count - 1; i >= 0; i--)
-            if (CompareBytes(Nsec3Hasher.ExtractHashFromOwnerName(chain[i].Name), targetHash) <= 0)
-                return chain[i];
+        // A record whose owner label is not base32hex has no hash to compare, so it covers nothing.
+        DnsResourceRecord last = null;
 
-        return chain.Count > 0 ? chain[^1] : null;
+        for (int i = chain.Count - 1; i >= 0; i--)
+        {
+            if (!Nsec3Hasher.TryExtractHashFromOwnerName(chain[i].Name, out byte[] ownerHash))
+                continue;
+
+            last ??= chain[i];
+
+            if (CompareBytes(ownerHash, targetHash) <= 0)
+                return chain[i];
+        }
+
+        // The target sorts before every hash, so the last record in hash order wraps around to it.
+        return last;
     }
 
     /// <summary>

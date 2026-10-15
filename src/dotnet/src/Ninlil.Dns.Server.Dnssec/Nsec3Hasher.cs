@@ -112,33 +112,63 @@ public static class Nsec3Hasher
         new([Encoding.ASCII.GetBytes(ToBase32Hex(hash)), .. apexName.Labels]);
 
     /// <summary>
-    ///     This method decodes base32hex text back into bytes, the reverse of
-    ///     <see cref="ToBase32Hex" />. Leftover bits at the end are dropped. Characters outside the
-    ///     alphabet are not rejected and produce wrong output.
+    ///     This method decodes base32hex text (RFC 4648 §7) without padding, the reverse of
+    ///     <see cref="ToBase32Hex" />, as NSEC3 owner names use it (RFC 5155 §3.3). It rejects
+    ///     input that is not a canonical encoding, so a malformed owner name is never decoded to a
+    ///     wrong hash.
     /// </summary>
-    /// <param name="text">The base32hex text to decode.</param>
-    /// <returns>The decoded bytes.</returns>
-    public static byte[] FromBase32Hex(string text)
+    /// <param name="text">The base32hex text to decode. Upper and lower case are accepted.</param>
+    /// <param name="bytes">The decoded bytes, or <see langword="null" /> when the text is invalid.</param>
+    /// <returns>
+    ///     <see langword="false" /> for a character outside the alphabet, for a length that no
+    ///     whole number of bytes encodes (five or more leftover bits) and for non-zero leftover
+    ///     bits (RFC 4648 §3.5); otherwise <see langword="true" />.
+    /// </returns>
+    public static bool TryFromBase32Hex(string text, out byte[] bytes)
     {
-        List<byte> bytes = [];
+        bytes = null;
+        List<byte> decoded = [];
         int bitBuffer = 0;
         int bitCount = 0;
 
         foreach (char c in text)
         {
             int value = Base32HexAlphabet.IndexOf(char.ToLowerInvariant(c));
-            bitBuffer = (bitBuffer << 5) | value;
+
+            // An unknown character gives -1, which would set every bit of the buffer.
+            if (value < 0)
+                return false;
+
+            bitBuffer = ((bitBuffer << 5) | value) & 0xFFFF;
             bitCount += 5;
 
             if (bitCount >= 8)
             {
                 bitCount -= 8;
-                bytes.Add((byte)((bitBuffer >> bitCount) & 0xFF));
+                decoded.Add((byte)((bitBuffer >> bitCount) & 0xFF));
             }
         }
 
-        return [.. bytes];
+        // A canonical encoding leaves fewer than 5 bits (a whole extra character would carry
+        // none of the data) and all of them zero (RFC 4648 §3.5).
+        if (bitCount >= 5 || (bitBuffer & ((1 << bitCount) - 1)) != 0)
+            return false;
+
+        bytes = [.. decoded];
+        return true;
     }
+
+    /// <summary>
+    ///     This method decodes base32hex text like <see cref="TryFromBase32Hex" /> but throws on
+    ///     invalid input.
+    /// </summary>
+    /// <param name="text">The base32hex text to decode.</param>
+    /// <returns>The decoded bytes.</returns>
+    /// <exception cref="FormatException">The text is not valid base32hex.</exception>
+    public static byte[] FromBase32Hex(string text) =>
+        TryFromBase32Hex(text, out byte[] bytes)
+            ? bytes
+            : throw new FormatException("The text is not valid base32hex.");
 
     /// <summary>
     ///     This method decodes the hash from a hashed owner name's leftmost label, the reverse of
@@ -148,7 +178,24 @@ public static class Nsec3Hasher
     ///     A name in the form <see cref="ToOwnerName" /> builds, usually the owner name of an
     ///     <see cref="Common.Wire.Records.Nsec3RecordData" /> record.
     /// </param>
+    /// <param name="hash">The decoded hash, or <see langword="null" /> when the label is invalid.</param>
+    /// <returns><see langword="false" /> when the leftmost label is not valid base32hex.</returns>
+    public static bool TryExtractHashFromOwnerName(DnsName hashedOwnerName, out byte[] hash)
+    {
+        hash = null;
+        return hashedOwnerName.Labels.Count > 0
+            && TryFromBase32Hex(Encoding.ASCII.GetString(hashedOwnerName.Labels[0]), out hash);
+    }
+
+    /// <summary>
+    ///     This method decodes the hash like <see cref="TryExtractHashFromOwnerName" /> but throws
+    ///     on an invalid label.
+    /// </summary>
+    /// <param name="hashedOwnerName">A name in the form <see cref="ToOwnerName" /> builds.</param>
     /// <returns>The decoded hash.</returns>
+    /// <exception cref="FormatException">The leftmost label is not valid base32hex.</exception>
     public static byte[] ExtractHashFromOwnerName(DnsName hashedOwnerName) =>
-        FromBase32Hex(System.Text.Encoding.ASCII.GetString(hashedOwnerName.Labels[0]));
+        TryExtractHashFromOwnerName(hashedOwnerName, out byte[] hash)
+            ? hash
+            : throw new FormatException("The owner name's first label is not valid base32hex.");
 }

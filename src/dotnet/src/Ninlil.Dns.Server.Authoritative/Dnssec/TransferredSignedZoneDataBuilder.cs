@@ -117,7 +117,8 @@ public static class TransferredSignedZoneDataBuilder
         ];
 
         // The NSEC3 chain in hash order, taking each hash from the owner name
-        // (Nsec3Hasher.ExtractHashFromOwnerName).
+        // (Nsec3Hasher.TryExtractHashFromOwnerName). A record whose owner label is not valid
+        // base32hex is dropped: it can neither be matched nor cover a name.
         List<DnsResourceRecord> nsec3Records =
         [
             .. activeRecords
@@ -125,7 +126,10 @@ public static class TransferredSignedZoneDataBuilder
                 .Select(record =>
                     RecordEntityCodec.ToWireRecord(record, DnsName.Parse(record.Name))
                 )
-                .Where(record => record is not null)
+                .Where(record =>
+                    record is not null
+                    && Nsec3Hasher.TryExtractHashFromOwnerName(record.Name, out _)
+                )
                 .OrderBy(
                     record => Nsec3Hasher.ExtractHashFromOwnerName(record.Name),
                     ByteSequenceComparer.Instance
