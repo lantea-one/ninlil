@@ -3,9 +3,9 @@ import { WebhookAuthModeEnum } from '../../api-client';
 /**
  * This constant lists the event types the webhook form offers: the seven that have a
  * `WebhookDeliverySubscriber<TEvent>` registered (`ServiceCollectionWebhooksExtension`), in the
- * order they read best. The backend also accepts `DnsQueryReceived` and `DnsQueryAnswered`, but
- * nothing delivers those (they fire on every query), so a subscription to them would never
- * deliver; the form leaves them out.
+ * order they read best. The list mirrors the server's webhook event catalog
+ * (`WebhookEventCatalog`), and the server answers 400 for every other event type name, so the form
+ * must not offer one.
  */
 export const CURATED_WEBHOOK_EVENT_TYPE_NAMES: readonly string[] = [
   'DnsZoneChanged',
