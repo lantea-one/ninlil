@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Enum;
@@ -15,7 +16,19 @@ namespace Ninlil.Dhcp.Server.Core.Scope;
 ///     lease repositories. Only enabled IPv6 scopes of the requested kind are considered, and a
 ///     request without a Client Identifier gets no scope.
 ///     <para>
-///         <b>Order of checks</b>, like <see cref="Dhcpv4ScopeResolver" />:
+///         <b>Relayed address requests.</b> When a request for an address-assignment scope
+///         carries a usable RELAY-FORW <c>link-address</c> (not <c>::</c>; a relay may send
+///         <c>::</c> and identify the link by Interface-ID only, RFC 8415 Section 19.1.1),
+///         <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c> copies it to
+///         <see cref="Dhcpv6Message.RelayLinkAddress" /> and the request is served from the scope
+///         whose subnet contains it, and from no other (RFC 8415 Section 13.1). When no enabled
+///         scope contains it the resolver returns <see langword="null" /> (no reply) and logs at
+///         Debug.
+///     </para>
+///     <para>
+///         <b>Everything else</b> (unrelayed requests, a <c>::</c> link address, and
+///         prefix-delegation requests, whose pool is not on the requesting router's link) is
+///         resolved in this order:
 ///         <list type="number">
 ///             <item>
 ///                 an enabled reservation for this client, for address-assignment scopes only
@@ -23,10 +36,7 @@ namespace Ninlil.Dhcp.Server.Core.Scope;
 ///             </item>
 ///             <item>any lease row for this client in a scope of the requested kind;</item>
 ///             <item>
-///                 for a relayed request, the scope whose subnet contains the RELAY-FORW
-///                 <c>link-address</c>, which <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c>
-///                 copies to <see cref="Dhcpv6Message.RelayLinkAddress" /> (the counterpart of
-///                 <c>giaddr</c>);
+///                 the scope whose subnet contains the link address, when there is a usable one;
 ///             </item>
 ///             <item>
 ///                 otherwise, the only enabled scope of that kind if there is exactly one, also
@@ -41,10 +51,12 @@ namespace Ninlil.Dhcp.Server.Core.Scope;
 /// <param name="scopeRepository">The repository scopes are read through.</param>
 /// <param name="reservationRepository">The repository reservations are read through.</param>
 /// <param name="leaseRepository">The repository leases are read through.</param>
+/// <param name="logger">The logger a link address that matches no scope is reported to.</param>
 public sealed class Dhcpv6ScopeResolver(
     IDhcpScopeRepository scopeRepository,
     IDhcpReservationRepository reservationRepository,
-    ILeaseRepository leaseRepository
+    ILeaseRepository leaseRepository,
+    ILogger<Dhcpv6ScopeResolver> logger
 ) : IDhcpv6ScopeResolver
 {
     /// <inheritdoc />
@@ -67,6 +79,25 @@ public sealed class Dhcpv6ScopeResolver(
 
         if (clientKey is null)
             return null;
+
+        bool hasLinkAddress =
+            request.RelayLinkAddress is not null
+            && !request.RelayLinkAddress.Equals(IPAddress.IPv6Any);
+
+        // A relayed address request belongs to the relay's link and to no other scope (RFC 8415
+        // Section 13.1). A delegated pool is not on the requesting router's link, so prefix
+        // delegation keeps the fallbacks below.
+        if (hasLinkAddress && kind == DhcpScopeKindEnum.AddressAssignment)
+        {
+            DhcpScopeEntity linkScope = FindScopeContaining(scopes, request.RelayLinkAddress);
+            if (linkScope is null)
+                logger.LogDebug(
+                    "DHCPv6 request relayed from link {LinkAddress}, which no enabled scope covers; no reply",
+                    request.RelayLinkAddress
+                );
+
+            return linkScope;
+        }
 
         // 1. A reservation for this client in any scope (address-assignment scopes only).
         if (kind == DhcpScopeKindEnum.AddressAssignment)
@@ -98,8 +129,8 @@ public sealed class Dhcpv6ScopeResolver(
                 return scope;
         }
 
-        // 3. A relayed request: the scope whose subnet contains the relay's link address.
-        if (request.RelayLinkAddress is not null)
+        // 3. A relayed prefix-delegation request: the scope whose subnet contains the link address.
+        if (hasLinkAddress)
         {
             DhcpScopeEntity relayScope = FindScopeContaining(scopes, request.RelayLinkAddress);
             if (relayScope is not null)
