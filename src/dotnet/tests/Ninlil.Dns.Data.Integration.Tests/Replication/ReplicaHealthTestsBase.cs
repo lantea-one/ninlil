@@ -252,11 +252,14 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
             try
             {
                 await ApplyLastSchemaStepOnPrimaryAsync(database);
+                // The wait is for the schema verdict, not for ineligibility: a last step with
+                // several statements takes long enough that the paused replica can first be
+                // ineligible for lag alone.
                 await WaitForAsync(
-                    () => !router.ReplicaHealth.IsEligible,
-                    "the replica one schema step behind to be ineligible"
+                    () => !router.ReplicaHealth.SchemaCurrent,
+                    "the replica one schema step behind to be seen as behind"
                 );
-                Assert.False(router.ReplicaHealth.SchemaCurrent);
+                Assert.False(router.ReplicaHealth.IsEligible);
                 Assert.Contains(
                     "schema",
                     router.ReplicaHealth.Reason,
