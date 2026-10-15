@@ -162,10 +162,22 @@ public abstract class ServerMigrationSnapshotTestsBase(EngineFixtureBase fixture
             Guid roleId = Guid.NewGuid();
             Guid userId = Guid.NewGuid();
 
-            // On SQL Server the zone goes in with SQL that leaves out CloudSyncInterval: that
-            // column is `time` before the ConvertTimeSpansToTicks migration and `bigint` after
-            // it, so the repository cannot write it in both schemas. The column default fills it.
-            if (fixture.Engine == StorageEngineEnum.SqlServer)
+            // On SQL Server and MySQL the zone goes in with SQL that leaves out CloudSyncInterval:
+            // that column is `time` before the ConvertTimeSpansToTicks migration and `bigint`
+            // after it, so the repository cannot write it in both schemas. The column default
+            // fills it.
+            if (fixture.Engine == StorageEngineEnum.MySql)
+            {
+                await ExecAsync(
+                    context,
+                    "INSERT INTO `NinlilDnsZones` (`Id`, `CreatedAtUtc`, `Name`, `Type`, "
+                        + "`DenialOfExistenceMode`, `DynamicUpdateEnabled`, `IsDisabled`, "
+                        + "`IsDnssecSigned`, `Nsec3Iterations`, `TransferTransport`, "
+                        + $"`ValidateDnssec`) VALUES ('{zoneId}', UTC_TIMESTAMP(6), "
+                        + "'snap.example', 'Primary', 0, 0, 0, 0, 0, 0, 0)"
+                );
+            }
+            else if (fixture.Engine == StorageEngineEnum.SqlServer)
             {
                 await ExecAsync(
                     context,
