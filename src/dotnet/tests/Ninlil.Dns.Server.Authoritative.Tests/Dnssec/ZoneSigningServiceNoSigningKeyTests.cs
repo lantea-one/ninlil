@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Authoritative.Dnssec;
 using Ninlil.Dns.Server.Authoritative.Tests.Resolution;
 using Ninlil.Dns.Server.Dnssec;
 using Ninlil.Dns.Server.Dnssec.Algorithms;
+using Ninlil.Dns.Server.Recursive.Validation;
 using Xunit;
 
 // Define our namespace.
@@ -20,7 +21,8 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 ///     sign because every key uses an algorithm prohibited for signing (RFC 8624 §3.1): the
 ///     signing service returns <see langword="null" />, <see cref="SignedZoneCache" /> keeps the
 ///     zone listed but serves it unsigned (no DNSKEY, RRSIG, NSEC or NSEC3) and logs a Warning,
-///     a parent zone hosted here generates no DS for it, and adding a key with a permitted
+///     a parent zone hosted here generates no DS for it and proves that with an NSEC or NSEC3
+///     record (a DS query for the child), and adding a key with a permitted
 ///     algorithm makes the next reload serve it signed again. Each test builds a SQLite
 ///     <see cref="AuthoritativeTestZoneHost" /> and writes the RSASHA1 keys to storage directly,
 ///     because key generation refuses that algorithm.
@@ -241,8 +243,8 @@ public sealed class ZoneSigningServiceNoSigningKeyTests
         Assert.NotNull(parent);
         Assert.False(parent.DsRecordsByDelegationName.ContainsKey(DnsName.Parse("kid.par.test")));
 
-        // The referral for a name below the child is an insecure delegation: the parent proves
-        // that no DS exists, with an NSEC whose bitmap lacks DS (RFC 4035 §3.1.4.1).
+        // The child zone is hosted here, so it answers names below it itself. The proof that the
+        // parent has no DS is checked on the DS query below.
         DnsMessage referral = await host.QueryAsync(
             "www.kid.par.test",
             DnsResourceRecordTypeEnum.A,
@@ -252,6 +254,88 @@ public sealed class ZoneSigningServiceNoSigningKeyTests
             referral.AuthorityRecords,
             record => record.Type == DnsResourceRecordTypeEnum.DS
         );
+    }
+
+    [Theory]
+    [InlineData(TestZoneSigningKind.Nsec)]
+    [InlineData(TestZoneSigningKind.Nsec3)]
+    public async Task DsQuery_ForAChildWithOnlyProhibitedKeys_IsProvenInsecureByTheParent(
+        TestZoneSigningKind kind
+    )
+    {
+        await using AuthoritativeTestZoneHost host = await AuthoritativeTestZoneHost.CreateAsync();
+        TestZoneSigning signing =
+            kind == TestZoneSigningKind.Nsec3
+                ? TestZoneSigning.Nsec3(1, "AB")
+                : TestZoneSigning.Nsec;
+        await host.AddZoneAsync(
+            "par.test",
+            [
+                TestRecord.Ns("kid.par.test", "ns.provider.example."),
+                TestRecord.A("www.par.test", "192.0.2.2"),
+            ],
+            signing
+        );
+        await AddProhibitedOnlyZoneAsync(host, "kid.par.test", []);
+        await host.StartAsync();
+
+        // The DS belongs to the parent (RFC 4035 §2.7), which has none for this child. The
+        // child's own zone is served unsigned, so a validator must see an insecure delegation:
+        // a NODATA answer with the parent's SOA, no DS and the NSEC (or the matching NSEC3)
+        // record whose type bitmap lists NS but not DS (RFC 4035 §3.1.4, RFC 5155 §7.2.4).
+        DnsMessage response = await host.QueryAsync(
+            "kid.par.test",
+            DnsResourceRecordTypeEnum.DS,
+            dnssecOk: true
+        );
+
+        Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+        Assert.True(response.IsAuthoritativeAnswer);
+        Assert.Empty(response.Answers);
+        Assert.DoesNotContain(
+            response.AuthorityRecords,
+            record => record.Type == DnsResourceRecordTypeEnum.DS
+        );
+        Assert.Contains(
+            response.AuthorityRecords,
+            record => record.Type == DnsResourceRecordTypeEnum.Soa
+        );
+
+        DnsResourceRecordTypeEnum chainType =
+            kind == TestZoneSigningKind.Nsec3
+                ? DnsResourceRecordTypeEnum.Nsec3
+                : DnsResourceRecordTypeEnum.Nsec;
+        DnsResourceRecord proof = Assert.Single(
+            response.AuthorityRecords,
+            record => record.Type == chainType
+        );
+        Assert.Contains(
+            response.AuthorityRecords,
+            record => record.Type == DnsResourceRecordTypeEnum.RrSig && record.Name == proof.Name
+        );
+
+        IReadOnlyList<DnsResourceRecordTypeEnum> bitmap =
+            kind == TestZoneSigningKind.Nsec3
+                ? ((Nsec3RecordData)DnsRecordDataCodecRegistry.Decode(chainType, proof.Data)).Types
+                : ((NsecRecordData)DnsRecordDataCodecRegistry.Decode(chainType, proof.Data)).Types;
+        Assert.Contains(DnsResourceRecordTypeEnum.NS, bitmap);
+        Assert.DoesNotContain(DnsResourceRecordTypeEnum.DS, bitmap);
+
+        DenialOfExistenceOutcomeEnum outcome =
+            kind == TestZoneSigningKind.Nsec3
+                ? DenialOfExistenceValidator.VerifyNoDataNsec3(
+                    DnsName.Parse("kid.par.test"),
+                    DnsResourceRecordTypeEnum.DS,
+                    DnsName.Parse("par.test"),
+                    response.AuthorityRecords
+                )
+                : DenialOfExistenceValidator.VerifyNoData(
+                    DnsName.Parse("kid.par.test"),
+                    DnsResourceRecordTypeEnum.DS,
+                    DnsName.Parse("par.test"),
+                    response.AuthorityRecords
+                );
+        Assert.Equal(DenialOfExistenceOutcomeEnum.Proven, outcome);
     }
 
     [Fact]
