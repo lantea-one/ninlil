@@ -13,12 +13,14 @@ import {
   FormControlDirective,
   FormDirective,
   FormLabelDirective,
+  FormTextDirective,
   SpinnerComponent,
 } from '@coreui/angular';
 import { firstValueFrom } from 'rxjs';
 import { RewriteSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/cluster-sync-info.component';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
@@ -29,6 +31,9 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  *
  * <p>Both fields are hot-reloaded: `DnsRewriteEngine` is always in the query pipeline and reads
  * these options on each check, whatever `Enable` was at startup.
+ *
+ * <p>The settings are replicated to every cluster node, so the page shows when they were last
+ * changed and on which node (the detail's `lastModifiedUtc` and `originatingNodeId`).
  */
 @Component({
   selector: 'app-rewrite-settings',
@@ -47,7 +52,9 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
     FormControlDirective,
     FormDirective,
     FormLabelDirective,
+    FormTextDirective,
     SpinnerComponent,
+    ClusterSyncInfoComponent,
   ],
   templateUrl: './rewrite-settings.component.html',
   styleUrl: './rewrite-settings.component.scss',
@@ -61,6 +68,10 @@ export class RewriteSettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
+  /** When this section was last written, from the cluster config sync; {@link originatingNodeId} names the node. */
+  readonly lastModifiedUtc = signal<string | null | undefined>(null);
+  readonly originatingNodeId = signal<string | null | undefined>(null);
+
   readonly form = this.formBuilder.group({
     enable: [false],
     // DnsRewriteOptions.TimeToLiveSeconds is a 32-bit unsigned integer.
@@ -71,7 +82,7 @@ export class RewriteSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes both fields, then shows the backend's note. */
+  /** This method PATCHes both fields, shows the backend's note and reloads the sync info. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -83,6 +94,8 @@ export class RewriteSettingsComponent implements OnInit {
     try {
       const result = await firstValueFrom(this.rewriteApi.apiRewriteSettingsPatch({ body: value }));
       this.notification.success(result.note ?? 'Rewrite settings saved.');
+      // The PATCH records a new last-modified time and origin node; reload to show them.
+      await this.loadSettings();
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save rewrite settings.'));
     } finally {
@@ -100,6 +113,8 @@ export class RewriteSettingsComponent implements OnInit {
         enable: settings.enable ?? false,
         timeToLiveSeconds: settings.timeToLiveSeconds ?? 300,
       });
+      this.lastModifiedUtc.set(settings.lastModifiedUtc);
+      this.originatingNodeId.set(settings.originatingNodeId);
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load rewrite settings.'));
     } finally {

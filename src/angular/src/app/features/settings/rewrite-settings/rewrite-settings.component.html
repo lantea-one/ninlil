@@ -2,11 +2,17 @@
   <c-spinner class="loading-spinner" />
 } @else {
   <c-card class="form-card">
-    <c-card-header>
+    <c-card-header class="d-flex align-items-center justify-content-between">
       <strong>DNS Rewrites</strong>
+      <app-cluster-sync-info
+        [lastModifiedUtc]="lastModifiedUtc()"
+        [originatingNodeId]="originatingNodeId()"
+      />
     </c-card-header>
 
     <c-card-body>
+      <div cFormText class="mb-3">These settings are replicated to every cluster node.</div>
+
       @if (errorMessage()) {
         <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
       }

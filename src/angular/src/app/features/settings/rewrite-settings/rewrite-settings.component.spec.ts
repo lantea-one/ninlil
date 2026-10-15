@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { RewriteSettingsService } from '../../../api-client';
+import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/cluster-sync-info.component';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { RewriteSettingsComponent } from './rewrite-settings.component';
 
@@ -10,8 +12,8 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the DNS Rewrites settings page: loading, saving, TTL validation and a save
- * error. TestBed with a spy-backed settings service and `NotificationService`.
+ * These tests cover the DNS Rewrites settings page: loading, saving, TTL validation, a save
+ * error and the cluster sync info beside the title. TestBed with a spy-backed settings service and `NotificationService`.
  */
 describe('RewriteSettingsComponent', () => {
   let apiSpy: {
@@ -92,5 +94,36 @@ describe('RewriteSettingsComponent', () => {
     await fixture.componentInstance.save();
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
+  });
+
+  it('shows the cluster sync info with the detail’s last-modified time and origin node', async () => {
+    const lastModifiedUtc = '2026-10-15T10:00:00Z';
+    const originatingNodeId = '0b6a4e7c-3f1d-4c52-9a8e-5d2f7b1c9e30';
+    const fixture = await createComponent(() => {
+      apiSpy.apiRewriteSettingsGet.and.returnValue(
+        of({ enable: true, timeToLiveSeconds: 120, lastModifiedUtc, originatingNodeId }),
+      );
+    });
+
+    const info = fixture.debugElement.query(By.directive(ClusterSyncInfoComponent));
+
+    expect(info).not.toBeNull();
+    expect(info.componentInstance.lastModifiedUtc()).toBe(lastModifiedUtc);
+    expect(info.componentInstance.originatingNodeId()).toBe(originatingNodeId);
+    expect(fixture.nativeElement.querySelector('.cluster-sync-icon')).not.toBeNull();
+  });
+
+  it('renders no sync icon when the detail has no last-modified time', async () => {
+    const fixture = await createComponent();
+
+    expect(fixture.nativeElement.querySelector('.cluster-sync-icon')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('DNS Rewrites');
+    expect(fixture.componentInstance.form.controls.timeToLiveSeconds.value).toBe(300);
+  });
+
+  it('says under the title that the settings are replicated to every cluster node', async () => {
+    const fixture = await createComponent();
+
+    expect(fixture.nativeElement.textContent).toContain('replicated to every cluster node');
   });
 });
