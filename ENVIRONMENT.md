@@ -243,7 +243,7 @@ and key rollover, RFC 9432 Catalog Zone sync, and CAA/PTR reconciliation timing.
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_NOTIFY_RESPONSE_TIMEOUT` | How long to wait for a secondary's NOTIFY acknowledgment. | `00:00:03` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_NOTIFY_SECONDARY_PORT` | Default port NOTIFY is sent to on each secondary. | `53` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_SECONDARY_ZONE_REFRESH_POLL_INTERVAL` | How often this server checks whether a secondary zone's SOA serial needs refreshing. | `00:00:15` |
-| `NINLIL_DNS_SERVER_AUTHORITATIVE_SECONDARY_ZONE_REFRESH_DEFAULT_RETRY_INTERVAL` | Fallback retry interval used if a zone's own SOA doesn't supply one. | `00:00:30` |
+| `NINLIL_DNS_SERVER_AUTHORITATIVE_SECONDARY_ZONE_REFRESH_DEFAULT_RETRY_INTERVAL` | Wait before the next check of a zone with no local SOA yet and of a stub zone. Other zones retry after their SOA Retry value. | `00:00:30` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_SIGNING_POLL_INTERVAL` | How often the DNSSEC re-signing background pass checks every signed zone. | `06:00:00` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_SIGNING_SIGNATURE_VALIDITY_PERIOD` | How long a freshly generated RRSIG stays valid. | `30.00:00:00` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_SIGNING_REFRESH_BEFORE_EXPIRATION` | How long before RRSIG expiration a zone is proactively re-signed. | `5.00:00:00` |

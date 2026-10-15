@@ -6,6 +6,7 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.Dnssec;
 using Ninlil.Dns.Server.Authoritative.Options;
+using Ninlil.Dns.Server.Authoritative.Refresh;
 using Ninlil.Dns.Server.Core.Resolution;
 
 // Define our namespace.
@@ -34,10 +35,16 @@ namespace Ninlil.Dns.Server.Authoritative.Resolution;
 ///     restart; <see cref="IOptions{TOptions}" /> would keep the startup value in this
 ///     singleton.
 /// </param>
+/// <param name="expiryTracker">
+///     Which secondary zones have expired (RFC 1035 §4.3.5); an expired zone is answered with
+///     SERVFAIL and the authoritative bit clear. <see langword="null" /> means no zone expires,
+///     which keeps hand-built resolvers in tests working.
+/// </param>
 public class AuthoritativeQueryResolver(
     AuthoritativeZoneCache zoneCache,
     SignedZoneCache signedZoneCache,
-    IOptionsMonitor<AuthoritativeServerOptions> options
+    IOptionsMonitor<AuthoritativeServerOptions> options,
+    SecondaryZoneExpiryTracker expiryTracker = null
 ) : IDnsQueryResolver
 {
     /// <inheritdoc />
@@ -70,6 +77,25 @@ public class AuthoritativeQueryResolver(
             && (question.Type != DnsResourceRecordTypeEnum.Soa || question.Name != zone.ApexName)
         )
             return ValueTask.FromResult(DnsQueryResolution.NotHandled);
+
+        // A secondary whose SOA Expire passed without a successful refresh no longer holds a
+        // trustworthy copy (RFC 1035 §4.3.5). SERVFAIL with AA clear tells resolvers to try
+        // another server of the zone; falling through to forwarding or recursion could return
+        // data for the zone from elsewhere. The tracker never holds Primary or Stub zones.
+        if (
+            zone
+                is {
+                    Zone.Type: ZoneTypeEnum.Secondary
+                        or ZoneTypeEnum.SecondaryCatalog
+                        or ZoneTypeEnum.SecondaryForwarder
+                }
+            && expiryTracker?.IsExpired(zone.Zone.Id) == true
+        )
+        {
+            DnsMessage expired = CreateAnswerHeader(request, isAuthoritative: false);
+            expired.ResponseCode = DnsResponseCodeEnum.ServerFailure;
+            return ValueTask.FromResult(DnsQueryResolution.Handled(expired));
+        }
 
         return ValueTask.FromResult(
             zone is null

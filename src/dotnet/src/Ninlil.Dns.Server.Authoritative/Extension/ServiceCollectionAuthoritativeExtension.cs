@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.CatalogSync;
@@ -72,6 +73,13 @@ public static class ServiceCollectionAuthoritativeExtension
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<AuthoritativeZoneCache>()
         );
+
+        // The expiry clock. TryAdd keeps a clock another extension or a test registered.
+        instance.TryAddSingleton(TimeProvider.System);
+
+        // Which secondary zones have expired (RFC 1035 §4.3.5): filled by the refresh service,
+        // read by the authoritative resolver and the zone transfer service.
+        instance.AddSingleton<SecondaryZoneExpiryTracker>();
 
         // One SecondaryZoneRefreshService instance: the concrete type, the hosted service that runs
         // the poll loop, and ISecondaryZoneRefreshTrigger for NotifyQueryResolver.

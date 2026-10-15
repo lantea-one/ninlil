@@ -8,6 +8,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.Dnssec;
 using Ninlil.Dns.Server.Authoritative.Options;
+using Ninlil.Dns.Server.Authoritative.Refresh;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Tsig;
 
@@ -36,12 +37,18 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     The records-per-message setting, read through <see cref="IOptionsMonitor{TOptions}" /> on
 ///     every transfer.
 /// </param>
+/// <param name="expiryTracker">
+///     Which secondary zones have expired (RFC 1035 §4.3.5); a transfer of one gets a signed
+///     SERVFAIL, so a downstream secondary does not copy an expired zone. <see langword="null" />
+///     means no zone expires.
+/// </param>
 public class ZoneTransferService(
     AuthoritativeZoneCache zoneCache,
     SignedZoneCache signedZoneCache,
     IZoneChangeJournalRepository journalRepository,
     ITsigService tsigService,
-    IOptionsMonitor<ZoneTransferOptions> options
+    IOptionsMonitor<ZoneTransferOptions> options,
+    SecondaryZoneExpiryTracker expiryTracker = null
 ) : IZoneTransferService
 {
     /// <inheritdoc />
@@ -380,8 +387,9 @@ public class ZoneTransferService(
 
     /// <summary>
     ///     This method runs the checks AXFR and IXFR share: the request came over TCP, TLS or QUIC,
-    ///     carries a TSIG that verifies, names a hosted zone's apex and uses a key listed in the
-    ///     zone's <see cref="ZoneEntity.TransferTsigKeyNames" />.
+    ///     carries a TSIG that verifies, names a hosted zone's apex, uses a key listed in the
+    ///     zone's <see cref="ZoneEntity.TransferTsigKeyNames" /> and names a zone that has not
+    ///     expired.
     /// </summary>
     /// <returns>
     ///     On success, the zone and TSIG result with a <see langword="null" /> error; on failure,
@@ -453,6 +461,20 @@ public class ZoneTransferService(
                 await SignedErrorResponseAsync(
                     request,
                     DnsResponseCodeEnum.Refused,
+                    tsigResult.Key.Name,
+                    stoppingToken
+                )
+            );
+
+        // An expired secondary must not feed a downstream secondary. The refusal is signed, since
+        // the request verified, and only a key bound to the zone learns the state.
+        if (expiryTracker?.IsExpired(zone.Zone.Id) == true)
+            return (
+                null,
+                null,
+                await SignedErrorResponseAsync(
+                    request,
+                    DnsResponseCodeEnum.ServerFailure,
                     tsigResult.Key.Name,
                     stoppingToken
                 )

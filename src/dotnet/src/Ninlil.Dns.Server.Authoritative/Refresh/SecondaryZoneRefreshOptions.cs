@@ -21,8 +21,9 @@ public class SecondaryZoneRefreshOptions
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>
-    ///     This property contains how long to wait before retrying a zone that has no local SOA yet
-    ///     (so no Retry value), whose primaries were all unreachable, or that is a stub zone.
+    ///     This property contains how long to wait before the next check of a zone that has no
+    ///     local SOA yet (so no Retry value) or that is a stub zone. Any other zone whose primaries
+    ///     were all unreachable is retried after its own SOA Retry value.
     /// </summary>
     public TimeSpan DefaultRetryInterval { get; set; } = TimeSpan.FromSeconds(30);
 }

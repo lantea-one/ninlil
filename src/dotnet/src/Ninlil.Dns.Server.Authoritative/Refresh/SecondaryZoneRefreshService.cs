@@ -26,11 +26,27 @@ namespace Ninlil.Dns.Server.Authoritative.Refresh;
 ///     or at once after a NOTIFY (<see cref="ISecondaryZoneRefreshTrigger" />), it asks the
 ///     primaries for their serial and pulls an AXFR/IXFR through the zone's
 ///     <see cref="IZoneTransferClient" /> when a primary is ahead, applying it through
-///     <see cref="IZoneUpdateService" />. Stub zones get an NS query instead. The SOA Expire field
-///     is not used.
+///     <see cref="IZoneUpdateService" />. Stub zones get an NS query instead.
 ///     <para>
-///         When each zone is next due is kept in memory only; after a restart every zone is checked
-///         at once, which at worst costs one "already current" round trip.
+///         Retry: when every primary fails, a zone with a local SOA is checked again after its SOA
+///         Retry interval (RFC 1035 §4.3.5); <see cref="SecondaryZoneRefreshOptions.DefaultRetryInterval" />
+///         applies to a zone with no local SOA yet and to stub zones. When each zone is next due is
+///         kept in memory only; after a restart every zone is checked at once, which at worst costs
+///         one "already current" round trip.
+///     </para>
+///     <para>
+///         Expire: a refresh succeeds when a primary shows the local copy is current or a pull is
+///         applied. The time of that success is stored per zone in
+///         <see cref="ISecondaryZoneRefreshStateRepository" /> (node-local, so it survives a
+///         restart) and the zone's expiry time, that time plus the SOA Expire field, is published
+///         to <see cref="SecondaryZoneExpiryTracker" />, which makes the resolver and the transfer
+///         service answer SERVFAIL for the zone once it passes. SOA Expire 0 means the zone never
+///         expires (a Warning at load). <see cref="StartAsync" /> loads the state before the loop
+///         starts, so the host starts its listeners with the expiry already known; a zone with a
+///         local SOA and no stored time (the first start, a restore, an engine switch, a zone
+///         enabled after a disable) begins a fresh interval at that moment. A row whose zone is
+///         deleted, disabled or no longer a Secondary, SecondaryCatalog or SecondaryForwarder zone
+///         is deleted at start and by the first pass that sees it gone.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">The factory used to create a scope per check.</param>
@@ -40,10 +56,14 @@ namespace Ninlil.Dns.Server.Authoritative.Refresh;
 ///     this singleton.
 /// </param>
 /// <param name="logger">The logger this service records refresh failures to.</param>
+/// <param name="timeProvider">The clock every due time and refresh time comes from.</param>
+/// <param name="expiryTracker">The tracker this service publishes each zone's expiry time to.</param>
 public sealed class SecondaryZoneRefreshService(
     IServiceScopeFactory scopeFactory,
     IOptionsMonitor<SecondaryZoneRefreshOptions> options,
-    ILogger<SecondaryZoneRefreshService> logger
+    ILogger<SecondaryZoneRefreshService> logger,
+    TimeProvider timeProvider,
+    SecondaryZoneExpiryTracker expiryTracker
 ) : BackgroundService, ISecondaryZoneRefreshTrigger
 {
     /// <summary>
@@ -56,6 +76,12 @@ public sealed class SecondaryZoneRefreshService(
     ///     after up to <see cref="SecondaryZoneRefreshOptions.PollInterval" />.
     /// </summary>
     private readonly SemaphoreSlim _wakeSignal = new(0, 1);
+
+    /// <summary>
+    ///     This field holds the zones whose expiry has been logged and not yet recovered from, so
+    ///     the Warning appears once per expiry and not on every failed pass.
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, byte> _expiryWarned = new();
 
     /// <inheritdoc />
     public void RequestImmediateRefresh(Guid zoneId)
@@ -74,6 +100,101 @@ public sealed class SecondaryZoneRefreshService(
                 // Another request released it first; the loop wakes up either way.
             }
         }
+    }
+
+    /// <summary>
+    ///     This method loads the stored refresh state into <see cref="SecondaryZoneExpiryTracker" />
+    ///     before the loop starts. The host starts the hosted services in order and the listeners
+    ///     after them, so no query is answered before an expired zone is known to be expired. A load
+    ///     failure is logged and the service still starts: the zones then answer until a pass
+    ///     publishes their expiry.
+    /// </summary>
+    public override async Task StartAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await LoadExpiryStateAsync(stoppingToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Could not load the secondary zone refresh state.");
+        }
+
+        await base.StartAsync(stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method gives every enabled Secondary, SecondaryCatalog and SecondaryForwarder zone
+    ///     with a local SOA its expiry time (stored refresh time plus SOA Expire), writes a row with
+    ///     the current time for a zone that has none, and deletes the rows of every other zone.
+    /// </summary>
+    internal async Task LoadExpiryStateAsync(CancellationToken stoppingToken)
+    {
+        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        IZoneRepository zoneRepository =
+            scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        ISecondaryZoneRefreshStateRepository stateRepository =
+            scope.ServiceProvider.GetRequiredService<ISecondaryZoneRefreshStateRepository>();
+        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        IReadOnlyList<ZoneEntity> zones = await zoneRepository.ListAsync(
+            zone =>
+                !zone.IsDisabled
+                && (
+                    zone.Type == ZoneTypeEnum.Secondary
+                    || zone.Type == ZoneTypeEnum.SecondaryCatalog
+                    || zone.Type == ZoneTypeEnum.SecondaryForwarder
+                ),
+            stoppingToken
+        );
+        IReadOnlyList<SecondaryZoneRefreshStateEntity> states = await stateRepository.ListAsync(
+            stoppingToken: stoppingToken
+        );
+        Dictionary<Guid, SecondaryZoneRefreshStateEntity> stateByZoneId = states.ToDictionary(
+            state => state.ZoneId
+        );
+        HashSet<Guid> zoneIds = [.. zones.Select(zone => zone.Id)];
+        DateTimeOffset now = timeProvider.GetUtcNow();
+
+        // The table has no foreign key, so a row outlives its zone. Remove what no longer belongs.
+        foreach (SecondaryZoneRefreshStateEntity state in states)
+            if (!zoneIds.Contains(state.ZoneId))
+                stateRepository.Remove(state);
+
+        foreach (ZoneEntity zone in zones)
+        {
+            SoaRecordData soa = await ReadLocalSoaAsync(zone, recordRepository, stoppingToken);
+
+            if (soa is null)
+                continue;
+
+            if (!stateByZoneId.TryGetValue(zone.Id, out SecondaryZoneRefreshStateEntity state))
+            {
+                state = new SecondaryZoneRefreshStateEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ZoneId = zone.Id,
+                    LastRefreshedAtUtc = now,
+                    CreatedAtUtc = now,
+                };
+                await stateRepository.AddAsync(state, stoppingToken);
+            }
+
+            if (soa.ExpireSeconds == 0)
+                logger.LogWarning(
+                    "Secondary zone '{ZoneName}' has SOA Expire 0, so it never expires.",
+                    zone.Name
+                );
+
+            expiryTracker.SetExpiresAt(zone.Id, ExpiresAt(state.LastRefreshedAtUtc, soa));
+
+            if (expiryTracker.IsExpired(zone.Id))
+                WarnExpiredOnce(zone, soa);
+        }
+
+        await unitOfWork.SaveChangesAsync(stoppingToken);
     }
 
     /// <inheritdoc />
@@ -104,9 +225,20 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method checks every secondary zone whose next-check time has come due.
+    ///     This method returns when the next check of a zone is due, or <see langword="null" />
+    ///     when it has none. It lets tests observe the Refresh and Retry scheduling.
     /// </summary>
-    private async Task CheckDueZonesAsync(CancellationToken stoppingToken)
+    /// <param name="zoneId">The identifier of the zone.</param>
+    internal DateTimeOffset? GetNextCheckAtUtc(Guid zoneId) =>
+        _nextCheckAtUtc.TryGetValue(zoneId, out DateTimeOffset nextCheckAtUtc)
+            ? nextCheckAtUtc
+            : null;
+
+    /// <summary>
+    ///     This method checks every secondary zone whose next-check time has come due, and first
+    ///     forgets the zones that are gone.
+    /// </summary>
+    internal async Task CheckDueZonesAsync(CancellationToken stoppingToken)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneRepository zoneRepository =
@@ -129,7 +261,9 @@ public sealed class SecondaryZoneRefreshService(
             stoppingToken
         );
 
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = timeProvider.GetUtcNow();
+
+        await ForgetGoneZonesAsync(secondaryZones, scope.ServiceProvider, stoppingToken);
 
         foreach (ZoneEntity zone in secondaryZones)
         {
@@ -153,6 +287,51 @@ public sealed class SecondaryZoneRefreshService(
                 );
             }
         }
+    }
+
+    /// <summary>
+    ///     This method drops the schedule, the expiry and the stored refresh time of every zone that
+    ///     is no longer in <paramref name="currentZones" /> (deleted, disabled or of another type).
+    ///     The table has no foreign key, so nothing else removes a row. The rows are read on every
+    ///     pass: there is at most one per secondary zone, and it catches a zone deleted before it was
+    ///     ever checked.
+    /// </summary>
+    private async Task ForgetGoneZonesAsync(
+        IReadOnlyList<ZoneEntity> currentZones,
+        IServiceProvider services,
+        CancellationToken stoppingToken
+    )
+    {
+        ISecondaryZoneRefreshStateRepository stateRepository =
+            services.GetRequiredService<ISecondaryZoneRefreshStateRepository>();
+        HashSet<Guid> currentIds = [.. currentZones.Select(zone => zone.Id)];
+
+        // Filtered in memory: the table holds at most one small row per secondary zone.
+        List<SecondaryZoneRefreshStateEntity> goneStates =
+        [
+            .. (await stateRepository.ListAsync(stoppingToken: stoppingToken)).Where(state =>
+                !currentIds.Contains(state.ZoneId)
+            ),
+        ];
+
+        foreach (Guid zoneId in _nextCheckAtUtc.Keys.Where(id => !currentIds.Contains(id)))
+        {
+            _nextCheckAtUtc.TryRemove(zoneId, out _);
+            _expiryWarned.TryRemove(zoneId, out _);
+            expiryTracker.Remove(zoneId);
+        }
+
+        if (goneStates.Count == 0)
+            return;
+
+        foreach (SecondaryZoneRefreshStateEntity state in goneStates)
+        {
+            _expiryWarned.TryRemove(state.ZoneId, out _);
+            expiryTracker.Remove(state.ZoneId);
+            stateRepository.Remove(state);
+        }
+
+        await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync(stoppingToken);
     }
 
     /// <summary>
@@ -190,6 +369,11 @@ public sealed class SecondaryZoneRefreshService(
             logger.LogWarning(
                 "Secondary zone '{ZoneName}' has no configured primary server addresses.",
                 zone.Name
+            );
+            await HandleAllPrimariesFailedAsync(
+                zone,
+                services.GetRequiredService<IRecordRepository>(),
+                stoppingToken
             );
             return;
         }
@@ -235,6 +419,7 @@ public sealed class SecondaryZoneRefreshService(
 
             if (!IsPrimaryAhead(localSerial, primarySerial.Value))
             {
+                await RecordRefreshSuccessAsync(zone, services, stoppingToken);
                 await RescheduleFromLocalSoaAsync(zone, recordRepository, stoppingToken);
                 return;
             }
@@ -258,7 +443,7 @@ public sealed class SecondaryZoneRefreshService(
                 continue;
             }
 
-            await ApplyPullResultAsync(
+            bool applied = await ApplyPullResultAsync(
                 zone,
                 localSerial,
                 pullResult,
@@ -276,9 +461,17 @@ public sealed class SecondaryZoneRefreshService(
                 stoppingToken
             );
 
+            // A pull the service skipped (an unusable answer) confirms nothing, so it is neither a
+            // success nor a reason to stop trying the other primaries.
+            if (!applied)
+                continue;
+
+            await RecordRefreshSuccessAsync(zone, services, stoppingToken);
             await RescheduleFromLocalSoaAsync(zone, recordRepository, stoppingToken);
             return;
         }
+
+        await HandleAllPrimariesFailedAsync(zone, recordRepository, stoppingToken);
     }
 
     /// <summary>
@@ -288,7 +481,7 @@ public sealed class SecondaryZoneRefreshService(
     ///     order is failover priority. It does nothing for other types, or when the list is unchanged,
     ///     so a poll with no change writes nothing.
     /// </summary>
-    private static async Task SyncForwarderAddressesFromRecordsAsync(
+    private async Task SyncForwarderAddressesFromRecordsAsync(
         ZoneEntity zone,
         IRecordRepository recordRepository,
         IServiceProvider services,
@@ -334,7 +527,7 @@ public sealed class SecondaryZoneRefreshService(
             return;
 
         zone.ForwarderAddresses = newAddresses;
-        zone.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        zone.UpdatedAtUtc = timeProvider.GetUtcNow();
 
         // Written through IZoneRepository, not IZoneUpdateService: the records were already
         // journaled by ApplyPullResultAsync; this only updates the zone's field.
@@ -443,7 +636,7 @@ public sealed class SecondaryZoneRefreshService(
 
             await unitOfWork.SaveChangesAsync(stoppingToken);
             eventPublisher.Publish(
-                new DnsZoneChangedEvent(DateTimeOffset.UtcNow, zone.Id, zone.Name)
+                new DnsZoneChangedEvent(timeProvider.GetUtcNow(), zone.Id, zone.Name)
             );
             return;
         }
@@ -453,7 +646,11 @@ public sealed class SecondaryZoneRefreshService(
     ///     This method applies a successful pull: it bootstraps a new zone, replays an incremental
     ///     diff step by step, or reconciles a full record set with what is stored.
     /// </summary>
-    private async Task ApplyPullResultAsync(
+    /// <returns>
+    ///     <see langword="false" /> when the answer was unusable and nothing was applied; otherwise
+    ///     <see langword="true" />.
+    /// </returns>
+    private async Task<bool> ApplyPullResultAsync(
         ZoneEntity zone,
         uint? localSerial,
         ZoneTransferPullResult pullResult,
@@ -463,7 +660,7 @@ public sealed class SecondaryZoneRefreshService(
     )
     {
         if (pullResult.IsAlreadyCurrent)
-            return;
+            return true;
 
         if (localSerial is null)
         {
@@ -473,7 +670,7 @@ public sealed class SecondaryZoneRefreshService(
                     "Primary answered an initial transfer for zone '{ZoneName}' with an unexpected incremental response; skipping this refresh.",
                     zone.Name
                 );
-                return;
+                return false;
             }
 
             List<RecordEntity> allRecords =
@@ -486,7 +683,7 @@ public sealed class SecondaryZoneRefreshService(
             ];
 
             await zoneUpdateService.BootstrapZoneAsync(zone.Id, allRecords, stoppingToken);
-            return;
+            return true;
         }
 
         if (pullResult.IsIncremental)
@@ -575,6 +772,8 @@ public sealed class SecondaryZoneRefreshService(
                 stoppingToken
             );
         }
+
+        return true;
     }
 
     /// <summary>
@@ -582,6 +781,16 @@ public sealed class SecondaryZoneRefreshService(
     ///     no local copy yet.
     /// </summary>
     private static async Task<uint?> ReadLocalSerialAsync(
+        ZoneEntity zone,
+        IRecordRepository recordRepository,
+        CancellationToken stoppingToken
+    ) => (await ReadLocalSoaAsync(zone, recordRepository, stoppingToken))?.Serial;
+
+    /// <summary>
+    ///     This method reads the zone's apex SOA data, or <see langword="null" /> if there is no
+    ///     local copy yet.
+    /// </summary>
+    private static async Task<SoaRecordData> ReadLocalSoaAsync(
         ZoneEntity zone,
         IRecordRepository recordRepository,
         CancellationToken stoppingToken
@@ -597,8 +806,115 @@ public sealed class SecondaryZoneRefreshService(
         return
             soaRecords.Count > 0
             && RecordEntityCodec.DecodeTypedData(soaRecords[0]) is SoaRecordData soaData
-            ? soaData.Serial
+            ? soaData
             : null;
+    }
+
+    /// <summary>
+    ///     This method computes when a zone expires: the last refresh plus the SOA Expire field
+    ///     (RFC 1035 §3.3.13).
+    /// </summary>
+    /// <returns>
+    ///     The expiry time, or <see langword="null" /> when there is no SOA or its Expire is 0
+    ///     (never expires).
+    /// </returns>
+    private static DateTimeOffset? ExpiresAt(
+        DateTimeOffset lastRefreshedAtUtc,
+        SoaRecordData soa
+    ) =>
+        soa is { ExpireSeconds: > 0 }
+            ? lastRefreshedAtUtc + TimeSpan.FromSeconds(soa.ExpireSeconds)
+            : null;
+
+    /// <summary>
+    ///     This method records that a primary confirmed the zone: it stores the current time as the
+    ///     zone's refresh time through the state repository and unit of work (not through
+    ///     <see cref="IZoneUpdateService" />, so no zone-changed event), and publishes the new expiry
+    ///     time computed from the zone's (possibly just replaced) SOA. The tracker is updated first,
+    ///     so a failing write cannot leave a zone expired that a primary just confirmed.
+    /// </summary>
+    private async Task RecordRefreshSuccessAsync(
+        ZoneEntity zone,
+        IServiceProvider services,
+        CancellationToken stoppingToken
+    )
+    {
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        IRecordRepository recordRepository = services.GetRequiredService<IRecordRepository>();
+        SoaRecordData soa = await ReadLocalSoaAsync(zone, recordRepository, stoppingToken);
+
+        bool wasExpired = expiryTracker.IsExpired(zone.Id);
+        expiryTracker.SetExpiresAt(zone.Id, ExpiresAt(now, soa));
+
+        if (_expiryWarned.TryRemove(zone.Id, out _) || wasExpired)
+            logger.LogInformation(
+                "Secondary zone '{ZoneName}' was refreshed and answers again.",
+                zone.Name
+            );
+
+        ISecondaryZoneRefreshStateRepository stateRepository =
+            services.GetRequiredService<ISecondaryZoneRefreshStateRepository>();
+        IUnitOfWork unitOfWork = services.GetRequiredService<IUnitOfWork>();
+        SecondaryZoneRefreshStateEntity state = await stateRepository.FindByZoneIdAsync(
+            zone.Id,
+            stoppingToken
+        );
+
+        if (state is null)
+            await stateRepository.AddAsync(
+                new SecondaryZoneRefreshStateEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ZoneId = zone.Id,
+                    LastRefreshedAtUtc = now,
+                    CreatedAtUtc = now,
+                },
+                stoppingToken
+            );
+        else
+        {
+            state.LastRefreshedAtUtc = now;
+            stateRepository.Update(state);
+        }
+
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method schedules the next check after every primary failed (RFC 1035 §4.3.5: the
+    ///     SOA Retry interval), and logs the expiry once if the Expire interval has passed. A zone
+    ///     with no local SOA, so no Retry value, uses
+    ///     <see cref="SecondaryZoneRefreshOptions.DefaultRetryInterval" />.
+    /// </summary>
+    private async Task HandleAllPrimariesFailedAsync(
+        ZoneEntity zone,
+        IRecordRepository recordRepository,
+        CancellationToken stoppingToken
+    )
+    {
+        SoaRecordData soa = await ReadLocalSoaAsync(zone, recordRepository, stoppingToken);
+
+        TimeSpan retry = soa is { RetrySeconds: > 0 }
+            ? TimeSpan.FromSeconds(soa.RetrySeconds)
+            : options.CurrentValue.DefaultRetryInterval;
+
+        _nextCheckAtUtc[zone.Id] = timeProvider.GetUtcNow() + retry;
+
+        if (soa is not null && expiryTracker.IsExpired(zone.Id))
+            WarnExpiredOnce(zone, soa);
+    }
+
+    /// <summary>
+    ///     This method logs that a zone expired, once until a refresh recovers it.
+    /// </summary>
+    private void WarnExpiredOnce(ZoneEntity zone, SoaRecordData soa)
+    {
+        if (_expiryWarned.TryAdd(zone.Id, 0))
+            logger.LogWarning(
+                "Secondary zone '{ZoneName}' expired: no primary confirmed it for {Expire}; it answers SERVFAIL until a refresh succeeds.",
+                zone.Name,
+                TimeSpan.FromSeconds(soa.ExpireSeconds)
+            );
     }
 
     /// <summary>
@@ -610,21 +926,13 @@ public sealed class SecondaryZoneRefreshService(
         CancellationToken stoppingToken
     )
     {
-        IReadOnlyList<RecordEntity> soaRecords = await recordRepository.FindByNameAsync(
-            zone.Id,
-            zone.Name,
-            DnsResourceRecordTypeEnum.Soa,
-            stoppingToken
-        );
+        SoaRecordData soaData = await ReadLocalSoaAsync(zone, recordRepository, stoppingToken);
 
-        TimeSpan interval =
-            soaRecords.Count > 0
-            && RecordEntityCodec.DecodeTypedData(soaRecords[0]) is SoaRecordData soaData
-            && soaData.RefreshSeconds > 0
-                ? TimeSpan.FromSeconds(soaData.RefreshSeconds)
-                : options.CurrentValue.DefaultRetryInterval;
+        TimeSpan interval = soaData is { RefreshSeconds: > 0 }
+            ? TimeSpan.FromSeconds(soaData.RefreshSeconds)
+            : options.CurrentValue.DefaultRetryInterval;
 
-        _nextCheckAtUtc[zone.Id] = DateTimeOffset.UtcNow + interval;
+        _nextCheckAtUtc[zone.Id] = timeProvider.GetUtcNow() + interval;
     }
 
     /// <summary>

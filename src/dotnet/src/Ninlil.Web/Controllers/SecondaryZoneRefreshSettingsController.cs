@@ -18,7 +18,7 @@ namespace Ninlil.Web.Controllers;
 /// <summary>
 ///     This controller reads and writes <see cref="SecondaryZoneRefreshOptions" />: how often the
 ///     background loop checks whether a secondary zone is due for a refresh, and how long to wait
-///     before retrying a zone that has no SOA yet or whose primaries were unreachable. Reading
+///     before the next check of a zone that has no SOA yet or of a stub zone. Reading
 ///     needs <c>secondaryzonerefreshsettings:read</c> and writing needs
 ///     <c>secondaryzonerefreshsettings:write</c>.
 ///     <para>
