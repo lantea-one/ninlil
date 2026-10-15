@@ -286,7 +286,7 @@ public class AuthoritativeQueryResolver(
                 response.AuthorityRecords.AddRange(
                     DenialOfExistenceProofBuilder.BuildInsecureDelegationProof(
                         signedData,
-                        zone.Zone,
+                        zone.ApexName,
                         delegationPoint
                     )
                 );
@@ -378,7 +378,6 @@ public class AuthoritativeQueryResolver(
             response.AuthorityRecords.AddRange(
                 DenialOfExistenceProofBuilder.BuildWildcardProof(
                     signedData,
-                    zone.Zone,
                     zone.ApexName,
                     queryName
                 )
@@ -602,13 +601,12 @@ public class AuthoritativeQueryResolver(
                 isNxDomain
                     ? DenialOfExistenceProofBuilder.BuildNxDomainProof(
                         signedData,
-                        zone.Zone,
                         zone.ApexName,
                         queryName
                     )
                     : DenialOfExistenceProofBuilder.BuildNoDataProof(
                         signedData,
-                        zone.Zone,
+                        zone.ApexName,
                         queryName
                     )
             );

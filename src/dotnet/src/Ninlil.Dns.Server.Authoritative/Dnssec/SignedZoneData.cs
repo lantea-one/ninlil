@@ -1,5 +1,6 @@
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Common.Wire.Records;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
@@ -10,6 +11,13 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     and <see cref="TransferredSignedZoneDataBuilder" /> rebuilds it from the signed records
 ///     a secondary zone received by transfer. <see cref="SignedZoneCache" /> holds it and the
 ///     resolver serves from it.
+///     <para>
+///         The chain describes itself: <see cref="DenialOfExistenceMode" /> and
+///         <see cref="Nsec3Parameters" /> come from the NSEC3PARAM or the chain records, never from
+///         the local zone row. A secondary's row keeps default settings, while the primary's
+///         chain may use any iterations and salt, and proofs must hash with the chain's own values
+///         (RFC 5155 §4).
+///     </para>
 /// </summary>
 /// <param name="dnsKeyRecords">The apex DNSKEY records: one per key that is not <c>Removed</c>.</param>
 /// <param name="rrsigsByCoveredRrset">
@@ -77,6 +85,23 @@ public sealed class SignedZoneData(
     public DnsResourceRecord Nsec3ParamRecord { get; } = nsec3ParamRecord;
 
     /// <summary>
+    ///     This property tells which kind of chain <see cref="DenialOfExistenceRecords" /> holds:
+    ///     NSEC3 when <see cref="Nsec3ParamRecord" /> is set or the first chain record is an
+    ///     NSEC3, otherwise NSEC.
+    /// </summary>
+    public DnssecDenialOfExistenceModeEnum DenialOfExistenceMode { get; } =
+        DetermineMode(nsec3ParamRecord, denialOfExistenceRecords);
+
+    /// <summary>
+    ///     This property contains the hash parameters of the NSEC3 chain, or
+    ///     <see langword="null" /> for an NSEC chain. They come from the NSEC3PARAM record
+    ///     (RFC 5155 §4: the parameters an authoritative server hashes with) and, without one,
+    ///     from the first NSEC3 record of the chain.
+    /// </summary>
+    public Nsec3HashParameters Nsec3Parameters { get; } =
+        DetermineNsec3Parameters(nsec3ParamRecord, denialOfExistenceRecords);
+
+    /// <summary>
     ///     This property contains the DS records generated for delegations to signed child zones
     ///     this server hosts, keyed by delegation point.
     /// </summary>
@@ -100,4 +125,47 @@ public sealed class SignedZoneData(
         DnsName name,
         DnsResourceRecordTypeEnum type
     ) => RrsigsByCoveredRrset.GetValueOrDefault((name, type), []);
+
+    /// <summary>
+    ///     This method decides the chain's mode from the NSEC3PARAM record and the chain.
+    /// </summary>
+    private static DnssecDenialOfExistenceModeEnum DetermineMode(
+        DnsResourceRecord nsec3Param,
+        IReadOnlyList<DnsResourceRecord> chain
+    ) =>
+        nsec3Param is not null
+        || (chain.Count > 0 && chain[0].Type == DnsResourceRecordTypeEnum.Nsec3)
+            ? DnssecDenialOfExistenceModeEnum.Nsec3
+            : DnssecDenialOfExistenceModeEnum.Nsec;
+
+    /// <summary>
+    ///     This method reads the NSEC3 hash parameters from the NSEC3PARAM record, else from the
+    ///     first NSEC3 record of the chain. It returns <see langword="null" /> for an NSEC chain
+    ///     and for NSEC3 records that cannot be decoded.
+    /// </summary>
+    private static Nsec3HashParameters DetermineNsec3Parameters(
+        DnsResourceRecord nsec3Param,
+        IReadOnlyList<DnsResourceRecord> chain
+    )
+    {
+        if (nsec3Param is not null)
+        {
+            return
+                DnsRecordDataCodecRegistry.Decode(nsec3Param.Type, nsec3Param.Data)
+                    is Nsec3ParamRecordData param
+                ? new Nsec3HashParameters(param.HashAlgorithm, param.Iterations, param.Salt)
+                : null;
+        }
+
+        if (chain.Count > 0 && chain[0].Type == DnsResourceRecordTypeEnum.Nsec3)
+        {
+            return
+                DnsRecordDataCodecRegistry.Decode(chain[0].Type, chain[0].Data)
+                    is Nsec3RecordData first
+                ? new Nsec3HashParameters(first.HashAlgorithm, first.Iterations, first.Salt)
+                : null;
+        }
+
+        return null;
+    }
 }

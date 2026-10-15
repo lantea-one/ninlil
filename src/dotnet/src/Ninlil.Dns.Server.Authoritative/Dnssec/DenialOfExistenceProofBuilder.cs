@@ -1,6 +1,5 @@
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
-using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Server.Dnssec;
 
 // Define our namespace.
@@ -13,8 +12,13 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     <para>
 ///         The records come from the chain <see cref="ZoneSigningService" /> already built
 ///         (<see cref="SignedZoneData.DenialOfExistenceRecords" />); nothing is signed per query.
-///         For NSEC3, names not in the chain (such as the next closer name) are hashed at query
-///         time to find the covering record. Lookups scan the chain linearly.
+///         The chain's own kind and hash parameters decide how records are found
+///         (<see cref="SignedZoneData.DenialOfExistenceMode" /> and
+///         <see cref="SignedZoneData.Nsec3Parameters" />), never the local zone row, because a
+///         secondary's row does not carry the primary's NSEC3 settings. For NSEC3, names not in
+///         the chain (such as the next closer name) are hashed at query time to find the covering
+///         record; a chain with an unsupported hash algorithm gives empty proofs. Lookups scan the
+///         chain linearly.
 ///     </para>
 /// </summary>
 public static class DenialOfExistenceProofBuilder
@@ -24,14 +28,24 @@ public static class DenialOfExistenceProofBuilder
     ///     NSEC3 record for that name, with its RRSIG.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's database record, for its NSEC3 hash parameters.</param>
+    /// <param name="apexName">The zone's apex name.</param>
     /// <param name="queryName">The name that exists but lacks the queried type.</param>
-    /// <returns>The proof records, or an empty list if the matching record was not found.</returns>
+    /// <returns>
+    ///     The proof records, or an empty list if the matching record was not found or the chain's
+    ///     hash algorithm is unsupported.
+    /// </returns>
     public static List<DnsResourceRecord> BuildNoDataProof(
         SignedZoneData signed,
-        ZoneEntity zone,
+        DnsName apexName,
         DnsName queryName
-    ) => WithSignature(signed, FindExactMatch(signed, zone, queryName), CoveringType(zone));
+    ) =>
+        CanProve(signed)
+            ? WithSignature(
+                signed,
+                FindExactMatch(signed, apexName, queryName),
+                CoveringType(signed)
+            )
+            : [];
 
     /// <summary>
     ///     This method builds the NXDOMAIN proof (RFC 4035 §3.1.3.2, RFC 5155 §7.2.2): that the
@@ -39,27 +53,27 @@ public static class DenialOfExistenceProofBuilder
     ///     wildcard at the closest encloser could have matched.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's database record.</param>
     /// <param name="apexName">The zone's apex name.</param>
     /// <param name="queryName">The name that does not exist.</param>
     /// <returns>The proof records, deduplicated.</returns>
     public static List<DnsResourceRecord> BuildNxDomainProof(
         SignedZoneData signed,
-        ZoneEntity zone,
         DnsName apexName,
         DnsName queryName
     )
     {
-        List<DnsResourceRecord> proof = BuildWildcardProof(signed, zone, apexName, queryName);
+        if (!CanProve(signed))
+            return [];
+
+        List<DnsResourceRecord> proof = BuildWildcardProof(signed, apexName, queryName);
         (DnsName closestEncloser, _) = FindClosestEncloserAndNextCloser(
             signed,
-            zone,
             apexName,
             queryName
         );
         DnsName wildcardName = WildcardNameFor(closestEncloser);
 
-        proof.AddRange(BuildCoveringProof(signed, zone, apexName, wildcardName));
+        proof.AddRange(BuildCoveringProof(signed, apexName, wildcardName));
 
         return Deduplicate(proof);
     }
@@ -70,16 +84,14 @@ public static class DenialOfExistenceProofBuilder
     ///     does not deny the wildcard, since the wildcard matched.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's database record.</param>
     /// <param name="apexName">The zone's apex name.</param>
     /// <param name="queryName">The originally queried name, before wildcard expansion.</param>
     /// <returns>The proof records, deduplicated.</returns>
     public static List<DnsResourceRecord> BuildWildcardProof(
         SignedZoneData signed,
-        ZoneEntity zone,
         DnsName apexName,
         DnsName queryName
-    ) => Deduplicate(BuildCoveringProof(signed, zone, apexName, queryName));
+    ) => CanProve(signed) ? Deduplicate(BuildCoveringProof(signed, apexName, queryName)) : [];
 
     /// <summary>
     ///     This method builds the proof that goes with an insecure referral (RFC 4035 §3.1.4): the
@@ -87,22 +99,25 @@ public static class DenialOfExistenceProofBuilder
     ///     secure delegation it returns an empty list, since the signed DS is sent instead.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's database record.</param>
+    /// <param name="apexName">The zone's apex name.</param>
     /// <param name="delegationPoint">The delegation point's name.</param>
     /// <returns>The proof records, or an empty list for a secure delegation.</returns>
     public static List<DnsResourceRecord> BuildInsecureDelegationProof(
         SignedZoneData signed,
-        ZoneEntity zone,
+        DnsName apexName,
         DnsName delegationPoint
     )
     {
-        if (signed.GeneratedDsRecordsByDelegationName.ContainsKey(delegationPoint))
+        if (
+            !CanProve(signed)
+            || signed.GeneratedDsRecordsByDelegationName.ContainsKey(delegationPoint)
+        )
             return [];
 
         return WithSignature(
             signed,
-            FindExactMatch(signed, zone, delegationPoint),
-            CoveringType(zone)
+            FindExactMatch(signed, apexName, delegationPoint),
+            CoveringType(signed)
         );
     }
 
@@ -113,31 +128,27 @@ public static class DenialOfExistenceProofBuilder
     /// </summary>
     private static List<DnsResourceRecord> BuildCoveringProof(
         SignedZoneData signed,
-        ZoneEntity zone,
         DnsName apexName,
         DnsName name
     )
     {
-        DnsResourceRecordTypeEnum coveringType = CoveringType(zone);
+        DnsResourceRecordTypeEnum coveringType = CoveringType(signed);
 
-        if (zone.DenialOfExistenceMode != DnssecDenialOfExistenceModeEnum.Nsec3)
+        if (signed.DenialOfExistenceMode != DnssecDenialOfExistenceModeEnum.Nsec3)
             return WithSignature(signed, FindCoveringNsec(signed, name), coveringType);
 
         (DnsName closestEncloser, DnsName nextCloser) = FindClosestEncloserAndNextCloser(
             signed,
-            zone,
             apexName,
             name
         );
 
         List<DnsResourceRecord> proof = WithSignature(
             signed,
-            FindExactMatch(signed, zone, closestEncloser),
+            FindExactMatch(signed, apexName, closestEncloser),
             coveringType
         );
-        proof.AddRange(
-            WithSignature(signed, FindCoveringNsec3(signed, zone, nextCloser), coveringType)
-        );
+        proof.AddRange(WithSignature(signed, FindCoveringNsec3(signed, nextCloser), coveringType));
 
         return proof;
     }
@@ -148,11 +159,11 @@ public static class DenialOfExistenceProofBuilder
     /// </summary>
     private static DnsResourceRecord FindExactMatch(
         SignedZoneData signed,
-        ZoneEntity zone,
+        DnsName apexName,
         DnsName name
     ) =>
-        zone.DenialOfExistenceMode == DnssecDenialOfExistenceModeEnum.Nsec3
-            ? FindExactNsec3(signed, zone, name)
+        signed.DenialOfExistenceMode == DnssecDenialOfExistenceModeEnum.Nsec3
+            ? FindExactNsec3(signed, apexName, name)
             : signed.DenialOfExistenceRecords.FirstOrDefault(record => record.Name == name);
 
     /// <summary>
@@ -175,13 +186,9 @@ public static class DenialOfExistenceProofBuilder
     ///     This method finds the NSEC3 record covering a name's hash, with the same rule as
     ///     <see cref="FindCoveringNsec" /> but in hash order.
     /// </summary>
-    private static DnsResourceRecord FindCoveringNsec3(
-        SignedZoneData signed,
-        ZoneEntity zone,
-        DnsName name
-    )
+    private static DnsResourceRecord FindCoveringNsec3(SignedZoneData signed, DnsName name)
     {
-        byte[] targetHash = HashFor(zone, name);
+        byte[] targetHash = HashFor(signed, name);
         IReadOnlyList<DnsResourceRecord> chain = signed.DenialOfExistenceRecords;
 
         for (int i = chain.Count - 1; i >= 0; i--)
@@ -196,23 +203,38 @@ public static class DenialOfExistenceProofBuilder
     /// </summary>
     private static DnsResourceRecord FindExactNsec3(
         SignedZoneData signed,
-        ZoneEntity zone,
+        DnsName apexName,
         DnsName name
     )
     {
-        DnsName ownerName = Nsec3Hasher.ToOwnerName(HashFor(zone, name), DnsName.Parse(zone.Name));
+        DnsName ownerName = Nsec3Hasher.ToOwnerName(HashFor(signed, name), apexName);
         return signed.DenialOfExistenceRecords.FirstOrDefault(record => record.Name == ownerName);
     }
 
     /// <summary>
-    ///     This method computes a name's RFC 5155 §5 hash with the zone's iterations and salt.
+    ///     This method computes a name's RFC 5155 §5 hash with the chain's own algorithm,
+    ///     iterations and salt (<see cref="SignedZoneData.Nsec3Parameters" />). Callers check
+    ///     <see cref="CanProve" /> first, so the algorithm is supported.
     /// </summary>
-    private static byte[] HashFor(ZoneEntity zone, DnsName name) =>
+    private static byte[] HashFor(SignedZoneData signed, DnsName name) =>
         Nsec3Hasher.ComputeHash(
-            1,
+            signed.Nsec3Parameters.HashAlgorithm,
             name,
-            zone.Nsec3Iterations,
-            string.IsNullOrEmpty(zone.Nsec3SaltHex) ? [] : Convert.FromHexString(zone.Nsec3SaltHex)
+            signed.Nsec3Parameters.Iterations,
+            signed.Nsec3Parameters.Salt
+        );
+
+    /// <summary>
+    ///     This method reports whether proofs can be built from the chain. An NSEC chain always
+    ///     can. An NSEC3 chain needs parameters with a hash algorithm
+    ///     <see cref="Nsec3Hasher.IsSupported" /> knows; otherwise names cannot be hashed and the
+    ///     proof is left empty instead of failing the query.
+    /// </summary>
+    private static bool CanProve(SignedZoneData signed) =>
+        signed.DenialOfExistenceMode != DnssecDenialOfExistenceModeEnum.Nsec3
+        || (
+            signed.Nsec3Parameters is not null
+            && Nsec3Hasher.IsSupported(signed.Nsec3Parameters.HashAlgorithm)
         );
 
     /// <summary>
@@ -223,7 +245,6 @@ public static class DenialOfExistenceProofBuilder
     /// </summary>
     private static (DnsName ClosestEncloser, DnsName NextCloser) FindClosestEncloserAndNextCloser(
         SignedZoneData signed,
-        ZoneEntity zone,
         DnsName apexName,
         DnsName name
     )
@@ -233,7 +254,7 @@ public static class DenialOfExistenceProofBuilder
 
         while (true)
         {
-            if (candidate == apexName || FindExactMatch(signed, zone, candidate) is not null)
+            if (candidate == apexName || FindExactMatch(signed, apexName, candidate) is not null)
                 return (candidate, previous ?? candidate);
 
             previous = candidate;
@@ -280,8 +301,8 @@ public static class DenialOfExistenceProofBuilder
     /// <summary>
     ///     This method reports which record type a zone's denial-of-existence chain uses.
     /// </summary>
-    private static DnsResourceRecordTypeEnum CoveringType(ZoneEntity zone) =>
-        zone.DenialOfExistenceMode == DnssecDenialOfExistenceModeEnum.Nsec3
+    private static DnsResourceRecordTypeEnum CoveringType(SignedZoneData signed) =>
+        signed.DenialOfExistenceMode == DnssecDenialOfExistenceModeEnum.Nsec3
             ? DnsResourceRecordTypeEnum.Nsec3
             : DnsResourceRecordTypeEnum.Nsec;
 
