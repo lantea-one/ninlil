@@ -1502,6 +1502,29 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.ToTable("NinlilDnsRoles", (string)null);
             });
 
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SecondaryZoneRefreshStateEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uuid");
+
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("timestamp with time zone");
+
+                b.Property<DateTimeOffset>("LastRefreshedAtUtc")
+                    .HasColumnType("timestamp with time zone");
+
+                b.Property<Guid>("ZoneId")
+                    .HasColumnType("uuid");
+
+                b.HasKey("Id");
+
+                b.HasIndex("ZoneId")
+                    .IsUnique();
+
+                b.ToTable("NinlilDnsSecondaryZoneRefreshStates", (string)null);
+            });
+
         modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.SessionEntity", b =>
             {
                 b.Property<Guid>("Id")
