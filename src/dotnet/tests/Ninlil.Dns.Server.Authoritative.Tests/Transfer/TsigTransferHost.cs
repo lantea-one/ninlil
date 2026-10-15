@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Common.Enum;
@@ -53,10 +54,18 @@ public sealed class TsigTransferHost : IAsyncDisposable
     ///     This method builds the host, seeds the zone and starts the host so the zone cache loads.
     /// </summary>
     /// <param name="recordsPerMessage">The records-per-message setting of the transfer service.</param>
-    public static async Task<TsigTransferHost> CreateAsync(int recordsPerMessage = 2)
+    /// <param name="reloadableConfigurationPath">
+    ///     The path of a JSON file (it need not exist yet) the host adds as a reload-on-change
+    ///     configuration source after its own settings, so a test can change options while the host
+    ///     runs; <see langword="null" /> adds none.
+    /// </param>
+    public static async Task<TsigTransferHost> CreateAsync(
+        int recordsPerMessage = 2,
+        string reloadableConfigurationPath = null
+    )
     {
         TsigTransferHost result = new();
-        await result.StartAsync(recordsPerMessage);
+        await result.StartAsync(recordsPerMessage, reloadableConfigurationPath);
         return result;
     }
 
@@ -65,12 +74,21 @@ public sealed class TsigTransferHost : IAsyncDisposable
     /// </summary>
     public IServiceProvider Services => _host.Services;
 
-    private async Task StartAsync(int recordsPerMessage)
+    private async Task StartAsync(int recordsPerMessage, string reloadableConfigurationPath)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
         builder.Configuration["DnsServer:Authoritative:ZoneTransfer:RecordsPerMessage"] =
             recordsPerMessage.ToString();
+
+        // Added after the in-memory settings above so a value in the file wins over them.
+        if (reloadableConfigurationPath is not null)
+            builder.Configuration.AddJsonFile(
+                reloadableConfigurationPath,
+                optional: true,
+                reloadOnChange: true
+            );
+
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
         builder.Services.AddSingleton<IDataProtectionProvider>(
