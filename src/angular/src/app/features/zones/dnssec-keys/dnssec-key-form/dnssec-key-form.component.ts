@@ -24,6 +24,8 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import {
   DEFAULT_RSA_KEY_SIZE_BITS,
   isRsaAlgorithm,
+  RSA_KEY_SIZE_HINT,
+  rsaKeySizeValidator,
   SIGNING_DNSSEC_ALGORITHMS,
 } from '../dnssec-key.model';
 
@@ -78,6 +80,9 @@ export class DnssecKeyFormComponent implements OnInit {
   readonly roleOptions = Object.values(DnssecKeyRoleEnum);
   readonly algorithmOptions = SIGNING_DNSSEC_ALGORITHMS;
 
+  /** The hint under the key size field, shared with the rollover dialog. */
+  readonly keySizeHint = RSA_KEY_SIZE_HINT;
+
   readonly loading = signal(this.isEditMode);
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
@@ -90,7 +95,7 @@ export class DnssecKeyFormComponent implements OnInit {
   readonly form = this.formBuilder.group({
     role: [DnssecKeyRoleEnum.Zsk as DnssecKeyRoleEnum, [Validators.required]],
     algorithm: [DnssecAlgorithmEnum.Ecdsap256Sha256 as DnssecAlgorithmEnum, [Validators.required]],
-    keySizeBits: [DEFAULT_RSA_KEY_SIZE_BITS, [Validators.min(0)]],
+    keySizeBits: [DEFAULT_RSA_KEY_SIZE_BITS, [rsaKeySizeValidator]],
     isRetired: [false],
     comments: [''],
   });
@@ -102,9 +107,14 @@ export class DnssecKeyFormComponent implements OnInit {
   readonly showKeySize = computed(() => isRsaAlgorithm(this.selectedAlgorithm()));
 
   constructor() {
-    this.form.controls.algorithm.valueChanges.subscribe((algorithm) =>
-      this.selectedAlgorithm.set(algorithm),
-    );
+    // The size is validated only while it applies: a stale invalid size must not block saving
+    // a key whose algorithm ignores the size.
+    this.form.controls.keySizeBits.disable();
+    this.form.controls.algorithm.valueChanges.subscribe((algorithm) => {
+      this.selectedAlgorithm.set(algorithm);
+      if (isRsaAlgorithm(algorithm)) this.form.controls.keySizeBits.enable();
+      else this.form.controls.keySizeBits.disable();
+    });
   }
 
   ngOnInit(): void {

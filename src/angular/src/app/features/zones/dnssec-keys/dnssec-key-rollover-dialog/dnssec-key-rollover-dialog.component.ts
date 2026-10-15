@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import {
   AlertComponent,
   ButtonDirective,
@@ -27,6 +27,8 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import {
   DEFAULT_RSA_KEY_SIZE_BITS,
   isRsaAlgorithm,
+  RSA_KEY_SIZE_HINT,
+  rsaKeySizeValidator,
   SIGNING_DNSSEC_ALGORITHMS,
 } from '../dnssec-key.model';
 
@@ -77,13 +79,17 @@ export class DnssecKeyRolloverDialogComponent {
   readonly rolled = output<DnssecKeyDetail>();
 
   readonly algorithmOptions = SIGNING_DNSSEC_ALGORITHMS;
+
+  /** The hint under the key size field, shared with the key form. */
+  readonly keySizeHint = RSA_KEY_SIZE_HINT;
+
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
   readonly form = this.formBuilder.group({
     // '' keeps the outgoing key's algorithm.
     algorithm: ['' as '' | DnssecAlgorithmEnum],
-    keySizeBits: [DEFAULT_RSA_KEY_SIZE_BITS, [Validators.required, Validators.min(1024)]],
+    keySizeBits: [DEFAULT_RSA_KEY_SIZE_BITS, [rsaKeySizeValidator]],
   });
 
   private readonly chosenAlgorithm = toSignal(this.form.controls.algorithm.valueChanges, {

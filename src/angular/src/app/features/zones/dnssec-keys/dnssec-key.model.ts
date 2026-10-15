@@ -1,3 +1,4 @@
+import { AbstractControl, ValidationErrors } from '@angular/forms';
 import {
   DnssecAlgorithmEnum,
   DnssecKeyDetail,
@@ -74,6 +75,38 @@ export const SIGNING_DNSSEC_ALGORITHMS: DnssecAlgorithmEnum[] = Object.values(
 /** This constant contains the RSA key size the key forms start with, the same 2048 bits the backend uses when none is given. */
 export const DEFAULT_RSA_KEY_SIZE_BITS = 2048;
 
+/** This constant is the smallest RSA key size in bits the server generates (other than 0, which means 2048). It mirrors `RsaSigningAlgorithm.MinimumKeySizeBits`. */
+export const MIN_RSA_KEY_SIZE_BITS = 2048;
+
+/** This constant is the largest RSA key size in bits the server generates (RFC 5702 §2.1, §2.2). It mirrors `RsaSigningAlgorithm.MaximumKeySizeBits`. */
+export const MAX_RSA_KEY_SIZE_BITS = 4096;
+
+/** This constant is the step an RSA key size must be a multiple of. It mirrors `RsaSigningAlgorithm.KeySizeStepBits`. */
+export const RSA_KEY_SIZE_STEP_BITS = 64;
+
+/** This constant is the hint under every RSA key size field, so the key form and the rollover dialog word the rule the same way. */
+export const RSA_KEY_SIZE_HINT = `Must be a multiple of ${RSA_KEY_SIZE_STEP_BITS} between ${MIN_RSA_KEY_SIZE_BITS} and ${MAX_RSA_KEY_SIZE_BITS} bits. 0 means ${DEFAULT_RSA_KEY_SIZE_BITS}.`;
+
+/**
+ * This function is the validator for an RSA key size field in the key form and the rollover
+ * dialog. It accepts 0 (the server's default of 2048) or a whole multiple of
+ * {@link RSA_KEY_SIZE_STEP_BITS} from {@link MIN_RSA_KEY_SIZE_BITS} to {@link MAX_RSA_KEY_SIZE_BITS},
+ * the same rule `RsaSigningAlgorithm.IsValidKeySize` applies, so the server never answers 400 for
+ * a size the form let through. It returns the error `rsaKeySize` otherwise, including for an
+ * empty field.
+ */
+export function rsaKeySizeValidator(control: AbstractControl): ValidationErrors | null {
+  const size: unknown = control.value;
+  const valid =
+    typeof size === 'number' &&
+    Number.isInteger(size) &&
+    (size === 0 ||
+      (size >= MIN_RSA_KEY_SIZE_BITS &&
+        size <= MAX_RSA_KEY_SIZE_BITS &&
+        size % RSA_KEY_SIZE_STEP_BITS === 0));
+  return valid ? null : { rsaKeySize: true };
+}
+
 /**
  * This function picks the CoreUI badge color for a key's RFC 6781 lifecycle state, so the key list
  * shows rollover progress at a glance. `Published` (an incoming key not yet in use) and
@@ -119,5 +152,24 @@ export function awaitingParentDsConfirmation(key: DnssecKeyDetail): boolean {
     key.role === DnssecKeyRoleEnum.Ksk &&
     key.lifecycleState === DnssecKeyLifecycleStateEnum.DoubleSignature &&
     !key.parentDsConfirmedAtUtc
+  );
+}
+
+/**
+ * This function reports whether a zone has keys but none of them can sign: no key is `Active` or
+ * `DoubleSignature` with an algorithm outside {@link SIGNING_PROHIBITED_DNSSEC_ALGORITHMS}. The
+ * server serves such a zone unsigned (and publishes no prohibited key) until a permitted key is
+ * added, so the key list warns about it. A zone with no key at all is not reported: it is simply
+ * not signed yet.
+ */
+export function hasNoSigningKey(keys: readonly DnssecKeyDetail[]): boolean {
+  return (
+    keys.length > 0 &&
+    !keys.some(
+      (key) =>
+        (key.lifecycleState === DnssecKeyLifecycleStateEnum.Active ||
+          key.lifecycleState === DnssecKeyLifecycleStateEnum.DoubleSignature) &&
+        !isSigningProhibited(key.algorithm),
+    )
   );
 }

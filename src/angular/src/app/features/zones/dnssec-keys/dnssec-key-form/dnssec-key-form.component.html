@@ -89,11 +89,14 @@
                   type="number"
                   formControlName="keySizeBits"
                 />
+                @if (form.controls.keySizeBits.invalid) {
+                  <p class="hint text-danger" role="alert">{{ keySizeHint }}</p>
+                }
                 <p class="hint">
                   Only meaningful for RSA -- ECDSA and EdDSA keys have a size fixed by the curve
                   itself, so this field disappears once one of those is selected. 2048 bits is a
                   reasonable default for a KSK or ZSK; going smaller weakens the signature, going
-                  much larger mostly just adds overhead to every signed answer.
+                  much larger mostly just adds overhead to every signed answer. {{ keySizeHint }}
                 </p>
               </div>
             }

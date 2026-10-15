@@ -1,7 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CdkTableModule } from '@angular/cdk/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
+  AlertComponent,
   BadgeComponent,
   ButtonDirective,
   SpinnerComponent,
@@ -25,6 +26,7 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import {
   awaitingParentDsConfirmation,
   canStartRollover,
+  hasNoSigningKey,
   lifecycleStateBadgeColor,
 } from '../dnssec-key.model';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
@@ -63,6 +65,7 @@ const DEFAULT_PAGE_SIZE = 25;
     TableDirective,
     TooltipDirective,
     IconDirective,
+    AlertComponent,
     CoreuiPaginationComponent,
     ConfirmDialogComponent,
     DnssecKeyRecordsDialogComponent,
@@ -117,6 +120,14 @@ export class DnssecKeyListComponent {
 
   readonly zoneName = signal<string | null>(null);
   readonly keys = signal<DnssecKeyDetail[]>([]);
+
+  /**
+   * Whether the zone has keys but none can sign (see {@link hasNoSigningKey}); the page then shows
+   * a warning. It looks at the loaded page only, so a zone with more keys than one page can show
+   * it while a permitted key sits on another page; the zone's keys are few in practice.
+   */
+  readonly noSigningKey = computed(() => hasNoSigningKey(this.keys()));
+
   readonly totalCount = signal(0);
   readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   readonly pageIndex = signal(0);

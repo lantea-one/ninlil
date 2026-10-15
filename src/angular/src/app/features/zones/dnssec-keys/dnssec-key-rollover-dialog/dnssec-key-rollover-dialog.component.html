@@ -39,6 +39,9 @@
             id="dnssec-rollover-key-size"
             formControlName="keySizeBits"
           />
+          <div cFormText [class.text-danger]="form.controls.keySizeBits.invalid">
+            {{ keySizeHint }}
+          </div>
         </div>
       }
     </form>

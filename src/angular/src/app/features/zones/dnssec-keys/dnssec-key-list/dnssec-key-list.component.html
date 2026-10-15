@@ -21,6 +21,14 @@
   <p class="error-message">{{ errorMessage() }}</p>
 }
 
+@if (!loading() && noSigningKey()) {
+  <c-alert color="warning" [dismissible]="false" class="no-signing-key-warning" role="alert">
+    None of this zone's keys can sign: no key is Active or in DoubleSignature with an algorithm the
+    server may sign with. The zone is served unsigned until a key with a permitted algorithm is
+    added.
+  </c-alert>
+}
+
 @if (loading()) {
   <c-spinner class="loading-spinner" />
 } @else if (keys().length === 0) {
