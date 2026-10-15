@@ -156,6 +156,10 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
         instance.AddScoped<IRecordRepository, RecordRepository>();
         instance.AddScoped<ITsigKeyRepository, TsigKeyRepository>();
         instance.AddScoped<IZoneChangeJournalRepository, ZoneChangeJournalRepository>();
+        instance.AddScoped<
+            ISecondaryZoneRefreshStateRepository,
+            SecondaryZoneRefreshStateRepository
+        >();
         instance.AddScoped<IDnssecKeyRepository, DnssecKeyRepository>();
         instance.AddScoped<
             ICloudDnsProviderCredentialRepository,

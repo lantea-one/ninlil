@@ -154,6 +154,10 @@ public static class ServiceCollectionMongoDbExtension
         instance.AddScoped<IRecordRepository, RecordMongoRepository>();
         instance.AddScoped<ITsigKeyRepository, TsigKeyMongoRepository>();
         instance.AddScoped<IZoneChangeJournalRepository, ZoneChangeJournalMongoRepository>();
+        instance.AddScoped<
+            ISecondaryZoneRefreshStateRepository,
+            SecondaryZoneRefreshStateMongoRepository
+        >();
         instance.AddScoped<IDnssecKeyRepository, DnssecKeyMongoRepository>();
         instance.AddScoped<
             ICloudDnsProviderCredentialRepository,

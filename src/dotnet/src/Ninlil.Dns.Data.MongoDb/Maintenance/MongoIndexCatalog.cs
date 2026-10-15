@@ -149,6 +149,13 @@ public static class MongoIndexCatalog
             stoppingToken
         );
         created += await EnsureCollectionAsync(
+            context.SecondaryZoneRefreshStates,
+            // One row per zone; a second row for the same zone must fail to save.
+            new IndexSet<SecondaryZoneRefreshStateEntity>().Unique(state => state.ZoneId),
+            logger,
+            stoppingToken
+        );
+        created += await EnsureCollectionAsync(
             context.CloudDnsProviderCredentials,
             new IndexSet<CloudDnsProviderCredentialEntity>().Asc(credential => credential.Name),
             logger,
@@ -402,7 +409,8 @@ public static class MongoIndexCatalog
     }
 
     /// <summary>
-    ///     This class collects the non-unique index definitions of one collection. Field
+    ///     This class collects the index definitions of one collection (non-unique, except those added with
+    ///     <see cref="Unique" />). Field
     ///     expressions are checked by the compiler against the entity, and the driver maps them
     ///     to the stored field names (the same mapping the repositories' filters use).
     /// </summary>
@@ -424,6 +432,21 @@ public static class MongoIndexCatalog
                     Builders<T>.IndexKeys.Combine(
                         fields.Select(field => Builders<T>.IndexKeys.Ascending(field))
                     )
+                )
+            );
+            return this;
+        }
+
+        /// <summary>
+        ///     This method adds a unique index on one field in ascending order. The server
+        ///     rejects a second document with the same value.
+        /// </summary>
+        public IndexSet<T> Unique(Expression<Func<T, object>> field)
+        {
+            Models.Add(
+                new CreateIndexModel<T>(
+                    Builders<T>.IndexKeys.Ascending(field),
+                    new CreateIndexOptions { Unique = true }
                 )
             );
             return this;

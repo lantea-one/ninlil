@@ -80,6 +80,7 @@ public static class MongoClassMapRegistrar
             RegisterEntity<DhcpTagRuleOptionEntity>();
             RegisterEntity<TsigKeyEntity>();
             RegisterEntity<ZoneChangeJournalEntryEntity>();
+            RegisterEntity<SecondaryZoneRefreshStateEntity>();
             RegisterEntity<DnssecKeyEntity>();
             RegisterEntity<CloudDnsProviderCredentialEntity>();
             RegisterEntity<DnsFilterListEntity>();

@@ -24,12 +24,14 @@ namespace Ninlil.Dns.Server.Backup.Catalog;
 ///         normal expiry sweep.
 ///     </para>
 ///     <para>
-///         <b>Excluded</b>: only history and telemetry tables, which a server does not need after
-///         a restore and which can grow very large: <see cref="LogEntity" /> and
+///         <b>Excluded</b>: history, telemetry and node-local state tables, which a server does not
+///         need after a restore (the history tables can grow very large): <see cref="LogEntity" /> and
 ///         <see cref="MetricEntity" /> (operational telemetry);
 ///         <see cref="ZoneChangeJournalEntryEntity" /> (the incremental-transfer journal, whose
 ///         absence costs nothing beyond a secondary's next refresh falling back from IXFR to a
-///         full AXFR once); <see cref="DnsQueryLogEntryEntity" /> (the persistent query log); and
+///         full AXFR once); <see cref="DnsQueryLogEntryEntity" /> (the persistent query log);
+///         <see cref="SecondaryZoneRefreshStateEntity" /> (node-local runtime state: after a
+///         restore or an engine switch a missing row starts a fresh Expire interval); and
 ///         <see cref="WebhookDeliveryAttemptEntity" /> (webhook delivery history). Cluster sync
 ///         tombstones (<see cref="ClusterSyncTombstoneEntity" />) are left out too: they only
 ///         guard against stale changes still in flight between peers. A new

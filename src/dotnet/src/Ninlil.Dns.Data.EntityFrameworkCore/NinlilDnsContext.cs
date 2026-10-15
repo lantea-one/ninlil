@@ -196,6 +196,12 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
         Set<ZoneChangeJournalEntryEntity>();
 
     /// <summary>
+    ///     This property contains when each secondary zone was last refreshed (node-local state).
+    /// </summary>
+    public DbSet<SecondaryZoneRefreshStateEntity> SecondaryZoneRefreshStates =>
+        Set<SecondaryZoneRefreshStateEntity>();
+
+    /// <summary>
     ///     This property contains every zone's DNSSEC signing keys.
     /// </summary>
     public DbSet<DnssecKeyEntity> DnssecKeys => Set<DnssecKeyEntity>();

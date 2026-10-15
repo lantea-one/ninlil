@@ -182,6 +182,12 @@ public class NinlilDnsMongoContext(
         Collection<ZoneChangeJournalEntryEntity>("NinlilDnsZoneChangeJournalEntries");
 
     /// <summary>
+    ///     This property contains when each secondary zone was last refreshed (node-local state).
+    /// </summary>
+    public IMongoCollection<SecondaryZoneRefreshStateEntity> SecondaryZoneRefreshStates =>
+        Collection<SecondaryZoneRefreshStateEntity>("NinlilDnsSecondaryZoneRefreshStates");
+
+    /// <summary>
     ///     This property contains every zone's DNSSEC signing keys.
     /// </summary>
     public IMongoCollection<DnssecKeyEntity> DnssecKeys =>
