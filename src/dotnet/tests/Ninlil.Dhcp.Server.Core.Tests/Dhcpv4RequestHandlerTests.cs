@@ -476,7 +476,9 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
         );
         await _host.Handler.HandleRequestAsync(decline, RemoteEndPoint, CancellationToken.None);
 
-        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, "50:50:50:50:50:50");
+        // The row is re-keyed to the address, so the client holds no row and nobody owns the address.
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, "50:50:50:50:50:50"));
+        LeaseEntity after = await _host.FindLeaseAsync(scope.Name, $"declined:{active.IpAddress}");
         Assert.Equal(LeaseStateEnum.Expired, after.State);
         Assert.True(after.LeaseExpiresAtUtc > DateTimeOffset.UtcNow);
     }

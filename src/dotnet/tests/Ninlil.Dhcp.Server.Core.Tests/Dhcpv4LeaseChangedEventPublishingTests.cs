@@ -10,7 +10,7 @@ namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
 ///     This test class checks where the DHCPv4 engine publishes <see cref="DhcpLeaseChangedEvent" />:
-///     for a granted lease and a release, never for an offer or a decline (see
+///     for a granted lease, a release and a decline (an Expired change), never for an offer (see
 ///     <see cref="Ninlil.Dhcp.Server.Core.Allocation.Dhcpv4LeaseAllocationService" />). It reads
 ///     the recording publisher of a <see cref="Dhcpv4EngineTestHost" />; delivery to subscribers
 ///     through the event bus is tested in <c>Ninlil.Dhcp.Server.DnsIntegration.Tests</c>.
@@ -117,7 +117,7 @@ public sealed class Dhcpv4LeaseChangedEventPublishingTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Decline_PublishesNoEvent()
+    public async Task Decline_PublishesExpired()
     {
         DhcpScopeEntity scope = await _host.SeedScopeAsync(
             "event-decline-scope",
@@ -142,7 +142,10 @@ public sealed class Dhcpv4LeaseChangedEventPublishingTests : IAsyncLifetime
 
         await _host.Handler.HandleRequestAsync(decline, RemoteEndPoint, CancellationToken.None);
 
-        Assert.Empty(_host.PublishedEvents);
+        DhcpLeaseChangedEvent published = Assert.IsType<DhcpLeaseChangedEvent>(
+            Assert.Single(_host.PublishedEvents)
+        );
+        Assert.Equal(DhcpLeaseChangeKindEnum.Expired, published.ChangeKind);
     }
 
     private static Dhcpv4Message NewMessage(byte[] clientHardwareAddress, uint transactionId) =>

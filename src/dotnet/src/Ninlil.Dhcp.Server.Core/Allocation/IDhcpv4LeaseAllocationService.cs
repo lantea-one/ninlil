@@ -16,11 +16,13 @@ public interface IDhcpv4LeaseAllocationService
 {
     /// <summary>
     ///     This method picks an address for a DISCOVER (RFC 2131 Section 4.3.1) and holds it for
-    ///     the client as an offer. In order: the address on the client's existing lease row,
-    ///     when that row is not <c>Expired</c> and the address is still in range; the client's
-    ///     enabled reservation; the address the client asked for (Requested IP Address, RFC 2132
-    ///     Section 9.1) when it is free, in range and not reserved for someone else; otherwise
-    ///     the first free address in the pool.
+    ///     the client as an offer. In order: the client's enabled reservation (when another client
+    ///     blocks the reserved address there is no offer, since <see cref="ConfirmAsync" /> would
+    ///     refuse any other); the address on the client's existing lease row, in any state, when
+    ///     it is still in range and not reserved for another client; the address the client asked
+    ///     for (Requested IP Address, RFC 2132 Section 9.1) when it is free, in range and not
+    ///     reserved for someone else; otherwise the first free address in the pool. Another
+    ///     client's released or expired row at the chosen address is deleted first.
     /// </summary>
     /// <param name="scope">The scope to allocate from.</param>
     /// <param name="request">The client's DISCOVER message.</param>
@@ -67,8 +69,12 @@ public interface IDhcpv4LeaseAllocationService
     /// <summary>
     ///     This method withholds an address a client reported as already in use (RFC 2131
     ///     Section 4.3.3, DHCPDECLINE) for <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" />,
-    ///     by marking the lease row for that address <c>Expired</c> with a future expiry. Only the
-    ///     declining client's own row is marked; with no row, or another client's, nothing changes.
+    ///     by re-keying the client's lease row for that address to <c>declined:&lt;address&gt;</c>
+    ///     and marking it <c>Expired</c> with a future expiry, and publishes an <c>Expired</c>
+    ///     lease change. The row then belongs to no client, so the address stays blocked for
+    ///     every client, the decliner included, and the decliner's next DISCOVER starts a new
+    ///     row. Only the declining client's own row is changed; with no row, or another client's,
+    ///     nothing changes.
     /// </summary>
     /// <param name="scope">The scope <paramref name="declinedAddress" /> belongs to.</param>
     /// <param name="request">The client's DECLINE message.</param>

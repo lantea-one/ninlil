@@ -34,6 +34,8 @@ public enum DhcpLeaseChangeKindEnum
     /// <summary>
     ///     The lease's validity period ran out without a renewal. A periodic sweep detects this,
     ///     because neither DHCPv4 nor DHCPv6 has a message a client sends when its lease expires.
+    ///     It is also published when a client declines the address (DHCPv4 DECLINE, RFC 2131
+    ///     Section 4.3.3): the lease row becomes a quarantine row that no client holds.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Expired")]
     Expired = 2,
