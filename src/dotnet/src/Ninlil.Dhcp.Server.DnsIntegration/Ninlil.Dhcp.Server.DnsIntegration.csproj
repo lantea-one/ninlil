@@ -32,6 +32,15 @@
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
 
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Server.Core -->
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />

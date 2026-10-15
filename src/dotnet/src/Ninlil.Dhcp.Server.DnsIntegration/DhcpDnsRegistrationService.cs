@@ -87,22 +87,14 @@ public class DhcpDnsRegistrationService(
             stoppingToken
         );
 
-        if (scope?.DnsZoneId is not { } dnsZoneId)
-            return DhcpDnsRegistrationResult.Skipped(
-                "The lease's own scope has no DNS zone designated for DHCP->DNS integration."
-            );
-
-        ZoneEntity zone = await zoneRepository.GetByIdAsync(dnsZoneId, stoppingToken);
+        (ZoneEntity zone, string skipReason) = await FindEligibleZoneAsync(
+            scope,
+            zoneRepository,
+            stoppingToken
+        );
 
         if (zone is null)
-            return DhcpDnsRegistrationResult.Skipped(
-                "The scope's own designated DNS zone no longer exists."
-            );
-
-        if (!IsEligibleZoneType(zone.Type))
-            return DhcpDnsRegistrationResult.Skipped(
-                $"Zone type '{zone.Type}' is not eligible for DHCP->DNS integration -- only Primary/CloudPrimary zones are."
-            );
+            return DhcpDnsRegistrationResult.Skipped(skipReason);
 
         DnsResourceRecordTypeEnum recordType =
             lease.ProtocolVersion == InternetProtocolVersionEnum.IPv6
@@ -173,6 +165,43 @@ public class DhcpDnsRegistrationService(
         await ApplyAsync(zone.Id, [newRecord], recordsToRemove, stoppingToken);
 
         return DhcpDnsRegistrationResult.Registered(ownerName);
+    }
+
+    /// <summary>
+    ///     This method finds the zone a scope's leases register in: the zone named by
+    ///     <see cref="DhcpScopeEntity.DnsZoneId" />, when it exists and its type is eligible (see
+    ///     <see cref="IsEligibleZoneType" />). <see cref="HandleLeaseChangeAsync" /> and
+    ///     <see cref="DhcpDnsUpdatePolicy" /> both call it, so the policy the DHCPv6 Client FQDN
+    ///     reply is built from and the registration that follows never disagree.
+    /// </summary>
+    /// <param name="scope">The scope, or <see langword="null" /> when it does not exist.</param>
+    /// <param name="zoneRepository">The repository the zone is read from.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The zone, or <see langword="null" /> with the reason there is none.</returns>
+    internal static async Task<(ZoneEntity Zone, string SkipReason)> FindEligibleZoneAsync(
+        DhcpScopeEntity scope,
+        IZoneRepository zoneRepository,
+        CancellationToken stoppingToken
+    )
+    {
+        if (scope?.DnsZoneId is not { } dnsZoneId)
+            return (
+                null,
+                "The lease's own scope has no DNS zone designated for DHCP->DNS integration."
+            );
+
+        ZoneEntity zone = await zoneRepository.GetByIdAsync(dnsZoneId, stoppingToken);
+
+        if (zone is null)
+            return (null, "The scope's own designated DNS zone no longer exists.");
+
+        if (!IsEligibleZoneType(zone.Type))
+            return (
+                null,
+                $"Zone type '{zone.Type}' is not eligible for DHCP->DNS integration -- only Primary/CloudPrimary zones are."
+            );
+
+        return (zone, null);
     }
 
     /// <summary>

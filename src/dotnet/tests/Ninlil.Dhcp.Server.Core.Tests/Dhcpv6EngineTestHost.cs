@@ -69,8 +69,13 @@ public sealed class Dhcpv6EngineTestHost : IAsyncDisposable
     /// <summary>
     ///     This method builds the host (without starting it) and creates the schema with
     ///     <c>EnsureCreatedAsync</c>, as <see cref="Dhcpv4EngineTestHost" /> does.
+    ///     <paramref name="configureServices" /> runs after the engine is registered, so a test can
+    ///     replace a service such as <see cref="Ninlil.Dhcp.Server.Core.DnsUpdate.IDhcpDnsUpdatePolicy" />.
     /// </summary>
-    public async Task InitializeAsync(bool enableRapidCommit = false)
+    public async Task InitializeAsync(
+        bool enableRapidCommit = false,
+        Action<IServiceCollection> configureServices = null
+    )
     {
         HostApplicationBuilder builder =
             Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
@@ -89,6 +94,7 @@ public sealed class Dhcpv6EngineTestHost : IAsyncDisposable
         );
 
         builder.Services.AddNinlilDhcpv6ServerCore(builder.Configuration);
+        configureServices?.Invoke(builder.Services);
 
         // Lease force-release and scope statistics, registered as Program.cs does.
         builder.Services.AddNinlilDhcpLeaseAdministration();

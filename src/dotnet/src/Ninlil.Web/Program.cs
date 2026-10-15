@@ -572,9 +572,10 @@ builder.Services.Configure<DnsOverHttpsOptions>(
 builder.Services.AddNinlilDnsProtocolDnsOverQuic(builder.Configuration);
 builder.Services.AddNinlilDnsProtocolDnsCrypt();
 
-// The DHCPv4 and DHCPv6 engine choices (local engine or relay agent), the DHCP-to-DNS integration
-// and the DHCP-lease client identity resolver live in DhcpServiceRegistration so a test can build
-// them on a plain ServiceCollection. They come after the DHCP repository registration above.
+// The DHCPv4 and DHCPv6 engine choices (local engine or relay agent) and the DHCP-to-DNS
+// integration live in DhcpServiceRegistration so a test can build them on a plain
+// ServiceCollection. The integration is registered in every configuration, so DHCPv6 leases reach
+// DNS even when DHCPv4 is relayed. They come after the DHCP repository registration above.
 builder.Services.AddNinlilDhcpEngines(builder.Configuration);
 builder.Services.AddNinlilDhcpProtocolDhcpv4(builder.Configuration);
 builder.Services.AddNinlilDhcpProtocolDhcpv6(builder.Configuration);
@@ -610,7 +611,9 @@ builder.Services.AddNinlilDhcpProtocolRa(builder.Configuration);
 // operator configuration.
 builder.Services.AddNinlilDnsServerClientIdentity(builder.Configuration);
 
-builder.Services.AddNinlilClientIdentityResolverChain(builder.Configuration);
+// The resolver chain (static mappings, DHCP leases, ARP) is built in DhcpServiceRegistration. The
+// DHCP-lease resolver is part of it in every configuration, like the DHCP-to-DNS integration.
+builder.Services.AddNinlilClientIdentityResolverChain();
 
 // DnsOverHttpsTransportGate gives DNS-over-HTTPS (mapped onto the shared Kestrel after Build()
 // rather than hosting its own) the same start and stop lifecycle as the socket transports, since

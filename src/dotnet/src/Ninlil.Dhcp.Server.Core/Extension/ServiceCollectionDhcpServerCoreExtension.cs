@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Ninlil.Dhcp.Protocol.Dhcpv4;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
 using Ninlil.Dhcp.Server.Core.Administration;
 using Ninlil.Dhcp.Server.Core.Allocation;
+using Ninlil.Dhcp.Server.Core.DnsUpdate;
 using Ninlil.Dhcp.Server.Core.Identity;
 using Ninlil.Dhcp.Server.Core.Options;
 using Ninlil.Dhcp.Server.Core.Scope;
@@ -26,7 +28,7 @@ public static class ServiceCollectionDhcpServerCoreExtension
     ///     This method binds <see cref="DhcpServerOptions" /> and registers the DHCPv4 engine:
     ///     <see cref="IDhcpServerIdentifierProvider" /> (singleton), the scoped
     ///     <see cref="IDhcpv4ScopeResolver" />, <see cref="IDhcpv4LeaseAllocationService" /> and
-    ///     <see cref="IDhcpv4OptionOverlayService" />, and <see cref="Dhcpv4RequestHandler" /> as the
+    ///     <see cref="IDhcpv4OptionOverlayService" />, the default <see cref="IDhcpDnsUpdatePolicy" />, and <see cref="Dhcpv4RequestHandler" /> as the
     ///     singleton <see cref="IDhcpv4RequestHandler" /> that <see cref="Dhcpv4UdpListener" />
     ///     calls.
     ///     <para>
@@ -51,6 +53,8 @@ public static class ServiceCollectionDhcpServerCoreExtension
         instance.AddScoped<IDhcpv4ScopeResolver, Dhcpv4ScopeResolver>();
         instance.AddScoped<IDhcpv4LeaseAllocationService, Dhcpv4LeaseAllocationService>();
         instance.AddScoped<IDhcpv4OptionOverlayService, Dhcpv4OptionOverlayService>();
+        // The default policy registers no host names; AddNinlilDhcpDnsIntegration replaces it.
+        instance.TryAddScoped<IDhcpDnsUpdatePolicy, NoDhcpDnsUpdatePolicy>();
 
         // Singleton, because the singleton Dhcpv4UdpListener holds it. Dhcpv4RequestHandler
         // creates a scope per request to reach the scoped services above.
@@ -65,7 +69,7 @@ public static class ServiceCollectionDhcpServerCoreExtension
     ///     singleton <see cref="IDhcpv6ServerIdentifierProvider" /> and
     ///     <see cref="IDhcpv6ServerAddressProvider" />, the scoped
     ///     <see cref="IDhcpv6ScopeResolver" />, <see cref="IDhcpv6LeaseAllocationService" /> and
-    ///     <see cref="IDhcpv6OptionOverlayService" />, and one singleton
+    ///     <see cref="IDhcpv6OptionOverlayService" />, the default <see cref="IDhcpDnsUpdatePolicy" />, and one singleton
     ///     <see cref="Dhcpv6RequestHandler" /> serving as both <see cref="IDhcpv6RequestHandler" />
     ///     and <see cref="IDhcpv6RelayMessageHandler" /> for <see cref="Dhcpv6UdpListener" />.
     ///     <para>
@@ -93,6 +97,8 @@ public static class ServiceCollectionDhcpServerCoreExtension
         instance.AddScoped<IDhcpv6ScopeResolver, Dhcpv6ScopeResolver>();
         instance.AddScoped<IDhcpv6LeaseAllocationService, Dhcpv6LeaseAllocationService>();
         instance.AddScoped<IDhcpv6OptionOverlayService, Dhcpv6OptionOverlayService>();
+        // The default policy registers no host names; AddNinlilDhcpDnsIntegration replaces it.
+        instance.TryAddScoped<IDhcpDnsUpdatePolicy, NoDhcpDnsUpdatePolicy>();
 
         // One instance behind both interfaces: Dhcpv6UdpListener uses IDhcpv6RequestHandler for
         // client messages and the optional IDhcpv6RelayMessageHandler for RELAY-FORW, and both

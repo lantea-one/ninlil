@@ -8,6 +8,7 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Enum;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
 using Ninlil.Dhcp.Server.Core.Allocation;
+using Ninlil.Dhcp.Server.Core.DnsUpdate;
 using Ninlil.Dhcp.Server.Core.Identity;
 using Ninlil.Dhcp.Server.Core.Network;
 using Ninlil.Dhcp.Server.Core.Options;
@@ -242,6 +243,8 @@ public sealed class Dhcpv6RequestHandler(
             scope.ServiceProvider.GetRequiredService<IDhcpv6LeaseAllocationService>();
         IDhcpv6OptionOverlayService optionOverlayService =
             scope.ServiceProvider.GetRequiredService<IDhcpv6OptionOverlayService>();
+        IDhcpDnsUpdatePolicy dnsUpdatePolicy =
+            scope.ServiceProvider.GetRequiredService<IDhcpDnsUpdatePolicy>();
 
         return request.MessageType switch
         {
@@ -251,6 +254,7 @@ public sealed class Dhcpv6RequestHandler(
                 scopeResolver,
                 leaseAllocationService,
                 optionOverlayService,
+                dnsUpdatePolicy,
                 cancellationToken
             ),
             Dhcpv6MessageTypeEnum.Request => await HandleConfirmingExchangeAsync(
@@ -260,6 +264,7 @@ public sealed class Dhcpv6RequestHandler(
                 scopeResolver,
                 leaseAllocationService,
                 optionOverlayService,
+                dnsUpdatePolicy,
                 cancellationToken
             ),
             Dhcpv6MessageTypeEnum.Renew => await HandleConfirmingExchangeAsync(
@@ -269,6 +274,7 @@ public sealed class Dhcpv6RequestHandler(
                 scopeResolver,
                 leaseAllocationService,
                 optionOverlayService,
+                dnsUpdatePolicy,
                 cancellationToken
             ),
             Dhcpv6MessageTypeEnum.Rebind => await HandleConfirmingExchangeAsync(
@@ -278,6 +284,7 @@ public sealed class Dhcpv6RequestHandler(
                 scopeResolver,
                 leaseAllocationService,
                 optionOverlayService,
+                dnsUpdatePolicy,
                 cancellationToken
             ),
             Dhcpv6MessageTypeEnum.Release => await HandleReleaseAsync(
@@ -325,6 +332,7 @@ public sealed class Dhcpv6RequestHandler(
         IDhcpv6ScopeResolver scopeResolver,
         IDhcpv6LeaseAllocationService leaseAllocationService,
         IDhcpv6OptionOverlayService optionOverlayService,
+        IDhcpDnsUpdatePolicy dnsUpdatePolicy,
         CancellationToken cancellationToken
     )
     {
@@ -385,7 +393,14 @@ public sealed class Dhcpv6RequestHandler(
                     offeredAnything = true;
 
                 if (rapidCommit)
-                    ApplyClientFqdnReply(reply, clientFqdn, replyNa.Addresses.Count > 0);
+                    await ApplyClientFqdnReplyAsync(
+                        reply,
+                        clientFqdn,
+                        replyNa.Addresses.Count > 0,
+                        scope,
+                        dnsUpdatePolicy,
+                        cancellationToken
+                    );
             }
         }
 
@@ -456,6 +471,7 @@ public sealed class Dhcpv6RequestHandler(
         IDhcpv6ScopeResolver scopeResolver,
         IDhcpv6LeaseAllocationService leaseAllocationService,
         IDhcpv6OptionOverlayService optionOverlayService,
+        IDhcpDnsUpdatePolicy dnsUpdatePolicy,
         CancellationToken cancellationToken
     )
     {
@@ -488,7 +504,14 @@ public sealed class Dhcpv6RequestHandler(
                 );
             reply.AddIdentityAssociationForNonTemporaryAddresses(replyNa);
             optionScope ??= scope;
-            ApplyClientFqdnReply(reply, clientFqdn, replyNa.Addresses.Count > 0);
+            await ApplyClientFqdnReplyAsync(
+                reply,
+                clientFqdn,
+                replyNa.Addresses.Count > 0,
+                scope,
+                dnsUpdatePolicy,
+                cancellationToken
+            );
         }
 
         if (requestedPd is not null)
@@ -1330,21 +1353,33 @@ public sealed class Dhcpv6RequestHandler(
     /// <summary>
     ///     This method adds the Client FQDN reply option once the address commit is known, and
     ///     does nothing if the request had none (see <see cref="ClientFqdnRequest.HadOption" />).
-    ///     The reply says the server performs the AAAA update (S=1, N=0) whenever an address was
-    ///     granted and there is a host name, and otherwise that it performs none (S=0, N=1).
-    ///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpDnsRegistrationService</c> additionally needs
-    ///     the scope to have a DNS zone, which is not checked here.
+    ///     The reply says the server performs the AAAA update (S=1, N=0) only when an address was
+    ///     granted, the client offered a host name and
+    ///     <see cref="IDhcpDnsUpdatePolicy.RegistersHostNamesAsync" /> says this server registers
+    ///     names for the granting scope; otherwise it says the server performs none (S=0, N=1), and
+    ///     sets O=1 when the client had asked for S=1 (RFC 4704 Section 4.1). S=1 promises an
+    ///     attempt, not a result: <c>DhcpDnsRegistrationService</c> can still refuse a name that
+    ///     belongs to a static record or another active client, or fail the update (RFC 4704
+    ///     Section 6), and the client is not told. The policy is not asked when the request had no
+    ///     Client FQDN option, nor when no address or host name makes the answer false anyway.
     /// </summary>
-    private static void ApplyClientFqdnReply(
+    private static async Task ApplyClientFqdnReplyAsync(
         Dhcpv6Message reply,
         ClientFqdnRequest decoded,
-        bool addressWasGranted
+        bool addressWasGranted,
+        DhcpScopeEntity scope,
+        IDhcpDnsUpdatePolicy dnsUpdatePolicy,
+        CancellationToken cancellationToken
     )
     {
         if (!decoded.HadOption)
             return;
 
-        bool serverPerformsAaaaUpdate = addressWasGranted && decoded.HostNameCandidate is not null;
+        bool serverPerformsAaaaUpdate =
+            addressWasGranted
+            && decoded.HostNameCandidate is not null
+            && scope is not null
+            && await dnsUpdatePolicy.RegistersHostNamesAsync(scope, cancellationToken);
 
         reply.SetClientFqdn(
             serverShouldNotPerformAnyDnsUpdates: !serverPerformsAaaaUpdate,
