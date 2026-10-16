@@ -43,7 +43,11 @@
               rows="3"
               placeholder="dns.example.com"
             ></textarea>
-            <div cFormText>Each domain must be a name this server itself is authoritative for.</div>
+            <div cFormText>
+              Host names only, with a leading <code>*.</code> for a wildcard certificate. Each name
+              must sit in a Primary or CloudPrimary zone on this server; validation waits up to two
+              minutes for the zone's secondaries to serve the challenge.
+            </div>
           </div>
 
           <div class="field full-width">
@@ -55,7 +59,10 @@
               rows="3"
               placeholder="admin@example.com"
             ></textarea>
-            <div cFormText>Used only for the CA's own expiry/incident notifications.</div>
+            <div cFormText>
+              Every address is registered with the certificate authority, which uses them only for
+              its own expiry and incident notices. Leaving this empty is allowed.
+            </div>
           </div>
         </div>
 

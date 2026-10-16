@@ -502,8 +502,13 @@
             cFormControl
             id="dnscrypt-provider-name"
             formControlName="providerName"
-            placeholder="resolver.example."
+            placeholder="resolver.example"
           />
+          <div cFormText>
+            Write it as <code>resolver.example</code> or
+            <code>2.dnscrypt-cert.resolver.example</code>; both publish the certificate at the same
+            name. A client's stamp carries the full <code>2.dnscrypt-cert.</code> name.
+          </div>
         </div>
 
         <div class="field-row">

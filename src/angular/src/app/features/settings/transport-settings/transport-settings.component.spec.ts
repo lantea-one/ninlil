@@ -89,7 +89,7 @@ describe('TransportSettingsComponent', () => {
     apiSpy.apiTransportSettingsDnscryptGet.and.returnValue(
       of({
         enable: false,
-        port: 5353,
+        port: 5443,
         providerName: '',
         tcpIdleTimeout: '00:00:30',
         maxConcurrentTcpConnections: 512,

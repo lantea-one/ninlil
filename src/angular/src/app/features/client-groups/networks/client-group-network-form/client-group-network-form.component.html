@@ -22,7 +22,7 @@
 
         @if (showCidrField()) {
           <div class="field full-width">
-            <label cLabel for="client-group-network-cidr">CIDR</label>
+            <label cLabel for="client-group-network-cidr">Address or network (CIDR)</label>
             <input
               cFormControl
               id="client-group-network-cidr"
@@ -32,6 +32,10 @@
             @if (form.controls.cidr.hasError('required')) {
               <div class="field-error">A CIDR network or address is required.</div>
             }
+            <div class="field-hint">
+              An address or a CIDR network. A bare address (for example 192.168.1.10) matches that
+              one host.
+            </div>
           </div>
         }
 

@@ -136,7 +136,7 @@ export class TransportSettingsComponent implements OnInit {
 
   readonly dnsCryptForm = this.formBuilder.group({
     enable: [false],
-    port: [5353, [Validators.required, Validators.min(1), Validators.max(65535)]],
+    port: [5443, [Validators.required, Validators.min(1), Validators.max(65535)]],
     listenAddresses: [''],
     providerName: [''],
     tcpIdleTimeout: ['00:00:30', [Validators.required]],
@@ -394,7 +394,7 @@ export class TransportSettingsComponent implements OnInit {
 
       this.dnsCryptForm.patchValue({
         enable: dnsCrypt.enable ?? false,
-        port: dnsCrypt.port ?? 5353,
+        port: dnsCrypt.port ?? 5443,
         listenAddresses: joinLines(dnsCrypt.listenAddresses),
         providerName: dnsCrypt.providerName ?? '',
         tcpIdleTimeout: dnsCrypt.tcpIdleTimeout ?? '00:00:30',

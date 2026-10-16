@@ -21,7 +21,7 @@
         </div>
 
         <div class="field full-width">
-          <label cLabel for="acl-rule-cidr">Network (CIDR)</label>
+          <label cLabel for="acl-rule-cidr">Address or network (CIDR)</label>
           <input
             cFormControl
             id="acl-rule-cidr"
@@ -29,11 +29,12 @@
             placeholder="192.168.1.0/24"
           />
           @if (form.controls.cidr.hasError('required')) {
-            <div class="field-error">A network is required.</div>
+            <div class="field-error">An address or network is required.</div>
           }
           <p class="hint">
-            A bare address (for example <code>192.168.1.10</code>) is treated as a single-host
-            <code>/32</code> network.
+            An address or a CIDR network. A bare address (for example <code>192.168.1.10</code> or
+            <code>2001:db8::10</code>) matches that one host. A zone index such as
+            <code>fe80::1%2</code> is not accepted.
           </p>
         </div>
 
