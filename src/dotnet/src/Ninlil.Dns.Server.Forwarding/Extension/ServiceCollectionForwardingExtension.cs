@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Forwarding;
@@ -24,7 +25,7 @@ public static class ServiceCollectionForwardingExtension
 {
     /// <summary>
     ///     This method binds <see cref="ForwardingOptions" /> and registers every forwarder client,
-    ///     the definition parser, the health tracker, the forwarded-response cache, and
+    ///     the definition parser, the host-name endpoint cache and its warm-up, the health tracker, the forwarded-response cache, and
     ///     <see cref="ForwarderQueryResolver" /> as an <see cref="IDnsQueryResolver" />. All are
     ///     registered even when <see cref="ForwardingOptions.Enable" /> is off at startup, so
     ///     forwarding can be turned on without a restart (a fresh install starts with it off). A
@@ -81,6 +82,13 @@ public static class ServiceCollectionForwardingExtension
         // and global forwarders; it needs an IEntityChangeNotifier, which the storage extensions
         // register.
         instance.AddSingleton<ForwarderSetCache>();
+
+        // Host-name forwarders are resolved in the background by the system resolver and
+        // refreshed on use; the warm-up service starts the lookups at startup.
+        instance.TryAddSingleton(TimeProvider.System);
+        instance.TryAddSingleton<IForwarderHostResolver, SystemForwarderHostResolver>();
+        instance.AddSingleton<ForwarderEndpointCache>();
+        instance.AddHostedService<ForwarderEndpointWarmUpService>();
 
         instance.AddSingleton<IDnsQueryResolver, ForwarderQueryResolver>();
 

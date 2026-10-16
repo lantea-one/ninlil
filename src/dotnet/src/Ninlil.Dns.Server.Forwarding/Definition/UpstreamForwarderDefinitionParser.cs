@@ -12,9 +12,18 @@ namespace Ninlil.Dns.Server.Forwarding.Definition;
 ///     <c>udp://</c>/<c>tcp://</c> (plain DNS; both mean UDP with TCP fallback),
 ///     <c>tls://host[:port]</c> (DNS-over-TLS), <c>https://url</c> (DNS-over-HTTPS),
 ///     <c>quic://host[:port]</c> (DNS-over-QUIC) and <c>sdns://...</c> (a DNSCrypt stamp,
-///     handed to <see cref="DnsCryptStampParser" />). <see cref="ForwarderQueryResolver" /> and
-///     <c>ForwardersController</c> call it. An IPv6 address must be in brackets; an unbracketed
-///     one is split at its last colon as if that were a port.
+///     handed to <see cref="DnsCryptStampParser" />). <see cref="ForwarderEndpointCache" /> and
+///     <c>ForwardersController</c> call it.
+///     <para>
+///         The parser is purely syntactic and never queries DNS. A host name leaves
+///         <see cref="UpstreamForwarderDefinition.Address" /> <see langword="null" /> and is kept
+///         in <see cref="UpstreamForwarderDefinition.TlsHostName" />; <see cref="ForwarderEndpointCache" />
+///         resolves it in the background. A <c>https://</c> definition never has an address.
+///     </para>
+///     <para>
+///         An IPv6 address with a port is written in brackets (RFC 3986 §3.2.2); an unbracketed
+///         IPv6 address is the whole host and uses the default port.
+///     </para>
 /// </summary>
 public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefinitionParser
 {
@@ -79,23 +88,20 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
     }
 
     /// <summary>
-    ///     This method parses an <c>https://</c> definition: a complete DoH URL. The host is still
-    ///     resolved into <see cref="UpstreamForwarderDefinition.Address" /> and
-    ///     <see cref="UpstreamForwarderDefinition.Port" />, although <c>HttpsForwarderClient</c>
-    ///     connects through <see cref="UpstreamForwarderDefinition.DohUri" /> alone, so a host that
-    ///     cannot be resolved here makes the definition invalid.
+    ///     This method parses an <c>https://</c> definition: a complete DoH URL.
+    ///     <c>HttpsForwarderClient</c> connects through <see cref="UpstreamForwarderDefinition.DohUri" />
+    ///     alone, so the host is not resolved here and <see cref="UpstreamForwarderDefinition.Address" />
+    ///     stays <see langword="null" />.
     /// </summary>
     private static UpstreamForwarderDefinition ParseHttps(string definitionString)
     {
         if (!Uri.TryCreate(definitionString, UriKind.Absolute, out Uri uri))
             throw new FormatException($"'{definitionString}' is not a valid https:// URL.");
 
-        IPAddress address = ResolveHost(uri.Host, definitionString);
-
         return new UpstreamForwarderDefinition(
             UpstreamForwarderProtocolEnum.Https,
             definitionString,
-            address,
+            null,
             uri.IsDefaultPort ? 443 : uri.Port,
             DohUri: uri
         );
@@ -103,8 +109,9 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
 
     /// <summary>
     ///     This method parses every <c>&lt;scheme&gt;://host[:port]</c> form (and the bare-address
-    ///     form, when <paramref name="prefix" /> is empty). A hostname is resolved here, once,
-    ///     not per query.
+    ///     form, when <paramref name="prefix" /> is empty). A host name is not resolved: the
+    ///     address stays <see langword="null" /> and the name goes to
+    ///     <see cref="UpstreamForwarderDefinition.TlsHostName" />.
     /// </summary>
     private static UpstreamForwarderDefinition ParseHostPort(
         string definitionString,
@@ -174,10 +181,18 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
             throw new FormatException($"'{definitionString}' carries no host/address at all.");
 
         bool isLiteralAddress = IPAddress.TryParse(host, out IPAddress literalAddress);
-        IPAddress address = isLiteralAddress ? literalAddress : ResolveHost(host, definitionString);
+        IPAddress address = isLiteralAddress ? literalAddress : null;
 
-        // TlsForwarderClient and QuicForwarderClient validate the certificate for this hostname;
-        // for an IP literal they use the address instead.
+        // No lookup happens here, so the syntax is the only check a host name gets: text that
+        // cannot be a host name is rejected at save time rather than failing in the background.
+        if (!isLiteralAddress && Uri.CheckHostName(host) != UriHostNameType.Dns)
+            throw new FormatException(
+                $"'{definitionString}' carries '{host}', which is not a valid host name."
+            );
+
+        // The name is what ForwarderEndpointCache resolves, and what TlsForwarderClient and
+        // QuicForwarderClient validate the certificate against; for an IP literal they use the
+        // address instead.
         string tlsHostName = isLiteralAddress ? null : host;
 
         return new UpstreamForwarderDefinition(
@@ -187,33 +202,6 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
             port,
             TlsHostName: tlsHostName
         );
-    }
-
-    /// <summary>
-    ///     This method resolves a hostname through the operating system's resolver, synchronously,
-    ///     and returns the first address. Because <see cref="ForwarderQueryResolver" /> caches
-    ///     parsed definitions, the address is kept until the process restarts.
-    /// </summary>
-    private static IPAddress ResolveHost(string host, string definitionString)
-    {
-        try
-        {
-            IPAddress[] addresses = System.Net.Dns.GetHostAddresses(host);
-
-            if (addresses.Length == 0)
-                throw new FormatException(
-                    $"'{definitionString}' names a host ('{host}') that resolved to no addresses."
-                );
-
-            return addresses[0];
-        }
-        catch (SocketException exception)
-        {
-            throw new FormatException(
-                $"'{definitionString}' names a host ('{host}') that could not be resolved.",
-                exception
-            );
-        }
     }
 
     /// <summary>

@@ -105,6 +105,17 @@ public sealed class ForwarderSetCache : IDisposable
     ) => (await _snapshot.GetAsync(stoppingToken)).Find(queriedName);
 
     /// <summary>
+    ///     This method returns every definition string in the current copy: the global set and
+    ///     every zone's set. The same set instance is returned until the copy is replaced, so a
+    ///     caller can tell a change by reference.
+    /// </summary>
+    /// <param name="stoppingToken">The token used to stop waiting for a load.</param>
+    /// <returns>The union of all definition strings.</returns>
+    public async ValueTask<IReadOnlySet<string>> GetAllDefinitionsAsync(
+        CancellationToken stoppingToken = default
+    ) => (await _snapshot.GetAsync(stoppingToken)).AllDefinitions;
+
+    /// <summary>
     ///     This method marks the copy out of date; the next read waits for a reload. Code that
     ///     changes zones or forwarders without a repository save calls it.
     /// </summary>
@@ -199,6 +210,21 @@ public sealed record ForwarderSetSnapshot(
         new Dictionary<string, ForwarderSet>(),
         new ForwarderSet([], true)
     );
+
+    /// <summary>
+    ///     This property is every definition string of the global set and the zone sets, built on
+    ///     first use and kept for the life of this copy.
+    /// </summary>
+    public IReadOnlySet<string> AllDefinitions =>
+        _allDefinitions ??= new HashSet<string>(
+            Zones.Values.SelectMany(set => set.Definitions).Concat(Global.Definitions)
+        );
+
+    /// <summary>
+    ///     This field backs <see cref="AllDefinitions" />. Two threads may both build the set;
+    ///     they build equal sets and one wins, which is harmless.
+    /// </summary>
+    private IReadOnlySet<string> _allDefinitions;
 
     /// <summary>
     ///     This method walks from the queried name up to the root and returns the first forwarder

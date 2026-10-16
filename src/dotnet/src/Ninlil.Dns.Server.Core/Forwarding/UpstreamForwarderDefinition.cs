@@ -12,7 +12,10 @@ namespace Ninlil.Dns.Server.Core.Forwarding;
 /// </summary>
 /// <param name="Protocol">Which transport protocol this forwarder speaks.</param>
 /// <param name="OriginalDefinitionString">The exact string this definition was parsed from, kept for logging and error messages.</param>
-/// <param name="Address">The forwarder's IP address.</param>
+/// <param name="Address">
+///     The forwarder's IP address. It is <see langword="null" /> for a host-name definition until
+///     <c>ForwarderEndpointCache</c> has resolved it, and always <see langword="null" /> for DNS-over-HTTPS.
+/// </param>
 /// <param name="Port">The forwarder's port.</param>
 /// <param name="TlsHostName">
 ///     The hostname used for SNI and certificate validation of an encrypted forwarder, or

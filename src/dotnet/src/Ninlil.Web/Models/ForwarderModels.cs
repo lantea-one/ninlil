@@ -12,9 +12,12 @@ namespace Ninlil.Web.Models;
 /// <param name="DefinitionString">
 ///     The forwarder definition, in the style Technitium and AdGuard Home use: a bare address; a
 ///     <c>udp://</c>, <c>tcp://</c>, <c>tls://</c>, <c>https://</c> or <c>quic://</c> URL; or an
-///     <c>sdns://</c> DNSCrypt stamp. It is checked with <c>IUpstreamForwarderDefinitionParser</c>
+///     <c>sdns://</c> DNSCrypt stamp. An IPv6 address with a port is written in brackets, for example
+///     <c>[2001:db8::1]:53</c>. The syntax is checked with <c>IUpstreamForwarderDefinitionParser</c>
 ///     (and <c>DnsCryptStampParser</c> for a stamp) before it is saved, much as
-///     <see cref="RecordsController" /> checks a record's <c>data</c>.
+///     <see cref="RecordsController" /> checks a record's <c>data</c>. A host name is not looked up
+///     at that point, so one that does not resolve is still saved; the server resolves it in the
+///     background and again about every five minutes.
 /// </param>
 /// <param name="SortOrder">The forwarder's position among the global forwarders; lower values are tried first. Defaults to 0.</param>
 /// <param name="IsDisabled">Whether the forwarder is disabled.</param>

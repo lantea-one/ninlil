@@ -31,7 +31,8 @@ namespace Ninlil.Web.Controllers;
 ///         <b>A change applies to the next query without any cache reset.</b>
 ///         <c>ForwarderQueryResolver.ResolveForwarderSetAsync</c> reads the enabled forwarders
 ///         through <see cref="IDnsForwarderRepository.ListEnabledOrderedAsync" /> in a new
-///         <see cref="IServiceScope" /> on every query. Its parsed-definition cache and
+///         <see cref="IServiceScope" /> on every query. <c>ForwarderEndpointCache</c> (parsed
+///         definitions and the resolved addresses of host names) and
 ///         <c>ForwarderHealthTracker</c>'s health map are keyed by the definition string, not by
 ///         <c>Id</c>, so an edited definition is simply treated as a new forwarder. Every write
 ///         still publishes a <see cref="DnsForwarderChangedEvent" />, which
@@ -41,8 +42,9 @@ namespace Ninlil.Web.Controllers;
 /// <param name="forwarderRepository">Reads and writes forwarders.</param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="definitionParser">
-///     Validates a <c>definitionString</c> before it is saved. <c>ForwarderQueryResolver</c> uses
-///     the same parser at query time, so a definition accepted here can be used there.
+///     Validates the syntax of a <c>definitionString</c> before it is saved. The parser never
+///     queries DNS, so a host name that does not resolve is saved; <c>ForwarderEndpointCache</c>
+///     resolves it in the background.
 /// </param>
 /// <param name="logger">Records a stored definition that unexpectedly fails to parse.</param>
 /// <param name="eventPublisher">
@@ -117,8 +119,9 @@ public class ForwardersController(
 
     /// <summary>
     ///     This action creates a server-wide forwarder. Returns 400 for a missing name or a
-    ///     definition string the forwarder parser rejects, and 409 when the name is taken. Requires
-    ///     <c>forwarders:write</c>.
+    ///     definition string whose syntax the forwarder parser rejects, and 409 when the name is
+    ///     taken. A host name is not looked up when the forwarder is saved, so one that does not
+    ///     resolve is accepted. Requires <c>forwarders:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("forwarders:write")]
@@ -307,8 +310,9 @@ public class ForwardersController(
     /// <summary>
     ///     This method checks a definition string with
     ///     <see cref="IUpstreamForwarderDefinitionParser" /> (which hands <c>sdns://</c> stamps to
-    ///     <c>DnsCryptStampParser</c>). A string that <c>ForwarderQueryResolver</c> would skip with
-    ///     a warning at query time is rejected here with a 400 instead.
+    ///     <c>DnsCryptStampParser</c>). The check is syntactic and never queries DNS. A string that
+    ///     <c>ForwarderQueryResolver</c> would skip with a warning at query time is rejected here
+    ///     with a 400 instead.
     /// </summary>
     private bool TryValidateDefinitionString(string definitionString, out string error)
     {

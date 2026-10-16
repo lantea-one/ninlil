@@ -200,6 +200,32 @@ public class ForwarderCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    ///     This test checks that saving a forwarder never looks the host up: a name that cannot
+    ///     resolve is accepted, because the server resolves it in the background.
+    /// </summary>
+    [Fact]
+    public async Task Create_WithAHostNameThatDoesNotResolve_ReturnsCreated()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/forwarders",
+            new
+            {
+                name = $"unresolvable-{Guid.NewGuid():N}",
+                definitionString = "tls://does-not-exist.invalid",
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        ForwarderDetail created = await response.Content.ReadFromJsonAsync<ForwarderDetail>();
+        Assert.Equal(UpstreamForwarderProtocolEnum.Tls, created.Protocol);
+
+        // Remove it so the shared host does not keep a forwarder nobody can resolve.
+        await client.DeleteAsync($"/api/forwarders/{created.Id}");
+    }
+
     [Fact]
     public async Task Create_WithEmptyDefinitionString_ReturnsBadRequest()
     {

@@ -94,4 +94,18 @@ public sealed class UpstreamForwarderDefinitionParserTests
             new UpstreamForwarderDefinitionParser().Parse("[2001:db8::1")
         );
     }
+
+    /// <summary>
+    ///     This method checks that text that cannot be a host name is rejected, because the
+    ///     parser does no lookup and syntax is its only check of a name.
+    /// </summary>
+    [Theory]
+    [InlineData("not a real forwarder definition at all!!")]
+    [InlineData("tls://bad host.example")]
+    public void Parse_TextThatIsNotAHostName_ThrowsFormatException(string definition)
+    {
+        Assert.Throws<FormatException>(() =>
+            new UpstreamForwarderDefinitionParser().Parse(definition)
+        );
+    }
 }

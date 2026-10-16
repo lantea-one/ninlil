@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
@@ -305,7 +306,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         IOptionsMonitor<RecursiveServerOptions> recursiveMonitor = null,
         InsecureDomainPolicy insecureDomains = null,
         IDnsAccessControlEngine accessControlEngine = null,
-        ForwarderHealthTracker healthTracker = null
+        ForwarderHealthTracker healthTracker = null,
+        ForwarderEndpointCache endpointCache = null,
+        ILogger<ForwarderQueryResolver> logger = null
     )
     {
         ForwardingOptions effectiveForwardingOptions =
@@ -343,7 +346,14 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                 NullLogger<ForwarderSetCache>.Instance
             ),
             clientList,
-            new UpstreamForwarderDefinitionParser(),
+            // The fake resolver keeps these tests off the network: a host-name forwarder stays
+            // unresolved unless a test completes its lookup.
+            endpointCache
+                ?? new ForwarderEndpointCache(
+                    new UpstreamForwarderDefinitionParser(),
+                    new FakeForwarderHostResolver(),
+                    NullLogger<ForwarderEndpointCache>.Instance
+                ),
             tracker,
             validator ?? new AlwaysInsecureDnssecValidatorStub(),
             new StaticOptionsMonitor<ForwardingOptions>(effectiveForwardingOptions),
@@ -356,7 +366,7 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                             EnableRecursion = true,
                         }
                 ),
-            NullLogger<ForwarderQueryResolver>.Instance,
+            logger ?? NullLogger<ForwarderQueryResolver>.Instance,
             clientSubnetService,
             responseCache,
             insecureDomains,

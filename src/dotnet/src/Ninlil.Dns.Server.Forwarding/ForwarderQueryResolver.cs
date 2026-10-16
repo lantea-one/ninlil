@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -37,6 +36,12 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         <see cref="RecursiveQueryResolver" /> uses: <see cref="RecursiveServerOptions.EnableRecursion" />
 ///         on, or an access rule granting the client recursion access. Any other query is
 ///         <see cref="DnsQueryResolution.NotHandled" />.
+///     </para>
+///     <para>
+///         <b>Host names.</b> A forwarder given as a host name is resolved in the background by
+///         <see cref="ForwarderEndpointCache" />. While its address is unknown (the first lookup
+///         has not finished, or never succeeded) the forwarder is skipped for the query and the
+///         next one is tried; the query never waits for DNS.
 ///     </para>
 ///     <para>
 ///         <b>Upstream failures.</b> An upstream that does not answer, or answers SERVFAIL,
@@ -103,7 +108,10 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     each query is chosen from.
 /// </param>
 /// <param name="clients">Every registered forwarder client, one per protocol.</param>
-/// <param name="definitionParser">Parses a forwarder's definition string.</param>
+/// <param name="endpoints">
+///     Parses each definition string once and holds the resolved address of a host-name
+///     forwarder; a forwarder whose address is not known yet is skipped for the query.
+/// </param>
 /// <param name="healthTracker">Tracks per-forwarder health for the round-robin strategy.</param>
 /// <param name="dnssecValidator">Validates a forwarded answer's DNSSEC status locally.</param>
 /// <param name="forwardingOptions">
@@ -139,7 +147,7 @@ namespace Ninlil.Dns.Server.Forwarding;
 public sealed class ForwarderQueryResolver(
     ForwarderSetCache forwarderSets,
     IEnumerable<IUpstreamForwarderClient> clients,
-    IUpstreamForwarderDefinitionParser definitionParser,
+    ForwarderEndpointCache endpoints,
     ForwarderHealthTracker healthTracker,
     IDnssecValidator dnssecValidator,
     IOptionsMonitor<ForwardingOptions> forwardingOptions,
@@ -158,8 +166,12 @@ public sealed class ForwarderQueryResolver(
         IUpstreamForwarderClient
     > _clientsByProtocol = clients.ToDictionary(client => client.Protocol);
 
-    private readonly ConcurrentDictionary<string, UpstreamForwarderDefinition> _parsedDefinitions =
-        new();
+    /// <summary>
+    ///     This field is the set of definition strings last passed to
+    ///     <see cref="ForwarderEndpointCache.Retain" />. It is compared by reference with the
+    ///     set of the current forwarder snapshot, so the retain call costs nothing per query.
+    /// </summary>
+    private IReadOnlySet<string> _retainedDefinitions;
 
     /// <inheritdoc />
     public async ValueTask<DnsQueryResolution> TryResolveAsync(
@@ -199,6 +211,8 @@ public sealed class ForwarderQueryResolver(
         (IReadOnlyList<string> definitionStrings, bool zoneValidates) =
             await ResolveForwarderSetAsync(question.Name, stoppingToken);
 
+        await RetainEndpointsAsync(stoppingToken);
+
         if (definitionStrings.Count == 0)
             return DnsQueryResolution.NotHandled;
 
@@ -206,7 +220,16 @@ public sealed class ForwarderQueryResolver(
 
         foreach (string definitionString in definitionStrings)
         {
-            if (TryParse(definitionString, out UpstreamForwarderDefinition definition))
+            // Null: unparseable, or a host name whose lookup has not finished. The forwarder is
+            // skipped for this query, and the next one is tried.
+            UpstreamForwarderDefinition definition = endpoints.TryGetSendable(definitionString);
+
+            if (definition is null)
+                logger.LogDebug(
+                    "Skipping forwarder '{Definition}' for this query: it has no usable address yet.",
+                    definitionString
+                );
+            else
                 candidates.Add(definition);
         }
 
@@ -440,31 +463,19 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method parses a forwarder's definition string, caching the result in
-    ///     <see cref="_parsedDefinitions" />. An unparseable definition is logged and skipped on
-    ///     every query that uses it, rather than failing the query.
+    ///     This method tells <see cref="ForwarderEndpointCache" /> to drop the definitions that
+    ///     are no longer configured, whenever the forwarder snapshot has been replaced. The set
+    ///     instance is the same until then, so the comparison is a reference check.
     /// </summary>
-    private bool TryParse(string definitionString, out UpstreamForwarderDefinition definition)
+    private async ValueTask RetainEndpointsAsync(CancellationToken stoppingToken)
     {
-        if (_parsedDefinitions.TryGetValue(definitionString, out definition))
-            return true;
+        IReadOnlySet<string> all = await forwarderSets.GetAllDefinitionsAsync(stoppingToken);
 
-        try
-        {
-            definition = definitionParser.Parse(definitionString);
-            _parsedDefinitions[definitionString] = definition;
-            return true;
-        }
-        catch (FormatException exception)
-        {
-            logger.LogWarning(
-                exception,
-                "Skipping an unparseable forwarder definition: '{Definition}'.",
-                definitionString
-            );
-            definition = null;
-            return false;
-        }
+        if (ReferenceEquals(Volatile.Read(ref _retainedDefinitions), all))
+            return;
+
+        Volatile.Write(ref _retainedDefinitions, all);
+        endpoints.Retain(all);
     }
 
     /// <summary>
