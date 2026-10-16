@@ -8,6 +8,10 @@ namespace Ninlil.Dns.Server.Core.Resolution;
 ///     and <c>AuthoritativeQueryResolver</c> (Server.Authoritative), <c>ForwarderQueryResolver</c>
 ///     (Server.Forwarding) and <c>RecursiveQueryResolver</c> (Server.Recursive). All of them sit
 ///     behind the same transports and <see cref="Pipeline.DnsQueryProcessingPipeline" />.
+///     <para>
+///         A resolver may return a message it also keeps (a cache entry) and hands to other
+///         clients. The pipeline replies on a copy and never changes the returned message.
+///     </para>
 /// </summary>
 public interface IDnsQueryResolver
 {

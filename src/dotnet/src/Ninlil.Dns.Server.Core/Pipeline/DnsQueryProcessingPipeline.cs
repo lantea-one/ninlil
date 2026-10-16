@@ -61,13 +61,20 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///             <item>Response IP and CNAME cloaking checks
 ///             (<see cref="IDnsFilterEngine.EvaluateResponseAsync" />) on any answer that was not
 ///             already a denial, including rewrite answers.</item>
-///             <item>Attaching a fresh server cookie, publishing
+///             <item>Giving a reply that has no OPT record one when the request had one (RFC 6891
+///             §7), attaching a fresh server cookie, publishing
 ///             <see cref="DnsQueryAnsweredEvent" />, truncating an oversized datagram reply
 ///             (<see cref="DnsInboundMessage.IsDatagram" />) with room left for the TSIG record,
 ///             signing the reply (the last change to it, because any later one would break the
 ///             MAC), and sending it. A reply still larger
 ///             than <see cref="DnsInboundMessage.MaxResponseOctets" /> is dropped instead.</item>
 ///         </list>
+///     </para>
+///     <para>
+///         <b>The pipeline replies on its own copy.</b> A resolver, the rewrite engine or the
+///         filter engine may return a message that is shared (a cache entry). The OPT, cookie and
+///         truncation steps never change that message: the first change takes one shallow copy
+///         (<see cref="CopyForReply" />) and the pipeline changes the copy.
 ///     </para>
 ///     <para>
 ///         Options are read through <see cref="IOptionsMonitor{TOptions}" />. The UDP limits
@@ -725,6 +732,24 @@ public sealed class DnsQueryProcessingPipeline(
             }
         }
 
+        // The object in "response" can be shared (a resolver may return a cache entry), so the
+        // steps below change a copy, taken once and only when a change is due.
+        bool replyIsOwned = false;
+
+        // RFC 6891 §7: a responder that receives an OPT record includes one. Replies this server
+        // builds itself (filter denials, rewrite answers, REFUSED) carry none, so one is added.
+        if (request.Edns is not null && response.Edns is null)
+        {
+            response = CopyForReply(response);
+            replyIsOwned = true;
+            response.Edns = new DnsEdnsOptions(
+                0,
+                DnsQueryDispatcher.DefaultUdpPayloadSizeOctets,
+                request.Edns.DnssecOk,
+                []
+            );
+        }
+
         // Every reply to a client that sent a cookie carries a fresh server cookie, replacing
         // any cookie option already there. A BADCOOKIE reply already has one.
         if (
@@ -732,6 +757,12 @@ public sealed class DnsQueryProcessingPipeline(
             && response.ResponseCode != DnsResponseCodeEnum.BadCookie
         )
         {
+            if (!replyIsOwned)
+            {
+                response = CopyForReply(response);
+                replyIsOwned = true;
+            }
+
             response.Edns = response.Edns is null
                 ? new DnsEdnsOptions(
                     0,
@@ -804,10 +835,13 @@ public sealed class DnsQueryProcessingPipeline(
 
             if (responseBytes.Length > effectiveMaxSize)
             {
-                response.Answers.Clear();
-                response.AuthorityRecords.Clear();
-                response.AdditionalRecords.Clear();
-                response.IsTruncated = true;
+                // A new message, not a cleared one: "response" can still be a shared object.
+                DnsMessage truncatedResponse = CopyForReply(response);
+                truncatedResponse.Answers.Clear();
+                truncatedResponse.AuthorityRecords.Clear();
+                truncatedResponse.AdditionalRecords.Clear();
+                truncatedResponse.IsTruncated = true;
+                response = truncatedResponse;
                 responseBytes = DnsMessageWriter.Write(response);
             }
         }
@@ -843,6 +877,33 @@ public sealed class DnsQueryProcessingPipeline(
 
         await message.RespondAsync(responseBytes, stoppingToken);
     }
+
+    /// <summary>
+    ///     This method takes the shallow copy the pipeline changes in place of a reply that can be
+    ///     shared. The header flags, the question and record lists (new lists holding the same
+    ///     record objects, which nothing here changes), <see cref="DnsMessage.Edns" /> and
+    ///     <see cref="DnsMessage.Tsig" /> are copied.
+    /// </summary>
+    private static DnsMessage CopyForReply(DnsMessage source) =>
+        new()
+        {
+            Id = source.Id,
+            IsResponse = source.IsResponse,
+            Opcode = source.Opcode,
+            IsAuthoritativeAnswer = source.IsAuthoritativeAnswer,
+            IsTruncated = source.IsTruncated,
+            RecursionDesired = source.RecursionDesired,
+            RecursionAvailable = source.RecursionAvailable,
+            AuthenticData = source.AuthenticData,
+            CheckingDisabled = source.CheckingDisabled,
+            ResponseCode = source.ResponseCode,
+            Questions = [.. source.Questions],
+            Answers = [.. source.Answers],
+            AuthorityRecords = [.. source.AuthorityRecords],
+            AdditionalRecords = [.. source.AdditionalRecords],
+            Edns = source.Edns,
+            Tsig = source.Tsig,
+        };
 
     /// <summary>
     ///     This method builds a minimal response with the given response code: the query's ID,

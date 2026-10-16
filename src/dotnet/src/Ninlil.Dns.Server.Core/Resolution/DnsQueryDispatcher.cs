@@ -7,8 +7,9 @@ namespace Ninlil.Dns.Server.Core.Resolution;
 
 /// <summary>
 ///     This class implements <see cref="IDnsQueryDispatcher" />. It publishes
-///     <see cref="DnsQueryReceivedEvent" />, answers FORMERR for a query with no question and
-///     BADVERS for an EDNS version above 0, then offers the query to each registered
+///     <see cref="DnsQueryReceivedEvent" />, answers FORMERR for a query with no question,
+///     NOTIMP for an opcode other than QUERY, NOTIFY and UPDATE (the kinds of message this server
+///     implements) and BADVERS for an EDNS version above 0, then offers the query to each registered
 ///     <see cref="IDnsQueryResolver" /> in registration order and returns the first answer.
 ///     <c>Ninlil.Web/Program.cs</c> registers them as NOTIFY, dynamic update, authoritative,
 ///     forwarding, then recursive, so a hosted zone is answered authoritatively even when the
@@ -62,6 +63,15 @@ public class DnsQueryDispatcher(
         // A query with no question cannot be answered.
         if (request.Questions.Count == 0)
             return WithResponseCode(request, DnsResponseCodeEnum.FormatError);
+
+        // RFC 1035 §4.1.1: NOTIMP means the server does not support the kind of query. IQUERY
+        // (obsolete, RFC 3425), STATUS, DSO (RFC 8490 §5.1) and unassigned opcodes would otherwise
+        // be answered as a plain QUERY by the resolvers, which do not look at the opcode.
+        if (
+            request.Opcode
+            is not (DnsOpcodeEnum.Query or DnsOpcodeEnum.Notify or DnsOpcodeEnum.Update)
+        )
+            return WithResponseCode(request, DnsResponseCodeEnum.NotImplemented);
 
         // RFC 6891 §6.1.3: an unsupported EDNS version gets BADVERS in an OPT record that
         // advertises version 0.
