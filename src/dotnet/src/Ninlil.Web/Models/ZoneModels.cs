@@ -23,7 +23,12 @@ namespace Ninlil.Web.Models;
 /// <param name="ForwarderAddresses">The addresses a forwarder zone sends every query to.</param>
 /// <param name="NotifyAddresses">The secondaries the zone sends NOTIFY messages to.</param>
 /// <param name="TsigKeyName">The TSIG key the zone signs its transfer requests with.</param>
-/// <param name="DynamicUpdateEnabled">Whether the zone accepts RFC 2136 dynamic updates.</param>
+/// <param name="DynamicUpdateEnabled">
+///     Whether the zone accepts RFC 2136 dynamic updates. Applies to Primary and CloudPrimary
+///     zones. A CloudPrimary zone pushes an accepted update to its provider within moments and
+///     refuses an update that adds a record type the providers cannot hold (anything but A, AAAA,
+///     CNAME, MX, NS, TXT, SRV and CAA).
+/// </param>
 /// <param name="UpdateTsigKeyNames">
 ///     The TSIG keys allowed to send dynamic updates to the zone (lowercase, no trailing dot). An
 ///     empty list accepts no key.
@@ -120,7 +125,12 @@ public record ZoneWriteRequest(
 /// <param name="ForwarderAddresses">The addresses a forwarder zone sends every query to.</param>
 /// <param name="NotifyAddresses">The secondaries the zone sends NOTIFY messages to.</param>
 /// <param name="TsigKeyName">The TSIG key the zone signs its transfer requests with.</param>
-/// <param name="DynamicUpdateEnabled">Whether the zone accepts RFC 2136 dynamic updates.</param>
+/// <param name="DynamicUpdateEnabled">
+///     Whether the zone accepts RFC 2136 dynamic updates. Applies to Primary and CloudPrimary
+///     zones. A CloudPrimary zone pushes an accepted update to its provider within moments and
+///     refuses an update that adds a record type the providers cannot hold (anything but A, AAAA,
+///     CNAME, MX, NS, TXT, SRV and CAA).
+/// </param>
 /// <param name="UpdateTsigKeyNames">
 ///     The TSIG keys allowed to send dynamic updates to the zone (lowercase, no trailing dot). An
 ///     empty list accepts no key.

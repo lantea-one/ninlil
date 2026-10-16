@@ -9,6 +9,7 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
+using Ninlil.Dns.Server.Authoritative.CloudSync;
 using Ninlil.Dns.Server.Authoritative.Extension;
 using Ninlil.Dns.Server.Core.Extension;
 using Ninlil.Dns.Server.Core.Pipeline;
@@ -40,7 +41,12 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
         $"ninlil-dns-signed-pipeline-tests-{Guid.NewGuid()}.sqlite3"
     );
 
+    // A CloudPrimary zone with an SOA, updates enabled and the test key bound.
+    private const string CloudZoneName = "signed-cloud-update.example.com";
+
     private readonly OffsetTimeProvider _clock = new();
+    private readonly RecordingCloudSyncTrigger _trigger = new();
+    private Guid _cloudZoneId;
 
     private IHost _host;
     private Guid _zoneId;
@@ -59,6 +65,27 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
         public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + Offset;
     }
 
+    /// <summary>
+    ///     This fake replaces the registered <see cref="ICloudZoneSyncTrigger" /> and records the
+    ///     zones a push was requested for, so no provider is involved.
+    /// </summary>
+    private sealed class RecordingCloudSyncTrigger : ICloudZoneSyncTrigger
+    {
+        /// <summary>This property lists the zone ids passed to <see cref="RequestSync" />.</summary>
+        public List<Guid> Requested { get; } = [];
+
+        /// <inheritdoc />
+        public Task SyncZoneNowAsync(Guid zoneId, CancellationToken stoppingToken) =>
+            Task.CompletedTask;
+
+        /// <inheritdoc />
+        public void RequestSync(Guid zoneId)
+        {
+            lock (Requested)
+                Requested.Add(zoneId);
+        }
+    }
+
     public async Task InitializeAsync()
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
@@ -72,6 +99,9 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
         builder.Services.AddNinlilDnsServerTsig(builder.Configuration);
         builder.Services.AddNinlilDnsServerDnssec();
         builder.Services.AddNinlilDnsServerAuthoritative(builder.Configuration);
+
+        // The last registration wins, so the resolver gets the recording fake.
+        builder.Services.AddSingleton<ICloudZoneSyncTrigger>(_trigger);
 
         _host = builder.Build();
 
@@ -112,8 +142,44 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             }
         );
+        _cloudZoneId = Guid.NewGuid();
+        await zoneRepository.AddAsync(
+            new ZoneEntity
+            {
+                Id = _cloudZoneId,
+                Name = CloudZoneName,
+                Type = ZoneTypeEnum.CloudPrimary,
+                DynamicUpdateEnabled = true,
+                UpdateTsigKeyNames = [_keyName],
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
         await unitOfWork.SaveChangesAsync();
 
+        await recordRepository.AddAsync(
+            new RecordEntity
+            {
+                Id = Guid.NewGuid(),
+                ZoneId = _cloudZoneId,
+                Name = CloudZoneName,
+                Type = DnsResourceRecordTypeEnum.Soa,
+                Class = DnsClassEnum.Internet,
+                TimeToLiveSeconds = 3600,
+                DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
+                    typeof(SoaRecordData),
+                    new SoaRecordData(
+                        DnsName.Parse($"ns1.{CloudZoneName}"),
+                        DnsName.Parse($"admin.{CloudZoneName}"),
+                        100,
+                        3600,
+                        900,
+                        604800,
+                        3600
+                    )
+                ),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
         await recordRepository.AddAsync(
             new RecordEntity
             {
@@ -453,5 +519,50 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
             );
             await AssertSignedReplyAsync(signed, replyBytes);
         }
+    }
+
+    [Fact]
+    public async Task SignedUpdateToACloudPrimaryZone_IsAppliedBumpsTheSerialAndRequestsOnePush()
+    {
+        DnsMessage signed = await SignAsync(
+            BuildUpdate($"cloud.{CloudZoneName}", 70, CloudZoneName)
+        );
+
+        byte[] replyBytes = await SendAsync(DnsMessageWriter.Write(signed));
+
+        Assert.Equal(DnsResponseCodeEnum.NoError, DnsMessageReader.Read(replyBytes).ResponseCode);
+        await AssertSignedReplyAsync(signed, replyBytes);
+
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IReadOnlyList<RecordEntity> records = await scope
+            .ServiceProvider.GetRequiredService<IRecordRepository>()
+            .ListByZoneIdAsync(_cloudZoneId);
+        Assert.Contains(
+            records,
+            record =>
+                record.Type == DnsResourceRecordTypeEnum.A
+                && record.Name.StartsWith("cloud.", StringComparison.OrdinalIgnoreCase)
+        );
+        RecordEntity soa = records.Single(record => record.Type == DnsResourceRecordTypeEnum.Soa);
+        Assert.Equal(
+            101u,
+            Ninlil.Common.Serializer.JsonSerializer.Deserialize<SoaRecordData>(soa.DataJson).Serial
+        );
+        Assert.Equal([_cloudZoneId], _trigger.Requested);
+    }
+
+    [Fact]
+    public async Task SignedUpdateToACloudPrimaryZoneWithAnUnlistedKey_GetsASignedRefusedAndRequestsNoPush()
+    {
+        DnsMessage signed = await SignAsync(
+            BuildUpdate($"cloud-unlisted.{CloudZoneName}", 71, CloudZoneName),
+            _unlistedKeyName
+        );
+
+        byte[] replyBytes = await SendAsync(DnsMessageWriter.Write(signed));
+
+        Assert.Equal(DnsResponseCodeEnum.Refused, DnsMessageReader.Read(replyBytes).ResponseCode);
+        await AssertSignedReplyAsync(signed, replyBytes);
+        Assert.Empty(_trigger.Requested);
     }
 }

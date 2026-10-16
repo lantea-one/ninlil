@@ -110,9 +110,14 @@ public class ZoneEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property controls whether this zone accepts RFC 2136 dynamic updates, when
-    ///     <see cref="Type" /> is <see cref="ZoneTypeEnum.Primary" />. It is off by default: a zone
-    ///     must opt in before anything can change it over the wire, even with a valid TSIG
-    ///     signature.
+    ///     <see cref="Type" /> is <see cref="ZoneTypeEnum.Primary" /> or
+    ///     <see cref="ZoneTypeEnum.CloudPrimary" />. It is off by default: a zone must opt in
+    ///     before anything can change it over the wire, even with a valid TSIG signature. An
+    ///     accepted update to a CloudPrimary zone is stored locally and pushed to the provider
+    ///     within moments. It is refused as a whole when it adds a record type the providers cannot
+    ///     hold (anything but A, AAAA, CNAME, MX, NS, TXT, SRV and CAA), so such a zone cannot take
+    ///     PTR updates. Deletions and changes to the apex SOA or NS set are allowed; they change
+    ///     only what this server serves, because the provider keeps its own SOA and apex NS.
     /// </summary>
     public bool DynamicUpdateEnabled { get; set; }
 

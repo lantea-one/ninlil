@@ -1,9 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Authoritative.Cache;
+using Ninlil.Dns.Server.Authoritative.CloudSync;
 using Ninlil.Dns.Server.Authoritative.Journal;
 using Ninlil.Dns.Server.Core.Resolution;
 
@@ -14,12 +16,28 @@ namespace Ninlil.Dns.Server.Authoritative.Update;
 ///     This class is the <see cref="IDnsQueryResolver" /> for RFC 2136 dynamic update (the
 ///     UPDATE opcode). It answers FORMERR unless the Zone Section is one SOA/IN question, NOTAUTH
 ///     when this server does not host that zone or the name is not its apex, and REFUSED unless
-///     the zone is a Primary with <see cref="ZoneEntity.DynamicUpdateEnabled" /> and the request
+///     the zone is a Primary or CloudPrimary with <see cref="ZoneEntity.DynamicUpdateEnabled" /> and the request
 ///     carries a TSIG signature that the pipeline verified
 ///     (<see cref="DnsQueryContext.TransactionSignature" />) with a key listed in
 ///     <see cref="ZoneEntity.UpdateTsigKeyNames" />. It then checks the prerequisites
 ///     and prescans the update section with <see cref="DynamicUpdateProcessor" /> and applies
 ///     the result through <see cref="IZoneUpdateService" />.
+///     <para>
+///         A CloudPrimary zone keeps its local records as the source of truth. An accepted update
+///         is applied locally exactly as for a Primary zone and answered NOERROR at once; the
+///         resolver then asks <see cref="ICloudZoneSyncTrigger.RequestSync" /> to push the zone, so
+///         the answer never waits for the provider (a provider call can take seconds and the
+///         client would retransmit). A failed push is reported by the sync service (a warning and
+///         <c>CloudDnsZoneSyncFailedEvent</c>) and the next push sends the complete local state.
+///         An update that adds a record the providers cannot hold is refused as a whole
+///         (<see cref="CloudZoneUpdatePolicy.IsPushable" />). The provider's own SOA serial is
+///         unrelated to the local one, because the SOA is never pushed. Without an
+///         <see cref="ICloudZoneSyncTrigger" /> the zone waits for its sync interval.
+///     </para>
+///     <para>
+///         An update to a zone without an SOA gets SERVFAIL and one warning, because the serial
+///         cannot be advanced.
+///     </para>
 ///     <para>
 ///         The enable flag and apex come from <see cref="AuthoritativeZoneCache" />, which may be
 ///         briefly stale; that only moves the moment an update starts or stops being accepted.
@@ -38,9 +56,16 @@ namespace Ninlil.Dns.Server.Authoritative.Update;
 ///     The factory used to create a scope for the repositories and
 ///     <see cref="IZoneUpdateService" />.
 /// </param>
+/// <param name="cloudSync">
+///     The trigger used to request a push after a CloudPrimary update, or <see langword="null" />
+///     when the zone should wait for its regular sync.
+/// </param>
+/// <param name="logger">The logger for the no-SOA warning and the applied-update message.</param>
 public class DynamicUpdateQueryResolver(
     AuthoritativeZoneCache zoneCache,
-    IServiceScopeFactory scopeFactory
+    IServiceScopeFactory scopeFactory,
+    ICloudZoneSyncTrigger cloudSync = null,
+    ILogger<DynamicUpdateQueryResolver> logger = null
 ) : IDnsQueryResolver
 {
     /// <inheritdoc />
@@ -80,9 +105,16 @@ public class DynamicUpdateQueryResolver(
                 ErrorResponse(request, DnsResponseCodeEnum.NotAuthoritative)
             );
 
-        // Only a Primary zone accepts updates; forwarding updates from a secondary to its
-        // primary is not supported.
-        if (zone.Zone.Type != ZoneTypeEnum.Primary || !zone.Zone.DynamicUpdateEnabled)
+        // Primary and CloudPrimary are the zone types this server originates. The other types are
+        // refused because their content comes from elsewhere, and forwarding an update to the
+        // primary (RFC 2136 §6) is not supported. A CloudPrimary zone needs the same opt-in and
+        // key binding as a Primary zone.
+        bool isCloudPrimary = zone.Zone.Type == ZoneTypeEnum.CloudPrimary;
+
+        if (
+            (zone.Zone.Type != ZoneTypeEnum.Primary && !isCloudPrimary)
+            || !zone.Zone.DynamicUpdateEnabled
+        )
             return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
         // Dynamic update always requires TSIG; there is no address-based allowance, as for zone
@@ -111,6 +143,20 @@ public class DynamicUpdateQueryResolver(
             zone.Zone.Id,
             stoppingToken
         );
+
+        // Without an SOA the serial cannot be advanced and ApplyChangesAsync would throw. SERVFAIL
+        // (RFC 1035 §4.1.1: the server could not process the request) is the honest answer, and
+        // it comes after the TSIG checks, so an unauthenticated sender learns nothing.
+        if (!currentRecords.Any(record => record.Type == DnsResourceRecordTypeEnum.Soa))
+        {
+            logger?.LogWarning(
+                "Zone '{ZoneName}' has no SOA record; add one before it can accept dynamic updates.",
+                zone.Zone.Name
+            );
+            return DnsQueryResolution.Handled(
+                ErrorResponse(request, DnsResponseCodeEnum.ServerFailure)
+            );
+        }
 
         // The Prerequisite section is the Answer section; RFC 2136 §3.2 checks it against the
         // zone before any update is applied.
@@ -141,6 +187,24 @@ public class DynamicUpdateQueryResolver(
                 zone.ApexName
             );
 
+        // A CloudPrimary zone is served by the provider's servers too, so an added record the
+        // providers cannot hold would be answered locally and never publicly, while the client
+        // sees success. Refuse the whole update (RFC 2136 §3.4.2: an update is atomic, so
+        // nothing is applied). Deletions are always allowed.
+        if (
+            isCloudPrimary
+            && toAdd.Find(record => !CloudZoneUpdatePolicy.IsPushable(record, zone.Zone.Name))
+                is { } unpushable
+        )
+        {
+            logger?.LogDebug(
+                "Refused an update to cloud zone '{ZoneName}': a {RecordType} record cannot be pushed to the provider.",
+                zone.Zone.Name,
+                unpushable.Type
+            );
+            return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
+        }
+
         if (toAdd.Count > 0 || toRemove.Count > 0)
         {
             IZoneUpdateService zoneUpdateService =
@@ -152,6 +216,20 @@ public class DynamicUpdateQueryResolver(
                 null,
                 stoppingToken
             );
+
+            // The change is committed locally, which is the point RFC 2136 §3.6 requires before
+            // the reply. The push is only requested: it does not delay the answer, and a failed
+            // push heals on the next pass.
+            if (isCloudPrimary)
+            {
+                logger?.LogInformation(
+                    "Applied a dynamic update to cloud zone '{ZoneName}' ({Added} added, {Removed} removed); a push to the provider is requested.",
+                    zone.Zone.Name,
+                    toAdd.Count,
+                    toRemove.Count
+                );
+                cloudSync?.RequestSync(zone.Zone.Id);
+            }
         }
 
         return DnsQueryResolution.Handled(SuccessResponse(request, zoneSection));
