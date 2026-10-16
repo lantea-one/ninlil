@@ -65,6 +65,15 @@ namespace Ninlil.Dhcp.Protocol.Ra;
 ///         several interfaces.
 ///     </para>
 ///     <para>
+///         <b>Rate limits.</b> <see cref="RaSendWindow" /> keeps RFC 4861 Section 6.2.6's
+///         MIN_DELAY_BETWEEN_RAS window per interface for multicast advertisements only. The
+///         periodic loop sends to every due interface and retries a refused one when its window
+///         ends. A solicited multicast reply that falls inside a window waits for the end of it
+///         instead of being dropped. A solicited unicast reply has its own bounded window per
+///         destination, which the RFC does not require (see <see cref="RaSendWindow" />).
+///         Unicast and multicast never share a window.
+///     </para>
+///     <para>
 ///         <b>Per-interface content.</b> Wherever the interface is known (the periodic loop and
 ///         the multicast reply), its name is passed to
 ///         <see cref="IRaAdvertisementProvider.BuildCurrentAdvertisement" />, which applies that
@@ -78,10 +87,16 @@ namespace Ninlil.Dhcp.Protocol.Ra;
 /// </param>
 /// <param name="options">The advertisement interval settings.</param>
 /// <param name="logger">The logger this listener records unexpected socket failures to.</param>
+/// <param name="timeProvider">
+///     The clock for every delay, interval and window; <see langword="null" /> (the default, which
+///     dependency injection uses when none is registered) means <see cref="TimeProvider.System" />.
+///     Tests pass a manual clock.
+/// </param>
 public sealed class Icmpv6RaListener(
     IRaAdvertisementProvider advertisementProvider,
     IOptions<RaProtocolOptions> options,
-    ILogger<Icmpv6RaListener> logger
+    ILogger<Icmpv6RaListener> logger,
+    TimeProvider timeProvider = null
 ) : IDhcpProtocolService
 {
     /// <summary>
@@ -89,22 +104,6 @@ public sealed class Icmpv6RaListener(
     ///     a solicitation, so replies from several routers on a link do not arrive together.
     /// </summary>
     private static readonly TimeSpan MaximumSolicitedResponseDelay = TimeSpan.FromMilliseconds(500);
-
-    /// <summary>
-    ///     RFC 4861 Section 10's "MIN_DELAY_BETWEEN_RAS": the shortest gap between two
-    ///     advertisements, solicited or not, so a burst of solicitations cannot cause a flood.
-    ///     RFC 4861 applies it per interface; this listener applies one window to all sends,
-    ///     since a solicited unicast reply has no known interface.
-    ///     <para>
-    ///         A send that falls inside the window is dropped (see
-    ///         <see cref="SendAdvertisementAsync" />), where RFC 4861 Section 6.2.6 would defer a
-    ///         solicited reply to the end of the window. The client's retransmitted solicitation or
-    ///         the next periodic advertisement covers a dropped reply. Because the window is
-    ///         shared, the periodic loop and the multicast reply, which send on several interfaces
-    ///         in a row, reach only the first interface in one pass; the others are skipped.
-    ///     </para>
-    /// </summary>
-    private static readonly TimeSpan MinimumDelayBetweenAdvertisements = TimeSpan.FromSeconds(3);
 
     /// <summary>
     ///     The hop limit every Neighbor Discovery message must carry (see the class summary).
@@ -151,11 +150,37 @@ public sealed class Icmpv6RaListener(
     private Task _executionTask;
 
     /// <summary>
-    ///     This field holds the time of the last successful send, shared by all interfaces (see
-    ///     <see cref="MinimumDelayBetweenAdvertisements" />). <see cref="StartAsync" /> resets it so
-    ///     a restart does not inherit the previous run's window.
+    ///     This field contains the clock behind every delay and window (see the constructor
+    ///     parameter).
     /// </summary>
-    private DateTime _lastSentAtUtc = DateTime.MinValue;
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+
+    /// <summary>
+    ///     This field contains the send windows (see <see cref="RaSendWindow" />).
+    ///     <see cref="StartAsync" /> resets them, so a restart does not inherit the previous run's
+    ///     windows.
+    /// </summary>
+    private readonly RaSendWindow _sendWindow = new(timeProvider ?? TimeProvider.System);
+
+    /// <summary>
+    ///     This property contains the function that lists the usable interfaces. It defaults to
+    ///     <see cref="EnumerateUsableInterfaces" />; tests replace it with a fixed list.
+    /// </summary>
+    internal Func<IEnumerable<(int Index, string Name)>> InterfaceEnumerator { get; set; } =
+        EnumerateUsableInterfaces;
+
+    /// <summary>
+    ///     This property contains the function that wraps the raw socket in the sender the loops
+    ///     use. It defaults to <see cref="SocketRaDatagramSender" />. Tests do not open the
+    ///     socket; they pass a recording sender straight to the loop methods.
+    /// </summary>
+    internal Func<Socket, IRaDatagramSender> SenderFactory { get; set; } =
+        socket => new SocketRaDatagramSender(socket);
+
+    /// <summary>
+    ///     This property exposes the send windows to tests.
+    /// </summary>
+    internal RaSendWindow SendWindow => _sendWindow;
 
     /// <summary>
     ///     This field counts the detached solicited replies that have not finished, which
@@ -266,7 +291,7 @@ public sealed class Icmpv6RaListener(
                 throw;
             }
 
-            _lastSentAtUtc = DateTime.MinValue;
+            _sendWindow.Reset();
 
             executionCts = new CancellationTokenSource();
 
@@ -361,14 +386,16 @@ public sealed class Icmpv6RaListener(
             stoppingToken
         );
 
+        IRaDatagramSender sender = SenderFactory(socket);
+
         Task receiveLoop = GuardLoopAsync(
             "receive",
-            () => ReceiveLoopAsync(socket, loopsCts.Token),
+            () => ReceiveLoopAsync(socket, sender, loopsCts.Token),
             stoppingToken
         );
         Task sendLoop = GuardLoopAsync(
             "unsolicited-send",
-            () => UnsolicitedSendLoopAsync(socket, loopsCts.Token),
+            () => UnsolicitedSendLoopAsync(sender, loopsCts.Token),
             stoppingToken
         );
 
@@ -423,7 +450,7 @@ public sealed class Icmpv6RaListener(
     /// </summary>
     private void JoinAllRoutersGroupOnEveryUsableInterface(Socket socket)
     {
-        foreach ((int interfaceIndex, string _) in EnumerateUsableInterfaces())
+        foreach ((int interfaceIndex, string _) in InterfaceEnumerator())
         {
             try
             {
@@ -446,8 +473,8 @@ public sealed class Icmpv6RaListener(
 
     /// <summary>
     ///     This method lists the index and name of every interface that is up, supports IPv6 and
-    ///     is not loopback. The multicast join, the periodic loop and the multicast reply all use
-    ///     it, and it is re-read each time, so interfaces that appear later get advertisements
+    ///     is not loopback. It is the default of <see cref="InterfaceEnumerator" />, which the
+    ///     multicast join, the periodic loop and the multicast reply all use, and it is re-read each time, so interfaces that appear later get advertisements
     ///     (though not the multicast membership until the next start). The name selects the
     ///     interface's <c>RaInterfaceOverrideOptions</c> entry in
     ///     <see cref="IRaAdvertisementProvider.BuildCurrentAdvertisement" />.
@@ -479,76 +506,107 @@ public sealed class Icmpv6RaListener(
     }
 
     /// <summary>
-    ///     This method runs the periodic unsolicited loop (RFC 4861 Section 6.2.4). Once a second
-    ///     it checks every usable interface and, when that interface is due, sends an advertisement
-    ///     to <see cref="RaMulticastGroups.AllNodes" /> and schedules the next one a random time
-    ///     between <see cref="RaProtocolOptions.MinRouterAdvertisementInterval" /> and
-    ///     <see cref="RaProtocolOptions.MaxRouterAdvertisementInterval" /> later. The randomness
-    ///     keeps routers on a link from synchronizing. The next time is scheduled even when the
-    ///     send was skipped by <see cref="MinimumDelayBetweenAdvertisements" /> or failed: a
-    ///     failing interface never ends the loop.
+    ///     This method runs the periodic unsolicited loop (RFC 4861 Section 6.2.4): once a second
+    ///     it calls <see cref="RunUnsolicitedPassAsync" />.
     /// </summary>
-    private async Task UnsolicitedSendLoopAsync(Socket socket, CancellationToken stoppingToken)
+    private async Task UnsolicitedSendLoopAsync(
+        IRaDatagramSender sender,
+        CancellationToken stoppingToken
+    )
     {
-        Dictionary<int, DateTime> nextSendAtUtcByInterfaceIndex = [];
+        Dictionary<int, DateTimeOffset> nextSendAtByInterfaceIndex = [];
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            DateTime now = DateTime.UtcNow;
-
-            List<(int Index, string Name)> interfaces;
+            await RunUnsolicitedPassAsync(sender, nextSendAtByInterfaceIndex, stoppingToken);
 
             try
             {
-                interfaces = EnumerateUsableInterfaces().ToList();
-            }
-            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
-            {
-                logger.LogError(exception, "Listing the network interfaces failed.");
-                interfaces = [];
-            }
-
-            foreach ((int interfaceIndex, string interfaceName) in interfaces)
-            {
-                if (
-                    nextSendAtUtcByInterfaceIndex.TryGetValue(
-                        interfaceIndex,
-                        out DateTime nextSendAtUtc
-                    )
-                    && nextSendAtUtc > now
-                )
-                    continue;
-
-                try
-                {
-                    await SendAdvertisementAsync(
-                        socket,
-                        interfaceIndex,
-                        interfaceName,
-                        RaMulticastGroups.AllNodes,
-                        stoppingToken
-                    );
-                }
-                catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
-                {
-                    logger.LogError(
-                        exception,
-                        "Sending the periodic Router Advertisement on interface {InterfaceName} failed.",
-                        interfaceName
-                    );
-                }
-
-                nextSendAtUtcByInterfaceIndex[interfaceIndex] = now.Add(NextUnsolicitedInterval());
-            }
-
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(1), _time, stoppingToken);
             }
             catch (OperationCanceledException)
             {
                 break;
             }
+        }
+    }
+
+    /// <summary>
+    ///     This method checks every usable interface once and, for each one that is due, sends an
+    ///     advertisement to <see cref="RaMulticastGroups.AllNodes" /> and schedules the next one a
+    ///     random time between <see cref="RaProtocolOptions.MinRouterAdvertisementInterval" /> and
+    ///     <see cref="RaProtocolOptions.MaxRouterAdvertisementInterval" /> later. The randomness
+    ///     keeps routers on a link from synchronizing.
+    ///     <para>
+    ///         Each interface has its own multicast window (<see cref="RaSendWindow" />), so one
+    ///         pass reaches every due interface. An interface whose window is still open is not
+    ///         rescheduled by a full interval: it is retried when the window ends. A failed send
+    ///         still schedules the next time, so a failing interface never ends the loop.
+    ///     </para>
+    /// </summary>
+    /// <param name="sender">Where the advertisements go.</param>
+    /// <param name="nextSendAtByInterfaceIndex">
+    ///     The time each interface is next due; the method reads and updates it.
+    /// </param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    internal async Task RunUnsolicitedPassAsync(
+        IRaDatagramSender sender,
+        Dictionary<int, DateTimeOffset> nextSendAtByInterfaceIndex,
+        CancellationToken stoppingToken
+    )
+    {
+        DateTimeOffset now = _time.GetUtcNow();
+
+        List<(int Index, string Name)> interfaces;
+
+        try
+        {
+            interfaces = InterfaceEnumerator().ToList();
+        }
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+        {
+            logger.LogError(exception, "Listing the network interfaces failed.");
+            interfaces = [];
+        }
+
+        foreach ((int interfaceIndex, string interfaceName) in interfaces)
+        {
+            if (
+                nextSendAtByInterfaceIndex.TryGetValue(
+                    interfaceIndex,
+                    out DateTimeOffset nextSendAt
+                )
+                && nextSendAt > now
+            )
+                continue;
+
+            // An open window on this interface only delays this interface (RFC 4861 Section 6.2.6).
+            if (!_sendWindow.TryReserveMulticastNow(interfaceIndex, out TimeSpan retryAfter))
+            {
+                nextSendAtByInterfaceIndex[interfaceIndex] = now + retryAfter;
+                continue;
+            }
+
+            try
+            {
+                await SendAdvertisementAsync(
+                    sender,
+                    interfaceIndex,
+                    interfaceName,
+                    RaMulticastGroups.AllNodes,
+                    stoppingToken
+                );
+            }
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+            {
+                logger.LogError(
+                    exception,
+                    "Sending the periodic Router Advertisement on interface {InterfaceName} failed.",
+                    interfaceName
+                );
+            }
+
+            nextSendAtByInterfaceIndex[interfaceIndex] = now + NextUnsolicitedInterval();
         }
     }
 
@@ -577,7 +635,11 @@ public sealed class Icmpv6RaListener(
     ///     solicitation is answered by <see cref="HandleSolicitationAsync" />, started without
     ///     awaiting.
     /// </summary>
-    private async Task ReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
+    private async Task ReceiveLoopAsync(
+        Socket socket,
+        IRaDatagramSender sender,
+        CancellationToken stoppingToken
+    )
     {
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
 
@@ -660,57 +722,25 @@ public sealed class Icmpv6RaListener(
                 continue;
             }
 
-            _ = HandleSolicitationAsync(socket, solicitationSource, stoppingToken);
+            _ = HandleSolicitationAsync(sender, solicitationSource, stoppingToken);
         }
     }
 
     /// <summary>
-    ///     This method answers one Router Solicitation after RFC 4861 Section 6.2.6's random delay
-    ///     (0 to <see cref="MaximumSolicitedResponseDelay" />): by unicast to the sender when it has
-    ///     an address (the scope ID routes the reply), or by multicast to
-    ///     <see cref="RaMulticastGroups.AllNodes" /> on every usable interface when it came from
-    ///     <c>::</c> (see the class summary). <see cref="ReceiveLoopAsync" /> does not await it,
-    ///     so the delay does not hold up the next receive. It runs detached, so it catches every
-    ///     exception, and it releases the pending-reply slot the receive loop took.
+    ///     This method runs <see cref="AnswerSolicitationAsync" /> for one accepted solicitation.
+    ///     <see cref="ReceiveLoopAsync" /> does not await it, so the delay does not hold up the
+    ///     next receive. It runs detached, so it catches every exception, and it releases the
+    ///     pending-reply slot the receive loop took.
     /// </summary>
     private async Task HandleSolicitationAsync(
-        Socket socket,
+        IRaDatagramSender sender,
         IPAddress solicitationSource,
         CancellationToken stoppingToken
     )
     {
         try
         {
-            TimeSpan delay = TimeSpan.FromMilliseconds(
-                Jitter.NextDouble() * MaximumSolicitedResponseDelay.TotalMilliseconds
-            );
-            await Task.Delay(delay, stoppingToken);
-
-            if (!solicitationSource.Equals(IPAddress.IPv6None))
-            {
-                // The arrival interface is unknown (see the class summary), so the reply uses the
-                // default content and ignores per-interface overrides and exclusions.
-                await SendAdvertisementAsync(
-                    socket,
-                    interfaceIndex: null,
-                    interfaceName: null,
-                    solicitationSource,
-                    stoppingToken
-                );
-                return;
-            }
-
-            // RFC 4861 Section 6.2.6: a solicitation from the unspecified address is answered by
-            // multicast. The arrival interface is unknown, so send on every usable interface,
-            // each with its own content (or nothing, for an excluded interface).
-            foreach ((int interfaceIndex, string interfaceName) in EnumerateUsableInterfaces())
-                await SendAdvertisementAsync(
-                    socket,
-                    interfaceIndex,
-                    interfaceName,
-                    RaMulticastGroups.AllNodes,
-                    stoppingToken
-                );
+            await AnswerSolicitationAsync(sender, solicitationSource, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -732,6 +762,97 @@ public sealed class Icmpv6RaListener(
 
             Interlocked.Decrement(ref _pendingSolicitedReplies);
         }
+    }
+
+    /// <summary>
+    ///     This method answers one Router Solicitation after RFC 4861 Section 6.2.6's random delay
+    ///     (0 to <see cref="MaximumSolicitedResponseDelay" />): by unicast to the sender when it has
+    ///     an address (the scope ID routes the reply), or by multicast to
+    ///     <see cref="RaMulticastGroups.AllNodes" /> on every usable interface when it came from
+    ///     <c>::</c> (see the class summary).
+    ///     <para>
+    ///         A unicast reply takes the destination's window (<see cref="RaSendWindow" />); a
+    ///         refused one is dropped with a Debug entry, since the client retransmits. A multicast
+    ///         reply runs on every interface at once, and each interface waits for its own next
+    ///         free multicast slot. A reply inside a window is therefore sent when the window ends
+    ///         (RFC 4861 Section 6.2.6), and a busy interface never holds up another.
+    ///     </para>
+    /// </summary>
+    /// <param name="sender">Where the advertisements go.</param>
+    /// <param name="solicitationSource">The source address of the solicitation.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    internal async Task AnswerSolicitationAsync(
+        IRaDatagramSender sender,
+        IPAddress solicitationSource,
+        CancellationToken stoppingToken
+    )
+    {
+        TimeSpan delay = TimeSpan.FromMilliseconds(
+            Jitter.NextDouble() * MaximumSolicitedResponseDelay.TotalMilliseconds
+        );
+        await Task.Delay(delay, _time, stoppingToken);
+
+        // "::" is IPAddress.IPv6Any and IPAddress.IPv6None alike; IPv6Any matches the receive loop.
+        if (!solicitationSource.Equals(IPAddress.IPv6Any))
+        {
+            if (!_sendWindow.TryReserveUnicast(solicitationSource))
+            {
+                logger.LogDebug(
+                    "Dropped the reply to a Router Solicitation from {Source}: it was answered within the last few seconds.",
+                    solicitationSource
+                );
+                return;
+            }
+
+            // The arrival interface is unknown (see the class summary), so the reply uses the
+            // default content and ignores per-interface overrides and exclusions.
+            await SendAdvertisementAsync(
+                sender,
+                interfaceIndex: null,
+                interfaceName: null,
+                solicitationSource,
+                stoppingToken
+            );
+            return;
+        }
+
+        // RFC 4861 Section 6.2.6: a solicitation from the unspecified address is answered by
+        // multicast. The arrival interface is unknown, so send on every usable interface,
+        // each with its own content (or nothing, for an excluded interface).
+        List<Task> replies = [];
+
+        foreach ((int interfaceIndex, string interfaceName) in InterfaceEnumerator())
+            replies.Add(
+                SendMulticastReplyAsync(sender, interfaceIndex, interfaceName, stoppingToken)
+            );
+
+        await Task.WhenAll(replies);
+    }
+
+    /// <summary>
+    ///     This method sends the multicast reply on one interface at that interface's next free
+    ///     slot (see <see cref="RaSendWindow.ReserveNextMulticastSlot" />). The slot is reserved
+    ///     before the wait, so replies queued on the same interface stay one window apart.
+    /// </summary>
+    private async Task SendMulticastReplyAsync(
+        IRaDatagramSender sender,
+        int interfaceIndex,
+        string interfaceName,
+        CancellationToken stoppingToken
+    )
+    {
+        TimeSpan wait = _sendWindow.ReserveNextMulticastSlot(interfaceIndex);
+
+        if (wait > TimeSpan.Zero)
+            await Task.Delay(wait, _time, stoppingToken);
+
+        await SendAdvertisementAsync(
+            sender,
+            interfaceIndex,
+            interfaceName,
+            RaMulticastGroups.AllNodes,
+            stoppingToken
+        );
     }
 
     /// <summary>
@@ -821,11 +942,10 @@ public sealed class Icmpv6RaListener(
 
     /// <summary>
     ///     This method builds the advertisement (see <see cref="TryBuildAdvertisement" />) and
-    ///     sends it, unless the last send was less than
-    ///     <see cref="MinimumDelayBetweenAdvertisements" /> ago or there is nothing to send. A
-    ///     build failure or a send error is logged and reported as <see langword="false" />.
+    ///     sends it. The caller has already taken the send window (see <see cref="RaSendWindow" />).
+    ///     A build failure or a send error is logged and reported as <see langword="false" />.
     /// </summary>
-    /// <param name="socket">The socket to send on.</param>
+    /// <param name="sender">Where the advertisement goes.</param>
     /// <param name="interfaceIndex">
     ///     The interface to use as the outgoing multicast interface, or <see langword="null" />
     ///     for a unicast send, which the destination's scope ID routes.
@@ -839,32 +959,19 @@ public sealed class Icmpv6RaListener(
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>Whether an advertisement was sent.</returns>
     private async Task<bool> SendAdvertisementAsync(
-        Socket socket,
+        IRaDatagramSender sender,
         int? interfaceIndex,
         string interfaceName,
         IPAddress destination,
         CancellationToken stoppingToken
     )
     {
-        DateTime now = DateTime.UtcNow;
-
-        if (now - _lastSentAtUtc < MinimumDelayBetweenAdvertisements)
-            return false;
-
         if (!TryBuildAdvertisement(interfaceName, out byte[] bytes))
             return false;
 
         try
         {
-            if (interfaceIndex is { } index)
-                socket.SetSocketOption(
-                    SocketOptionLevel.IPv6,
-                    SocketOptionName.MulticastInterface,
-                    index
-                );
-
-            await socket.SendToAsync(bytes, new IPEndPoint(destination, 0), stoppingToken);
-            _lastSentAtUtc = now;
+            await sender.SendAsync(bytes, destination, interfaceIndex, stoppingToken);
             return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
