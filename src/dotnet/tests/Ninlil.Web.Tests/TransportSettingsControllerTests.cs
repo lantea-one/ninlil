@@ -198,7 +198,7 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
             await response.Content.ReadFromJsonAsync<DnsCryptSettingsDetail>();
 
         Assert.False(detail.Enable);
-        Assert.Equal(5353, detail.Port);
+        Assert.Equal(5443, detail.Port);
         Assert.Equal(2, detail.EnabledEsVersions.Count);
     }
 
@@ -295,6 +295,33 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchDnsCrypt_WithAnUnparseableProviderName_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/transport-settings/dnscrypt", new { providerName = "a..b" })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("resolver.example")]
+    [InlineData("2.dnscrypt-cert.resolver.example")]
+    [InlineData(null)]
+    public async Task PatchDnsCrypt_WithAUsableOrNullProviderName_ReturnsOk(string providerName)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/transport-settings/dnscrypt", new { providerName })
+        );
+
+        response.EnsureSuccessStatusCode();
     }
 
     [Fact]

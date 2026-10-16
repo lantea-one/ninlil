@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Protocol.DnsOverHttps;
 using Ninlil.Dns.Protocol.DnsOverQuic;
@@ -596,6 +597,34 @@ public class TransportSettingsController(
         Ok(ToDetail(dnsCryptOptions.CurrentValue));
 
     /// <summary>
+    ///     This method checks that a DNSCrypt provider name parses as a domain name and that its
+    ///     certificate discovery name (<c>2.dnscrypt-cert.</c> added when missing) fits in 255
+    ///     octets. It mirrors the rule the DNSCrypt listeners apply at start, which is internal
+    ///     to <c>Ninlil.Dns.Protocol.DnsCrypt</c>.
+    /// </summary>
+    private static bool IsUsableDnsCryptProviderName(string providerName)
+    {
+        if (!DnsName.TryParse(providerName, out DnsName name))
+            return false;
+
+        if (
+            name.Labels.Count >= 2
+            && name.ToCanonicalLower().ToString().StartsWith("2.dnscrypt-cert.")
+        )
+            return true;
+
+        try
+        {
+            name.PrependLabels("2.dnscrypt-cert");
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Protocol:DnsCrypt</c> as an
     ///     RFC 7396 merge patch. <c>enable</c> starts or stops the UDP and TCP listeners and the
     ///     certificate rotation loop at once; every other field needs a restart of those services.
@@ -653,6 +682,18 @@ public class TransportSettingsController(
 
         if (patch.TryGetMergePatchString("providerName", out string providerName, true))
         {
+            // Null clears the name. Anything else must build a certificate discovery name, the
+            // rule the listeners apply at start, so a bad value fails here and not at restart.
+            if (
+                !string.IsNullOrWhiteSpace(providerName)
+                && (providerName.Length > 253 || !IsUsableDnsCryptProviderName(providerName))
+            )
+            {
+                throw new ValidationException(
+                    "'providerName' must be a domain name such as resolver.example or 2.dnscrypt-cert.resolver.example."
+                );
+            }
+
             settings.Add(
                 new PresetConfigurationSetting(
                     DnsCryptOptions.SectionName,

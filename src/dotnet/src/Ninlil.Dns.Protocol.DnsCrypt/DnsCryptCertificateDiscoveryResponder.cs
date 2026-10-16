@@ -32,10 +32,80 @@ internal static class DnsCryptCertificateDiscoveryResponder
     private const uint DiscoveryTimeToLiveSeconds = 60;
 
     /// <summary>
-    ///     This method builds the certificate discovery name for a configured provider name.
+    ///     This constant contains the second label of the certificate discovery name.
     /// </summary>
-    public static DnsName BuildProviderCertificateName(string providerName) =>
-        DnsName.Parse(providerName).PrependLabels($"{ProtocolMajorVersion}.dnscrypt-cert");
+    private const string CertificateLabel = "dnscrypt-cert";
+
+    /// <summary>
+    ///     This method builds the certificate discovery name for a configured provider name. The
+    ///     provider name works with or without the <c>2.dnscrypt-cert.</c> prefix, so
+    ///     <c>resolver.example</c> and <c>2.dnscrypt-cert.resolver.example</c> both publish at
+    ///     <c>2.dnscrypt-cert.resolver.example.</c>, the name a client's <c>sdns://</c> stamp
+    ///     carries. The prefix is matched case-insensitively and is never doubled.
+    /// </summary>
+    /// <exception cref="FormatException">
+    ///     <paramref name="providerName" /> is not a valid name, or the result is longer than 255
+    ///     octets.
+    /// </exception>
+    public static DnsName BuildProviderCertificateName(string providerName)
+    {
+        DnsName parsed = DnsName.Parse(providerName);
+
+        // Labels compare ignoring ASCII case (RFC 1035 §3.1); a name that already starts with
+        // the prefix is used as is so the prefix is never doubled.
+        if (
+            parsed.Labels.Count >= 2
+            && LabelEquals(parsed.Labels[0], ProtocolMajorVersion)
+            && LabelEquals(parsed.Labels[1], CertificateLabel)
+        )
+            return parsed;
+
+        return parsed.PrependLabels($"{ProtocolMajorVersion}.{CertificateLabel}");
+    }
+
+    /// <summary>
+    ///     This method builds the certificate discovery name like
+    ///     <see cref="BuildProviderCertificateName" /> but reports a failure instead of throwing,
+    ///     so the listeners can refuse to start with a log line.
+    /// </summary>
+    /// <param name="providerName">The configured provider name.</param>
+    /// <param name="name">The discovery name, when this returns <see langword="true" />.</param>
+    /// <returns>
+    ///     <see langword="false" /> for a blank or unparseable name, or one whose result is longer
+    ///     than 255 octets in wire form.
+    /// </returns>
+    public static bool TryBuildProviderCertificateName(string providerName, out DnsName name)
+    {
+        name = null;
+
+        if (string.IsNullOrWhiteSpace(providerName))
+            return false;
+
+        try
+        {
+            name = BuildProviderCertificateName(providerName);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     This method compares one wire label with an ASCII text, ignoring ASCII case.
+    /// </summary>
+    private static bool LabelEquals(byte[] label, string text)
+    {
+        if (label.Length != text.Length)
+            return false;
+
+        for (int i = 0; i < label.Length; i++)
+            if (char.ToLowerInvariant((char)label[i]) != text[i])
+                return false;
+
+        return true;
+    }
 
     /// <summary>
     ///     This method checks whether a decoded plaintext query is a certificate discovery request

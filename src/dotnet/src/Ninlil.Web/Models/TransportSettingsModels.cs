@@ -164,13 +164,13 @@ public record DnsOverQuicSettingsDetail(
 ///     certificates; without one, a listener could accept connections but not answer an
 ///     encrypted query.
 /// </param>
-/// <param name="Port">The port the transport binds to, for UDP and TCP. A change needs a listener restart.</param>
+/// <param name="Port">The port the transport binds to, for UDP and TCP. The default is 5443, not 5353, which multicast DNS uses. A change needs a listener restart.</param>
 /// <param name="ListenAddresses">
 ///     The local IP addresses the transport binds to, for UDP and TCP, one socket per address. An
 ///     empty list (the default) means every address, through one dual-stack socket. A change
 ///     needs a listener restart.
 /// </param>
-/// <param name="ProviderName">The provider name certificates are published under (clients query the TXT record <c>2.dnscrypt-cert.&lt;ProviderName&gt;</c>). Empty by default, and the listeners refuse to start while it is empty. A change needs a listener restart.</param>
+/// <param name="ProviderName">The provider name certificates are published under (clients query the TXT record <c>2.dnscrypt-cert.&lt;ProviderName&gt;</c>). Either form works, <c>resolver.example</c> or <c>2.dnscrypt-cert.resolver.example</c>, and both publish at the same name. Empty by default, and the listeners refuse to start while it is empty or not a valid domain name. A change needs a listener restart.</param>
 /// <param name="TcpIdleTimeout">How long a TCP connection may stay idle before the server closes it. A change needs a listener restart.</param>
 /// <param name="MaxConcurrentTcpConnections">How many TCP connections the server accepts at once. A change needs a listener restart.</param>
 /// <param name="EnabledEsVersions">

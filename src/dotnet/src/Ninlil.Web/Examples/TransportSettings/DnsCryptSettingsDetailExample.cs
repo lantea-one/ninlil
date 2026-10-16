@@ -12,14 +12,14 @@ public class DnsCryptSettingsDetailExample : IExamplesProvider<DnsCryptSettingsD
 {
     /// <summary>
     ///     This method returns DNSCrypt enabled with a provider name, both ciphers and the default
-    ///     port, limits and certificate timing. The provider name already starts with
-    ///     <c>2.dnscrypt-cert.</c>, which <c>DnsCryptCertificateDiscoveryResponder</c> adds again,
-    ///     so with this value the certificates would be published under a doubled prefix.
+    ///     port (5443), limits and certificate timing. The provider name carries the
+    ///     <c>2.dnscrypt-cert.</c> prefix, the form a client's <c>sdns://</c> stamp holds; the
+    ///     bare <c>resolver.example</c> publishes at the same name.
     /// </summary>
     public DnsCryptSettingsDetail GetExamples() =>
         new(
             Enable: true,
-            Port: 5353,
+            Port: 5443,
             ListenAddresses: [],
             ProviderName: "2.dnscrypt-cert.resolver.example.",
             TcpIdleTimeout: TimeSpan.FromSeconds(30),

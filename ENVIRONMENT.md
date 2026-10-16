@@ -210,7 +210,7 @@ default.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override. | `None` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_ENABLE` | Whether DNSCrypt v2 is enabled. | `false` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PORT` | The DNSCrypt UDP/TCP port. | `5353` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PORT` | The DNSCrypt UDP/TCP port. | `5443` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PROVIDER_NAME` | The DNSCrypt provider name clients use to build an `sdns://` stamp against this server. | *(empty — must be set to actually use DNSCrypt)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_MAX_CONCURRENT_TCP_CONNECTIONS` | Max simultaneous DNSCrypt TCP connections. | `512` |

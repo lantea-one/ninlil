@@ -91,10 +91,21 @@ public sealed class DnsCryptUdpListener(
             return;
         }
 
-        DnsName providerCertificateName =
-            DnsCryptCertificateDiscoveryResponder.BuildProviderCertificateName(
+        if (
+            !DnsCryptCertificateDiscoveryResponder.TryBuildProviderCertificateName(
+                options.CurrentValue.ProviderName,
+                out DnsName providerCertificateName
+            )
+        )
+        {
+            // An unparseable name must not throw out of ExecuteAsync: a faulted hosted service
+            // can stop the host. Log and stay unbound instead, like a blank name.
+            logger.LogError(
+                "DNSCrypt is enabled, but ProviderName '{ProviderName}' is not a valid domain name (at most 255 octets, labels of at most 63 octets) -- clients would have no name to discover this resolver's certificates under. This transport will not start; every other part of this server is unaffected.",
                 options.CurrentValue.ProviderName
             );
+            return;
+        }
 
         _sockets = ListenSocketSet.Bind(
             "DNSCrypt (UDP)",

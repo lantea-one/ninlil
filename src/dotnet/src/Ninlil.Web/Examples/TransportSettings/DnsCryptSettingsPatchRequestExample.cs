@@ -20,7 +20,7 @@ public class DnsCryptSettingsPatchRequestExample : IExamplesProvider<JsonElement
                 """
                 {
                   "enable": true,
-                  "providerName": "2.dnscrypt-cert.resolver.example."
+                  "providerName": "2.dnscrypt-cert.resolver.example"
                 }
                 """
             )

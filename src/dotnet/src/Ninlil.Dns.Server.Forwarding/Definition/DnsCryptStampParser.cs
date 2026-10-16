@@ -24,9 +24,10 @@ namespace Ninlil.Dns.Server.Forwarding.Definition;
 ///     <para>
 ///         <b>Provider name.</b> By DNSCrypt convention a stamp's <c>providerName</c> is already
 ///         the full certificate-discovery name (for example <c>2.dnscrypt-cert.example.com</c>).
-///         The server-role <c>DnsCryptOptions.ProviderName</c> is only the zone part, and
+///         The server-role <c>DnsCryptOptions.ProviderName</c> accepts either that full
+///         name or only the zone part, and
 ///         <c>DnsCryptCertificateDiscoveryResponder.BuildProviderCertificateName</c> adds the
-///         prefix. So the forwarder client uses
+///         prefix only when it is missing. So the forwarder client uses
 ///         <see cref="UpstreamForwarderDefinition.DnsCryptProviderName" /> as the query name as is,
 ///         without adding the prefix again.
 ///     </para>

@@ -413,7 +413,7 @@ console, or `/documentation` for a browsable REST API reference.
 | `53` UDP/TCP (`DnsServer:Protocol:Plain:Port`) | Plain DNS | On by default (the one transport that is) |
 | `853` (`DnsServer:Protocol:DnsOverTls:Port`) | DNS-over-TLS | Off by default |
 | `853` UDP (`DnsServer:Protocol:DnsOverQuic:Port`) | DNS-over-QUIC | Off by default (needs `libmsquic`/OpenSSL on the host OS) |
-| `5353` UDP/TCP (`DnsServer:Protocol:DnsCrypt:Port`) | DNSCrypt v2 | Off by default |
+| `5443` UDP/TCP (`DnsServer:Protocol:DnsCrypt:Port`) | DNSCrypt v2 | Off by default |
 | `67`/`68` UDP (`DhcpServer:Protocol:Dhcpv4:*Port`) | DHCPv4 | Off by default |
 | `547`/`546` UDP (`DhcpServer:Protocol:Dhcpv6:*Port`) | DHCPv6 | Off by default |
 | `69` UDP (`DhcpServer:Tftp:Port`) | TFTP (PXE boot delivery) | Off by default |

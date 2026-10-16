@@ -23,9 +23,10 @@ public class DnsCryptOptions
     /// <summary>
     ///     This property contains the port this transport binds to, for both UDP and TCP. It is
     ///     not 443, which DNSCrypt servers often use to blend in, because the DNS-over-HTTPS
-    ///     transport uses TCP 443 by default in the same process.
+    ///     transport uses TCP 443 by default in the same process, and not 5353, which multicast
+    ///     DNS uses (RFC 6762) and which would clash with an mDNS responder on the same host.
     /// </summary>
-    public int Port { get; set; } = 5353;
+    public int Port { get; set; } = 5443;
 
     /// <summary>
     ///     This property contains the local addresses this transport binds to for both UDP and
@@ -41,8 +42,11 @@ public class DnsCryptOptions
     /// <summary>
     ///     This property contains the provider name under which the certificates are published:
     ///     clients query the TXT record <c>2.dnscrypt-cert.&lt;ProviderName&gt;</c> (protocol
-    ///     major version <c>2</c>) to learn the current certificates. It is empty by default, and
-    ///     the listeners refuse to start while it is empty.
+    ///     major version <c>2</c>) to learn the current certificates. The name works with or
+    ///     without the <c>2.dnscrypt-cert.</c> prefix (matched case-insensitively, never doubled):
+    ///     <c>resolver.example</c> and <c>2.dnscrypt-cert.resolver.example</c> publish at the same
+    ///     name. It is empty by default, and the listeners refuse to start while it is empty or
+    ///     not a valid domain name.
     /// </summary>
     public string ProviderName { get; set; } = string.Empty;
 
