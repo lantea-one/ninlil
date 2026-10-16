@@ -150,7 +150,7 @@ describe('LoginComponent', () => {
 
     expect(root.querySelector('c-alert')).toBeNull();
 
-    authServiceFake.login.and.rejectWith(new Error('unauthorized'));
+    authServiceFake.login.and.rejectWith(new HttpErrorResponse({ status: 401 }));
     fixture.componentInstance.credentialsForm.patchValue({
       userName: 'someone',
       password: 'wrong-password',
@@ -162,6 +162,49 @@ describe('LoginComponent', () => {
     const alert = root.querySelector('c-alert');
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('Incorrect username or password.');
+  });
+
+  /** Submits the credentials step with `login` rejecting with `error`, and returns the message shown. */
+  async function messageAfterLoginFails(error: unknown): Promise<string | null> {
+    const fixture = await createComponent();
+    authServiceFake.login.and.rejectWith(error);
+    fixture.componentInstance.credentialsForm.patchValue({ userName: 'someone', password: 'pw' });
+    await fixture.componentInstance.submitCredentials();
+    return fixture.componentInstance.errorMessage();
+  }
+
+  it('says the account is locked when sign-in fails with 423', async () => {
+    expect(await messageAfterLoginFails(new HttpErrorResponse({ status: 423 }))).toBe(
+      'This account is locked. Try again later, or ask an administrator to unlock it.',
+    );
+  });
+
+  it('words the Retry-After wait when sign-in fails with 429', async () => {
+    const error = new HttpErrorResponse({
+      status: 429,
+      headers: new HttpHeaders({ 'Retry-After': '120' }),
+    });
+    expect(await messageAfterLoginFails(error)).toBe(
+      'Too many sign-in attempts. Try again in 2 minutes.',
+    );
+  });
+
+  it('says the server is unreachable when sign-in fails with status 0', async () => {
+    expect(await messageAfterLoginFails(new HttpErrorResponse({ status: 0 }))).toBe(
+      'Could not reach the server. Check your connection and try again.',
+    );
+  });
+
+  it('names the status when sign-in fails with a server error', async () => {
+    expect(await messageAfterLoginFails(new HttpErrorResponse({ status: 500 }))).toBe(
+      'Sign-in failed because of a server error (HTTP 500). Try again.',
+    );
+  });
+
+  it('says the password is wrong when sign-in fails with 401', async () => {
+    expect(await messageAfterLoginFails(new HttpErrorResponse({ status: 401 }))).toBe(
+      'Incorrect username or password.',
+    );
   });
 
   it('does nothing when the credentials form is submitted while invalid', async () => {
@@ -276,7 +319,7 @@ describe('LoginComponent', () => {
 
   it('shows an error message and stays on the credentials step when sign-in fails', async () => {
     const fixture = await createComponent();
-    authServiceFake.login.and.rejectWith(new Error('unauthorized'));
+    authServiceFake.login.and.rejectWith(new HttpErrorResponse({ status: 401 }));
 
     fixture.componentInstance.credentialsForm.patchValue({
       userName: 'someone',

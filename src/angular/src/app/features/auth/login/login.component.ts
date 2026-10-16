@@ -42,6 +42,28 @@ function waitMinutes(error: HttpErrorResponse): string {
 }
 
 /**
+ * This function words why the credentials step failed, so the user can tell a wrong password from
+ * a locked account, a rate limit, an unreachable server and a server fault. The 423 text reveals
+ * only what the status already reveals to a caller.
+ */
+function credentialsErrorMessage(error: unknown): string {
+  if (!(error instanceof HttpErrorResponse)) return 'Sign-in failed. Try again.';
+
+  switch (error.status) {
+    case 401:
+      return 'Incorrect username or password.';
+    case 423:
+      return 'This account is locked. Try again later, or ask an administrator to unlock it.';
+    case 429:
+      return `Too many sign-in attempts. Try again in ${waitMinutes(error)}.`;
+    case 0:
+      return 'Could not reach the server. Check your connection and try again.';
+    default:
+      return `Sign-in failed because of a server error (HTTP ${error.status}). Try again.`;
+  }
+}
+
+/**
  * This component is the public login page (`/login`). It has two steps on one page:
  * `credentials` (user name, password, "Remember me") and, for an account with two-factor sign-in,
  * `two-factor`. Keeping both in one component lets the pending sign-in's `mfaToken` from
@@ -50,6 +72,9 @@ function waitMinutes(error: HttpErrorResponse): string {
  * <p>The two-factor step accepts an authenticator code, an e-mailed code or a recovery code (a
  * fallback when the others are unavailable; the Security page generates them). One text field
  * serves all three; the backend redeems a recovery code so it cannot be used again.
+ *
+ * <p>A failed credentials step says why: wrong password, locked account, rate limit, unreachable
+ * server or server error ({@link credentialsErrorMessage}).
  *
  * <p>A "Sign in with SSO" button appears when `GET /api/auth/sso` reports that OpenID Connect is
  * available. That endpoint checks whether the scheme was registered at startup, not the current
@@ -156,8 +181,8 @@ export class LoginComponent implements OnInit {
   });
 
   /**
-   * This method submits the credentials step. Any failure shows "Incorrect username or
-   * password.", including a locked account (423) or a network error.
+   * This method submits the credentials step. A failure shows the message that
+   * {@link credentialsErrorMessage} picks from the HTTP status (401, 423, 429, none or other).
    */
   async submitCredentials(): Promise<void> {
     if (this.credentialsForm.invalid || this.submitting()) return;
@@ -175,8 +200,8 @@ export class LoginComponent implements OnInit {
       } else {
         await this.navigateAfterSignIn();
       }
-    } catch {
-      this.errorMessage.set('Incorrect username or password.');
+    } catch (error) {
+      this.errorMessage.set(credentialsErrorMessage(error));
     } finally {
       this.submitting.set(false);
     }
