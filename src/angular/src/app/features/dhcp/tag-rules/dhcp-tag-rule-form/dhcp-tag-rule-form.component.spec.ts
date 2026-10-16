@@ -204,6 +204,113 @@ describe('DhcpTagRuleFormComponent', () => {
     );
   });
 
+  describe('rule protocol', () => {
+    const v4Entry = { code: 6, name: 'Domain Name Server', valueType: 'IPv4AddressList' };
+    const v6Entry = { code: 23, name: 'DNS Servers', valueType: 'IPv6AddressList' };
+
+    async function createWithScopes() {
+      return createComponent(null, () => {
+        scopesApiSpy.apiDhcpScopesGet.and.returnValue(
+          of({
+            items: [
+              { id: 'scope-4', name: 'lan4', protocolVersion: 'IPv4' },
+              { id: 'scope-6', name: 'lan6', protocolVersion: 'IPv6' },
+            ],
+            skip: 0,
+            take: 500,
+            totalCount: 2,
+          }),
+        );
+        optionCatalogApiSpy.apiDhcpOptionCatalogGet.and.callFake(
+          (params: { protocolVersion: string }) =>
+            of(params.protocolVersion === 'IPv4' ? [v4Entry] : [v6Entry]),
+        );
+      });
+    }
+
+    it('offers only IPv4 options for a global rule and an IPv4 scope, and only IPv6 for an IPv6 scope', async () => {
+      const fixture = await createWithScopes();
+      const component = fixture.componentInstance;
+      const codes = () => component.candidateCatalog().map((entry) => entry.selectionValue);
+
+      expect(codes()).toEqual(['IPv4:6']);
+      component.form.controls.scopeId.setValue('scope-4');
+      expect(codes()).toEqual(['IPv4:6']);
+      component.form.controls.scopeId.setValue('scope-6');
+      expect(codes()).toEqual(['IPv6:23']);
+    });
+
+    it('shows the relay interface ID and enterprise number only for a v6 rule, and the circuit ID only for a v4 rule', async () => {
+      const fixture = await createWithScopes();
+      const page = () => fixture.nativeElement as HTMLElement;
+      const has = (id: string) => page().querySelector(`#${id}`) !== null;
+
+      expect(has('dhcp-tag-rule-circuit-id')).toBeTrue();
+      expect(has('dhcp-tag-rule-interface-id')).toBeFalse();
+      expect(has('dhcp-tag-rule-vc-enterprise')).toBeFalse();
+
+      fixture.componentInstance.form.controls.scopeId.setValue('scope-6');
+      fixture.detectChanges();
+
+      expect(has('dhcp-tag-rule-circuit-id')).toBeFalse();
+      expect(has('dhcp-tag-rule-interface-id')).toBeTrue();
+      expect(has('dhcp-tag-rule-vc-enterprise')).toBeTrue();
+    });
+
+    it('clears the criteria the new protocol cannot evaluate and says so', async () => {
+      const fixture = await createWithScopes();
+      const component = fixture.componentInstance;
+
+      component.form.patchValue({ relayAgentCircuitIdHex: 'AABB' });
+      component.form.controls.scopeId.setValue('scope-6');
+
+      expect(component.form.controls.relayAgentCircuitIdHex.value).toBe('');
+      expect(component.clearedCriteriaHint()).toContain('Relay Agent Circuit ID');
+
+      component.form.patchValue({
+        relayInterfaceIdHex: '6574',
+        vendorClassEnterpriseNumber: 32473,
+      });
+      component.form.controls.scopeId.setValue('');
+
+      expect(component.form.controls.relayInterfaceIdHex.value).toBe('');
+      expect(component.form.controls.vendorClassEnterpriseNumber.value).toBeNull();
+      expect(component.clearedCriteriaHint()).toContain('Vendor Class enterprise number');
+    });
+
+    it('applies the v6 option code limits to a v6 rule and the v4 limits otherwise', async () => {
+      const fixture = await createWithScopes();
+      const component = fixture.componentInstance;
+      component.addOptionRow();
+      const tag = component.options.at(0).controls.optionTag;
+
+      tag.setValue(2);
+      expect(tag.valid).toBeTrue();
+      tag.setValue(53);
+      expect(tag.hasError('reservedTag')).toBeTrue();
+
+      component.form.controls.scopeId.setValue('scope-6');
+      expect(tag.valid).toBeTrue();
+      tag.setValue(2);
+      expect(tag.hasError('reservedTag')).toBeTrue();
+    });
+
+    it('turns a typed row of the other protocol into a custom row that keeps its bytes', async () => {
+      const fixture = await createWithScopes();
+      const component = fixture.componentInstance;
+      component.addOptionRow();
+      const row = component.options.at(0);
+      row.controls.catalogSelection.setValue('IPv4:6');
+      component.onOptionCatalogSelectionChange(0);
+      row.controls.value.setValue('192.168.1.1');
+
+      component.form.controls.scopeId.setValue('scope-6');
+
+      expect(row.controls.catalogSelection.value).toBe('custom');
+      expect(row.controls.value.value).toBe('C0A80101');
+    });
+  });
+
   describe('contributed options table', () => {
     const dnsServerCatalogEntry = {
       code: 6,
@@ -334,10 +441,10 @@ describe('DhcpTagRuleFormComponent', () => {
       expect(fixture.componentInstance.errorMessage()).toContain('Option row 1');
     });
 
-    it('disambiguates a loaded option whose tag collides across both catalogs by which one actually decodes the stored value', async () => {
+    it("resolves a loaded option whose tag collides across both catalogs by the rule's protocol (its scope)", async () => {
       // DHCPv4 option 23 (Default IP Time-to-live, UInt8, 1 byte) collides with DHCPv6 option 23
-      // (DNS Recursive Name Server, an address list; here one 16-byte IPv6 address). Taking the
-      // first catalog's entry would decode the address as a 1-byte UInt8.
+      // (DNS Recursive Name Server, an address list). The rule sits on an IPv6 scope, so only the
+      // DHCPv6 entry is a candidate.
       const ipv4DefaultTtl = {
         code: 23,
         name: 'Default IP Time-to-live',
@@ -354,6 +461,14 @@ describe('DhcpTagRuleFormComponent', () => {
       };
 
       const fixture = await createComponent('rule-1', () => {
+        scopesApiSpy.apiDhcpScopesGet.and.returnValue(
+          of({
+            items: [{ id: 'scope-6', name: 'lan6', protocolVersion: 'IPv6' }],
+            skip: 0,
+            take: 500,
+            totalCount: 1,
+          }),
+        );
         optionCatalogApiSpy.apiDhcpOptionCatalogGet.and.callFake(
           (params: { protocolVersion: string }) =>
             of(params.protocolVersion === 'IPv4' ? [ipv4DefaultTtl] : [ipv6DnsServer]),
@@ -362,7 +477,7 @@ describe('DhcpTagRuleFormComponent', () => {
           of({
             id: 'rule-1',
             name: 'pxe',
-            scopeId: null,
+            scopeId: 'scope-6',
             priority: 0,
             isDisabled: false,
             vendorClassIdentifierMatch: null,

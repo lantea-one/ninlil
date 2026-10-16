@@ -1,9 +1,10 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import {
   FormControl,
   FormGroup,
   NonNullableFormBuilder,
   ReactiveFormsModule,
+  ValidatorFn,
   Validators,
 } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -46,15 +47,18 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { planDhcpOptionReconciliation } from '../../shared/dhcp-option-reconcile.util';
 import {
   assertDhcpv4OptionValueLength,
+  assertDhcpv6OptionValueLength,
+  dhcpv4OptionHint,
   dhcpv4OptionTagValidator,
+  dhcpv6OptionCodeValidator,
 } from '../../shared/dhcp-option-rules.util';
 import { decodeDhcpOptionValue, encodeDhcpOptionValue } from '../../shared/dhcp-option-value.util';
 
 /**
- * This interface is one entry of {@link DhcpTagRuleFormComponent.combinedCatalog}. Unlike a
- * scope, a tag rule has no protocol version, so its option dropdown lists the DHCPv4 and DHCPv6
- * catalogs together, each entry labeled with its protocol, since the same tag number can mean
- * different options in the two.
+ * This interface is one entry of {@link DhcpTagRuleFormComponent.combinedCatalog}. A tag rule
+ * has no protocol field; its protocol follows its scope. The form loads both catalogs and offers
+ * the ones of the rule's protocol ({@link DhcpTagRuleFormComponent.candidateCatalog}), since the
+ * same tag number can mean different options in the two.
  */
 interface CombinedCatalogEntry {
   protocolVersion: InternetProtocolVersionEnum;
@@ -93,6 +97,14 @@ interface DhcpOptionRowViewState {
  * `isDisabled` and `comments`; the rule's `isDisabled` switches them all. On save the rows are
  * written one call at a time through `/api/dhcp-tag-rules/{id}/options`
  * ({@link planDhcpOptionReconciliation}).
+ *
+ * <p>A rule belongs to one protocol (the server enforces it): a global rule and a rule on an IPv4
+ * scope are DHCPv4 rules, a rule on an IPv6 scope is a DHCPv6 rule ({@link ruleProtocol}). The
+ * protocol decides the offered catalog, the option code limits, and which match fields show:
+ * `relayInterfaceIdHex` and `vendorClassEnterpriseNumber` for DHCPv6, `relayAgentCircuitIdHex`
+ * for DHCPv4. Changing the scope clears the criteria that no longer apply and says so
+ * ({@link clearedCriteriaHint}), and turns the typed option rows of the other protocol into
+ * custom rows that keep their bytes.
  */
 @Component({
   selector: 'app-dhcp-tag-rule-form',
@@ -144,6 +156,33 @@ export class DhcpTagRuleFormComponent implements OnInit {
   /** The DHCPv4 and DHCPv6 option catalogs merged; see {@link CombinedCatalogEntry}. */
   readonly combinedCatalog = signal<CombinedCatalogEntry[]>([]);
 
+  /** The selected `scopeId` as a signal (the form's `valueChanges` is not one). */
+  private readonly selectedScopeId = signal('');
+
+  /** Resolves when the scope list has loaded, so an existing rule's protocol is known before its option rows are built. */
+  private scopesLoaded: Promise<void> = Promise.resolve();
+
+  /**
+   * The rule's protocol: the scope's protocol version, or IPv4 for a global rule (and while the
+   * scope is unknown).
+   */
+  readonly ruleProtocol = computed(
+    () =>
+      this.scopes().find((scope) => scope.id === this.selectedScopeId())?.protocolVersion ??
+      InternetProtocolVersionEnum.Ipv4,
+  );
+
+  /** Whether the rule is a DHCPv6 rule. */
+  readonly isDhcpv6Rule = computed(() => this.ruleProtocol() === InternetProtocolVersionEnum.Ipv6);
+
+  /** The catalog entries of the rule's protocol, the options the dropdown offers. */
+  readonly candidateCatalog = computed(() =>
+    this.combinedCatalog().filter((entry) => entry.protocolVersion === this.ruleProtocol()),
+  );
+
+  /** A note shown after a scope change cleared match fields that the new protocol cannot evaluate, or null. */
+  readonly clearedCriteriaHint = signal<string | null>(null);
+
   /** The ids of the option rows as loaded, for {@link planDhcpOptionReconciliation}. */
   private originallyLoadedOptionIds: string[] = [];
 
@@ -172,11 +211,86 @@ export class DhcpTagRuleFormComponent implements OnInit {
     return this.form.controls.options;
   }
 
+  constructor() {
+    this.form.controls.scopeId.valueChanges.subscribe((scopeId) => {
+      const previousProtocol = this.ruleProtocol();
+      this.selectedScopeId.set(scopeId);
+      this.applyProtocolChange(previousProtocol);
+    });
+  }
+
   ngOnInit(): void {
-    void this.loadScopes();
+    this.scopesLoaded = this.loadScopes();
     void this.loadCombinedCatalog();
     if (this.isEditMode) void this.loadExistingRule();
   }
+
+  /**
+   * This method clears the match fields the new protocol cannot evaluate (the server rejects
+   * them), converts typed option rows of the old protocol to custom rows, and re-checks the
+   * option codes against the new protocol's limits.
+   */
+  private applyProtocolChange(previousProtocol: InternetProtocolVersionEnum): void {
+    const protocol = this.ruleProtocol();
+    if (protocol === previousProtocol) return;
+
+    const cleared: string[] = [];
+    const controls = this.form.controls;
+
+    if (protocol === InternetProtocolVersionEnum.Ipv6) {
+      if (controls.relayAgentCircuitIdHex.value !== '') {
+        controls.relayAgentCircuitIdHex.setValue('');
+        cleared.push('Relay Agent Circuit ID');
+      }
+    } else {
+      if (controls.relayInterfaceIdHex.value !== '') {
+        controls.relayInterfaceIdHex.setValue('');
+        cleared.push('Relay Interface ID');
+      }
+      if (controls.vendorClassEnterpriseNumber.value !== null) {
+        controls.vendorClassEnterpriseNumber.setValue(null);
+        cleared.push('Vendor Class enterprise number');
+      }
+    }
+
+    this.clearedCriteriaHint.set(
+      cleared.length === 0
+        ? null
+        : `${cleared.join(' and ')} cleared: the ${protocol === InternetProtocolVersionEnum.Ipv6 ? 'DHCPv6' : 'DHCPv4'} rule cannot match on it.`,
+    );
+
+    for (const row of this.options.controls) {
+      const combined = this.catalogEntryFor(row);
+
+      if (combined && combined.protocolVersion !== protocol) {
+        // Keep the typed value's bytes as hex so nothing the operator entered is lost.
+        let hex = '';
+        if (row.controls.valueSource.value !== DhcpOptionValueSourceEnum.ServerAddress) {
+          try {
+            hex = encodeDhcpOptionValue(combined.entry.valueType ?? null, row.controls.value.value);
+          } catch {
+            hex = row.controls.value.value;
+          }
+        }
+        row.controls.catalogSelection.setValue(CUSTOM_TAG_SELECTION);
+        row.controls.valueSource.setValue(DhcpOptionValueSourceEnum.Custom);
+        row.controls.value.setValue(hex);
+      }
+
+      row.controls.optionTag.updateValueAndValidity();
+    }
+
+    this.recomputeOptionRowViewState();
+  }
+
+  /** This method returns the hint for an option row's tag (DHCPv4 rules only), or null. */
+  optionHint(tag: number | null): string | null {
+    return this.isDhcpv6Rule() ? null : dhcpv4OptionHint(tag);
+  }
+
+  /** This validator applies the rule's protocol limits to an option row's tag or code. */
+  private readonly optionTagValidator: ValidatorFn = (control) =>
+    this.isDhcpv6Rule() ? dhcpv6OptionCodeValidator(control) : dhcpv4OptionTagValidator(control);
 
   /** This method adds an empty option row, starting as a custom tag. */
   addOptionRow(): void {
@@ -196,7 +310,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     const selection = row.controls.catalogSelection.value;
 
     if (selection !== CUSTOM_TAG_SELECTION) {
-      const matched = this.combinedCatalog().find(
+      const matched = this.candidateCatalog().find(
         (candidate) => candidate.selectionValue === selection,
       );
       if (matched) row.controls.optionTag.setValue(matched.entry.code ?? 0);
@@ -355,7 +469,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     const valueSource = existing?.valueSource ?? DhcpOptionValueSourceEnum.Custom;
 
     const candidates = existing
-      ? this.combinedCatalog().filter((candidate) => candidate.entry.code === optionTag)
+      ? this.candidateCatalog().filter((candidate) => candidate.entry.code === optionTag)
       : [];
 
     let matchingEntry: CombinedCatalogEntry | undefined;
@@ -396,7 +510,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     return this.formBuilder.group({
       id: [existing?.id ?? (null as string | null)],
       catalogSelection: [catalogSelection],
-      optionTag: [optionTag, [Validators.required, dhcpv4OptionTagValidator]],
+      optionTag: [optionTag, [Validators.required, this.optionTagValidator]],
       valueSource: [valueSource],
       value: [displayValue],
     });
@@ -415,7 +529,8 @@ export class DhcpTagRuleFormComponent implements OnInit {
       if (!isServerAddress) {
         try {
           valueHex = encodeDhcpOptionValue(combined?.entry.valueType ?? null, raw.value);
-          assertDhcpv4OptionValueLength(valueHex);
+          if (this.isDhcpv6Rule()) assertDhcpv6OptionValueLength(valueHex);
+          else assertDhcpv4OptionValueLength(valueHex);
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           throw new Error(`Option row ${index + 1} (tag ${raw.optionTag}): ${reason}`, {
@@ -477,6 +592,9 @@ export class DhcpTagRuleFormComponent implements OnInit {
       const rule = await firstValueFrom(
         this.tagRulesApi.apiDhcpTagRulesIdGet({ id: this.tagRuleId }),
       );
+
+      // The rule's protocol (from its scope) decides which catalog entries its rows can match.
+      await this.scopesLoaded;
 
       this.form.patchValue({
         name: rule.name ?? '',

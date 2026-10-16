@@ -31,9 +31,16 @@
             <select cSelect id="dhcp-tag-rule-scope" formControlName="scopeId">
               <option value="">Any scope</option>
               @for (scope of scopes(); track scope.id) {
-                <option [value]="scope.id">{{ scope.name }}</option>
+                <option [value]="scope.id">{{ scope.name }} ({{ scope.protocolVersion }})</option>
               }
             </select>
+            <div cFormText>
+              @if (isDhcpv6Rule()) {
+                A DHCPv6 rule: it names a DHCPv6 scope.
+              } @else {
+                A DHCPv4 rule: any scope, or an IPv4 scope. Pick an IPv6 scope for a DHCPv6 rule.
+              }
+            </div>
           </div>
 
           <div class="field">
@@ -47,6 +54,10 @@
             <div cFormText>Rules are evaluated in ascending priority order.</div>
           </div>
         </div>
+
+        @if (clearedCriteriaHint(); as hint) {
+          <c-alert color="info" [dismissible]="false" role="status">{{ hint }}</c-alert>
+        }
 
         <div class="field-row">
           <div class="field">
@@ -77,18 +88,18 @@
             </select>
           </div>
 
-          <div class="field">
-            <label cLabel for="dhcp-tag-rule-vc-enterprise"
-              >Vendor Class enterprise number (DHCPv6 only)</label
-            >
-            <input
-              cFormControl
-              type="number"
-              id="dhcp-tag-rule-vc-enterprise"
-              formControlName="vendorClassEnterpriseNumber"
-              placeholder="32473"
-            />
-          </div>
+          @if (isDhcpv6Rule()) {
+            <div class="field">
+              <label cLabel for="dhcp-tag-rule-vc-enterprise">Vendor Class enterprise number</label>
+              <input
+                cFormControl
+                type="number"
+                id="dhcp-tag-rule-vc-enterprise"
+                formControlName="vendorClassEnterpriseNumber"
+                placeholder="32473"
+              />
+            </div>
+          }
         </div>
 
         <div class="field-row">
@@ -107,16 +118,16 @@
         </div>
 
         <div class="field-row">
-          <div class="field">
-            <label cLabel for="dhcp-tag-rule-circuit-id"
-              >Relay Agent Circuit ID (hex, DHCPv4 only)</label
-            >
-            <input
-              cFormControl
-              id="dhcp-tag-rule-circuit-id"
-              formControlName="relayAgentCircuitIdHex"
-            />
-          </div>
+          @if (!isDhcpv6Rule()) {
+            <div class="field">
+              <label cLabel for="dhcp-tag-rule-circuit-id">Relay Agent Circuit ID (hex)</label>
+              <input
+                cFormControl
+                id="dhcp-tag-rule-circuit-id"
+                formControlName="relayAgentCircuitIdHex"
+              />
+            </div>
+          }
 
           <div class="field">
             <label cLabel for="dhcp-tag-rule-remote-id">Relay/Remote ID (hex)</label>
@@ -128,24 +139,24 @@
             <div cFormText>DHCPv4's Agent Remote ID sub-option, or DHCPv6's Remote-ID option.</div>
           </div>
 
-          <div class="field">
-            <label cLabel for="dhcp-tag-rule-interface-id"
-              >Relay Interface ID (hex, DHCPv6 only)</label
-            >
-            <input
-              cFormControl
-              id="dhcp-tag-rule-interface-id"
-              formControlName="relayInterfaceIdHex"
-            />
-          </div>
+          @if (isDhcpv6Rule()) {
+            <div class="field">
+              <label cLabel for="dhcp-tag-rule-interface-id">Relay Interface ID (hex)</label>
+              <input
+                cFormControl
+                id="dhcp-tag-rule-interface-id"
+                formControlName="relayInterfaceIdHex"
+              />
+            </div>
+          }
         </div>
 
         <div class="field full-width">
           <div class="options-table-label">Contributed options</div>
           <div cFormText class="options-hint">
             The options this rule delivers to a matching client. Pick a well-known option from the
-            dropdown (DHCPv4 and DHCPv6 options both shown, since a rule can match either), or
-            choose "Custom / other option..." to set a raw option tag and hex value by hand.
+            dropdown (the options of the rule's protocol, set by the scope above), or choose "Custom
+            / other option..." to set a raw option tag and hex value by hand.
           </div>
 
           <div formArrayName="options">
@@ -162,10 +173,9 @@
                     (change)="onOptionCatalogSelectionChange($index)"
                   >
                     <option value="custom">Custom / other option...</option>
-                    @for (candidate of combinedCatalog(); track candidate.selectionValue) {
+                    @for (candidate of candidateCatalog(); track candidate.selectionValue) {
                       <option [value]="candidate.selectionValue">
-                        [{{ candidate.protocolVersion }}] {{ candidate.entry.name }} (option
-                        {{ candidate.entry.code }})
+                        {{ candidate.entry.name }} (option {{ candidate.entry.code }})
                       </option>
                     }
                   </select>
@@ -290,6 +300,16 @@
                         />
                         <div cFormText>Seconds.</div>
                       }
+                      @case ('DomainNameList') {
+                        <textarea
+                          cFormControl
+                          rows="2"
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="example.com"
+                        ></textarea>
+                        <div cFormText>One domain name per line.</div>
+                      }
                       @case ('String') {
                         <input
                           cFormControl
@@ -314,6 +334,10 @@
                       is delivered.
                     </div>
                   </div>
+                }
+
+                @if (optionHint(row.controls.optionTag.value); as hint) {
+                  <div cFormText class="field full-width">{{ hint }}</div>
                 }
 
                 <div class="field-row option-row-footer">
