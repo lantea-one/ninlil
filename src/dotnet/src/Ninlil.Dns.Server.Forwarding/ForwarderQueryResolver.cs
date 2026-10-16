@@ -31,11 +31,18 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     <see cref="ForwardingOptions.PerForwarderTimeout" />; when all fail, the dispatcher falls
 ///     through to recursive iteration.
 ///     <para>
+///         <b>The outbound query.</b> Every hop gets a query built for it (see
+///         <see cref="BuildOutboundRequest" />), never the client's message. The client's EDNS
+///         options (cookie, padding, NSID and so on) and its TSIG are never relayed. The upstream
+///         gets an OPT record only when the client sent EDNS, validation is on or an ECS option
+///         was built; it keeps the client's payload size and DO bit, carries the built ECS option
+///         as its only option and passes the client's CD bit through.
+///     </para>
+///     <para>
 ///         <b>DNSSEC.</b> When <see cref="RecursiveServerOptions.EnableDnssecValidation" /> is
 ///         on and the forwarder set allows it, the query sent upstream has EDNS with DO and CD set, whatever the client sent
 ///         (RFC 6840 §5.9: a validating resolver sets CD upstream, so the upstream returns the
-///         data and its signatures even when its own validation fails). Only the client's ECS
-///         option is kept; its cookie and other options belong to the client-to-server hop.
+///         data and its signatures even when its own validation fails).
 ///         Each answer is then checked locally with the same <see cref="IDnssecValidator" /> as
 ///         an iterative answer: the CNAME chain is rebuilt from the answer section, a negative
 ///         answer or a wildcard expansion carries the NSEC or NSEC3 proof the validator needs,
@@ -171,22 +178,19 @@ public sealed class ForwarderQueryResolver(
             recursiveOptions.CurrentValue.EnableDnssecValidation && zoneValidates;
 
         // Built once per query: the ECS option is the same whichever forwarder answers.
-        // AttachToRequest returns a copy, because context.Request is shared with the resolvers
-        // this dispatch may still fall through to.
         DnsEdnsOption clientSubnetOption = clientSubnetService?.BuildOutboundOption(
             context.RemoteAddress,
             context.Request
         );
-        DnsMessage outboundRequest =
-            validationEnabled ? BuildValidatingRequest(context.Request, clientSubnetOption)
-            : clientSubnetOption is null ? context.Request
-            : EdnsClientSubnetService.AttachToRequest(context.Request, clientSubnetOption);
 
-        // The client's TSIG belongs to the hop between the client and this server: its MAC covers
-        // the request ID and this server's key, which the upstream cannot check, and forwarding it
-        // would leak the key name. The ECS copy and the validating copy never carry it.
-        if (outboundRequest.Tsig is not null)
-            outboundRequest = WithoutTsig(outboundRequest);
+        // A fresh message for the upstream hop. context.Request is shared with the resolvers this
+        // dispatch may still fall through to, and the pipeline signs the reply from its TSIG, so
+        // it is never changed or sent.
+        DnsMessage outboundRequest = BuildOutboundRequest(
+            context.Request,
+            clientSubnetOption,
+            validationEnabled
+        );
 
         // Only a plain, single-question QUERY is cached: that is all a stub resolver ever sends,
         // and anything else (a NOTIFY or UPDATE that reached here, a multi-question message) has
@@ -440,73 +444,69 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the outbound query for a validating forwarder: the client's
-    ///     question, ID and RD bit, with CD set and EDNS with DO set (RFC 6840 §5.9), so the
-    ///     upstream answers with its RRSIGs and NSEC proofs even for a client that did not ask
-    ///     for them and even when the upstream's own validation fails. The client's payload size
-    ///     and ECS option are kept; every other EDNS option, and the TSIG, are left behind
-    ///     because they belong to the client-to-server hop.
+    ///     This method builds the query sent to an upstream forwarder: a new message made for this
+    ///     hop, not a relay of the client's. The header keeps the client's ID (the forwarder client
+    ///     may replace it), opcode and RD bit, and the questions are copied. CD is set when this
+    ///     server validates (RFC 6840 §5.9: a validating resolver sets CD upstream, so the upstream
+    ///     returns the data and its signatures even when its own validation fails) and otherwise
+    ///     follows the client's CD bit.
+    ///     <para>
+    ///         An OPT record is added when the client sent EDNS, when validation is on, or when an
+    ///         ECS option was built (RFC 6891 §6.1.1: the OPT record is per hop, so it is rebuilt
+    ///         and never copied). It keeps the client's payload size and DO bit, with DO always
+    ///         set when validating, and carries ECS as its only option. The client's cookie
+    ///         (RFC 7873, a client-server pair), padding, NSID and every other option belong to
+    ///         the client-to-server hop and are never relayed. The client's own ECS option is
+    ///         relayed only when validating without an ECS service, as the validating query has
+    ///         always done. The TSIG record is never sent: its MAC covers the request ID and this
+    ///         server's key, which the upstream cannot check, and forwarding it would leak the
+    ///         key name.
+    ///     </para>
     /// </summary>
     /// <param name="clientRequest">The client's request, which is not changed.</param>
     /// <param name="clientSubnetOption">
-    ///     The ECS option built for this client, or <see langword="null" /> to relay the client's
-    ///     own ECS option, if it sent one.
+    ///     The ECS option built for this client, or <see langword="null" /> when there is none.
     /// </param>
-    private static DnsMessage BuildValidatingRequest(
+    /// <param name="validating">Whether this server validates the answer.</param>
+    private static DnsMessage BuildOutboundRequest(
         DnsMessage clientRequest,
-        DnsEdnsOption clientSubnetOption
+        DnsEdnsOption clientSubnetOption,
+        bool validating
     )
     {
-        DnsEdnsOption subnet =
-            clientSubnetOption
-            ?? clientRequest.Edns?.Options.FirstOrDefault(option =>
-                option.Code == (ushort)EdnsOptionCodeEnum.ClientSubnet
-            );
-
         DnsMessage outbound = new()
         {
             Id = clientRequest.Id,
             Opcode = clientRequest.Opcode,
             RecursionDesired = clientRequest.RecursionDesired,
-            CheckingDisabled = true,
-            Edns = new DnsEdnsOptions(
-                0,
-                clientRequest.Edns is { RequestorPayloadSize: > 0 } edns
-                    ? edns.RequestorPayloadSize
-                    : DnsQueryDispatcher.DefaultUdpPayloadSizeOctets,
-                true,
-                subnet is null ? [] : [subnet]
-            ),
+            CheckingDisabled = validating || clientRequest.CheckingDisabled,
         };
         outbound.Questions.AddRange(clientRequest.Questions);
 
+        DnsEdnsOption subnet =
+            clientSubnetOption
+            ?? (
+                validating
+                    ? clientRequest.Edns?.Options.FirstOrDefault(option =>
+                        option.Code == (ushort)EdnsOptionCodeEnum.ClientSubnet
+                    )
+                    : null
+            );
+
+        if (!validating && clientRequest.Edns is null && subnet is null)
+            return outbound;
+
+        outbound.Edns = new DnsEdnsOptions(
+            0,
+            clientRequest.Edns is { RequestorPayloadSize: > 0 } edns
+                ? edns.RequestorPayloadSize
+                : DnsQueryDispatcher.DefaultUdpPayloadSizeOctets,
+            validating || clientRequest.Edns?.DnssecOk == true,
+            subnet is null ? [] : [subnet]
+        );
+
         return outbound;
     }
-
-    /// <summary>
-    ///     This method copies a request without its TSIG record. The shared
-    ///     <c>DnsQueryContext.Request</c> must keep it, because the pipeline signs the reply from it.
-    /// </summary>
-    private static DnsMessage WithoutTsig(DnsMessage original) =>
-        new()
-        {
-            Id = original.Id,
-            IsResponse = original.IsResponse,
-            Opcode = original.Opcode,
-            IsAuthoritativeAnswer = original.IsAuthoritativeAnswer,
-            IsTruncated = original.IsTruncated,
-            RecursionDesired = original.RecursionDesired,
-            RecursionAvailable = original.RecursionAvailable,
-            AuthenticData = original.AuthenticData,
-            CheckingDisabled = original.CheckingDisabled,
-            ResponseCode = original.ResponseCode,
-            Questions = [.. original.Questions],
-            Answers = [.. original.Answers],
-            AuthorityRecords = [.. original.AuthorityRecords],
-            AdditionalRecords = [.. original.AdditionalRecords],
-            Edns = original.Edns,
-            Tsig = null,
-        };
 
     /// <summary>
     ///     This method turns a forwarded response into the shape <see cref="IDnssecValidator" />

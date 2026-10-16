@@ -11,11 +11,16 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     <see cref="Caching.ForwardedResponseCacheEntry" /> for a cached one, so both shapes agree.
 ///     The upstream message is never changed; the result is a new message.
 ///     <para>
-///         The reply is built from three facts about the client, because the forwarder asks the
+///         The reply is built from facts about the client, because the forwarder asks the
 ///         upstream for more than the client did (DO and CD are always set when validation is on,
 ///         see <see cref="ForwarderQueryResolver" />):
 ///     </para>
 ///     <list type="bullet">
+///         <item>
+///             <b>AA and RA.</b> AA is always clear: this server is not an authority for forwarded
+///             data (RFC 1035 §4.1.1). RA is always set: this server offered recursion for the
+///             query. The upstream's bits for either are never passed on.
+///         </item>
 ///         <item>
 ///             <b>AD.</b> It is set only when this server validated the answer as Secure and the
 ///             client set DO or AD (RFC 6840 §5.8). The upstream's own AD bit is never passed on:
@@ -62,10 +67,10 @@ internal static class ForwardedResponseShaper
             Id = request.Id,
             IsResponse = true,
             Opcode = source.Opcode,
-            IsAuthoritativeAnswer = source.IsAuthoritativeAnswer,
+            IsAuthoritativeAnswer = false,
             IsTruncated = source.IsTruncated,
             RecursionDesired = request.RecursionDesired,
-            RecursionAvailable = source.RecursionAvailable,
+            RecursionAvailable = true,
             AuthenticData = isSecure && (clientWantsDnssec || request.AuthenticData),
             CheckingDisabled = request.CheckingDisabled,
             ResponseCode = source.ResponseCode,
