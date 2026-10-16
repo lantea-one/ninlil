@@ -22,7 +22,8 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="RefreshInterval">
 ///     How often a <see cref="DnsFilterListSourceEnum.Subscribed" /> list is fetched again.
-///     Ignored for a <see cref="DnsFilterListSourceEnum.Local" /> list.
+///     <c>null</c> means every 24 hours. The minimum is one hour (<c>01:00:00</c>); a smaller
+///     value is rejected with 400. Ignored for a <see cref="DnsFilterListSourceEnum.Local" /> list.
 /// </param>
 /// <param name="IsDisabled">Whether the list is disabled.</param>
 /// <param name="Comments">Free-form operator notes about the list.</param>

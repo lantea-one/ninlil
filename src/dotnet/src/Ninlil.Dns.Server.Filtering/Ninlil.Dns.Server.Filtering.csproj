@@ -10,6 +10,11 @@
     <PackageId>Ninlil.Dns.Server.Filtering</PackageId>
   </PropertyGroup>
 
+  <!-- The refresh schedule tests call RefreshDueListsAsync directly instead of running the loop. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.Filtering.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />

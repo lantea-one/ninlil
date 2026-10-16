@@ -209,6 +209,81 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Conflict, createEntryResponse.StatusCode);
     }
 
+    /// <summary>
+    ///     This test checks that creating a subscribed list refuses a refresh interval under one
+    ///     hour with 400, and accepts exactly one hour and a null interval.
+    /// </summary>
+    [Theory]
+    [InlineData("00:10:00", HttpStatusCode.BadRequest)]
+    [InlineData("00:59:59", HttpStatusCode.BadRequest)]
+    [InlineData("01:00:00", HttpStatusCode.Created)]
+    [InlineData(null, HttpStatusCode.Created)]
+    public async Task CreatingASubscribedFilterList_ChecksTheRefreshIntervalFloor(
+        string refreshInterval,
+        HttpStatusCode expected
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/filter-lists",
+            new
+            {
+                name = $"interval-{Guid.NewGuid():N}",
+                kind = "Domain",
+                action = "Block",
+                source = "Subscribed",
+                subscriptionUrl = "https://example.invalid/hosts.txt",
+                refreshInterval,
+            }
+        );
+
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     This test checks that a merge patch refuses a refresh interval under one hour with 400
+    ///     and leaves the stored interval alone, and that a null interval is accepted.
+    /// </summary>
+    [Fact]
+    public async Task PatchingAFilterListRefreshInterval_ChecksTheFloorAndAllowsNull()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/filter-lists",
+            new
+            {
+                name = $"patch-interval-{Guid.NewGuid():N}",
+                kind = "Domain",
+                action = "Block",
+                source = "Subscribed",
+                subscriptionUrl = "https://example.invalid/hosts.txt",
+                refreshInterval = "02:00:00",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        FilterListDetail list = await createResponse.Content.ReadFromJsonAsync<FilterListDetail>();
+
+        HttpResponseMessage tooSmall = await client.SendAsync(
+            PatchRequest($"/api/filter-lists/{list.Id}", new { refreshInterval = "00:00:30" })
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, tooSmall.StatusCode);
+
+        FilterListDetail unchanged = await client.GetFromJsonAsync<FilterListDetail>(
+            $"/api/filter-lists/{list.Id}"
+        );
+        Assert.Equal(TimeSpan.FromHours(2), unchanged.RefreshInterval);
+
+        HttpResponseMessage cleared = await client.SendAsync(
+            PatchRequest(
+                $"/api/filter-lists/{list.Id}",
+                new Dictionary<string, object> { ["refreshInterval"] = null }
+            )
+        );
+        Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
+    }
+
     [Fact]
     public async Task FilterListEntry_WildcardAndRegexKinds_CreateAndRoundTripCorrectly()
     {

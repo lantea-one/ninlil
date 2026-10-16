@@ -102,8 +102,10 @@ public class FilterListsController(
 
     /// <summary>
     ///     This action creates a block or allow list. A subscribed list needs a subscription URL;
-    ///     the URL and refresh interval are dropped for a local list. Returns 400 for a missing
-    ///     name or URL and 409 when the name is taken. Requires <c>filterlists:write</c>.
+    ///     the URL and refresh interval are dropped for a local list. A subscribed list with no
+    ///     refresh interval is fetched every 24 hours. Returns 400 for a missing name or URL, or a
+    ///     refresh interval under one hour, and 409 when the name is taken. Requires
+    ///     <c>filterlists:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("filterlists:write")]
@@ -128,6 +130,8 @@ public class FilterListsController(
             )
         )
             throw new ValidationException(subscriptionError);
+
+        ValidateRefreshInterval(request.RefreshInterval);
 
         DnsFilterListEntity list = new()
         {
@@ -198,6 +202,8 @@ public class FilterListsController(
         )
             throw new ValidationException(subscriptionError);
 
+        ValidateRefreshInterval(request.RefreshInterval);
+
         list.Name = request.Name;
         list.Kind = request.Kind;
         list.Action = request.Action;
@@ -222,7 +228,8 @@ public class FilterListsController(
     /// <summary>
     ///     This action updates a list's settings as an RFC 7396 merge patch: an absent field is
     ///     unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces it.
-    ///     Validation and errors are as for <see cref="Replace" />. Requires
+    ///     Validation and errors are as for <see cref="Replace" />: a <c>refreshInterval</c> under
+    ///     one hour is rejected with 400, and <c>null</c> restores the 24-hour default. Requires
     ///     <c>filterlists:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
@@ -285,10 +292,13 @@ public class FilterListsController(
             source == DnsFilterListSourceEnum.Subscribed ? subscriptionUrl : null;
 
         if (patch.TryGetMergePatchField("refreshInterval", out JsonElement refreshInterval))
+        {
             list.RefreshInterval =
                 refreshInterval.ValueKind == JsonValueKind.Null
                     ? null
                     : JsonSerializer.Deserialize<TimeSpan>(refreshInterval.GetRawText());
+            ValidateRefreshInterval(list.RefreshInterval);
+        }
 
         if (source != DnsFilterListSourceEnum.Subscribed)
             list.RefreshInterval = null;
@@ -376,6 +386,20 @@ public class FilterListsController(
         }
 
         return true;
+    }
+
+    /// <summary>
+    ///     This method rejects a refresh interval under
+    ///     <see cref="DnsFilterListExternalRefreshService.MinimumRefreshInterval" />. A
+    ///     <see langword="null" /> interval is allowed and means the 24-hour default.
+    /// </summary>
+    /// <exception cref="ValidationException">The interval is under one hour.</exception>
+    private static void ValidateRefreshInterval(TimeSpan? refreshInterval)
+    {
+        if (refreshInterval < DnsFilterListExternalRefreshService.MinimumRefreshInterval)
+            throw new ValidationException(
+                $"'refreshInterval' must be at least {DnsFilterListExternalRefreshService.MinimumRefreshInterval}, or null for the default of 24 hours."
+            );
     }
 
     /// <summary>
