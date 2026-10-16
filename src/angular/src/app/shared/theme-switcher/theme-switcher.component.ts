@@ -12,12 +12,15 @@ import { IconDirective } from '@coreui/icons-angular';
 import { UiThemeModeEnum, UiThemePaletteEnum } from '../../api-client';
 import { MODE_OPTIONS, PALETTE_OPTIONS } from '../../core/theme/theme-palette.model';
 import { ThemeService } from '../../core/theme/theme.service';
+import { extractErrorMessage } from '../http-error/http-error.util';
+import { NotificationService } from '../notification/notification.service';
 
 /**
  * This component is the appearance dropdown in the app shell header ({@link AppShellComponent}).
  * It offers the five palettes and the Light, Dark and System modes. Choosing one calls
  * {@link ThemeService.setPalette} or {@link ThemeService.setMode}, which saves the signed-in
- * user's preference through `PATCH /api/appearance-settings/me` and applies it at once.
+ * user's preference through `PATCH /api/appearance-settings/me` and applies it at once. A failed
+ * save shows an error toast ({@link NotificationService}) and leaves the theme on screen as it was.
  *
  * <p>The trigger button shows the selected mode's icon (sun, moon or contrast for System).
  */
@@ -41,6 +44,7 @@ export class ThemeSwitcherComponent {
   readonly alignment = input<'start' | 'end'>('end');
 
   private readonly themeService = inject(ThemeService);
+  private readonly notification = inject(NotificationService);
 
   /** Every palette this picker offers, with its display label and swatch color. */
   readonly paletteOptions = PALETTE_OPTIONS;
@@ -63,25 +67,41 @@ export class ThemeSwitcherComponent {
   /** Whether a change is in flight; every option is disabled meanwhile, so requests cannot race. */
   readonly pending = signal(false);
 
-  /** This method saves a newly selected palette. A failed save is not reported to the user. */
+  /**
+   * This method saves a newly selected palette. A failed save shows an error toast with the
+   * server's message and does not reject. The theme on screen stays the previous one, because
+   * {@link ThemeService} applies only a successful response.
+   */
   async selectPalette(palette: UiThemePaletteEnum): Promise<void> {
     if (this.pending() || palette === this.activePalette()) return;
 
     this.pending.set(true);
     try {
       await this.themeService.setPalette(palette);
+    } catch (error) {
+      this.notification.error(
+        extractErrorMessage(error, 'Your appearance choice could not be saved.'),
+      );
     } finally {
       this.pending.set(false);
     }
   }
 
-  /** This method saves a newly selected mode. A failed save is not reported to the user. */
+  /**
+   * This method saves a newly selected mode. A failed save shows an error toast with the
+   * server's message and does not reject. The theme on screen stays the previous one, because
+   * {@link ThemeService} applies only a successful response.
+   */
   async selectMode(mode: UiThemeModeEnum): Promise<void> {
     if (this.pending() || mode === this.activeMode()) return;
 
     this.pending.set(true);
     try {
       await this.themeService.setMode(mode);
+    } catch (error) {
+      this.notification.error(
+        extractErrorMessage(error, 'Your appearance choice could not be saved.'),
+      );
     } finally {
       this.pending.set(false);
     }

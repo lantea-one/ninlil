@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { of, throwError } from 'rxjs';
 import {
   AppearanceSettingsService as AppearanceApiService,
   UiThemeModeEnum,
   UiThemePaletteEnum,
 } from '../../api-client';
+import { NotificationService } from '../notification/notification.service';
 import { ThemeSwitcherComponent } from './theme-switcher.component';
 
 /** A plain spy object rather than `jasmine.SpyObj`; the `AuthService` spec explains why. */
@@ -19,6 +21,7 @@ interface FakeAppearanceApiService {
  */
 describe('ThemeSwitcherComponent', () => {
   let appearanceApiSpy: FakeAppearanceApiService;
+  let notificationSpy: { error: jasmine.Spy };
 
   async function createComponent() {
     appearanceApiSpy = {
@@ -26,9 +29,14 @@ describe('ThemeSwitcherComponent', () => {
       apiAppearanceSettingsMePatch: jasmine.createSpy('apiAppearanceSettingsMePatch'),
     };
 
+    notificationSpy = { error: jasmine.createSpy('error') };
+
     await TestBed.configureTestingModule({
       imports: [ThemeSwitcherComponent],
-      providers: [{ provide: AppearanceApiService, useValue: appearanceApiSpy }],
+      providers: [
+        { provide: AppearanceApiService, useValue: appearanceApiSpy },
+        { provide: NotificationService, useValue: notificationSpy },
+      ],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(ThemeSwitcherComponent);
@@ -91,5 +99,37 @@ describe('ThemeSwitcherComponent', () => {
       body: { mode: UiThemeModeEnum.Dark },
     });
     expect(fixture.componentInstance.triggerIcon()).toBe('cilMoon');
+  });
+
+  /** A 500 response with an RFC 7807 problem body, as the API sends for a failed save. */
+  function problem500(): HttpErrorResponse {
+    return new HttpErrorResponse({
+      status: 500,
+      error: { title: 'Server error', detail: 'The preference could not be stored.' },
+    });
+  }
+
+  it('selectPalette() reports a failed save and keeps the previous palette', async () => {
+    const fixture = await createComponent();
+    const before = fixture.componentInstance.activePalette();
+    appearanceApiSpy.apiAppearanceSettingsMePatch.and.returnValue(throwError(() => problem500()));
+
+    await fixture.componentInstance.selectPalette(UiThemePaletteEnum.Amber);
+
+    expect(notificationSpy.error).toHaveBeenCalledWith('The preference could not be stored.');
+    expect(fixture.componentInstance.pending()).toBeFalse();
+    expect(fixture.componentInstance.activePalette()).toBe(before);
+  });
+
+  it('selectMode() reports a failed save and keeps the previous mode', async () => {
+    const fixture = await createComponent();
+    const before = fixture.componentInstance.activeMode();
+    appearanceApiSpy.apiAppearanceSettingsMePatch.and.returnValue(throwError(() => problem500()));
+
+    await fixture.componentInstance.selectMode(UiThemeModeEnum.Dark);
+
+    expect(notificationSpy.error).toHaveBeenCalledWith('The preference could not be stored.');
+    expect(fixture.componentInstance.pending()).toBeFalse();
+    expect(fixture.componentInstance.activeMode()).toBe(before);
   });
 });
