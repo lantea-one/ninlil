@@ -90,14 +90,20 @@ public class ConsoleHelpTextModel
     ///     default and group, followed by the description lines.
     /// </summary>
     /// <param name="padding">
-    ///     Extra indentation for the description lines, used to align them under the column.
+    ///     The number of spaces that start every description line after the first (the bracketed
+    ///     line of an argument follows the name column), so continuation lines begin at the
+    ///     description column. Zero adds no indentation.
     /// </param>
     /// <returns>The description column text for the help text element.</returns>
     public string GetHelpDescription(int padding = 0)
     {
         // Check for a verb.
         if (Verb)
-            return IsDefault ? $"[default] {Description}" : Description;
+            return IsDefault
+                ? string.IsNullOrEmpty(Description)
+                    ? "[default]"
+                    : $"[default] {Description}"
+                : Description;
 
         // Define our prefix list.
         List<string> prefixes = [$"Required: {Required.ToString().ToLower()}"];
@@ -113,10 +119,12 @@ public class ConsoleHelpTextModel
         // Localize our prefix string.
         string prefix = $"[{string.Join(", ", prefixes)}]";
 
+        // An argument without a description shows the bracketed line alone.
+        if (string.IsNullOrEmpty(Description))
+            return prefix;
+
         // Localize the description lines.
-        string[] descriptionLines = Description.Contains(Environment.NewLine)
-            ? Description.Split(Environment.NewLine)
-            : [Description];
+        string[] descriptionLines = Description.Split(Environment.NewLine);
 
         // Localize our longest description line.
         int longest = descriptionLines.Max(d => d.Length);
@@ -125,10 +133,11 @@ public class ConsoleHelpTextModel
         if (longest < prefix.Length)
             descriptionLines = descriptionLines.Select(d => d.PadLeft(prefix.Length)).ToArray();
 
-        // Check for additional padding.
+        // Indent every description line by exactly the padding, so continuation lines start at
+        // the description column. The prefix line is not indented: it follows the name column.
         if (padding > 0)
             descriptionLines = descriptionLines
-                .Select(d => d.PadLeft(d.Length + padding + GetPadding()))
+                .Select(d => d.PadLeft(d.Length + padding))
                 .ToArray();
 
         // Prepend the prefix to the description lines.
@@ -143,13 +152,16 @@ public class ConsoleHelpTextModel
     ///     for a positional argument, or <c>-x, --name</c> for a named argument. Optional arguments
     ///     are wrapped in brackets.
     /// </summary>
-    /// <param name="padding">An optional padding value to apply to the name string.</param>
+    /// <param name="padding">
+    ///     The width to pad the name to, so a column of names lines up. Zero returns the name
+    ///     unpadded; a name longer than the padding is not cut.
+    /// </param>
     /// <returns>The name string for the help text element.</returns>
     public string GetHelpName(int padding = 0)
     {
         // Check for a verb.
         if (Verb)
-            return Name.PadRight(padding + GetPadding());
+            return Name.PadRight(padding);
 
         // Define our response.
         string response;
@@ -166,7 +178,7 @@ public class ConsoleHelpTextModel
             response = $"[{response}]";
 
         // We're done, return the response.
-        return padding > 0 ? response.PadRight(padding + GetPadding()) : response;
+        return padding > 0 ? response.PadRight(padding) : response;
     }
 
     /// <summary>
@@ -184,8 +196,10 @@ public class ConsoleHelpTextModel
     /// <summary>
     ///     This method converts the instance into a tuple pair of its name and description.
     /// </summary>
-    /// <param name="namePadding">An optional padding value to apply to the name string.</param>
-    /// <param name="descriptionPadding">An optional padding value to apply to the description string.</param>
+    /// <param name="namePadding">The width to pad the name to, see <see cref="GetHelpName" />.</param>
+    /// <param name="descriptionPadding">
+    ///     The indentation of continuation lines, see <see cref="GetHelpDescription" />.
+    /// </param>
     /// <returns>A tuple pair containing the name and description of the instance.</returns>
     public Tuple<string, string> ToHelpStringPair(
         int namePadding = 0,

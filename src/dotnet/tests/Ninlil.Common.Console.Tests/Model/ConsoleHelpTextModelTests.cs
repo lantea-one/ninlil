@@ -215,4 +215,81 @@ public class ConsoleHelpTextModelTests
         Assert.Equal("desc", model.Description);
         Assert.Equal("grp", model.Group);
     }
+
+    /// <summary>Verifies that an argument without a description shows the bracketed line alone.</summary>
+    [Fact]
+    public void GetHelpDescription_ForArgumentWithoutDescription_ReturnsTheBracketedLine()
+    {
+        ConsoleHelpTextModel model = new()
+        {
+            Position = int.MinValue,
+            Name = "name",
+            Required = true,
+            Description = null,
+        };
+
+        Assert.Equal("[Required: true]", model.GetHelpDescription());
+        Assert.Equal("[Required: true]", model.GetHelpDescription(10));
+    }
+
+    /// <summary>Verifies that a default verb without a description shows "[default]" with no trailing space.</summary>
+    [Fact]
+    public void GetHelpDescription_ForDefaultVerbWithoutDescription_ReturnsDefaultMarkerAlone()
+    {
+        ConsoleHelpTextModel model = new()
+        {
+            Verb = true,
+            IsDefault = true,
+            Description = null,
+        };
+
+        Assert.Equal("[default]", model.GetHelpDescription());
+    }
+
+    /// <summary>Verifies that a non-default verb without a description shows nothing.</summary>
+    [Fact]
+    public void GetHelpDescription_ForPlainVerbWithoutDescription_ReturnsEmpty()
+    {
+        ConsoleHelpTextModel model = new() { Verb = true, Description = null };
+
+        Assert.True(string.IsNullOrEmpty(model.GetHelpDescription()));
+    }
+
+    /// <summary>Verifies that the name padding is the exact width of the padded name for both verbs and arguments.</summary>
+    [Fact]
+    public void GetHelpName_WithPadding_PadsToExactlyThatWidth()
+    {
+        ConsoleHelpTextModel verb = new() { Verb = true, Name = "add" };
+        ConsoleHelpTextModel argument = new()
+        {
+            Name = "name",
+            Required = true,
+            Position = int.MinValue,
+        };
+
+        Assert.Equal("add".PadRight(10), verb.GetHelpName(10));
+        Assert.Equal("--name".PadRight(10), argument.GetHelpName(10));
+    }
+
+    /// <summary>Verifies that continuation lines of a multi-line description are indented by exactly the padding.</summary>
+    [Fact]
+    public void GetHelpDescription_WithPadding_IndentsContinuationLinesByExactlyThePadding()
+    {
+        string first = new('a', 30);
+        string second = new('b', 30);
+        ConsoleHelpTextModel model = new()
+        {
+            Name = "name",
+            Required = true,
+            Position = int.MinValue,
+            Description = $"{first}{Environment.NewLine}{second}",
+        };
+
+        string[] lines = model.GetHelpDescription(12).Split(Environment.NewLine);
+
+        Assert.Equal(3, lines.Length);
+        Assert.StartsWith("[Required: true]", lines[0]);
+        Assert.Equal(new string(' ', 12) + first, lines[1]);
+        Assert.Equal(new string(' ', 12) + second, lines[2]);
+    }
 }

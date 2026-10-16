@@ -102,8 +102,8 @@ public class ParsedConsoleArgument
     ///     This method returns the value to use when the argument was not given or could not be
     ///     converted. A required argument gets <see langword="null" />. Otherwise the attribute's
     ///     default is used, converted to the property type when it is a string; a nested verb gets
-    ///     a new instance of its type; and with no attribute default the property type's default is
-    ///     used.
+    ///     a new instance of its type; and with no attribute default the property keeps the value
+    ///     it has on a new instance of the model (see <see cref="GetInitializerValue" />).
     /// </summary>
     /// <returns>The fallback value for the property.</returns>
     private object GetDefaultValue() =>
@@ -111,50 +111,65 @@ public class ParsedConsoleArgument
             ? null
             : Attribute switch
             {
-                // A string default on a non-string property is converted to the property type.
-                NamedConsoleArgumentAttribute namedAttribute
-                    when (
-                        namedAttribute.Default?.GetType() == typeof(string)
-                        && Property.PropertyType != typeof(string)
-                        && namedAttribute
-                            .Default?.ToString()
-                            .TryGetTypedValue(Property.PropertyType, out object namedValue)
-                            is true
-                    ) => namedValue,
-                NamedConsoleArgumentAttribute namedAttribute => namedAttribute.Default
-                    ?? (
-                        (Property.Attributes & PropertyAttributes.HasDefault) != 0
-                            ? Property.GetValue(Property.PropertyType.CreateInstance())
-                            : Property.PropertyType.GetDefaultValue()
-                    ),
+                NamedConsoleArgumentAttribute namedAttribute => ConvertAttributeDefault(
+                    namedAttribute.Default,
+                    Property.PropertyType
+                ) ?? GetInitializerValue(),
 
                 // A nested verb falls back to a new instance of its type.
                 NestedConsoleVerbAttribute => Property.PropertyType.CreateInstance()
                     ?? Property.PropertyType.GetDefaultValue(),
 
-                // A string default on a non-string property is converted to the property type.
-                PositionalConsoleArgumentAttribute positionalAttribute
-                    when (
-                        positionalAttribute.Default?.GetType() == typeof(string)
-                        && Property.PropertyType != typeof(string)
-                        && positionalAttribute
-                            .Default?.ToString()
-                            .TryGetTypedValue(Property.PropertyType, out object positionalValue)
-                            is true
-                    ) => positionalValue,
-                PositionalConsoleArgumentAttribute positionalAttribute =>
-                    positionalAttribute.Default
-                        ?? (
-                            (Property.Attributes & PropertyAttributes.HasDefault) != 0
-                                ? Property.GetValue(Property.PropertyType.CreateInstance())
-                                : Property.PropertyType.GetDefaultValue()
-                        ),
+                PositionalConsoleArgumentAttribute positionalAttribute => ConvertAttributeDefault(
+                    positionalAttribute.Default,
+                    Property.PropertyType
+                ) ?? GetInitializerValue(),
 
-                // Any other attribute falls back to the property type's default.
-                _ => (Property.Attributes & PropertyAttributes.HasDefault) != 0
-                    ? Property.GetValue(Property.PropertyType.CreateInstance())
-                    : Property.PropertyType.GetDefaultValue(),
+                // Any other attribute falls back to the property's initial value.
+                _ => GetInitializerValue(),
             };
+
+    /// <summary>
+    ///     This method converts an attribute default to the type of the property it is written to.
+    ///     A string default on a non-string property is converted with the same rules as a typed
+    ///     command-line value; every other default, and a string that does not convert, is returned
+    ///     as given. <see cref="GetDefaultValue" /> and <see cref="ConsoleCommandInputModel.SetDefaults" />
+    ///     share it, so both treat <c>Default = "7"</c> on an <see cref="int" /> property alike.
+    /// </summary>
+    /// <param name="attributeDefault">The default declared on the attribute, or <see langword="null" />.</param>
+    /// <param name="propertyType">The type of the property the default is written to.</param>
+    /// <returns>The converted default, the default as given, or <see langword="null" />.</returns>
+    internal static object ConvertAttributeDefault(object attributeDefault, Type propertyType) =>
+        attributeDefault is string text
+        && propertyType != typeof(string)
+        && text.TryGetTypedValue(propertyType, out object converted)
+            ? converted
+            : attributeDefault;
+
+    /// <summary>
+    ///     This method returns the value the property has on a new instance of the model that
+    ///     declares it, so a property initializer (<c>int Port { get; set; } = 53</c>) is the
+    ///     fallback for an argument that was not given. A model that cannot be created without
+    ///     arguments falls back to the property type's default.
+    /// </summary>
+    /// <returns>The initial value of the property, or the type default.</returns>
+    private object GetInitializerValue()
+    {
+        try
+        {
+            // The model type is the type the property was reflected from, which can be a derived
+            // type when the property is inherited. The property type itself is the wrong object.
+            object model = Property.ReflectedType?.CreateInstance();
+            return model is null
+                ? Property.PropertyType.GetDefaultValue()
+                : Property.GetValue(model);
+        }
+        catch (Exception)
+        {
+            // A constructor or getter that throws leaves nothing to read.
+            return Property.PropertyType.GetDefaultValue();
+        }
+    }
 
     /// <summary>
     ///     This method converts the tokens matched by a named argument to the property type and

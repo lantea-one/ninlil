@@ -250,4 +250,50 @@ public class ParsedConsoleArgumentTests
 
         Assert.Null(model.Name);
     }
+
+    /// <summary>Verifies that an unfound optional argument without an attribute default falls back to the property initializer of the model.</summary>
+    [Fact]
+    public void GetParsedValue_ForUnfoundArgumentWithoutAttributeDefault_ReturnsPropertyInitializer()
+    {
+        ParsedConsoleArgument parsed = new()
+        {
+            Attribute = new NamedConsoleArgumentAttribute("port", "The port.", false),
+            Property = typeof(ConsoleCommandArgumentCollectionTests.InitializerModel).GetProperty(
+                nameof(ConsoleCommandArgumentCollectionTests.InitializerModel.Port)
+            ),
+            Arguments = [],
+        };
+
+        Assert.Equal(53, parsed.GetParsedValue());
+    }
+
+    /// <summary>Verifies that an unfound positional argument without an attribute default also falls back to the property initializer.</summary>
+    [Fact]
+    public void GetParsedValue_ForUnfoundPositionalWithoutAttributeDefault_ReturnsPropertyInitializer()
+    {
+        ParsedConsoleArgument parsed = new()
+        {
+            Attribute = new PositionalConsoleArgumentAttribute(0, "The mode.", false),
+            Property = typeof(ConsoleCommandArgumentCollectionTests.InitializerModel).GetProperty(
+                nameof(ConsoleCommandArgumentCollectionTests.InitializerModel.Mode)
+            ),
+            Arguments = [],
+        };
+
+        Assert.Equal("fast", parsed.GetParsedValue());
+    }
+
+    /// <summary>Verifies that a string attribute default on a non-string property is converted to the property type.</summary>
+    [Fact]
+    public void GetParsedValue_ForStringDefaultOnIntProperty_ConvertsTheDefault()
+    {
+        ParsedConsoleArgument parsed = new()
+        {
+            Attribute = new NamedConsoleArgumentAttribute("age", "The age.", false, "7"),
+            Property = typeof(SimpleNamedArgsModel).GetProperty(nameof(SimpleNamedArgsModel.Age)),
+            Arguments = [],
+        };
+
+        Assert.Equal(7, parsed.GetParsedValue());
+    }
 }

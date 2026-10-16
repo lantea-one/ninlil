@@ -22,9 +22,11 @@ public interface IConsoleCommandInputModel
     public bool Silent { get; set; }
 
     /// <summary>
-    ///     This method makes sure the output uses a serialized format (JSON, XML or YAML).
+    ///     This method makes sure the output uses a serialized format (JSON, XML or YAML). A
+    ///     serialized <see cref="Format" /> is kept; otherwise <paramref name="format" /> is used
+    ///     when it is serialized, and JSON when it is not.
     /// </summary>
-    /// <param name="format">The requested serialized format.</param>
+    /// <param name="format">The format to use when the current one is not serialized.</param>
     public void ForceSerializedOutputFormat(SerializerFormatEnum format);
 
     /// <summary>

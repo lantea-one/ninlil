@@ -183,4 +183,143 @@ public class ConsoleHelpTextCollectionModelTests
 
         Assert.Contains("Positional Arguments", result);
     }
+
+    /// <summary>
+    ///     This method finds the column where each entry's bracketed description line starts in
+    ///     the rendered help text.
+    /// </summary>
+    /// <param name="text">The rendered help text.</param>
+    /// <returns>The column of the <c>[Required:</c> marker on every entry line.</returns>
+    private static List<int> DescriptionColumns(string text) =>
+        text.Split(Environment.NewLine)
+            .Select(l => l.IndexOf("[Required:", StringComparison.Ordinal))
+            .Where(i => i >= 0)
+            .ToList();
+
+    /// <summary>Verifies that the descriptions of the named section start at one column although the names differ in form and length.</summary>
+    [Fact]
+    public void ToString_ForNamedArguments_AlignsTheDescriptionColumn()
+    {
+        string result = ConsoleCommandInputModel
+            .GetHelpTextCollection(typeof(SimpleNamedArgsModel))
+            .ToString();
+
+        List<int> columns = DescriptionColumns(result);
+
+        Assert.True(columns.Count > 1);
+        Assert.Single(columns.Distinct());
+    }
+
+    /// <summary>Verifies that the positional section is measured from its own entries, and its descriptions line up.</summary>
+    [Fact]
+    public void ToString_ForPositionalArguments_AlignsTheDescriptionColumn()
+    {
+        string result = ConsoleCommandInputModel
+            .GetHelpTextCollection(typeof(PositionalArgsModel))
+            .ToString();
+
+        string positional = result[
+            result.IndexOf("Positional Arguments", StringComparison.Ordinal)..
+        ];
+        positional = positional[..positional.IndexOf("Named Arguments", StringComparison.Ordinal)];
+        List<int> columns = DescriptionColumns(positional);
+
+        Assert.Equal(2, columns.Count);
+        Assert.Single(columns.Distinct());
+    }
+
+    /// <summary>Verifies that a collection with only positional entries renders its section (no named entries to measure).</summary>
+    [Fact]
+    public void ToString_WithOnlyPositionalEntries_RendersThePositionalSection()
+    {
+        ConsoleHelpTextCollectionModel collection = new ConsoleHelpTextCollectionModel()
+            .WithApplication(null)
+            .WithAuthor(null)
+            .WithCompany(null)
+            .WithDescription(null)
+            .WithVersion(null)
+            .WithElement(e =>
+            {
+                e.Position = 0;
+                e.Name = "source";
+                e.Required = true;
+                e.Description = "The source.";
+            });
+
+        string result = collection.ToString();
+
+        Assert.Contains("Positional Arguments", result);
+        Assert.Contains("<0>", result);
+        Assert.DoesNotContain("Named Arguments", result);
+        Assert.DoesNotContain("Verb", result);
+    }
+
+    /// <summary>Verifies that continuation lines of a multi-line description start at the description column.</summary>
+    [Fact]
+    public void ToString_WithMultiLineDescription_AlignsContinuationLinesToTheDescriptionColumn()
+    {
+        string continuation = new('z', 40);
+        ConsoleHelpTextCollectionModel collection = new ConsoleHelpTextCollectionModel()
+            .WithApplication(null)
+            .WithAuthor(null)
+            .WithCompany(null)
+            .WithDescription(null)
+            .WithVersion(null)
+            .WithElement(e =>
+            {
+                e.Name = "first";
+                e.ShortName = 'f';
+                e.Required = true;
+                e.Description = $"{new string('y', 40)}{Environment.NewLine}{continuation}";
+            })
+            .WithElement(e =>
+            {
+                e.Name = "second";
+                e.Required = false;
+                e.Description = new string('x', 40);
+            });
+
+        string[] lines = collection.ToString().Split(Environment.NewLine);
+        int column = DescriptionColumns(string.Join(Environment.NewLine, lines))[0];
+        string line = lines.Single(l => l.EndsWith(continuation, StringComparison.Ordinal));
+
+        Assert.Equal(column, line.Length - continuation.Length);
+        Assert.True(string.IsNullOrWhiteSpace(line[..column]));
+    }
+
+    /// <summary>Verifies that short names and brackets widen the name column instead of pushing one description out of line.</summary>
+    [Fact]
+    public void ToString_WithShortNamesAndBrackets_AlignsTheDescriptionColumn()
+    {
+        ConsoleHelpTextCollectionModel collection = new ConsoleHelpTextCollectionModel()
+            .WithApplication(null)
+            .WithAuthor(null)
+            .WithCompany(null)
+            .WithDescription(null)
+            .WithVersion(null)
+            .WithElement(e =>
+            {
+                e.Name = "ab";
+                e.ShortName = 'x';
+                e.Required = true;
+                e.Description = "Short name.";
+            })
+            .WithElement(e =>
+            {
+                e.Name = "cde";
+                e.Required = false;
+                e.Description = "Long name.";
+            })
+            .WithElement(e =>
+            {
+                e.Name = "gh";
+                e.Required = false;
+                e.Description = "Optional.";
+            });
+
+        List<int> columns = DescriptionColumns(collection.ToString());
+
+        Assert.Equal(3, columns.Count);
+        Assert.Single(columns.Distinct());
+    }
 }

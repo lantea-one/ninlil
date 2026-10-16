@@ -145,119 +145,109 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
         bool skipInformationBlock = false
     )
     {
-        // Define our additional padding for the description column.
-        int additionalPadding = Tab.Length * 2;
-
         // Start with the information block, unless it is skipped.
         builder = WriteStartHelpText(builder, skipInformationBlock);
 
-        // Check for verbs.
-        if (this.Any(e => e.Verb))
-        {
-            // Add our verb header.
-            WriteHeader(builder, "Verb");
+        // Localize the verbs: the default verb first, then the others by name.
+        List<ConsoleHelpTextModel> verbs =
+        [
+            .. this.Where(e => e.Verb).Where(e => e.IsDefault).Take(1),
+            .. this.Where(e => e.Verb)
+                .Where(e => !e.IsDefault)
+                .OrderBy(e => e.Name)
+                .DistinctBy(v => v.Name),
+        ];
 
-            // Localize the longest verb name length.
-            int longest = this.Where(e => e.Verb).Max(e => e.Name.Length);
+        // Localize the positional arguments: required ones first, each in position order.
+        List<ConsoleHelpTextModel> positionals =
+        [
+            .. OrderPositionals(this.Where(e => e.Required)),
+            .. OrderPositionals(this.Where(e => !e.Required)),
+        ];
 
-            // Localize our default verb.
-            Tuple<string, string> defaultVerb = this.Where(e => e.Verb)
-                .Where(e => e.IsDefault)
-                .Select(e => e.ToHelpStringPair(longest, longest + additionalPadding))
-                .FirstOrDefault();
+        // Localize the named arguments: required ones first, each by short name or name.
+        List<ConsoleHelpTextModel> named =
+        [
+            .. OrderNamed(this.Where(e => e.Required)),
+            .. OrderNamed(this.Where(e => !e.Required)),
+        ];
 
-            // Check for a default verb then add it to the builder.
-            if (defaultVerb is not null)
-                builder
-                    .AppendLine($"{Tab}{defaultVerb.Item1}{Tab}{defaultVerb.Item2}")
-                    .AppendLine();
-
-            // Iterate over the other verb elements, and append them to the builder.
-            foreach (
-                Tuple<string, string> verb in this.Where(e => !e.IsDefault)
-                    .Where(e => e.Verb)
-                    .OrderBy(e => e.Name)
-                    .DistinctBy(v => v.Name)
-                    .Select(e => e.ToHelpStringPair(longest, longest + additionalPadding))
-            )
-                builder.AppendLine($"{Tab}{verb.Item1}{Tab}{verb.Item2}").AppendLine();
-        }
-
-        // Check for any positional arguments.
-        if (this.Any(e => !e.Verb && e.Position >= 0))
-        {
-            // Add our positional arguments header.
-            WriteHeader(builder, "Positional Arguments");
-
-            // Localize the longest name length. This measures the named arguments, not the
-            // positional ones.
-            int longest = this.Where(e => e.Position < 0)
-                .Where(e => !e.Verb)
-                .Max(e => e.Name.Length);
-
-            // Iterate over the required positional elements, and append them to the builder.
-            foreach (
-                Tuple<string, string> argument in this.Where(e => e.Position >= 0)
-                    .Where(e => e.Required)
-                    .Where(e => !e.Verb)
-                    .GroupBy(e => e.Group)
-                    .SelectMany(g => g.OrderBy(e => e.Position))
-                    .DistinctBy(v => v.Position)
-                    .Select(e => e.ToHelpStringPair(longest, longest + additionalPadding))
-            )
-                builder.AppendLine($"{Tab}{argument.Item1}{Tab}{argument.Item2}").AppendLine();
-
-            // Iterate over the optional positional elements, and append them to the builder.
-            foreach (
-                Tuple<string, string> argument in this.Where(e => e.Position >= 0)
-                    .Where(e => !e.Required)
-                    .Where(e => !e.Verb)
-                    .GroupBy(e => e.Group)
-                    .SelectMany(g => g.OrderBy(e => e.Position))
-                    .DistinctBy(v => v.Position)
-                    .Select(e => e.ToHelpStringPair(longest, longest + additionalPadding))
-            )
-                builder.AppendLine($"{Tab}{argument.Item1}{Tab}{argument.Item2}").AppendLine();
-        }
-
-        // Check for any named arguments.
-        if (this.Any(e => !e.Verb && e.Position < 0))
-        {
-            // Add our named arguments header.
-            WriteHeader(builder, "Named Arguments");
-
-            // Localize the longest named-argument name length.
-            int longest = this.Where(e => e.Position < 0)
-                .Where(e => !e.Verb)
-                .Max(e => e.Name.Length);
-
-            // Iterate over the required named elements, and append them to the builder.
-            foreach (
-                Tuple<string, string> argument in this.Where(e => e.Position < 0)
-                    .Where(e => e.Required)
-                    .Where(e => !e.Verb)
-                    .GroupBy(e => e.Group)
-                    .SelectMany(g => g.OrderBy(e => e.ShortName?.ToString() ?? e.Name))
-                    .DistinctBy(v => v.Name)
-                    .Select(e => e.ToHelpStringPair(longest, longest + additionalPadding))
-            )
-                builder.AppendLine($"{Tab}{argument.Item1}{Tab}{argument.Item2}").AppendLine();
-
-            // Iterate over the optional named elements, and append them to the builder.
-            foreach (
-                Tuple<string, string> argument in this.Where(e => e.Position < 0)
-                    .Where(e => !e.Required)
-                    .Where(e => !e.Verb)
-                    .GroupBy(e => e.Group)
-                    .SelectMany(g => g.OrderBy(e => e.ShortName?.ToString() ?? e.Name))
-                    .DistinctBy(v => v.Name)
-                    .Select(e => e.ToHelpStringPair(longest, longest + additionalPadding))
-            )
-                builder.AppendLine($"{Tab}{argument.Item1}{Tab}{argument.Item2}").AppendLine();
-        }
+        // Write each section; a section without entries is skipped.
+        WriteSection(builder, "Verb", verbs);
+        WriteSection(builder, "Positional Arguments", positionals);
+        WriteSection(builder, "Named Arguments", named);
 
         // We're done, return the updated builder.
         return builder.AppendLine();
+    }
+
+    /// <summary>
+    ///     This method keeps the positional arguments among <paramref name="entries" />, grouped
+    ///     and ordered by position, with one entry per position.
+    /// </summary>
+    /// <param name="entries">The entries to filter.</param>
+    /// <returns>The ordered positional entries.</returns>
+    private static IEnumerable<ConsoleHelpTextModel> OrderPositionals(
+        IEnumerable<ConsoleHelpTextModel> entries
+    ) =>
+        entries
+            .Where(e => e.Position >= 0)
+            .Where(e => !e.Verb)
+            .GroupBy(e => e.Group)
+            .SelectMany(g => g.OrderBy(e => e.Position))
+            .DistinctBy(v => v.Position);
+
+    /// <summary>
+    ///     This method keeps the named arguments among <paramref name="entries" />, grouped and
+    ///     ordered by short name or name, with one entry per name.
+    /// </summary>
+    /// <param name="entries">The entries to filter.</param>
+    /// <returns>The ordered named entries.</returns>
+    private static IEnumerable<ConsoleHelpTextModel> OrderNamed(
+        IEnumerable<ConsoleHelpTextModel> entries
+    ) =>
+        entries
+            .Where(e => e.Position < 0)
+            .Where(e => !e.Verb)
+            .GroupBy(e => e.Group)
+            .SelectMany(g => g.OrderBy(e => e.ShortName?.ToString() ?? e.Name))
+            .DistinctBy(v => v.Name);
+
+    /// <summary>
+    ///     This method writes one help section: a banner and one entry per line. The name column is
+    ///     as wide as the longest rendered name of this section (<c>-x, --name</c>, <c>[--name]</c>,
+    ///     <c>&lt;0&gt;</c>), so the descriptions line up under each other whatever the names look
+    ///     like, and continuation lines of a multi-line description start at the description column.
+    ///     Each section measures only its own entries.
+    /// </summary>
+    /// <param name="builder">The <see cref="StringBuilder" /> to write to.</param>
+    /// <param name="header">The banner text of the section.</param>
+    /// <param name="entries">The entries of the section, in output order. Nothing is written when empty.</param>
+    private void WriteSection(
+        StringBuilder builder,
+        string header,
+        IReadOnlyList<ConsoleHelpTextModel> entries
+    )
+    {
+        // A section without entries has nothing to measure or show.
+        if (entries.Count is 0)
+            return;
+
+        // Add the section banner.
+        WriteHeader(builder, header);
+
+        // The name column is as wide as the longest rendered name in this section.
+        int width = entries.Max(e => e.GetHelpName().Length);
+
+        // The description column starts after the indentation, the name column and the gap.
+        int descriptionColumn = Tab.Length + width + Tab.Length;
+
+        // Write each entry followed by a blank line.
+        foreach (ConsoleHelpTextModel entry in entries)
+        {
+            Tuple<string, string> pair = entry.ToHelpStringPair(width, descriptionColumn);
+            builder.AppendLine($"{Tab}{pair.Item1}{Tab}{pair.Item2}").AppendLine();
+        }
     }
 
     /// <summary>

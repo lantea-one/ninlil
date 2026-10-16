@@ -480,21 +480,32 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
         GetPropertyInfo((expression.Body as MemberExpression)?.Member.Name);
 
     /// <summary>
-    ///     This method makes sure the output uses a serialized format. If <see cref="Format" /> is
-    ///     not JSON, XML or YAML it is set to JSON.
+    ///     This method makes sure the output uses a serialized format. A <see cref="Format" /> that is
+    ///     already JSON, XML or YAML is kept. Otherwise it is set to <paramref name="format" /> when
+    ///     that is JSON, XML or YAML, and to JSON when it is not.
     /// </summary>
-    /// <param name="format">
-    ///     The requested format. The current implementation ignores it and always falls back to JSON.
-    /// </param>
-    public void ForceSerializedOutputFormat(SerializerFormatEnum format) =>
-        Format = Format
-            is not (
-                SerializerFormatEnum.Json
+    /// <param name="format">The format to use when the current one is not serialized.</param>
+    public void ForceSerializedOutputFormat(SerializerFormatEnum format)
+    {
+        // A serialized format the user chose stays.
+        if (IsSerializedFormat(Format))
+            return;
+
+        // Use the requested format when it is serialized, otherwise fall back to JSON.
+        Format = IsSerializedFormat(format) ? format : SerializerFormatEnum.Json;
+    }
+
+    /// <summary>
+    ///     This method tells whether <paramref name="format" /> is one of the serializer formats
+    ///     (JSON, XML or YAML) rather than the console table.
+    /// </summary>
+    /// <param name="format">The format to test.</param>
+    /// <returns><see langword="true" /> for JSON, XML and YAML.</returns>
+    private static bool IsSerializedFormat(SerializerFormatEnum format) =>
+        format
+            is SerializerFormatEnum.Json
                 or SerializerFormatEnum.Xml
-                or SerializerFormatEnum.Yaml
-            )
-            ? SerializerFormatEnum.Json
-            : Format;
+                or SerializerFormatEnum.Yaml;
 
     /// <summary>
     ///     This method retrieves the argument name or position for the specified property name.
@@ -733,6 +744,7 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     /// <summary>
     ///     This method sets the default values for all named and positional arguments along with the nested verbs in
     ///     the input model. If a property already has a value, it will not be overwritten by the default value.
+    ///     A string default on a non-string property is converted to the property type, as the parser does.
     /// </summary>
     /// <returns>
     ///     The current instance of <see cref="IConsoleCommandInputModel" /> with the default
@@ -758,7 +770,13 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
 
             // Only apply attribute defaults when the property is still at its type default.
             if (Equals(currentValue, typeDefault) && attribute.Default is not null)
-                property.SetValue(this, attribute.Default);
+                property.SetValue(
+                    this,
+                    ParsedConsoleArgument.ConvertAttributeDefault(
+                        attribute.Default,
+                        property.PropertyType
+                    )
+                );
         }
 
         // Iterate through the nested verbs in the instance.
@@ -807,7 +825,13 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
 
             // Only apply attribute defaults when the property is still at its type default.
             if (Equals(currentValue, typeDefault) && attribute.Default is not null)
-                property.SetValue(this, attribute.Default);
+                property.SetValue(
+                    this,
+                    ParsedConsoleArgument.ConvertAttributeDefault(
+                        attribute.Default,
+                        property.PropertyType
+                    )
+                );
         }
 
         // We're done, return the updated instance.

@@ -2,6 +2,7 @@ using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
+using Ninlil.Common.Serializer.Enum;
 
 // Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
@@ -386,5 +387,70 @@ public class ConsoleCommandInputModelTests
 
         Assert.False(success);
         Assert.Null(model);
+    }
+
+    /// <summary>
+    ///     This model declares a string attribute default on an integer property, to check that
+    ///     <see cref="ConsoleCommandInputModel.SetDefaults" /> converts it.
+    /// </summary>
+    public sealed class StringDefaultModel : ConsoleCommandInputModel
+    {
+        /// <summary>The optional count, whose attribute default is the string "7".</summary>
+        [NamedConsoleArgument("count", "The count.", false, "7")]
+        public int Count { get; set; }
+
+        /// <summary>The optional position, whose attribute default is the string "3".</summary>
+        [PositionalConsoleArgument(0, "The position.", false, "3")]
+        public int Place { get; set; }
+    }
+
+    /// <summary>Verifies that <see cref="ConsoleCommandInputModel.SetDefaults" /> converts a string attribute default for a non-string property.</summary>
+    [Fact]
+    public void SetDefaults_WithStringDefaultOnIntProperty_ConvertsTheDefault()
+    {
+        StringDefaultModel model = new();
+
+        model.SetDefaults();
+
+        Assert.Equal(7, model.Count);
+        Assert.Equal(3, model.Place);
+    }
+
+    /// <summary>Verifies that a requested serialized format replaces a non-serialized one.</summary>
+    [Theory]
+    [InlineData(SerializerFormatEnum.Yaml)]
+    [InlineData(SerializerFormatEnum.Xml)]
+    [InlineData(SerializerFormatEnum.Json)]
+    public void ForceSerializedOutputFormat_FromNone_UsesTheRequestedSerializedFormat(
+        SerializerFormatEnum requested
+    )
+    {
+        SimpleNamedArgsModel model = new() { Format = SerializerFormatEnum.None };
+
+        model.ForceSerializedOutputFormat(requested);
+
+        Assert.Equal(requested, model.Format);
+    }
+
+    /// <summary>Verifies that a serialized format the user chose is kept.</summary>
+    [Fact]
+    public void ForceSerializedOutputFormat_WithSerializedFormat_KeepsIt()
+    {
+        SimpleNamedArgsModel model = new() { Format = SerializerFormatEnum.Xml };
+
+        model.ForceSerializedOutputFormat(SerializerFormatEnum.Yaml);
+
+        Assert.Equal(SerializerFormatEnum.Xml, model.Format);
+    }
+
+    /// <summary>Verifies that a requested format that is not serialized falls back to JSON.</summary>
+    [Fact]
+    public void ForceSerializedOutputFormat_WithNoneRequested_FallsBackToJson()
+    {
+        SimpleNamedArgsModel model = new() { Format = SerializerFormatEnum.None };
+
+        model.ForceSerializedOutputFormat(SerializerFormatEnum.None);
+
+        Assert.Equal(SerializerFormatEnum.Json, model.Format);
     }
 }

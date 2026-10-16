@@ -1094,4 +1094,55 @@ public class ConsoleCommandArgumentCollectionTests
         [NestedConsoleVerb("child", "The nested child command.")]
         public ChildInputModel Child { get; set; }
     }
+
+    /// <summary>
+    ///     This model has optional arguments without an attribute default but with property
+    ///     initializers, to check that an unmatched argument keeps its initializer. The parsed
+    ///     argument and input-model tests use it too.
+    /// </summary>
+    public sealed class InitializerModel : ConsoleCommandInputModel
+    {
+        /// <summary>The required name.</summary>
+        [NamedConsoleArgument("name", "The name.")]
+        public string Name { get; set; }
+
+        /// <summary>The optional port, initialized to 53 and with no attribute default.</summary>
+        [NamedConsoleArgument("port", "The port.", false)]
+        public int Port { get; set; } = 53;
+
+        /// <summary>The optional mode, initialized to "fast" and with no attribute default.</summary>
+        [NamedConsoleArgument("mode", "The mode.", false)]
+        public string Mode { get; set; } = "fast";
+    }
+
+    /// <summary>Verifies that optional arguments that are not given keep their property initializers while other tokens are parsed.</summary>
+    [Fact]
+    public void GetParseResult_WithUnmatchedOptionalArguments_KeepsPropertyInitializers()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--name",
+            "x",
+        ]).GetParseResult(typeof(InitializerModel));
+
+        Assert.True(result.Succeeded);
+        InitializerModel model = Assert.IsType<InitializerModel>(result.Model);
+        Assert.Equal(53, model.Port);
+        Assert.Equal("fast", model.Mode);
+    }
+
+    /// <summary>Verifies that a given argument overrides the initializer and the others keep theirs.</summary>
+    [Fact]
+    public void GetParseResult_WithOneOptionalArgumentGiven_KeepsTheOtherInitializer()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--name",
+            "x",
+            "--mode",
+            "slow",
+        ]).GetParseResult(typeof(InitializerModel));
+
+        InitializerModel model = Assert.IsType<InitializerModel>(result.Model);
+        Assert.Equal("slow", model.Mode);
+        Assert.Equal(53, model.Port);
+    }
 }
