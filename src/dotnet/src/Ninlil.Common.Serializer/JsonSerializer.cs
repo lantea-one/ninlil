@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Ninlil.Common.Serializer.Converter;
 using Ninlil.Common.Serializer.Enum;
 using Ninlil.Common.Serializer.Model;
@@ -9,20 +8,26 @@ using Ninlil.Common.Serializer.Model;
 namespace Ninlil.Common.Serializer;
 
 /// <summary>
-///     This static class is Ninlil's front door to System.Text.Json. Every call builds options that
-///     allow trailing commas and comments, ignore property-name case, and include the shared
-///     <see cref="Converters" /> (structured strings, IP and MAC addresses, colors, URIs and camelCase
-///     enum strings). Other assemblies add their own converters through <see cref="AddConverter(JsonConverter)" />,
-///     for example from a module initializer. Both serialized output and input to deserialize pass
-///     through <see cref="SanitizeJsonString" />. Deserializing with explicit options uses them as
-///     given, without adding the shared converters. The <c>Try*</c> methods return
-///     <see langword="false" /> instead of throwing.
+///     This static class is Ninlil's front door to System.Text.Json. Storage (record data, the zone
+///     journal, backups), the event broker and the config files all serialize through it. Without
+///     explicit options every call uses one cached set of default options, built once and reused so
+///     System.Text.Json keeps its type metadata. The defaults allow trailing commas and comments,
+///     ignore property-name case and include the shared <see cref="Converters" /> (structured strings,
+///     IP and MAC addresses, colors, URIs and camelCase enum strings). They start from the library
+///     settings, or from the options assigned to <see cref="SerializerOptions" />. Other assemblies
+///     add their own converters through <see cref="AddConverter(JsonConverter)" />, for example from a
+///     module initializer; a converter added after the first call is used from the next call on.
+///     Explicit options are copied and completed with the shared converters for both serialize and
+///     deserialize; the caller's instance is never changed. Nothing rewrites the JSON text. The
+///     <c>Try*</c> methods return <see langword="false" /> instead of throwing.
 /// </summary>
 public static class JsonSerializer
 {
     /// <summary>
     ///     This field lists the converters added to every set of options <see cref="GetOptions" />
-    ///     builds. Add to it through <see cref="AddConverter(JsonConverter)" />.
+    ///     builds. Add to it only through <see cref="AddConverter(JsonConverter)" />: that method
+    ///     locks the list and drops the cached default options, which a direct change to the list
+    ///     does neither.
     /// </summary>
     public static readonly List<JsonConverter> Converters =
     [
@@ -47,32 +52,58 @@ public static class JsonSerializer
     ];
 
     /// <summary>
-    ///     This field holds the options exposed through <see cref="SerializerOptions" />.
+    ///     This lock guards <see cref="Converters" />, the base options and the writes to the two
+    ///     cached option instances. Reads of the cached instances take no lock (see
+    ///     <see cref="GetDefaultOptions" />).
     /// </summary>
-    private static JsonSerializerOptions _options = GetOptions();
+    private static readonly object _gate = new();
 
     /// <summary>
-    ///     This field matches runs of <c>\uXXXX</c> escapes. Nothing in this class uses it.
+    ///     This field holds the private copy of the options assigned to <see cref="SerializerOptions" />,
+    ///     or null for the library defaults. Guarded by <see cref="_gate" />.
     /// </summary>
-    private static readonly Regex SanitizationRegularExpression = new(
-        @"(\\u(?<Value>[a-zA-Z0-9]{4}))+",
-        RegexOptions.Compiled
-    );
+    private static JsonSerializerOptions _baseOptions;
 
     /// <summary>
-    ///     This property holds process-wide default options, completed by <see cref="GetOptions" /> on
-    ///     set. The serialize and deserialize methods do not read it: without explicit options they
-    ///     build fresh defaults.
+    ///     This field caches the completed compact default options, or null when they must be rebuilt.
+    ///     Written under <see cref="_gate" /> and read with <see cref="Volatile.Read{T}(ref readonly T)" />.
+    /// </summary>
+    private static JsonSerializerOptions _compactOptions;
+
+    /// <summary>
+    ///     This field caches the completed indented default options, or null when they must be rebuilt.
+    ///     Same access rules as <see cref="_compactOptions" />.
+    /// </summary>
+    private static JsonSerializerOptions _prettyOptions;
+
+    /// <summary>
+    ///     This property holds the process-wide default options used when a call passes none. The
+    ///     getter returns the cached, completed instance (the same one on every read until a converter is
+    ///     added or the property is set). Treat it as read-only: it is shared and becomes read-only on
+    ///     first use. To change the defaults assign a new instance: the setter stores a copy (the
+    ///     assigned object is never changed or kept), completes it with the shared converters and
+    ///     drops the cached instances. Assigning <see langword="null" /> restores the library defaults.
     /// </summary>
     public static JsonSerializerOptions SerializerOptions
     {
-        get => _options;
-        set => _options = GetOptions(value);
+        get => GetDefaultOptions(false);
+        set
+        {
+            lock (_gate)
+            {
+                // Copy, so later changes to the caller's instance (or its becoming read-only
+                // through use elsewhere) cannot reach the shared defaults.
+                _baseOptions = value is null ? null : new JsonSerializerOptions(value);
+                _compactOptions = null;
+                _prettyOptions = null;
+            }
+        }
     }
 
     /// <summary>
     ///     This method adds a <paramref name="converter" /> to the list
-    ///     of default JSON converters if it doesn't already exist.
+    ///     of default JSON converters if it doesn't already exist, and drops the cached default options
+    ///     so the converter is used from the next call on. It is safe to call from several threads.
     /// </summary>
     /// <param name="converter">The JSON converter to add.</param>
     /// <exception cref="ArgumentNullException">
@@ -83,9 +114,22 @@ public static class JsonSerializer
         // Ensure we have a converter to add.
         ArgumentNullException.ThrowIfNull(converter);
 
-        // Ensure the converter isn't already registered.
-        if (Converters.All(c => c.GetType() != converter.GetType()))
+        // The list and the cache are changed together under the lock: module initializers in
+        // several assemblies call this at start-up while other threads already serialize.
+        lock (_gate)
+        {
+            // Ensure the converter isn't already registered.
+            if (Converters.Any(c => c.GetType() == converter.GetType()))
+                return;
+
             Converters.Add(converter);
+
+            // Options become read-only once used, so the cached instances cannot take the new
+            // converter. Drop them; the next call rebuilds them with it. A call that already
+            // holds the old instance finishes with it.
+            _compactOptions = null;
+            _prettyOptions = null;
+        }
     }
 
     /// <summary>
@@ -128,7 +172,9 @@ public static class JsonSerializer
     /// </summary>
     /// <param name="type">The expected type of the deserialized object.</param>
     /// <param name="json">The JSON to deserialize.</param>
-    /// <param name="options">Optional, JSON Serializer Options override.</param>
+    /// <param name="options">
+    ///     Optional options. They are copied and completed with the shared converters; the instance is not changed.
+    /// </param>
     /// <returns><paramref name="json" /> deserialized into a <paramref name="type" /> object.</returns>
     public static object Deserialize(
         Type type,
@@ -138,32 +184,36 @@ public static class JsonSerializer
         json?.Trim() is null or ""
             ? null
             : System.Text.Json.JsonSerializer.Deserialize(
-                SanitizeJsonString(json),
+                json,
                 type,
-                options ?? GetOptions()
+                options is null ? GetDefaultOptions(false) : GetOptions(options)
             );
 
     /// <summary>
     ///     This method deserializes a <paramref name="json" /> string into a <typeparamref name="TResult"/> object.
     /// </summary>
     /// <param name="json">The JSON to deserialize.</param>
-    /// <param name="options">Optional, JSON Serializer Options override.</param>
+    /// <param name="options">
+    ///     Optional options. They are copied and completed with the shared converters; the instance is not changed.
+    /// </param>
     /// <typeparam name="TResult">The expected type of the deserialized object.</typeparam>
     /// <returns><paramref name="json" /> deserialized into a <typeparamref name="TResult" /> object.</returns>
     public static TResult Deserialize<TResult>(string json, JsonSerializerOptions options = null) =>
         json?.Trim() is null or ""
             ? default
             : System.Text.Json.JsonSerializer.Deserialize<TResult>(
-                SanitizeJsonString(json),
-                options ?? GetOptions()
+                json,
+                options is null ? GetDefaultOptions(false) : GetOptions(options)
             );
 
     /// <summary>
-    ///     This method returns options ready for use: <paramref name="fromOptions" />, or new defaults
-    ///     (trailing commas, comments skipped, case-insensitive names), with the indent setting applied
-    ///     and every converter in <see cref="Converters" /> added if its type is missing. The given
-    ///     options are changed in place. Read-only options (already used for serialization) are
-    ///     returned unchanged.
+    ///     This method returns options ready for use: a new mutable copy of <paramref name="fromOptions" />
+    ///     (or of new library defaults: trailing commas, comments skipped, case-insensitive names) with the
+    ///     indent setting applied and every converter in <see cref="Converters" /> added if its type is
+    ///     missing. The given options are never changed. Read-only options (already used for
+    ///     serialization) are returned unchanged. A caller that passes the same options repeatedly
+    ///     should keep the returned instance and pass that on, because a fresh copy per call makes
+    ///     System.Text.Json rebuild its type metadata.
     /// </summary>
     /// <param name="pretty">Whether to indent the JSON; null keeps the existing setting.</param>
     /// <param name="fromOptions">Optional options to complete instead of new defaults.</param>
@@ -173,77 +223,105 @@ public static class JsonSerializer
         bool? pretty = null
     )
     {
-        // Define our options response.
-        JsonSerializerOptions options =
-            fromOptions
-            ?? new()
-            {
-                // We'll want to allow trailing commas.
-                AllowTrailingCommas = true,
-
-                // We'll want to disable property case sensitivity.
-                PropertyNameCaseInsensitive = true,
-
-                // We'll want to allow [and ignore] comments in the JSON.
-                ReadCommentHandling = JsonCommentHandling.Skip,
-
-                // Default the pretty option to false.
-                WriteIndented = false,
-            };
-
         // Options become read-only once used. A converter that calls back into this class (such
         // as ListMapJsonConverter) receives such in-use options, which already carry every
         // converter; changing them would throw, so return them as they are.
-        if (options.IsReadOnly)
-            return options;
+        if (fromOptions is { IsReadOnly: true })
+            return fromOptions;
 
+        // Copy the caller's options, so System.Text.Json never marks the caller's own instance
+        // read-only and the shared converters never leak into it.
+        return Complete(
+            fromOptions is null ? CreateLibraryDefaults() : new JsonSerializerOptions(fromOptions),
+            pretty
+        );
+    }
+
+    /// <summary>
+    ///     This method returns the cached default options, building them on first use or after a
+    ///     converter was added or <see cref="SerializerOptions" /> was set.
+    /// </summary>
+    /// <param name="pretty">Whether to return the indented instance.</param>
+    /// <returns>The shared, completed default options.</returns>
+    private static JsonSerializerOptions GetDefaultOptions(bool pretty)
+    {
+        // The fast path takes no lock: a reference read is atomic and the instance was fully
+        // built before it was published.
+        JsonSerializerOptions cached = Volatile.Read(
+            ref pretty ? ref _prettyOptions : ref _compactOptions
+        );
+        if (cached is not null)
+            return cached;
+
+        lock (_gate)
+        {
+            // Build both under one lock, from one snapshot of the base options and the converters,
+            // so the compact and indented sets never differ.
+            if (_compactOptions is null || _prettyOptions is null)
+            {
+                _compactOptions = Complete(
+                    _baseOptions is null
+                        ? CreateLibraryDefaults()
+                        : new JsonSerializerOptions(_baseOptions),
+                    false
+                );
+                _prettyOptions = Complete(
+                    _baseOptions is null
+                        ? CreateLibraryDefaults()
+                        : new JsonSerializerOptions(_baseOptions),
+                    true
+                );
+            }
+
+            return pretty ? _prettyOptions : _compactOptions;
+        }
+    }
+
+    /// <summary>
+    ///     This method applies the indent setting to mutable <paramref name="options" /> and adds every
+    ///     shared converter whose type is missing.
+    /// </summary>
+    /// <param name="options">Mutable options owned by the caller of this method.</param>
+    /// <param name="pretty">Whether to indent the JSON; null keeps the existing setting.</param>
+    /// <returns>The same <paramref name="options" />.</returns>
+    private static JsonSerializerOptions Complete(JsonSerializerOptions options, bool? pretty)
+    {
         // Reconcile the pretty option.
         options.WriteIndented = pretty ?? options.WriteIndented;
 
-        // Add each shared converter whose type is not already present, so repeated calls on the
-        // same options do not add duplicates.
-        Converters
-            .Where(c => options.Converters.All(existing => existing.GetType() != c.GetType()))
-            .ToList()
-            .ForEach(options.Converters.Add);
+        // Take the snapshot under the lock: AddConverter changes the list on other threads, and
+        // enumerating a list while it changes throws. The type check also keeps repeated calls
+        // on the same options from adding duplicates.
+        JsonConverter[] shared;
+        lock (_gate)
+            shared = [.. Converters];
 
-        // We're done, return the options.
+        foreach (JsonConverter converter in shared)
+            if (options.Converters.All(existing => existing.GetType() != converter.GetType()))
+                options.Converters.Add(converter);
+
         return options;
     }
 
     /// <summary>
-    ///     This method repairs JSON that contains an unescaped double quote inside a string value, which
-    ///     makes the document invalid, by escaping quotes inside every <c>"key": "value"</c> pair.
-    ///     It is a best-effort repair for hand-typed or external data.
+    ///     This method creates new options with the library defaults.
     /// </summary>
-    /// <param name="json">The JSON string to sanitize.</param>
-    /// <returns>The sanitized <paramref name="json" /> string.</returns>
-    public static string SanitizeJsonString(string json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return json;
+    /// <returns>New, mutable options without converters.</returns>
+    private static JsonSerializerOptions CreateLibraryDefaults() =>
+        new()
+        {
+            // We'll want to allow trailing commas.
+            AllowTrailingCommas = true,
 
-        // Pattern to match all JSON string values: "key": "value"
-        string pattern = "\"(.*?)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"";
+            // We'll want to disable property case sensitivity.
+            PropertyNameCaseInsensitive = true,
 
-        // Replace unescaped quotes inside the value part
-        json = Regex.Replace(
-            json,
-            pattern,
-            match =>
-            {
-                string key = match.Groups[1].Value;
-                string value = match.Groups[2].Value;
+            // We'll want to allow [and ignore] comments in the JSON.
+            ReadCommentHandling = JsonCommentHandling.Skip,
 
-                // Escape unescaped quotes inside value
-                string fixedValue = Regex.Replace(value, "(?<!\\\\)\"", "\\\"");
-
-                return $"\"{key}\":\"{fixedValue}\"";
-            },
-            RegexOptions.Singleline
-        );
-        return json;
-    }
+            // Default the pretty option to false.
+            WriteIndented = false,
+        };
 
     /// <summary>
     ///     This method serializes a <paramref name="type" /> <paramref name="payload" />
@@ -251,7 +329,9 @@ public static class JsonSerializer
     /// </summary>
     /// <param name="type">The type of <paramref name="payload" /> to be serialized.</param>
     /// <param name="payload">The value to be serialized.</param>
-    /// <param name="options">Optional, serializer options override.</param>
+    /// <param name="options">
+    ///     Optional options. They are copied and completed with the shared converters; the instance is not changed.
+    /// </param>
     /// <returns>JSON serialized <paramref name="payload" /> <paramref name="type" /> object instance.</returns>
     public static string Serialize(
         Type type,
@@ -260,8 +340,10 @@ public static class JsonSerializer
     ) =>
         payload is null
             ? null
-            : SanitizeJsonString(
-                System.Text.Json.JsonSerializer.Serialize(payload, type, GetOptions(options))
+            : System.Text.Json.JsonSerializer.Serialize(
+                payload,
+                type,
+                options is null ? GetDefaultOptions(false) : GetOptions(options)
             );
 
     /// <summary>
@@ -310,7 +392,14 @@ public static class JsonSerializer
         Type type,
         object payload,
         JsonSerializerOptions options = null
-    ) => Serialize(type, payload, GetOptions(options, true));
+    ) =>
+        payload is null
+            ? null
+            : System.Text.Json.JsonSerializer.Serialize(
+                payload,
+                type,
+                options is null ? GetDefaultOptions(true) : GetOptions(options, true)
+            );
 
     /// <summary>
     ///     This method serializes <typeparamref name="TSource" />

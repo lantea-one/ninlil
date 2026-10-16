@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Ninlil.Common.Serializer;
@@ -9,7 +10,9 @@ namespace Ninlil.Common.Serializer.Tests;
 ///     These tests cover the <see cref="JsonSerializer" /> static wrapper: round trips, null and
 ///     malformed input, property names kept as declared (no naming policy), and
 ///     <see cref="JsonSerializer.GetOptions" />, which must return read-only options unchanged
-///     and must not add a converter type that is already present.
+///     and must not add a converter type that is already present. They change no process-wide state
+///     and run in parallel with other classes; the tests that change the shared defaults or the
+///     shared converter list are in <see cref="JsonSerializerProcessWideTests" />.
 /// </summary>
 public class JsonSerializerTests
 {
@@ -27,6 +30,11 @@ public class JsonSerializerTests
     private class Simple
     {
         public string Value { get; set; }
+    }
+
+    private class Addressed
+    {
+        public IPAddress Address { get; set; }
     }
 
     [Fact]
@@ -131,17 +139,99 @@ public class JsonSerializerTests
     {
         var options = new JsonSerializerOptions();
 
-        JsonSerializer.GetOptions(options);
-        JsonSerializer.GetOptions(options);
-        JsonSerializer.GetOptions(options);
+        // GetOptions returns a completed copy and leaves the caller's instance alone, so the
+        // duplicate check runs on the copy that is handed back again.
+        JsonSerializerOptions first = JsonSerializer.GetOptions(options);
+        JsonSerializerOptions second = JsonSerializer.GetOptions(first);
+        JsonSerializerOptions third = JsonSerializer.GetOptions(second);
 
-        // Each converter TYPE in the library's default set must appear at most once, regardless
-        // of how many times GetOptions() is called against the same still-mutable instance.
-        var converterTypeCounts = options
+        // Each converter TYPE in the library's default set must appear at most once, however
+        // often the completed options are passed through GetOptions() again.
+        var converterTypeCounts = third
             .Converters.GroupBy(c => c.GetType())
             .ToDictionary(g => g.Key, g => g.Count());
 
         Assert.All(converterTypeCounts, kvp => Assert.Equal(1, kvp.Value));
+    }
+
+    [Fact]
+    public void GetOptions_MutableCallerOptions_AreNotChanged_AndACompletedCopyIsReturned()
+    {
+        var callerOptions = new JsonSerializerOptions { WriteIndented = false };
+
+        JsonSerializerOptions result = JsonSerializer.GetOptions(callerOptions, pretty: true);
+
+        Assert.Empty(callerOptions.Converters);
+        Assert.False(callerOptions.WriteIndented);
+        Assert.NotSame(callerOptions, result);
+        Assert.NotEmpty(result.Converters);
+        Assert.True(result.WriteIndented);
+    }
+
+    [Fact]
+    public void Deserialize_WithExplicitOptions_UsesTheSharedConverters()
+    {
+        // System.Text.Json has no built-in IPAddress converter, so this only works when the
+        // shared IpAddressJsonConverter is added to the caller's plain options.
+        var plain = new JsonSerializerOptions();
+
+        Addressed result = JsonSerializer.Deserialize<Addressed>(
+            """{"Address":"192.0.2.1"}""",
+            plain
+        );
+
+        Assert.Equal(IPAddress.Parse("192.0.2.1"), result.Address);
+        Assert.Empty(plain.Converters);
+    }
+
+    [Fact]
+    public void Serialize_WithExplicitOptions_LeavesTheCallersOptionsUnchanged()
+    {
+        var plain = new JsonSerializerOptions();
+
+        string json = JsonSerializer.Serialize(
+            new Addressed { Address = IPAddress.Loopback },
+            plain
+        );
+
+        Assert.Contains("127.0.0.1", json);
+        Assert.Empty(plain.Converters);
+        Assert.False(plain.IsReadOnly);
+    }
+
+    [Fact]
+    public void Serialize_Compact_IsByteIdenticalToTheOptionsOutput_AndKeepsTextExact()
+    {
+        // Stored JSON (records, journal, backups, broker messages) goes through this serializer,
+        // so the compact bytes must not change when the sanitising pass is gone. The expected
+        // text is written out because comparing with the same options alone would prove nothing.
+        var payload = new Simple { Value = "q\" c\": \"d \\ line\nnext \u00e9\u4e2d" };
+        const string expected =
+            "{\"Value\":\"q\\u0022 c\\u0022: \\u0022d \\\\ line\\nnext \\u00E9\\u4E2D\"}";
+
+        string json = JsonSerializer.Serialize(payload);
+
+        Assert.Equal(expected, json);
+        Assert.Equal(
+            System.Text.Json.JsonSerializer.Serialize(
+                payload,
+                typeof(Simple),
+                JsonSerializer.GetOptions()
+            ),
+            json
+        );
+        Assert.Equal(payload.Value, JsonSerializer.Deserialize<Simple>(json).Value);
+    }
+
+    [Fact]
+    public void SerializePretty_Output_DeserializesBackToAnEqualPayload()
+    {
+        var payload = new Simple { Value = "a \"quoted\": value\nline" };
+
+        string json = JsonSerializer.SerializePretty(payload);
+
+        Assert.Contains("\n", json);
+        Assert.Equal(payload.Value, JsonSerializer.Deserialize<Simple>(json).Value);
     }
 
     [Fact]
@@ -162,20 +252,6 @@ public class JsonSerializerTests
         JsonSerializerOptions options = JsonSerializer.GetOptions(pretty: true);
 
         Assert.True(options.WriteIndented);
-    }
-
-    [Fact]
-    public void AddConverter_ByInstance_DoesNotDuplicate()
-    {
-        int before = JsonSerializer.Converters.Count;
-
-        var converter = new JsonStringEnumConverter();
-        JsonSerializer.AddConverter(converter);
-        JsonSerializer.AddConverter(converter);
-
-        // A converter of a type that's already registered (JsonStringEnumConverter is already in
-        // the library's default set) must not be added again.
-        Assert.Equal(before, JsonSerializer.Converters.Count);
     }
 
     [Fact]

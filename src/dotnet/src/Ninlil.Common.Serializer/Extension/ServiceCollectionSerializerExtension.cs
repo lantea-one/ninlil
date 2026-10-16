@@ -222,7 +222,10 @@ public static class ServiceCollectionSerializerExtension
     }
 
     /// <summary>
-    ///     This method sets the process-wide default options of <see cref="JsonSerializer" />.
+    ///     This method sets the process-wide default options of <see cref="JsonSerializer" />. Every
+    ///     serialize and deserialize call without explicit options uses a copy of
+    ///     <paramref name="options" /> completed with the shared converters; the given instance is
+    ///     not changed. Passing <see langword="null" /> restores the library defaults.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
     /// <param name="options">The JSON serializer options.</param>
