@@ -140,7 +140,7 @@ public sealed partial class ForwarderQueryResolverTests
     {
         DnsMessage forwarded = await ForwardAndCaptureAsync(
             BuildEdnsQuery(12, false, 1400),
-            new RecursiveServerOptions { EnableDnssecValidation = true }
+            new RecursiveServerOptions { EnableDnssecValidation = true, EnableRecursion = true }
         );
 
         Assert.True(forwarded.CheckingDisabled);
@@ -154,7 +154,7 @@ public sealed partial class ForwarderQueryResolverTests
     {
         DnsMessage forwarded = await ForwardAndCaptureAsync(
             BuildQuery(13, "example.com."),
-            new RecursiveServerOptions { EnableDnssecValidation = true }
+            new RecursiveServerOptions { EnableDnssecValidation = true, EnableRecursion = true }
         );
 
         Assert.True(forwarded.Edns.DnssecOk);

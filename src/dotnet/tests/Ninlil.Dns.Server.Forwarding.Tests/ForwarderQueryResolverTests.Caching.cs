@@ -42,6 +42,7 @@ public sealed partial class ForwarderQueryResolverTests
     {
         EnableDnssecValidation = false,
         EnableServeStale = false,
+        EnableRecursion = true,
     };
 
     private ForwardedResponseCache CreateResponseCache() =>
@@ -136,7 +137,7 @@ public sealed partial class ForwarderQueryResolverTests
     }
 
     [Fact]
-    public async Task Cache_AServfail_IsNotCached()
+    public async Task Cache_AServfail_IsNotCachedAndIsAFailedAttempt()
     {
         DnsMessage servfail = new()
         {
@@ -152,7 +153,8 @@ public sealed partial class ForwarderQueryResolverTests
         );
         await resolver.TryResolveAsync(BuildContext(BuildQuery(2, "example.com.")));
 
-        Assert.Equal(DnsResponseCodeEnum.ServerFailure, first.Response.ResponseCode);
+        // A SERVFAIL fails the only forwarder, so nothing is handled and nothing is stored.
+        Assert.False(first.IsHandled);
         Assert.Equal(2, upstream.QueryCount);
     }
 

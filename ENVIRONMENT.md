@@ -291,7 +291,7 @@ and RFC 5011 automated trust-anchor rollover.
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` | Whether this server answers recursive queries at all (off by default — capability-expanding). | `false` |
+| `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` | Whether this server offers recursive service to every client, by iteration and by forwarding (off by default — capability-expanding; an access rule granting recursion access allows single clients while it is off). | `false` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_QNAME_MINIMIZATION` | Whether RFC 9156 QNAME minimization is used during iterative resolution. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION` | Whether recursively resolved and forwarded answers are DNSSEC-validated. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_USE_CUSTOM_INSECURE_DOMAINS` | Whether the Insecure domain list (`DnsServer:Recursive:InsecureDomains`, the names that skip DNSSEC validation and are never answered with AD) replaces the built-in list. Off: the built-in list applies (`home.arpa`, `internal`, and the RFC 6303 / RFC 7793 locally-served reverse zones). On: only `InsecureDomains` applies, and an empty list exempts nothing. The list itself has no variable; edit it in the admin console, through `PATCH /api/recursive-settings` or in the configuration file. | `false` |
@@ -403,7 +403,7 @@ General upstream forwarding with health-checked failover — independent of the 
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NINLIL_DNS_SERVER_FORWARDING_ENABLE` | Whether configured upstream forwarders are consulted (between the authoritative and recursive resolvers in dispatch order). | `false` |
+| `NINLIL_DNS_SERVER_FORWARDING_ENABLE` | Whether configured upstream forwarders are consulted (between the authoritative and recursive resolvers in dispatch order). Only for queries with RD set from clients allowed recursion (`NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` or an access rule granting recursion access). | `false` |
 | `NINLIL_DNS_SERVER_FORWARDING_FAILOVER_STRATEGY` | How multiple forwarders are chosen between: `TryInOrder` or `HealthCheckedRoundRobin`. | `HealthCheckedRoundRobin` |
 | `NINLIL_DNS_SERVER_FORWARDING_HEALTH_CHECK_INTERVAL` | How often each forwarder's health is probed. | `00:00:30` |
 | `NINLIL_DNS_SERVER_FORWARDING_PER_FORWARDER_TIMEOUT` | Per-query timeout against a single forwarder before failing over. | `00:00:03` |

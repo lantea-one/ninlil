@@ -7,6 +7,7 @@ using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Core.AccessControl;
 using Ninlil.Dns.Server.Core.ClientSubnet;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
@@ -28,8 +29,26 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     the dispatcher and <c>DnsQueryProcessingPipeline</c> for the whole query path). The
 ///     forwarder set is the closest enabled forwarder zone's addresses, or else the global
 ///     forwarders. The forwarders are tried in order, each with
-///     <see cref="ForwardingOptions.PerForwarderTimeout" />; when all fail, the dispatcher falls
-///     through to recursive iteration.
+///     <see cref="ForwardingOptions.PerForwarderTimeout" />.
+///     <para>
+///         <b>Who is forwarded for.</b> Forwarding is recursive service, so it needs a QUERY with
+///         RD set (RFC 1034 §4.3.1: without RD the server answers from local data only) from a
+///         client allowed recursion by <see cref="RecursionPermission" />, the rule
+///         <see cref="RecursiveQueryResolver" /> uses: <see cref="RecursiveServerOptions.EnableRecursion" />
+///         on, or an access rule granting the client recursion access. Any other query is
+///         <see cref="DnsQueryResolution.NotHandled" />.
+///     </para>
+///     <para>
+///         <b>Upstream failures.</b> An upstream that does not answer, or answers SERVFAIL,
+///         REFUSED, NOTIMP, FORMERR or any other code except NOERROR and NXDOMAIN, has failed: it
+///         counts against its health and the next forwarder is tried. NXDOMAIN and NOERROR are
+///         answers and end the search. When every forwarder has failed, a stale cached answer is
+///         served if the RFC 8767 setting allows it; otherwise the result is
+///         <see cref="DnsQueryResolution.NotHandled" />, so the dispatcher falls through to
+///         <see cref="RecursiveQueryResolver" />, which is permitted for this client by the same
+///         rule. A SERVFAIL reply for a client not permitted that fallback is kept in the code but
+///         cannot be reached while forwarding and recursion share one permission.
+///     </para>
 ///     <para>
 ///         <b>The outbound query.</b> Every hop gets a query built for it (see
 ///         <see cref="BuildOutboundRequest" />), never the client's message. The client's EDNS
@@ -113,6 +132,11 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     The Insecure domain list whose changes flush <paramref name="responseCache" />.
 ///     <see langword="null" /> (the default) never flushes.
 /// </param>
+/// <param name="accessControlEngine">
+///     The access-control engine that can grant recursion access to a client while
+///     <see cref="RecursiveServerOptions.EnableRecursion" /> is off (see
+///     <see cref="RecursionPermission" />). <see langword="null" /> (the default) grants nothing.
+/// </param>
 public sealed class ForwarderQueryResolver(
     ForwarderSetCache forwarderSets,
     IEnumerable<IUpstreamForwarderClient> clients,
@@ -124,7 +148,8 @@ public sealed class ForwarderQueryResolver(
     ILogger<ForwarderQueryResolver> logger,
     EdnsClientSubnetService clientSubnetService = null,
     IForwardedResponseCache responseCache = null,
-    InsecureDomainPolicy insecureDomains = null
+    InsecureDomainPolicy insecureDomains = null,
+    IDnsAccessControlEngine accessControlEngine = null
 ) : IDnsQueryResolver
 {
     private string _seenInsecureDomains;
@@ -144,6 +169,28 @@ public sealed class ForwarderQueryResolver(
     )
     {
         if (!forwardingOptions.CurrentValue.Enable || context.Request.Questions.Count == 0)
+            return DnsQueryResolution.NotHandled;
+
+        // Only a QUERY is forwarded. The dispatcher answers NOTIMP for the opcodes it does not
+        // implement and the NOTIFY and UPDATE resolvers claim theirs before this step, so this
+        // check is defensive.
+        if (context.Request.Opcode != DnsOpcodeEnum.Query)
+            return DnsQueryResolution.NotHandled;
+
+        // RFC 1034 §4.3.1: without RD the server answers from local data only.
+        if (!context.Request.RecursionDesired)
+            return DnsQueryResolution.NotHandled;
+
+        // Forwarding is recursive service (BCP 140, RFC 5358), so it is limited to the clients the
+        // recursive resolver serves. Checked before anything is sent or read from the cache.
+        bool recursionPermitted = await RecursionPermission.IsPermittedAsync(
+            recursiveOptions.CurrentValue,
+            accessControlEngine,
+            context.RemoteAddress,
+            stoppingToken
+        );
+
+        if (!recursionPermitted)
             return DnsQueryResolution.NotHandled;
 
         DnsQuestion question = context.Request.Questions[0];
@@ -232,7 +279,6 @@ public sealed class ForwarderQueryResolver(
             try
             {
                 response = await client.ForwardAsync(definition, outboundRequest, timeoutCts.Token);
-                healthTracker.RecordResult(definition, succeeded: true);
             }
             catch (Exception exception)
                 when (exception is not OperationCanceledException
@@ -249,6 +295,26 @@ public sealed class ForwarderQueryResolver(
                 continue;
             }
 
+            // A lame or overloaded upstream answers SERVFAIL, REFUSED or NOTIMP (or garbles the
+            // message with FORMERR). The next forwarder may know better, and the failure counts
+            // against this one's health. NXDOMAIN is a real answer, so it stops the search
+            // (RFC 1035 §4.1.1).
+            if (
+                response.ResponseCode
+                is not (DnsResponseCodeEnum.NoError or DnsResponseCodeEnum.NxDomain)
+            )
+            {
+                healthTracker.RecordResult(definition, succeeded: false);
+                logger.LogDebug(
+                    "Forwarder '{Definition}' answered {ResponseCode} for {Name}; trying the next one.",
+                    definition.OriginalDefinitionString,
+                    response.ResponseCode,
+                    question.Name
+                );
+                continue;
+            }
+
+            healthTracker.RecordResult(definition, succeeded: true);
             response.Id = context.Request.Id;
 
             if (!validationEnabled)
@@ -308,7 +374,34 @@ public sealed class ForwarderQueryResolver(
             return DnsQueryResolution.Handled(stale);
         }
 
-        return DnsQueryResolution.NotHandled;
+        // The recursive resolver is next and is permitted for this client by the same rule that let
+        // this resolver run, so it gets the query. If the permission rules ever differ, a client
+        // that cannot recurse gets SERVFAIL (RFC 1035 §4.1.1: the server could not process the
+        // query) rather than the REFUSED the dispatcher would answer, which would say the client
+        // is not allowed.
+        return recursionPermitted
+            ? DnsQueryResolution.NotHandled
+            : DnsQueryResolution.Handled(BuildServerFailure(context.Request));
+    }
+
+    /// <summary>
+    ///     This method builds the SERVFAIL reply for <paramref name="request" /> with the question
+    ///     echoed and RA set, for a query every forwarder failed and no other resolver will take.
+    /// </summary>
+    private static DnsMessage BuildServerFailure(DnsMessage request)
+    {
+        DnsMessage reply = new()
+        {
+            Id = request.Id,
+            IsResponse = true,
+            Opcode = request.Opcode,
+            RecursionDesired = request.RecursionDesired,
+            RecursionAvailable = true,
+            ResponseCode = DnsResponseCodeEnum.ServerFailure,
+        };
+        reply.Questions.AddRange(request.Questions);
+
+        return reply;
     }
 
     /// <summary>

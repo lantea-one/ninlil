@@ -44,7 +44,7 @@ public sealed partial class ForwarderQueryResolverTests
             Hierarchy = SignedHierarchy.CreateStandard(Clock);
             Options = Hierarchy.CreateOptions();
             Options.EnableDnssecValidation = true;
-            Options.EnableRecursion = false;
+            Options.EnableRecursion = true;
 
             Monitor = new SwappableOptionsMonitor<RecursiveServerOptions>(Options);
             InsecureDomains = new InsecureDomainPolicy(Monitor);
@@ -77,7 +77,7 @@ public sealed partial class ForwarderQueryResolverTests
         {
             Options = Hierarchy.CreateOptions();
             Options.EnableDnssecValidation = true;
-            Options.EnableRecursion = false;
+            Options.EnableRecursion = true;
             Options.UseCustomInsecureDomains = true;
             Options.InsecureDomains = [.. domains];
             Monitor.CurrentValue = Options;

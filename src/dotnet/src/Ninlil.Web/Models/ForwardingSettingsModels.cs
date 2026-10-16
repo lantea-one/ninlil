@@ -11,7 +11,7 @@ namespace Ninlil.Web.Models;
 ///     failover and health-check tuning, and the forwarded-answer cache settings that apply to
 ///     all of them.
 /// </summary>
-/// <param name="Enable">Whether the configured forwarders are used at all. Defaults to <see langword="false" />.</param>
+/// <param name="Enable">Whether the configured forwarders are used at all. Defaults to <see langword="false" />. Forwarding also needs the client to set the recursion-desired bit and to be allowed recursion: either the recursive setting EnableRecursion is on, or an access rule grants the client recursion access.</param>
 /// <param name="FailoverStrategy">How one forwarder is picked among several. Defaults to health-checked round robin.</param>
 /// <param name="HealthCheckInterval">How often each forwarder's health is probed under health-checked round robin. Defaults to 30 seconds.</param>
 /// <param name="PerForwarderTimeout">How long one forwarder may take to answer before the attempt counts as failed. Defaults to 3 seconds.</param>

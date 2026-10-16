@@ -73,16 +73,12 @@ public class RecursiveQueryResolver(
 
         // An access-control rule granting RecursionAccess to the client's address allows
         // recursion for that client while EnableRecursion is off.
-        bool recursionPermitted =
-            currentOptions.EnableRecursion
-            || (
-                accessControlEngine is not null
-                && await accessControlEngine.HasCapabilityAsync(
-                    context.RemoteAddress,
-                    DnsAccessControlCapabilityEnum.RecursionAccess,
-                    stoppingToken
-                )
-            );
+        bool recursionPermitted = await RecursionPermission.IsPermittedAsync(
+            currentOptions,
+            accessControlEngine,
+            context.RemoteAddress,
+            stoppingToken
+        );
 
         if (!recursionPermitted || !request.RecursionDesired || request.Questions.Count == 0)
             return DnsQueryResolution.NotHandled;

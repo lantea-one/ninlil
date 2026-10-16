@@ -19,7 +19,12 @@ public class ForwardingOptions
 
     /// <summary>
     ///     This property controls whether this server forwards at all. It is off by default, so an
-    ///     operator opts in.
+    ///     operator opts in. Forwarding is recursive service, so it also needs the client to set
+    ///     RD and to be allowed recursion: <see cref="Recursive.RecursiveServerOptions.EnableRecursion" /> on,
+    ///     or an access rule granting the client recursion access (see
+    ///     <see cref="Recursive.Resolution.RecursionPermission" />). A forward-only network that keeps
+    ///     <see cref="Recursive.RecursiveServerOptions.EnableRecursion" /> off therefore adds one such rule
+    ///     for its clients.
     /// </summary>
     public bool Enable { get; set; }
 

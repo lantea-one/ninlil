@@ -20,10 +20,13 @@ public class RecursiveServerOptions
     public const string SectionName = "DnsServer:Recursive";
 
     /// <summary>
-    ///     This property controls whether this server recurses for names it is not authoritative
-    ///     for. It is off by default because an open resolver reachable from the internet is a
-    ///     well-known amplification vector, so an operator opts in. An access-control rule can
-    ///     still allow recursion for particular clients while this is off.
+    ///     This property controls whether this server offers recursive service to every client,
+    ///     both by iterating from the root and by forwarding to the configured forwarders (the
+    ///     forwarding step needs it, or an access rule, as well as
+    ///     <c>ForwardingOptions.Enable</c>). It is off by default because an open resolver
+    ///     reachable from the internet is a well-known amplification vector, so an operator opts
+    ///     in. An access-control rule granting recursion access can still allow particular clients
+    ///     while this is off, which is how a forward-only network serves its LAN.
     /// </summary>
     public bool EnableRecursion { get; set; }
 

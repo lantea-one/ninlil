@@ -13,6 +13,7 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
+using Ninlil.Dns.Server.Core.AccessControl;
 using Ninlil.Dns.Server.Core.ClientSubnet;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
@@ -302,7 +303,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         IReadOnlyList<IUpstreamForwarderClient> forwarderClients = null,
         EdnsClientSubnetService clientSubnetService = null,
         IOptionsMonitor<RecursiveServerOptions> recursiveMonitor = null,
-        InsecureDomainPolicy insecureDomains = null
+        InsecureDomainPolicy insecureDomains = null,
+        IDnsAccessControlEngine accessControlEngine = null,
+        ForwarderHealthTracker healthTracker = null
     )
     {
         ForwardingOptions effectiveForwardingOptions =
@@ -325,11 +328,13 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                 new DnsCryptForwarderClient(),
             ];
 
-        ForwarderHealthTracker tracker = new(
-            clientList,
-            new StaticOptionsMonitor<ForwardingOptions>(effectiveForwardingOptions),
-            NullLogger<ForwarderHealthTracker>.Instance
-        );
+        ForwarderHealthTracker tracker =
+            healthTracker
+            ?? new ForwarderHealthTracker(
+                clientList,
+                new StaticOptionsMonitor<ForwardingOptions>(effectiveForwardingOptions),
+                NullLogger<ForwarderHealthTracker>.Instance
+            );
 
         return new ForwarderQueryResolver(
             new ForwarderSetCache(
@@ -345,12 +350,17 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             recursiveMonitor
                 ?? new StaticOptionsMonitor<RecursiveServerOptions>(
                     recursiveOptions
-                        ?? new RecursiveServerOptions { EnableDnssecValidation = false }
+                        ?? new RecursiveServerOptions
+                        {
+                            EnableDnssecValidation = false,
+                            EnableRecursion = true,
+                        }
                 ),
             NullLogger<ForwarderQueryResolver>.Instance,
             clientSubnetService,
             responseCache,
-            insecureDomains
+            insecureDomains,
+            accessControlEngine
         );
     }
 

@@ -20,6 +20,12 @@ namespace Ninlil.Web.Models;
 ///         and the locally-served reverse zones of RFC 6303), for comparison and for a "restore
 ///         defaults" action; it is read-only.
 ///     </para>
+///     <para>
+///         <c>EnableRecursion</c> turns on recursive service for every client, by iterating from
+///         the root and by forwarding to the configured forwarders (forwarding also needs its own
+///         switch). While it is off, an access rule granting recursion access still lets
+///         particular clients use both.
+///     </para>
 /// </summary>
 public record RecursiveSettingsDetail(
     bool EnableRecursion,
