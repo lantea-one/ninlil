@@ -28,8 +28,12 @@ public sealed class Dns64Options
     ///     embedded into (RFC 6052 §2.2). The default, <c>64:ff9b::/96</c>, is the RFC 6052
     ///     Well-Known Prefix; set it to the gateway's prefix if the NAT64 gateway uses a
     ///     network-specific one. RFC 6052 §3.1 says the Well-Known Prefix must not represent
-    ///     non-global IPv4 addresses. Only the RFC 6052 lengths /32, /40, /48, /56, /64 and /96
-    ///     are accepted; any other value turns synthesis off rather than failing queries.
+    ///     non-global IPv4 addresses, so under it such addresses (private, loopback, link-local,
+    ///     documentation and the like) are not synthesized; a network-specific prefix embeds every
+    ///     address. Only the RFC 6052 lengths /32, /40, /48, /56, /64 and /96 are accepted, and
+    ///     the prefix must have a zero "u" octet (bits 64 to 71), must not lie in the IPv4-mapped
+    ///     range <c>::ffff:0:0/96</c> and must not be multicast. Any other value turns synthesis
+    ///     off rather than failing queries; <c>Dns64SettingsController</c> rejects it up front.
     /// </summary>
     public string SynthesisPrefix { get; set; } = "64:ff9b::/96";
 }

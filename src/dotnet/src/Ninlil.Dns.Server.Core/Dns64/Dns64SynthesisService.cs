@@ -13,8 +13,9 @@ namespace Ninlil.Dns.Server.Core.Dns64;
 ///     records by embedding each A record's IPv4 address into
 ///     <see cref="Dns64Options.SynthesisPrefix" /> (RFC 6052 §2.2). <c>RecursiveQueryResolver</c>
 ///     is its only caller. It needs no storage, so it lives in <c>Server.Core</c> next to
-///     <see cref="ClientSubnet.EdnsClientSubnetService" />. It does not skip non-global IPv4
-///     addresses.
+///     <see cref="ClientSubnet.EdnsClientSubnetService" />. Under the Well-Known Prefix it
+///     skips IPv4 addresses that are not globally reachable (RFC 6052 §3.1); a network-specific
+///     prefix embeds every address.
 ///     <para>
 ///         <b>A synthesized answer must never carry the AD bit.</b> No one signed the invented
 ///         addresses; any RRSIG covered only the A record they came from. RFC 6147 §3 warns that
@@ -36,6 +37,58 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
     private static readonly int[] ValidPrefixLengths = [32, 40, 48, 56, 64, 96];
 
     /// <summary>
+    ///     This field contains the RFC 6052 §2.1 Well-Known Prefix <c>64:ff9b::/96</c>, as the
+    ///     16 bytes <see cref="TryParsePrefix" /> returns for it.
+    /// </summary>
+    private static readonly byte[] WellKnownPrefixBytes = IPAddress
+        .Parse("64:ff9b::")
+        .GetAddressBytes();
+
+    /// <summary>
+    ///     This field lists the IPv4 blocks that are not globally reachable, as the IANA IPv4
+    ///     Special-Purpose Address Registry marks them ("Globally Reachable" = False), plus
+    ///     multicast. <see cref="IsGloballyReachableIPv4" /> checks the two globally reachable
+    ///     holes in <c>192.0.0.0/24</c> first. The registry's finer rows inside these blocks
+    ///     (0.0.0.0/32, 192.0.0.0/29, 192.0.0.8/32, 192.0.0.170/32, 192.0.0.171/32 and
+    ///     192.88.99.2/32) need no row of their own.
+    /// </summary>
+    private static readonly (uint Network, int Bits)[] NonGlobalIPv4Blocks =
+    [
+        // RFC 791 §3.2 "this network" (RFC 1122 §3.2.1.3).
+        (ToUInt32(0, 0, 0, 0), 8),
+        // RFC 1918 private use.
+        (ToUInt32(10, 0, 0, 0), 8),
+        // RFC 6598 shared address space.
+        (ToUInt32(100, 64, 0, 0), 10),
+        // RFC 1122 §3.2.1.3 loopback.
+        (ToUInt32(127, 0, 0, 0), 8),
+        // RFC 3927 link local.
+        (ToUInt32(169, 254, 0, 0), 16),
+        // RFC 1918 private use.
+        (ToUInt32(172, 16, 0, 0), 12),
+        // RFC 6890 IETF protocol assignments; 192.0.0.9 and 192.0.0.10 are carved out.
+        (ToUInt32(192, 0, 0, 0), 24),
+        // RFC 5737 documentation (TEST-NET-1).
+        (ToUInt32(192, 0, 2, 0), 24),
+        // RFC 7526 deprecated 6to4 relay anycast (the registry leaves the column blank).
+        (ToUInt32(192, 88, 99, 0), 24),
+        // RFC 1918 private use.
+        (ToUInt32(192, 168, 0, 0), 16),
+        // RFC 2544 benchmarking.
+        (ToUInt32(198, 18, 0, 0), 15),
+        // RFC 5737 documentation (TEST-NET-2).
+        (ToUInt32(198, 51, 100, 0), 24),
+        // RFC 5737 documentation (TEST-NET-3).
+        (ToUInt32(203, 0, 113, 0), 24),
+        // RFC 5771 multicast; not in the registry, never a host address.
+        (ToUInt32(224, 0, 0, 0), 4),
+        // RFC 1112 §4 reserved.
+        (ToUInt32(240, 0, 0, 0), 4),
+        // RFC 919 limited broadcast.
+        (ToUInt32(255, 255, 255, 255), 32),
+    ];
+
+    /// <summary>
     ///     This property reports whether DNS64 synthesis is enabled.
     /// </summary>
     public bool IsEnabled => options.CurrentValue.Enable;
@@ -46,7 +99,9 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
     ///     shape of <c>IterativeResolutionResult.Answer</c>). Each A record becomes an AAAA record
     ///     and other records are copied. It returns an empty list, meaning "do not synthesize",
     ///     when synthesis is disabled, <paramref name="aAnswer" /> is empty, or
-    ///     <see cref="Dns64Options.SynthesisPrefix" /> is not a valid RFC 6052 prefix.
+    ///     <see cref="Dns64Options.SynthesisPrefix" /> is not a valid RFC 6052 prefix. Under the
+    ///     Well-Known Prefix an A record whose address is not globally reachable
+    ///     (<see cref="IsGloballyReachableIPv4" />) is skipped, as RFC 6052 §3.1 requires.
     /// </summary>
     public IReadOnlyList<DnsResourceRecord> SynthesizeAaaaRecords(
         IReadOnlyList<DnsResourceRecord> aAnswer
@@ -64,6 +119,8 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
         )
             return [];
 
+        bool wellKnownPrefix =
+            prefixLength == 96 && prefixBytes.AsSpan().SequenceEqual(WellKnownPrefixBytes);
         List<DnsResourceRecord> synthesized = [];
 
         foreach (DnsResourceRecord record in aAnswer)
@@ -79,6 +136,12 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
                 DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.A, record.Data)
                 is not ARecordData aData
             )
+                continue;
+
+            // RFC 6052 §3.1: the Well-Known Prefix must not represent non-global IPv4
+            // addresses. A network-specific prefix may, because the operator's NAT64 gateway
+            // owns it.
+            if (wellKnownPrefix && !IsGloballyReachableIPv4(aData.Address))
                 continue;
 
             byte[] ipv6Bytes = EmbedIPv4Address(aData.Address, prefixBytes, prefixLength);
@@ -98,6 +161,64 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
 
         return synthesized;
     }
+
+    /// <summary>
+    ///     This method tells whether an AAAA address is inside <c>::ffff:0:0/96</c>, the IPv4-mapped
+    ///     range. RFC 6147 §5.1.4 says an IPv6-only client cannot use such an address, so a DNS64
+    ///     resolver treats the AAAA record as absent.
+    /// </summary>
+    public static bool IsExcludedAaaaAddress(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+            return false;
+
+        byte[] bytes = address.GetAddressBytes();
+
+        for (int index = 0; index < 10; index++)
+        {
+            if (bytes[index] != 0)
+                return false;
+        }
+
+        return bytes[10] == 0xff && bytes[11] == 0xff;
+    }
+
+    /// <summary>
+    ///     This method tells whether an IPv4 address is globally reachable: not in any block
+    ///     the IANA IPv4 Special-Purpose Address Registry marks as not globally reachable, and
+    ///     not multicast. <c>192.0.0.9</c> (PCP anycast) and <c>192.0.0.10</c> (TURN anycast) are
+    ///     globally reachable although the rest of <c>192.0.0.0/24</c> is not. Any other address
+    ///     family returns <see langword="false" />.
+    /// </summary>
+    public static bool IsGloballyReachableIPv4(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetwork)
+            return false;
+
+        byte[] bytes = address.GetAddressBytes();
+        uint value = ToUInt32(bytes[0], bytes[1], bytes[2], bytes[3]);
+
+        // The registry lists these two rows as globally reachable inside the not-reachable
+        // 192.0.0.0/24, so they are checked before the blocks.
+        if (value == ToUInt32(192, 0, 0, 9) || value == ToUInt32(192, 0, 0, 10))
+            return true;
+
+        foreach ((uint network, int bits) in NonGlobalIPv4Blocks)
+        {
+            uint mask = uint.MaxValue << (32 - bits);
+
+            if ((value & mask) == network)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     This method packs four octets into a host-order 32-bit address, first octet highest.
+    /// </summary>
+    private static uint ToUInt32(byte a, byte b, byte c, byte d) =>
+        ((uint)a << 24) | ((uint)b << 16) | ((uint)c << 8) | d;
 
     /// <summary>
     ///     This method embeds an IPv4 address into an IPv6 address under an RFC 6052 §2.2 prefix.
@@ -171,7 +292,9 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
     /// </summary>
     /// <returns>
     ///     <see langword="true" /> when <paramref name="cidr" /> is an IPv6 CIDR with one of the six
-    ///     RFC 6052 §2.2 lengths; otherwise <see langword="false" />, with both
+    ///     RFC 6052 §2.2 lengths that can carry synthesized addresses: its "u" octet (bits 64 to
+    ///     71) is zero, it is not inside the IPv4-mapped range <c>::ffff:0:0/96</c> and it is not
+    ///     multicast. Otherwise <see langword="false" />, with both
     ///     <see langword="out" /> parameters set to their defaults.
     /// </returns>
     public static bool TryParsePrefix(string cidr, out byte[] prefixBytes, out int prefixLength)
@@ -198,6 +321,12 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
 
         // Every valid length is a multiple of 8, so masking is a whole-byte copy.
         Array.Copy(raw, masked, length / 8);
+
+        // RFC 6052 §2.2: bits 64 to 71 are the "u" octet and must be zero; only a /96 prefix can
+        // set them. A prefix inside ::ffff:0:0/96 would give IPv4-mapped addresses (RFC 6147
+        // §5.1.4 excludes those), and a multicast prefix gives addresses no host can have.
+        if (masked[8] != 0 || IsExcludedAaaaAddress(new IPAddress(masked)) || masked[0] == 0xff)
+            return false;
 
         prefixBytes = masked;
         prefixLength = length;

@@ -134,20 +134,39 @@ public class RecursiveQueryResolver(
         bool isBogus = validation.State == DnssecValidationStateEnum.Bogus;
         bool enforceBogus = isBogus && !request.CheckingDisabled;
 
-        // RFC 6147 DNS64: only for an AAAA query that came back NoData, never for NXDOMAIN,
-        // SERVFAIL or an enforced Bogus result, since only NoData means the name may have an A
-        // record to synthesize from. RFC 6147 §5.5: a client that set DO and CD wants the
-        // DNSSEC data itself, so nothing is synthesized for it.
-        IReadOnlyList<DnsResourceRecord> synthesizedAaaa = [];
-        bool dns64SourceBogus = false;
-
-        if (
+        // RFC 6147 §5.5: a client that set DO and CD wants the DNSSEC data itself, so it gets
+        // the answer as it came, with nothing excluded or synthesized.
+        bool dns64Applies =
             !enforceBogus
             && dns64Service is { IsEnabled: true }
             && question.Type == DnsResourceRecordTypeEnum.Aaaa
-            && result.Status == RecursiveResolutionStatusEnum.NoData
-            && !(clientRequestedDnssec && request.CheckingDisabled)
-        )
+            && !(clientRequestedDnssec && request.CheckingDisabled);
+
+        // RFC 6147 §5.1.4: an AAAA record inside ::ffff:0:0/96 is not usable by an IPv6-only
+        // client and counts as absent. An answer with only such records is treated as NoData
+        // (MUST). An answer with other records too keeps only those (the default SHOULD) and
+        // loses the RRSIGs over the AAAA RRset, which no longer match it. Either way the answer
+        // was edited here, so it never carries AD.
+        bool dns64FilteredAnswer = false;
+
+        if (dns64Applies && result.Status == RecursiveResolutionStatusEnum.Success)
+        {
+            (IterativeResolutionResult filtered, bool changed) = ExcludeMappedAaaaRecords(result);
+
+            if (changed)
+            {
+                result = filtered;
+                dns64FilteredAnswer = true;
+            }
+        }
+
+        // RFC 6147 DNS64: synthesis only for an AAAA query that came back NoData (or whose AAAA
+        // records were all excluded above), never for NXDOMAIN, SERVFAIL or an enforced Bogus
+        // result, since only NoData means the name may have an A record to synthesize from.
+        IReadOnlyList<DnsResourceRecord> synthesizedAaaa = [];
+        bool dns64SourceBogus = false;
+
+        if (dns64Applies && result.Status == RecursiveResolutionStatusEnum.NoData)
         {
             IterativeResolutionResult aResult = await engine.ResolveAsync(
                 question.Name,
@@ -206,6 +225,7 @@ public class RecursiveQueryResolver(
             AuthenticData =
                 !enforceBogus
                 && !didSynthesizeDns64Answer
+                && !dns64FilteredAnswer
                 && validation.State == DnssecValidationStateEnum.Secure
                 && (clientRequestedDnssec || request.AuthenticData),
             ResponseCode = enforceBogus
@@ -263,6 +283,75 @@ public class RecursiveQueryResolver(
         }
 
         return DnsQueryResolution.Handled(response);
+    }
+
+    /// <summary>
+    ///     This method removes the AAAA records inside <c>::ffff:0:0/96</c> from a successful AAAA
+    ///     answer (RFC 6147 §5.1.4; see
+    ///     <see cref="Dns64SynthesisService.IsExcludedAaaaAddress" />). When none is left it
+    ///     returns a NoData result; otherwise it returns the answer without them and without the
+    ///     RRSIGs that cover the AAAA RRset.
+    /// </summary>
+    /// <returns>
+    ///     The result to use and whether it differs from <paramref name="result" />; an answer
+    ///     with no excluded record comes back unchanged.
+    /// </returns>
+    private static (IterativeResolutionResult Result, bool Changed) ExcludeMappedAaaaRecords(
+        IterativeResolutionResult result
+    )
+    {
+        List<DnsResourceRecord> kept = [];
+        int excluded = 0;
+        int keptAaaa = 0;
+
+        foreach (DnsResourceRecord record in result.Answer)
+        {
+            if (record.Type != DnsResourceRecordTypeEnum.Aaaa)
+            {
+                kept.Add(record);
+                continue;
+            }
+
+            if (
+                DnsRecordDataCodecRegistry.Decode(record.Type, record.Data) is AaaaRecordData aaaa
+                && Dns64SynthesisService.IsExcludedAaaaAddress(aaaa.Address)
+            )
+            {
+                excluded++;
+                continue;
+            }
+
+            keptAaaa++;
+            kept.Add(record);
+        }
+
+        if (excluded == 0)
+            return (result, false);
+
+        if (keptAaaa == 0)
+            return (
+                new IterativeResolutionResult(
+                    RecursiveResolutionStatusEnum.NoData,
+                    [],
+                    [],
+                    null,
+                    result.ZoneCutsTraversed
+                ),
+                true
+            );
+
+        List<DnsResourceRecord> dnssecRecords =
+        [
+            .. result.DnssecRecords.Where(record =>
+                !(
+                    record.Type == DnsResourceRecordTypeEnum.RrSig
+                    && DnsRecordDataCodecRegistry.Decode(record.Type, record.Data)
+                        is RrSigRecordData { TypeCovered: DnsResourceRecordTypeEnum.Aaaa }
+                )
+            ),
+        ];
+
+        return (result with { Answer = kept, DnssecRecords = dnssecRecords }, true);
     }
 
     /// <summary>

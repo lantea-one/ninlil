@@ -12,7 +12,9 @@ namespace Ninlil.Dns.Server.Core.Tests;
 ///     This class tests <see cref="Dns64SynthesisService" /> with a fixed options monitor: the
 ///     RFC 6052 §2.2 embedding for several prefix lengths, prefix parsing, the enable switch, and
 ///     that a synthesized answer keeps the owner name, class, TTL and CNAME records of the A
-///     answer it came from.
+///     answer it came from. It also covers the Well-Known Prefix rule for non-global IPv4
+///     addresses (RFC 6052 §3.1), the IPv4-mapped AAAA exclusion (RFC 6147 §5.1.4) and the
+///     prefix checks of <see cref="Dns64SynthesisService.TryParsePrefix" />.
 /// </summary>
 public class Dns64SynthesisServiceTests
 {
@@ -81,6 +83,13 @@ public class Dns64SynthesisServiceTests
     [InlineData("not-a-prefix", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
+    // RFC 6052 §2.2: the "u" octet (bits 64 to 71) of a /96 prefix must be zero.
+    [InlineData("64:ff9b:0:0:ff00::/96", false)]
+    // The IPv4-mapped range and multicast cannot carry synthesized addresses.
+    [InlineData("::ffff:0:0/96", false)]
+    [InlineData("ff0e::/96", false)]
+    // Host bits after the length are masked, not refused.
+    [InlineData("64:ff9b::1/96", true)]
     public void TryParsePrefixOnlyAcceptsTheSixLegalRfc6052Lengths(string cidr, bool expected)
     {
         bool actual = Dns64SynthesisService.TryParsePrefix(cidr, out _, out _);
@@ -144,7 +153,7 @@ public class Dns64SynthesisServiceTests
         );
 
         IReadOnlyList<DnsResourceRecord> synthesized = service.SynthesizeAaaaRecords([
-            ARecord("192.0.2.1", ttl: 120),
+            ARecord("198.41.0.4", ttl: 120),
         ]);
 
         DnsResourceRecord record = Assert.Single(synthesized);
@@ -160,7 +169,7 @@ public class Dns64SynthesisServiceTests
         );
         AaaaRecordData data = (AaaaRecordData)
             DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Aaaa, record.Data);
-        Assert.Equal(IPAddress.Parse("64:ff9b::c000:201"), data.Address);
+        Assert.Equal(IPAddress.Parse("64:ff9b::c629:4"), data.Address);
     }
 
     [Fact]
@@ -183,7 +192,7 @@ public class Dns64SynthesisServiceTests
             300,
             DnsRecordDataCodecRegistry.Encode(
                 DnsResourceRecordTypeEnum.A,
-                new ARecordData(IPAddress.Parse("192.0.2.1"))
+                new ARecordData(IPAddress.Parse("198.41.0.4"))
             )
         );
 
@@ -200,5 +209,113 @@ public class Dns64SynthesisServiceTests
         Assert.Same(cname, synthesized[0]);
         Assert.Equal(DnsResourceRecordTypeEnum.Aaaa, synthesized[1].Type);
         Assert.Equal(DnsName.Parse("target.example.com."), synthesized[1].Name);
+    }
+
+    [Theory]
+    [InlineData("10.1.2.3")]
+    [InlineData("192.168.0.1")]
+    [InlineData("127.0.0.1")]
+    [InlineData("100.64.0.1")]
+    [InlineData("169.254.1.1")]
+    [InlineData("192.0.2.1")]
+    [InlineData("192.0.0.8")]
+    public void SynthesizeAaaaRecordsUnderTheWellKnownPrefixSkipsNonGlobalIPv4(string address)
+    {
+        Dns64SynthesisService service = CreateService(
+            new Dns64Options { Enable = true, SynthesisPrefix = "64:ff9b::/96" }
+        );
+
+        Assert.Empty(service.SynthesizeAaaaRecords([ARecord(address)]));
+    }
+
+    [Fact]
+    public void SynthesizeAaaaRecordsUnderTheWellKnownPrefixKeepsOnlyTheGlobalAddresses()
+    {
+        Dns64SynthesisService service = CreateService(
+            new Dns64Options { Enable = true, SynthesisPrefix = "64:ff9b::/96" }
+        );
+
+        IReadOnlyList<DnsResourceRecord> synthesized = service.SynthesizeAaaaRecords([
+            ARecord("10.1.2.3"),
+            ARecord("198.41.0.4"),
+        ]);
+
+        DnsResourceRecord record = Assert.Single(synthesized);
+        AaaaRecordData data = (AaaaRecordData)
+            DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Aaaa, record.Data);
+        Assert.Equal(IPAddress.Parse("64:ff9b::c629:4"), data.Address);
+    }
+
+    [Fact]
+    public void SynthesizeAaaaRecordsUnderANetworkSpecificPrefixEmbedsEveryAddress()
+    {
+        // RFC 6052 §3.1 restricts only the Well-Known Prefix; the operator's gateway owns its own.
+        Dns64SynthesisService service = CreateService(
+            new Dns64Options { Enable = true, SynthesisPrefix = "2001:db8:64::/96" }
+        );
+
+        DnsResourceRecord record = Assert.Single(
+            service.SynthesizeAaaaRecords([ARecord("10.1.2.3")])
+        );
+        AaaaRecordData data = (AaaaRecordData)
+            DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Aaaa, record.Data);
+        Assert.Equal(IPAddress.Parse("2001:db8:64::a01:203"), data.Address);
+    }
+
+    [Theory]
+    [InlineData("0.1.2.3", false)]
+    [InlineData("10.0.0.1", false)]
+    [InlineData("100.127.255.255", false)]
+    [InlineData("100.128.0.0", true)]
+    [InlineData("127.0.0.1", false)]
+    [InlineData("169.254.0.1", false)]
+    [InlineData("172.16.0.1", false)]
+    [InlineData("172.32.0.1", true)]
+    [InlineData("192.0.0.8", false)]
+    // The registry marks these two addresses of 192.0.0.0/24 globally reachable.
+    [InlineData("192.0.0.9", true)]
+    [InlineData("192.0.0.10", true)]
+    [InlineData("192.0.0.11", false)]
+    [InlineData("192.0.2.1", false)]
+    [InlineData("192.88.99.1", false)]
+    [InlineData("192.168.1.1", false)]
+    [InlineData("198.17.255.255", true)]
+    [InlineData("198.18.0.1", false)]
+    [InlineData("198.19.255.255", false)]
+    [InlineData("198.20.0.0", true)]
+    [InlineData("198.51.100.1", false)]
+    [InlineData("203.0.113.1", false)]
+    [InlineData("224.0.0.1", false)]
+    [InlineData("240.0.0.1", false)]
+    [InlineData("255.255.255.255", false)]
+    [InlineData("198.41.0.4", true)]
+    [InlineData("8.8.8.8", true)]
+    // Registry rows whose "Globally Reachable" column is True.
+    [InlineData("192.31.196.1", true)]
+    [InlineData("192.52.193.1", true)]
+    [InlineData("192.175.48.1", true)]
+    public void IsGloballyReachableIPv4FollowsTheIanaSpecialPurposeRegistry(
+        string address,
+        bool expected
+    )
+    {
+        Assert.Equal(
+            expected,
+            Dns64SynthesisService.IsGloballyReachableIPv4(IPAddress.Parse(address))
+        );
+    }
+
+    [Theory]
+    [InlineData("::ffff:192.0.2.1", true)]
+    [InlineData("::ffff:0:0", true)]
+    [InlineData("2001:db8::1", false)]
+    [InlineData("::1", false)]
+    [InlineData("64:ff9b::c629:4", false)]
+    public void IsExcludedAaaaAddressMatchesTheIPv4MappedRange(string address, bool expected)
+    {
+        Assert.Equal(
+            expected,
+            Dns64SynthesisService.IsExcludedAaaaAddress(IPAddress.Parse(address))
+        );
     }
 }

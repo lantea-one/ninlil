@@ -51,10 +51,11 @@ public class Dns64SettingsController(
     ///     This action merges a partial update into <c>DnsServer:Dns64</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value. <see cref="Dns64Options.SynthesisPrefix" />
-    ///     is checked against the same RFC 6052 §2.2 rule
+    ///     is checked against the same rule
     ///     <c>Dns64SynthesisService.TryParsePrefix</c> applies (an IPv6 prefix of /32, /40, /48,
-    ///     /56, /64 or /96), so a bad prefix returns 400 here instead of quietly disabling
-    ///     synthesis later. Requires <c>dns64settings:write</c>.
+    ///     /56, /64 or /96 with a zero "u" octet, outside <c>::ffff:0:0/96</c> and not
+    ///     multicast; RFC 6052 §2.2, RFC 6147 §5.1.4), so a bad prefix returns 400 here instead of
+    ///     quietly disabling synthesis later. Requires <c>dns64settings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("dns64settings:write")]
@@ -83,8 +84,10 @@ public class Dns64SettingsController(
         {
             if (!Dns64SynthesisService.TryParsePrefix(synthesisPrefix, out _, out _))
                 throw new ValidationException(
-                    $"'{synthesisPrefix}' is not a legal RFC 6052 §2.2 DNS64 prefix -- it must be "
-                        + "an IPv6 CIDR whose prefix length is one of /32, /40, /48, /56, /64, or /96."
+                    $"'{synthesisPrefix}' is not a usable DNS64 prefix -- it must be an IPv6 CIDR "
+                        + "whose prefix length is one of /32, /40, /48, /56, /64, or /96 (RFC 6052 "
+                        + "§2.2), with a zero 'u' octet (bits 64 to 71), outside ::ffff:0:0/96 and "
+                        + "not multicast."
                 );
 
             settings.Add(

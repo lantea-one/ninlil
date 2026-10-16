@@ -104,6 +104,23 @@ public class Dns64SettingsControllerTests(NinlilDnsWebApplicationFactory factory
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("::ffff:0:0/96")]
+    [InlineData("64:ff9b:0:0:ff00::/96")]
+    [InlineData("ff0e::/96")]
+    public async Task Patch_WithAnUnusablePrefix_ReturnsBadRequest(string prefix)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        // The IPv4-mapped range, a set "u" octet (RFC 6052 §2.2) and multicast cannot carry
+        // synthesized addresses.
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dns64-settings", new { synthesisPrefix = prefix })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task Patch_WithAnIPv4Prefix_ReturnsBadRequest()
     {
