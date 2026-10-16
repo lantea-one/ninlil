@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
@@ -62,9 +63,9 @@ public class ConsoleCommandTests
         Assert.False(string.IsNullOrWhiteSpace(result));
     }
 
-    /// <summary>Verifies that <see cref="ConsoleCommand.AddSingletonService{TImplementation}" /> registers a resolvable service.</summary>
+    /// <summary>Verifies that <see cref="ConsoleCommand.AddSingletonService{TImplementation}" /> gives the same instance on every <c>GetService</c> call, because the command keeps one provider.</summary>
     [Fact]
-    public void AddSingletonService_RegistersResolvableService()
+    public void AddSingletonService_ResolvedTwice_ReturnsTheSameInstance()
     {
         IConsoleCommand command = ConsoleCommand.Create([]).AddSingletonService<List<string>>();
 
@@ -72,7 +73,193 @@ public class ConsoleCommandTests
         List<string> second = command.GetService<List<string>>();
 
         Assert.NotNull(first);
-        Assert.NotSame(first, second); // GetService builds a fresh provider each call, so singleton scoping isn't observable across calls.
+        Assert.Same(first, second);
+    }
+
+    /// <summary>Verifies that a singleton resolved through <c>GetService</c> is the instance a parsed delegate gets from its provider.</summary>
+    [Fact]
+    public async Task AddSingletonService_ResolvedBeforeTheRun_IsTheInstanceTheDelegateResolves()
+    {
+        IConsoleCommand command = ConsoleCommand
+            .Create(["--name", "x"])
+            .AddSingletonService<List<string>>();
+        List<string> before = command.GetService<List<string>>();
+        List<string> inside = null;
+
+        await command.WithParsedAsync<SimpleNamedArgsModel>(
+            (_, provider, _) =>
+            {
+                inside = provider.GetRequiredService<List<string>>();
+                return Task.CompletedTask;
+            }
+        );
+
+        Assert.Same(before, inside);
+    }
+
+    /// <summary>Verifies that the first registration of a singleton interface and factory wins.</summary>
+    [Fact]
+    public void AddSingletonServiceWithFactory_RegisteredTwice_KeepsTheFirstRegistration()
+    {
+        List<string> a = ["a"];
+        List<string> b = ["b"];
+        IConsoleCommand command = ConsoleCommand
+            .Create([])
+            .AddSingletonService<IList<string>, List<string>>(_ => a)
+            .AddSingletonService<IList<string>, List<string>>(_ => b);
+
+        Assert.Same(a, command.GetService<IList<string>>());
+    }
+
+    /// <summary>Verifies that the first registration of a scoped interface and factory wins.</summary>
+    [Fact]
+    public void AddScopedServiceWithFactory_RegisteredTwice_KeepsTheFirstRegistration()
+    {
+        List<string> a = ["a"];
+        List<string> b = ["b"];
+        IConsoleCommand command = ConsoleCommand
+            .Create([])
+            .AddScopedService<IList<string>, List<string>>(_ => a)
+            .AddScopedService<IList<string>, List<string>>(_ => b);
+
+        // Resolving a scoped service from the root works here because the provider does not validate scopes.
+        Assert.Same(a, command.GetService<IList<string>>());
+    }
+
+    /// <summary>Verifies that the first registration of a transient interface and factory wins.</summary>
+    [Fact]
+    public void AddTransientServiceWithFactory_RegisteredTwice_KeepsTheFirstRegistration()
+    {
+        List<string> a = ["a"];
+        List<string> b = ["b"];
+        IConsoleCommand command = ConsoleCommand
+            .Create([])
+            .AddTransientService<IList<string>, List<string>>(_ => a)
+            .AddTransientService<IList<string>, List<string>>(_ => b);
+
+        Assert.Same(a, command.GetService<IList<string>>());
+    }
+
+    /// <summary>Verifies that registering a service after the provider is built throws.</summary>
+    [Fact]
+    public void AddSingletonService_AfterGetService_Throws()
+    {
+        IConsoleCommand command = ConsoleCommand.Create([]).AddSingletonService<List<string>>();
+        command.GetService<List<string>>();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            command.AddSingletonService<Dictionary<string, string>>()
+        );
+        Assert.Throws<InvalidOperationException>(() =>
+            command.ConfigureServices(services => services.AddSingleton("late"))
+        );
+    }
+
+    /// <summary>Verifies that registering after a run (which builds the provider) throws.</summary>
+    [Fact]
+    public async Task AddScopedService_AfterARun_Throws()
+    {
+        IConsoleCommand command = ConsoleCommand.Create(["--name", "x"]);
+        await command.WithParsedAsync<SimpleNamedArgsModel>((_, _, _) => Task.CompletedTask);
+
+        Assert.Throws<InvalidOperationException>(() => command.AddScopedService<List<string>>());
+    }
+
+    /// <summary>Verifies that disposing the command disposes the singletons the provider created.</summary>
+    [Fact]
+    public async Task DisposeAsync_DisposesTheSingletonsItCreated()
+    {
+        ConsoleCommand command = ConsoleCommand.Create([]);
+        command.AddSingletonService<DisposableProbe>();
+        DisposableProbe probe = command.GetService<DisposableProbe>();
+
+        await command.DisposeAsync();
+
+        Assert.True(probe.Disposed);
+    }
+
+    /// <summary>Verifies that the synchronous <c>Dispose</c> also disposes the singletons, and that disposing twice is harmless.</summary>
+    [Fact]
+    public void Dispose_CalledTwice_DisposesTheSingletonsOnce()
+    {
+        ConsoleCommand command = ConsoleCommand.Create([]);
+        command.AddSingletonService<DisposableProbe>();
+        DisposableProbe probe = command.GetService<DisposableProbe>();
+
+        command.Dispose();
+        command.Dispose();
+
+        Assert.Equal(1, probe.DisposeCount);
+    }
+
+    /// <summary>Verifies that <c>GetService</c> and runs throw after the command is disposed.</summary>
+    [Fact]
+    public async Task GetServiceAndRuns_AfterDispose_ThrowObjectDisposedException()
+    {
+        ConsoleCommand command = ConsoleCommand.Create(["--name", "x"]);
+        command.AddSingletonService<List<string>>();
+        await command.DisposeAsync();
+
+        Assert.Throws<ObjectDisposedException>(() => command.GetService<List<string>>());
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            command.WithParsedAsync<SimpleNamedArgsModel>((_, _, _) => Task.CompletedTask)
+        );
+    }
+
+    /// <summary>Verifies that a scoped service is one instance within a run and that two commands do not share it.</summary>
+    [Fact]
+    public async Task AddScopedService_WithinOneRun_IsSharedAndAcrossCommandsIsNot()
+    {
+        List<string> firstInRun = null;
+        List<string> secondInRun = null;
+        List<string> otherCommand = null;
+
+        IConsoleCommand command = ConsoleCommand
+            .Create(["--name", "x"])
+            .AddScopedService<List<string>>();
+        await command.WithParsedAsync<SimpleNamedArgsModel>(
+            (_, provider, _) =>
+            {
+                firstInRun = provider.GetRequiredService<List<string>>();
+                secondInRun = provider.GetRequiredService<List<string>>();
+                return Task.CompletedTask;
+            }
+        );
+        IConsoleCommand other = ConsoleCommand
+            .Create(["--name", "x"])
+            .AddScopedService<List<string>>();
+        await other.WithParsedAsync<SimpleNamedArgsModel>(
+            (_, provider, _) =>
+            {
+                otherCommand = provider.GetRequiredService<List<string>>();
+                return Task.CompletedTask;
+            }
+        );
+
+        Assert.Same(firstInRun, secondInRun);
+        Assert.NotSame(firstInRun, otherCommand);
+    }
+
+    /// <summary>Verifies that each run gets its own scope, so a scoped service differs between two runs of one command, and that the scope is disposed when the delegate completes.</summary>
+    [Fact]
+    public async Task AddScopedService_AcrossTwoRuns_IsDisposedWithEachRunsScope()
+    {
+        List<DisposableProbe> seen = [];
+        IConsoleCommand command = ConsoleCommand
+            .Create(["--name", "x"])
+            .AddScopedService<DisposableProbe>();
+
+        for (int i = 0; i < 2; i++)
+            await command.WithParsedAsync<SimpleNamedArgsModel>(
+                (_, provider, _) =>
+                {
+                    seen.Add(provider.GetRequiredService<DisposableProbe>());
+                    return Task.CompletedTask;
+                }
+            );
+
+        Assert.NotSame(seen[0], seen[1]);
+        Assert.All(seen, probe => Assert.True(probe.Disposed));
     }
 
     /// <summary>Verifies that <see cref="ConsoleCommand.AddSingletonService{TInterface, TImplementation}" /> registers under the interface type.</summary>
@@ -393,5 +580,36 @@ public class ConsoleCommandTests
         IConsoleCommand command = ConsoleCommand.Create([]);
 
         await Assert.ThrowsAsync<ArgumentException>(() => command.ApplicationAsync(typeof(string)));
+    }
+
+    /// <summary>Verifies that <c>ApplicationAsync</c> gives a <see cref="ConsoleApplication" /> its service provider, so <c>GetService</c> works inside <c>RunAsync</c>.</summary>
+    [Fact]
+    public async Task ApplicationAsync_ApplicationResolvingAService_Succeeds()
+    {
+        ServiceResolvingTestConsoleApplication.LastResolvedLogger = null;
+        IConsoleLogger logger = ConsoleLogger.Create();
+
+        await ConsoleCommand
+            .Create(["--name", "a"])
+            .ConfigureServices(services => services.AddSingleton(logger))
+            .ApplicationAsync<ServiceResolvingTestConsoleApplication>();
+
+        Assert.Same(logger, ServiceResolvingTestConsoleApplication.LastResolvedLogger);
+    }
+
+    /// <summary>
+    ///     This test double records how often it is disposed, so a test can see whether the command
+    ///     or a run scope disposed the instance the container created.
+    /// </summary>
+    public sealed class DisposableProbe : IDisposable
+    {
+        /// <summary>The number of times <see cref="Dispose" /> has run.</summary>
+        public int DisposeCount { get; private set; }
+
+        /// <summary>Whether <see cref="Dispose" /> has run.</summary>
+        public bool Disposed => DisposeCount > 0;
+
+        /// <inheritdoc />
+        public void Dispose() => ++DisposeCount;
     }
 }

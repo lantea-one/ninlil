@@ -10,7 +10,11 @@ namespace Ninlil.Common.Console;
 ///     the logger and the service provider, exposes service lookup to subclasses, and turns a
 ///     parsed input model into a call to the matching <c>RunAsync</c> overload by reflection. The
 ///     generic subclasses declare which input models (verbs) the application accepts; each adds
-///     one abstract <c>RunAsync</c> overload for the application to implement.
+///     one abstract <c>RunAsync</c> overload for the application to implement. A run from a
+///     <see cref="ConsoleCommand" /> (<see cref="ConsoleCommand.ApplicationAsync(Type, CancellationToken)" />
+///     or <see cref="ExecuteAsync(IEnumerable{string}, CancellationToken)" />) hands the application
+///     the service provider scope of that run through <see cref="WithServiceProvider" />, so
+///     <c>GetService</c> works inside <c>RunAsync</c>; the scope ends when the run ends.
 /// </summary>
 /// <param name="logger">The logger for the console application.</param>
 public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplication
@@ -82,55 +86,36 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
 
     /// <summary>
     ///     This method parses the raw command line <paramref name="arguments" /> against the input
-    ///     models named by this class's generic arguments, stores the service provider built for the
-    ///     run and then calls <see cref="ExecuteAsync(IConsoleCommandInputModel, CancellationToken)" />.
+    ///     models named by this class's generic arguments, gives the application the service provider
+    ///     scope of the run and then calls
+    ///     <see cref="ExecuteAsync(IConsoleCommandInputModel, CancellationToken)" />. It builds a
+    ///     <see cref="ConsoleCommand" /> for the run, applies <see cref="ConfigureServices" /> and
+    ///     disposes the command (and its singletons) when the run ends. A command line that no input
+    ///     model accepts is reported through the command's default not-parsed handler.
     /// </summary>
     /// <param name="arguments">The command line arguments.</param>
     /// <param name="stoppingToken">The cancellation token to stop the operation.</param>
     /// <returns>An awaitable <see cref="Task" /> representing the result of the operation.</returns>
-    public Task ExecuteAsync(
+    public async Task ExecuteAsync(
         IEnumerable<string> arguments,
         CancellationToken stoppingToken = default
     )
     {
-        // Instantiate our parser.
-        IConsoleCommand parser = ConsoleCommand
-            .Create(arguments)
-            .ConfigureServices(ConfigureServices);
+        // The command owns the root service provider, so it is disposed when the run ends.
+        await using ConsoleCommand command = ConsoleCommand.Create(arguments);
+        command.ConfigureServices(ConfigureServices);
 
-        // Determine the number of generic arguments on this class.
-        Type[] genericArguments = GetType().GetGenericArguments();
-
-        // Find the WithParsedAsync overload whose arity matches the number of generic arguments.
-        MethodInfo method = typeof(IConsoleCommand).GetMethod(
-            nameof(IConsoleCommand.WithParsedAsync),
-            genericArguments
+        // Run through the command's own parse-and-dispatch body with this class's input model types.
+        await command.RunParsedAsync(
+            ConsoleCommand.GetConsoleApplicationInputModelTypes(GetType()),
+            (input, serviceProvider, token) =>
+            {
+                // Store the scope provider built for this run, so GetService works in RunAsync.
+                WithServiceProvider(serviceProvider);
+                return ExecuteAsync(input, token);
+            },
+            stoppingToken
         );
-
-        // If we don't have a method, throw an exception.
-        if (method == null)
-            throw new NotSupportedException(
-                $"The console application does not support this operation [IConsoleCommand.WithParsedAsync<{string.Join(", ", genericArguments.Select(a => a.Name))}>]."
-            );
-
-        // This is a generic method, so we need to make it generic with the generic arguments.
-        MethodInfo genericMethod = method.MakeGenericMethod(genericArguments);
-
-        // Execute the generic method with the input model and the service provider.
-        return (Task)
-            genericMethod.Invoke(
-                parser,
-                [
-                    (IConsoleCommandInputModel input, ServiceProvider serviceProvider) =>
-                    {
-                        // Store the service provider built for this run.
-                        WithServiceProvider(serviceProvider);
-
-                        // We're done, execute the console application.
-                        return ExecuteAsync(input, stoppingToken);
-                    },
-                ]
-            );
     }
 
     /// <summary>

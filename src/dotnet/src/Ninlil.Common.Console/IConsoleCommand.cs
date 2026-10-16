@@ -8,9 +8,10 @@ namespace Ninlil.Common.Console;
 ///     This interface is the contract for <see cref="ConsoleCommand" />, the command-line parser and
 ///     runner. It registers services, sets the not-parsed handler, and parses the arguments into
 ///     one of up to 24 candidate input model types before handing the result to a delegate or an
-///     <see cref="IConsoleApplication" />.
+///     <see cref="IConsoleApplication" />. The command owns one root service provider, built on first
+///     use; disposing the command disposes it and the singletons it created.
 /// </summary>
-public interface IConsoleCommand
+public interface IConsoleCommand : IAsyncDisposable, IDisposable
 {
     /// <summary>
     ///     This property contains the exit code of the last run: 0 before any run, after a parse and
@@ -50,6 +51,8 @@ public interface IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TImplementation" /> service and optional
     ///     <paramref name="factory" /> as a scoped service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TImplementation">The type of the implementation to register.</typeparam>
@@ -62,6 +65,8 @@ public interface IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TInterface" /> and <typeparamref name="TImplementation" />
     ///     service and optional <paramref name="factory" /> as a scoped service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TInterface">The type of the interface to register.</typeparam>
@@ -76,6 +81,8 @@ public interface IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TImplementation" /> service and optional
     ///     <paramref name="factory" /> as a singleton service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TImplementation">The type of the implementation to register.</typeparam>
@@ -88,6 +95,8 @@ public interface IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TInterface" /> and <typeparamref name="TImplementation" />
     ///     service and optional <paramref name="factory" /> as a singleton service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TInterface">The type of the interface to register.</typeparam>
@@ -102,6 +111,8 @@ public interface IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TImplementation" /> service and optional
     ///     <paramref name="factory" /> as a transient service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TImplementation">The type of the implementation to register.</typeparam>
@@ -114,6 +125,8 @@ public interface IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TInterface" /> and <typeparamref name="TImplementation" />
     ///     service and optional <paramref name="factory" /> as a transient service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TInterface">The type of the interface to register.</typeparam>
@@ -150,15 +163,18 @@ public interface IConsoleCommand
 
     /// <summary>
     ///     This method lets <paramref name="handler" /> register services in the service collection
-    ///     used for each parse.
+    ///     the root provider is built from. It throws <see cref="InvalidOperationException" /> once that
+    ///     provider is built (by <see cref="GetService{TService}" />, a run or <c>ApplicationAsync</c>).
     /// </summary>
     /// <param name="handler">The handler to configure the services.</param>
     /// <returns>The updated <see cref="IConsoleCommand" /> instance.</returns>
     public IConsoleCommand ConfigureServices(Action<IServiceCollection> handler);
 
     /// <summary>
-    ///     This method resolves a registered service from the instance's
-    ///     <see cref="IServiceCollection" />.
+    ///     This method resolves a registered service from the root service provider, which it builds
+    ///     on the first call and which freezes the registrations. Singletons are the same instance on
+    ///     every call and in every run. It throws <see cref="ObjectDisposedException" /> after the
+    ///     command is disposed.
     /// </summary>
     /// <typeparam name="TService">The type of the service to retrieve.</typeparam>
     /// <returns>The service instance of the specified type <typeparamref name="TService" />.</returns>

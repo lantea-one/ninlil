@@ -14,7 +14,7 @@ namespace Ninlil.Common.Console;
 ///     This class is the command-line parser and runner at the centre of this library. It holds
 ///     the raw arguments and a service collection. <c>WithParsedAsync</c> tries each candidate
 ///     input model type in turn through <see cref="ConsoleCommandInputModel.GetParseResult(Type, string[])" /> and hands
-///     the first match, with a freshly built service provider, to a delegate.
+///     the first match, with a service provider scope, to a delegate.
 ///     <see cref="ApplicationAsync(Type, CancellationToken)" /> does the same for an
 ///     <see cref="IConsoleApplication" /> type. A help switch as the first argument prints the help
 ///     text for the candidate types and reports exit code 0. When no type parses, the not-parsed
@@ -22,6 +22,15 @@ namespace Ninlil.Common.Console;
 ///     never ends the process: the host reads <see cref="ExitCode" /> and <see cref="LastParseResult" />
 ///     after the run and decides how to exit. The static properties hold the
 ///     application details shown in the help text and default to the entry assembly's metadata.
+///     Services follow the usual container contract: register them, then use them. The command
+///     builds one root service provider the first time it needs one (<see cref="GetService{TService}" />,
+///     a run, or <see cref="ApplicationAsync(Type, CancellationToken)" />), so singletons are shared
+///     between <see cref="GetService{TService}" /> and every run, and registering a service after
+///     that throws <see cref="InvalidOperationException" />. Each run gets its own scope, which is
+///     disposed when the parsed delegate completes. The first registration of a service type wins.
+///     The command owns the root provider: disposing the command disposes the provider and the
+///     singletons it created, and afterwards <see cref="GetService{TService}" /> and runs throw
+///     <see cref="ObjectDisposedException" />.
 /// </summary>
 /// <param name="arguments">The CLI arguments passed to the console command.</param>
 public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
@@ -2998,19 +3007,78 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     ]);
 
     /// <summary>
-    ///     This field contains the service collection that each parse builds a provider from.
+    ///     This field contains the service collection the root provider is built from. It is frozen
+    ///     once <see cref="_provider" /> exists.
     /// </summary>
     private readonly IServiceCollection _services = new ServiceCollection();
 
     /// <summary>
-    ///     This method builds a service provider and invokes <paramref name="handler" /> with the
-    ///     parsed input. It does nothing when parsing produced no input.
+    ///     This field guards <see cref="_provider" /> and <see cref="_disposed" />, so two threads
+    ///     cannot build two root providers or register while one is being built.
+    /// </summary>
+    private readonly object _providerLock = new();
+
+    /// <summary>
+    ///     This field contains the root service provider, built the first time it is needed. It is
+    ///     null until then and after disposal.
+    /// </summary>
+    private ServiceProvider _provider;
+
+    /// <summary>
+    ///     This field is true once the command is disposed.
+    /// </summary>
+    private bool _disposed;
+
+    /// <summary>
+    ///     This method returns the root service provider and builds it on first use. The build freezes
+    ///     the service collection: a singleton must come from one provider for the whole life of the
+    ///     command, and a service registered after the build would be invisible to the instances
+    ///     already created.
+    /// </summary>
+    /// <returns>The root service provider.</returns>
+    /// <exception cref="ObjectDisposedException">When the command is disposed.</exception>
+    private ServiceProvider GetRootProvider()
+    {
+        lock (_providerLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _provider ??= _services.BuildServiceProvider();
+        }
+    }
+
+    /// <summary>
+    ///     This method runs <paramref name="register" /> against the service collection while the
+    ///     provider is not built and the command is not disposed.
+    /// </summary>
+    /// <param name="register">The registration to run.</param>
+    /// <exception cref="ObjectDisposedException">When the command is disposed.</exception>
+    /// <exception cref="InvalidOperationException">When the service provider is already built.</exception>
+    private void Register(Action<IServiceCollection> register)
+    {
+        lock (_providerLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_provider is not null)
+                throw new InvalidOperationException(
+                    "Services cannot be registered after the service provider is built. "
+                        + "Register every service before the first GetService call or run."
+                );
+
+            register?.Invoke(_services);
+        }
+    }
+
+    /// <summary>
+    ///     This method creates a scope from the root provider and invokes <paramref name="handler" />
+    ///     with the parsed input and the scope's provider. It does nothing when parsing produced no
+    ///     input. The scope is disposed when the handler's task completes, so scoped services live for
+    ///     one run.
     /// </summary>
     /// <param name="input">The input model to parse.</param>
     /// <param name="handler">The delegate to invoke after the input model is parsed.</param>
     /// <param name="stoppingToken">Optional cancellation token to stop the parsing process.</param>
     /// <typeparam name="TInputModel">The type of the input model to parse.</typeparam>
-    /// <returns>An awaitable <see cref="Task" /> that resolves when the pre-parse processing is complete.</returns>
+    /// <returns>An awaitable <see cref="Task" /> that resolves when the handler has finished.</returns>
     private async Task BeforeHandleAsync<TInputModel>(
         TInputModel input,
         IConsoleCommand.CommandParsedAsyncDelegate<TInputModel> handler,
@@ -3022,13 +3090,16 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         if (input is null)
             return;
 
-        // We're done, return the instance.
-        await handler.Invoke(input, _services.BuildServiceProvider(), stoppingToken);
+        // Run the handler inside a scope that ends with the run.
+        await using AsyncServiceScope scope = GetRootProvider().CreateAsyncScope();
+        await handler.Invoke(input, scope.ServiceProvider, stoppingToken);
     }
 
     /// <summary>
     ///     This method finds the input model types of a <paramref name="consoleApplicationType" /> by
     ///     walking up its base types to the first generic one and returning that type's arguments.
+    ///     <see cref="ApplicationAsync(Type, CancellationToken)" /> and
+    ///     <see cref="ConsoleApplication.ExecuteAsync(IEnumerable{string}, CancellationToken)" /> share it.
     /// </summary>
     /// <param name="consoleApplicationType">
     ///     The type of <see cref="IConsoleApplication"/> to retrieve input model types for.
@@ -3036,7 +3107,7 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <returns>
     ///     The array of input model types for the specified console application type.
     /// </returns>
-    private Type[] GetConsoleApplicationInputModelTypes(Type consoleApplicationType)
+    internal static Type[] GetConsoleApplicationInputModelTypes(Type consoleApplicationType)
     {
         // Ensure we have a base type to work with.
         if (consoleApplicationType.BaseType is null)
@@ -3190,17 +3261,42 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <param name="types">The various types of input models to parse.</param>
     /// <typeparam name="TInputModel">The type of the input model to parse.</typeparam>
     /// <returns>An awaitable <see cref="Task" /> that resolves when the parsing is complete.</returns>
-    private Task ParseAsync<TInputModel>(
+    /// <exception cref="ObjectDisposedException">When the command is disposed.</exception>
+    private async Task ParseAsync<TInputModel>(
         IConsoleCommand.CommandParsedAsyncDelegate<TInputModel> parsedDelegate,
         CancellationToken stoppingToken,
         params Type[] types
     )
-        where TInputModel : class, IConsoleCommandInputModel =>
-        BeforeHandleAsync(Parse<TInputModel>(types), parsedDelegate, stoppingToken);
+        where TInputModel : class, IConsoleCommandInputModel
+    {
+        // A disposed command must fail before it parses, prints help or calls a not-parsed handler.
+        lock (_providerLock)
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+        await BeforeHandleAsync(Parse<TInputModel>(types), parsedDelegate, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method parses the arguments against <paramref name="inputModelTypes" /> and runs
+    ///     <paramref name="handler" /> in a scope, exactly like <c>WithParsedAsync</c> does.
+    ///     <see cref="ConsoleApplication.ExecuteAsync(IEnumerable{string}, CancellationToken)" /> calls
+    ///     it with the types its generic base class names, which a generic overload cannot express.
+    /// </summary>
+    /// <param name="inputModelTypes">The candidate input model types.</param>
+    /// <param name="handler">The delegate to invoke with the parsed input model and scope provider.</param>
+    /// <param name="stoppingToken">The cancellation token to stop the run.</param>
+    /// <returns>An awaitable <see cref="Task" /> that resolves when the run is complete.</returns>
+    internal Task RunParsedAsync(
+        Type[] inputModelTypes,
+        IConsoleCommand.CommandParsedAsyncDelegate<IConsoleCommandInputModel> handler,
+        CancellationToken stoppingToken
+    ) => ParseAsync(handler, stoppingToken, inputModelTypes);
 
     /// <summary>
     ///     This method registers the <typeparamref name="TImplementation" /> service and optional
     ///     <paramref name="factory" /> as a scoped service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TImplementation">The type of the implementation to register.</typeparam>
@@ -3212,10 +3308,10 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     {
         // Check for a factory then try to add the scoped service to dependency injection.
         if (factory is null)
-            _services.TryAddScoped<TImplementation>();
+            Register(services => services.TryAddScoped<TImplementation>());
         // Otherwise, try to add the scoped service to dependency injection with its factory.
         else
-            _services.TryAddScoped(factory);
+            Register(services => services.TryAddScoped(factory));
 
         // We're done, return the instance.
         return this;
@@ -3224,6 +3320,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TInterface" /> and <typeparamref name="TImplementation" />
     ///     service and optional <paramref name="factory" /> as a scoped service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TInterface">The type of the interface to register.</typeparam>
@@ -3237,10 +3335,13 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     {
         // Check for a factory then try to add the scoped service to dependency injection.
         if (factory is null)
-            _services.TryAddScoped<TInterface, TImplementation>();
-        // Otherwise, try to add the scoped service to dependency injection with its factory.
+            Register(services => services.TryAddScoped<TInterface, TImplementation>());
+        // Otherwise, try to add the scoped service with its factory. TryAdd keeps the first
+        // registration of the interface, like every other overload; Add would let a later one win.
         else
-            _services.AddScoped<TInterface, TImplementation>(factory);
+            Register(services =>
+                services.TryAdd(ServiceDescriptor.Scoped<TInterface, TImplementation>(factory))
+            );
 
         // We're done, return the instance.
         return this;
@@ -3249,6 +3350,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TImplementation" /> service and optional
     ///     <paramref name="factory" /> as a singleton service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TImplementation">The type of the implementation to register.</typeparam>
@@ -3260,10 +3363,10 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     {
         // Check for a factory then try to add the singleton service to dependency injection.
         if (factory is null)
-            _services.TryAddSingleton<TImplementation>();
+            Register(services => services.TryAddSingleton<TImplementation>());
         // Otherwise, try to add the singleton service to dependency injection with its factory.
         else
-            _services.TryAddSingleton(factory);
+            Register(services => services.TryAddSingleton(factory));
 
         // We're done, return the instance.
         return this;
@@ -3272,6 +3375,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TInterface" /> and <typeparamref name="TImplementation" />
     ///     service and optional <paramref name="factory" /> as a singleton service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TInterface">The type of the interface to register.</typeparam>
@@ -3285,10 +3390,13 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     {
         // Check for a factory then try to add the singleton service to dependency injection.
         if (factory is null)
-            _services.TryAddSingleton<TInterface, TImplementation>();
-        // Otherwise, try to add the singleton service to dependency injection with its factory.
+            Register(services => services.TryAddSingleton<TInterface, TImplementation>());
+        // Otherwise, try to add the singleton service with its factory. TryAdd keeps the first
+        // registration of the interface, like every other overload; Add would let a later one win.
         else
-            _services.AddSingleton<TInterface, TImplementation>(factory);
+            Register(services =>
+                services.TryAdd(ServiceDescriptor.Singleton<TInterface, TImplementation>(factory))
+            );
 
         // We're done, return the instance.
         return this;
@@ -3297,6 +3405,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TImplementation" /> service and optional
     ///     <paramref name="factory" /> as a transient service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TImplementation">The type of the implementation to register.</typeparam>
@@ -3308,10 +3418,10 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     {
         // Check for a factory then try to add the transient service to dependency injection.
         if (factory is null)
-            _services.TryAddTransient<TImplementation>();
+            Register(services => services.TryAddTransient<TImplementation>());
         // Otherwise, try to add the transient service to dependency injection with its factory.
         else
-            _services.TryAddTransient(factory);
+            Register(services => services.TryAddTransient(factory));
 
         // We're done, return the instance.
         return this;
@@ -3320,6 +3430,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <summary>
     ///     This method registers the <typeparamref name="TInterface" /> and <typeparamref name="TImplementation" />
     ///     service and optional <paramref name="factory" /> as a transient service in the dependency injection container.
+    ///     The first registration of a service type wins. It throws <see cref="InvalidOperationException" />
+    ///     once the service provider is built.
     /// </summary>
     /// <param name="factory">The optional factory to use for creating the service.</param>
     /// <typeparam name="TInterface">The type of the interface to register.</typeparam>
@@ -3333,10 +3445,13 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     {
         // Check for a factory then try to add the transient service to dependency injection.
         if (factory is null)
-            _services.TryAddTransient<TInterface, TImplementation>();
-        // Otherwise, try to add the transient service to dependency injection with its factory.
+            Register(services => services.TryAddTransient<TInterface, TImplementation>());
+        // Otherwise, try to add the transient service with its factory. TryAdd keeps the first
+        // registration of the interface, like every other overload; Add would let a later one win.
         else
-            _services.AddTransient<TInterface, TImplementation>(factory);
+            Register(services =>
+                services.TryAdd(ServiceDescriptor.Transient<TInterface, TImplementation>(factory))
+            );
 
         // We're done, return the instance.
         return this;
@@ -3365,8 +3480,19 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
                 nameof(consoleApplicationType)
             );
 
-        // Register our console application type with the service collection.
-        _services.AddSingleton(consoleApplicationType);
+        // Register our console application type before the provider is built. When the provider
+        // already exists the collection is frozen, so the type must have been registered by an
+        // earlier run.
+        lock (_providerLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_provider is null)
+                _services.TryAddSingleton(consoleApplicationType);
+            else if (_services.All(d => d.ServiceType != consoleApplicationType))
+                throw new InvalidOperationException(
+                    "The console application type cannot be registered after the service provider is built."
+                );
+        }
 
         // Localize the type of the input model for the console application.
         Type[] inputModelTypes = GetConsoleApplicationInputModelTypes(consoleApplicationType);
@@ -3375,13 +3501,16 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         // raw arguments.
         if (inputModelTypes.Length is 0)
         {
-            // Localize our service provider.
-            ServiceProvider provider = _services.BuildServiceProvider();
+            // Run in a scope, like a parsed run, so scoped services end with the application.
+            await using AsyncServiceScope scope = GetRootProvider().CreateAsyncScope();
+            IConsoleApplication application = (IConsoleApplication)
+                scope.ServiceProvider.GetRequiredService(consoleApplicationType);
+
+            // Give the application its provider so GetService works inside RunAsync.
+            (application as ConsoleApplication)?.WithServiceProvider(scope.ServiceProvider);
 
             // Execute the console application without any input model.
-            await (
-                provider.GetRequiredService(consoleApplicationType) as IConsoleApplication
-            )!.ExecuteAsync(_arguments, stoppingToken);
+            await application.ExecuteAsync(_arguments, stoppingToken);
 
             // We're done, return from the method.
             return;
@@ -3390,10 +3519,15 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         // Parse the arguments from the command-line interface.
         await ParseAsync<IConsoleCommandInputModel>(
             (m, p, t) =>
-                (p.GetRequiredService(consoleApplicationType) as IConsoleApplication)!.ExecuteAsync(
-                    m,
-                    t
-                ),
+            {
+                IConsoleApplication application = (IConsoleApplication)
+                    p.GetRequiredService(consoleApplicationType);
+
+                // Give the application the run's scope provider. A ConsoleApplication resolves its
+                // services from it, and it has none until this call.
+                (application as ConsoleApplication)?.WithServiceProvider(p);
+                return application.ExecuteAsync(m, t);
+            },
             stoppingToken,
             inputModelTypes
         );
@@ -3412,27 +3546,71 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
 
     /// <summary>
     ///     This method lets <paramref name="handler" /> register services in the service collection
-    ///     used for each parse.
+    ///     the root provider is built from. It throws once that provider is built.
     /// </summary>
     /// <param name="handler">The handler to configure the services.</param>
     /// <returns>The updated <see cref="IConsoleCommand" /> instance.</returns>
+    /// <exception cref="InvalidOperationException">When the service provider is already built.</exception>
     public IConsoleCommand ConfigureServices(Action<IServiceCollection> handler)
     {
         // Invoke the handler to configure the services.
-        handler?.Invoke(_services);
+        Register(handler);
 
         // We're done, return the instance.
         return this;
     }
 
     /// <summary>
-    ///     This method resolves a registered service. Each call builds a new service provider from
-    ///     the service collection.
+    ///     This method resolves a registered service from the root service provider, which it
+    ///     builds on the first call. A singleton is the same instance on every call and in every run.
+    ///     Building the provider freezes the registrations.
     /// </summary>
     /// <typeparam name="TService">The type of the service to retrieve.</typeparam>
     /// <returns>The service instance of the specified type <typeparamref name="TService" />.</returns>
+    /// <exception cref="ObjectDisposedException">When the command is disposed.</exception>
     public TService GetService<TService>()
-        where TService : class => _services.BuildServiceProvider().GetRequiredService<TService>();
+        where TService : class => GetRootProvider().GetRequiredService<TService>();
+
+    /// <summary>
+    ///     This method disposes the root service provider and the singletons it created. Calling it
+    ///     again, or after <see cref="DisposeAsync" />, does nothing.
+    /// </summary>
+    public void Dispose()
+    {
+        ServiceProvider provider = TakeProvider();
+        provider?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     This method disposes the root service provider and the singletons it created, awaiting
+    ///     those that are <see cref="IAsyncDisposable" />. Calling it again does nothing.
+    /// </summary>
+    /// <returns>An awaitable <see cref="ValueTask" /> that resolves when disposal is complete.</returns>
+    public async ValueTask DisposeAsync()
+    {
+        ServiceProvider provider = TakeProvider();
+        if (provider is not null)
+            await provider.DisposeAsync();
+
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     This method marks the command disposed and hands back the provider to dispose, once.
+    ///     Disposing outside the lock keeps a singleton's own disposal from running under it.
+    /// </summary>
+    /// <returns>The provider to dispose, or null when none was built or it was already taken.</returns>
+    private ServiceProvider TakeProvider()
+    {
+        lock (_providerLock)
+        {
+            _disposed = true;
+            ServiceProvider provider = _provider;
+            _provider = null;
+            return provider;
+        }
+    }
 
     /// <summary>
     ///     This method registers a handler to run when no input model matches the arguments. It

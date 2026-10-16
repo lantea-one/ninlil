@@ -9,7 +9,8 @@ namespace Ninlil.Common.Console.Tests;
 /// <summary>
 ///     These tests cover <see cref="ConsoleApplication" /> and <see cref="ConsoleApplication{TInputModel}" />
 ///     through the <see cref="TestConsoleApplication" /> double: reflection dispatch from an input
-///     model to the matching <c>RunAsync</c> overload, service lookup, and the metadata setters that
+///     model to the matching <c>RunAsync</c> overload, raw-argument runs through
+///     <c>ExecuteAsync(IEnumerable{string})</c>, service lookup, and the metadata setters that
 ///     change <see cref="ConsoleCommand" />'s static, process-wide fields.
 /// </summary>
 public class ConsoleApplicationTests
@@ -42,6 +43,37 @@ public class ConsoleApplicationTests
         PositionalArgsModel input = new();
 
         await Assert.ThrowsAsync<NotSupportedException>(() => app.ExecuteAsync(input));
+    }
+
+    /// <summary>
+    ///     Verifies that <see cref="ConsoleApplication.ExecuteAsync(IEnumerable{string}, CancellationToken)" />
+    ///     parses raw arguments against the application's input model and runs it.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_WithRawArguments_ParsesAndRunsTheApplication()
+    {
+        TestConsoleApplication app = new();
+
+        await app.ExecuteAsync(["--name", "Bob"]);
+
+        Assert.NotNull(app.ReceivedInput);
+        Assert.Equal("Bob", app.ReceivedInput.Name);
+        Assert.Equal(1, app.RunCount);
+    }
+
+    /// <summary>
+    ///     Verifies that a raw-arguments run applies the application's <c>ConfigureServices</c> and
+    ///     gives <c>RunAsync</c> a working service provider.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_WithRawArguments_GivesRunAsyncItsServices()
+    {
+        ServiceResolvingTestConsoleApplication.LastResolvedLogger = null;
+        ServiceResolvingTestConsoleApplication app = new();
+
+        await app.ExecuteAsync(["--name", "Bob"]);
+
+        Assert.NotNull(ServiceResolvingTestConsoleApplication.LastResolvedLogger);
     }
 
     /// <summary>
