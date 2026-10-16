@@ -39,6 +39,7 @@ public sealed class Route53ZoneSyncRoundTripTests : IAsyncLifetime
     private readonly FakeRoute53Server _fake = new();
     private IHost _host;
     private Guid _pullZoneId;
+    private Guid _pushZoneId;
 
     public async Task InitializeAsync()
     {
@@ -172,7 +173,7 @@ public sealed class Route53ZoneSyncRoundTripTests : IAsyncLifetime
             }
         );
 
-        Guid pushZoneId = Guid.NewGuid();
+        Guid pushZoneId = _pushZoneId = Guid.NewGuid();
         _pullZoneId = Guid.NewGuid();
 
         await zoneRepository.AddAsync(
@@ -373,5 +374,77 @@ public sealed class Route53ZoneSyncRoundTripTests : IAsyncLifetime
             afterFirst.Select(r => r.Id).Order().ToArray(),
             afterSecond.Select(r => r.Id).Order().ToArray()
         );
+    }
+
+    /// <summary>
+    ///     This test checks that <see cref="CloudDnsZoneSyncService.SyncZoneNowAsync" /> pushes a
+    ///     CloudPrimary zone's new TXT record to the provider at once, without the loop running.
+    /// </summary>
+    [Fact]
+    public async Task SyncZoneNow_ForACloudPrimaryZone_PushesTheNewTxtRecordOnce()
+    {
+        ICloudZoneSyncTrigger trigger = ActivatorUtilities.CreateInstance<CloudDnsZoneSyncService>(
+            _host.Services
+        );
+
+        using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
+        {
+            await scope
+                .ServiceProvider.GetRequiredService<IRecordRepository>()
+                .AddAsync(
+                    new RecordEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        ZoneId = _pushZoneId,
+                        Name = "_acme-challenge.r53push.example.com",
+                        Type = DnsResourceRecordTypeEnum.Txt,
+                        Class = DnsClassEnum.Internet,
+                        TimeToLiveSeconds = 60,
+                        DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
+                            typeof(TxtRecordData),
+                            new TxtRecordData(["challenge-value"])
+                        ),
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        await trigger.SyncZoneNowAsync(_pushZoneId, CancellationToken.None);
+
+        FakeRoute53Server.FakeRecordSet txt = Assert.Single(
+            _fake.Sets(PushZoneId),
+            set => set.Name == "_acme-challenge.r53push.example.com." && set.Type == "TXT"
+        );
+        Assert.Equal(["\"challenge-value\""], txt.Values);
+        Assert.Equal(
+            1,
+            _fake.ChangeRequests(PushZoneId).Count(body => body.Contains("challenge-value"))
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that a manual sync started while a loop pass is running waits for it:
+    ///     with every provider request held for 150 ms, the fake never sees two requests at once.
+    /// </summary>
+    [Fact]
+    public async Task SyncZoneNow_DuringALoopPass_DoesNotOverlapIt()
+    {
+        _fake.Latency = TimeSpan.FromMilliseconds(150);
+        CloudDnsZoneSyncService syncService =
+            ActivatorUtilities.CreateInstance<CloudDnsZoneSyncService>(_host.Services);
+        await syncService.StartAsync(CancellationToken.None);
+
+        // The loop is now inside its first pass (its first provider request is being held).
+        for (int attempt = 0; attempt < 200 && _fake.MaxConcurrentRequests == 0; attempt++)
+            await Task.Delay(10);
+
+        await ((ICloudZoneSyncTrigger)syncService).SyncZoneNowAsync(
+            _pushZoneId,
+            CancellationToken.None
+        );
+        await syncService.StopAsync(CancellationToken.None);
+
+        Assert.Equal(1, _fake.MaxConcurrentRequests);
     }
 }

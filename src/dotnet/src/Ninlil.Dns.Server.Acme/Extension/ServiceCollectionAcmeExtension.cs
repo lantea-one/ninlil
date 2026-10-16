@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Server.Acme.Caa;
 using Ninlil.Dns.Server.Core.Events;
@@ -15,7 +16,7 @@ public static class ServiceCollectionAcmeExtension
 {
     /// <summary>
     ///     This method registers the ACME account store, the DNS-01 challenge responder, the
-    ///     issuer, the renewal service and the CAA reconciliation service and subscriber. The
+    ///     issuer, the DNS-01 propagation waiter, the renewal service and the CAA reconciliation service and subscriber. The
     ///     composition root must also call
     ///     <c>Ninlil.Dns.Server.Authoritative.Extension.ServiceCollectionAuthoritativeExtension.AddNinlilDnsServerAuthoritative</c>,
     ///     since <see cref="AcmeDnsChallengeResponder" /> depends on
@@ -39,8 +40,18 @@ public static class ServiceCollectionAcmeExtension
         // A singleton, because every renewal check must share one account identity.
         instance.AddSingleton<IAcmeAccountStore, FileAcmeAccountStore>();
 
+        // The probe and the resolver hold no state. The clock is the waiter's timer source, so
+        // tests can replace it.
+        instance.AddSingleton<IAcmeChallengeProbe, UdpAcmeChallengeProbe>();
+        instance.AddSingleton<
+            IAcmeNameServerAddressResolver,
+            SystemAcmeNameServerAddressResolver
+        >();
+        instance.TryAddSingleton(TimeProvider.System);
+
         // Scoped, because they depend on the scoped repositories and IZoneUpdateService.
         instance.AddScoped<AcmeDnsChallengeResponder>();
+        instance.AddScoped<AcmeChallengePropagationWaiter>();
         instance.AddScoped<AcmeCertificateIssuer>();
 
         // Registered as its concrete type and, through the factory below, as IHostedService, so

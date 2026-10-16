@@ -6,6 +6,7 @@ using Certes.Pkcs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.IO;
+using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Acme.Caa;
 
 // Define our namespace.
@@ -14,12 +15,17 @@ namespace Ninlil.Dns.Server.Acme;
 /// <summary>
 ///     This class runs one RFC 8555 issuance for one domain through Certes. A renewal is the
 ///     same thing, a new order for the same domain. It registers an account if there is none,
-///     opens an order, publishes and validates the DNS-01 challenge, finalizes with a CSR for a
-///     new ECDSA P-256 key, writes the PFX, records the state and reconciles the zone's CAA
+///     opens an order, publishes the DNS-01 challenge, waits until the zone's other name servers
+///     serve it (<see cref="AcmeChallengePropagationWaiter" />), asks the CA to validate it,
+///     finalizes with a CSR for a new ECDSA P-256 key, writes the PFX, records the state and reconciles the zone's CAA
 ///     records. <see cref="AcmeCertificateRenewalService" /> calls it in a new scope.
 /// </summary>
 /// <param name="accountStore">The store the account key and certificate state are read from and written to.</param>
 /// <param name="challengeResponder">The responder that publishes and removes the DNS-01 challenge record.</param>
+/// <param name="propagationWaiter">
+///     The waiter that holds the validation back until the zone's other name servers serve the
+///     challenge record.
+/// </param>
 /// <param name="caaReconciliationService">
 ///     The service that reconciles the zone's CAA records after a successful issuance. There
 ///     is no separate "ACME enrollment changed" signal, so a completed issuance is used as the
@@ -34,6 +40,7 @@ namespace Ninlil.Dns.Server.Acme;
 public sealed class AcmeCertificateIssuer(
     IAcmeAccountStore accountStore,
     AcmeDnsChallengeResponder challengeResponder,
+    AcmeChallengePropagationWaiter propagationWaiter,
     CaaRecordReconciliationService caaReconciliationService,
     IOptionsMonitor<AcmeOptions> options,
     ILogger<AcmeCertificateIssuer> logger
@@ -52,6 +59,7 @@ public sealed class AcmeCertificateIssuer(
     /// </summary>
     /// <param name="accountStore">See the primary constructor.</param>
     /// <param name="challengeResponder">See the primary constructor.</param>
+    /// <param name="propagationWaiter">See the primary constructor.</param>
     /// <param name="caaReconciliationService">See the primary constructor.</param>
     /// <param name="options">See the primary constructor.</param>
     /// <param name="logger">See the primary constructor.</param>
@@ -59,12 +67,20 @@ public sealed class AcmeCertificateIssuer(
     internal AcmeCertificateIssuer(
         IAcmeAccountStore accountStore,
         AcmeDnsChallengeResponder challengeResponder,
+        AcmeChallengePropagationWaiter propagationWaiter,
         CaaRecordReconciliationService caaReconciliationService,
         IOptionsMonitor<AcmeOptions> options,
         ILogger<AcmeCertificateIssuer> logger,
         HttpMessageHandler acmeHandler
     )
-        : this(accountStore, challengeResponder, caaReconciliationService, options, logger)
+        : this(
+            accountStore,
+            challengeResponder,
+            propagationWaiter,
+            caaReconciliationService,
+            options,
+            logger
+        )
     {
         _acmeHandler = acmeHandler;
     }
@@ -138,7 +154,14 @@ public sealed class AcmeCertificateIssuer(
         // Checked first, so a domain that cannot be validated or stored never costs a CA order.
         // The configured string keys the account store's domain states and stays as written; the
         // normalized form is used for the CA order, the challenge and the file name.
-        if (!AcmeDomainName.TryParse(domain, out string normalizedDomain, out _, out string error))
+        if (
+            !AcmeDomainName.TryParse(
+                domain,
+                out string normalizedDomain,
+                out DnsName challengeBase,
+                out string error
+            )
+        )
             throw new InvalidOperationException(error);
 
         string pfxFileName = BuildPfxFileName(normalizedDomain);
@@ -163,11 +186,15 @@ public sealed class AcmeCertificateIssuer(
 
         try
         {
-            // A short pause before asking the CA to validate. The record only has to reach this
-            // process's zone cache, which is nearly immediate, and the pause is small next to the
-            // CA's validation time. The record is excluded from sync (see
-            // AcmeDnsChallengeResponder), so only this server answers it.
-            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+            // The CA may ask any of the zone's name servers, and the record reaches the others
+            // (secondaries, a cloud provider) after this server has it. Wait, bounded, until
+            // they serve it; on timeout the waiter logs a Warning and validation goes ahead,
+            // since a server unreachable from here may still answer the CA.
+            await propagationWaiter.WaitAsync(
+                challengeBase.PrependLabels("_acme-challenge"),
+                dnsTxtValue,
+                stoppingToken
+            );
 
             await dnsChallenge.Validate();
             await WaitForChallengeAsync(dnsChallenge, stoppingToken);

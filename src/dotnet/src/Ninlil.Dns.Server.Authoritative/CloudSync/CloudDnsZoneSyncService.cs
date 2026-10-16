@@ -21,6 +21,10 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 ///     branch of <c>SecondaryZoneRefreshService</c>, because each provider has its record IDs.
 ///     The SOA, apex NS and ExcludeFromSync records are never synced, and the provider's own apex NS
 ///     and SOA records are ignored on both sides.
+///     It also implements <see cref="ICloudZoneSyncTrigger" />, so a caller can sync one zone at
+///     once. A semaphore lets only one sync run at a time, whether it comes from the loop or from
+///     the trigger, so a manual push never overlaps a loop pass. The dependency injection
+///     container registers one instance that serves as the trigger and as the hosted service.
 /// </summary>
 /// <param name="scopeFactory">The factory used to create a scope per zone sync.</param>
 /// <param name="providers">Every registered <see cref="ICloudDnsProvider" /> implementation.</param>
@@ -36,7 +40,7 @@ public sealed class CloudDnsZoneSyncService(
     CloudCredentialProtector protector,
     ILogger<CloudDnsZoneSyncService> logger,
     IDnsServerEventPublisher eventPublisher = null
-) : BackgroundService
+) : BackgroundService, ICloudZoneSyncTrigger
 {
     /// <summary>
     ///     This field contains how often the service checks for zones due a sync. It is shorter than
@@ -49,6 +53,41 @@ public sealed class CloudDnsZoneSyncService(
     ///     zone syncs at once, which is harmless because syncing is idempotent.
     /// </summary>
     private readonly Dictionary<Guid, DateTimeOffset> _lastSyncedAtUtc = [];
+
+    /// <summary>
+    ///     This field lets one zone sync run at a time. The loop and
+    ///     <see cref="SyncZoneNowAsync" /> both take it around every sync, and
+    ///     <see cref="_lastSyncedAtUtc" /> is read and written only while it is held.
+    /// </summary>
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
+
+    /// <inheritdoc />
+    public async Task SyncZoneNowAsync(Guid zoneId, CancellationToken stoppingToken)
+    {
+        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        ZoneEntity zone = await scope
+            .ServiceProvider.GetRequiredService<IZoneRepository>()
+            .GetByIdAsync(zoneId, stoppingToken);
+
+        if (
+            zone is null
+            || zone.IsDisabled
+            || (zone.Type != ZoneTypeEnum.CloudPrimary && zone.Type != ZoneTypeEnum.CloudSecondary)
+        )
+            return;
+
+        await _syncLock.WaitAsync(stoppingToken);
+
+        try
+        {
+            await SyncZoneAsync(zone, stoppingToken);
+            _lastSyncedAtUtc[zone.Id] = DateTimeOffset.UtcNow;
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
+    }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -99,41 +138,51 @@ public sealed class CloudDnsZoneSyncService(
             stoppingToken
         );
 
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-
         foreach (ZoneEntity zone in zones)
         {
-            bool isDue =
-                !_lastSyncedAtUtc.TryGetValue(zone.Id, out DateTimeOffset lastSyncedAtUtc)
-                || now - lastSyncedAtUtc >= zone.CloudSyncInterval;
-
-            if (!isDue)
-                continue;
-
-            _lastSyncedAtUtc[zone.Id] = now;
+            // Held across the due check and the sync, so an on-demand sync of the same zone
+            // either finishes first (and this pass sees it as recent) or waits for this one.
+            await _syncLock.WaitAsync(stoppingToken);
 
             try
             {
-                await SyncZoneAsync(zone, stoppingToken);
-            }
-            catch (Exception exception)
-            {
-                // One zone's failure (an expired token, an outage, a wrong zone ID) must not block the
-                // others.
-                logger.LogWarning(
-                    exception,
-                    "Cloud DNS sync failed for zone '{ZoneName}'.",
-                    zone.Name
-                );
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                bool isDue =
+                    !_lastSyncedAtUtc.TryGetValue(zone.Id, out DateTimeOffset lastSyncedAtUtc)
+                    || now - lastSyncedAtUtc >= zone.CloudSyncInterval;
 
-                eventPublisher?.Publish(
-                    new CloudDnsZoneSyncFailedEvent(
-                        DateTimeOffset.UtcNow,
-                        zone.Id,
-                        zone.Name,
-                        exception.Message
-                    )
-                );
+                if (!isDue)
+                    continue;
+
+                _lastSyncedAtUtc[zone.Id] = now;
+
+                try
+                {
+                    await SyncZoneAsync(zone, stoppingToken);
+                }
+                catch (Exception exception)
+                {
+                    // One zone's failure (an expired token, an outage, a wrong zone ID) must not block the
+                    // others.
+                    logger.LogWarning(
+                        exception,
+                        "Cloud DNS sync failed for zone '{ZoneName}'.",
+                        zone.Name
+                    );
+
+                    eventPublisher?.Publish(
+                        new CloudDnsZoneSyncFailedEvent(
+                            DateTimeOffset.UtcNow,
+                            zone.Id,
+                            zone.Name,
+                            exception.Message
+                        )
+                    );
+                }
+            }
+            finally
+            {
+                _syncLock.Release();
             }
         }
     }

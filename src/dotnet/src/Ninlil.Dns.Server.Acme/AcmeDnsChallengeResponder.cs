@@ -5,6 +5,7 @@ using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Authoritative.Cache;
+using Ninlil.Dns.Server.Authoritative.CloudSync;
 using Ninlil.Dns.Server.Authoritative.Journal;
 
 // Define our namespace.
@@ -16,24 +17,34 @@ namespace Ninlil.Dns.Server.Acme;
 ///     A wildcard domain (<c>*.example.com</c>) is validated at its base name, so its record is
 ///     at <c>_acme-challenge.example.com</c> (RFC 8555 §8.4).
 ///     It works only for domains inside a zone this server hosts
-///     (<see cref="AuthoritativeZoneCache.FindZone" />); any other domain is refused. The
-///     record is marked <c>ExcludeFromSync</c>, so zone transfers and cloud sync never carry
-///     it, and the challenge can only succeed if the CA queries this server.
+///     (<see cref="AuthoritativeZoneCache.FindZone" />); any other domain is refused. The CA may
+///     ask any of the zone's public name servers (RFC 8555 §8.4), so the record is synced like
+///     any record: a NOTIFY brings it to secondaries by zone transfer, and a CloudPrimary zone is
+///     pushed to its provider at once through <see cref="ICloudZoneSyncTrigger" /> after the
+///     publish and after the removal. Only <c>Primary</c> and <c>CloudPrimary</c> zones take a
+///     challenge, because this server is not the source of truth for any other type.
+///     <see cref="AcmeChallengePropagationWaiter" /> then waits until the servers serve the value.
 /// </summary>
 /// <param name="zoneCache">The cache used to find the zone that holds a domain.</param>
 /// <param name="recordRepository">The repository the challenge records are looked up in for removal.</param>
 /// <param name="zoneUpdateService">The service every add and remove goes through.</param>
-/// <param name="logger">The logger this responder records a domain that is not locally hosted to.</param>
+/// <param name="logger">The logger this responder records a domain that is not locally hosted and a failed cloud push to.</param>
+/// <param name="cloudSync">
+///     The trigger that pushes a CloudPrimary zone to its provider at once. With
+///     <see langword="null" />, a CloudPrimary zone waits for its regular sync.
+/// </param>
 public sealed class AcmeDnsChallengeResponder(
     AuthoritativeZoneCache zoneCache,
     IRecordRepository recordRepository,
     IZoneUpdateService zoneUpdateService,
-    ILogger<AcmeDnsChallengeResponder> logger
+    ILogger<AcmeDnsChallengeResponder> logger,
+    ICloudZoneSyncTrigger cloudSync = null
 )
 {
     /// <summary>
     ///     This method publishes the DNS-01 challenge TXT record for a domain, with a 60-second
-    ///     TTL.
+    ///     TTL. The record is synced like any other, and a CloudPrimary zone is pushed to its
+    ///     provider before this method returns.
     /// </summary>
     /// <param name="domain">The domain a certificate is being requested for; a leading <c>*.</c> is allowed.</param>
     /// <param name="dnsTxtValue">The key authorization digest the CA computed, from <c>AcmeContext.AccountKey.DnsTxt(token)</c>.</param>
@@ -42,6 +53,10 @@ public sealed class AcmeDnsChallengeResponder(
     ///     <see langword="true" /> if <paramref name="domain" /> is in a zone this server hosts and
     ///     the record was published, otherwise <see langword="false" />.
     /// </returns>
+    /// <exception cref="InvalidOperationException">
+    ///     Thrown when the zone is neither a Primary nor a CloudPrimary zone: DNS-01 needs the
+    ///     record on the zone's primary.
+    /// </exception>
     public async Task<bool> PublishChallengeAsync(
         string domain,
         string dnsTxtValue,
@@ -60,6 +75,11 @@ public sealed class AcmeDnsChallengeResponder(
             return false;
         }
 
+        if (zone.Zone.Type is not (ZoneTypeEnum.Primary or ZoneTypeEnum.CloudPrimary))
+            throw new InvalidOperationException(
+                $"DNS-01 needs the record on the zone's primary; this server holds a {zone.Zone.Type} copy of '{zone.Zone.Name}'."
+            );
+
         DnsResourceRecord wireRecord = new(
             challengeName,
             DnsResourceRecordTypeEnum.Txt,
@@ -73,11 +93,10 @@ public sealed class AcmeDnsChallengeResponder(
 
         RecordEntity record = RecordEntityCodec.FromWireRecord(wireRecord, zone.Zone.Id);
 
-        // The record is temporary and system-managed, so it is kept out of zone transfers and
-        // cloud sync.
-        record.ExcludeFromSync = true;
-
+        // ExcludeFromSync stays false on purpose: the CA may ask a secondary or the cloud
+        // provider, and both get the record only if it syncs like any other.
         await zoneUpdateService.ApplyChangesAsync(zone.Zone.Id, [record], [], null, stoppingToken);
+        await PushCloudZoneAsync(zone.Zone, stoppingToken);
         return true;
     }
 
@@ -130,6 +149,33 @@ public sealed class AcmeDnsChallengeResponder(
             null,
             stoppingToken
         );
+        await PushCloudZoneAsync(zone.Zone, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method pushes a CloudPrimary zone to its provider at once, so the provider's name
+    ///     servers serve the change before the CA asks. Other zone types need nothing: a NOTIFY
+    ///     already carries the change to their secondaries. A failed push is logged and does not
+    ///     fail the challenge, because the zone's regular sync still retries it and the
+    ///     propagation wait reports a server that never served the value.
+    /// </summary>
+    private async Task PushCloudZoneAsync(ZoneEntity zone, CancellationToken stoppingToken)
+    {
+        if (zone.Type != ZoneTypeEnum.CloudPrimary || cloudSync is null)
+            return;
+
+        try
+        {
+            await cloudSync.SyncZoneNowAsync(zone.Id, stoppingToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                exception,
+                "The cloud push of zone '{ZoneName}' after a DNS-01 change failed; its regular sync tries again.",
+                zone.Name
+            );
+        }
     }
 
     /// <summary>

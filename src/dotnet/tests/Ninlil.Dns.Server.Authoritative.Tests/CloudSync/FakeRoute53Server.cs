@@ -30,6 +30,20 @@ public sealed class FakeRoute53Server : IAsyncDisposable
     private readonly List<(string ZoneId, string Body)> _changeRequests = [];
     private readonly Dictionary<string, int> _listRequestCounts = [];
     private WebApplication _app;
+    private int _activeRequests;
+    private int _maxConcurrentRequests;
+
+    /// <summary>
+    ///     This property is how long each request is held before it is answered, so requests that
+    ///     are sent at the same time overlap and <see cref="MaxConcurrentRequests" /> can see it.
+    ///     It is zero by default.
+    /// </summary>
+    public TimeSpan Latency { get; set; } = TimeSpan.Zero;
+
+    /// <summary>
+    ///     This property is the highest number of requests the server has held at one time.
+    /// </summary>
+    public int MaxConcurrentRequests => Volatile.Read(ref _maxConcurrentRequests);
 
     /// <summary>
     ///     This class is one record set in the fake: the fields of Route 53's ResourceRecordSet that
@@ -81,18 +95,50 @@ public sealed class FakeRoute53Server : IAsyncDisposable
 
         _app.MapGet(
             "/2013-04-01/hostedzone/{zoneId}/rrset",
-            (string zoneId, HttpRequest request) => List(zoneId, request)
+            async (string zoneId, HttpRequest request) =>
+            {
+                await HoldAsync();
+                return List(zoneId, request);
+            }
         );
         _app.MapPost(
             "/2013-04-01/hostedzone/{zoneId}/rrset",
             async (string zoneId, HttpContext context) =>
             {
                 using StreamReader reader = new(context.Request.Body);
-                return Change(zoneId, await reader.ReadToEndAsync());
+                string body = await reader.ReadToEndAsync();
+                await HoldAsync();
+                return Change(zoneId, body);
             }
         );
 
         await _app.StartAsync();
+    }
+
+    /// <summary>
+    ///     This method counts the request as active, waits <see cref="Latency" /> and counts it out,
+    ///     keeping the highest number of overlapping requests.
+    /// </summary>
+    private async Task HoldAsync()
+    {
+        int active = Interlocked.Increment(ref _activeRequests);
+        int max;
+
+        do max = Volatile.Read(ref _maxConcurrentRequests);
+        while (
+            active > max
+            && Interlocked.CompareExchange(ref _maxConcurrentRequests, active, max) != max
+        );
+
+        try
+        {
+            if (Latency > TimeSpan.Zero)
+                await Task.Delay(Latency);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeRequests);
+        }
     }
 
     /// <summary>This method stops the server.</summary>

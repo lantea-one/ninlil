@@ -141,6 +141,12 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
 
         builder.Services.AddSingleton<IAcmeAccountStore, FileAcmeAccountStore>();
         builder.Services.AddScoped<AcmeDnsChallengeResponder>();
+        builder.Services.AddScoped<AcmeChallengePropagationWaiter>();
+        builder.Services.AddSingleton<IAcmeChallengeProbe, UdpAcmeChallengeProbe>();
+        builder.Services.AddSingleton<
+            IAcmeNameServerAddressResolver,
+            SystemAcmeNameServerAddressResolver
+        >();
         builder.Services.AddScoped<CaaRecordReconciliationService>();
         builder.Services.AddScoped<AcmeCertificateIssuer>();
         builder.Services.AddSingleton<AcmeCertificateRenewalService>();

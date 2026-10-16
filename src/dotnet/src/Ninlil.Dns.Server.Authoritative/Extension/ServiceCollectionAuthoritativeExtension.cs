@@ -169,7 +169,16 @@ public static class ServiceCollectionAuthoritativeExtension
             client.BaseAddress = new Uri(DigitalOceanDnsProvider.DefaultBaseAddress)
         );
         instance.AddSingleton<ICloudDnsProvider, Route53DnsProvider>();
-        instance.AddHostedService<CloudDnsZoneSyncService>();
+
+        // One instance is both the hosted loop and the on-demand trigger (ICloudZoneSyncTrigger),
+        // so a manual push and a loop pass share one lock and never overlap.
+        instance.AddSingleton<CloudDnsZoneSyncService>();
+        instance.AddSingleton<ICloudZoneSyncTrigger>(provider =>
+            provider.GetRequiredService<CloudDnsZoneSyncService>()
+        );
+        instance.AddHostedService(provider =>
+            provider.GetRequiredService<CloudDnsZoneSyncService>()
+        );
 
         // Scoped, because it uses the scoped repositories and unit of work.
         instance.AddScoped<PtrSyncService>();

@@ -11,6 +11,7 @@ using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Server.Acme;
 using Ninlil.Dns.Server.Authoritative.Cache;
+using Ninlil.Dns.Server.Authoritative.CloudSync;
 using Ninlil.Dns.Server.Authoritative.Journal;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Core.Extension;
@@ -34,6 +35,7 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
     private IHost _host;
     private AuthoritativeZoneCache _cache;
     private Guid _zoneId;
+    private Guid _cloudZoneId;
 
     public async Task InitializeAsync()
     {
@@ -103,6 +105,57 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
         );
         await unitOfWork.SaveChangesAsync();
 
+        // A Secondary and a CloudPrimary zone, each with an SOA, for the zone-type rule.
+        foreach (
+            (string name, ZoneTypeEnum type) in new[]
+            {
+                ("example.net", ZoneTypeEnum.Secondary),
+                ("cloud.example.org", ZoneTypeEnum.CloudPrimary),
+            }
+        )
+        {
+            Guid id = Guid.NewGuid();
+
+            if (type == ZoneTypeEnum.CloudPrimary)
+                _cloudZoneId = id;
+
+            await zoneRepository.AddAsync(
+                new ZoneEntity
+                {
+                    Id = id,
+                    Name = name,
+                    Type = type,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                }
+            );
+            await recordRepository.AddAsync(
+                new RecordEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ZoneId = id,
+                    Name = name,
+                    Type = DnsResourceRecordTypeEnum.Soa,
+                    Class = DnsClassEnum.Internet,
+                    TimeToLiveSeconds = 3600,
+                    DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
+                        typeof(SoaRecordData),
+                        new SoaRecordData(
+                            DnsName.Parse($"ns1.{name}"),
+                            DnsName.Parse($"admin.{name}"),
+                            1,
+                            3600,
+                            900,
+                            604800,
+                            3600
+                        )
+                    ),
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                }
+            );
+        }
+
+        await unitOfWork.SaveChangesAsync();
+
         await _host.StartAsync();
 
         _cache = _host.Services.GetRequiredService<AuthoritativeZoneCache>();
@@ -117,14 +170,15 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
             File.Delete(_databasePath);
     }
 
-    private AcmeDnsChallengeResponder CreateResponder()
+    private AcmeDnsChallengeResponder CreateResponder(ICloudZoneSyncTrigger cloudSync = null)
     {
         IServiceScope scope = _host.Services.CreateScope();
         return new AcmeDnsChallengeResponder(
             _cache,
             scope.ServiceProvider.GetRequiredService<IRecordRepository>(),
             scope.ServiceProvider.GetRequiredService<IZoneUpdateService>(),
-            NullLogger<AcmeDnsChallengeResponder>.Instance
+            NullLogger<AcmeDnsChallengeResponder>.Instance,
+            cloudSync
         );
     }
 
@@ -187,7 +241,7 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task PublishedChallengeRecordIsMarkedExcludeFromSync()
+    public async Task PublishedChallengeRecordIsNotExcludedFromSync()
     {
         AcmeDnsChallengeResponder responder = CreateResponder();
         await responder.PublishChallengeAsync("example.com", "fake-key-authorization");
@@ -201,7 +255,8 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
             r.Type == DnsResourceRecordTypeEnum.Txt && r.Name == "_acme-challenge.example.com"
         );
 
-        Assert.True(challengeRecord.ExcludeFromSync);
+        // The CA may ask a secondary or the cloud provider, so the record must sync.
+        Assert.False(challengeRecord.ExcludeFromSync);
     }
 
     [Fact]
@@ -300,5 +355,81 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
         await responder.RemoveChallengeAsync("example.com", "never-published");
 
         Assert.Equal(["v1"], await ReadChallengeValuesAsync());
+    }
+
+    /// <summary>
+    ///     This fake records every zone the responder asks to sync and can be told to fail, so a
+    ///     test sees when the cloud push happens without a provider.
+    /// </summary>
+    private sealed class RecordingCloudSyncTrigger : ICloudZoneSyncTrigger
+    {
+        /// <summary>The zone of every sync request, in order.</summary>
+        public List<Guid> Requests { get; } = [];
+
+        /// <summary>Whether a request throws.</summary>
+        public bool Fail { get; set; }
+
+        /// <inheritdoc />
+        public Task SyncZoneNowAsync(Guid zoneId, CancellationToken stoppingToken)
+        {
+            Requests.Add(zoneId);
+            return Fail
+                ? Task.FromException(new InvalidOperationException("push failed"))
+                : Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task PublishChallenge_ForASecondaryZone_ThrowsNamingTheType()
+    {
+        AcmeDnsChallengeResponder responder = CreateResponder();
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                responder.PublishChallengeAsync("example.net", "v1")
+        );
+
+        Assert.Contains("Secondary", exception.Message);
+        Assert.Contains("example.net", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishAndRemoveChallenge_ForACloudPrimaryZone_PushTheZoneAfterEach()
+    {
+        RecordingCloudSyncTrigger trigger = new();
+        AcmeDnsChallengeResponder responder = CreateResponder(trigger);
+
+        bool published = await responder.PublishChallengeAsync("cloud.example.org", "v1");
+
+        Assert.True(published);
+        Assert.Equal([_cloudZoneId], trigger.Requests);
+
+        await responder.RemoveChallengeAsync("cloud.example.org", "v1");
+
+        Assert.Equal([_cloudZoneId, _cloudZoneId], trigger.Requests);
+    }
+
+    [Fact]
+    public async Task PublishChallenge_ForAPrimaryZone_DoesNotPushToTheCloud()
+    {
+        RecordingCloudSyncTrigger trigger = new();
+        AcmeDnsChallengeResponder responder = CreateResponder(trigger);
+
+        await responder.PublishChallengeAsync("example.com", "v1");
+        await responder.RemoveChallengeAsync("example.com", "v1");
+
+        Assert.Empty(trigger.Requests);
+    }
+
+    [Fact]
+    public async Task PublishChallenge_WhenTheCloudPushFails_StillReturnsTrue()
+    {
+        RecordingCloudSyncTrigger trigger = new() { Fail = true };
+        AcmeDnsChallengeResponder responder = CreateResponder(trigger);
+
+        bool published = await responder.PublishChallengeAsync("cloud.example.org", "v1");
+
+        Assert.True(published);
+        Assert.Single(trigger.Requests);
     }
 }

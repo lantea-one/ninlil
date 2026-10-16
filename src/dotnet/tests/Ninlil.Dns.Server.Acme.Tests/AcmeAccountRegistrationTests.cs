@@ -27,8 +27,8 @@ public sealed class AcmeAccountRegistrationTests
         Certes.KeyFactory.NewKey(Certes.KeyAlgorithm.ES256).ToPem();
 
     /// <summary>
-    ///     This method builds an issuer that sends through <paramref name="ca" />. The responder
-    ///     and CAA service are null because <c>CreateContextAsync</c> never touches them.
+    ///     This method builds an issuer that sends through <paramref name="ca" />. The responder,
+    ///     waiter and CAA service are null because <c>CreateContextAsync</c> never touches them.
     /// </summary>
     private static AcmeCertificateIssuer CreateIssuer(
         FakeCaHandler ca,
@@ -38,6 +38,7 @@ public sealed class AcmeAccountRegistrationTests
     ) =>
         new(
             store,
+            null,
             null,
             null,
             new StaticOptionsMonitor<AcmeOptions>(
