@@ -17,10 +17,20 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Mvc" Version="2.3.12" />
+    <!--
+      The MVC formatters, model binders and Swagger filters use types that ship inside the
+      ASP.NET Core shared framework (Microsoft.AspNetCore.Mvc, .Http, .ModelBinding), so the
+      library references the framework instead of the legacy Microsoft.AspNetCore.Mvc 2.3 NuGet
+      package. Every Ninlil host already runs on that framework.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="MimeKit" Version="4.17.0" />
+    <!-- MimeKit 4.17 depends on Pkcs 10.0.0, which has known advisories; this pin lifts it. -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+    <!-- ListMapJsonConverter honours Newtonsoft's JsonPropertyAttribute on its key property. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore.Filters" Version="10.0.1" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="10.2.3" />
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
