@@ -1,5 +1,6 @@
 using System.Runtime.Serialization;
 using Ninlil.Common.Extension.Converter;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
 // Define our namespace.
@@ -96,5 +97,17 @@ public class EnumDescriptionYamlConverterTests
 
         Assert.Equal(SampleEnum.First, fromAttributeValue.Value);
         Assert.Equal(SampleEnum.Second, fromRawSecondName.Value);
+    }
+
+    /// <summary>
+    ///     An unknown scalar is refused, so a typo in a YAML file is reported instead of becoming
+    ///     the first member.
+    /// </summary>
+    [Fact]
+    public void Deserialize_OnAnUnknownScalar_ThrowsYamlException()
+    {
+        Assert.Throws<YamlException>(() =>
+            BuildDeserializer().Deserialize<Wrapper>("Value: bogus\n")
+        );
     }
 }

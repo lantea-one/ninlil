@@ -51,17 +51,16 @@ public class ToDescriptionEnumExtensionTests
     }
 
     /// <summary>
-    ///     Pins a known bug: the <c>ToDescription(Type, params attributeChecks[])</c> overload calls
-    ///     <c>enumInstance.ToString()</c> before forwarding, so a null <see cref="System.Enum" />
-    ///     throws <see cref="NullReferenceException" /> instead of returning <see langword="null" /> as
-    ///     the three-argument overload does.
+    ///     The <c>ToDescription(Type, params attributeChecks[])</c> overload returns
+    ///     <see langword="null" /> for a null <see cref="System.Enum" />, as the three-argument
+    ///     overload does.
     /// </summary>
     [Fact]
-    public void ToDescriptionWithTypeAndParamsOverloadThrowsOnNullEnumInsteadOfReturningNull()
+    public void ToDescription_WithTypeAndChecksOnANullEnum_ReturnsNull()
     {
         System.Enum instance = null;
 
-        Assert.Throws<NullReferenceException>(() =>
+        Assert.Null(
             instance.ToDescription(
                 typeof(SampleEnum),
                 GetEnumDescriptionsTypeExtension.DefaultAttributeChecks.ToArray()

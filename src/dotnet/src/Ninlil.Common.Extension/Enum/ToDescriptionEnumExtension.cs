@@ -7,7 +7,9 @@ namespace Ninlil.Common.Extension.Enum;
 ///     This static class turns an enum value into its description string. The caller passes
 ///     attribute checks (delegates that pull a name out of an attribute such as
 ///     <c>[EnumMember(Value = ...)]</c>); the first name any check finds on the member wins, and
-///     the member name is the fallback. <see cref="Ninlil.Common.Extension.String.ToEnumStringExtension" /> does the reverse. The
+///     the member name is the fallback, and a value with no member is written as its number.
+///     A null instance gives <see langword="null" /> in every overload that takes a type.
+///     <see cref="Ninlil.Common.Extension.String.ToEnumStringExtension" /> does the reverse. The
 ///     enum JSON and YAML converters are built on these two.
 ///     <para>
 ///         Pass the concrete enum type (or call the generic overloads with a concrete
@@ -73,9 +75,11 @@ public static class ToDescriptionEnumExtension
             System.Type type,
             params GetEnumDescriptionsTypeExtension.EnumToStringExtensionAttributeDelegate[] attributeChecks
         ) =>
+            // The null-conditional keeps a null instance from throwing; the inner overload
+            // returns null for it.
             enumInstance.ToDescription(
                 type,
-                enumInstance.ToString(),
+                enumInstance?.ToString(),
                 attributeChecks.AsEnumerable()
             );
     }

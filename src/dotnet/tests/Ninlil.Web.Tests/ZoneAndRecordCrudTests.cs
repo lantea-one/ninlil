@@ -693,6 +693,65 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(1, page.TotalCount);
     }
 
+    /// <summary>
+    ///     A zone type that names no member is refused with 400 that names the <c>type</c> field,
+    ///     and nothing is stored. It must not be read as the first member (a Primary zone).
+    /// </summary>
+    [Fact]
+    public async Task CreateZone_WithAnUnknownType_ReturnsBadRequestNamingTheFieldAndStoresNothing()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"bogus-type-{Guid.NewGuid():N}.example.com";
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = zoneName, type = "Bogus" }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("type", body, StringComparison.OrdinalIgnoreCase);
+
+        using IServiceScope scope = factory.Services.CreateScope();
+        Assert.Null(
+            await scope
+                .ServiceProvider.GetRequiredService<IZoneRepository>()
+                .FindByNameAsync(zoneName)
+        );
+    }
+
+    /// <summary>
+    ///     A <c>null</c> zone type (a non-nullable field) is a client error, not a server error.
+    /// </summary>
+    [Fact]
+    public async Task CreateZone_WithANullType_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = $"null-type-{Guid.NewGuid():N}.example.com", type = (string)null }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     A valid zone type in lower case is still accepted (guard: member names ignore case).
+    /// </summary>
+    [Fact]
+    public async Task CreateZone_WithALowerCaseType_IsCreated()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = $"lower-type-{Guid.NewGuid():N}.example.com", type = "primary" }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
     [Fact]
     public async Task CreateZone_WithAnInvalidName_ReturnsBadRequest()
     {

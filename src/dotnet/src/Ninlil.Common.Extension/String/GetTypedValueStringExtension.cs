@@ -108,11 +108,13 @@ public static class GetTypeValueStringExtension
                 : Nullable.GetUnderlyingType(type) is null ? type.GetDefaultValue()
                 : null;
 
-        // Check for an enumerated value then parse and return the value.
-        if (type.IsEnum)
-            return System.Enum.TryParse(type, instance, true, out object result)
-                ? result
-                : instance.ToEnum(type);
+        // Check for an enumerated value (or a nullable one) then match it by name, description
+        // or number. Text that matches nothing is a format error, never the first member.
+        if ((Nullable.GetUnderlyingType(type) ?? type).IsEnum)
+            return instance.ToEnum(GetEnumDescriptionsTypeExtension.DefaultAttributeChecks, type)
+                ?? throw new FormatException(
+                    $"'{instance}' is not a value of {(Nullable.GetUnderlyingType(type) ?? type).Name}."
+                );
 
         // Check for a boolean type. The pattern is not anchored, so any text containing one of
         // the words (such as "not", which contains "t") reads as true.

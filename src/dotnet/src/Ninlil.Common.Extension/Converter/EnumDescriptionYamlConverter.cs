@@ -16,7 +16,9 @@ namespace Ninlil.Common.Extension.Converter;
 ///     <see cref="EnumMemberAttribute" />, <see cref="DisplayNameAttribute" /> and
 ///     <see cref="JsonStringEnumMemberNameAttribute" />, falling back to the member name. It is the
 ///     YAML counterpart of
-///     <see cref="EnumDescriptionJsonConverter{TEnum}" />.
+///     <see cref="EnumDescriptionJsonConverter{TEnum}" />, and it refuses the same input: a scalar
+///     that names no member (and is not a number that fits the underlying type) and a node that is
+///     not a scalar throw <see cref="YamlException" />.
 /// </summary>
 public class EnumDescriptionYamlConverter : IYamlTypeConverter
 {
@@ -34,22 +36,29 @@ public class EnumDescriptionYamlConverter : IYamlTypeConverter
     /// <param name="type">The type to deserialize to.</param>
     /// <param name="rootDeserializer">The root deserializer function.</param>
     /// <returns>
-    ///     The deserialized <see cref="System.Enum" /> object, or <see langword="null" /> when the
-    ///     current node is not a scalar or no member matches.
+    ///     The deserialized <see cref="System.Enum" /> object.
     /// </returns>
+    /// <exception cref="YamlException">
+    ///     The current node is not a scalar, or no member matches its text.
+    /// </exception>
     public object ReadYaml(IParser parser, System.Type type, ObjectDeserializer rootDeserializer)
     {
         // YamlDotNet calls a type converter with Current already on this value's scalar node.
         // Read it first, then advance with MoveNext(); advancing first would skip the value.
         if (parser.Current is not Scalar scalar)
-            return null;
+            throw new YamlException(
+                parser.Current?.Start ?? Mark.Empty,
+                parser.Current?.End ?? Mark.Empty,
+                $"Expected a scalar value for {type.Name}."
+            );
 
         // Localize and trim the scalar's raw text value before advancing the parser past it.
         string value = scalar.Value?.Trim();
         parser.MoveNext();
 
         // Try to resolve the scalar text back to an enum member, checking every supported
-        // description-bearing attribute in turn, then return the resolved value or null.
+        // description-bearing attribute in turn, then return the resolved value. Text that
+        // matches nothing is refused with the scalar's position, not read as the first member.
         return value.TryToEnum(
             out var enumValue,
             type,
@@ -62,7 +71,11 @@ public class EnumDescriptionYamlConverter : IYamlTypeConverter
             attribute => attribute is JsonStringEnumMemberNameAttribute a ? a.Name.Trim() : null
         )
             ? enumValue
-            : null;
+            : throw new YamlException(
+                scalar.Start,
+                scalar.End,
+                $"'{scalar.Value}' is not a valid value for {type.Name}."
+            );
     }
 
     /// <summary>

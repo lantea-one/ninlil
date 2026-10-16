@@ -1,3 +1,7 @@
+using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
+using Ninlil.Common.Extension.Converter;
+
 // Define our namespace.
 namespace Ninlil.Common.Extension.Tests.TestSupport;
 
@@ -105,4 +109,101 @@ public class SampleCallableModel
     /// <typeparam name="TValue">The type of <paramref name="value" />.</typeparam>
     /// <returns>The <paramref name="value" /> unchanged.</returns>
     public TValue Identity<TValue>(TValue value) => value;
+}
+
+/// <summary>
+///     A sample enum whose second member carries an <see cref="EnumMemberAttribute" /> value, so a
+///     result of <see cref="Second" /> proves a real match and a result of <see cref="First" />
+///     exposes a fall back to the zero member. The enum tests across this project share it.
+/// </summary>
+public enum SampleSecondValueEnum
+{
+    /// <summary>
+    ///     The zero member, which an unmatched input must never produce.
+    /// </summary>
+    First,
+
+    /// <summary>
+    ///     The member matched by its name or by its description <c>second-value</c>.
+    /// </summary>
+    [EnumMember(Value = "second-value")]
+    Second,
+}
+
+/// <summary>
+///     A sample enum backed by <see cref="ushort" /> with unassigned codes between members, like
+///     the DNS wire enums (record types, classes, response codes). Number strings in range must
+///     read back as the number, defined or not.
+/// </summary>
+public enum SampleWireEnum : ushort
+{
+    /// <summary>
+    ///     A defined code.
+    /// </summary>
+    Alpha = 1,
+
+    /// <summary>
+    ///     A second defined code.
+    /// </summary>
+    Beta = 28,
+}
+
+/// <summary>
+///     A sample <see cref="FlagsAttribute" /> enum, used to check that a comma list is accepted
+///     only for flags enums.
+/// </summary>
+[Flags]
+public enum SampleFlagsEnum
+{
+    /// <summary>
+    ///     No flag.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    ///     The first flag.
+    /// </summary>
+    One = 1,
+
+    /// <summary>
+    ///     The second flag.
+    /// </summary>
+    Two = 2,
+}
+
+/// <summary>
+///     A sample enum that carries both the description converter attribute and an
+///     <see cref="EnumMemberAttribute" /> value on a member that is not the first. The converter
+///     precedence guard test serializes it through the library's JSON serializer.
+/// </summary>
+[JsonConverter(typeof(EnumDescriptionJsonConverter<SampleConverterAttributeEnum>))]
+public enum SampleConverterAttributeEnum
+{
+    /// <summary>
+    ///     The zero member.
+    /// </summary>
+    First,
+
+    /// <summary>
+    ///     A member whose description differs from its name.
+    /// </summary>
+    [EnumMember(Value = "second-value")]
+    Second,
+}
+
+/// <summary>
+///     A sample holder with a non-nullable and a nullable enum property, used to read JSON
+///     <c>null</c> into each through <see cref="EnumDescriptionJsonConverter{TEnum}" />.
+/// </summary>
+public class SampleEnumHolder
+{
+    /// <summary>
+    ///     Gets or sets the non-nullable enum.
+    /// </summary>
+    public SampleSecondValueEnum Value { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the nullable enum.
+    /// </summary>
+    public SampleSecondValueEnum? Optional { get; set; }
 }

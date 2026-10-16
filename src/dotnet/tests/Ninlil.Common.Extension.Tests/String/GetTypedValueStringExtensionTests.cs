@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Mail;
 using Ninlil.Common.Extension.String;
+using Ninlil.Common.Extension.Tests.TestSupport;
 
 // Define our namespace.
 namespace Ninlil.Common.Extension.Tests.String;
@@ -46,6 +47,36 @@ public class GetTypedValueStringExtensionTests
     public void GetTypedValueOnEnumParsesByMemberName()
     {
         Assert.Equal(SampleEnum.Second, "Second".GetTypedValue<SampleEnum>());
+    }
+
+    [Fact]
+    public void GetTypedValue_OnAnEnumDescription_ReturnsThatMember()
+    {
+        Assert.Equal(
+            SampleSecondValueEnum.Second,
+            "second-value".GetTypedValue<SampleSecondValueEnum>()
+        );
+    }
+
+    [Fact]
+    public void GetTypedValue_OnAnUnknownEnumName_ThrowsFormatException()
+    {
+        Assert.Throws<FormatException>(() => "nope".GetTypedValue(typeof(SampleSecondValueEnum)));
+    }
+
+    [Fact]
+    public void TryGetTypedValue_OnAnUnknownEnumName_ReturnsFalse()
+    {
+        Assert.False("nope".TryGetTypedValue(out SampleSecondValueEnum _));
+    }
+
+    [Fact]
+    public void GetTypedValue_OnANullableEnumName_ReturnsTheMember()
+    {
+        Assert.Equal(
+            SampleSecondValueEnum.Second,
+            "Second".GetTypedValue(typeof(SampleSecondValueEnum?))
+        );
     }
 
     [Theory]

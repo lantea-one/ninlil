@@ -5,15 +5,22 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.String;
 
 /// <summary>
-///     This static class turns a string back into an enum value. It accepts a member name or
-///     number (ignoring case, through <see cref="System.Enum.TryParse(System.Type, string, bool, out object)" />)
-///     or any description the caller's attribute checks extract from a member (see
-///     <see cref="GetEnumDescriptionsTypeExtension" />). It is the reverse of
+///     This static class turns a string back into an enum value. It accepts a member name
+///     (ignoring case), any description the caller's attribute checks extract from a member (see
+///     <see cref="GetEnumDescriptionsTypeExtension" />), or a decimal number. It is the reverse of
 ///     <see cref="Ninlil.Common.Extension.Enum.ToDescriptionEnumExtension" />.
 ///     <para>
-///         When nothing matches and a non-nullable enum type was given, the result is the enum's
-///         zero value rather than <see langword="null" />, so the <c>TryToEnum</c> methods
-///         report success for unknown input.
+///         Text that names no member is refused: <c>ToEnum</c> returns <see langword="null" /> (no
+///         fall back to the zero member), the <c>TryToEnum</c> methods return <see langword="false" />
+///         and the generic <c>ToEnum</c> throws <see cref="ArgumentException" />. A silent zero member
+///         would turn a typo in a request into a valid, wrong value.
+///     </para>
+///     <para>
+///         A number is accepted when it fits the enum's underlying type, whether or not a member has
+///         that value. Wire enums (DNS record types, classes, response codes) carry codes with no
+///         member, and <see cref="Ninlil.Common.Extension.Enum.ToDescriptionEnumExtension" /> writes
+///         such a code as its number, so the number must read back. A comma list is accepted only
+///         for a <see cref="FlagsAttribute" /> enum.
 ///     </para>
 /// </summary>
 public static class ToEnumStringExtension
@@ -25,75 +32,87 @@ public static class ToEnumStringExtension
     extension(string instance)
     {
         /// <summary>
-        ///     Converts a <see cref="string"/> to a <see cref="System.Enum"/>, matching member names and
-        ///     numbers first and then member descriptions, ignoring case.
+        ///     Converts a <see cref="string"/> to a <see cref="System.Enum"/>, matching member names
+        ///     (ignoring case) and member descriptions first, then a decimal number that fits the
+        ///     underlying type, then (for a flags enum only) a comma list.
         /// </summary>
         /// <param name="type">
-        ///     The <see cref="System.Enum"/> type to convert to. When null, the public enums in this
-        ///     assembly (Ninlil.Common.Extension) are searched.
+        ///     The <see cref="System.Enum"/> type to convert to. A <see cref="Nullable{T}" /> of an
+        ///     enum is unwrapped. When null (kept optional for source compatibility), nothing can
+        ///     match and the result is <see langword="null" />.
         /// </param>
         /// <param name="attributeChecks">The attribute checks that extract a description.</param>
         /// <returns>
-        ///     The matching value; <see langword="null" /> for blank input, an exception, a nullable
-        ///     <paramref name="type" /> or no <paramref name="type" />; otherwise the type's zero value.
+        ///     The matching value, or <see langword="null" /> for blank input, a null or non-enum
+        ///     <paramref name="type" />, or text that matches nothing.
         /// </returns>
         public System.Enum ToEnum(
             IEnumerable<GetEnumDescriptionsTypeExtension.EnumToStringExtensionAttributeDelegate> attributeChecks,
             System.Type type = null
         )
         {
-            // Check for a null or empty string then return null.
-            if (instance?.Trim() is null or { Length: 0 })
+            // Check for blank input or a missing type then return null.
+            if (instance?.Trim() is null or { Length: 0 } || type is null)
                 return null;
 
-            // Localize our enum types.
-            System.Type[] types = type is not null
-                ? [type]
-                :
-                [
-                    .. Assembly
-                        .GetExecutingAssembly()
-                        .GetTypes()
-                        .Where(t => t.IsEnum && t.IsPublic),
-                ];
+            // Unwrap a nullable enum, then refuse anything that is not an enum.
+            type = Nullable.GetUnderlyingType(type) ?? type;
+            if (!type.IsEnum)
+                return null;
 
-            // Try to parse the enum value directly for the provided type then return if we've matched.
             try
             {
-                // Localize the list of attributes to check for.
+                // Localize the trimmed text and the list of attributes to check for.
+                string text = instance.Trim();
                 var attributesChecksArray = attributeChecks?.ToArray() ?? [];
 
-                // Try each candidate enum type in turn and return the first match.
-                foreach (System.Type t in types.Where(t => t.IsEnum))
+                // Match a member name or a description. An exact-case name wins over a name that
+                // differs only by case.
+                System.Enum caseInsensitive = null;
+                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Static))
                 {
-                    // Try to parse the enum value directly then return if we've matched.
-                    if (System.Enum.TryParse(t, instance, true, out var result))
-                        return result as System.Enum;
+                    if (field.Name.Equals(text, StringComparison.Ordinal))
+                        return field.GetValue(null) as System.Enum;
 
-                    // Otherwise, match the input against each member's descriptions.
-                    foreach (var field in t.GetFields(BindingFlags.Public | BindingFlags.Static))
-                        if (
-                            t.GetEnumDescriptions(field, attributesChecksArray)
+                    if (
+                        caseInsensitive is null
+                        && (
+                            field.Name.Equals(text, StringComparison.OrdinalIgnoreCase)
+                            || type.GetEnumDescriptions(field, attributesChecksArray)
                                 .Any(d =>
-                                    d
-                                        ?.Trim()
-                                        .Equals(instance.Trim(), StringComparison.OrdinalIgnoreCase)
+                                    d?.Trim().Equals(text, StringComparison.OrdinalIgnoreCase)
                                         is true
                                 )
                         )
-                            return field.GetValue(null) as System.Enum;
+                    )
+                        caseInsensitive = field.GetValue(null) as System.Enum;
                 }
+
+                if (caseInsensitive is not null)
+                    return caseInsensitive;
+
+                // Accept a decimal number in the range of the underlying type, defined or not
+                // (Enum.TryParse rejects a value that overflows the underlying type).
+                if (IsDecimalNumber(text))
+                    return System.Enum.TryParse(type, text, false, out var number)
+                        ? number as System.Enum
+                        : null;
+
+                // Accept a comma list only for a flags enum; on any other enum it would silently
+                // OR several members into a value no member has.
+                if (text.Contains(',') && type.IsDefined(typeof(FlagsAttribute), false))
+                    return System.Enum.TryParse(type, text, true, out var flags)
+                        ? flags as System.Enum
+                        : null;
             }
-            // Catch any exceptions that occur during parsing and return null since we can't find a match.
+            // Catch any exceptions that occur during matching and return null since we can't find a match.
             catch (Exception)
             {
                 return null;
             }
 
-            // No match: a nullable or missing type gives null, otherwise the type's zero value.
-            return type is not null && Nullable.GetUnderlyingType(type) is not null
-                ? null
-                : type?.GetDefaultValue();
+            // Nothing matched.
+            return null;
         }
 
         /// <summary>
@@ -102,7 +121,7 @@ public static class ToEnumStringExtension
         /// </summary>
         /// <param name="type">The <see cref="System.Enum"/> type to convert.</param>
         /// <param name="attributeChecks">The attribute checks that extract a description.</param>
-        /// <returns>The <see cref="System.Enum"/> representation of the <c>instance</c> value.</returns>
+        /// <returns>The matching value, or <see langword="null" /> when nothing matches.</returns>
         public System.Enum ToEnum(
             System.Type type = null,
             params GetEnumDescriptionsTypeExtension.EnumToStringExtensionAttributeDelegate[] attributeChecks
@@ -114,11 +133,18 @@ public static class ToEnumStringExtension
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type to convert.</typeparam>
         /// <returns>The <typeparamref name="TEnum" /> representation of the <c>instance</c> value.</returns>
+        /// <exception cref="ArgumentException">
+        ///     The <c>instance</c> is blank or matches no value of <typeparamref name="TEnum" />.
+        /// </exception>
         public TEnum ToEnum<TEnum>(
             IEnumerable<GetEnumDescriptionsTypeExtension.EnumToStringExtensionAttributeDelegate> attributeChecks
         )
             where TEnum : System.Enum =>
-            (TEnum)instance.ToEnum(attributeChecks.AsEnumerable(), typeof(TEnum));
+            instance.ToEnum(attributeChecks.AsEnumerable(), typeof(TEnum)) is TEnum value
+                ? value
+                : throw new ArgumentException(
+                    $"'{instance}' is not a value of {typeof(TEnum).Name}."
+                );
 
         /// <summary>
         ///     Converts a <see cref="string"/> to a <typeparamref name="TEnum" />.
@@ -126,6 +152,9 @@ public static class ToEnumStringExtension
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type to convert.</typeparam>
         /// <returns>The <typeparamref name="TEnum" /> representation of the <c>instance</c> value.</returns>
+        /// <exception cref="ArgumentException">
+        ///     The <c>instance</c> is blank or matches no value of <typeparamref name="TEnum" />.
+        /// </exception>
         public TEnum ToEnum<TEnum>(
             params GetEnumDescriptionsTypeExtension.EnumToStringExtensionAttributeDelegate[] attributeChecks
         )
@@ -154,7 +183,7 @@ public static class ToEnumStringExtension
         /// </param>
         /// <param name="type">
         ///     The <see cref="System.Enum"/> type to convert. If <see langword="null" />,
-        ///     the public enums in this assembly are searched.
+        ///     nothing can match and the conversion fails.
         /// </param>
         /// <returns>
         ///     <see langword="true"/> if the conversion is successful; otherwise, <see langword="false"/>.
@@ -195,7 +224,7 @@ public static class ToEnumStringExtension
         /// </param>
         /// <param name="type">
         ///     The <see cref="System.Enum"/> type to convert. If <see langword="null" />,
-        ///     the public enums in this assembly are searched.
+        ///     nothing can match and the conversion fails.
         /// </param>
         /// <param name="attributeChecks">
         ///     The additional attributes to check for during the conversion.
@@ -283,5 +312,16 @@ public static class ToEnumStringExtension
         )
             where TEnum : System.Enum =>
             instance.TryToEnum(out result, attributeChecks.AsEnumerable());
+    }
+
+    /// <summary>
+    ///     Reports whether the text is an optional minus sign followed by decimal digits only.
+    /// </summary>
+    /// <param name="text">The trimmed text to check.</param>
+    /// <returns><see langword="true" /> for a decimal integer.</returns>
+    private static bool IsDecimalNumber(string text)
+    {
+        int start = text.StartsWith('-') ? 1 : 0;
+        return text.Length > start && text.AsSpan(start).IndexOfAnyExceptInRange('0', '9') < 0;
     }
 }

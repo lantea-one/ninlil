@@ -115,9 +115,9 @@ public class DnssecPolicySettingsController(
                 throw new ValidationException($"'{item}' is not a valid DNSSEC algorithm name.");
             }
 
-            // EnumDescriptionJsonConverter does not throw for an unknown name; it returns the
-            // enum's default (zero) value, so the JsonException catch alone would accept a bad
-            // name. Enum.IsDefined rejects it.
+            // EnumDescriptionJsonConverter accepts a number string as any value of the underlying
+            // type (wire codes have no member), so "9999" would pass the JsonException catch.
+            // Enum.IsDefined rejects a number that no algorithm uses.
             if (!Enum.IsDefined(algorithm))
                 throw new ValidationException($"'{item}' is not a valid DNSSEC algorithm name.");
 
