@@ -78,7 +78,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Solicit_WhenPoolExhausted_ReturnsNoAdvertise()
+    public async Task Solicit_WhenPoolExhausted_AdvertisesNoAddrsAvailWithBothIdentifiers()
     {
         DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
             "solicit-full",
@@ -91,11 +91,9 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
             [0x00, 0x01, 0x00, 0x01, 0x22, 0x22, 0x22, 0x22, 0x00, 0x01]
         );
 
-        Dhcpv6Message solicit = NewSolicit(
-            [0x00, 0x01, 0x00, 0x01, 0x33, 0x33, 0x33, 0x33, 0x00, 0x02],
-            0x2000
-        );
-        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x33, 0x33, 0x33, 0x33, 0x00, 0x02];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x2000);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(7));
 
         Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
             solicit,
@@ -103,7 +101,184 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
             CancellationToken.None
         );
 
-        Assert.Null(advertise);
+        Assert.NotNull(advertise);
+        Assert.Equal(Dhcpv6MessageTypeEnum.Advertise, advertise.MessageType);
+        Assert.Equal(0x2000u, advertise.TransactionId);
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses na = Assert.Single(
+            NaAssociations(advertise)
+        );
+        Assert.Equal(7u, na.IdentityAssociationId);
+        Assert.Empty(na.Addresses);
+        Assert.True(na.Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum status, out string _));
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoAddressesAvailable, status);
+
+        // RFC 8415 Section 18.3.9 asks for the status inside the IA only, so the message itself
+        // carries none; the identifiers are there, and no lease row was created.
+        Assert.False(advertise.TryGetStatusCode(out Dhcpv6StatusCodeEnum _, out string _));
+        Assert.True(advertise.TryGetServerIdentifier(out byte[] _));
+        Assert.True(advertise.TryGetClientIdentifier(out byte[] echoedClient));
+        Assert.Equal(clientDuid, echoedClient);
+        Assert.False(advertise.TryGetRapidCommit());
+        Assert.Null(await _host.FindLeaseAsync(scope.Name, FormatDuid(clientDuid)));
+    }
+
+    [Fact]
+    public async Task Solicit_WhenPrefixPoolExhausted_AdvertisesNoPrefixAvail()
+    {
+        DhcpScopeEntity scope = await _host.SeedPrefixDelegationScopeAsync(
+            "pd-full",
+            "2001:db8:2000::",
+            "2001:db8:2000::",
+            delegatedPrefixLength: 60
+        );
+        Dhcpv6Message first = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, 0x12, 0x12, 0x12, 0x12, 0x00, 0x01],
+            0x2100
+        );
+        first.AddIdentityAssociationForPrefixDelegation(NewPdRequest(1));
+        Dhcpv6Message firstAdvertise = await _host.Handler.HandleRequestAsync(
+            first,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+        Assert.NotNull(firstAdvertise);
+
+        Dhcpv6Message second = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, 0x13, 0x13, 0x13, 0x13, 0x00, 0x02],
+            0x2101
+        );
+        second.AddIdentityAssociationForPrefixDelegation(NewPdRequest(4));
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            second,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.Equal(Dhcpv6MessageTypeEnum.Advertise, advertise.MessageType);
+        Assert.True(
+            advertise.TryGetIdentityAssociationsForPrefixDelegation(
+                out IReadOnlyList<Dhcpv6IdentityAssociationForPrefixDelegation> pds
+            )
+        );
+        Dhcpv6IdentityAssociationForPrefixDelegation pd = Assert.Single(pds);
+        Assert.Equal(4u, pd.IdentityAssociationId);
+        Assert.Empty(pd.Prefixes);
+        Assert.True(pd.Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum status, out string _));
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoPrefixAvailable, status);
+        Assert.False(advertise.TryGetStatusCode(out Dhcpv6StatusCodeEnum _, out string _));
+        Assert.True(advertise.TryGetServerIdentifier(out byte[] _));
+        Assert.True(advertise.TryGetClientIdentifier(out byte[] _));
+        Assert.NotNull(scope);
+    }
+
+    [Fact]
+    public async Task Solicit_WithExhaustedAddressesButAFreePrefix_AdvertisesThePrefixAndTheNaStatus()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "mixed-na",
+            "2001:db8:2::10",
+            "2001:db8:2::10"
+        );
+        await _host.SeedPrefixDelegationScopeAsync(
+            "mixed-pd",
+            "2001:db8:3000::",
+            "2001:db8:3fff::",
+            delegatedPrefixLength: 60
+        );
+        await ConfirmAddressForNewClientAsync(
+            scope,
+            [0x00, 0x01, 0x00, 0x01, 0x14, 0x14, 0x14, 0x14, 0x00, 0x01]
+        );
+
+        Dhcpv6Message solicit = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, 0x15, 0x15, 0x15, 0x15, 0x00, 0x02],
+            0x2200
+        );
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+        solicit.AddIdentityAssociationForPrefixDelegation(NewPdRequest(2));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.Equal(Dhcpv6MessageTypeEnum.Advertise, advertise.MessageType);
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses na = Assert.Single(
+            NaAssociations(advertise)
+        );
+        Assert.Empty(na.Addresses);
+        Assert.True(na.Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum status, out string _));
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoAddressesAvailable, status);
+        advertise.TryGetIdentityAssociationsForPrefixDelegation(
+            out IReadOnlyList<Dhcpv6IdentityAssociationForPrefixDelegation> pds
+        );
+        Assert.Single(Assert.Single(pds).Prefixes);
+    }
+
+    [Fact]
+    public async Task Solicit_OnALinkWithNoScope_GetsNoReply()
+    {
+        Dhcpv6Message solicit = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, 0x16, 0x16, 0x16, 0x16, 0x00, 0x01],
+            0x2300
+        );
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+        solicit.AddIdentityAssociationForPrefixDelegation(NewPdRequest(2));
+
+        Assert.Null(
+            await _host.Handler.HandleRequestAsync(solicit, RemoteEndPoint, CancellationToken.None)
+        );
+    }
+
+    [Fact]
+    public async Task Solicit_WithRapidCommitOnAnExhaustedScope_RepliesWithNoAddrsAvailAndRapidCommit()
+    {
+        // RFC 8415 Section 18.3.1: with Rapid Commit the server produces the REPLY "as though
+        // it had received a Request message" and includes Rapid Commit in it; Section 18.3.2
+        // then puts NoAddrsAvail in an IA that cannot be served.
+        await using Dhcpv6EngineTestHost rapidHost = new();
+        await rapidHost.InitializeAsync(enableRapidCommit: true);
+        DhcpScopeEntity scope = await rapidHost.SeedAddressScopeAsync(
+            "rapid-full",
+            "2001:db8:4::10",
+            "2001:db8:4::10"
+        );
+        Dhcpv6Message first = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, 0x17, 0x17, 0x17, 0x17, 0x00, 0x01],
+            0x2400
+        );
+        first.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+        first.SetRapidCommit();
+        Assert.NotNull(
+            await rapidHost.Handler.HandleRequestAsync(
+                first,
+                RemoteEndPoint,
+                CancellationToken.None
+            )
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x18, 0x18, 0x18, 0x18, 0x00, 0x02];
+        Dhcpv6Message second = NewSolicit(clientDuid, 0x2401);
+        second.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+        second.SetRapidCommit();
+        Dhcpv6Message reply = await rapidHost.Handler.HandleRequestAsync(
+            second,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(reply);
+        Assert.Equal(Dhcpv6MessageTypeEnum.Reply, reply.MessageType);
+        Assert.True(reply.TryGetRapidCommit());
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses na = Assert.Single(NaAssociations(reply));
+        Assert.Empty(na.Addresses);
+        Assert.True(na.Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum status, out string _));
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoAddressesAvailable, status);
+        Assert.False(reply.TryGetStatusCode(out Dhcpv6StatusCodeEnum _, out string _));
+        Assert.Null(await rapidHost.FindLeaseAsync(scope.Name, FormatDuid(clientDuid)));
     }
 
     [Fact]
@@ -454,7 +629,10 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
             CancellationToken.None
         );
 
-        Assert.Null(secondAdvertise);
+        // The scope still exists, so the exhausted pool is answered with NoAddrsAvail.
+        Assert.NotNull(secondAdvertise);
+        Assert.Empty(Assert.Single(NaAssociations(secondAdvertise)).Addresses);
+        Assert.Equal(Dhcpv6StatusCodeEnum.NoAddressesAvailable, NaStatus(secondAdvertise));
     }
 
     [Fact]
@@ -480,6 +658,72 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         Assert.Equal(LeaseStateEnum.Active, after.State);
         Assert.Equal(active.LeaseExpiresAtUtc, after.LeaseExpiresAtUtc);
         Assert.Null(await _host.FindLeaseAsync(scope.Name, FormatDuid(otherDuid)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Decline_WithTwoIas_AnswersEachOneAndQuarantinesOnlyTheClientsOwnAddress(
+        bool ownAddressInSecondIa
+    )
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "decline-two-ias",
+            "2001:db8:c1::10",
+            "2001:db8:c1::11"
+        );
+        byte[] ownerDuid = [0x00, 0x01, 0x00, 0x01, 0x61, 0x61, 0x61, 0x61, 0x00, 0x01];
+        byte[] otherDuid = [0x00, 0x01, 0x00, 0x01, 0x62, 0x62, 0x62, 0x62, 0x00, 0x02];
+        LeaseEntity own = await ConfirmAddressForNewClientAsync(scope, ownerDuid);
+        LeaseEntity foreign = await ConfirmAddressForNewClientAsync(scope, otherDuid);
+
+        Dhcpv6Message decline = NewMessage(Dhcpv6MessageTypeEnum.Decline, ownerDuid, 0xE100);
+        decline.SetServerIdentifier(await GetServerDuidAsync());
+        IPAddress ownAddress = IPAddress.Parse(own.IpAddress);
+        IPAddress foreignAddress = IPAddress.Parse(foreign.IpAddress);
+        (IPAddress first, IPAddress second) = ownAddressInSecondIa
+            ? (foreignAddress, ownAddress)
+            : (ownAddress, foreignAddress);
+
+        foreach ((uint iaid, IPAddress address) in new[] { (1u, first), (2u, second) })
+        {
+            Dhcpv6IdentityAssociationForNonTemporaryAddresses na = NewNaRequest(iaid);
+            na.Addresses.Add(new Dhcpv6IdentityAssociationAddress { Address = address });
+            decline.AddIdentityAssociationForNonTemporaryAddresses(na);
+        }
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            decline,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(reply);
+        IReadOnlyList<Dhcpv6IdentityAssociationForNonTemporaryAddresses> answered = NaAssociations(
+            reply
+        );
+        Assert.Equal([1u, 2u], answered.Select(na => na.IdentityAssociationId));
+
+        Dhcpv6StatusCodeEnum[] expected = ownAddressInSecondIa
+            ? [Dhcpv6StatusCodeEnum.NoBinding, Dhcpv6StatusCodeEnum.Success]
+            : [Dhcpv6StatusCodeEnum.Success, Dhcpv6StatusCodeEnum.NoBinding];
+
+        for (int index = 0; index < answered.Count; index++)
+        {
+            Assert.True(
+                answered[index]
+                    .Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum status, out string _)
+            );
+            Assert.Equal(expected[index], status);
+        }
+
+        LeaseEntity quarantined = await _host.FindLeaseAsync(
+            scope.Name,
+            "declined:" + own.IpAddress
+        );
+        Assert.Equal(LeaseStateEnum.Expired, quarantined.State);
+        LeaseEntity untouched = await _host.FindLeaseAsync(scope.Name, FormatDuid(otherDuid));
+        Assert.Equal(LeaseStateEnum.Active, untouched.State);
     }
 
     [Fact]
@@ -815,6 +1059,21 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         na.Addresses.Add(new Dhcpv6IdentityAssociationAddress { Address = address });
         decline.AddIdentityAssociationForNonTemporaryAddresses(na);
         return decline;
+    }
+
+    /// <summary>
+    ///     This method returns every IA_NA of a message, in order.
+    /// </summary>
+    private static IReadOnlyList<Dhcpv6IdentityAssociationForNonTemporaryAddresses> NaAssociations(
+        Dhcpv6Message message
+    )
+    {
+        Assert.True(
+            message.TryGetIdentityAssociationsForNonTemporaryAddresses(
+                out IReadOnlyList<Dhcpv6IdentityAssociationForNonTemporaryAddresses> associations
+            )
+        );
+        return associations;
     }
 
     /// <summary>

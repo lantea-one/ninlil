@@ -32,7 +32,8 @@ namespace Ninlil.Dhcp.Server.Core;
 ///     </para>
 ///     <para>
 ///         <b>Not handled.</b> IA_TA (temporary addresses) is ignored, and so is every IA after
-///         the first IA_NA and IA_PD (see <see cref="IDhcpv6LeaseAllocationService" />).
+///         the first IA_NA and IA_PD (see <see cref="IDhcpv6LeaseAllocationService" />); only a
+///         DECLINE processes every IA_NA.
 ///         <b>Options.</b> <see cref="Dhcpv6OptionDeliveryService" /> adds the standard options,
 ///         then <see cref="IDhcpv6OptionOverlayService" /> adds the scope's custom options
 ///         (<see cref="DhcpScopeCustomOptionEntity" />) and the tag rules to the replies that
@@ -40,7 +41,9 @@ namespace Ninlil.Dhcp.Server.Core;
 ///         DHCPv4. RELEASE, DECLINE and CONFIRM replies carry only status. A REQUEST, RENEW or
 ///         REBIND for an address or prefix that cannot be confirmed always gets
 ///         <c>NoBinding</c>, never <c>NoAddrsAvail</c> or <c>NoPrefixAvail</c>; either way the
-///         client starts again with a SOLICIT.
+///         client starts again with a SOLICIT. A SOLICIT on a link with a scope but nothing left
+///         to offer gets <c>NoAddrsAvail</c> or <c>NoPrefixAvail</c> in its IAs; on a link with
+///         no scope it gets no reply.
 ///     </para>
 ///     <para>
 ///         <b>Relays.</b> As the <see cref="IDhcpv6RelayMessageHandler" />,
@@ -324,7 +327,16 @@ public sealed class Dhcpv6RequestHandler(
     ///     an address or prefix for each, and returns an ADVERTISE (RFC 8415 Section 18.3.9). When
     ///     the client asks for Rapid Commit and
     ///     <see cref="DhcpServerOptions.EnableDhcpv6RapidCommit" /> is on, it commits them at once
-    ///     and returns a REPLY. If nothing at all can be offered there is no reply.
+    ///     and returns a REPLY. When a scope serves the client's link but nothing can be offered,
+    ///     the reply still goes out, with <c>NoAddrsAvail</c> in each IA_NA and
+    ///     <c>NoPrefixAvail</c> in each IA_PD that got nothing (RFC 8415 Section 18.3.9: the
+    ///     server "MUST include the IA option in the Advertise message with no addresses in that
+    ///     IA and a Status Code option ... containing status code NoAddrsAvail"). The RFC asks for
+    ///     no top-level Status Code, so none is added. With Rapid Commit the same holds for the
+    ///     REPLY: Section 18.3.1 has the server produce it "as though it had received a Request
+    ///     message", and Section 18.3.2 gives the same per-IA statuses. When no scope exists for
+    ///     the link there is no reply, because this server has no configuration for the client
+    ///     and another server may serve it.
     /// </summary>
     private async Task<Dhcpv6Message> HandleSolicitAsync(
         Dhcpv6Message request,
@@ -350,6 +362,10 @@ public sealed class Dhcpv6RequestHandler(
         );
 
         bool offeredAnything = false;
+
+        // True once an IA found a scope, whether or not it got an address or prefix: only then
+        // does this server speak for the client's link.
+        bool scopeFound = false;
         DhcpScopeEntity optionScope = null;
 
         // Only Rapid Commit commits an address in this exchange, so only then is the Client FQDN
@@ -384,13 +400,16 @@ public sealed class Dhcpv6RequestHandler(
             if (replyNa is not null)
             {
                 reply.AddIdentityAssociationForNonTemporaryAddresses(replyNa);
-                optionScope ??= scope;
+                scopeFound = true;
 
                 // An association is added whenever a scope was found, carrying a Status Code when
-                // nothing could be allocated; only one with an address counts as an offer for the
-                // "no reply" rule below.
+                // nothing could be allocated; only one with an address counts as an offer, which
+                // decides whether the scope's options are added below.
                 if (replyNa.Addresses.Count > 0)
+                {
                     offeredAnything = true;
+                    optionScope ??= scope;
+                }
 
                 if (rapidCommit)
                     await ApplyClientFqdnReplyAsync(
@@ -428,20 +447,38 @@ public sealed class Dhcpv6RequestHandler(
             if (replyPd is not null)
             {
                 reply.AddIdentityAssociationForPrefixDelegation(replyPd);
-                optionScope ??= scope;
+                scopeFound = true;
 
                 // Only an association with a prefix counts as an offer, as for IA_NA above.
                 if (replyPd.Prefixes.Count > 0)
+                {
                     offeredAnything = true;
+                    optionScope ??= scope;
+                }
             }
         }
 
-        // Nothing to offer for any IA: send no ADVERTISE.
-        if (!offeredAnything)
+        // No IA resolved a scope: this server has no configuration for the client's link, so it
+        // stays silent and lets another server answer.
+        if (!scopeFound)
             return null;
 
         if (rapidCommit)
             reply.SetRapidCommit();
+
+        // A scope exists but nothing was offered: the reply carries the per-IA statuses and the
+        // identifiers only. The scope's options and the overlays would describe a configuration
+        // the client cannot use, so they are left out.
+        if (!offeredAnything)
+        {
+            Dhcpv6OptionDeliveryService.Apply(
+                reply,
+                scope: null,
+                request,
+                serverIdentifierProvider.Value
+            );
+            return reply;
+        }
 
         Dhcpv6OptionDeliveryService.Apply(
             reply,
@@ -635,10 +672,13 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a DECLINE (RFC 8415): the client found addresses in its first IA_NA
+    ///     This method handles a DECLINE (RFC 8415): the client found addresses in its IA_NAs
     ///     already in use by duplicate address detection, and each address that is the client's
-    ///     own lease is quarantined. Unlike DHCPv4, the server replies: <c>Success</c> when at
-    ///     least one address was the client's, otherwise <c>NoBinding</c> (Section 18.3.8).
+    ///     own lease is quarantined. Every IA_NA is processed. Unlike DHCPv4, the server replies
+    ///     with one IA per requested IA_NA: <c>Success</c> when at least one of its addresses was
+    ///     the client's, otherwise <c>NoBinding</c> (Section 18.3.8: "For each IA in the Decline
+    ///     message for which the server has no binding information, the server adds an IA option
+    ///     ... with the value NoBinding").
     ///     Prefixes cannot be declined. A DECLINE without this server's Server Identifier gets no
     ///     reply (Section 16.8).
     /// </summary>
@@ -653,9 +693,11 @@ public sealed class Dhcpv6RequestHandler(
         if (!HasOurServerIdentifier(request))
             return null;
 
-        Dhcpv6IdentityAssociationForNonTemporaryAddresses requestedNa = FirstOrDefaultNa(request);
-
-        if (requestedNa is null)
+        if (
+            !request.TryGetIdentityAssociationsForNonTemporaryAddresses(
+                out IReadOnlyList<Dhcpv6IdentityAssociationForNonTemporaryAddresses> requestedNas
+            )
+        )
             return null;
 
         DhcpScopeEntity scope = await scopeResolver.ResolveAsync(
@@ -663,24 +705,30 @@ public sealed class Dhcpv6RequestHandler(
             DhcpScopeKindEnum.AddressAssignment,
             cancellationToken
         );
-        bool declinedAny = false;
-
-        if (scope is not null)
-            foreach (Dhcpv6IdentityAssociationAddress declined in requestedNa.Addresses)
-                declinedAny |= await leaseAllocationService.DeclineAddressAsync(
-                    scope,
-                    clientKey,
-                    declined.Address,
-                    cancellationToken
-                );
 
         Dhcpv6Message reply = NewReply(request, Dhcpv6MessageTypeEnum.Reply);
-        reply.AddIdentityAssociationForNonTemporaryAddresses(
-            BuildNaStatus(
-                requestedNa.IdentityAssociationId,
-                declinedAny ? Dhcpv6StatusCodeEnum.Success : Dhcpv6StatusCodeEnum.NoBinding
-            )
-        );
+
+        foreach (Dhcpv6IdentityAssociationForNonTemporaryAddresses requestedNa in requestedNas)
+        {
+            bool declinedAny = false;
+
+            if (scope is not null)
+                foreach (Dhcpv6IdentityAssociationAddress declined in requestedNa.Addresses)
+                    declinedAny |= await leaseAllocationService.DeclineAddressAsync(
+                        scope,
+                        clientKey,
+                        declined.Address,
+                        cancellationToken
+                    );
+
+            reply.AddIdentityAssociationForNonTemporaryAddresses(
+                BuildNaStatus(
+                    requestedNa.IdentityAssociationId,
+                    declinedAny ? Dhcpv6StatusCodeEnum.Success : Dhcpv6StatusCodeEnum.NoBinding
+                )
+            );
+        }
+
         Dhcpv6OptionDeliveryService.Apply(reply, scope, request, serverIdentifierProvider.Value);
         return reply;
     }
