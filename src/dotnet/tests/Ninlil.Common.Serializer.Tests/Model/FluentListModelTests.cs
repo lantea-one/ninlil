@@ -116,4 +116,24 @@ public class FluentListModelTests
 
         Assert.Equal([1, 2, 3], list);
     }
+
+    [Fact]
+    public void WithoutItem_ByPredicate_WithNoMatch_KeepsADefaultValueItem()
+    {
+        var list = new FluentListModel<int> { 0, 1, 2 };
+
+        list.WithoutItem(x => x == 5);
+
+        Assert.Equal([0, 1, 2], list);
+    }
+
+    [Fact]
+    public void WithoutItem_ByPredicate_RemovesTheMatchingValueItem()
+    {
+        var list = new FluentListModel<int> { 0, 1, 2 };
+
+        list.WithoutItem(x => x == 2);
+
+        Assert.Equal([0, 1], list);
+    }
 }

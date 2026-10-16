@@ -107,4 +107,29 @@ public class FluentDistinctListModelTests
 
         Assert.Equal(["1", "3"], result.Select(i => i.Payload));
     }
+
+    [Fact]
+    public void WithItem_WithANullKey_ReplacesTheItemWithANullKey_WithoutThrowing()
+    {
+        FluentDistinctListModel<Item, string> list = NewList()
+            .WithItem(new Item(null, "first"))
+            .WithItem(new Item("a", "other"))
+            .WithItem(new Item(null, "second"));
+
+        Assert.Equal(2, list.Count);
+        Assert.Contains(list, i => i.Key == null && i.Payload == "second");
+        Assert.DoesNotContain(list, i => i.Payload == "first");
+    }
+
+    [Fact]
+    public void WithoutItem_ByANullMatchValue_RemovesTheItemWithANullKey()
+    {
+        FluentDistinctListModel<Item, string> list = NewList()
+            .WithItem(new Item(null, "n"))
+            .WithItem(new Item("a", "1"));
+
+        list.WithoutItem((string)null);
+
+        Assert.Equal("a", Assert.Single(list).Key);
+    }
 }

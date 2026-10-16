@@ -121,13 +121,21 @@ public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
 
     /// <summary>
     ///     This method removes the first item that matches <paramref name="predicate" />. With no
-    ///     match, it tries to remove <c>default(TType)</c>, which for a value type can remove an
-    ///     unrelated item equal to the default.
+    ///     match, the list is unchanged.
     /// </summary>
     /// <param name="predicate">The condition the item to remove must meet.</param>
     /// <returns>The current list, for method chaining.</returns>
-    public FluentListModel<TType> WithoutItem(Func<TType, bool> predicate) =>
-        WithoutItem(this.FirstOrDefault(predicate));
+    public FluentListModel<TType> WithoutItem(Func<TType, bool> predicate)
+    {
+        // Remove by index: a match search that falls back to default(TType) would remove a real
+        // default value (such as 0) when nothing matches.
+        int index = FindIndex(item => predicate(item));
+        if (index >= 0)
+            RemoveAt(index);
+
+        // We're done, return the updated instance for method chaining.
+        return this;
+    }
 
     /// <summary>
     ///     This method removes one equal item for each of <paramref name="items" />.

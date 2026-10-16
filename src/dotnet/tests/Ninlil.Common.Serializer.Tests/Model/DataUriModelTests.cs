@@ -118,4 +118,104 @@ public class DataUriModelTests
         Assert.False(success);
         Assert.Null(uri);
     }
+
+    /// <summary>
+    ///     Returns every byte value 0x00..0xFF once, the smallest input that is not valid UTF-8 text.
+    /// </summary>
+    private static byte[] AllByteValues() =>
+        Enumerable.Range(0, 256).Select(i => (byte)i).ToArray();
+
+    [Fact]
+    public async Task FromStreamAsync_WithBinaryBytes_KeepsEveryByte()
+    {
+        byte[] bytes = AllByteValues();
+        using MemoryStream stream = new(bytes);
+
+        DataUriModel uri = await DataUriModel.FromStreamAsync(stream, "all.bin", "image/png");
+
+        Assert.Equal(bytes, uri.Binary);
+        Assert.Equal("all.bin", uri.Filename);
+        Assert.Equal("image/png", uri.MimeType);
+    }
+
+    [Fact]
+    public async Task FromStreamAsync_AfterReading_LeavesTheCallersStreamOpen()
+    {
+        byte[] bytes = AllByteValues();
+        using MemoryStream stream = new(bytes);
+
+        await DataUriModel.FromStreamAsync(stream, "all.bin", "image/png");
+
+        Assert.True(stream.CanRead);
+        stream.Position = 0;
+        Assert.Equal(0, stream.ReadByte());
+    }
+
+    [Fact]
+    public async Task FromStreamAsync_WithBinaryBytes_SetsNoCharacterSet()
+    {
+        using MemoryStream stream = new(AllByteValues());
+
+        DataUriModel uri = await DataUriModel.FromStreamAsync(stream, "all.bin", "image/png");
+
+        Assert.Null(uri.CharacterSet);
+    }
+
+    [Fact]
+    public void FromStream_WithBinaryBytes_KeepsEveryByte()
+    {
+        byte[] bytes = AllByteValues();
+        using MemoryStream stream = new(bytes);
+
+        DataUriModel uri = DataUriModel.FromStream(stream, "all.bin", "image/png");
+
+        Assert.Equal(bytes, uri.Binary);
+    }
+
+    [Fact]
+    public void ImplicitConversion_FromAStreamOfBinaryBytes_KeepsEveryByteAndLeavesItOpen()
+    {
+        byte[] bytes = AllByteValues();
+        using MemoryStream stream = new(bytes);
+
+        DataUriModel uri = stream;
+
+        Assert.Equal(bytes, uri.Binary);
+        Assert.Null(uri.CharacterSet);
+        Assert.True(stream.CanRead);
+    }
+
+    [Fact]
+    public void ImplicitConversion_FromAFileStream_KeepsTheFileNameOnly()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"ninlil-{Guid.NewGuid():N}.png");
+        byte[] bytes = AllByteValues();
+        File.WriteAllBytes(path, bytes);
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+
+            DataUriModel uri = stream;
+
+            Assert.Equal(Path.GetFileName(path), uri.Filename);
+            Assert.Equal("image/png", uri.MimeType);
+            Assert.Equal(bytes, uri.Binary);
+            Assert.DoesNotContain(Path.GetTempPath(), uri.ToString());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Filename_WithSpacesAndPlus_RoundTripsThroughTheStringForm()
+    {
+        DataUriModel uri = new([1, 2, 3], "image/png", "my logo+1.png");
+
+        Assert.True(DataUriModel.TryParse(uri.ToString(), out DataUriModel parsed));
+
+        Assert.Equal("my logo+1.png", parsed.Filename);
+        Assert.Equal(uri.Binary, parsed.Binary);
+    }
 }

@@ -13,7 +13,8 @@ namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
 ///     This class is an RFC 2397 <c>data:</c> URI held as its parts: content bytes, MIME type,
-///     optional character set and optional file name. It reads and writes the base64 form
+///     optional character set and optional file name. Content is binary-safe (bytes are never
+///     decoded as text); the file name is URL-encoded on write and decoded on read. It reads and writes the base64 form
 ///     <c>data:&lt;mime&gt;[;charset=..][;filename=..];base64,&lt;data&gt;</c>, and serializes as that
 ///     string in JSON (through <see cref="StructuredStringJsonConverter{TObject}" />) and XML. The
 ///     web console uses it for the uploaded branding logo.
@@ -52,6 +53,9 @@ public class DataUriModel : StructuredStringModel
 
     /// <summary>
     ///     This operator provides implicit <see cref="Stream" /> conversion to a <see cref="DataUriModel" />.
+    ///     It copies the bytes from the stream's current position to its end unchanged, leaves the
+    ///     stream open and sets no character set. A <see cref="FileStream" /> also supplies the MIME
+    ///     type and the file name (without its directory path).
     /// </summary>
     /// <param name="stream">The <see cref="Stream" /> to convert.</param>
     /// <returns>The <see cref="DataUriModel" /> instance representing the <paramref name="stream" />.</returns>
@@ -61,23 +65,20 @@ public class DataUriModel : StructuredStringModel
         if (stream == null)
             return null;
 
-        // Localize the stream reader into a disposable context.
-        using StreamReader reader = new(stream);
+        // Copy the bytes unchanged. Decoding them as text would replace every byte that is not
+        // valid UTF-8, so binary content (images) would be corrupted. The caller's stream stays open.
+        using MemoryStream copy = new();
+        stream.CopyTo(copy);
 
-        // Read the stream as text and store it as UTF-8 bytes; a file stream also supplies a name and MIME type.
+        // A file stream also supplies a MIME type and a name. Only the file name is kept, never the
+        // directory path, because the name ends up in the data URI.
         return stream is FileStream fileStream
             ? new(
-                Encoding.UTF8.GetBytes(reader.ReadToEnd()),
-                MimeTypes.GetMimeType(fileStream.Name),
-                fileStream.Name,
-                reader.CurrentEncoding.WebName
+                copy.ToArray(),
+                MimeTypes.GetMimeType(Path.GetFileName(fileStream.Name)),
+                Path.GetFileName(fileStream.Name)
             )
-            : new(
-                Encoding.UTF8.GetBytes(reader.ReadToEnd()),
-                null,
-                null,
-                reader.CurrentEncoding.WebName
-            );
+            : new(copy.ToArray(), null);
     }
 
     /// <summary>
@@ -203,8 +204,9 @@ public class DataUriModel : StructuredStringModel
         FromStreamAsync(fileStream, fileName, contentType).GetAwaiter().GetResult();
 
     /// <summary>
-    ///     This method reads a stream into a <see cref="DataUriModel" />. The stream is read as text
-    ///     and re-encoded as UTF-8, so only text content round-trips unchanged.
+    ///     This method reads a stream into a <see cref="DataUriModel" />. It copies the bytes from the
+    ///     stream's current position to its end unchanged, so binary content survives, leaves the
+    ///     stream open and sets no character set (the bytes are not text that was decoded).
     /// </summary>
     /// <param name="fileStream">The file stream to convert.</param>
     /// <param name="fileName">The file name to use for the <paramref name="fileStream" />.</param>
@@ -220,16 +222,12 @@ public class DataUriModel : StructuredStringModel
         CancellationToken stoppingToken = default
     )
     {
-        // Localize the stream reader
-        using StreamReader reader = new(fileStream);
+        // Copy the bytes unchanged; the caller owns the stream, so it is not disposed here.
+        using MemoryStream copy = new();
+        await fileStream.CopyToAsync(copy, stoppingToken);
 
-        // We're done, return the new data URI
-        return new(
-            Encoding.UTF8.GetBytes(await reader.ReadToEndAsync(stoppingToken)),
-            contentType,
-            fileName,
-            reader.CurrentEncoding.WebName
-        );
+        // We're done, return the new data URI.
+        return new(copy.ToArray(), contentType, fileName);
     }
 
     /// <summary>
@@ -313,7 +311,8 @@ public class DataUriModel : StructuredStringModel
         Binary = Convert.FromBase64String(binaryMatch);
 
         // Set the filename into the instance.
-        Filename = filenameMatch is null or "" ? null : filenameMatch;
+        // The file name is URL-encoded on write (ToString), so decode it here to round-trip it.
+        Filename = filenameMatch is null or "" ? null : HttpUtility.UrlDecode(filenameMatch);
 
         // Set the character set into the instance.
         CharacterSet = characterSetMatch is null or "" ? null : characterSetMatch;
@@ -328,7 +327,8 @@ public class DataUriModel : StructuredStringModel
     /// <summary>
     ///     This method writes the data URI. Without a MIME type, the type is guessed from the file
     ///     name, falling back to <c>application/octet-stream</c>. The file name is URL-encoded on
-    ///     write but not decoded on read.
+    ///     write and decoded on read, so it round-trips. The <c>filename</c> parameter is a Ninlil
+    ///     extension; RFC 2397 does not define it.
     /// </summary>
     /// <returns>The data URI <see cref="string" /> representation of the instance.</returns>
     protected override string ToString(IDictionary<string, object> _)

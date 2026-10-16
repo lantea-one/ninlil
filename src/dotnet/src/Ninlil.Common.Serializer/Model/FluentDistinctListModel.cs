@@ -113,13 +113,14 @@ public class FluentDistinctListModel<TType, TMatcher>
 
     /// <summary>
     ///     This method fluently removes every item whose distinct property equals
-    ///     <paramref name="matchValue" />.
+    ///     <paramref name="matchValue" />. A null value matches items whose distinct property is null.
     /// </summary>
     /// <param name="matchValue">The distinct property value of the items to remove.</param>
     /// <returns>The current list, for method chaining.</returns>
     public FluentDistinctListModel<TType, TMatcher> WithoutItem(TMatcher matchValue) =>
-        base.WithoutItems(p => _distinctPropertySelector(p).Equals(matchValue))
-        as FluentDistinctListModel<TType, TMatcher>;
+        base.WithoutItems(p =>
+            EqualityComparer<TMatcher>.Default.Equals(_distinctPropertySelector(p), matchValue)
+        ) as FluentDistinctListModel<TType, TMatcher>;
 
     /// <summary>
     ///     This method fluently removes every item whose distinct property is one of
