@@ -285,8 +285,8 @@ public class ConsoleCommandTests
     }
 
     /// <summary>
-    ///     Verifies that the default not-parsed handler writes to standard error and returns
-    ///     instead of ending the process. The error stream is redirected to keep test output clean
+    ///     Verifies that the default not-parsed handler writes the message (not the exception type)
+    ///     to standard error and returns instead of ending the process. The error stream is redirected to keep test output clean
     ///     and restored in <c>finally</c>; no other test class touches it concurrently because the
     ///     collection is serial.
     /// </summary>
@@ -309,6 +309,7 @@ public class ConsoleCommandTests
 
         Assert.Equal(1, command.ExitCode);
         Assert.Contains("--name", captured.ToString());
+        Assert.DoesNotContain(nameof(ConsoleParseException), captured.ToString());
     }
 
     /// <summary>

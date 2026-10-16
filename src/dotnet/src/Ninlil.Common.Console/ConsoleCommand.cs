@@ -2976,8 +2976,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
 
     /// <summary>
     ///     This field maps an exception type to the handler that runs when no input model matches the
-    ///     arguments. The default <see cref="Exception" /> entry writes the error to standard error and
-    ///     does not end the process;
+    ///     arguments. The default <see cref="Exception" /> entry writes the exception's message (the
+    ///     errors and help text) to standard error and does not end the process;
     ///     <see cref="WithNotParsed{TException}" /> adds or replaces entries.
     /// </summary>
     private readonly Dictionary<
@@ -2986,7 +2986,14 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     > _notParsed = new([
         new KeyValuePair<Type, IConsoleCommand.CommandNotParsedAsyncDelegate<Exception>>(
             typeof(Exception),
-            e => ConsoleService.WriteLine(e)
+            e =>
+            {
+                // The user needs the errors and the help text the message carries, not the exception
+                // type or its inner exceptions, so only the message is written.
+                System.Console.ForegroundColor = ConsoleColor.DarkRed;
+                System.Console.Error.WriteLine(e.Message);
+                System.Console.ResetColor();
+            }
         ),
     ]);
 
