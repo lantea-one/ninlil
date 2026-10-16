@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
@@ -56,6 +57,16 @@ public sealed class DnsClientScheduleCache : IDisposable
     private readonly IDisposable _subscription;
 
     /// <summary>
+    ///     This field holds the time zone ids that could not be resolved on the last load that met
+    ///     them. An id is warned about when it enters the set and logged at debug level while it
+    ///     stays, so a bad id does not repeat a warning every <see cref="SnapshotTimeToLive" />. An
+    ///     id that resolves again leaves the set, so a later failure warns again.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, bool> _unresolvedTimeZones = new(
+        StringComparer.Ordinal
+    );
+
+    /// <summary>
     ///     This constructor builds the cache and subscribes it to schedule and group changes.
     /// </summary>
     /// <param name="scopeFactory">The factory used to reach the repositories, once per load.</param>
@@ -70,7 +81,7 @@ public sealed class DnsClientScheduleCache : IDisposable
     )
     {
         _snapshot = new RefreshingSnapshot<DnsScheduleSet>(
-            (reason, token) => LoadAsync(scopeFactory, logger, reason, token),
+            (reason, token) => LoadAsync(scopeFactory, logger, _unresolvedTimeZones, reason, token),
             DnsScheduleSet.Empty,
             SnapshotTimeToLive,
             timeProvider ?? TimeProvider.System,
@@ -114,6 +125,7 @@ public sealed class DnsClientScheduleCache : IDisposable
     private static async Task<DnsScheduleSet> LoadAsync(
         IServiceScopeFactory scopeFactory,
         ILogger logger,
+        ConcurrentDictionary<string, bool> unresolvedTimeZones,
         SnapshotLoadReasonEnum reason,
         CancellationToken stoppingToken
     )
@@ -141,6 +153,7 @@ public sealed class DnsClientScheduleCache : IDisposable
                     row.ClientId,
                     Window: ToWindow(
                         logger,
+                        unresolvedTimeZones,
                         row.DaysOfWeek,
                         row.StartTime,
                         row.EndTime,
@@ -162,6 +175,7 @@ public sealed class DnsClientScheduleCache : IDisposable
                     row.ClientGroupId,
                     Window: ToWindow(
                         logger,
+                        unresolvedTimeZones,
                         row.DaysOfWeek,
                         row.StartTime,
                         row.EndTime,
@@ -186,11 +200,13 @@ public sealed class DnsClientScheduleCache : IDisposable
     /// <summary>
     ///     This method builds one window. The schedule controllers reject unknown time zone ids on
     ///     write, so a failure here means the host's time zone database no longer knows the id. The
-    ///     schedule is then dropped (never active) rather than failing the load, and a warning is
-    ///     logged on every load that hits it.
+    ///     schedule is then dropped (never active) rather than failing the load. The first load
+    ///     that meets an id logs a warning; later loads log it at debug level until the id
+    ///     resolves again.
     /// </summary>
     private static DnsScheduleWindow ToWindow(
         ILogger logger,
+        ConcurrentDictionary<string, bool> unresolvedTimeZones,
         DnsScheduleDayOfWeekEnum daysOfWeek,
         TimeOnly startTime,
         TimeOnly endTime,
@@ -199,21 +215,30 @@ public sealed class DnsClientScheduleCache : IDisposable
     {
         try
         {
-            return new DnsScheduleWindow(
+            DnsScheduleWindow window = new(
                 daysOfWeek,
                 startTime,
                 endTime,
                 TimeZoneInfo.FindSystemTimeZoneById(timeZoneId)
             );
+            unresolvedTimeZones.TryRemove(timeZoneId, out _);
+            return window;
         }
         catch (Exception exception)
             when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
         {
-            logger.LogWarning(
-                exception,
-                "A client schedule's own time zone id '{TimeZoneId}' could not be resolved on this host; treating its schedule as never active.",
-                timeZoneId
-            );
+            if (unresolvedTimeZones.TryAdd(timeZoneId, true))
+                logger.LogWarning(
+                    exception,
+                    "A client schedule's own time zone id '{TimeZoneId}' could not be resolved on this host; treating its schedule as never active.",
+                    timeZoneId
+                );
+            else
+                logger.LogDebug(
+                    exception,
+                    "A client schedule's own time zone id '{TimeZoneId}' still cannot be resolved on this host.",
+                    timeZoneId
+                );
             return null;
         }
     }
