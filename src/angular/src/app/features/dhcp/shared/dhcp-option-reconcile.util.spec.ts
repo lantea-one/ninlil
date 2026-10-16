@@ -1,4 +1,4 @@
-import { planDhcpOptionReconciliation } from './dhcp-option-reconcile.util';
+import { findDuplicateOptionTag, planDhcpOptionReconciliation } from './dhcp-option-reconcile.util';
 
 interface TestRow {
   id: string | null;
@@ -46,5 +46,21 @@ describe('planDhcpOptionReconciliation', () => {
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual(rows);
     expect(plan.toDeleteIds).toEqual([]);
+  });
+});
+
+/** These tests cover the duplicate option tag check the forms run before saving. */
+describe('findDuplicateOptionTag', () => {
+  it('names the tag and the 1-based numbers of the first two rows that share it', () => {
+    expect(findDuplicateOptionTag([6, 3, 6])).toEqual({ tag: 6, firstRow: 1, secondRow: 3 });
+  });
+
+  it('returns null when every tag is different', () => {
+    expect(findDuplicateOptionTag([1, 2])).toBeNull();
+    expect(findDuplicateOptionTag([])).toBeNull();
+  });
+
+  it('reports the earliest second occurrence when several tags repeat', () => {
+    expect(findDuplicateOptionTag([5, 7, 7, 5])).toEqual({ tag: 7, firstRow: 2, secondRow: 3 });
   });
 });

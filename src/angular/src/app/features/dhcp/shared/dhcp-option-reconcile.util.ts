@@ -10,7 +10,11 @@ export interface ReconcilableRow {
   readonly id: string | null;
 }
 
-/** The calls {@link planDhcpOptionReconciliation} says a save must make. */
+/**
+ * The calls {@link planDhcpOptionReconciliation} says a save must make. The forms run them in the
+ * order deletes, updates, creates, so a tag freed by a removed row can be taken by a new row in
+ * the same save without hitting the unique `(parent, tag)` index.
+ */
 export interface DhcpOptionReconciliationPlan<TRow extends ReconcilableRow> {
   /** Every row with no `id` yet; each needs a `POST`. */
   readonly toCreate: readonly TRow[];
@@ -22,7 +26,8 @@ export interface DhcpOptionReconciliationPlan<TRow extends ReconcilableRow> {
 
 /**
  * This function compares `currentRows` (the edited table) with `originallyLoadedIds` (the ids
- * loaded from the server) and returns the calls a save must make.
+ * loaded from the server) and returns the calls a save must make. It only sorts the calls; the
+ * caller decides the order and must run deletes first, then updates, then creates.
  */
 export function planDhcpOptionReconciliation<TRow extends ReconcilableRow>(
   currentRows: readonly TRow[],
@@ -37,4 +42,35 @@ export function planDhcpOptionReconciliation<TRow extends ReconcilableRow>(
   const toDeleteIds = originallyLoadedIds.filter((id) => !currentIds.has(id));
 
   return { toCreate, toUpdate, toDeleteIds };
+}
+
+/** The first pair of rows that share an option tag, as {@link findDuplicateOptionTag} returns it. */
+export interface DuplicateOptionTag {
+  /** The tag both rows use. */
+  readonly tag: number;
+  /** The 1-based number of the earlier row. */
+  readonly firstRow: number;
+  /** The 1-based number of the later row. */
+  readonly secondRow: number;
+}
+
+/**
+ * This function finds two rows that use the same option tag, or returns `null`. The server keeps
+ * one option per `(scope or rule, tag)`, so a duplicate would fail with a 500 after the parent
+ * was already saved. The forms call this before any request and name both rows in the message.
+ *
+ * @param tags The option tags in row order.
+ */
+export function findDuplicateOptionTag(tags: readonly number[]): DuplicateOptionTag | null {
+  const firstRowByTag = new Map<number, number>();
+
+  for (let index = 0; index < tags.length; index++) {
+    const firstRow = firstRowByTag.get(tags[index]);
+    if (firstRow !== undefined) {
+      return { tag: tags[index], firstRow, secondRow: index + 1 };
+    }
+    firstRowByTag.set(tags[index], index + 1);
+  }
+
+  return null;
 }
