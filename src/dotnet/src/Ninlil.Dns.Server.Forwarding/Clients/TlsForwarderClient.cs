@@ -15,9 +15,36 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 ///     certificate is validated against the operating system's trust store, for
 ///     <see cref="UpstreamForwarderDefinition.TlsHostName" /> when the definition names a host,
 ///     or for the forwarder's IP address otherwise. Validation is never disabled.
+///     <para>
+///         The query goes out with a new random message ID (RFC 5452 §9.2) and the reply must
+///         carry that ID and repeat the question; otherwise the attempt fails with an
+///         <see cref="InvalidDataException" />. The reply handed back carries the ID of the query
+///         the caller passed in.
+///     </para>
 /// </summary>
 public sealed class TlsForwarderClient : IUpstreamForwarderClient
 {
+    private readonly Func<ushort> newMessageId;
+
+    /// <summary>
+    ///     This constructor builds a client that draws its message IDs from the cryptographic
+    ///     random source.
+    /// </summary>
+    public TlsForwarderClient()
+        : this(null) { }
+
+    /// <summary>
+    ///     This constructor lets tests fix the message ID.
+    /// </summary>
+    /// <param name="newMessageId">
+    ///     Returns the ID of each attempt; <see langword="null" /> uses
+    ///     <see cref="ForwarderQueryMessage.NewRandomId" />.
+    /// </param>
+    internal TlsForwarderClient(Func<ushort> newMessageId)
+    {
+        this.newMessageId = newMessageId ?? ForwarderQueryMessage.NewRandomId;
+    }
+
     /// <inheritdoc />
     public UpstreamForwarderProtocolEnum Protocol => UpstreamForwarderProtocolEnum.Tls;
 
@@ -41,7 +68,8 @@ public sealed class TlsForwarderClient : IUpstreamForwarderClient
             stoppingToken
         );
 
-        byte[] queryBytes = DnsMessageWriter.Write(query);
+        DnsMessage sent = ForwarderQueryMessage.WithId(query, newMessageId());
+        byte[] queryBytes = DnsMessageWriter.Write(sent);
         byte[] lengthPrefix = new byte[2];
         BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)queryBytes.Length);
 
@@ -53,7 +81,16 @@ public sealed class TlsForwarderClient : IUpstreamForwarderClient
         byte[] responseBuffer = new byte[responseLength];
         await ReadExactAsync(sslStream, responseBuffer, stoppingToken);
 
-        return DnsMessageReader.Read(responseBuffer);
+        DnsMessage response = DnsMessageReader.Read(responseBuffer);
+
+        if (response.Id != sent.Id || !ForwarderQueryMessage.IsReplyTo(sent, response))
+            throw new InvalidDataException(
+                "The forwarder's TLS response does not match the query that was sent."
+            );
+
+        response.Id = query.Id;
+
+        return response;
     }
 
     /// <summary>

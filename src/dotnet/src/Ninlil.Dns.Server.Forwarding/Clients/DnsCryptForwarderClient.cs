@@ -26,9 +26,37 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 ///         upstream's certificate rotation, so every forwarded query discovers it again, at the
 ///         cost of an extra round trip.
 ///     </para>
+///     <para>
+///         The forwarded query carries a new random message ID, and the decrypted reply must carry
+///         that ID and repeat the question, otherwise the attempt fails with an
+///         <see cref="InvalidDataException" />. The reply handed back carries the ID of the query
+///         the caller passed in. Certificate discovery keeps its own plaintext query, protected by
+///         the certificate signature instead.
+///     </para>
 /// </summary>
 public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
 {
+    private readonly Func<ushort> newMessageId;
+
+    /// <summary>
+    ///     This constructor builds a client that draws its message IDs from the cryptographic
+    ///     random source.
+    /// </summary>
+    public DnsCryptForwarderClient()
+        : this(null) { }
+
+    /// <summary>
+    ///     This constructor lets tests fix the message ID of the forwarded query.
+    /// </summary>
+    /// <param name="newMessageId">
+    ///     Returns the ID of each forwarded query; <see langword="null" /> uses
+    ///     <see cref="ForwarderQueryMessage.NewRandomId" />.
+    /// </param>
+    internal DnsCryptForwarderClient(Func<ushort> newMessageId)
+    {
+        this.newMessageId = newMessageId ?? ForwarderQueryMessage.NewRandomId;
+    }
+
     /// <summary>
     ///     This constant contains the largest UDP datagram this client reads.
     /// </summary>
@@ -58,6 +86,7 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
         byte[] clientNonceHalf = RandomNumberGenerator.GetBytes(
             DnsCryptEnvelopeCodec.HalfNonceLength
         );
+        DnsMessage sent = ForwarderQueryMessage.WithId(query, newMessageId());
 
         byte[] queryPacket = DnsCryptEnvelopeCodec.EncryptQuery(
             certificate.EsVersion,
@@ -66,7 +95,7 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
             clientSecretKey,
             certificate.ResolverPublicKey,
             clientNonceHalf,
-            DnsMessageWriter.Write(query)
+            DnsMessageWriter.Write(sent)
         );
 
         byte[] responsePacket = await SendUdpAsync(queryPacket, endpoint, stoppingToken);
@@ -82,7 +111,16 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
             certificate.ResolverPublicKey
         );
 
-        return DnsMessageReader.Read(plaintext);
+        DnsMessage response = DnsMessageReader.Read(plaintext);
+
+        if (response.Id != sent.Id || !ForwarderQueryMessage.IsReplyTo(sent, response))
+            throw new InvalidDataException(
+                "The DNSCrypt response does not match the query that was sent."
+            );
+
+        response.Id = query.Id;
+
+        return response;
     }
 
     /// <summary>

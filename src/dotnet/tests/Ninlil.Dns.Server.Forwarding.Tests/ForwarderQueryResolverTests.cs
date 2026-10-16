@@ -573,12 +573,18 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                     Volatile.Write(ref _lastQuery, buffer[..received.ReceivedBytes]);
                     Interlocked.Increment(ref _queryCount);
 
-                    // Copy the query's transaction ID (the header's first two octets, RFC 1035
-                    // §4.1.1) into the canned response, as a server does; PlainForwarderClient
-                    // discards answers whose ID does not match.
-                    byte[] response = (byte[])responseBytes.Clone();
-                    response[0] = buffer[0];
-                    response[1] = buffer[1];
+                    // Echo the query's transaction ID (the header's first two octets, RFC 1035
+                    // §4.1.1) and question section (RFC 1035 §4.1.1 QDCOUNT, RFC 5452 §9.1) in the
+                    // canned response, as a server does; PlainForwarderClient discards answers
+                    // whose ID or question does not match.
+                    DnsMessage canned = DnsMessageReader.Read(responseBytes);
+                    DnsMessage asked = DnsMessageReader.Read(
+                        buffer.AsSpan(0, received.ReceivedBytes)
+                    );
+                    canned.Id = asked.Id;
+                    canned.Questions.Clear();
+                    canned.Questions.AddRange(asked.Questions);
+                    byte[] response = DnsMessageWriter.Write(canned);
 
                     await _socket.SendToAsync(response, received.RemoteEndPoint, stoppingToken);
                 }

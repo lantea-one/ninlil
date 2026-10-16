@@ -40,6 +40,8 @@ public class DnsCryptForwarderClientTests
                 Opcode = response.Opcode,
                 ResponseCode = response.ResponseCode,
             };
+            // A real resolver repeats the question; the client rejects a reply without it.
+            answered.Questions.AddRange(context.Request.Questions);
             answered.Answers.AddRange(response.Answers);
             return ValueTask.FromResult(answered);
         }

@@ -21,6 +21,11 @@
     <SupportedPlatform Include="windows" />
   </ItemGroup>
 
+  <!-- The tests drive the forwarder clients with an injected ID source and a fake HTTP handler. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.Forwarding.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
