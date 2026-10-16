@@ -632,8 +632,10 @@ public class TransportSettingsController(
     ///     a field of the wrong JSON type, a port outside 0-65535, a connection or stream limit
     ///     below 1, an idle timeout outside 1 second to 1 day, a certificate rotation interval, validity duration or clock-skew tolerance
     ///     beyond the timer limit (rotation and validity must also be positive, validity longer
-    ///     than rotation), an invalid listen address or cipher name, or an empty cipher list.
-    ///     Requires <c>transportsettings:write</c>.
+    ///     than rotation), an invalid listen address or cipher name, an empty cipher list, or a
+    ///     <c>providerName</c> that is not a domain name (with or without the
+    ///     <c>2.dnscrypt-cert.</c> prefix; null clears it). Requires
+    ///     <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dnscrypt")]
     [RequirePermission("transportsettings:write")]
