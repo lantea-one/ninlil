@@ -11,7 +11,9 @@ namespace Ninlil.Common.Extension.Type;
 ///     helpers use it to call <c>Add</c> and <c>ToArray</c> on lists built at run time.
 ///     <para>
 ///         Method lookup uses <see cref="System.Type.GetMethod(string, BindingFlags)" />, so an
-///         overloaded name throws <see cref="AmbiguousMatchException" />.
+///         overloaded name throws <see cref="AmbiguousMatchException" />. The type-only overloads
+///         match the name case-sensitively, the same rule <c>GetMethod</c> applies, so a
+///         wrong-case name throws <see cref="MissingMethodException" />.
 ///     </para>
 /// </summary>
 public static class CallTypeExtension
@@ -234,15 +236,15 @@ public static class CallTypeExtension
         string methodName,
         params object[] methodArguments
     ) =>
-        // Prefer a static method, since no instance was supplied. The name check ignores case but
-        // GetMethod does not, so a differently cased name reaches the null-forgiving call.
+        // Prefer a static method, since no instance was supplied. The name check is ordinal like
+        // GetMethod's own lookup, so a name that passes it is always found by GetMethod.
         type.GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
-            ? type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public)!
+            .Any(m => m.Name.Equals(methodName, StringComparison.Ordinal))
+            ? type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public)
                 .Invoke(null, methodArguments.Length > 0 ? methodArguments : null)
         // Otherwise, call an instance method on a new, throwaway instance of the type.
         : type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
-            .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
+            .Any(m => m.Name.Equals(methodName, StringComparison.Ordinal))
             ? CallMethod(type, type.CreateInstance(), methodName, methodArguments)
         // Neither a static nor an instance method exists by this name.
         : throw new MissingMethodException(type.FullName, methodName);
@@ -275,15 +277,16 @@ public static class CallTypeExtension
         IEnumerable<System.Type> genericArguments,
         params object[] methodArguments
     ) =>
-        // Prefer a static method, since no instance was supplied.
+        // Prefer a static method, since no instance was supplied. The name check is ordinal like
+        // GetMethod's own lookup, so a name that passes it is always found by GetMethod.
         type.GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
-            ? type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)!
+            .Any(m => m.Name.Equals(methodName, StringComparison.Ordinal))
+            ? type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)
                 .MakeGenericMethod(genericArguments?.ToArray() ?? [])
                 .Invoke(null, methodArguments.Length > 0 ? methodArguments : null)
         // Otherwise, call an instance method on a new, throwaway instance of the type.
         : type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
-            .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
+            .Any(m => m.Name.Equals(methodName, StringComparison.Ordinal))
             ? CallMethod(type, type.CreateInstance(), methodName, genericArguments, methodArguments)
         // Neither a static nor an instance method exists by this name.
         : throw new MissingMethodException(type.FullName, methodName);

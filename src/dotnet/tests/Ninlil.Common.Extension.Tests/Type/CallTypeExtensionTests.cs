@@ -85,6 +85,30 @@ public class CallTypeExtensionTests
     }
 
     [Fact]
+    public void CallMethodOnType_WithAWrongCaseStaticName_ThrowsMissingMethodException()
+    {
+        Assert.Throws<MissingMethodException>(() =>
+            typeof(SampleCallableModel).CallMethod("staticgreet")
+        );
+    }
+
+    [Fact]
+    public void CallMethodOnType_WithAWrongCaseInstanceName_ThrowsMissingMethodException()
+    {
+        Assert.Throws<MissingMethodException>(() =>
+            typeof(SampleCallableModel).CallMethod("instancegreet")
+        );
+    }
+
+    [Fact]
+    public void CallMethodOnType_WithAWrongCaseGenericName_ThrowsMissingMethodException()
+    {
+        Assert.Throws<MissingMethodException>(() =>
+            typeof(SampleCallableModel).CallMethod("identity", [typeof(string)], "x")
+        );
+    }
+
+    [Fact]
     public void CallMethodOnTypeThrowsForUnknownMethodName()
     {
         Assert.Throws<MissingMethodException>(() =>

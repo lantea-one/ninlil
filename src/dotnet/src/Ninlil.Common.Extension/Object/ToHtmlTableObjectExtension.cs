@@ -9,14 +9,18 @@ namespace Ninlil.Common.Extension.Object;
 /// <summary>
 ///     This static class renders an object, a <c>Dictionary&lt;string, object&gt;</c> or a list of
 ///     such dictionaries as an HTML table using MimeKit's <see cref="HtmlWriter" />. Public
-///     properties (or dictionary keys) become the header cells; nested classes and dictionaries
-///     become nested tables. Each value is written in its own body row with a single cell.
+///     properties (or dictionary keys) become the header cells and each object becomes one body row
+///     with one cell per header, in header order. A list of dictionaries takes its headers from the
+///     union of all keys in first-seen order and leaves the cell empty where a dictionary has no
+///     such key. A cell value that is a dictionary, a list of dictionaries or a nested class is
+///     written once, as a nested table; anything else is written as escaped text. A nested
+///     reference that is already being rendered (a cycle) is written as its type name.
 /// </summary>
 public static class ToHtmlTableObjectExtension
 {
     /// <summary>
     ///     This method renders a dictionary as an HTML table: the keys as header cells, then one row
-    ///     per value.
+    ///     with one cell per key.
     /// </summary>
     /// <param name="instance">
     ///     The instance of the <see cref="Dictionary{TKey,TValue}" /> to convert where
@@ -27,127 +31,20 @@ public static class ToHtmlTableObjectExtension
     ///     Optional flag to indicate whether to write only the row of
     ///     data for the table without the header or surrounding elements.
     /// </param>
+    /// <param name="rendering">The references being rendered now, for the cycle rule.</param>
     /// <param name="stoppingToken">Optional cancellation token to stop the operation.</param>
     /// <returns>A string representation of the <paramref name="instance" /> as an HTML table.</returns>
-    private static async Task<string> ToHtmlTableAsync(
+    private static Task<string> ToHtmlTableAsync(
         Dictionary<string, object> instance,
-        Dictionary<string, object> tableAttributes = null,
-        bool rowOnly = false,
-        CancellationToken stoppingToken = default
-    )
-    {
-        // Ensure the table attributes are not null.
-        tableAttributes ??= [];
-
-        // Create our HTML memory stream.
-        await using MemoryStream memoryStream = new();
-
-        // Create our HTML writer using the memory stream and UTF-8 encoding.
-        using HtmlWriter htmlWriter = new HtmlWriter(memoryStream, Encoding.UTF8);
-
-        // If we're not just writing rows, we need to open the table and header elements.
-        if (!rowOnly)
-        {
-            // Open our header element.
-            htmlWriter.WriteStartTag("table");
-
-            // Iterate through the table attributes and write them to the HTML writer.
-            foreach (var (key, value) in tableAttributes)
-                htmlWriter.WriteAttribute(key, value?.ToString() ?? string.Empty);
-
-            // Open the table header element.
-            htmlWriter.WriteStartTag("thead");
-
-            // Open the table header row element.
-            htmlWriter.WriteStartTag("tr");
-
-            // Iterate through the keys and write them as table header cells.
-            foreach (var key in instance.Keys.Where(k => k?.Trim() is not (null or "")))
-            {
-                // Open the table header cell element.
-                htmlWriter.WriteStartTag("th");
-
-                // Write the key as text in the table header cell.
-                htmlWriter.WriteText(key.Trim());
-
-                // Close the table header cell element.
-                htmlWriter.WriteEndTag("th");
-            }
-
-            // Close the table header row element.
-            htmlWriter.WriteEndTag("tr");
-
-            // Close the table header element.
-            htmlWriter.WriteEndTag("thead");
-
-            // Open the table body element.
-            htmlWriter.WriteStartTag("tbody");
-        }
-
-        // Iterate through the key-value pairs in the dictionary.
-        foreach (
-            (object _, object value) in instance.Where(kvp => kvp.Key?.Trim() is not (null or ""))
-        )
-        {
-            // Open the table row element.
-            htmlWriter.WriteStartTag("tr");
-
-            // Open the table cell element for the value.
-            htmlWriter.WriteStartTag("td");
-
-            // Check the type of value for a nested dictionary then write it as a nested HTML table.
-            if (value is Dictionary<string, object> dictionary)
-                htmlWriter.WriteMarkupText(
-                    await ToHtmlTableAsync(dictionary, null, false, stoppingToken)
-                );
-
-            // Check the type of value for a list of dictionaries then write it as a nested HTML table.
-            // This is not an else-if, so a nested dictionary also reaches the else branch below and
-            // is written a second time as text.
-            if (value is IEnumerable<Dictionary<string, object>> enumerable)
-                htmlWriter.WriteMarkupText(
-                    await ToHtmlTableAsync(enumerable, null, false, stoppingToken)
-                );
-            // Otherwise write the value as text.
-            else
-                htmlWriter.WriteText(value?.ToString()?.Trim() ?? string.Empty);
-
-            // Close the table cell element for the value.
-            htmlWriter.WriteEndTag("td");
-
-            // Close the table row element.
-            htmlWriter.WriteEndTag("tr");
-        }
-
-        // Close the table body and table elements if we're not just writing rows.
-        if (!rowOnly)
-        {
-            // Close the table body element.
-            htmlWriter.WriteEndTag("tbody");
-
-            // Close the table element.
-            htmlWriter.WriteEndTag("table");
-        }
-
-        // Flush the HTML writer to ensure all data is written to the memory stream.
-        htmlWriter.Flush();
-
-        // Reset the memory stream position to the beginning.
-        memoryStream.Position = 0;
-
-        // Convert the memory stream to a string using UTF-8 encoding.
-        using StreamReader reader = new(memoryStream, Encoding.UTF8);
-
-        // Read the entire content of the memory stream asynchronously.
-        string htmlContent = await reader.ReadToEndAsync(stoppingToken);
-
-        // Return the HTML content as a string.
-        return htmlContent.Trim();
-    }
+        Dictionary<string, object> tableAttributes,
+        bool rowOnly,
+        HashSet<object> rendering,
+        CancellationToken stoppingToken
+    ) => WriteTableAsync(instance, [instance], tableAttributes, rowOnly, rendering, stoppingToken);
 
     /// <summary>
     ///     This method renders a list of dictionaries as one HTML table, taking the header cells from
-    ///     the first dictionary's keys and writing each dictionary's rows in turn.
+    ///     the union of the dictionaries' keys and writing one row per dictionary.
     /// </summary>
     /// <param name="instance">The instance of the <see cref="IEnumerable{Dictionary}"/> to convert.</param>
     /// <param name="tableAttributes">Optional attributes for the HTML table element.</param>
@@ -155,106 +52,223 @@ public static class ToHtmlTableObjectExtension
     ///     Optional flag to indicate whether to write only the rows of
     ///     data for the table without the header or surrounding elements.
     /// </param>
+    /// <param name="rendering">The references being rendered now, for the cycle rule.</param>
     /// <param name="stoppingToken">Optional cancellation token to stop the operation.</param>
     /// <returns>The HTML table string representation of the <paramref name="instance"/>.</returns>
-    private static async Task<string> ToHtmlTableAsync(
+    private static Task<string> ToHtmlTableAsync(
         IEnumerable<Dictionary<string, object>> instance,
-        Dictionary<string, object> tableAttributes = null,
-        bool rowsOnly = false,
-        CancellationToken stoppingToken = default
+        Dictionary<string, object> tableAttributes,
+        bool rowsOnly,
+        HashSet<object> rendering,
+        CancellationToken stoppingToken
+    ) => WriteTableAsync(instance, instance, tableAttributes, rowsOnly, rendering, stoppingToken);
+
+    /// <summary>
+    ///     This method writes the table shared by every overload: a header row with one cell per
+    ///     key, then one body row per dictionary with one cell per header.
+    /// </summary>
+    /// <param name="owner">
+    ///     The object the rows came from. It is tracked in <paramref name="rendering" /> while its
+    ///     table is written, so a value that points back at it is not expanded again.
+    /// </param>
+    /// <param name="rows">The row dictionaries, one per body row.</param>
+    /// <param name="tableAttributes">Optional attributes for the HTML table element.</param>
+    /// <param name="rowsOnly">Whether to write only the body rows.</param>
+    /// <param name="rendering">The references being rendered now, for the cycle rule.</param>
+    /// <param name="stoppingToken">Optional cancellation token to stop the operation.</param>
+    /// <returns>The HTML string.</returns>
+    private static async Task<string> WriteTableAsync(
+        object owner,
+        IEnumerable<Dictionary<string, object>> rows,
+        Dictionary<string, object> tableAttributes,
+        bool rowsOnly,
+        HashSet<object> rendering,
+        CancellationToken stoppingToken
     )
     {
         // Ensure the table attributes are not null.
         tableAttributes ??= [];
 
-        // Localize the array of dictionaries to a list for easier access.
-        Dictionary<string, object>[] dictionaries = instance
-            .Select(d =>
+        // A blank key cannot head a column, so such entries are left out.
+        Dictionary<string, object>[] bodyRows = rows.Select(d =>
                 d.Where(kvp => kvp.Key?.Trim() is not (null or ""))
                     .ToDictionary(k => k.Key, v => v.Value)
             )
             .ToArray();
 
-        // Create our HTML memory stream.
-        await using MemoryStream memoryStream = new();
+        // The header is the union of the keys in first-seen order.
+        List<string> headers = bodyRows.SelectMany(d => d.Keys).Distinct().ToList();
 
-        // Create our HTML writer using the memory stream and UTF-8 encoding.
-        using HtmlWriter htmlWriter = new HtmlWriter(memoryStream, Encoding.UTF8);
-
-        // If we're not just writing rows, we need to open the table and header elements.
-        if (!rowsOnly)
+        // Track the owner while its table is written, so a value that points back at it is written
+        // as a type name instead of recursing forever.
+        rendering.Add(owner);
+        try
         {
-            // Open our header element.
-            htmlWriter.WriteStartTag("table");
+            // Create our HTML memory stream.
+            await using MemoryStream memoryStream = new();
 
-            // Iterate through the table attributes and write them to the HTML writer.
-            foreach (var (key, value) in tableAttributes)
-                htmlWriter.WriteAttribute(key, value?.ToString() ?? string.Empty);
+            // Create our HTML writer using the memory stream and UTF-8 encoding.
+            using HtmlWriter htmlWriter = new HtmlWriter(memoryStream, Encoding.UTF8);
 
-            // Open the table header element.
-            htmlWriter.WriteStartTag("thead");
-
-            // Open the table header row element.
-            htmlWriter.WriteStartTag("tr");
-
-            // Iterate through the keys and write them as table header cells.
-            foreach (
-                (string key, object _) in dictionaries
-                    .FirstOrDefault()
-                    ?.Where(kvp => kvp.Key?.Trim() is not (null or ""))
-                    ?? []
-            )
+            // If we're not just writing rows, we need to open the table and header elements.
+            if (!rowsOnly)
             {
-                // Open the table header cell element.
-                htmlWriter.WriteStartTag("th");
+                // Open our table element.
+                htmlWriter.WriteStartTag("table");
 
-                // Write the key as text in the table header cell.
-                htmlWriter.WriteText(key.Trim());
+                // Iterate through the table attributes and write them to the HTML writer.
+                foreach (var (key, value) in tableAttributes)
+                    htmlWriter.WriteAttribute(key, value?.ToString() ?? string.Empty);
 
-                // Close the table header cell element.
-                htmlWriter.WriteEndTag("th");
+                // Open the table header element and its one row.
+                htmlWriter.WriteStartTag("thead");
+                htmlWriter.WriteStartTag("tr");
+
+                // Write each key as a table header cell.
+                foreach (string header in headers)
+                {
+                    htmlWriter.WriteStartTag("th");
+                    htmlWriter.WriteText(header.Trim());
+                    htmlWriter.WriteEndTag("th");
+                }
+
+                // Close the header row and element, then open the table body element.
+                htmlWriter.WriteEndTag("tr");
+                htmlWriter.WriteEndTag("thead");
+                htmlWriter.WriteStartTag("tbody");
             }
 
-            // Close the table header row element.
-            htmlWriter.WriteEndTag("tr");
+            // Write one row per dictionary with one cell per header, in header order.
+            foreach (Dictionary<string, object> row in bodyRows)
+            {
+                htmlWriter.WriteStartTag("tr");
 
-            // Close the table header element.
-            htmlWriter.WriteEndTag("thead");
+                foreach (string header in headers)
+                {
+                    htmlWriter.WriteStartTag("td");
 
-            // Open the table body element.
-            htmlWriter.WriteStartTag("tbody");
+                    // A missing key leaves its cell empty.
+                    if (row.TryGetValue(header, out object cell))
+                        await WriteCellAsync(htmlWriter, cell, rendering, stoppingToken);
+
+                    htmlWriter.WriteEndTag("td");
+                }
+
+                htmlWriter.WriteEndTag("tr");
+            }
+
+            // Close the table body and table elements if we're not just writing rows.
+            if (!rowsOnly)
+            {
+                htmlWriter.WriteEndTag("tbody");
+                htmlWriter.WriteEndTag("table");
+            }
+
+            // Flush the HTML writer to ensure all data is written to the memory stream.
+            htmlWriter.Flush();
+
+            // Reset the memory stream position to the beginning.
+            memoryStream.Position = 0;
+
+            // Convert the memory stream to a string using UTF-8 encoding.
+            using StreamReader reader = new(memoryStream, Encoding.UTF8);
+
+            // Return the HTML content as a string.
+            return (await reader.ReadToEndAsync(stoppingToken)).Trim();
         }
-
-        // Iterate through the dictionaries
-        foreach (Dictionary<string, object> dictionary in dictionaries)
-            htmlWriter.WriteMarkupText(
-                await ToHtmlTableAsync(dictionary, null, true, stoppingToken)
-            );
-
-        // Close the table body and table elements if we're not just writing rows.
-        if (!rowsOnly)
+        finally
         {
-            // Close the table body element.
-            htmlWriter.WriteEndTag("tbody");
-
-            // Close the table element.
-            htmlWriter.WriteEndTag("table");
+            rendering.Remove(owner);
         }
+    }
 
-        // Flush the HTML writer to ensure all data is written to the memory stream.
-        htmlWriter.Flush();
+    /// <summary>
+    ///     This method writes one cell value: a nested table for a dictionary, a list of
+    ///     dictionaries or a nested class, otherwise escaped text. The branches are exclusive, so a
+    ///     nested dictionary is written once.
+    /// </summary>
+    /// <param name="htmlWriter">The writer positioned inside a <c>td</c> element.</param>
+    /// <param name="value">The cell value.</param>
+    /// <param name="rendering">The references being rendered now, for the cycle rule.</param>
+    /// <param name="stoppingToken">Optional cancellation token to stop the operation.</param>
+    private static async Task WriteCellAsync(
+        HtmlWriter htmlWriter,
+        object value,
+        HashSet<object> rendering,
+        CancellationToken stoppingToken
+    )
+    {
+        // A reference that is already being rendered is a cycle; its type name ends the recursion.
+        if (value is not null && !value.GetType().IsValueType && rendering.Contains(value))
+            htmlWriter.WriteText(value.GetType().Name);
+        // Check the type of value for a nested dictionary then write it as a nested HTML table.
+        else if (value is Dictionary<string, object> nestedDictionary)
+            htmlWriter.WriteMarkupText(
+                await ToHtmlTableAsync(nestedDictionary, null, false, rendering, stoppingToken)
+            );
+        // Check the type of value for a list of dictionaries then write it as a nested HTML table.
+        else if (value is IEnumerable<Dictionary<string, object>> nestedEnumerable)
+            htmlWriter.WriteMarkupText(
+                await ToHtmlTableAsync(nestedEnumerable, null, false, rendering, stoppingToken)
+            );
+        // Check for a nested class and write it as a nested HTML table. Test the property value's
+        // type, not the enclosing instance's type, which always passes this check.
+        else if (IsUserDefinedClass(value))
+            htmlWriter.WriteMarkupText(
+                await ToHtmlTableAsync(value, null, false, rendering, stoppingToken)
+            );
+        // Otherwise write the value as text.
+        else
+            htmlWriter.WriteText(value?.ToString()?.Trim() ?? string.Empty);
+    }
 
-        // Reset the memory stream position to the beginning.
-        memoryStream.Position = 0;
+    /// <summary>
+    ///     This method determines whether a value is an instance of a user-defined class, which is
+    ///     rendered from its public properties.
+    /// </summary>
+    /// <param name="value">The value to test; may be null.</param>
+    /// <returns>True for a non-null class instance that is not a primitive, enum or sequence.</returns>
+    private static bool IsUserDefinedClass(object value) =>
+        value is not null
+        && !value.GetType().IsPrimitive()
+        && !value.GetType().IsEnumerableType()
+        && value.GetType().IsClass
+        && !value.GetType().IsEnum
+        && !value.GetType().IsValueType;
 
-        // Convert the memory stream to a string using UTF-8 encoding.
-        using StreamReader reader = new(memoryStream, Encoding.UTF8);
+    /// <summary>
+    ///     This method renders a user-defined class from its public instance properties, skipping
+    ///     indexers (which need an index argument).
+    /// </summary>
+    /// <param name="instance">The class instance.</param>
+    /// <param name="tableAttributes">Optional attributes for the HTML table element.</param>
+    /// <param name="rowOnly">Whether to write only the body row.</param>
+    /// <param name="rendering">The references being rendered now, for the cycle rule.</param>
+    /// <param name="stoppingToken">Optional cancellation token to stop the operation.</param>
+    /// <returns>The HTML string.</returns>
+    private static Task<string> ToHtmlTableAsync(
+        object instance,
+        Dictionary<string, object> tableAttributes,
+        bool rowOnly,
+        HashSet<object> rendering,
+        CancellationToken stoppingToken
+    )
+    {
+        // Localize the properties of the instance as a dictionary.
+        Dictionary<string, object> properties = instance
+            .GetType()
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(p => p.GetIndexParameters().Length == 0)
+            .ToDictionary(p => p.Name, p => p.GetValue(instance));
 
-        // Read the entire content of the memory stream asynchronously.
-        string htmlContent = await reader.ReadToEndAsync(stoppingToken);
-
-        // Return the HTML content as a string.
-        return htmlContent.Trim();
+        return WriteTableAsync(
+            instance,
+            [properties],
+            tableAttributes,
+            rowOnly,
+            rendering,
+            stoppingToken
+        );
     }
 
     /// <summary>
@@ -285,12 +299,16 @@ public static class ToHtmlTableObjectExtension
         if (instance is null)
             throw new ArgumentNullException(nameof(instance));
 
+        // Reference equality, so two equal-looking objects are not mistaken for a cycle.
+        HashSet<object> rendering = new(ReferenceEqualityComparer.Instance);
+
         // Check for a dictionary instance and convert it to an HTML table.
         if (instance is Dictionary<string, object> objectDictionary)
             return await ToHtmlTableAsync(
                 objectDictionary,
                 tableAttributes,
                 rowOnly,
+                rendering,
                 stoppingToken
             );
 
@@ -300,6 +318,7 @@ public static class ToHtmlTableObjectExtension
                 enumerableDictionary,
                 tableAttributes,
                 rowOnly,
+                rendering,
                 stoppingToken
             );
 
@@ -316,133 +335,6 @@ public static class ToHtmlTableObjectExtension
                 nameof(instance)
             );
 
-        // Ensure the table attributes are not null.
-        tableAttributes ??= [];
-
-        // Create our HTML memory stream.
-        await using MemoryStream memoryStream = new();
-
-        // Create our HTML writer using the memory stream and UTF-8 encoding.
-        using HtmlWriter htmlWriter = new HtmlWriter(memoryStream, Encoding.UTF8);
-
-        // Localize the properties of the instance as a dictionary.
-        Dictionary<string, object> dictionary = instance
-            .GetType()
-            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Select(p => new KeyValuePair<string, object>(p.Name, p.GetValue(instance)))
-            .ToDictionary(k => k.Key, v => v.Value);
-
-        // If we're not just writing rows, we need to open the table and header elements.
-        if (!rowOnly)
-        {
-            // Open our header element.
-            htmlWriter.WriteStartTag("table");
-
-            // Iterate through the table attributes and write them to the HTML writer.
-            foreach (var (key, value) in tableAttributes)
-                htmlWriter.WriteAttribute(key, value?.ToString() ?? string.Empty);
-
-            // Open the table header element.
-            htmlWriter.WriteStartTag("thead");
-
-            // Open the table header row element.
-            htmlWriter.WriteStartTag("tr");
-
-            // Iterate through the keys and write them as table header cells.
-            foreach (
-                (string key, object _) in dictionary.Where(k => k.Key?.Trim() is not (null or ""))
-            )
-            {
-                // Open the table header cell element.
-                htmlWriter.WriteStartTag("th");
-
-                // Write the key as text in the table header cell.
-                htmlWriter.WriteText(key.Trim());
-
-                // Close the table header cell element.
-                htmlWriter.WriteEndTag("th");
-            }
-
-            // Close the table header row element.
-            htmlWriter.WriteEndTag("tr");
-
-            // Close the table header element.
-            htmlWriter.WriteEndTag("thead");
-
-            // Open the table body element.
-            htmlWriter.WriteStartTag("tbody");
-        }
-
-        // Iterate through the key-value pairs in the dictionary.
-        foreach (
-            (string _, object value) in dictionary.Where(kvp =>
-                kvp.Key?.ToString().Trim() is not (null or "")
-            )
-        )
-        {
-            // Open the table row element.
-            htmlWriter.WriteStartTag("tr");
-
-            // Open the table cell element for the value.
-            htmlWriter.WriteStartTag("td");
-
-            // Check the type of value for a nested dictionary then write it as a nested HTML table.
-            if (value is Dictionary<string, object> nestedDictionary)
-                htmlWriter.WriteMarkupText(
-                    await ToHtmlTableAsync(nestedDictionary, null, false, stoppingToken)
-                );
-            // Check the type of value for a list of dictionaries then write it as a nested HTML table.
-            else if (value is IEnumerable<Dictionary<string, object>> nestedEnumerable)
-                htmlWriter.WriteMarkupText(
-                    await ToHtmlTableAsync(nestedEnumerable, null, false, stoppingToken)
-                );
-            // Check for a nested class and write it as a nested HTML table. Test the property value's
-            // type, not the enclosing instance's type, which always passes this check.
-            else if (
-                value is not null
-                && !value.GetType().IsPrimitive()
-                && !value.GetType().IsEnumerableType()
-                && value.GetType().IsClass
-                && !value.GetType().IsEnum
-                && !value.GetType().IsValueType
-            )
-                htmlWriter.WriteMarkupText(
-                    await ToHtmlTableAsync(value, null, false, stoppingToken)
-                );
-            // Otherwise write the value as text.
-            else
-                htmlWriter.WriteText(value?.ToString()?.Trim() ?? string.Empty);
-
-            // Close the table cell element for the value.
-            htmlWriter.WriteEndTag("td");
-
-            // Close the table row element.
-            htmlWriter.WriteEndTag("tr");
-        }
-
-        // Close the table body and table elements if we're not just writing rows.
-        if (!rowOnly)
-        {
-            // Close the table body element.
-            htmlWriter.WriteEndTag("tbody");
-
-            // Close the table element.
-            htmlWriter.WriteEndTag("table");
-        }
-
-        // Flush the HTML writer to ensure all data is written to the memory stream.
-        htmlWriter.Flush();
-
-        // Reset the memory stream position to the beginning.
-        memoryStream.Position = 0;
-
-        // Convert the memory stream to a string using UTF-8 encoding.
-        using StreamReader reader = new(memoryStream, Encoding.UTF8);
-
-        // Read the entire content of the memory stream asynchronously.
-        string htmlContent = await reader.ReadToEndAsync(stoppingToken);
-
-        // Return the HTML content as a string.
-        return htmlContent.Trim();
+        return await ToHtmlTableAsync(instance, tableAttributes, rowOnly, rendering, stoppingToken);
     }
 }

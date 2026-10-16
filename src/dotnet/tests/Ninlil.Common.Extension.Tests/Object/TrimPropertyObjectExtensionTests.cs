@@ -29,6 +29,50 @@ public class TrimPropertyObjectExtensionTests
         TrimPropertyObjectExtension.TrimProperty(instance, nameof(SampleModel.Name), "fallback");
 
         Assert.Equal("fallback", instance.Name);
+
+        SampleModel empty = new() { Name = "" };
+        TrimPropertyObjectExtension.TrimProperty(empty, nameof(SampleModel.Name), "fallback");
+        Assert.Equal("fallback", empty.Name);
+    }
+
+    [Fact]
+    public void TrimPropertyByNameUsesDefaultValueWhenCurrentValueIsOnlyWhitespace()
+    {
+        SampleModel instance = new() { Name = "   " };
+
+        TrimPropertyObjectExtension.TrimProperty(instance, nameof(SampleModel.Name), "fallback");
+
+        Assert.Equal("fallback", instance.Name);
+    }
+
+    [Fact]
+    public void TrimPropertyByNameWithoutADefaultTurnsWhitespaceIntoAnEmptyString()
+    {
+        SampleModel instance = new() { Name = "   " };
+
+        TrimPropertyObjectExtension.TrimProperty(instance, nameof(SampleModel.Name));
+
+        Assert.Equal(string.Empty, instance.Name);
+    }
+
+    [Fact]
+    public void TrimPropertyByNameWithoutADefaultLeavesNullAsNull()
+    {
+        SampleModel instance = new() { Name = null };
+
+        TrimPropertyObjectExtension.TrimProperty(instance, nameof(SampleModel.Name));
+
+        Assert.Null(instance.Name);
+    }
+
+    [Fact]
+    public void TrimPropertyByNameKeepsANonBlankValueEvenWhenADefaultIsGiven()
+    {
+        SampleModel instance = new() { Name = "  kept  " };
+
+        TrimPropertyObjectExtension.TrimProperty(instance, nameof(SampleModel.Name), "fallback");
+
+        Assert.Equal("kept", instance.Name);
     }
 
     [Fact]
