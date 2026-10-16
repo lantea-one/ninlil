@@ -35,6 +35,11 @@ namespace Ninlil.Dns.Protocol.DnsOverQuic;
 ///         for XFR-over-TLS.
 ///     </para>
 ///     <para>
+///         Every query must carry message ID 0 (RFC 9250 §4.2.1). A query with another ID,
+///         including an AXFR or IXFR, closes its connection with <c>DOQ_PROTOCOL_ERROR</c>
+///         (RFC 9250 §4.3.3) and gets no reply.
+///     </para>
+///     <para>
 ///         0-RTT is not enabled: no TLS session resumption is configured on
 ///         <see cref="SslServerAuthenticationOptions" />, which 0-RTT would need. RFC 9250
 ///         discusses the replay risk it brings.
@@ -452,7 +457,9 @@ public sealed class DnsOverQuicListener(
     ///     within <paramref name="idleTimeout" />. A stream that misses a deadline, or whose
     ///     query the pipeline drops, is reset with a DoQ error code (RFC 9250 §8.4) instead of
     ///     being left open. A message that does not decode is logged at Debug and the stream
-    ///     reset. The source address is the QUIC connection's remote address.
+    ///     reset. A message whose ID is not 0 (RFC 9250 §4.2.1) is a protocol error: the whole
+    ///     connection is closed with <c>DOQ_PROTOCOL_ERROR</c> and nothing is answered (RFC 9250
+    ///     §4.3.3). The source address is the QUIC connection's remote address.
     /// </summary>
     private async Task HandleStreamAsync(
         QuicConnection connection,
@@ -490,6 +497,19 @@ public sealed class DnsOverQuicListener(
                     connection.RemoteEndPoint.Address
                 );
                 AbortQuietly(stream, DoqProtocolError);
+                return;
+            }
+
+            // RFC 9250 §4.2.1 requires ID 0 on every DoQ message, and §4.3.3 makes a non-zero ID
+            // a fatal protocol error for the connection. This covers zone transfers too.
+            if (request.Id != 0)
+            {
+                logger.LogDebug(
+                    "Closing a DNS-over-QUIC connection from {RemoteAddress}: the query carried message ID {MessageId}, not 0.",
+                    connection.RemoteEndPoint.Address,
+                    request.Id
+                );
+                await CloseConnectionQuietlyAsync(connection, DoqProtocolError);
                 return;
             }
 
@@ -714,6 +734,29 @@ public sealed class DnsOverQuicListener(
             )
         {
             // Already closed; nothing left to reset.
+        }
+    }
+
+    /// <summary>
+    ///     This method closes a connection with a DoQ error code (RFC 9250 §4.3.3) and swallows
+    ///     the errors a peer that is already gone causes. The close is bounded, so a stalled peer
+    ///     cannot hold the stream task.
+    /// </summary>
+    private static async Task CloseConnectionQuietlyAsync(QuicConnection connection, long errorCode)
+    {
+        try
+        {
+            using CancellationTokenSource closeTimeout = new(TimeSpan.FromSeconds(5));
+            await connection.CloseAsync(errorCode, closeTimeout.Token);
+        }
+        catch (Exception exception)
+            when (exception
+                    is QuicException
+                        or OperationCanceledException
+                        or ObjectDisposedException
+            )
+        {
+            // Already closed; nothing left to close.
         }
     }
 

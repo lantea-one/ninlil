@@ -102,6 +102,10 @@ internal static class ZoneTransferPullOverStream
     /// <param name="tsigService">The service used to verify each response's TSIG.</param>
     /// <param name="readTimeout">How long to wait for each response message.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <param name="expectedMessageId">
+    ///     The message ID every response must carry, or <see langword="null" /> to accept any.
+    ///     DNS-over-QUIC passes 0 (RFC 9250 §4.2.1).
+    /// </param>
     public static async Task<ZoneTransferPullResult> ReadResponsesAsync(
         Stream stream,
         string tsigKeyName,
@@ -109,7 +113,8 @@ internal static class ZoneTransferPullOverStream
         uint? currentSerial,
         ITsigService tsigService,
         TimeSpan readTimeout,
-        CancellationToken stoppingToken
+        CancellationToken stoppingToken,
+        ushort? expectedMessageId = null
     )
     {
         ZoneTransferResponseAssembler assembler = new(currentSerial);
@@ -163,6 +168,11 @@ internal static class ZoneTransferPullOverStream
                     $"A transfer response message could not be decoded: {exception.Message}"
                 );
             }
+
+            if (expectedMessageId is { } expectedId && response.Id != expectedId)
+                return ZoneTransferPullResult.Failure(
+                    $"A transfer response message carried ID {response.Id}, but the query used ID {expectedId}; the transfer was not applied."
+                );
 
             // An error reply is not verified: the primary does not sign BADKEY or BADSIG answers
             // (RFC 8945 §5.3.2). The extended TSIG error, when there is one, says why.

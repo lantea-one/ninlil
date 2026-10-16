@@ -114,7 +114,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
 
         DnsMessage query = new()
         {
-            Id = 777,
+            Id = 0,
             Opcode = DnsOpcodeEnum.Query,
             Questions =
             {
@@ -158,7 +158,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             QuicStreamType.Bidirectional
         );
 
-        DnsMessage query = BuildQuery(1234, "example.com");
+        DnsMessage query = BuildQuery(0, "example.com");
         await SendAsync(stream, query);
         DnsMessage response = await ReceiveAsync(stream);
 
@@ -167,6 +167,72 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
         Assert.Single(response.Answers);
         Assert.Equal(DnsResourceRecordTypeEnum.A, response.Answers[0].Type);
+    }
+
+    [Fact]
+    public async Task AQueryWithANonZeroMessageId_AbortsTheConnectionWithProtocolErrorAndGetsNoReply()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        await using QuicConnection connection = await ConnectAsync();
+        await using QuicStream stream = await connection.OpenOutboundStreamAsync(
+            QuicStreamType.Bidirectional
+        );
+        await SendAsync(stream, BuildQuery(7, "non-zero-id.example.com"));
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+        QuicException aborted = await Assert.ThrowsAsync<QuicException>(async () =>
+            await stream.ReadExactlyAsync(new byte[2], timeout.Token)
+        );
+
+        // RFC 9250 §4.3.3: the whole connection ends with DOQ_PROTOCOL_ERROR (0x2).
+        Assert.Equal(QuicError.ConnectionAborted, aborted.QuicError);
+        Assert.Equal(2, aborted.ApplicationErrorCode);
+    }
+
+    [Fact]
+    public async Task AZoneTransferQueryWithANonZeroMessageId_AbortsTheConnectionAndIsNotTransferred()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        await using QuicConnection connection = await ConnectAsync();
+        await using QuicStream stream = await connection.OpenOutboundStreamAsync(
+            QuicStreamType.Bidirectional
+        );
+        DnsMessage query = BuildQuery(7, "axfr-non-zero-id.example.com");
+        query.Questions[0] = new DnsQuestion(
+            query.Questions[0].Name,
+            DnsResourceRecordTypeEnum.Axfr,
+            DnsClassEnum.Internet
+        );
+        await SendAsync(stream, query);
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+        QuicException aborted = await Assert.ThrowsAsync<QuicException>(async () =>
+            await stream.ReadExactlyAsync(new byte[2], timeout.Token)
+        );
+
+        Assert.Equal(QuicError.ConnectionAborted, aborted.QuicError);
+        Assert.Equal(2, aborted.ApplicationErrorCode);
+    }
+
+    [Fact]
+    public async Task AQueryWithMessageIdZero_IsAnsweredWithMessageIdZero()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        await using QuicConnection connection = await ConnectAsync();
+        await using QuicStream stream = await connection.OpenOutboundStreamAsync(
+            QuicStreamType.Bidirectional
+        );
+        await SendAsync(stream, BuildQuery(0, "zero-id.example.com"));
+        DnsMessage response = await ReceiveAsync(stream);
+
+        Assert.Equal((ushort)0, response.Id);
+        Assert.Single(response.Answers);
     }
 
     [Fact]
@@ -180,7 +246,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             await using QuicStream stream = await first.OpenOutboundStreamAsync(
                 QuicStreamType.Bidirectional
             );
-            await SendAsync(stream, BuildQuery(1, "first.example.com"));
+            await SendAsync(stream, BuildQuery(0, "first.example.com"));
             await ReceiveAsync(stream);
         }
 
@@ -188,10 +254,10 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         await using QuicStream secondStream = await second.OpenOutboundStreamAsync(
             QuicStreamType.Bidirectional
         );
-        await SendAsync(secondStream, BuildQuery(2, "second.example.com"));
+        await SendAsync(secondStream, BuildQuery(0, "second.example.com"));
         DnsMessage response = await ReceiveAsync(secondStream);
 
-        Assert.Equal((ushort)2, response.Id);
+        Assert.Equal(DnsName.Parse("second.example.com"), response.Questions[0].Name);
     }
 
     [Fact]
@@ -202,20 +268,21 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
 
         await using QuicConnection connection = await ConnectAsync();
 
-        async Task<DnsMessage> QueryAsync(ushort id)
+        // Every DoQ message has ID 0, so the streams are told apart by their question name.
+        async Task<DnsMessage> QueryAsync(int number)
         {
             await using QuicStream stream = await connection.OpenOutboundStreamAsync(
                 QuicStreamType.Bidirectional
             );
-            await SendAsync(stream, BuildQuery(id, $"q{id}.example.com"));
+            await SendAsync(stream, BuildQuery(0, $"q{number}.example.com"));
             return await ReceiveAsync(stream);
         }
 
         DnsMessage[] responses = await Task.WhenAll(QueryAsync(10), QueryAsync(11), QueryAsync(12));
 
         Assert.Equal(
-            [10, 11, 12],
-            responses.Select(response => (int)response.Id).OrderBy(id => id)
+            ["q10.example.com.", "q11.example.com.", "q12.example.com."],
+            responses.Select(response => response.Questions[0].Name.ToString()).Order()
         );
     }
 
@@ -321,7 +388,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
                 await using QuicStream stream = await second.OpenOutboundStreamAsync(
                     QuicStreamType.Bidirectional
                 );
-                await SendAsync(stream, BuildQuery(5, "over-the-limit.example.com"));
+                await SendAsync(stream, BuildQuery(0, "over-the-limit.example.com"));
                 await ReceiveAsync(stream);
             });
 
@@ -392,7 +459,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         await using QuicStream stream = await connection.OpenOutboundStreamAsync(
             QuicStreamType.Bidirectional
         );
-        await SendAsync(stream, BuildQuery(8, "drop.example.com"));
+        await SendAsync(stream, BuildQuery(0, "drop.example.com"));
 
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
         QuicException reset = await Assert.ThrowsAsync<QuicException>(async () =>
@@ -551,7 +618,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
                 QuicStreamType.Bidirectional,
                 timeout.Token
             );
-            await SendAsync(stream, BuildQuery(99, "listen.example.com"));
+            await SendAsync(stream, BuildQuery(0, "listen.example.com"));
             return await ReceiveAsync(stream).WaitAsync(timeout.Token);
         }
         catch (Exception exception)
@@ -604,9 +671,9 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     private static async Task<QuicStream> OpenAnsweredStreamAsync(QuicConnection connection)
     {
         QuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional);
-        await SendAsync(stream, BuildQuery(3, "answered.example.com"));
+        await SendAsync(stream, BuildQuery(0, "answered.example.com"));
         DnsMessage response = await ReceiveAsync(stream);
-        Assert.Equal((ushort)3, response.Id);
+        Assert.Equal((ushort)0, response.Id);
         return stream;
     }
 

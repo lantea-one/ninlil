@@ -19,6 +19,12 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     9250 §4.2 allows for zone transfers. It needs the native <c>libmsquic</c> library, like
 ///     <c>DnsOverQuicListener</c>; <see cref="PullAsync" /> checks
 ///     <see cref="QuicConnection.IsSupported" />. The SOA check goes over plain UDP.
+///     <para>
+///         Every message on a QUIC connection has ID 0 (RFC 9250 §4.2.1), so the query is sent
+///         with ID 0 and signed with original ID 0 (the TSIG MAC covers the ID as sent, RFC
+///         8945 §4.3). A response message with another ID ends the pull with a failure; the
+///         primary treats a non-zero ID as a protocol error and closes the connection.
+///     </para>
 /// </summary>
 /// <param name="tsigService">The service used to sign requests and verify responses.</param>
 /// <param name="options">
@@ -42,6 +48,12 @@ public class QuicZoneTransferClient(
     ///     transfers over QUIC also use.
     /// </summary>
     private static readonly SslApplicationProtocol DoqApplicationProtocol = new("doq");
+
+    /// <summary>
+    ///     This constant contains the message ID of every DNS-over-QUIC message (RFC 9250
+    ///     §4.2.1): the query's ID, its TSIG original ID and the ID each response must carry.
+    /// </summary>
+    private const ushort QuicMessageId = 0;
 
     /// <inheritdoc />
     public ZoneTransferTransportEnum Transport => ZoneTransferTransportEnum.Quic;
@@ -78,10 +90,14 @@ public class QuicZoneTransferClient(
                 "QUIC is not supported on this platform -- libmsquic (and, on Linux, OpenSSL) must be installed."
             );
 
-        DnsMessage query = ZoneTransferPullCodec.BuildTransferQuery(zoneName, currentSerial);
+        DnsMessage query = ZoneTransferPullCodec.BuildTransferQuery(
+            zoneName,
+            currentSerial,
+            QuicMessageId
+        );
 
         if (!string.IsNullOrEmpty(tsigKeyName))
-            query = await tsigService.SignAsync(query, tsigKeyName, query.Id, stoppingToken);
+            query = await tsigService.SignAsync(query, tsigKeyName, QuicMessageId, stoppingToken);
 
         // The request MAC the first response chains from (see TcpZoneTransferClient).
         byte[] requestMac = query.Tsig?.Mac;
@@ -149,7 +165,8 @@ public class QuicZoneTransferClient(
                 currentSerial,
                 tsigService,
                 options.CurrentValue.ReadTimeout,
-                stoppingToken
+                stoppingToken,
+                QuicMessageId
             );
         }
     }

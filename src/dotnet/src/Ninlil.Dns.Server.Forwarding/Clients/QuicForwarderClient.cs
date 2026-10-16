@@ -13,7 +13,11 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 /// <summary>
 ///     This class forwards a query over DNS-over-QUIC (RFC 9250): a new QUIC connection per
 ///     query, one bidirectional stream, 2-byte length-prefixed framing. The query is sent with
-///     its existing message ID. The certificate is validated against the operating system's
+///     message ID 0, as RFC 9250 §4.2.1 requires (a copy of the caller's message, built by
+///     <see cref="ForwarderQueryMessage.WithId" />). A reply is accepted only when its ID is 0
+///     and it repeats the question that was sent; anything else is a failed attempt
+///     (<see cref="InvalidDataException" />). The caller's own ID is restored on the reply. The
+///     certificate is validated against the operating system's
 ///     trust store (never disabled), for <see cref="UpstreamForwarderDefinition.TlsHostName" />
 ///     when named or for the forwarder's IP address otherwise. It needs libmsquic, hence the
 ///     platform attributes.
@@ -28,6 +32,32 @@ public sealed class QuicForwarderClient : IUpstreamForwarderClient
     ///     listener in <c>Ninlil.Dns.Protocol.DnsOverQuic</c> keeps a private copy of it.
     /// </summary>
     private static readonly SslApplicationProtocol DoqApplicationProtocol = new("doq");
+
+    /// <summary>
+    ///     This field contains the message ID of every DNS-over-QUIC message (RFC 9250 §4.2.1).
+    /// </summary>
+    private const ushort QuicMessageId = 0;
+
+    /// <summary>
+    ///     This field contains the certificate check used instead of the operating system's trust
+    ///     store, or <see langword="null" /> for the default check. Only tests set it.
+    /// </summary>
+    private readonly RemoteCertificateValidationCallback certificateValidation;
+
+    /// <summary>
+    ///     This constructor creates a client that validates the certificate against the operating
+    ///     system's trust store.
+    /// </summary>
+    public QuicForwarderClient() { }
+
+    /// <summary>
+    ///     This constructor creates a client with its own certificate check, so a test can talk
+    ///     to a loopback listener that has a self-signed certificate. Production code never
+    ///     passes a callback that accepts everything.
+    /// </summary>
+    /// <param name="certificateValidation">The certificate check to use.</param>
+    internal QuicForwarderClient(RemoteCertificateValidationCallback certificateValidation) =>
+        this.certificateValidation = certificateValidation;
 
     /// <inheritdoc />
     public UpstreamForwarderProtocolEnum Protocol => UpstreamForwarderProtocolEnum.Quic;
@@ -56,6 +86,7 @@ public sealed class QuicForwarderClient : IUpstreamForwarderClient
                 {
                     TargetHost = targetHost,
                     ApplicationProtocols = [DoqApplicationProtocol],
+                    RemoteCertificateValidationCallback = certificateValidation,
                 },
             },
             stoppingToken
@@ -66,7 +97,9 @@ public sealed class QuicForwarderClient : IUpstreamForwarderClient
             stoppingToken
         );
 
-        byte[] queryBytes = DnsMessageWriter.Write(query);
+        // A copy with ID 0: the caller's message keeps its own ID.
+        DnsMessage outbound = ForwarderQueryMessage.WithId(query, QuicMessageId);
+        byte[] queryBytes = DnsMessageWriter.Write(outbound);
         byte[] lengthPrefix = new byte[2];
         BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)queryBytes.Length);
 
@@ -78,7 +111,17 @@ public sealed class QuicForwarderClient : IUpstreamForwarderClient
         byte[] responseBuffer = new byte[responseLength];
         await ReadExactAsync(stream, responseBuffer, stoppingToken);
 
-        return DnsMessageReader.Read(responseBuffer);
+        DnsMessage reply = DnsMessageReader.Read(responseBuffer);
+
+        // RFC 9250 §4.2.1: a DoQ message has ID 0. A reply with another ID, or for another
+        // question, is not an answer to this query.
+        if (reply.Id != QuicMessageId || !ForwarderQueryMessage.IsReplyTo(outbound, reply))
+            throw new InvalidDataException(
+                "The DNS-over-QUIC reply does not answer the question that was sent, or its message ID is not 0."
+            );
+
+        reply.Id = query.Id;
+        return reply;
     }
 
     /// <summary>

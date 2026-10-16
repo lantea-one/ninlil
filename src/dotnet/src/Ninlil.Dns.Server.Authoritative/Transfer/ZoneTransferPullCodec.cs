@@ -184,11 +184,21 @@ internal static class ZoneTransferPullCodec
     /// <summary>
     ///     This method builds an AXFR or IXFR query, per whether a current serial is supplied.
     /// </summary>
-    public static DnsMessage BuildTransferQuery(DnsName zoneName, uint? currentSerial)
+    /// <param name="zoneName">The zone to transfer.</param>
+    /// <param name="currentSerial">The serial this server holds, or <see langword="null" /> for an AXFR.</param>
+    /// <param name="messageId">
+    ///     The message ID to send, or <see langword="null" /> for a random one (TCP and TLS).
+    ///     DNS-over-QUIC passes 0, because RFC 9250 §4.2.1 requires it.
+    /// </param>
+    public static DnsMessage BuildTransferQuery(
+        DnsName zoneName,
+        uint? currentSerial,
+        ushort? messageId = null
+    )
     {
         DnsMessage query = new()
         {
-            Id = NewMessageId(),
+            Id = messageId ?? NewMessageId(),
             Opcode = DnsOpcodeEnum.Query,
             Questions =
             {
