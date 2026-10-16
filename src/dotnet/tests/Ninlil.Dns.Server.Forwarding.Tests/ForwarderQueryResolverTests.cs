@@ -331,29 +331,36 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                 new DnsCryptForwarderClient(),
             ];
 
+        ForwarderSetCache setCache = new(
+            _provider.GetRequiredService<IServiceScopeFactory>(),
+            _provider.GetRequiredService<IEntityChangeNotifier>(),
+            NullLogger<ForwarderSetCache>.Instance
+        );
+
+        // The fake resolver keeps these tests off the network: a host-name forwarder stays
+        // unresolved unless a test completes its lookup.
+        ForwarderEndpointCache endpoints =
+            endpointCache
+            ?? new ForwarderEndpointCache(
+                new UpstreamForwarderDefinitionParser(),
+                new FakeForwarderHostResolver(),
+                NullLogger<ForwarderEndpointCache>.Instance
+            );
+
         ForwarderHealthTracker tracker =
             healthTracker
             ?? new ForwarderHealthTracker(
                 clientList,
                 new StaticOptionsMonitor<ForwardingOptions>(effectiveForwardingOptions),
-                NullLogger<ForwarderHealthTracker>.Instance
+                NullLogger<ForwarderHealthTracker>.Instance,
+                setCache,
+                endpoints
             );
 
         return new ForwarderQueryResolver(
-            new ForwarderSetCache(
-                _provider.GetRequiredService<IServiceScopeFactory>(),
-                _provider.GetRequiredService<IEntityChangeNotifier>(),
-                NullLogger<ForwarderSetCache>.Instance
-            ),
+            setCache,
             clientList,
-            // The fake resolver keeps these tests off the network: a host-name forwarder stays
-            // unresolved unless a test completes its lookup.
-            endpointCache
-                ?? new ForwarderEndpointCache(
-                    new UpstreamForwarderDefinitionParser(),
-                    new FakeForwarderHostResolver(),
-                    NullLogger<ForwarderEndpointCache>.Instance
-                ),
+            endpoints,
             tracker,
             validator ?? new AlwaysInsecureDnssecValidatorStub(),
             new StaticOptionsMonitor<ForwardingOptions>(effectiveForwardingOptions),

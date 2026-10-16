@@ -1,11 +1,14 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Forwarding.Caching;
 using Ninlil.Dns.Server.Forwarding.Clients;
+using Ninlil.Dns.Server.Forwarding.Definition;
 using Ninlil.Dns.Server.Forwarding.Tests.Fakes;
 
 // Define our namespace.
@@ -147,7 +150,17 @@ public sealed partial class ForwarderQueryResolverTests
         ForwarderHealthTracker tracker = new(
             [new PlainForwarderClient()],
             new StaticOptionsMonitor<ForwardingOptions>(new ForwardingOptions { Enable = true }),
-            NullLogger<ForwarderHealthTracker>.Instance
+            NullLogger<ForwarderHealthTracker>.Instance,
+            new ForwarderSetCache(
+                _provider.GetRequiredService<IServiceScopeFactory>(),
+                _provider.GetRequiredService<IEntityChangeNotifier>(),
+                NullLogger<ForwarderSetCache>.Instance
+            ),
+            new ForwarderEndpointCache(
+                new UpstreamForwarderDefinitionParser(),
+                new FakeForwarderHostResolver(),
+                NullLogger<ForwarderEndpointCache>.Instance
+            )
         );
         ForwarderQueryResolver resolver = CreateResolver(healthTracker: tracker);
 

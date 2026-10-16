@@ -13,11 +13,16 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     This class tracks the health of each upstream forwarder for
 ///     <see cref="ForwarderQueryResolver" />'s <see cref="ForwarderFailoverStrategyEnum.HealthCheckedRoundRobin" />
 ///     strategy. A forwarder becomes known the first time the resolver orders it
-///     (<see cref="EnsureTracked" />); the tracker does not read the forwarder set from storage,
-///     and it never forgets a forwarder, so one removed from the configuration is still probed
-///     until restart. Health comes from two sources: a background probe every
-///     <see cref="ForwardingOptions.HealthCheckInterval" />, and the resolver recording the
-///     outcome of every query (<see cref="RecordResult" />), so a failure counts at once.
+///     (<see cref="EnsureTracked" />). Every probe pass first reads the configured definitions
+///     from <see cref="ForwarderSetCache" /> and forgets each tracked forwarder that is no longer
+///     in them (a disabled forwarder, or one in a deleted or disabled forwarder zone), so a
+///     removed forwarder is not probed for ever. Health comes from two sources: a background
+///     probe every <see cref="ForwardingOptions.HealthCheckInterval" />, and the resolver
+///     recording the outcome of every query (<see cref="RecordResult" />). A forwarder is
+///     unhealthy after <see cref="UnhealthyAfterConsecutiveFailures" /> failures in a row and
+///     healthy again after one success, so a single lost datagram does not exclude it.
+///     The probe sends only to addresses <see cref="ForwarderEndpointCache" /> already knows and
+///     does no DNS lookup of its own.
 /// </summary>
 /// <param name="clients">Every registered forwarder client, used to send a trivial probe query.</param>
 /// <param name="options">
@@ -27,19 +32,44 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     <see cref="ForwarderFailoverStrategyEnum.HealthCheckedRoundRobin" /> through
 ///     <c>ForwardingSettingsController.Patch</c> starts probing without a restart.
 /// </param>
-/// <param name="logger">The logger this tracker records failed queries and probe passes to.</param>
+/// <param name="logger">The logger this tracker records health changes and probe passes to.</param>
+/// <param name="forwarderSets">The source of the definitions that are still configured.</param>
+/// <param name="endpoints">
+///     The source of the sendable form of a definition. A host-name definition whose address is
+///     not known yet is skipped by the probe, not marked unhealthy.
+/// </param>
+/// <param name="timeProvider">The clock the probe loop waits on; the system clock when <see langword="null" />.</param>
 public sealed class ForwarderHealthTracker(
     IEnumerable<IUpstreamForwarderClient> clients,
     IOptionsMonitor<ForwardingOptions> options,
-    ILogger<ForwarderHealthTracker> logger
+    ILogger<ForwarderHealthTracker> logger,
+    ForwarderSetCache forwarderSets,
+    ForwarderEndpointCache endpoints,
+    TimeProvider timeProvider = null
 ) : BackgroundService
 {
+    /// <summary>
+    ///     This constant is how many failures in a row (queries or probes) make a forwarder
+    ///     unhealthy. A single failure is common (a lost datagram, one slow reply) and must not
+    ///     take a forwarder out of rotation.
+    /// </summary>
+    public const int UnhealthyAfterConsecutiveFailures = 3;
+
     private readonly IReadOnlyDictionary<
         UpstreamForwarderProtocolEnum,
         IUpstreamForwarderClient
     > _clientsByProtocol = clients.ToDictionary(client => client.Protocol);
 
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     private readonly ConcurrentDictionary<string, TrackedForwarder> _tracked = new();
+
+    /// <summary>
+    ///     This field serialises <see cref="RecordResult" />, so the failure count and the
+    ///     health-change log line stay consistent when queries and a probe report together.
+    /// </summary>
+    private readonly object _recordLock = new();
+
     private int _roundRobinCursor = -1;
 
     /// <summary>
@@ -49,30 +79,53 @@ public sealed class ForwarderHealthTracker(
     public void EnsureTracked(UpstreamForwarderDefinition definition) =>
         _tracked.GetOrAdd(
             definition.OriginalDefinitionString,
-            _ => new TrackedForwarder(definition, IsHealthy: true)
+            _ => new TrackedForwarder(definition, ConsecutiveFailures: 0)
         );
 
     /// <summary>
     ///     This method reports whether a forwarder is considered healthy. An unknown forwarder is.
     /// </summary>
     public bool IsHealthy(string definitionString) =>
-        !_tracked.TryGetValue(definitionString, out TrackedForwarder tracked) || tracked.IsHealthy;
+        !_tracked.TryGetValue(definitionString, out TrackedForwarder tracked)
+        || tracked.ConsecutiveFailures < UnhealthyAfterConsecutiveFailures;
 
     /// <summary>
-    ///     This method records the outcome of a query or probe against a forwarder. One result
-    ///     sets its health: a single failure marks it unhealthy, a single success healthy again.
+    ///     This method records the outcome of a query or probe against a forwarder. A success
+    ///     clears the failure count and makes the forwarder healthy at once; a failure adds one,
+    ///     and the forwarder turns unhealthy at <see cref="UnhealthyAfterConsecutiveFailures" />.
+    ///     A change of state is logged, a repeat of the same state is not.
     /// </summary>
     public void RecordResult(UpstreamForwarderDefinition definition, bool succeeded)
     {
-        _tracked.AddOrUpdate(
-            definition.OriginalDefinitionString,
-            _ => new TrackedForwarder(definition, succeeded),
-            (_, existing) => existing with { IsHealthy = succeeded }
-        );
+        bool turnedUnhealthy;
+        bool recovered;
 
-        if (!succeeded)
-            logger.LogDebug(
-                "Forwarder '{Definition}' marked unhealthy after a failed query.",
+        lock (_recordLock)
+        {
+            _tracked.TryGetValue(definition.OriginalDefinitionString, out TrackedForwarder before);
+            int failuresBefore = before?.ConsecutiveFailures ?? 0;
+            int failuresAfter = succeeded ? 0 : failuresBefore + 1;
+
+            _tracked[definition.OriginalDefinitionString] = new TrackedForwarder(
+                definition,
+                failuresAfter
+            );
+
+            turnedUnhealthy =
+                failuresBefore < UnhealthyAfterConsecutiveFailures
+                && failuresAfter >= UnhealthyAfterConsecutiveFailures;
+            recovered = failuresBefore >= UnhealthyAfterConsecutiveFailures && failuresAfter == 0;
+        }
+
+        if (turnedUnhealthy)
+            logger.LogInformation(
+                "Forwarder '{Definition}' is unhealthy after {Failures} consecutive failures.",
+                definition.OriginalDefinitionString,
+                UnhealthyAfterConsecutiveFailures
+            );
+        else if (recovered)
+            logger.LogInformation(
+                "Forwarder '{Definition}' is healthy again.",
                 definition.OriginalDefinitionString
             );
     }
@@ -148,6 +201,7 @@ public sealed class ForwarderHealthTracker(
                 {
                     await Task.Delay(
                         ClampProbeInterval(options.CurrentValue.HealthCheckInterval),
+                        _timeProvider,
                         stoppingToken
                     );
                 }
@@ -163,6 +217,7 @@ public sealed class ForwarderHealthTracker(
             {
                 await Task.Delay(
                     ClampProbeInterval(options.CurrentValue.HealthCheckInterval),
+                    _timeProvider,
                     stoppingToken
                 );
                 await ProbeAllAsync(stoppingToken);
@@ -179,12 +234,20 @@ public sealed class ForwarderHealthTracker(
     }
 
     /// <summary>
-    ///     This method probes every known forwarder once, in parallel.
+    ///     This method runs one probe pass. It first forgets every tracked forwarder that is no
+    ///     longer configured, then probes the rest once, in parallel. It is internal so tests
+    ///     can run a pass without waiting for the loop.
     /// </summary>
-    private async Task ProbeAllAsync(CancellationToken stoppingToken)
+    internal async Task ProbeAllAsync(CancellationToken stoppingToken)
     {
+        IReadOnlySet<string> configured = await forwarderSets.GetAllDefinitionsAsync(stoppingToken);
+
+        foreach (string definitionString in _tracked.Keys)
+            if (!configured.Contains(definitionString))
+                _tracked.TryRemove(definitionString, out _);
+
         await Task.WhenAll(
-            _tracked.Values.Select(tracked => ProbeOneAsync(tracked.Definition, stoppingToken))
+            _tracked.Keys.Select(definitionString => ProbeOneAsync(definitionString, stoppingToken))
         );
     }
 
@@ -192,13 +255,17 @@ public sealed class ForwarderHealthTracker(
     ///     This method sends a root NS query to one forwarder and records the outcome through
     ///     <see cref="RecordResult" />. Any response counts as success, whatever its response code.
     ///     A forwarder whose protocol has no registered client is skipped, since that is a
-    ///     configuration gap, not a reachability problem.
+    ///     configuration gap, not a reachability problem. So is one
+    ///     <see cref="ForwarderEndpointCache.TryGetSendable" /> has no address for yet (a host
+    ///     name still being looked up): that says nothing about the forwarder's health.
     /// </summary>
-    private async Task ProbeOneAsync(
-        UpstreamForwarderDefinition definition,
-        CancellationToken stoppingToken
-    )
+    private async Task ProbeOneAsync(string definitionString, CancellationToken stoppingToken)
     {
+        UpstreamForwarderDefinition definition = endpoints.TryGetSendable(definitionString);
+
+        if (definition is null)
+            return;
+
         if (
             !_clientsByProtocol.TryGetValue(
                 definition.Protocol,
@@ -232,7 +299,11 @@ public sealed class ForwarderHealthTracker(
     }
 
     /// <summary>
-    ///     This record pairs a forwarder's definition with its tracked health.
+    ///     This record pairs a forwarder's definition with the number of failures in a row. The
+    ///     count, not a flag, decides health (<see cref="UnhealthyAfterConsecutiveFailures" />).
     /// </summary>
-    private sealed record TrackedForwarder(UpstreamForwarderDefinition Definition, bool IsHealthy);
+    private sealed record TrackedForwarder(
+        UpstreamForwarderDefinition Definition,
+        int ConsecutiveFailures
+    );
 }

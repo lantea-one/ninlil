@@ -1,10 +1,13 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Forwarding.Caching;
+using Ninlil.Dns.Server.Forwarding.Definition;
 using Ninlil.Dns.Server.Forwarding.Tests.Fakes;
 using Ninlil.Dns.Server.Forwarding.Validation;
 using Ninlil.Dns.Server.Recursive;
@@ -206,7 +209,21 @@ public sealed partial class ForwarderQueryResolverTests
             new ForwarderHealthTracker(
                 [client],
                 monitor,
-                NullLogger<ForwarderHealthTracker>.Instance
+                NullLogger<ForwarderHealthTracker>.Instance,
+                // The fetcher never runs a probe pass, so the set cache is never loaded and an
+                // empty service provider is enough.
+                new ForwarderSetCache(
+                    new ServiceCollection()
+                        .BuildServiceProvider()
+                        .GetRequiredService<IServiceScopeFactory>(),
+                    new EntityChangeNotifier(),
+                    NullLogger<ForwarderSetCache>.Instance
+                ),
+                new ForwarderEndpointCache(
+                    new UpstreamForwarderDefinitionParser(),
+                    new FakeForwarderHostResolver(),
+                    NullLogger<ForwarderEndpointCache>.Instance
+                )
             ),
             cache,
             monitor,
