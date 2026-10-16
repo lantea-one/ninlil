@@ -13,8 +13,9 @@ namespace Ninlil.Common.Console.Model;
 ///     This class pairs one argument declared on an input model (its attribute and property) with
 ///     the command-line tokens that matched it. <see cref="ConsoleCommandArgumentCollection" />
 ///     builds these while parsing, uses <see cref="Found" /> and <see cref="Required" /> to report
-///     missing arguments, and calls <see cref="SetValue" /> to convert the tokens and write the
-///     result to the model, falling back to the attribute's default when nothing matched.
+///     missing arguments, and calls <see cref="TryGetParsedValue" /> to convert the tokens (a value
+///     that does not convert is a parse error) or <see cref="SetValue" /> to write a default when
+///     nothing matched.
 /// </summary>
 public class ParsedConsoleArgument
 {
@@ -156,31 +157,33 @@ public class ParsedConsoleArgument
             };
 
     /// <summary>
+    ///     This method converts the tokens matched by a named argument to the property type and
+    ///     returns the value to use: the converted value, or <see cref="GetDefaultValue" /> when
+    ///     nothing matched or conversion fails.
+    /// </summary>
+    /// <returns>The converted value, or the fallback value.</returns>
+    private object GetParsedNamedValue() =>
+        Found && TryConvertNamedValue(out object value) ? value : GetDefaultValue();
+
+    /// <summary>
     ///     This method converts the tokens matched by a named argument to the property type. One
     ///     token is converted directly. Several tokens (a repeated argument) are joined with commas,
     ///     wrapped in <c>{}</c> for a dictionary or <c>()</c> for a tuple, and converted as one value.
-    ///     When nothing matched or conversion fails it returns <see cref="GetDefaultValue" />.
+    ///     It expects at least one matched token.
     /// </summary>
-    /// <returns>The converted value, or the fallback value.</returns>
-    private object GetParsedNamedValue()
+    /// <param name="value">The converted value, or <see langword="null" /> when conversion fails.</param>
+    /// <returns><see langword="true" /> when the tokens converted; otherwise <see langword="false" />.</returns>
+    private bool TryConvertNamedValue(out object value)
     {
-        // Without a matching token, use the fallback value.
-        if (!Found)
-            return GetDefaultValue();
-
-        // Localize our parsed value for reuse.
-        object parsedValue;
-
-        // Check for a singular argument value and attempt to parse it to
-        // the type of the property. If successful, return the parsed value.
+        // A single token converts on its own.
         if (Arguments.Count is 1)
-            return
-                Arguments[0].Value?.TryGetTypedValue(Property.PropertyType, out parsedValue) is true
-                ? parsedValue
-                : GetDefaultValue();
+        {
+            value = null;
+            return Arguments[0].Value?.TryGetTypedValue(Property.PropertyType, out value) is true;
+        }
 
         // Localize our value string.
-        string value = string.Join(
+        string joined = string.Join(
             ",",
             Arguments.Select(a =>
                 Property.PropertyType.IsDictionary() ? a.Value?.Trim().TrimStart('{').TrimEnd('}')
@@ -191,16 +194,13 @@ public class ParsedConsoleArgument
 
         // Check for a dictionary, then update the value string with the proper notation.
         if (Property.PropertyType.IsDictionary())
-            value = $"{{{value}}}";
+            joined = $"{{{joined}}}";
         // Check for a tuple. then update the value string with the proper notation.
         else if (Property.PropertyType.IsTuple())
-            value = $"({value})";
+            joined = $"({joined})";
 
-        // Attempt to parse the value string to the type of the property. If
-        // successful, return the parsed value, otherwise return the default value.
-        return value.TryGetTypedValue(Property.PropertyType, out parsedValue)
-            ? parsedValue
-            : GetDefaultValue();
+        // Convert the joined value string to the type of the property.
+        return joined.TryGetTypedValue(Property.PropertyType, out value);
     }
 
     /// <summary>
@@ -210,6 +210,7 @@ public class ParsedConsoleArgument
     /// </summary>
     /// <param name="argumentCollection">The full token collection being parsed.</param>
     /// <returns>The parsed nested input model, or the fallback value.</returns>
+    /// <exception cref="ConsoleParseException">When the tokens after the verb do not parse.</exception>
     private object GetParsedNestedVerbValue(ConsoleCommandArgumentCollection argumentCollection) =>
         Found
             ? new ConsoleCommandArgumentCollection(
@@ -223,13 +224,20 @@ public class ParsedConsoleArgument
     /// </summary>
     /// <returns>The converted value, or the fallback value.</returns>
     private object GetParsedPositionalValue() =>
-        Found
-        && Arguments
-            .FirstOrDefault()
-            ?.Value?.TryGetTypedValue(Property.PropertyType, out object value)
-            is true
-            ? value
-            : GetDefaultValue();
+        Found && TryConvertPositionalValue(out object value) ? value : GetDefaultValue();
+
+    /// <summary>
+    ///     This method converts the first token matched by a positional argument to the property
+    ///     type. It expects at least one matched token.
+    /// </summary>
+    /// <param name="value">The converted value, or <see langword="null" /> when conversion fails.</param>
+    /// <returns><see langword="true" /> when the token converted; otherwise <see langword="false" />.</returns>
+    private bool TryConvertPositionalValue(out object value)
+    {
+        value = null;
+        return Arguments.FirstOrDefault()?.Value?.TryGetTypedValue(Property.PropertyType, out value)
+            is true;
+    }
 
     /// <summary>
     ///     This method returns the <see cref="Attribute" /> as <typeparamref name="TAttribute" />, or
@@ -271,6 +279,52 @@ public class ParsedConsoleArgument
             // Otherwise, we don't have a valid attribute, so return null.
             _ => null,
         };
+
+    /// <summary>
+    ///     This method converts the matched tokens to the property type like
+    ///     <see cref="GetParsedValue(ConsoleCommandArgumentCollection)" />, and also says whether a
+    ///     token the user typed failed to convert. The parser uses it so a value such as
+    ///     <c>--age abc</c> is reported as an error instead of being replaced by the default.
+    /// </summary>
+    /// <param name="argumentCollection">
+    ///     The full token collection being parsed. Only a nested verb uses it.
+    /// </param>
+    /// <param name="value">
+    ///     The converted value; when conversion fails or nothing matched, the fallback value
+    ///     <see cref="GetParsedValue(ConsoleCommandArgumentCollection)" /> gives.
+    /// </param>
+    /// <returns>
+    ///     <see langword="false" /> when at least one matched token does not convert; otherwise
+    ///     <see langword="true" />, including when nothing matched and for a nested verb.
+    /// </returns>
+    /// <exception cref="ConsoleParseException">
+    ///     For a nested verb that was given, when the tokens after it do not parse.
+    /// </exception>
+    public bool TryGetParsedValue(
+        ConsoleCommandArgumentCollection argumentCollection,
+        out object value
+    )
+    {
+        // Only a named or positional argument with matched tokens can fail to convert.
+        bool converted;
+        if (Found && Attribute is NamedConsoleArgumentAttribute)
+            converted = TryConvertNamedValue(out value);
+        else if (Found && Attribute is PositionalConsoleArgumentAttribute)
+            converted = TryConvertPositionalValue(out value);
+        else
+        {
+            // Nothing typed, or a nested verb: there is no user value to reject.
+            value = GetParsedValue(argumentCollection);
+            return true;
+        }
+
+        // A failed conversion still hands back the fallback value, the same one GetParsedValue gives.
+        if (!converted)
+            value = GetDefaultValue();
+
+        // We're done, report whether every matched token converted.
+        return converted;
+    }
 
     /// <summary>
     ///     This method converts the matched tokens to the property type and casts the result to

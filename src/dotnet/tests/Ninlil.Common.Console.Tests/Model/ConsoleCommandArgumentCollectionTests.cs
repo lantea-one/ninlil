@@ -1,3 +1,4 @@
+using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
@@ -8,11 +9,11 @@ namespace Ninlil.Common.Console.Tests.Model;
 /// <summary>
 ///     These tests cover <see cref="ConsoleCommandArgumentCollection" />: tokenizing raw CLI
 ///     arguments (positional, named, switch and embedded-value forms), the implicit conversions and
-///     factory methods, the <c>Parse*Arguments</c> matchers, and Parse/TryParse against the models
-///     in <c>TestSupport</c>. Every scenario supplies all required arguments and never starts with
-///     a help switch. Those two cases make <see cref="ConsoleCommandArgumentCollection.Parse(Type)" />
-///     call <see cref="Environment.Exit" />, which would stop the test host, so they are not tested
-///     here.
+///     factory methods, the <c>Parse*Arguments</c> matchers, and GetParseResult/Parse/TryParse
+///     against the models in <c>TestSupport</c> and the test-private models below. The parser never
+///     prints or exits, so help requests, missing and unconvertible arguments, verb-only command
+///     lines and throwing setters are asserted on the returned <see cref="ConsoleParseResult" /> or
+///     the thrown <see cref="ConsoleParseException" />, in process.
 /// </summary>
 public class ConsoleCommandArgumentCollectionTests
 {
@@ -298,13 +299,16 @@ public class ConsoleCommandArgumentCollectionTests
         Assert.Equal("Widget", model.Name);
     }
 
-    /// <summary>Verifies that a mismatched verb as the first argument throws.</summary>
+    /// <summary>
+    ///     Verifies that a mismatched verb as the first argument throws an exception that callers
+    ///     catching <see cref="InvalidOperationException" /> still see.
+    /// </summary>
     [Fact]
     public void Parse_WithMismatchedVerb_Throws()
     {
         ConsoleCommandArgumentCollection collection = new(["remove", "--name", "Widget"]);
 
-        Assert.Throws<InvalidOperationException>(() => collection.Parse(typeof(VerbModel)));
+        Assert.ThrowsAny<InvalidOperationException>(() => collection.Parse(typeof(VerbModel)));
     }
 
     /// <summary>
@@ -466,5 +470,372 @@ public class ConsoleCommandArgumentCollectionTests
         string result = collection.ToString();
 
         Assert.Equal("--name John", result);
+    }
+
+    /// <summary>
+    ///     This model has a non-default verb and only an optional switch, so the verb alone is a
+    ///     complete command line.
+    /// </summary>
+    [ConsoleVerb("list", "Lists the items.")]
+    public sealed class ListVerbModel : ConsoleCommandInputModel
+    {
+        /// <summary>The optional switch that shows every column.</summary>
+        [NamedConsoleArgument('l', "long", "Whether to show every column.", false, false)]
+        public bool Long { get; set; }
+    }
+
+    /// <summary>
+    ///     This model's named property setter always throws, to check that an exception while
+    ///     filling the model is reported as an invalid result. The input-model tests use it too.
+    /// </summary>
+    public sealed class ThrowingSetterModel : ConsoleCommandInputModel
+    {
+        /// <summary>The optional value whose setter rejects every assignment.</summary>
+        [NamedConsoleArgument("value", "A value the setter rejects.", false)]
+        public string Value
+        {
+            get => null;
+            set => throw new ArgumentException($"The value '{value}' is rejected.");
+        }
+    }
+
+    /// <summary>Verifies that a help switch is reported as a help request with the model's help text.</summary>
+    [Fact]
+    public void GetParseResult_WithHelpSwitch_ReportsHelpRequested()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection(["--help"]).GetParseResult(
+            typeof(SimpleNamedArgsModel)
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.HelpRequested, result.Outcome);
+        Assert.Contains("--name", result.HelpText);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Null(result.Model);
+    }
+
+    /// <summary>Verifies that Parse reports a help switch by throwing, carrying the help result.</summary>
+    [Fact]
+    public void Parse_WithHelpSwitch_ThrowsWithHelpRequested()
+    {
+        ConsoleParseException exception = Assert.Throws<ConsoleParseException>(() =>
+            new ConsoleCommandArgumentCollection(["--help"]).Parse(typeof(SimpleNamedArgsModel))
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.HelpRequested, exception.Result.Outcome);
+    }
+
+    /// <summary>Verifies that a help switch right after the verb is reported as a help request.</summary>
+    [Fact]
+    public void GetParseResult_WithHelpSwitchAfterVerb_ReportsHelpRequested()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "add",
+            "--help",
+        ]).GetParseResult(typeof(VerbModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.HelpRequested, result.Outcome);
+    }
+
+    /// <summary>Verifies that Parse reports a help switch after the verb by throwing.</summary>
+    [Fact]
+    public void Parse_WithHelpSwitchAfterVerb_ThrowsWithHelpRequested()
+    {
+        ConsoleParseException exception = Assert.Throws<ConsoleParseException>(() =>
+            new ConsoleCommandArgumentCollection(["add", "--help"]).Parse(typeof(VerbModel))
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.HelpRequested, exception.Result.Outcome);
+    }
+
+    /// <summary>Verifies that no arguments for a model with a required argument is invalid and names it.</summary>
+    [Fact]
+    public void GetParseResult_WithNoArgumentsAndARequiredArgument_ReportsInvalid()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection(
+            Array.Empty<string>()
+        ).GetParseResult(typeof(SimpleNamedArgsModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+        Assert.Contains("--name", Assert.Single(result.Errors));
+        Assert.Equal(1, result.ExitCode);
+    }
+
+    /// <summary>Verifies that Parse reports no arguments for a model with a required argument as a parse exception.</summary>
+    [Fact]
+    public void Parse_WithNoArgumentsAndARequiredArgument_ThrowsWithInvalid()
+    {
+        ConsoleParseException exception = Assert.Throws<ConsoleParseException>(() =>
+            new ConsoleCommandArgumentCollection(Array.Empty<string>()).Parse(
+                typeof(SimpleNamedArgsModel)
+            )
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, exception.Result.Outcome);
+    }
+
+    /// <summary>Verifies that a missing required argument is invalid, with the error leading the help text.</summary>
+    [Fact]
+    public void GetParseResult_WithMissingRequiredArgument_ReportsInvalid()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--age",
+            "3",
+        ]).GetParseResult(typeof(SimpleNamedArgsModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+        string error = Assert.Single(result.Errors);
+        Assert.Contains("--name", error);
+        Assert.StartsWith(error, result.HelpText);
+        Assert.Null(result.Exception);
+    }
+
+    /// <summary>Verifies that Parse reports a missing required argument as a parse exception.</summary>
+    [Fact]
+    public void Parse_WithMissingRequiredArgument_ThrowsWithInvalid()
+    {
+        ConsoleParseException exception = Assert.Throws<ConsoleParseException>(() =>
+            new ConsoleCommandArgumentCollection(["--age", "3"]).Parse(typeof(SimpleNamedArgsModel))
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, exception.Result.Outcome);
+        Assert.Contains("--name", exception.Message);
+    }
+
+    /// <summary>Verifies that a verb alone parses a model whose arguments are all optional.</summary>
+    [Fact]
+    public void GetParseResult_WithVerbOnlyAndOptionalArguments_ReportsParsedWithDefaults()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection(["list"]).GetParseResult(
+            typeof(ListVerbModel)
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Parsed, result.Outcome);
+        Assert.False(Assert.IsType<ListVerbModel>(result.Model).Long);
+    }
+
+    /// <summary>Verifies that TryParse succeeds for a verb alone when every argument is optional.</summary>
+    [Fact]
+    public void TryParse_WithVerbOnlyAndOptionalArguments_ReturnsTrue()
+    {
+        bool success = new ConsoleCommandArgumentCollection(["list"]).TryParse(
+            out ListVerbModel model
+        );
+
+        Assert.True(success);
+        Assert.NotNull(model);
+    }
+
+    /// <summary>Verifies that a verb alone for a model with a required argument is invalid and names it.</summary>
+    [Fact]
+    public void GetParseResult_WithVerbOnlyAndARequiredArgument_ReportsInvalid()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection(["add"]).GetParseResult(
+            typeof(VerbModel)
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+        Assert.Contains("--name", Assert.Single(result.Errors));
+    }
+
+    /// <summary>Verifies that Parse reports a verb alone with a missing required argument as a parse exception.</summary>
+    [Fact]
+    public void Parse_WithVerbOnlyAndARequiredArgument_ThrowsWithInvalid()
+    {
+        ConsoleParseException exception = Assert.Throws<ConsoleParseException>(() =>
+            new ConsoleCommandArgumentCollection(["add"]).Parse(typeof(VerbModel))
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, exception.Result.Outcome);
+    }
+
+    /// <summary>Verifies that another model's verb is reported as not matched.</summary>
+    [Fact]
+    public void GetParseResult_WithMismatchedVerb_ReportsNotMatched()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "remove",
+            "--name",
+            "x",
+        ]).GetParseResult(typeof(VerbModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.NotMatched, result.Outcome);
+        Assert.Equal(1, result.ExitCode);
+    }
+
+    /// <summary>Verifies that a setter that throws is an invalid result carrying the setter's exception.</summary>
+    [Fact]
+    public void GetParseResult_WithThrowingSetter_ReportsInvalidWithException()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--value",
+            "x",
+        ]).GetParseResult(typeof(ThrowingSetterModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+        Assert.IsType<ArgumentException>(result.Exception);
+        Assert.Contains("rejected", Assert.Single(result.Errors));
+    }
+
+    /// <summary>Verifies that TryParse is false when a setter throws.</summary>
+    [Fact]
+    public void TryParse_WithThrowingSetter_ReturnsFalse()
+    {
+        bool success = new ConsoleCommandArgumentCollection(["--value", "x"]).TryParse(
+            typeof(ThrowingSetterModel),
+            out object model
+        );
+
+        Assert.False(success);
+        Assert.Null(model);
+    }
+
+    /// <summary>Verifies that a value that does not convert to an integer is invalid, naming the argument and the value.</summary>
+    [Fact]
+    public void GetParseResult_WithUnconvertibleInteger_ReportsInvalid()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--name",
+            "x",
+            "--age",
+            "abc",
+        ]).GetParseResult(typeof(SimpleNamedArgsModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+        string error = Assert.Single(result.Errors);
+        Assert.Contains("--age", error);
+        Assert.Contains("'abc'", error);
+    }
+
+    /// <summary>Verifies that TryParse is false for a value that does not convert to an integer.</summary>
+    [Fact]
+    public void TryParse_WithUnconvertibleInteger_ReturnsFalse()
+    {
+        bool success = new ConsoleCommandArgumentCollection([
+            "--name",
+            "x",
+            "--age",
+            "abc",
+        ]).TryParse(out SimpleNamedArgsModel model);
+
+        Assert.False(success);
+        Assert.Null(model);
+    }
+
+    /// <summary>Verifies that a value that is not a boolean word is invalid for a switch.</summary>
+    [Fact]
+    public void GetParseResult_WithUnconvertibleBoolean_ReportsInvalid()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--name",
+            "x",
+            "--verbose",
+            "maybe",
+        ]).GetParseResult(typeof(SimpleNamedArgsModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+        Assert.Contains("maybe", Assert.Single(result.Errors));
+    }
+
+    /// <summary>Verifies that TryParse is false for a value that is not a boolean word.</summary>
+    [Fact]
+    public void TryParse_WithUnconvertibleBoolean_ReturnsFalse()
+    {
+        bool success = new ConsoleCommandArgumentCollection([
+            "--name",
+            "x",
+            "--verbose",
+            "maybe",
+        ]).TryParse(out SimpleNamedArgsModel _);
+
+        Assert.False(success);
+    }
+
+    /// <summary>Verifies that parsing leaves the collection unchanged, so a second parse also succeeds.</summary>
+    [Fact]
+    public void GetParseResult_CalledTwiceOnOneCollection_ParsesBothTimes()
+    {
+        ConsoleCommandArgumentCollection collection = new(["add", "--name", "w"]);
+
+        ConsoleParseResult first = collection.GetParseResult(typeof(VerbModel));
+        ConsoleParseResult second = collection.GetParseResult(typeof(VerbModel));
+
+        Assert.True(first.Succeeded);
+        Assert.True(second.Succeeded);
+        Assert.Equal("add", collection[0].Value);
+    }
+
+    /// <summary>Verifies that Parse on the same collection twice returns a model both times.</summary>
+    [Fact]
+    public void Parse_CalledTwiceOnOneCollection_ReturnsAModelBothTimes()
+    {
+        ConsoleCommandArgumentCollection collection = new(["add", "--name", "w"]);
+
+        object first = collection.Parse(typeof(VerbModel));
+        object second = collection.Parse(typeof(VerbModel));
+
+        Assert.Equal("w", Assert.IsType<VerbModel>(first).Name);
+        Assert.Equal("w", Assert.IsType<VerbModel>(second).Name);
+    }
+
+    /// <summary>Verifies that a lone dash, the usual stdin marker, is a positional value.</summary>
+    [Fact]
+    public void Constructor_WithLoneDash_ParsesPositionalArgument()
+    {
+        ConsoleCommandArgumentCollection collection = new(["-"]);
+
+        ConsoleCommandArgument argument = Assert.Single(collection);
+        Assert.Equal(ConsoleCommandArgumentType.Positional, argument.Type);
+        Assert.Equal("-", argument.Value);
+    }
+
+    /// <summary>Verifies that a lone dash after a named argument is that argument's value.</summary>
+    [Fact]
+    public void Constructor_WithLoneDashAfterNamedArgument_UsesItAsTheValue()
+    {
+        ConsoleCommandArgumentCollection collection = new(["--input", "-"]);
+
+        ConsoleCommandArgument argument = Assert.Single(collection);
+        Assert.Equal("input", argument.Name);
+        Assert.Equal("-", argument.Value);
+    }
+
+    /// <summary>Verifies that a help switch inside a nested verb reports the nested verb's help.</summary>
+    [Fact]
+    public void GetParseResult_WithHelpSwitchInsideNestedVerb_ReportsNestedHelp()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "child",
+            "--help",
+        ]).GetParseResult(typeof(ParentWithNestedVerbModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.HelpRequested, result.Outcome);
+        Assert.Contains("--value", result.HelpText);
+    }
+
+    /// <summary>Verifies that Parse reports a help switch inside a nested verb by throwing.</summary>
+    [Fact]
+    public void Parse_WithHelpSwitchInsideNestedVerb_ThrowsWithHelpRequested()
+    {
+        ConsoleParseException exception = Assert.Throws<ConsoleParseException>(() =>
+            new ConsoleCommandArgumentCollection(["child", "--help"]).Parse(
+                typeof(ParentWithNestedVerbModel)
+            )
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.HelpRequested, exception.Result.Outcome);
+    }
+
+    /// <summary>Verifies that a nested verb with valid arguments parses into the nested model.</summary>
+    [Fact]
+    public void GetParseResult_WithNestedVerbArguments_ReportsParsed()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "child",
+            "--value",
+            "hello",
+        ]).GetParseResult(typeof(ParentWithNestedVerbModel));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("hello", Assert.IsType<ParentWithNestedVerbModel>(result.Model).Child.Value);
     }
 }

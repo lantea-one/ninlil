@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using ConsoleTables;
 using Ninlil.Common.Console.Attribute;
+using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Service;
 using Ninlil.Common.Extension.Object;
 using Ninlil.Common.Extension.String;
@@ -277,19 +278,55 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
 
     /// <summary>
     ///     This method parses the <paramref name="arguments" /> from the CLI into an
-    ///     <see cref="IConsoleCommandInputModel" /> of the specified <paramref name="type" />.
+    ///     <see cref="IConsoleCommandInputModel" /> of the specified <paramref name="type" /> and
+    ///     reports how it went. It never prints and never ends the process. See
+    ///     <see cref="ConsoleCommandArgumentCollection.GetParseResult(Type)" /> for the rules.
+    /// </summary>
+    /// <param name="type">The type of the console command input model to parse the arguments into.</param>
+    /// <param name="arguments">The arguments from the CLI to parse into the model.</param>
+    /// <returns>The parse result; the model is in <see cref="ConsoleParseResult.Model" /> when it parsed.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="type" /> is null.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///     When <paramref name="type" /> does not implement <see cref="IConsoleCommandInputModel" />.
+    /// </exception>
+    public static ConsoleParseResult GetParseResult(
+        [NotNull] Type type,
+        params string[] arguments
+    ) => new ConsoleCommandArgumentCollection(arguments).GetParseResult(type);
+
+    /// <summary>
+    ///     This method parses the <paramref name="arguments" /> from the CLI into an
+    ///     <see cref="IConsoleCommandInputModel" /> of the specified <typeparamref name="TInputModel" />
+    ///     and reports how it went. See
+    ///     <see cref="ConsoleCommandArgumentCollection.GetParseResult(Type)" /> for the rules.
+    /// </summary>
+    /// <param name="arguments">The arguments from the CLI to parse into the model.</param>
+    /// <typeparam name="TInputModel">
+    ///     The type of the console command input model to parse the arguments into.
+    /// </typeparam>
+    /// <returns>The parse result.</returns>
+    public static ConsoleParseResult GetParseResult<TInputModel>(params string[] arguments)
+        where TInputModel : class, IConsoleCommandInputModel =>
+        GetParseResult(typeof(TInputModel), arguments);
+
+    /// <summary>
+    ///     This method parses the <paramref name="arguments" /> from the CLI into an
+    ///     <see cref="IConsoleCommandInputModel" /> of the specified <paramref name="type" />. It never
+    ///     prints, never ends the process and never returns <see langword="null" />.
     /// </summary>
     /// <param name="type">The type of the console command input model to parse the arguments into.</param>
     /// <param name="arguments">The arguments from the CLI to parse into the model.</param>
     /// <returns>
     ///     The <see cref="IConsoleCommandInputModel" /> representation of the parsed <paramref name="arguments" />.
     /// </returns>
-    /// <exception cref="ArgumentNullException">
-    ///     When the <paramref name="type" /> is null or the <paramref name="arguments" /> are null or empty.
+    /// <exception cref="ArgumentNullException">When <paramref name="type" /> is null.</exception>
+    /// <exception cref="ConsoleParseException">
+    ///     When no model was produced: help was requested, the first argument does not match the
+    ///     verb defined in <paramref name="type" />, or the arguments are invalid. The exception
+    ///     carries the <see cref="ConsoleParseResult" /> with the help text to show.
     /// </exception>
-    /// <exception cref="ArgumentException">
-    ///     When the <paramref name="type" /> is not a valid console command input model or the first argument
-    ///     in <paramref name="arguments" /> does not match the verb defined in the <paramref name="type" />.
+    /// <exception cref="InvalidOperationException">
+    ///     When <paramref name="type" /> does not implement <see cref="IConsoleCommandInputModel" />.
     /// </exception>
     public static object Parse([NotNull] Type type, params string[] arguments) =>
         new ConsoleCommandArgumentCollection(arguments).Parse(type);
@@ -297,6 +334,7 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     /// <summary>
     ///     This method parses the <paramref name="arguments" /> from the CLI into an
     ///     <see cref="IConsoleCommandInputModel" /> of the specified <typeparamref name="TInputModel" />.
+    ///     See <see cref="Parse(Type, string[])" /> for the rules.
     /// </summary>
     /// <param name="arguments">The arguments from the CLI to parse into the model.</param>
     /// <typeparam name="TInputModel">
@@ -305,12 +343,8 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     /// <returns>
     ///     The <typeparamref name="TInputModel" /> representation of the parsed <paramref name="arguments" />.
     /// </returns>
-    /// <exception cref="ArgumentNullException">
-    ///     When the <typeparamref name="TInputModel" /> is null or the <paramref name="arguments" /> are null or empty.
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    ///     When the <typeparamref name="TInputModel" /> is not a valid console command input model or the first argument
-    ///     in <paramref name="arguments" /> does not match the verb defined in the <typeparamref name="TInputModel" />.
+    /// <exception cref="ConsoleParseException">
+    ///     In the same cases as <see cref="Parse(Type, string[])" />.
     /// </exception>
     public static TInputModel Parse<TInputModel>(params string[] arguments)
         where TInputModel : class, IConsoleCommandInputModel =>
@@ -318,11 +352,13 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
 
     /// <summary>
     ///     This method attempts to parse the <paramref name="arguments" /> from the CLI into an
-    ///     <see cref="IConsoleCommandInputModel" /> of the specified <paramref name="type" />. Any
-    ///     exception from parsing counts as a failure.
+    ///     <see cref="IConsoleCommandInputModel" /> of the specified <paramref name="type" />. It is
+    ///     true exactly when <see cref="GetParseResult(Type, string[])" /> reports
+    ///     <see cref="ConsoleParseOutcomeEnum.Parsed" />; help, a mismatched verb, invalid arguments
+    ///     and an invalid type are all false.
     /// </summary>
     /// <param name="type">The type of the console command input model to parse the arguments into.</param>
-    /// <param name="model">The output model to parse the arguments into.</param>
+    /// <param name="model">The parsed model, or <see langword="null" /> on failure.</param>
     /// <param name="arguments">The arguments from the CLI to parse into the model.</param>
     /// <returns>
     ///     A <see cref="bool" /> indicating whether the parsing was successful or not.
@@ -332,13 +368,16 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
         // Try to parse the arguments into the model.
         try
         {
-            // Parse the arguments into the output model variable.
-            model = Parse(type, arguments);
+            // Parse the arguments and localize the result.
+            ConsoleParseResult result = GetParseResult(type, arguments);
 
-            // We're done, no exceptions occurred, so return true.
-            return true;
+            // The result only carries a model when it parsed, so a null model is never success.
+            model = result.Model;
+
+            // We're done, report whether a model was produced.
+            return result.Succeeded;
         }
-        // Catch any exceptions that occur during parsing.
+        // Only an invalid type throws; it is a failure like any other here.
         catch (Exception)
         {
             // Reset the output model variable to null.

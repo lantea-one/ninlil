@@ -1,4 +1,5 @@
 using Ninlil.Common.Console.Attribute;
+using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
 
@@ -9,9 +10,9 @@ namespace Ninlil.Common.Console.Tests.Model;
 ///     These tests cover <see cref="ConsoleCommandInputModel" /> using the models in
 ///     <c>TestSupport</c>: attribute discovery (named, positional, nested verb, verb), the
 ///     argument-name and predicate helpers, <see cref="ConsoleCommandInputModel.SetDefaults" />,
-///     and the static Parse/TryParse/help-text entry points. As in
-///     <see cref="ConsoleCommandArgumentCollectionTests" />, every parse supplies all required
-///     arguments so the parser never reaches its process-exit paths.
+///     and the static GetParseResult/Parse/TryParse/help-text entry points. Parsing never prints or
+///     exits, so failed parses are asserted on the returned <see cref="ConsoleParseResult" /> or
+///     the thrown <see cref="ConsoleParseException" />, in process.
 /// </summary>
 public class ConsoleCommandInputModelTests
 {
@@ -340,5 +341,50 @@ public class ConsoleCommandInputModelTests
         );
 
         Assert.Contains(collection, e => e.Verb && e.Name == "add");
+    }
+
+    /// <summary>Verifies that the static GetParseResult parses valid arguments into the model.</summary>
+    [Fact]
+    public void GetParseResult_Generic_WithValidArguments_ReportsParsed()
+    {
+        ConsoleParseResult result = ConsoleCommandInputModel.GetParseResult<SimpleNamedArgsModel>(
+            "--name",
+            "John"
+        );
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(typeof(SimpleNamedArgsModel), result.InputModelType);
+        Assert.Equal("John", Assert.IsType<SimpleNamedArgsModel>(result.Model).Name);
+    }
+
+    /// <summary>
+    ///     Verifies that the static Parse reports a missing required argument with a
+    ///     <see cref="ConsoleParseException" />, which callers catching
+    ///     <see cref="InvalidOperationException" /> still see.
+    /// </summary>
+    [Fact]
+    public void Parse_WithMissingRequiredArgument_ThrowsConsoleParseExceptionThatIsAnInvalidOperationException()
+    {
+        InvalidOperationException exception = Assert.ThrowsAny<InvalidOperationException>(() =>
+            ConsoleCommandInputModel.Parse(typeof(SimpleNamedArgsModel), "--age", "3")
+        );
+
+        ConsoleParseException parseException = Assert.IsType<ConsoleParseException>(exception);
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, parseException.Result.Outcome);
+    }
+
+    /// <summary>Verifies that the static TryParse is false when a setter throws, so no null model counts as success.</summary>
+    [Fact]
+    public void TryParse_WithThrowingSetter_ReturnsFalse()
+    {
+        bool success = ConsoleCommandInputModel.TryParse(
+            typeof(ConsoleCommandArgumentCollectionTests.ThrowingSetterModel),
+            out object model,
+            "--value",
+            "x"
+        );
+
+        Assert.False(success);
+        Assert.Null(model);
     }
 }

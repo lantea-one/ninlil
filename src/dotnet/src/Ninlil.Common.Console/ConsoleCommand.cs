@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Ninlil.Common.Console.Attribute;
+using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Service;
 
@@ -103,6 +104,42 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     ///     and ignore case.
     /// </summary>
     public static readonly string[] HelpRequestSwitches = ["?", "/?", "/h", "h", "help", "version"];
+
+    /// <summary>
+    ///     This method says whether a raw first argument asks for help: its name with leading dashes
+    ///     stripped is one of <see cref="HelpRequestSwitches" /> (ignoring case). Null and blank
+    ///     arguments are not help requests; they are checked first because
+    ///     <see cref="NamedConsoleArgumentAttribute.SanitizeArgumentName" /> throws for them.
+    /// </summary>
+    /// <param name="argument">The raw command-line argument.</param>
+    /// <returns><see langword="true" /> for a help request; otherwise <see langword="false" />.</returns>
+    internal static bool IsHelpRequest(string argument) =>
+        argument?.Trim() is { Length: > 0 }
+        && HelpRequestSwitches.Contains(
+            NamedConsoleArgumentAttribute.SanitizeArgumentName(argument),
+            StringComparer.OrdinalIgnoreCase
+        );
+
+    /// <summary>
+    ///     This method says whether a token asks for help. Only a named token counts: its long name
+    ///     (dashes stripped) or its short character is one of <see cref="HelpRequestSwitches" />
+    ///     (ignoring case). A positional token such as <c>help</c> is a value for the model, so the
+    ///     parser does not treat it as a request.
+    /// </summary>
+    /// <param name="argument">The token to check.</param>
+    /// <returns><see langword="true" /> for a help request; otherwise <see langword="false" />.</returns>
+    internal static bool IsHelpRequest(ConsoleCommandArgument argument) =>
+        argument is { Type: ConsoleCommandArgumentType.Named }
+        && (
+            IsHelpRequest(argument.Name)
+            || (
+                argument.Character != char.MinValue
+                && HelpRequestSwitches.Contains(
+                    argument.Character.ToString(),
+                    StringComparer.OrdinalIgnoreCase
+                )
+            )
+        );
 
     /// <summary>
     ///     This property contains the version shown in the help text.

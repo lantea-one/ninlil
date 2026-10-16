@@ -2,7 +2,6 @@
 using System.Xml.Serialization;
 using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Enum;
-using Ninlil.Common.Console.Service;
 using Ninlil.Common.Extension.Type;
 
 // Define our namespace.
@@ -13,9 +12,13 @@ namespace Ninlil.Common.Console.Model;
 ///     input model. The constructors split raw arguments into <see cref="ConsoleCommandArgument" />
 ///     tokens: a token starting with <c>-</c> or <c>--</c> is named (its value is the text after
 ///     <c>=</c>, else the next token, else <c>true</c> for a switch) and any other token is
-///     positional. <see cref="Parse(System.Type)" /> then matches those tokens against the
-///     attributes on an input model type and fills in a new instance.
-///     <see cref="ConsoleCommandInputModel.Parse(System.Type, string[])" /> is the usual entry point.
+///     positional; a lone <c>-</c> is positional too. <see cref="GetParseResult(System.Type)" /> then
+///     matches those tokens against the attributes on an input model type, fills in a new instance
+///     and reports the outcome as a <see cref="ConsoleParseResult" />. The parser never prints and
+///     never ends the process: help requests and errors are results, and the host owns the output
+///     and the exit code. <see cref="Parse(System.Type)" /> and <see cref="TryParse(System.Type, out object)" />
+///     are shortcuts over it; <see cref="ConsoleCommandInputModel.Parse(System.Type, string[])" /> is
+///     the usual entry point.
 /// </summary>
 [XmlInclude(typeof(List<ConsoleCommandArgument>))]
 [XmlRoot("consoleArgumentCollection")]
@@ -103,14 +106,15 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
         // Iterate through the provided arguments and parse them into ConsoleCommandArgument instances.
         for (int a = 0; a < arguments.Count(); ++a)
         {
-            // Localize the argument for easier access.
-            string argument = arguments.ElementAt(a).Trim();
+            // Localize the argument for easier access. A null element is read as an empty token.
+            string argument = arguments.ElementAt(a)?.Trim() ?? string.Empty;
 
             // Instantiate our new console argument instance.
             ConsoleCommandArgument commandArgument = new() { Index = a };
 
-            // Check for a positional argument.
-            if (!argument.StartsWith('-'))
+            // Check for a positional argument. A lone "-" is the usual stdin marker, so it is a value,
+            // not a named argument with no name.
+            if (!IsNamedToken(argument))
             {
                 // Ensure we have an empty character on the argument, as this is a positional argument.
                 commandArgument.Character = char.MinValue;
@@ -171,8 +175,10 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
                 continue;
             }
 
-            // Check for a switch value.
-            if (arguments.ElementAtOrDefault(a + 1)?.StartsWith('-') is not false)
+            // Check for a switch value. The next token is this argument's value unless it is missing
+            // or is itself named; a lone "-" counts as a value by the same rule as above.
+            string next = arguments.ElementAtOrDefault(a + 1)?.Trim();
+            if (next is null || IsNamedToken(next))
             {
                 // The next token is missing or is another named argument, so this is a switch: set it to true.
                 commandArgument.Value = bool.TrueString.ToLower();
@@ -185,7 +191,7 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
             }
 
             // Set the value to the next argument, as this is a named argument with a value.
-            commandArgument.Value = arguments.ElementAt(a + 1).Trim();
+            commandArgument.Value = next;
 
             // Add the parsed argument to our response list.
             Add(commandArgument);
@@ -195,6 +201,15 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
             ++a;
         }
     }
+
+    /// <summary>
+    ///     This method says whether a raw token is a named argument: it starts with <c>-</c> and has
+    ///     at least one more character. A lone <c>-</c> is a positional value.
+    /// </summary>
+    /// <param name="argument">The trimmed raw token.</param>
+    /// <returns><see langword="true" /> for a named token; otherwise <see langword="false" />.</returns>
+    private static bool IsNamedToken(string argument) =>
+        argument.Length > 1 && argument.StartsWith('-');
 
     /// <summary>
     ///     This constructor tokenizes a single command-line string, split on spaces. Quoting is not
@@ -304,271 +319,139 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
             .ToList();
 
     /// <summary>
-    ///     This method parses the tokens into a new instance of <paramref name="inputModelType" />.
-    ///     <list type="bullet">
+    ///     This method parses the tokens into a new instance of <paramref name="inputModelType" /> and
+    ///     reports how it went. It never prints, never ends the process and never changes this
+    ///     collection: the steps run on a copy of the tokens, so the same collection can be parsed
+    ///     again or against another model. The steps, in order:
+    ///     <list type="number">
     ///         <item>
-    ///             With no tokens it returns a model with attribute defaults applied, unless the model
-    ///             has required arguments or a verb that is not the default verb.
+    ///             If the model has a verb that is not the default verb, the first token must be a
+    ///             positional token equal to it (ignoring case), else the result is
+    ///             <see cref="ConsoleParseOutcomeEnum.NotMatched" />. The verb token is then dropped.
     ///         </item>
     ///         <item>
-    ///             If the model has a non-default verb, the first token must be that verb and is
-    ///             removed before parsing.
+    ///             If the next token is a named help switch
+    ///             (<see cref="ConsoleCommand.HelpRequestSwitches" />), the result is
+    ///             <see cref="ConsoleParseOutcomeEnum.HelpRequested" /> with the model's help text.
     ///         </item>
     ///         <item>
-    ///             If the next token is a help switch it prints the help text and exits the process.
+    ///             With no tokens left, the model gets its attribute defaults without overwriting
+    ///             property initializers; a missing required argument makes the result
+    ///             <see cref="ConsoleParseOutcomeEnum.Invalid" />.
     ///         </item>
     ///         <item>
-    ///             If a required argument is missing it prints the help text with the missing
-    ///             arguments and exits the process with code 1.
+    ///             Otherwise the tokens are matched to the model's arguments. A missing required
+    ///             argument, a value that does not convert to its property type, or an invalid
+    ///             nested verb makes the result <see cref="ConsoleParseOutcomeEnum.Invalid" />,
+    ///             with one error per problem. Tokens nothing claimed go to the property marked
+    ///             with <see cref="UnknownConsoleArgumentsAttribute" />, if any.
     ///         </item>
     ///         <item>
-    ///             Otherwise it sets every argument property, and puts tokens nothing claimed into
-    ///             the property marked with <see cref="UnknownConsoleArgumentsAttribute" />, if any.
+    ///             An exception while creating or filling the model makes the result
+    ///             <see cref="ConsoleParseOutcomeEnum.Invalid" /> with
+    ///             <see cref="ConsoleParseResult.Exception" /> set.
     ///         </item>
     ///     </list>
     /// </summary>
     /// <param name="inputModelType">The input model type to create and populate.</param>
-    /// <returns>
-    ///     The populated input model, or <see langword="null" /> when setting the properties throws
-    ///     (the exception is written to the console).
-    /// </returns>
+    /// <returns>The parse result. The model is in <see cref="ConsoleParseResult.Model" /> when it parsed.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="inputModelType" /> is null.</exception>
     /// <exception cref="InvalidOperationException">
     ///     When <paramref name="inputModelType" /> does not implement
-    ///     <see cref="IConsoleCommandInputModel" />, when there are no tokens but the model needs
-    ///     some, or when the first token does not match the model's verb.
+    ///     <see cref="IConsoleCommandInputModel" />. This is a programmer error, not a parse failure.
     /// </exception>
-    public object Parse(System.Type inputModelType)
+    public ConsoleParseResult GetParseResult(System.Type inputModelType)
     {
-        // Ensure the type is valid for parsing, throw an exception if it's not.
+        // Ensure the type is valid for parsing; a wrong type is a bug in the caller, so it throws.
+        ArgumentNullException.ThrowIfNull(inputModelType);
         if (!inputModelType.IsAssignableTo(typeof(IConsoleCommandInputModel)))
             throw new InvalidOperationException(
                 "The input model type must implement the IConsoleCommandInputModel interface."
             );
 
-        // Instantiate our input model instance to populate with the parsed arguments.
-        object inputModel = inputModelType.CreateInstance();
+        // Work on a copy so dropping the verb token leaves this collection intact for the next model.
+        ConsoleCommandArgumentCollection tokens = new(this);
 
-        // Check for no arguments then either return the model populated with its defaults
-        // (via attribute/property defaults) or throw an exception if there are required arguments.
-        if (Count is 0)
+        // A model with a non-default verb only owns a command line that starts with that verb.
+        string verb = GetRequiredVerb(inputModelType);
+        if (verb is not null)
         {
-            // Ensure the model has no required arguments (or a required verb), throw an exception if it does.
             if (
-                (inputModel as IConsoleCommandInputModel)?.HasRequiredArguments() is not false
-                || (
-                    (inputModel as IConsoleCommandInputModel).HasVerb()
-                    && !(inputModel as IConsoleCommandInputModel).IsDefault()
-                )
+                tokens.FirstOrDefault() is not { Type: ConsoleCommandArgumentType.Positional } first
+                || first.Value?.Equals(verb, StringComparison.OrdinalIgnoreCase) is not true
             )
-                throw new InvalidOperationException(
-                    "No arguments were provided, but this input model requires a verb and/or required arguments."
+                return new(
+                    ConsoleParseOutcomeEnum.NotMatched,
+                    inputModelType,
+                    errors: [$"The first argument must be the verb '{verb}'."]
                 );
 
-            // Build a model from defaults alone.
-            try
-            {
-                // Parse and localize the named arguments into their defaults.
-                List<ParsedConsoleArgument> namedArguments = ParseNamedArguments(inputModelType);
-
-                // Parse and localize the nested verbs into their defaults.
-                List<ParsedConsoleArgument> nestedVerbs = ParseNestedVerbs(inputModelType);
-
-                // Parse and localize the positional arguments into their defaults.
-                List<ParsedConsoleArgument> positionalArguments = ParsePositionalArguments(
-                    inputModelType
-                );
-
-                // Reset our input model instance to a new one.
-                inputModel = inputModelType.CreateInstance();
-
-                // Apply attribute defaults only where one is defined (or for nested verbs), so property
-                // initializers are not overwritten.
-                foreach (
-                    ParsedConsoleArgument argument in namedArguments
-                        .Concat(nestedVerbs)
-                        .Concat(positionalArguments)
-                )
-                    if (
-                        argument.Attribute is NestedConsoleVerbAttribute
-                        || argument.GetAttribute<NamedConsoleArgumentAttribute>()?.Default
-                            is not null
-                        || argument.GetAttribute<PositionalConsoleArgumentAttribute>()?.Default
-                            is not null
-                    )
-                    {
-                        // Localize the current value of the object.
-                        object currentValue = argument.Property.GetValue(inputModel);
-
-                        // Localize the type's default value.
-                        object typeDefault = argument.Property.PropertyType.GetDefaultValue();
-
-                        // If the current value and type's default value are equal then
-                        // override the value with the default value from the attribute.
-                        if (Equals(currentValue, typeDefault))
-                            argument.SetValue(inputModel);
-                    }
-
-                // We're done, return the parsed default input model.
-                return inputModel;
-            }
-            // Catch any exceptions that occur.
-            catch (System.Exception exception)
-            {
-                // Write a warning to the console indicating the exception that occurred.
-                ConsoleService.WriteLine(exception);
-
-                // Rethrow so TryParse reports the failure.
-                throw;
-            }
+            // Drop the verb so the remaining tokens are the model's own arguments.
+            tokens.RemoveAt(0);
         }
 
-        // Check for a verb on the input model.
-        if (
-            (inputModel as IConsoleCommandInputModel)?.HasVerb() is true
-            && !(inputModel as IConsoleCommandInputModel).IsDefault()
-        )
-        {
-            // Localize the verb name from the type.
-            string verb = inputModelType
-                .GetCustomAttribute<ConsoleVerbAttribute>(true)
-                ?.Name?.Trim();
-
-            // When the verb has a name, the first token must match it. Remove it so the remaining
-            // tokens can be parsed.
-            if (verb?.Trim() is not (null or { Length: 0 }))
-                if (
-                    !this.FirstOrDefault()?.Value.Equals(verb, StringComparison.OrdinalIgnoreCase)
-                    is true
-                )
-                    throw new InvalidOperationException(
-                        $"The first argument in the collection must match the verb name '{verb}' defined in the input model type."
-                    );
-                else
-                    RemoveAt(0);
-        }
-
-        // Check the first token for a help request. A positional token has a null Name, and
-        // SanitizeArgumentName throws for null, so only compare the name when there is one.
-        if (
-            (
-                this[0].Name is not null
-                && ConsoleCommand.HelpRequestSwitches.Contains(
-                    NamedConsoleArgumentAttribute.SanitizeArgumentName(this[0].Name),
-                    StringComparer.OrdinalIgnoreCase
-                )
-            )
-            || ConsoleCommand.HelpRequestSwitches.Contains(
-                this[0].Character.ToString(),
-                StringComparer.OrdinalIgnoreCase
-            )
-        )
-        {
-            // Generate the help text for the type.
-            ConsoleCommand.HelpText(inputModelType);
-
-            // Exit the process once the help text is printed.
-            Environment.Exit(0);
-
-            // Unreachable after Environment.Exit, but the compiler needs a return.
-            return null;
-        }
-
-        // Try to parse the various types of arguments from the CLI into the input model.
-        try
-        {
-            // Localize the named console arguments from the input model type for later access.
-            List<ParsedConsoleArgument> namedArguments = ParseNamedArguments(inputModelType);
-
-            // Localize the nested console verbs from the input model type for later access.
-            List<ParsedConsoleArgument> nestedVerbs = ParseNestedVerbs(inputModelType);
-
-            // Localize the positional console arguments from the input model type for later access.
-            List<ParsedConsoleArgument> positionalArguments = ParsePositionalArguments(
-                inputModelType
+        // A help switch right after the verb (or first, without one) asks for this model's help.
+        if (tokens.Count > 0 && ConsoleCommand.IsHelpRequest(tokens[0]))
+            return new(
+                ConsoleParseOutcomeEnum.HelpRequested,
+                inputModelType,
+                helpText: ConsoleCommand.GetHelpText(inputModelType)
             );
 
-            // Localize our missing arguments.
-            IEnumerable<string> missing = positionalArguments
-                .Where(a => a.Required && !a.Found)
-                .Select(a =>
-                    $"Missing argument at index: <{a.GetAttribute<PositionalConsoleArgumentAttribute>().Position}>"
-                )
-                .Concat(
-                    namedArguments
-                        .Where(a => a.Required && !a.Found)
-                        .Select(a => a.GetAttribute<NamedConsoleArgumentAttribute>())
-                        .Select(a =>
-                            a.ShortName is not null
-                                ? $"Missing argument: -{a.ShortName}, --{a.Name} ({a.Description})"
-                                : $"Missing argument: --{a.Name} ({a.Description})"
-                        )
-                )
-                .ToList();
-
-            // Check for any missing required arguments.
-            if (missing.Any())
-            {
-                // Display the help text with the missing arguments.
-                ConsoleCommandInputModel.HelpText(
-                    inputModelType,
-                    string.Join(Environment.NewLine, missing)
-                );
-
-                // Exit the process with a failure code once the help text is printed.
-                Environment.Exit(1);
-
-                // Unreachable after Environment.Exit, but the compiler needs a return.
-                return null;
-            }
-
-            // Reset our input model instance to a new one.
-            inputModel = inputModelType.CreateInstance();
-
-            // If the model has a ConsoleCommandArgumentCollection property marked with
-            // UnknownConsoleArgumentsAttribute, fill it with every token no argument or nested verb
-            // claimed, in their original order.
-            inputModelType
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .FirstOrDefault(p =>
-                    p.GetCustomAttribute<UnknownConsoleArgumentsAttribute>(true) is not null
-                    && typeof(ConsoleCommandArgumentCollection).IsAssignableFrom(p.PropertyType)
-                )
-                ?.SetValue(
-                    inputModel,
-                    new ConsoleCommandArgumentCollection(
-                        this.Where(a =>
-                                !namedArguments
-                                    .Concat(nestedVerbs)
-                                    .Concat(positionalArguments)
-                                    .SelectMany(p => p.Arguments.Select(c => c.Index))
-                                    .Contains(a.Index)
-                            )
-                            .OrderBy(a => a.Index)
-                    )
-                );
-
-            // Set every argument property on the model. The full token collection is passed along so
-            // a nested verb can parse the tokens that follow its own verb token instead of falling back
-            // to its default.
-            foreach (
-                ParsedConsoleArgument argument in namedArguments
-                    .Concat(nestedVerbs)
-                    .Concat(positionalArguments)
-            )
-                argument.SetValue(inputModel, this);
-
-            // We're done, return the parsed and populated input model instance.
-            return inputModel;
+        // Any exception from here on (a constructor or setter that throws) is a failed parse, not a
+        // crash: the host decides what to show.
+        try
+        {
+            return tokens.Count is 0
+                ? tokens.GetDefaultsResult(inputModelType)
+                : tokens.GetMatchedResult(inputModelType);
         }
-        // Catch any exceptions that occur during parsing.
         catch (System.Exception exception)
         {
-            // Write the exception to the console in red text.
-            ConsoleService.WriteLine(exception, true);
+            // A setter called through reflection wraps its exception; report the setter's own one.
+            System.Exception cause = exception
+                is TargetInvocationException { InnerException: not null } invocation
+                ? invocation.InnerException
+                : exception;
 
-            // Return a null result.
-            return null;
+            // Report the exception as the single error.
+            return CreateInvalidResult(inputModelType, [cause.Message], cause);
         }
+    }
+
+    /// <summary>
+    ///     This method parses the tokens into a new <typeparamref name="TInputModel" /> and reports
+    ///     how it went. See <see cref="GetParseResult(System.Type)" /> for the rules.
+    /// </summary>
+    /// <typeparam name="TInputModel">The input model type to create and populate.</typeparam>
+    /// <returns>The parse result.</returns>
+    public ConsoleParseResult GetParseResult<TInputModel>()
+        where TInputModel : class, IConsoleCommandInputModel => GetParseResult(typeof(TInputModel));
+
+    /// <summary>
+    ///     This method parses the tokens into a new instance of <paramref name="inputModelType" />
+    ///     with <see cref="GetParseResult(System.Type)" />. It never prints and never ends the
+    ///     process, and it never returns <see langword="null" />.
+    /// </summary>
+    /// <param name="inputModelType">The input model type to create and populate.</param>
+    /// <returns>The populated input model.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="inputModelType" /> is null.</exception>
+    /// <exception cref="ConsoleParseException">
+    ///     When the result is anything but <see cref="ConsoleParseOutcomeEnum.Parsed" />: help was
+    ///     requested, the model's verb did not match, or the arguments are invalid. The exception
+    ///     carries the result, including the help text to show.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    ///     When <paramref name="inputModelType" /> does not implement
+    ///     <see cref="IConsoleCommandInputModel" />.
+    /// </exception>
+    public object Parse(System.Type inputModelType)
+    {
+        // Parse the tokens and localize the result.
+        ConsoleParseResult result = GetParseResult(inputModelType);
+
+        // Only a parsed result has a model; anything else is reported to the caller.
+        return result.Succeeded ? result.Model : throw new ConsoleParseException(result);
     }
 
     /// <summary>
@@ -576,8 +459,8 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
     ///     <see cref="Parse(System.Type)" /> for the rules.
     /// </summary>
     /// <typeparam name="TInputModel">The input model type to create and populate.</typeparam>
-    /// <returns>The populated input model, or <see langword="null" /> when parsing failed.</returns>
-    /// <exception cref="InvalidOperationException">
+    /// <returns>The populated input model.</returns>
+    /// <exception cref="ConsoleParseException">
     ///     In the same cases as <see cref="Parse(System.Type)" />.
     /// </exception>
     public IConsoleCommandInputModel Parse<TInputModel>()
@@ -604,13 +487,14 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
 
     /// <summary>
     ///     This method tries to parse the tokens into a new instance of
-    ///     <paramref name="inputModelType" /> with <see cref="Parse(System.Type)" />.
+    ///     <paramref name="inputModelType" /> with <see cref="GetParseResult(System.Type)" />.
     /// </summary>
     /// <param name="inputModelType">The input model type to create and populate.</param>
     /// <param name="model">The populated model, or <see langword="null" /> on failure.</param>
     /// <returns>
-    ///     <see langword="true" /> when parsing produced a model; <see langword="false" /> when it
-    ///     threw or returned <see langword="null" />.
+    ///     <see langword="true" /> exactly when the result is
+    ///     <see cref="ConsoleParseOutcomeEnum.Parsed" />; <see langword="false" /> for any other
+    ///     outcome or an invalid type.
     /// </returns>
     public bool TryParse(System.Type inputModelType, out object model)
     {
@@ -618,12 +502,15 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
         try
         {
             // Parse the CLI arguments into the input model type.
-            model = Parse(inputModelType);
+            ConsoleParseResult result = GetParseResult(inputModelType);
 
-            // A null result means Parse caught and reported an error.
-            return model is not null;
+            // The result only carries a model when it parsed.
+            model = result.Model;
+
+            // We're done, report whether a model was produced.
+            return result.Succeeded;
         }
-        // Catch any exceptions that occur during parsing, returning false to indicate that parsing failed.
+        // An invalid type is the only exception left; it is a failure like any other here.
         catch (System.Exception)
         {
             // Set the output model to null in case of an exception.
@@ -658,5 +545,259 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
 
         // Return false to indicate that parsing failed.
         return false;
+    }
+
+    /// <summary>
+    ///     This method returns the verb a command line must start with for
+    ///     <paramref name="inputModelType" />: the name of its <see cref="ConsoleVerbAttribute" /> when
+    ///     that verb is not the default verb and has a name, otherwise <see langword="null" />.
+    /// </summary>
+    /// <param name="inputModelType">The input model type to inspect.</param>
+    /// <returns>The required verb, or <see langword="null" />.</returns>
+    private static string GetRequiredVerb(System.Type inputModelType) =>
+        inputModelType.GetCustomAttribute<ConsoleVerbAttribute>(true)
+            is { Default: false, Name: { } name }
+        && name.Trim() is { Length: > 0 } verb
+            ? verb
+            : null;
+
+    /// <summary>
+    ///     This method lists one error per required argument that no token matched, in the form the
+    ///     help text preface uses (<c>Missing argument: -x, --name (description)</c>).
+    /// </summary>
+    /// <param name="namedArguments">The named arguments of the model.</param>
+    /// <param name="positionalArguments">The positional arguments of the model.</param>
+    /// <returns>The errors, possibly empty.</returns>
+    private static List<string> GetMissingArgumentErrors(
+        IEnumerable<ParsedConsoleArgument> namedArguments,
+        IEnumerable<ParsedConsoleArgument> positionalArguments
+    ) =>
+        positionalArguments
+            .Where(a => a.Required && !a.Found)
+            .Select(a =>
+                $"Missing argument at index: <{a.GetAttribute<PositionalConsoleArgumentAttribute>().Position}>"
+            )
+            .Concat(
+                namedArguments
+                    .Where(a => a.Required && !a.Found)
+                    .Select(a => a.GetAttribute<NamedConsoleArgumentAttribute>())
+                    .Select(a =>
+                        a.ShortName is not null
+                            ? $"Missing argument: -{a.ShortName}, --{a.Name} ({a.Description})"
+                            : $"Missing argument: --{a.Name} ({a.Description})"
+                    )
+            )
+            .ToList();
+
+    /// <summary>
+    ///     This method builds the error for a matched argument whose value does not convert to its
+    ///     property type, naming the argument, the value given and the expected type.
+    /// </summary>
+    /// <param name="argument">The argument whose tokens did not convert.</param>
+    /// <returns>The error line.</returns>
+    private static string GetConversionError(ParsedConsoleArgument argument)
+    {
+        // Name the argument the way the user typed it.
+        string name = argument.Attribute switch
+        {
+            NamedConsoleArgumentAttribute { ShortName: not null } named =>
+                $"-{named.ShortName}, --{named.Name}",
+            NamedConsoleArgumentAttribute named => $"--{named.Name}",
+            PositionalConsoleArgumentAttribute positional => $"<{positional.Position}>",
+            _ => argument.Property?.Name,
+        };
+
+        // A repeated argument is converted as one joined value, so show every value given.
+        string value = string.Join(",", argument.Arguments.Select(a => a.Value));
+
+        // Name the underlying type of a nullable property, which is what the value had to be.
+        System.Type expected =
+            Nullable.GetUnderlyingType(argument.Property.PropertyType)
+            ?? argument.Property.PropertyType;
+
+        // We're done, return the error line.
+        return $"Invalid value '{value}' for {name}: expected {expected.Name}.";
+    }
+
+    /// <summary>
+    ///     This method creates an <see cref="ConsoleParseOutcomeEnum.Invalid" /> result whose help
+    ///     text is the errors followed by the model's help, the text a user needs to fix the command.
+    /// </summary>
+    /// <param name="inputModelType">The input model type that was parsed.</param>
+    /// <param name="errors">One line per problem.</param>
+    /// <param name="exception">The unexpected exception behind the failure, if any.</param>
+    /// <returns>The invalid result.</returns>
+    private static ConsoleParseResult CreateInvalidResult(
+        System.Type inputModelType,
+        IReadOnlyCollection<string> errors,
+        System.Exception exception = null
+    ) =>
+        new(
+            ConsoleParseOutcomeEnum.Invalid,
+            inputModelType,
+            errors: errors,
+            helpText: ConsoleCommandInputModel.GetHelpText(
+                inputModelType,
+                string.Join(Environment.NewLine, errors)
+            ),
+            exception: exception
+        );
+
+    /// <summary>
+    ///     This method builds the model from attribute defaults alone, for a command line with no
+    ///     tokens left after the verb. Defaults are applied only where an attribute defines one (and
+    ///     to nested verbs), so property initializers are not overwritten.
+    /// </summary>
+    /// <param name="inputModelType">The input model type to create and populate.</param>
+    /// <returns>A parsed result, or an invalid one listing the missing required arguments.</returns>
+    private ConsoleParseResult GetDefaultsResult(System.Type inputModelType)
+    {
+        // Localize the model's arguments; with no tokens none of them is found.
+        List<ParsedConsoleArgument> namedArguments = ParseNamedArguments(inputModelType);
+        List<ParsedConsoleArgument> nestedVerbs = ParseNestedVerbs(inputModelType);
+        List<ParsedConsoleArgument> positionalArguments = ParsePositionalArguments(inputModelType);
+
+        // A required argument cannot be satisfied by a default.
+        List<string> missing = GetMissingArgumentErrors(namedArguments, positionalArguments);
+        if (missing.Count > 0)
+            return CreateInvalidResult(inputModelType, missing);
+
+        // Instantiate the model to receive its defaults.
+        object inputModel = inputModelType.CreateInstance();
+
+        // Apply attribute defaults only where one is defined (or for nested verbs), so property
+        // initializers are not overwritten.
+        foreach (
+            ParsedConsoleArgument argument in namedArguments
+                .Concat(nestedVerbs)
+                .Concat(positionalArguments)
+        )
+            if (
+                argument.Attribute is NestedConsoleVerbAttribute
+                || argument.GetAttribute<NamedConsoleArgumentAttribute>()?.Default is not null
+                || argument.GetAttribute<PositionalConsoleArgumentAttribute>()?.Default is not null
+            )
+            {
+                // Localize the current value of the object.
+                object currentValue = argument.Property.GetValue(inputModel);
+
+                // Localize the type's default value.
+                object typeDefault = argument.Property.PropertyType.GetDefaultValue();
+
+                // If the current value and type's default value are equal then
+                // override the value with the default value from the attribute.
+                if (Equals(currentValue, typeDefault))
+                    argument.SetValue(inputModel);
+            }
+
+        // We're done, return the model built from its defaults.
+        return new(
+            ConsoleParseOutcomeEnum.Parsed,
+            inputModelType,
+            inputModel as IConsoleCommandInputModel
+        );
+    }
+
+    /// <summary>
+    ///     This method matches the tokens to the model's arguments, converts them and fills a new
+    ///     model. Every problem is collected, so one result lists them all.
+    /// </summary>
+    /// <param name="inputModelType">The input model type to create and populate.</param>
+    /// <returns>A parsed, help-requested (from a nested verb) or invalid result.</returns>
+    private ConsoleParseResult GetMatchedResult(System.Type inputModelType)
+    {
+        // Localize the model's arguments and the tokens each one matched.
+        List<ParsedConsoleArgument> namedArguments = ParseNamedArguments(inputModelType);
+        List<ParsedConsoleArgument> nestedVerbs = ParseNestedVerbs(inputModelType);
+        List<ParsedConsoleArgument> positionalArguments = ParsePositionalArguments(inputModelType);
+
+        // Collect every problem instead of stopping at the first.
+        List<string> errors = [];
+
+        // Parse each nested verb that was given from the tokens after it. This runs first so a help
+        // request inside the nested verb wins over the parent's own missing arguments.
+        Dictionary<ParsedConsoleArgument, IConsoleCommandInputModel> nestedModels = [];
+        foreach (ParsedConsoleArgument nestedVerb in nestedVerbs.Where(v => v.Found))
+        {
+            // Localize the nested verb's name for its errors.
+            string name = nestedVerb.GetAttribute<NestedConsoleVerbAttribute>().Name;
+
+            // Parse the tokens that follow the nested verb token into the nested model.
+            ConsoleParseResult nestedResult = new ConsoleCommandArgumentCollection(
+                this.Where(a => a.Index > nestedVerb.Arguments[0].Index)
+            ).GetParseResult(nestedVerb.Property.PropertyType);
+
+            // Help for the nested verb is the answer for the whole command line.
+            if (nestedResult.Outcome is ConsoleParseOutcomeEnum.HelpRequested)
+                return new(
+                    ConsoleParseOutcomeEnum.HelpRequested,
+                    inputModelType,
+                    helpText: nestedResult.HelpText
+                );
+
+            // Keep the nested model, or report its errors under the nested verb's name.
+            if (nestedResult.Succeeded)
+                nestedModels[nestedVerb] = nestedResult.Model;
+            else
+                errors.AddRange(
+                    nestedResult
+                        .Errors.DefaultIfEmpty("The arguments are not valid.")
+                        .Select(e => $"{name}: {e}")
+                );
+        }
+
+        // A required argument no token matched is an error.
+        errors.AddRange(GetMissingArgumentErrors(namedArguments, positionalArguments));
+
+        // Instantiate the model to receive the values.
+        object inputModel = inputModelType.CreateInstance();
+
+        // If the model has a ConsoleCommandArgumentCollection property marked with
+        // UnknownConsoleArgumentsAttribute, fill it with every token no argument or nested verb
+        // claimed, in their original order.
+        inputModelType
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .FirstOrDefault(p =>
+                p.GetCustomAttribute<UnknownConsoleArgumentsAttribute>(true) is not null
+                && typeof(ConsoleCommandArgumentCollection).IsAssignableFrom(p.PropertyType)
+            )
+            ?.SetValue(
+                inputModel,
+                new ConsoleCommandArgumentCollection(
+                    this.Where(a =>
+                            !namedArguments
+                                .Concat(nestedVerbs)
+                                .Concat(positionalArguments)
+                                .SelectMany(p => p.Arguments.Select(c => c.Index))
+                                .Contains(a.Index)
+                        )
+                        .OrderBy(a => a.Index)
+                )
+            );
+
+        // Convert and set each named and positional argument. A value the user typed that does not
+        // convert is an error, never a silent default: running with a value nobody typed is worse
+        // than saying what was rejected.
+        foreach (ParsedConsoleArgument argument in namedArguments.Concat(positionalArguments))
+            if (argument.TryGetParsedValue(this, out object value))
+                argument.Property?.SetValue(inputModel, value);
+            else
+                errors.Add(GetConversionError(argument));
+
+        // Set each nested verb: the model parsed above, or its default when the verb was not given.
+        foreach (ParsedConsoleArgument nestedVerb in nestedVerbs)
+            if (nestedModels.TryGetValue(nestedVerb, out IConsoleCommandInputModel nestedModel))
+                nestedVerb.Property?.SetValue(inputModel, nestedModel);
+            else if (!nestedVerb.Found)
+                nestedVerb.SetValue(inputModel, this);
+
+        // Any problem makes the whole parse invalid; a half-filled model is never returned.
+        return errors.Count > 0
+            ? CreateInvalidResult(inputModelType, errors)
+            : new(
+                ConsoleParseOutcomeEnum.Parsed,
+                inputModelType,
+                inputModel as IConsoleCommandInputModel
+            );
     }
 }
