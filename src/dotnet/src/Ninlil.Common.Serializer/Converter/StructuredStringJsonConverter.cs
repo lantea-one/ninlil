@@ -21,26 +21,39 @@ public class StructuredStringJsonConverter<TObject> : JsonConverter<TObject>
     /// <param name="reader">The reference instance of the JSON reader.</param>
     /// <param name="typeToConvert">The type to be converted.</param>
     /// <param name="options">The JSON serializer options.</param>
-    /// <returns>The deserialized typed value.</returns>
+    /// <returns>The deserialized typed value, or <see langword="null" /> for a null or blank value.</returns>
+    /// <exception cref="JsonException">The token is not a string, or the text does not parse.</exception>
     public override TObject Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
     )
     {
+        // System.Text.Json does not call a converter for a null token into a reference type, but a
+        // direct caller can; null stays null.
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        // Only a string carries a structured string. Any other token is refused instead of read
+        // as null, so a wrong JSON type is reported to the caller.
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException(
+                $"A {reader.TokenType} token is not a valid {typeof(TObject).Name}; expected a string."
+            );
+
         // Read the string from the serializer.
         string value = reader.GetString()?.Trim();
 
-        // Check for a null or empty string.
+        // A blank string means "no value".
         if (value is null or { Length: 0 })
             return null;
 
-        // Try to parse the string into our structured string model.
-        // If parsing fails or the result is null, return null.
-        return
-            StructuredStringModel.TryParse(value, out TObject result) && result?.IsNull() is false
-            ? result
-            : null;
+        // Text that does not parse, or parses to an empty model, is refused instead of read as
+        // null: a silent null would drop what the caller wrote.
+        if (StructuredStringModel.TryParse(value, out TObject result) && result?.IsNull() is false)
+            return result;
+
+        throw new JsonException($"'{value}' is not a valid {typeof(TObject).Name}.");
     }
 
     /// <summary>
