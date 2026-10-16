@@ -2,7 +2,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Exceptions;
-using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Acme;
 using Ninlil.Dns.Server.Presets;
@@ -70,7 +69,9 @@ public class AcmeSettingsController(
     ///     <c>DnsServer:Acme:CaaAutoManagement</c> as an RFC 7396 merge patch, through
     ///     <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value. The response note says whether a restart is
-    ///     needed. Returns 400 for an invalid directory URL, domain, contact address or duration, a
+    ///     needed. A domain must be a host name of letters, digits and hyphens with at least two
+    ///     labels, optionally with a leading <c>*.</c> for a wildcard certificate. Returns 400 for
+    ///     an invalid directory URL, domain, contact address or duration, a
     ///     non-positive interval, or an empty path or organization. Requires
     ///     <c>acmesettings:write</c>.
     /// </summary>
@@ -385,14 +386,14 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This method checks that a <c>domains</c> entry is a valid DNS name, using
-    ///     <see cref="DnsName.TryParse(string,out DnsName)" /> like the API's other domain-name
-    ///     fields.
+    ///     This method checks that a <c>domains</c> entry is a certificate host name with
+    ///     <see cref="AcmeDomainName.TryParse" />: letters, digits and hyphens, at least two
+    ///     labels, optionally a leading <c>*.</c> for a wildcard.
     /// </summary>
     private static void ValidateDomain(string domain)
     {
-        if (string.IsNullOrWhiteSpace(domain) || !DnsName.TryParse(domain, out _))
-            throw new ValidationException($"'{domain}' is not a valid domain name.");
+        if (!AcmeDomainName.TryParse(domain, out _, out _, out string error))
+            throw new ValidationException(error);
     }
 
     /// <summary>

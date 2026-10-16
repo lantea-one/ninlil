@@ -211,7 +211,7 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
         await responder.PublishChallengeAsync("example.com", "fake-key-authorization");
         await WaitUntilCacheHasChallengeRecordAsync(true);
 
-        await responder.RemoveChallengeAsync("example.com");
+        await responder.RemoveChallengeAsync("example.com", "fake-key-authorization");
         await WaitUntilCacheHasChallengeRecordAsync(false);
 
         CachedZone zone = _cache.FindZone(DnsName.Parse("_acme-challenge.example.com"));
@@ -223,7 +223,10 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
     {
         AcmeDnsChallengeResponder responder = CreateResponder();
 
-        await responder.RemoveChallengeAsync("not-hosted-here.example.org");
+        await responder.RemoveChallengeAsync(
+            "not-hosted-here.example.org",
+            "fake-key-authorization"
+        );
     }
 
     [Fact]
@@ -231,6 +234,71 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
     {
         AcmeDnsChallengeResponder responder = CreateResponder();
 
-        await responder.RemoveChallengeAsync("example.com");
+        await responder.RemoveChallengeAsync("example.com", "fake-key-authorization");
+    }
+
+    /// <summary>
+    ///     This method returns the TXT strings stored at <c>_acme-challenge.example.com</c> in the
+    ///     database, one entry per record, so a test sees exactly what a removal left behind.
+    /// </summary>
+    private async Task<List<string>> ReadChallengeValuesAsync()
+    {
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        IReadOnlyList<RecordEntity> records = await recordRepository.ListByZoneIdAsync(_zoneId);
+
+        return records
+            .Where(r =>
+                r.Type == DnsResourceRecordTypeEnum.Txt && r.Name == "_acme-challenge.example.com"
+            )
+            .Select(r => ((TxtRecordData)RecordEntityCodec.DecodeTypedData(r)).Values.Single())
+            .ToList();
+    }
+
+    [Fact]
+    public async Task PublishChallenge_ForAWildcardDomain_PutsTheRecordAtTheBaseName()
+    {
+        AcmeDnsChallengeResponder responder = CreateResponder();
+
+        bool published = await responder.PublishChallengeAsync("*.example.com", "wildcard-value");
+
+        Assert.True(published);
+        Assert.Equal(["wildcard-value"], await ReadChallengeValuesAsync());
+    }
+
+    [Fact]
+    public async Task RemoveChallenge_WithAForeignRecordAtTheName_LeavesTheForeignRecord()
+    {
+        AcmeDnsChallengeResponder responder = CreateResponder();
+        await responder.PublishChallengeAsync("example.com", "operator");
+        await responder.PublishChallengeAsync("example.com", "v1");
+
+        await responder.RemoveChallengeAsync("example.com", "v1");
+
+        Assert.Equal(["operator"], await ReadChallengeValuesAsync());
+    }
+
+    [Fact]
+    public async Task RemoveChallenge_WithTwoAttemptsAtTheSameName_RemovesOnlyTheGivenValue()
+    {
+        AcmeDnsChallengeResponder responder = CreateResponder();
+        await responder.PublishChallengeAsync("example.com", "v1");
+        await responder.PublishChallengeAsync("*.example.com", "v2");
+
+        await responder.RemoveChallengeAsync("example.com", "v1");
+
+        Assert.Equal(["v2"], await ReadChallengeValuesAsync());
+    }
+
+    [Fact]
+    public async Task RemoveChallenge_WithAValueNeverPublished_RemovesNothing()
+    {
+        AcmeDnsChallengeResponder responder = CreateResponder();
+        await responder.PublishChallengeAsync("example.com", "v1");
+
+        await responder.RemoveChallengeAsync("example.com", "never-published");
+
+        Assert.Equal(["v1"], await ReadChallengeValuesAsync());
     }
 }

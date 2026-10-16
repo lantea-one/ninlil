@@ -240,6 +240,44 @@ public class AcmeSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("exa mple.com")]
+    [InlineData("_x.example.com")]
+    [InlineData("*.*.example.com")]
+    [InlineData("com")]
+    public async Task Patch_WithADomainThatIsNotAHostName_ReturnsBadRequest(string domain)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/acme-settings", new { domains = new[] { domain } })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Patch_WithAWildcardDomainAndItsBaseName_IsAccepted()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/acme-settings",
+                new
+                {
+                    domains = new[]
+                    {
+                        "*.acme-wildcard.acme-settings-tests.invalid",
+                        "acme-wildcard.acme-settings-tests.invalid",
+                    },
+                }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     [Fact]
     public async Task Patch_WithAnInvalidContactEmail_ReturnsBadRequest()
     {

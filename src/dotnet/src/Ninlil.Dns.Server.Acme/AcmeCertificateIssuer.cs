@@ -51,20 +51,29 @@ public sealed class AcmeCertificateIssuer(
     private static readonly TimeSpan ChallengePollInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    ///     This method returns the PFX file name for <paramref name="domain" />. A DNS name can
-    ///     carry escaped characters such as <c>\</c>, <c>/</c> or a leading dot, so a name that
-    ///     is not a plain file name is rejected before it can point outside the certificate
-    ///     directory.
+    ///     This method returns the PFX file name for <paramref name="domain" />. The name is
+    ///     lowercased with its trailing dot removed, and a wildcard's leading <c>*.</c> becomes
+    ///     <c>_wildcard.</c> on every platform (<c>*.example.com</c> gives
+    ///     <c>_wildcard.example.com.pfx</c>), because <c>*</c> is not a valid file-name character
+    ///     on Windows. A label cannot start with <c>_</c> in a host name, so no real domain maps
+    ///     to the same file. A name that is not a plain file name is rejected before it can point
+    ///     outside the certificate directory.
     /// </summary>
     /// <param name="domain">The domain the certificate is issued for.</param>
     /// <exception cref="InvalidOperationException">The domain does not make a plain file name.</exception>
     public static string BuildPfxFileName(string domain)
     {
-        string fileName = $"{domain}.pfx";
+        string name = domain?.Trim().TrimEnd('.').ToLowerInvariant() ?? "";
+
+        // Only the whole leading label is mapped, so a stray '*' still fails the character check.
+        if (name.StartsWith("*.", StringComparison.Ordinal))
+            name = "_wildcard." + name[2..];
+
+        string fileName = $"{name}.pfx";
 
         if (
-            string.IsNullOrWhiteSpace(domain)
-            || domain.StartsWith('.')
+            string.IsNullOrWhiteSpace(name)
+            || name.StartsWith('.')
             || fileName != Path.GetFileName(fileName)
             || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || fileName.IndexOfAny(['\\', '/']) >= 0
@@ -83,8 +92,9 @@ public sealed class AcmeCertificateIssuer(
     /// </summary>
     /// <exception cref="InvalidOperationException">
     ///     Thrown when <paramref name="domain" /> is not a zone this server hosts, or the CA
-    ///     reports the DNS-01 challenge as invalid, or the domain does not make a plain file name
-    ///     (see <see cref="BuildPfxFileName" />).
+    ///     reports the DNS-01 challenge as invalid, or the domain is not a valid host name
+    ///     (see <see cref="AcmeDomainName.TryParse" />) or does not make a plain file name (see
+    ///     <see cref="BuildPfxFileName" />).
     /// </exception>
     /// <exception cref="TimeoutException">
     ///     Thrown when the challenge does not reach a final status within
@@ -95,18 +105,23 @@ public sealed class AcmeCertificateIssuer(
         CancellationToken stoppingToken = default
     )
     {
-        // Checked first, so a domain that cannot be stored never costs a CA order.
-        string pfxFileName = BuildPfxFileName(domain);
+        // Checked first, so a domain that cannot be validated or stored never costs a CA order.
+        // The configured string keys the account store's domain states and stays as written; the
+        // normalized form is used for the CA order, the challenge and the file name.
+        if (!AcmeDomainName.TryParse(domain, out string normalizedDomain, out _, out string error))
+            throw new InvalidOperationException(error);
+
+        string pfxFileName = BuildPfxFileName(normalizedDomain);
 
         AcmeContext acme = await CreateContextAsync(stoppingToken);
 
-        IOrderContext order = await acme.NewOrder([domain]);
+        IOrderContext order = await acme.NewOrder([normalizedDomain]);
         IAuthorizationContext authorization = (await order.Authorizations()).First();
         IChallengeContext dnsChallenge = await authorization.Dns();
         string dnsTxtValue = acme.AccountKey.DnsTxt(dnsChallenge.Token);
 
         bool published = await challengeResponder.PublishChallengeAsync(
-            domain,
+            normalizedDomain,
             dnsTxtValue,
             stoppingToken
         );
@@ -131,7 +146,7 @@ public sealed class AcmeCertificateIssuer(
             CertificateChain certificateChain = await order.Generate(
                 new CsrInfo
                 {
-                    CommonName = domain,
+                    CommonName = normalizedDomain,
                     Organization = options.CurrentValue.CsrOrganization,
                 },
                 certificateKey
@@ -193,7 +208,11 @@ public sealed class AcmeCertificateIssuer(
         }
         finally
         {
-            await challengeResponder.RemoveChallengeAsync(domain, stoppingToken);
+            await challengeResponder.RemoveChallengeAsync(
+                normalizedDomain,
+                dnsTxtValue,
+                stoppingToken
+            );
         }
     }
 

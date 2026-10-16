@@ -42,8 +42,12 @@ public class AcmeOptions
 
     /// <summary>
     ///     This property contains every domain a certificate should be issued and kept renewed
-    ///     for. Each must be inside a zone this server hosts, because the DNS-01 challenge record
-    ///     is added to that zone; the cloud zone connectors' credentials are not used.
+    ///     for. Each must be a host name of letters, digits and hyphens (an internationalized name
+    ///     in its <c>xn--</c> form) with at least two labels, optionally with a leading <c>*.</c>
+    ///     for a wildcard certificate (see <see cref="AcmeDomainName" />). A wildcard is validated
+    ///     at its base name. Each must be inside a zone this server hosts, because the DNS-01
+    ///     challenge record is added to that zone; the cloud zone connectors' credentials are not
+    ///     used.
     /// </summary>
     public List<string> Domains { get; set; } = [];
 
@@ -73,7 +77,8 @@ public class AcmeOptions
 
     /// <summary>
     ///     This property contains the directory each issued certificate is written to, as
-    ///     <c>&lt;domain&gt;.pfx</c> with an empty password. A transport uses an ACME certificate
+    ///     <c>&lt;domain&gt;.pfx</c> with an empty password. The name is lowercase, and a wildcard's
+    ///     leading <c>*.</c> becomes <c>_wildcard.</c> (<c>_wildcard.example.com.pfx</c>). A transport uses an ACME certificate
     ///     when <c>TlsCertificateOptions.PfxPath</c> points at one of these files;
     ///     <c>TlsCertificateLoader</c> loads any PKCS#12 file.
     /// </summary>

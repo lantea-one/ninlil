@@ -13,6 +13,8 @@ namespace Ninlil.Dns.Server.Acme;
 /// <summary>
 ///     This class publishes and removes the record the RFC 8555 §8.4 DNS-01 challenge needs: a
 ///     TXT record at <c>_acme-challenge.&lt;domain&gt;</c> holding the key authorization digest.
+///     A wildcard domain (<c>*.example.com</c>) is validated at its base name, so its record is
+///     at <c>_acme-challenge.example.com</c> (RFC 8555 §8.4).
 ///     It works only for domains inside a zone this server hosts
 ///     (<see cref="AuthoritativeZoneCache.FindZone" />); any other domain is refused. The
 ///     record is marked <c>ExcludeFromSync</c>, so zone transfers and cloud sync never carry
@@ -33,7 +35,7 @@ public sealed class AcmeDnsChallengeResponder(
     ///     This method publishes the DNS-01 challenge TXT record for a domain, with a 60-second
     ///     TTL.
     /// </summary>
-    /// <param name="domain">The domain a certificate is being requested for.</param>
+    /// <param name="domain">The domain a certificate is being requested for; a leading <c>*.</c> is allowed.</param>
     /// <param name="dnsTxtValue">The key authorization digest the CA computed, from <c>AcmeContext.AccountKey.DnsTxt(token)</c>.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
@@ -46,7 +48,7 @@ public sealed class AcmeDnsChallengeResponder(
         CancellationToken stoppingToken = default
     )
     {
-        DnsName challengeName = DnsName.Parse(domain).PrependLabels("_acme-challenge");
+        DnsName challengeName = BuildChallengeName(domain);
         CachedZone zone = zoneCache.FindZone(challengeName, DnsResourceRecordTypeEnum.Txt);
 
         if (zone is null)
@@ -80,13 +82,23 @@ public sealed class AcmeDnsChallengeResponder(
     }
 
     /// <summary>
-    ///     This method removes every TXT record at <c>_acme-challenge.&lt;domain&gt;</c> once the
-    ///     attempt is over, including any not published by <see cref="PublishChallengeAsync" />.
-    ///     It does nothing when there are none or the domain is not in a hosted zone.
+    ///     This method removes the TXT record this attempt published at
+    ///     <c>_acme-challenge.&lt;domain&gt;</c> once the attempt is over. Only a record that holds
+    ///     exactly one string equal to <paramref name="dnsTxtValue" /> is removed; a record an
+    ///     operator added, or one another attempt published at the same name (for example a
+    ///     wildcard and its base name), stays. It does nothing when there is no such record or the
+    ///     domain is not in a hosted zone.
     /// </summary>
-    public async Task RemoveChallengeAsync(string domain, CancellationToken stoppingToken = default)
+    /// <param name="domain">The domain the certificate was requested for; a leading <c>*.</c> is allowed.</param>
+    /// <param name="dnsTxtValue">The value <see cref="PublishChallengeAsync" /> published.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    public async Task RemoveChallengeAsync(
+        string domain,
+        string dnsTxtValue,
+        CancellationToken stoppingToken = default
+    )
     {
-        DnsName challengeName = DnsName.Parse(domain).PrependLabels("_acme-challenge");
+        DnsName challengeName = BuildChallengeName(domain);
         CachedZone zone = zoneCache.FindZone(challengeName, DnsResourceRecordTypeEnum.Txt);
 
         if (zone is null)
@@ -99,15 +111,39 @@ public sealed class AcmeDnsChallengeResponder(
             stoppingToken
         );
 
-        if (existingRecords.Count == 0)
+        // Match on the value, not on the name: two attempts can share a name, and the zone can
+        // hold TXT records this class never wrote.
+        List<RecordEntity> ownRecords = existingRecords
+            .Where(record =>
+                RecordEntityCodec.DecodeTypedData(record) is TxtRecordData { Values.Count: 1 } txt
+                && string.Equals(txt.Values[0], dnsTxtValue, StringComparison.Ordinal)
+            )
+            .ToList();
+
+        if (ownRecords.Count == 0)
             return;
 
         await zoneUpdateService.ApplyChangesAsync(
             zone.Zone.Id,
             [],
-            existingRecords,
+            ownRecords,
             null,
             stoppingToken
         );
+    }
+
+    /// <summary>
+    ///     This method returns the name the CA validates for <paramref name="domain" />:
+    ///     <c>_acme-challenge.</c> in front of the domain, or in front of a wildcard's base name
+    ///     (RFC 8555 §8.4).
+    /// </summary>
+    private static DnsName BuildChallengeName(string domain)
+    {
+        string name = domain.Trim().TrimEnd('.');
+
+        if (name.StartsWith("*.", StringComparison.Ordinal))
+            name = name[2..];
+
+        return DnsName.Parse(name).PrependLabels("_acme-challenge");
     }
 }
