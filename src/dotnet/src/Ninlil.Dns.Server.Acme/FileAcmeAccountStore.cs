@@ -13,8 +13,11 @@ namespace Ninlil.Dns.Server.Acme;
 ///     <see cref="AcmeOptions.AccountStateFilePath" /> holding the JSON state encrypted with
 ///     <see cref="IDataProtector" /> (see that property for why it is encrypted). Like the RFC
 ///     5011 trust anchor store and the DNSCrypt certificate store, it loads the file or starts
-///     empty (a corrupt file is moved aside first); here that happens on first use. Every change
-///     rewrites the whole file atomically.
+///     empty (a file whose content is unusable is moved aside first); here that happens on first
+///     use. A file that cannot be read right now (an I/O or permission error) is not unusable
+///     content: it stays where it is, the member that needed it throws
+///     <see cref="InvalidOperationException" />, and the next access tries again, so a passing
+///     error never replaces the account key. Every change rewrites the whole file atomically.
 /// </summary>
 /// <param name="dataProtectionProvider">The provider the store's purpose-scoped protector is created from.</param>
 /// <param name="options">The ACME settings, read for the state file path.</param>
@@ -111,12 +114,15 @@ public sealed class FileAcmeAccountStore(
 
     /// <summary>
     ///     This method loads the state file, or returns an empty state when the file does not
-    ///     exist. A file that cannot be used (unreadable, not decryptable after the key ring was
+    ///     exist. A file whose content cannot be used (not decryptable after the key ring was
     ///     lost, not JSON, or JSON without a domain table) is moved aside to
     ///     <c>&lt;path&gt;.corrupt-&lt;timestamp&gt;</c> and an Error is logged, so the next write
-    ///     does not destroy an account key the operator could still recover. The service must
-    ///     start either way, because ACME is optional.
+    ///     does not destroy an account key the operator could still recover.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    ///     The file exists but could not be read (an I/O or permission error). The file is left in
+    ///     place and no state is cached, so the next access reads it again.
+    /// </exception>
     private AcmeAccountState LoadOrSeed()
     {
         string path = options.Value.AccountStateFilePath;
@@ -139,17 +145,32 @@ public sealed class FileAcmeAccountStore(
                 );
             }
             catch (Exception exception)
+                when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A read error says nothing about the content. Moving the file aside would drop
+                // the account key, and the next issuance would register a new CA account, so the
+                // file stays and the caller sees a retryable error.
+                logger.LogWarning(
+                    exception,
+                    "The ACME account state file at '{Path}' could not be read; it is tried again on next use.",
+                    path
+                );
+
+                throw new InvalidOperationException(
+                    $"The ACME account state file at '{path}' could not be read; it is tried again on next use.",
+                    exception
+                );
+            }
+            catch (Exception exception)
                 when (exception
-                        is IOException
-                            or UnauthorizedAccessException
-                            or FormatException
+                        is FormatException
                             or System.Text.Json.JsonException
                             or System.Security.Cryptography.CryptographicException
                 )
             {
                 logger.LogError(
                     exception,
-                    "The ACME account state file at '{Path}' could not be read; it was moved aside ({AsidePath}) and a fresh, empty state is used.",
+                    "The ACME account state file at '{Path}' is not usable; it was moved aside ({AsidePath}) and a fresh, empty state is used.",
                     path,
                     MoveAside(path)
                 );

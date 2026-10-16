@@ -5,7 +5,9 @@ namespace Ninlil.Dns.Server.Acme;
 ///     This interface stores the ACME account key and the per-domain certificate and failure
 ///     state across restarts. <see cref="AcmeCertificateIssuer" /> and
 ///     <see cref="AcmeCertificateRenewalService" /> write it, and the ACME settings API reads it.
-///     <see cref="FileAcmeAccountStore" /> implements it.
+///     <see cref="FileAcmeAccountStore" /> implements it. Every member that reads the state may
+///     throw <see cref="InvalidOperationException" /> while the state file cannot be read; the
+///     next call tries again.
 /// </summary>
 public interface IAcmeAccountStore
 {

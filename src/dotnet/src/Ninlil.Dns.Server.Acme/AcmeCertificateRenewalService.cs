@@ -49,7 +49,9 @@ public sealed class AcmeCertificateRenewalService(
     ///     <c>TrustAnchorRolloverService.ExecuteAsync</c>: <see cref="BackgroundService.ExecuteAsync" />
     ///     runs once per process, so returning early while disabled would ignore a later enable.
     ///     <see cref="AcmeOptions.PollInterval" /> is also read on every pass, so a shorter
-    ///     interval applies to the next wait.
+    ///     interval applies to the next wait. A pass that fails for any reason other than
+    ///     cancellation (for example an account state file that cannot be read) is logged as a
+    ///     Warning and the loop waits the normal interval, so this hosted service never faults.
     /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -63,6 +65,13 @@ public sealed class AcmeCertificateRenewalService(
             catch (OperationCanceledException)
             {
                 break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(
+                    exception,
+                    "The ACME renewal pass failed; it runs again at the next poll."
+                );
             }
 
             try

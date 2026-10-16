@@ -157,4 +157,39 @@ public sealed class FileAcmeAccountStoreTests : IDisposable
             Directory.GetFiles(Path.GetTempPath(), $".{Path.GetFileName(_statePath)}.*.tmp")
         );
     }
+
+    [Fact]
+    public void AStateFileThatCannotBeOpenedThrowsAndStaysInPlaceUntilItCanBeRead()
+    {
+        // File mode 000 is a Unix permission; root reads the file anyway, so the case cannot run
+        // as root.
+        if (OperatingSystem.IsWindows() || Environment.UserName == "root")
+            return;
+
+        IDataProtectionProvider provider = new EphemeralDataProtectionProvider();
+        CreateStore(provider).SaveAccountKey("the-account-key");
+        File.SetUnixFileMode(_statePath, UnixFileMode.None);
+
+        try
+        {
+            FileAcmeAccountStore store = CreateStore(provider);
+
+            Assert.Throws<InvalidOperationException>(() => store.AccountKeyPem);
+
+            // A transient error must not move the file aside or replace the account.
+            Assert.True(File.Exists(_statePath));
+            Assert.Empty(
+                Directory.GetFiles(Path.GetTempPath(), $"{Path.GetFileName(_statePath)}.corrupt-*")
+            );
+
+            File.SetUnixFileMode(_statePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+            Assert.Equal("the-account-key", store.AccountKeyPem);
+        }
+        finally
+        {
+            if (File.Exists(_statePath))
+                File.SetUnixFileMode(_statePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
 }

@@ -40,6 +40,36 @@ public sealed class AcmeCertificateIssuer(
 )
 {
     /// <summary>
+    ///     This field contains the handler Certes sends its requests through, or
+    ///     <see langword="null" /> to use Certes' own default. Only the test constructor sets it.
+    /// </summary>
+    private readonly HttpMessageHandler _acmeHandler;
+
+    /// <summary>
+    ///     This constructor is the test seam: it makes Certes send every request through
+    ///     <paramref name="acmeHandler" />, so a test can stand in for the CA. The dependency
+    ///     injection container ignores it because it is not public.
+    /// </summary>
+    /// <param name="accountStore">See the primary constructor.</param>
+    /// <param name="challengeResponder">See the primary constructor.</param>
+    /// <param name="caaReconciliationService">See the primary constructor.</param>
+    /// <param name="options">See the primary constructor.</param>
+    /// <param name="logger">See the primary constructor.</param>
+    /// <param name="acmeHandler">The handler that answers the CA's requests.</param>
+    internal AcmeCertificateIssuer(
+        IAcmeAccountStore accountStore,
+        AcmeDnsChallengeResponder challengeResponder,
+        CaaRecordReconciliationService caaReconciliationService,
+        IOptionsMonitor<AcmeOptions> options,
+        ILogger<AcmeCertificateIssuer> logger,
+        HttpMessageHandler acmeHandler
+    )
+        : this(accountStore, challengeResponder, caaReconciliationService, options, logger)
+    {
+        _acmeHandler = acmeHandler;
+    }
+
+    /// <summary>
     ///     This constant contains how many times, at most, the CA is polled for the outcome of a
     ///     DNS-01 challenge before giving up.
     /// </summary>
@@ -217,29 +247,97 @@ public sealed class AcmeCertificateIssuer(
     }
 
     /// <summary>
+    ///     This method returns the RFC 8555 §7.3 contact URLs for the configured email addresses:
+    ///     each address trimmed, blank entries dropped, duplicates (ignoring case) removed, and
+    ///     every address prefixed <c>mailto:</c>, in the configured order. The result is empty
+    ///     when no address is configured; the account is then registered without a contact,
+    ///     which RFC 8555 allows because the field is optional.
+    /// </summary>
+    /// <param name="contactEmails">The configured contact email addresses.</param>
+    internal static IReadOnlyList<string> BuildContactUris(IEnumerable<string> contactEmails) =>
+        (contactEmails ?? [])
+            .Select(email => email?.Trim())
+            .Where(email => !string.IsNullOrEmpty(email))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(email => $"mailto:{email}")
+            .ToList();
+
+    /// <summary>
     ///     This method builds an <see cref="AcmeContext" /> with the stored account key. When
     ///     there is none, it registers a new account with the CA, agreeing to its terms of
-    ///     service, using the first contact email (or <c>admin@localhost</c>), and stores the key.
+    ///     service, with every configured contact address as a <c>mailto:</c> URL (none when no
+    ///     address is configured), and stores the key. For a stored key, the contact addresses
+    ///     the CA holds are compared with the configured ones and the account is updated when
+    ///     they differ, so a change reaches the CA at the next issuance. A failed comparison or
+    ///     update is logged as a Warning and does not stop the issuance.
     /// </summary>
-    private async Task<AcmeContext> CreateContextAsync(CancellationToken stoppingToken)
+    internal async Task<AcmeContext> CreateContextAsync(CancellationToken stoppingToken)
     {
         string existingAccountKeyPem = accountStore.AccountKeyPem;
+        Uri directoryUri = options.CurrentValue.DirectoryUri;
+        IReadOnlyList<string> contactUris = BuildContactUris(options.CurrentValue.ContactEmails);
 
         if (existingAccountKeyPem is not null)
         {
             IKey existingAccountKey = KeyFactory.FromPem(existingAccountKeyPem);
-            return new AcmeContext(options.CurrentValue.DirectoryUri, existingAccountKey);
+            AcmeContext existing = NewContext(directoryUri, existingAccountKey);
+            await UpdateContactsIfChangedAsync(existing, contactUris);
+            return existing;
         }
 
-        AcmeContext acme = new(options.CurrentValue.DirectoryUri);
+        AcmeContext acme = NewContext(directoryUri, null);
 
+        // An empty list is passed as null so the request carries no "contact" field at all.
         await acme.NewAccount(
-            options.CurrentValue.ContactEmails.FirstOrDefault() ?? "admin@localhost",
+            contactUris.Count == 0 ? null : contactUris.ToList(),
             termsOfServiceAgreed: true
         );
 
         accountStore.SaveAccountKey(acme.AccountKey.ToPem());
         return acme;
+    }
+
+    /// <summary>
+    ///     This method creates the Certes context, sending through <see cref="_acmeHandler" />
+    ///     when a test supplied one. A <see langword="null" /> key makes Certes generate one.
+    /// </summary>
+    private AcmeContext NewContext(Uri directoryUri, IKey accountKey) =>
+        _acmeHandler is null
+            ? new AcmeContext(directoryUri, accountKey)
+            : new AcmeContext(
+                directoryUri,
+                accountKey,
+                new AcmeHttpClient(directoryUri, new HttpClient(_acmeHandler, false))
+            );
+
+    /// <summary>
+    ///     This method updates the account's contact list at the CA (RFC 8555 §7.3.2) when it
+    ///     differs, as a set and ignoring case, from <paramref name="contactUris" />. Any failure
+    ///     is a Warning: the certificate can still be issued with the contacts the CA has.
+    /// </summary>
+    private async Task UpdateContactsIfChangedAsync(
+        AcmeContext acme,
+        IReadOnlyList<string> contactUris
+    )
+    {
+        try
+        {
+            IAccountContext account = await acme.Account();
+            Account resource = await account.Resource();
+            HashSet<string> current = new(resource.Contact ?? [], StringComparer.OrdinalIgnoreCase);
+
+            if (current.SetEquals(contactUris))
+                return;
+
+            await account.Update(contactUris.ToList(), false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                exception,
+                "The ACME account's contact addresses could not be updated; the certificate is still requested with the contacts the CA holds."
+            );
+        }
     }
 
     /// <summary>

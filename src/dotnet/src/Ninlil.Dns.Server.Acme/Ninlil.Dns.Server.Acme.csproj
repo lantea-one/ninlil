@@ -9,6 +9,11 @@
     <PackageId>Ninlil.Dns.Server.Acme</PackageId>
   </PropertyGroup>
 
+  <!-- The tests drive the issuer against a fake CA handler and call BuildContactUris. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.Acme.Tests" />
+  </ItemGroup>
+
   <!--
       Certes is an MIT-licensed, RFC 8555-compliant .NET ACME client (JOSE/JWS request signing,
       the full account/order/authorization/challenge state machine). Used here rather than

@@ -34,9 +34,10 @@ public class AcmeOptions
     public Uri DirectoryUri { get; set; } = WellKnownServers.LetsEncryptV2;
 
     /// <summary>
-    ///     This property contains contact email addresses for the ACME account. Only the first is
-    ///     registered, and only when the account is created; with none, <c>admin@localhost</c> is
-    ///     used.
+    ///     This property contains contact email addresses for the ACME account. Every address is
+    ///     registered with the CA as a <c>mailto:</c> contact (RFC 8555 §7.3), blank entries are
+    ///     ignored and duplicates are registered once. A change reaches the CA at the next
+    ///     issuance. With none, the account has no contact address.
     /// </summary>
     public List<string> ContactEmails { get; set; } = [];
 
