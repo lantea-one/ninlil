@@ -7,7 +7,9 @@ namespace Ninlil.Dns.Server.DnsCrypt;
 ///     This interface stores the resolver's DNSCrypt identity across restarts: the long-term
 ///     Ed25519 provider key pair that signs every certificate, and the tracked certificates.
 ///     <see cref="DnsCryptCertificateRotationService" /> writes it and the DNSCrypt listeners
-///     read it. <see cref="FileDnsCryptCertificateStore" /> implements it.
+///     read it. <see cref="FileDnsCryptCertificateStore" /> implements it. The state loads on
+///     first use, and every member throws <see cref="InvalidOperationException" /> while the
+///     stored state cannot be read; a later call tries again.
 /// </summary>
 public interface IDnsCryptCertificateStore
 {

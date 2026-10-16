@@ -68,6 +68,46 @@ public class DnsCryptCertificateRotationServiceTests
     }
 
     [Fact]
+    public async Task WithDnsCryptDisabled_RunningTheService_WritesNoStateFile()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            $"dnscrypt-rotation-{Guid.NewGuid():N}"
+        );
+        string statePath = Path.Combine(directory, "state.json");
+
+        try
+        {
+            DnsCryptOptions options = new()
+            {
+                Enable = false,
+                CertificateStateFilePath = statePath,
+            };
+            FileDnsCryptCertificateStore store = new(
+                Options.Create(options),
+                NullLogger<FileDnsCryptCertificateStore>.Instance
+            );
+            DnsCryptCertificateRotationService service = new(
+                store,
+                new StaticOptionsMonitor<DnsCryptOptions>(options),
+                NullLogger<DnsCryptCertificateRotationService>.Instance
+            );
+
+            await service.StartAsync(CancellationToken.None);
+            await service.ExecuteTask;
+            await service.StopAsync(CancellationToken.None);
+
+            Assert.False(File.Exists(statePath));
+            Assert.False(Directory.Exists(directory));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ARealRotationIntervalTick_IssuesFreshCertificatesBeyondTheInitialSet()
     {
         string statePath = Path.Combine(

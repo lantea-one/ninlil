@@ -13,9 +13,12 @@ namespace Ninlil.Dns.Server.DnsCrypt;
 ///     This class implements <see cref="IDnsCryptCertificateStore" /> as one JSON file at
 ///     <see cref="DnsCryptOptions.CertificateStateFilePath" />, like the RFC 5011 trust anchor
 ///     store and the self-signed TLS certificate: a small, automatically generated identity does
-///     not need the database. The state is loaded (or a new identity generated, after moving a
-///     damaged file aside) when the singleton is constructed, and <see cref="Save" /> rewrites
-///     the whole file atomically.
+///     not need the database. The state is loaded on first use of any member, not at
+///     construction, so an installation with DNSCrypt off never creates the file or an identity.
+///     The load reads the file, or generates a new identity after moving an unparseable file
+///     aside. A read error (IO or permission) is not cached and never generates an identity: the
+///     member throws <see cref="InvalidOperationException" /> and the next use tries again.
+///     <see cref="Save" /> rewrites the whole file atomically.
 /// </summary>
 /// <param name="options">The DNSCrypt settings, read for the state file path.</param>
 /// <param name="logger">The logger this store records a corrupt or unreadable state file to.</param>
@@ -25,13 +28,19 @@ public sealed class FileDnsCryptCertificateStore(
 ) : IDnsCryptCertificateStore
 {
     private readonly Lock _lock = new();
-    private readonly (
-        DnssecKeyPair ProviderKeyPair,
-        List<DnsCryptCertificateEntry> Entries
-    ) _state = LoadOrSeed(options.Value, logger);
+
+    // A nullable field, not Lazy<T>: Lazy<T> would cache a transient read failure for good.
+    private (DnssecKeyPair ProviderKeyPair, List<DnsCryptCertificateEntry> Entries)? _state;
 
     /// <inheritdoc />
-    public DnssecKeyPair ProviderKeyPair => _state.ProviderKeyPair;
+    public DnssecKeyPair ProviderKeyPair
+    {
+        get
+        {
+            lock (_lock)
+                return EnsureLoaded().ProviderKeyPair;
+        }
+    }
 
     /// <inheritdoc />
     public IReadOnlyList<DnsCryptCertificateEntry> Entries
@@ -39,7 +48,7 @@ public sealed class FileDnsCryptCertificateStore(
         get
         {
             lock (_lock)
-                return [.. _state.Entries];
+                return [.. EnsureLoaded().Entries];
         }
     }
 
@@ -48,25 +57,34 @@ public sealed class FileDnsCryptCertificateStore(
     {
         lock (_lock)
         {
-            _state.Entries.Clear();
-            _state.Entries.AddRange(entries);
-            WriteFile(
-                options.Value.CertificateStateFilePath,
-                _state.ProviderKeyPair,
-                _state.Entries,
-                logger
-            );
+            (DnssecKeyPair providerKeyPair, List<DnsCryptCertificateEntry> state) = EnsureLoaded();
+
+            state.Clear();
+            state.AddRange(entries);
+            WriteFile(options.Value.CertificateStateFilePath, providerKeyPair, state, logger);
         }
     }
 
     /// <summary>
-    ///     This method loads the state file, or creates a new one with a newly generated provider
-    ///     key pair and no certificates when the file does not exist or is unusable (unreadable,
-    ///     not JSON, or missing the provider keys or the certificate list). An unusable file is
-    ///     moved aside to <c>&lt;path&gt;.corrupt-&lt;timestamp&gt;</c> and an Error is logged.
-    ///     This runs when the singleton is constructed, whether or not DNSCrypt is enabled, so it
-    ///     must not throw for a damaged file or the host would not start.
+    ///     This method returns the loaded state, loading it on the first call. The caller holds
+    ///     <c>_lock</c>. A failed load leaves <c>_state</c> null so the next call retries.
     /// </summary>
+    private (
+        DnssecKeyPair ProviderKeyPair,
+        List<DnsCryptCertificateEntry> Entries
+    ) EnsureLoaded() => _state ??= LoadOrSeed(options.Value, logger);
+
+    /// <summary>
+    ///     This method loads the state file, or creates a new one with a newly generated provider
+    ///     key pair and no certificates when the file does not exist or its content is unusable
+    ///     (not JSON, or missing the provider keys or the certificate list). An unusable file is
+    ///     moved aside to <c>&lt;path&gt;.corrupt-&lt;timestamp&gt;</c> and an Error is logged.
+    ///     A file that cannot be read (IO or permission error) is left in place and no identity is
+    ///     generated.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    ///     The file exists but cannot be read right now, or the Ed25519 algorithm is missing.
+    /// </exception>
     private static (
         DnssecKeyPair ProviderKeyPair,
         List<DnsCryptCertificateEntry> Entries
@@ -99,16 +117,27 @@ public sealed class FileDnsCryptCertificateStore(
                 );
             }
             catch (Exception exception)
-                when (exception
-                        is IOException
-                            or UnauthorizedAccessException
-                            or FormatException
-                            or System.Text.Json.JsonException
-                )
+                when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A transient failure (locked file, permissions being fixed) must not replace
+                // the identity: the file is the only copy of the provider key that clients pinned.
+                logger.LogWarning(
+                    exception,
+                    "The DNSCrypt certificate state file at '{Path}' could not be read; it is left in place and no new identity is generated.",
+                    path
+                );
+
+                throw new InvalidOperationException(
+                    $"The DNSCrypt certificate state file at '{path}' could not be read; no new identity is generated, and it is tried again on next use.",
+                    exception
+                );
+            }
+            catch (Exception exception)
+                when (exception is FormatException or System.Text.Json.JsonException)
             {
                 logger.LogError(
                     exception,
-                    "The DNSCrypt certificate state file at '{Path}' could not be read; it was moved aside ({AsidePath}) and a new provider identity is generated. Clients need the new stamp.",
+                    "The DNSCrypt certificate state file at '{Path}' is not valid; it was moved aside ({AsidePath}) and a new provider identity is generated. Clients need the new stamp.",
                     path,
                     MoveAside(path)
                 );
