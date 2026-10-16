@@ -24,6 +24,25 @@ public sealed record NeighborTableEntry(IPAddress Address, byte[] LinkLayerAddre
 }
 
 /// <summary>
+///     This enum says what one parsed datagram of a neighbor dump means for the dump as a whole.
+/// </summary>
+public enum NetlinkDumpStatus
+{
+    /// <summary>The dump goes on; the next datagram carries more messages.</summary>
+    Continue,
+
+    /// <summary>The dump ended cleanly (<c>NLMSG_DONE</c>); the entries collected are the whole table.</summary>
+    Complete,
+
+    /// <summary>
+    ///     The dump is unusable and the entries collected so far must be discarded: the kernel
+    ///     reported an error, the dump was inconsistent (<c>NLM_F_DUMP_INTR</c>) or a message was
+    ///     malformed.
+    /// </summary>
+    Failed,
+}
+
+/// <summary>
 ///     This static class parses the reply to an rtnetlink neighbor dump (<c>RTM_GETNEIGH</c> with
 ///     <c>NLM_F_DUMP</c>) into <see cref="NeighborTableEntry" /> values. It contains no socket
 ///     code, so tests can run it against constructed byte sequences.
@@ -53,6 +72,9 @@ public static class NetlinkNeighborMessageParser
 
     /// <summary>The neighbor state bit for a recently confirmed-reachable entry (<c>NUD_REACHABLE</c>).</summary>
     public const ushort NudReachable = 0x02;
+
+    /// <summary>The <c>nlmsghdr</c> flag marking a dump as inconsistent (<c>NLM_F_DUMP_INTR</c>).</summary>
+    private const ushort FlagDumpInterrupted = 0x10;
 
     /// <summary>The length of an <c>nlmsghdr</c>.</summary>
     public const int HeaderLength = 16;
@@ -93,40 +115,78 @@ public static class NetlinkNeighborMessageParser
 
     /// <summary>
     ///     This method parses one received datagram, appending every neighbor entry it carries.
+    ///     A <see cref="NetlinkDumpStatus.Failed" /> result means the caller must discard every
+    ///     entry of the dump, including those appended by earlier datagrams. The failures are a
+    ///     length that cannot hold its header or overruns the datagram, an <c>NLMSG_ERROR</c> whose
+    ///     error is not zero (an error of zero is an acknowledgement and is skipped), an
+    ///     <c>NLMSG_DONE</c> whose payload starts with a negative status, and any message flagged
+    ///     <c>NLM_F_DUMP_INTR</c>, which the kernel sets when the table changed during the dump.
     /// </summary>
     /// <param name="datagram">One datagram read from the netlink socket.</param>
     /// <param name="entries">The list parsed entries are appended to.</param>
-    /// <returns><see langword="true" /> when the datagram ends the dump (<c>NLMSG_DONE</c> or an error).</returns>
-    public static bool ParseDatagram(ReadOnlySpan<byte> datagram, List<NeighborTableEntry> entries)
+    /// <returns>
+    ///     <see cref="NetlinkDumpStatus.Complete" /> at a clean <c>NLMSG_DONE</c>,
+    ///     <see cref="NetlinkDumpStatus.Failed" /> for a failure above, otherwise
+    ///     <see cref="NetlinkDumpStatus.Continue" />.
+    /// </returns>
+    public static NetlinkDumpStatus ParseDatagram(
+        ReadOnlySpan<byte> datagram,
+        List<NeighborTableEntry> entries
+    )
     {
         int offset = 0;
         while (offset + HeaderLength <= datagram.Length)
         {
             ReadOnlySpan<byte> header = datagram[offset..];
-            int length = (int)BinaryPrimitives.ReadUInt32LittleEndian(header);
+            long length = BinaryPrimitives.ReadUInt32LittleEndian(header);
             ushort type = BinaryPrimitives.ReadUInt16LittleEndian(header[4..]);
+            ushort flags = BinaryPrimitives.ReadUInt16LittleEndian(header[6..]);
 
             // A length that cannot hold its own header, or overruns the datagram, is malformed;
-            // stop rather than misread whatever follows.
+            // stop rather than misread whatever follows, and do not trust the entries so far.
             if (length < HeaderLength || offset + length > datagram.Length)
-                return true;
+                return NetlinkDumpStatus.Failed;
 
-            if (type is MessageTypeDone or MessageTypeError)
-                return true;
+            // The kernel sets NLM_F_DUMP_INTR when the table changed while it was being dumped, so
+            // the entries may repeat or miss devices (netlink(7)).
+            if ((flags & FlagDumpInterrupted) != 0)
+                return NetlinkDumpStatus.Failed;
 
-            if (type == MessageTypeNewNeighbor)
+            ReadOnlySpan<byte> payload = datagram.Slice(
+                offset + HeaderLength,
+                (int)length - HeaderLength
+            );
+
+            if (type == MessageTypeError)
             {
-                NeighborTableEntry entry = ParseNeighbor(
-                    datagram.Slice(offset + HeaderLength, length - HeaderLength)
-                );
+                // The payload starts with an s32 errno (negative) or 0 for an acknowledgement
+                // (netlink(7)); a payload too short to hold it is malformed.
+                if (payload.Length < 4)
+                    return NetlinkDumpStatus.Failed;
+
+                if (BinaryPrimitives.ReadInt32LittleEndian(payload) != 0)
+                    return NetlinkDumpStatus.Failed;
+            }
+            else if (type == MessageTypeDone)
+            {
+                // A multi-part reply's NLMSG_DONE may carry an s32 status; a negative one is an
+                // error that ended the dump early. A bare NLMSG_DONE has no payload.
+                if (payload.Length >= 4 && BinaryPrimitives.ReadInt32LittleEndian(payload) < 0)
+                    return NetlinkDumpStatus.Failed;
+
+                return NetlinkDumpStatus.Complete;
+            }
+            else if (type == MessageTypeNewNeighbor)
+            {
+                NeighborTableEntry entry = ParseNeighbor(payload);
                 if (entry is not null)
                     entries.Add(entry);
             }
 
-            offset += Align(length);
+            offset += Align((int)length);
         }
 
-        return false;
+        return NetlinkDumpStatus.Continue;
     }
 
     /// <summary>

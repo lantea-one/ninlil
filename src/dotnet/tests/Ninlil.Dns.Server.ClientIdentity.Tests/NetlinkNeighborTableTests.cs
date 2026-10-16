@@ -98,9 +98,9 @@ public class NetlinkNeighborTableTests
         ];
         List<NeighborTableEntry> entries = [];
 
-        bool finished = NetlinkNeighborMessageParser.ParseDatagram(datagram, entries);
+        NetlinkDumpStatus status = NetlinkNeighborMessageParser.ParseDatagram(datagram, entries);
 
-        Assert.False(finished);
+        Assert.Equal(NetlinkDumpStatus.Continue, status);
         Assert.Equal(2, entries.Count);
         Assert.Equal(IPAddress.Parse("192.0.2.10"), entries[0].Address);
         Assert.Equal(Mac, entries[0].LinkLayerAddress);
@@ -123,12 +123,15 @@ public class NetlinkNeighborTableTests
         ];
         List<NeighborTableEntry> entries = [];
 
-        Assert.True(NetlinkNeighborMessageParser.ParseDatagram(datagram, entries));
+        Assert.Equal(
+            NetlinkDumpStatus.Complete,
+            NetlinkNeighborMessageParser.ParseDatagram(datagram, entries)
+        );
         Assert.Null(Assert.Single(entries).LinkLayerAddress);
     }
 
     /// <summary>
-    ///     This test checks that a truncated message stops parsing rather than misreading past it.
+    ///     This test checks that a truncated message fails the dump rather than misreading past it.
     /// </summary>
     [Fact]
     public void ATruncatedMessageEndsParsingSafely()
@@ -140,13 +143,120 @@ public class NetlinkNeighborTableTests
         );
         List<NeighborTableEntry> entries = [];
 
-        Assert.True(
+        Assert.Equal(
+            NetlinkDumpStatus.Failed,
             NetlinkNeighborMessageParser.ParseDatagram(
                 message.AsSpan(0, message.Length - 4),
                 entries
             )
         );
         Assert.Empty(entries);
+    }
+
+    /// <summary>
+    ///     This method builds an <c>NLMSG_ERROR</c> message carrying the given error number.
+    /// </summary>
+    private static byte[] ErrorMessage(int error)
+    {
+        // nlmsghdr, the s32 error, then the echoed request header (nlmsgerr).
+        byte[] message = new byte[36];
+        BinaryPrimitives.WriteUInt32LittleEndian(message, 36);
+        BinaryPrimitives.WriteUInt16LittleEndian(message.AsSpan(4), 2);
+        BinaryPrimitives.WriteInt32LittleEndian(message.AsSpan(16), error);
+        return message;
+    }
+
+    /// <summary>
+    ///     This test checks that an <c>NLMSG_ERROR</c> with a non-zero error after two neighbor
+    ///     messages fails the dump, so the caller discards the two entries.
+    /// </summary>
+    [Fact]
+    public void AnErrorMessageAfterEntries_FailsTheDump()
+    {
+        byte[] datagram =
+        [
+            .. NeighborMessage(IPAddress.Parse("192.0.2.20"), Mac, NudStale),
+            .. NeighborMessage(IPAddress.Parse("192.0.2.21"), Mac, NudStale),
+            .. ErrorMessage(-16),
+        ];
+        List<NeighborTableEntry> entries = [];
+
+        NetlinkDumpStatus status = NetlinkNeighborMessageParser.ParseDatagram(datagram, entries);
+
+        Assert.Equal(NetlinkDumpStatus.Failed, status);
+    }
+
+    /// <summary>
+    ///     This test checks that a length field running past the datagram fails the dump.
+    /// </summary>
+    [Fact]
+    public void ALengthThatOverrunsTheDatagram_FailsTheDump()
+    {
+        byte[] message = NeighborMessage(IPAddress.Parse("192.0.2.22"), Mac, NudStale);
+        BinaryPrimitives.WriteUInt32LittleEndian(message, (uint)message.Length + 8);
+
+        Assert.Equal(
+            NetlinkDumpStatus.Failed,
+            NetlinkNeighborMessageParser.ParseDatagram(message, [])
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that a message flagged <c>NLM_F_DUMP_INTR</c> (the table changed during
+    ///     the dump) fails the dump.
+    /// </summary>
+    [Fact]
+    public void AMessageFlaggedDumpInterrupted_FailsTheDump()
+    {
+        byte[] message = NeighborMessage(IPAddress.Parse("192.0.2.23"), Mac, NudStale);
+        BinaryPrimitives.WriteUInt16LittleEndian(message.AsSpan(6), 0x02 | 0x10);
+
+        Assert.Equal(
+            NetlinkDumpStatus.Failed,
+            NetlinkNeighborMessageParser.ParseDatagram(message, [])
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that an <c>NLMSG_DONE</c> carrying a status of zero completes the dump,
+    ///     and one carrying a negative status fails it.
+    /// </summary>
+    [Fact]
+    public void DoneWithAStatus_CompletesOnZeroAndFailsOnANegativeValue()
+    {
+        byte[] done = DoneMessage();
+        Assert.Equal(
+            NetlinkDumpStatus.Complete,
+            NetlinkNeighborMessageParser.ParseDatagram(done, [])
+        );
+
+        byte[] failedDone = DoneMessage();
+        BinaryPrimitives.WriteInt32LittleEndian(failedDone.AsSpan(16), -5);
+        Assert.Equal(
+            NetlinkDumpStatus.Failed,
+            NetlinkNeighborMessageParser.ParseDatagram(failedDone, [])
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that an <c>NLMSG_ERROR</c> with error 0 (an acknowledgement) is skipped
+    ///     and the dump still completes at the following <c>NLMSG_DONE</c>.
+    /// </summary>
+    [Fact]
+    public void AnAcknowledgementThenDone_CompletesTheDump()
+    {
+        byte[] datagram =
+        [
+            .. NeighborMessage(IPAddress.Parse("192.0.2.24"), Mac, NudStale),
+            .. ErrorMessage(0),
+            .. DoneMessage(),
+        ];
+        List<NeighborTableEntry> entries = [];
+
+        NetlinkDumpStatus status = NetlinkNeighborMessageParser.ParseDatagram(datagram, entries);
+
+        Assert.Equal(NetlinkDumpStatus.Complete, status);
+        Assert.Single(entries);
     }
 
     /// <summary>

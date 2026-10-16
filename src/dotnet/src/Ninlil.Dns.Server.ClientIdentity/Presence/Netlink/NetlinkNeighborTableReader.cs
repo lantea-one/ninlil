@@ -10,9 +10,10 @@ public interface INeighborTableReader
 {
     /// <summary>
     ///     This method reads every current neighbor entry, or returns <see langword="null" /> when
-    ///     the neighbor table cannot be read on this platform at all.
+    ///     the neighbor table cannot be read on this platform at all or the kernel's dump failed.
+    ///     A failed dump never yields a partial table.
     /// </summary>
-    /// <returns>The neighbor entries, or <see langword="null" /> when unsupported.</returns>
+    /// <returns>The neighbor entries, or <see langword="null" /> when unsupported or failed.</returns>
     IReadOnlyList<NeighborTableEntry> Read();
 }
 
@@ -27,7 +28,9 @@ public interface INeighborTableReader
 ///         family outright, so this class calls the C library's socket functions directly. Only the
 ///         Linux 64-bit targets this project builds for are supported; on any other platform, or if
 ///         the socket cannot be opened (a sandbox forbidding netlink, for example), <see cref="Read" />
-///         returns <see langword="null" /> and presence tracking goes without this signal.
+///         returns <see langword="null" /> and presence tracking goes without this signal. A dump that
+///         fails (see <see cref="NetlinkDumpStatus.Failed" />) or times out also returns
+///         <see langword="null" />, never the entries read before the failure.
 ///     </para>
 /// </summary>
 public sealed partial class NetlinkNeighborTableReader : INeighborTableReader
@@ -110,12 +113,17 @@ public sealed partial class NetlinkNeighborTableReader : INeighborTableReader
                 if (received <= 0)
                     return null;
 
-                if (
-                    NetlinkNeighborMessageParser.ParseDatagram(
-                        buffer.AsSpan(0, (int)received),
-                        entries
-                    )
-                )
+                NetlinkDumpStatus status = NetlinkNeighborMessageParser.ParseDatagram(
+                    buffer.AsSpan(0, (int)received),
+                    entries
+                );
+
+                // A failed dump (kernel error, inconsistent or malformed reply) returns no table
+                // at all, for the same reason a timeout does.
+                if (status == NetlinkDumpStatus.Failed)
+                    return null;
+
+                if (status == NetlinkDumpStatus.Complete)
                     return entries;
             }
 
