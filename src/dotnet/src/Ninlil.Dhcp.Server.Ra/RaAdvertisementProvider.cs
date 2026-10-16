@@ -18,7 +18,10 @@ namespace Ninlil.Dhcp.Server.Ra;
 ///     hand-edited file that the settings controller never saw. <see cref="RaContentRules" />
 ///     decides what is valid: an invalid list entry (a prefix, an IPv4 RDNSS address, a route) is
 ///     skipped, an out-of-range scalar (a router lifetime over 65 535 s) is clamped to the nearest
-///     valid value, and an MTU under 1280 is omitted. Each distinct problem is logged once as a
+///     valid value, and an MTU under 1280 is omitted. RDNSS addresses past
+///     <see cref="RaContentRules.MaxRecursiveDnsServers" /> and DNSSL names past
+///     <see cref="RaContentRules.MaxDnsSearchListOctets" /> are skipped, so each option fits one
+///     datagram. Each distinct problem is logged once as a
 ///     Warning until the options change.
 /// </summary>
 public sealed class RaAdvertisementProvider : IRaAdvertisementProvider
@@ -217,14 +220,23 @@ public sealed class RaAdvertisementProvider : IRaAdvertisementProvider
         if (dnsSearchListDomains.Count > 0)
         {
             // Skip a domain the encoder cannot represent (an empty or overlong label, a non-ASCII
-            // character), as with prefixes above.
+            // character), as with prefixes above, and a domain that would push the option past
+            // the size that fits one datagram. A shorter later domain can still fit.
             List<string> validDomainNames = [];
 
             foreach (string domainName in dnsSearchListDomains)
-                if (RaDnsSearchListOption.IsValidDomainName(domainName))
-                    validDomainNames.Add(domainName);
-                else
+                if (!RaDnsSearchListOption.IsValidDomainName(domainName))
                     problems.Add($"DNS search domain '{domainName}' is skipped{where}.");
+                else if (
+                    RaContentRules.EncodedDnsSearchListOctets([.. validDomainNames, domainName])
+                    > RaContentRules.MaxDnsSearchListOctets
+                )
+                    problems.Add(
+                        $"DNS search domain '{domainName}' is skipped{where}: the list is "
+                            + $"limited to {RaContentRules.MaxDnsSearchListOctets} octets."
+                    );
+                else
+                    validDomainNames.Add(domainName);
 
             if (validDomainNames.Count > 0)
                 message.SetDnsSearchList(dnsSearchListLifetime, validDomainNames);

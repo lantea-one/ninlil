@@ -8,7 +8,12 @@ namespace Ninlil.Dhcp.Server.Ra;
 ///     This class is the one source of the limits a Router Advertisement's content must respect.
 ///     The settings controller uses it to reject a bad value with a message that names the field;
 ///     <see cref="RaAdvertisementProvider" /> uses it to skip or clamp a bad value that reached
-///     the configuration file by hand, so building an advertisement never throws. Every
+///     the configuration file by hand, so building an advertisement never throws. It also holds
+///     the size limits that keep each option within one advertisement datagram of 1240 octets,
+///     the IPv6 minimum link MTU of 1280 (RFC 8200 Section 5) minus the 40-octet IPv6 header. A
+///     larger datagram may be fragmented, and hosts drop fragmented Neighbor Discovery messages
+///     (RFC 6980 Section 5). The listener (<c>Ninlil.Dhcp.Protocol.Ra.Icmpv6RaListener</c>)
+///     splits a larger message, but cannot split one option. Every
 ///     <c>Check*</c> method returns <see langword="null" /> when the value is acceptable and an
 ///     error message otherwise.
 /// </summary>
@@ -32,10 +37,20 @@ public static class RaContentRules
     public const uint MinLinkMtu = 1280;
 
     /// <summary>
-    ///     This field holds the most addresses one RDNSS option can carry: its length byte counts
-    ///     8-octet units, 1 + 2n units must fit in 255, so n is at most 127 (RFC 8106 Section 5.1).
+    ///     This field holds the most addresses one RDNSS option may carry. The option must fit
+    ///     one datagram next to the 16-octet ICMPv6 and Router Advertisement header and the 8-octet
+    ///     Source Link-Layer Address and MTU options the listener repeats in every part:
+    ///     (1240 - 16 - 8 - 8 - 8 option header) / 16 = 75 (RFC 8106 Section 5.1 allows 127 on
+    ///     the wire).
     /// </summary>
-    public const int MaxRecursiveDnsServers = 127;
+    public const int MaxRecursiveDnsServers = 75;
+
+    /// <summary>
+    ///     This field holds the largest size in octets of the DNS Search List option, including its
+    ///     8-octet header and fixed fields and the padding: 1240 - 16 - 8 - 8 = 1208, for the same
+    ///     reason as <see cref="MaxRecursiveDnsServers" /> (RFC 8106 Section 5.2).
+    /// </summary>
+    public const int MaxDnsSearchListOctets = 1208;
 
     /// <summary>
     ///     This field holds the smallest allowed unsolicited advertisement interval in seconds
@@ -145,6 +160,40 @@ public static class RaContentRules
     public static string CheckRecursiveDnsServerCount(int count) =>
         count > MaxRecursiveDnsServers
             ? $"'recursiveDnsServers' must hold at most {MaxRecursiveDnsServers} addresses."
+            : null;
+
+    /// <summary>
+    ///     This method returns the size in octets the DNS Search List option has on the wire for
+    ///     the given names: the 8-octet header and fixed fields, then each name as its labels with
+    ///     one length octet each and a root label, padded to a multiple of 8 (RFC 8106 Section
+    ///     5.2). The names must be valid (see <c>RaDnsSearchListOption.IsValidDomainName</c>).
+    /// </summary>
+    public static int EncodedDnsSearchListOctets(IEnumerable<string> domainNames)
+    {
+        int nameOctets = 0;
+
+        foreach (string domainName in domainNames)
+        {
+            // "a.b" encodes as 1 a 1 b 0: the text plus a length octet and the root label. A
+            // name of dots only is the root label alone.
+            string trimmed = domainName.Trim('.');
+            nameOctets += trimmed.Length == 0 ? 1 : trimmed.Length + 2;
+        }
+
+        return 8 + (nameOctets + 7) / 8 * 8;
+    }
+
+    /// <summary>
+    ///     This method checks that the DNS Search List option for the given valid names fits
+    ///     <see cref="MaxDnsSearchListOctets" /> (see <see cref="EncodedDnsSearchListOctets" />).
+    /// </summary>
+    public static string CheckDnsSearchListSize(
+        IReadOnlyList<string> domainNames,
+        string field = "dnsSearchListDomains"
+    ) =>
+        domainNames.Count > 0 && EncodedDnsSearchListOctets(domainNames) > MaxDnsSearchListOctets
+            ? $"'{field}' must encode to at most {MaxDnsSearchListOctets} octets; the names "
+                + "are too long to advertise in one Router Advertisement."
             : null;
 
     /// <summary>

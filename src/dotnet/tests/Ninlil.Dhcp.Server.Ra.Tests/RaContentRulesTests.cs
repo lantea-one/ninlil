@@ -1,4 +1,5 @@
 using System.Net;
+using Ninlil.Dhcp.Common.Wire.Ra;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Ra.Tests;
@@ -82,10 +83,38 @@ public class RaContentRulesTests
     }
 
     [Fact]
-    public void CheckRecursiveDnsServerCount_AtAndAbove127_AcceptsOnlyTheRange()
+    public void CheckRecursiveDnsServerCount_AtAndAbove75_AcceptsOnlyTheRange()
     {
-        Assert.Null(RaContentRules.CheckRecursiveDnsServerCount(127));
-        Assert.NotNull(RaContentRules.CheckRecursiveDnsServerCount(128));
+        Assert.Null(RaContentRules.CheckRecursiveDnsServerCount(75));
+        Assert.NotNull(RaContentRules.CheckRecursiveDnsServerCount(76));
+    }
+
+    [Theory]
+    [InlineData("a.b", 16)]
+    [InlineData(".", 16)]
+    [InlineData("homelab.internal", 32)]
+    public void EncodedDnsSearchListOctets_MatchesTheOptionTheEncoderWrites(
+        string domainName,
+        int expected
+    )
+    {
+        RouterAdvertisementMessage message = new();
+        message.SetDnsSearchList(TimeSpan.FromMinutes(30), [domainName]);
+        RaOption option = Assert.Single(message.Options);
+
+        Assert.Equal(expected, RaContentRules.EncodedDnsSearchListOctets([domainName]));
+        Assert.Equal(expected, 2 + option.Data.Length);
+    }
+
+    [Fact]
+    public void CheckDnsSearchListSize_AtAndAboveTheLimit_AcceptsOnlyTheRange()
+    {
+        // Each name encodes to 65 octets: 18 give a 1184-octet option, 19 give 1248.
+        string[] names = [.. Enumerable.Range(10, 19).Select(i => new string('a', 60) + "." + i)];
+
+        Assert.Null(RaContentRules.CheckDnsSearchListSize(names[..18]));
+        Assert.NotNull(RaContentRules.CheckDnsSearchListSize(names));
+        Assert.Null(RaContentRules.CheckDnsSearchListSize([]));
     }
 
     [Theory]

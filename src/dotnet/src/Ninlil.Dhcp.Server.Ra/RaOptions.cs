@@ -81,8 +81,9 @@ public sealed class RaOptions
     ///     This property contains the DNS resolver addresses for the RFC 8106 Section 5.1 RDNSS
     ///     option, which gives SLAAC hosts DNS servers (SLAAC itself carries none). Empty (the
     ///     default) sends no RDNSS option, for example when <see cref="OtherConfiguration" /> sends
-    ///     hosts to DHCPv6 instead. The settings API accepts IPv6 addresses only (at most 127); the
-    ///     provider skips any other entry (see <see cref="RaContentRules" />).
+    ///     hosts to DHCPv6 instead. The settings API accepts IPv6 addresses only (at most
+    ///     <see cref="RaContentRules.MaxRecursiveDnsServers" />); the provider skips any other
+    ///     entry, and any address past that limit (see <see cref="RaContentRules" />).
     /// </summary>
     public List<string> RecursiveDnsServers { get; set; } = [];
 
@@ -98,7 +99,9 @@ public sealed class RaOptions
     /// <summary>
     ///     This property contains the search domain suffixes for the RFC 8106 Section 5.2 DNS
     ///     Search List (DNSSL) option, the companion of <see cref="RecursiveDnsServers" />. Empty
-    ///     (the default) sends no DNSSL option. Names the encoder cannot represent are skipped.
+    ///     (the default) sends no DNSSL option. Names the encoder cannot represent are skipped, and
+    ///     so are names that would make the option larger than
+    ///     <see cref="RaContentRules.MaxDnsSearchListOctets" />.
     /// </summary>
     public List<string> DnsSearchListDomains { get; set; } = [];
 

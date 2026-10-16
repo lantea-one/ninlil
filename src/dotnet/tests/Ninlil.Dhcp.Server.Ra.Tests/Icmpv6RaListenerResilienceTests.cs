@@ -16,24 +16,24 @@ namespace Ninlil.Dhcp.Server.Ra.Tests;
 public sealed class Icmpv6RaListenerResilienceTests
 {
     [Fact]
-    public void TryBuildAdvertisement_WhenTheProviderThrows_ReturnsFalseAndLogsOneError()
+    public void TryBuildAdvertisements_WhenTheProviderThrows_ReturnsFalseAndLogsOneError()
     {
         SwitchableProvider provider = new() { Failure = new InvalidOperationException("Bad.") };
         ListLogger logger = new();
         Icmpv6RaListener listener = CreateListener(provider, logger);
 
-        Assert.False(listener.TryBuildAdvertisement("eth0", out byte[] bytes));
-        Assert.Null(bytes);
+        Assert.False(listener.TryBuildAdvertisements("eth0", out IReadOnlyList<byte[]> datagrams));
+        Assert.Null(datagrams);
 
         // The same failure again is only a Debug entry, so a bad setting is not logged every
         // few seconds.
-        Assert.False(listener.TryBuildAdvertisement("eth0", out _));
+        Assert.False(listener.TryBuildAdvertisements("eth0", out _));
         Assert.Equal(1, logger.Count(LogLevel.Error));
         Assert.Equal(1, logger.Count(LogLevel.Debug));
     }
 
     [Fact]
-    public void TryBuildAdvertisement_WhenTheEncoderRejectsTheMessage_ReturnsFalse_AndSucceedsOnceFixed()
+    public void TryBuildAdvertisements_WhenTheEncoderRejectsTheMessage_ReturnsFalse_AndSucceedsOnceFixed()
     {
         SwitchableProvider provider = new()
         {
@@ -45,8 +45,8 @@ public sealed class Icmpv6RaListenerResilienceTests
         ListLogger logger = new();
         Icmpv6RaListener listener = CreateListener(provider, logger);
 
-        Assert.False(listener.TryBuildAdvertisement(null, out byte[] bytes));
-        Assert.Null(bytes);
+        Assert.False(listener.TryBuildAdvertisements(null, out IReadOnlyList<byte[]> datagrams));
+        Assert.Null(datagrams);
         Assert.Equal(1, logger.Count(LogLevel.Error));
 
         provider.Message = new RouterAdvertisementMessage
@@ -54,23 +54,23 @@ public sealed class Icmpv6RaListenerResilienceTests
             RouterLifetime = TimeSpan.FromSeconds(1800),
         };
 
-        Assert.True(listener.TryBuildAdvertisement(null, out bytes));
-        Assert.NotEmpty(bytes);
+        Assert.True(listener.TryBuildAdvertisements(null, out datagrams));
+        Assert.NotEmpty(Assert.Single(datagrams));
 
         // After a success, a new failure is reported at Error again.
         provider.Failure = new InvalidOperationException("Bad.");
-        Assert.False(listener.TryBuildAdvertisement(null, out _));
+        Assert.False(listener.TryBuildAdvertisements(null, out _));
         Assert.Equal(2, logger.Count(LogLevel.Error));
     }
 
     [Fact]
-    public void TryBuildAdvertisement_WhenTheProviderReturnsNull_ReturnsFalseWithoutLogging()
+    public void TryBuildAdvertisements_WhenTheProviderReturnsNull_ReturnsFalseWithoutLogging()
     {
         SwitchableProvider provider = new();
         ListLogger logger = new();
         Icmpv6RaListener listener = CreateListener(provider, logger);
 
-        Assert.False(listener.TryBuildAdvertisement("eth0", out _));
+        Assert.False(listener.TryBuildAdvertisements("eth0", out _));
         Assert.Equal(0, logger.Count(LogLevel.Error));
     }
 

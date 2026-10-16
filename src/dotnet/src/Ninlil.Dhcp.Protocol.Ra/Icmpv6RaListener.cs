@@ -74,6 +74,13 @@ namespace Ninlil.Dhcp.Protocol.Ra;
 ///         Unicast and multicast never share a window.
 ///     </para>
 ///     <para>
+///         <b>Size.</b> An advertisement is at most <see cref="MaximumAdvertisementBytes" />
+///         octets, so it is never fragmented on a link with the IPv6 minimum MTU. A larger one is
+///         sent as several advertisements that each repeat the header fields and the Source
+///         Link-Layer Address and MTU options (see <see cref="TryBuildAdvertisements" />). The
+///         parts of one advertisement are one send for the rate-limit window.
+///     </para>
+///     <para>
 ///         <b>Per-interface content.</b> Wherever the interface is known (the periodic loop and
 ///         the multicast reply), its name is passed to
 ///         <see cref="IRaAdvertisementProvider.BuildCurrentAdvertisement" />, which applies that
@@ -122,6 +129,15 @@ public sealed class Icmpv6RaListener(
     ///     a longer datagram is truncated, which is harmless since only solicitations are decoded.
     /// </summary>
     private const int MaximumDatagramSize = 1500;
+
+    /// <summary>
+    ///     This constant contains the largest size in octets of one advertisement datagram, the
+    ///     ICMPv6 message without the IPv6 header: the IPv6 minimum link MTU of 1280 minus 40
+    ///     (RFC 8200 Section 5). A larger message may be fragmented on a link with the minimum MTU,
+    ///     and hosts drop fragmented Neighbor Discovery messages (RFC 6980 Section 5), so
+    ///     <see cref="TryBuildAdvertisements" /> splits a larger message into several datagrams.
+    /// </summary>
+    internal const int MaximumAdvertisementBytes = 1240;
 
     private static readonly Random Jitter = Random.Shared;
 
@@ -206,7 +222,7 @@ public sealed class Icmpv6RaListener(
     ///     This field contains the message of the exception that made the last advertisement
     ///     build fail, or <see langword="null" /> after a build succeeds. It keeps a persistent
     ///     failure from logging an Error every few seconds (see
-    ///     <see cref="TryBuildAdvertisement" />).
+    ///     <see cref="TryBuildAdvertisements" />).
     /// </summary>
     private string _lastBuildFailureMessage;
 
@@ -881,21 +897,28 @@ public sealed class Icmpv6RaListener(
     }
 
     /// <summary>
-    ///     This method builds and encodes the advertisement for one interface. It returns
-    ///     <see langword="false" /> with no bytes when the provider returns <see langword="null" />
-    ///     (an excluded interface), and also when the provider or the encoder throws: the
-    ///     exception is logged and never propagates, because a bad configuration must not end a
-    ///     loop. A failure logs an Error the first time; the same failure again logs only at
-    ///     Debug until a build succeeds, so one bad setting is reported once, not every few
-    ///     seconds.
+    ///     This method builds and encodes the advertisement for one interface, as one datagram or,
+    ///     when the encoded message is larger than <see cref="MaximumAdvertisementBytes" />, as
+    ///     several (see <see cref="SplitAdvertisement" />). It returns <see langword="false" />
+    ///     with no datagrams when the provider returns <see langword="null" /> (an excluded
+    ///     interface), and also when the provider or the encoder throws: the exception is logged
+    ///     and never propagates, because a bad configuration must not end a loop. A failure logs
+    ///     an Error the first time; the same failure again logs only at Debug until a build
+    ///     succeeds, so one bad setting is reported once, not every few seconds. An option that
+    ///     had to be dropped is such a failure too, although the build then still succeeds.
     /// </summary>
     /// <param name="interfaceName">
     ///     The interface to build for, or <see langword="null" /> for the default content.
     /// </param>
-    /// <param name="bytes">The encoded advertisement when this method returns true.</param>
-    internal bool TryBuildAdvertisement(string interfaceName, out byte[] bytes)
+    /// <param name="datagrams">
+    ///     The encoded advertisement datagrams, in send order, when this method returns true. A
+    ///     message within the limit gives one datagram, identical to the output of
+    ///     <see cref="RaMessageWriter.WriteRouterAdvertisement" />.
+    /// </param>
+    internal bool TryBuildAdvertisements(string interfaceName, out IReadOnlyList<byte[]> datagrams)
     {
-        bytes = null;
+        datagrams = null;
+        string droppedOptions = null;
 
         try
         {
@@ -905,45 +928,160 @@ public sealed class Icmpv6RaListener(
             if (advertisement is null)
                 return false;
 
-            bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
+            byte[] whole = RaMessageWriter.WriteRouterAdvertisement(advertisement);
+
+            datagrams =
+                whole.Length <= MaximumAdvertisementBytes
+                    ? [whole]
+                    : SplitAdvertisement(advertisement, out droppedOptions);
         }
         catch (Exception exception)
         {
-            bool isRepeat;
-
-            lock (_buildFailureLock)
-            {
-                isRepeat = _lastBuildFailureMessage == exception.Message;
-                _lastBuildFailureMessage = exception.Message;
-            }
-
-            if (isRepeat)
-                logger.LogDebug(
-                    exception,
-                    "Building the Router Advertisement for interface {InterfaceName} failed again.",
-                    interfaceName
-                );
-            else
-                logger.LogError(
-                    exception,
-                    "Building the Router Advertisement for interface {InterfaceName} failed; no advertisement is sent until the configuration is fixed.",
-                    interfaceName
-                );
-
-            bytes = null;
+            ReportBuildProblem(interfaceName, exception.Message, exception);
+            datagrams = null;
             return false;
         }
 
-        lock (_buildFailureLock)
-            _lastBuildFailureMessage = null;
+        if (droppedOptions is not null)
+            ReportBuildProblem(interfaceName, droppedOptions, exception: null);
+        else
+            lock (_buildFailureLock)
+                _lastBuildFailureMessage = null;
 
         return true;
     }
 
     /// <summary>
-    ///     This method builds the advertisement (see <see cref="TryBuildAdvertisement" />) and
-    ///     sends it. The caller has already taken the send window (see <see cref="RaSendWindow" />).
-    ///     A build failure or a send error is logged and reported as <see langword="false" />.
+    ///     This method logs a build problem: an Error the first time its message occurs since the
+    ///     last clean build, and a Debug entry when the same message occurs again.
+    /// </summary>
+    private void ReportBuildProblem(string interfaceName, string message, Exception exception)
+    {
+        bool isRepeat;
+
+        lock (_buildFailureLock)
+        {
+            isRepeat = _lastBuildFailureMessage == message;
+            _lastBuildFailureMessage = message;
+        }
+
+        if (isRepeat)
+            logger.LogDebug(
+                exception,
+                "Building the Router Advertisement for interface {InterfaceName} failed again: {Problem}",
+                interfaceName,
+                message
+            );
+        else
+            logger.LogError(
+                exception,
+                "Building the Router Advertisement for interface {InterfaceName} failed; the advertisement is not complete or is not sent until the configuration is fixed: {Problem}",
+                interfaceName,
+                message
+            );
+    }
+
+    /// <summary>
+    ///     This method splits an advertisement that is larger than
+    ///     <see cref="MaximumAdvertisementBytes" /> into several messages that each fit. RFC 4861
+    ///     Section 6.2.3 lets a router describe a link in several advertisements, each carrying
+    ///     a subset of the options. Every part repeats the header fields and the Source
+    ///     Link-Layer Address and MTU options, so a host that sees only one part still has the
+    ///     link's basics. The other options are packed in their original order: a new part starts
+    ///     when the next option does not fit after the ones before it, so the order of the
+    ///     prefixes and routes is kept and no option appears twice. An option that does not fit
+    ///     even next to the repeated ones is dropped and named in <paramref name="dropped" />.
+    /// </summary>
+    /// <param name="advertisement">The message whose encoding is too large.</param>
+    /// <param name="dropped">
+    ///     A description of the dropped options, or <see langword="null" /> when none was dropped.
+    /// </param>
+    /// <returns>The encoded parts, in send order. There is always at least one.</returns>
+    private static List<byte[]> SplitAdvertisement(
+        RouterAdvertisementMessage advertisement,
+        out string dropped
+    )
+    {
+        // The ICMPv6 header and the Router Advertisement fixed fields.
+        const int headerLength =
+            RaConstants.Icmpv6HeaderLength + RaConstants.RouterAdvertisementFixedBodyLength;
+
+        // Selected by type, not with Except: that is a set operation and would merge two
+        // identical options.
+        static bool IsRepeated(RaOption option) =>
+            option.Type
+                is (byte)Common.Enum.RaOptionCodeEnum.SourceLinkLayerAddress
+                    or (byte)Common.Enum.RaOptionCodeEnum.Mtu;
+
+        List<RaOption> repeated = [.. advertisement.Options.Where(IsRepeated)];
+        int repeatedLength = repeated.Sum(OptionLength);
+        List<List<RaOption>> parts = [];
+        List<string> droppedTypes = [];
+        int currentLength = headerLength + repeatedLength;
+
+        foreach (
+            RaOption option in advertisement.Options.Where(candidate => !IsRepeated(candidate))
+        )
+        {
+            int length = OptionLength(option);
+
+            if (headerLength + repeatedLength + length > MaximumAdvertisementBytes)
+            {
+                droppedTypes.Add($"type {option.Type} ({length} octets)");
+                continue;
+            }
+
+            if (parts.Count == 0 || currentLength + length > MaximumAdvertisementBytes)
+            {
+                parts.Add([.. repeated]);
+                currentLength = headerLength + repeatedLength;
+            }
+
+            parts[^1].Add(option);
+            currentLength += length;
+        }
+
+        if (parts.Count == 0)
+            parts.Add([.. repeated]);
+
+        dropped =
+            droppedTypes.Count == 0
+                ? null
+                : "A Router Advertisement option is larger than one datagram allows and is dropped: "
+                    + string.Join(", ", droppedTypes)
+                    + ".";
+
+        return
+        [
+            .. parts.Select(options =>
+            {
+                RouterAdvertisementMessage part = new()
+                {
+                    CurrentHopLimit = advertisement.CurrentHopLimit,
+                    ManagedAddressConfiguration = advertisement.ManagedAddressConfiguration,
+                    OtherConfiguration = advertisement.OtherConfiguration,
+                    RouterLifetime = advertisement.RouterLifetime,
+                    ReachableTime = advertisement.ReachableTime,
+                    RetransTimer = advertisement.RetransTimer,
+                };
+                part.Options.AddRange(options);
+                return RaMessageWriter.WriteRouterAdvertisement(part);
+            }),
+        ];
+    }
+
+    /// <summary>
+    ///     This method returns the encoded size of an option: its 2-octet header and its value.
+    /// </summary>
+    private static int OptionLength(RaOption option) =>
+        RaConstants.OptionHeaderLength + option.Data.Length;
+
+    /// <summary>
+    ///     This method builds the advertisement (see <see cref="TryBuildAdvertisements" />) and
+    ///     sends its datagrams back to back. The caller has already taken the send window (see
+    ///     <see cref="RaSendWindow" />) once for the whole advertisement, so the parts of a split
+    ///     advertisement do not take it again. A build failure or a send error is logged and
+    ///     reported as <see langword="false" />; a send error stops the remaining parts.
     /// </summary>
     /// <param name="sender">Where the advertisement goes.</param>
     /// <param name="interfaceIndex">
@@ -957,7 +1095,7 @@ public sealed class Icmpv6RaListener(
     /// </param>
     /// <param name="destination">Where to send the advertisement.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>Whether an advertisement was sent.</returns>
+    /// <returns>Whether every datagram of the advertisement was sent.</returns>
     private async Task<bool> SendAdvertisementAsync(
         IRaDatagramSender sender,
         int? interfaceIndex,
@@ -966,12 +1104,14 @@ public sealed class Icmpv6RaListener(
         CancellationToken stoppingToken
     )
     {
-        if (!TryBuildAdvertisement(interfaceName, out byte[] bytes))
+        if (!TryBuildAdvertisements(interfaceName, out IReadOnlyList<byte[]> datagrams))
             return false;
 
         try
         {
-            await sender.SendAsync(bytes, destination, interfaceIndex, stoppingToken);
+            foreach (byte[] datagram in datagrams)
+                await sender.SendAsync(datagram, destination, interfaceIndex, stoppingToken);
+
             return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

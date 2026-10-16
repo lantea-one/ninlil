@@ -567,6 +567,72 @@ public class RaAdvertisementProviderTests
         Assert.Equal(1, logger.Warnings);
     }
 
+    [Fact]
+    public void BuildCurrentAdvertisement_WithMoreRdnssAddressesThanFitOneDatagram_SendsTheFirst75AndLogsOneWarning()
+    {
+        CapturingLogger logger = new();
+        RaAdvertisementProvider provider = new(
+            new FixedOptionsMonitor(
+                new RaOptions
+                {
+                    RecursiveDnsServers =
+                    [
+                        .. Enumerable.Range(1, 100).Select(i => $"2001:db8::{i:x}"),
+                    ],
+                }
+            ),
+            logger
+        );
+
+        RouterAdvertisementMessage advertisement = provider.BuildCurrentAdvertisement();
+        provider.BuildCurrentAdvertisement();
+
+        Assert.True(
+            advertisement.TryGetRecursiveDnsServers(out _, out IReadOnlyList<IPAddress> dns)
+        );
+        Assert.Equal(75, dns.Count);
+        Assert.Equal(IPAddress.Parse("2001:db8::1"), dns[0]);
+        Assert.Equal(IPAddress.Parse("2001:db8::4b"), dns[74]);
+        Assert.Equal(1, logger.Warnings);
+    }
+
+    [Theory]
+    [InlineData(23)]
+    [InlineData(40)]
+    public void BuildCurrentAdvertisement_WithASearchListThatDoesNotFit_KeepsTheNamesThatFitAndLogsOneWarning(
+        int nameCount
+    )
+    {
+        CapturingLogger logger = new();
+        RaAdvertisementProvider provider = new(
+            new FixedOptionsMonitor(
+                new RaOptions { DnsSearchListDomains = [.. SixtyFiveOctetNames(nameCount)] }
+            ),
+            logger
+        );
+
+        // 40 names encode to more than the 255 units a length byte can count; the build used to
+        // throw there, and the writer below would too.
+        RouterAdvertisementMessage advertisement = provider.BuildCurrentAdvertisement();
+
+        Assert.True(advertisement.TryGetDnsSearchList(out _, out IReadOnlyList<string> names));
+        Assert.Equal(SixtyFiveOctetNames(18), names);
+        RaOption option = Assert.Single(
+            advertisement.Options,
+            o => o.Type == (byte)RaOptionCodeEnum.DnsSearchList
+        );
+        Assert.True(2 + option.Data.Length <= RaContentRules.MaxDnsSearchListOctets);
+        Assert.NotEmpty(RaMessageWriter.WriteRouterAdvertisement(advertisement));
+        Assert.Equal(1, logger.Warnings);
+    }
+
+    /// <summary>
+    ///     This method returns distinct names that each encode to 65 octets (a 60-character label,
+    ///     a 2-character label and the length bytes and root label).
+    /// </summary>
+    private static IEnumerable<string> SixtyFiveOctetNames(int count) =>
+        Enumerable.Range(10, count).Select(i => new string('a', 60) + "." + i);
+
     /// <summary>
     ///     This class is an <see cref="ILogger{TCategoryName}" /> fake that counts Warning entries.
     /// </summary>
