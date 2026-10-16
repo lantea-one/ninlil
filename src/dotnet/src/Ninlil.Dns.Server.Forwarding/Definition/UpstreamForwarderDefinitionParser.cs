@@ -129,13 +129,34 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
 
             host = hostPort[1..closingBracket];
             string remainder = hostPort[(closingBracket + 1)..];
-            port = remainder.StartsWith(':')
-                ? ParsePort(remainder[1..], definitionString)
-                : defaultPort;
+
+            if (remainder.Length == 0)
+                port = defaultPort;
+            else if (remainder.StartsWith(':'))
+                port = ParsePort(remainder[1..], definitionString);
+            else
+                throw new FormatException(
+                    $"'{definitionString}' must have ':port' after the bracketed IPv6 address."
+                );
+        }
+        else if (
+            IPAddress.TryParse(hostPort, out IPAddress wholeAddress)
+            && wholeAddress.AddressFamily == AddressFamily.InterNetworkV6
+        )
+        {
+            // The whole text is an IPv6 address, so its last group is not a port.
+            host = hostPort;
+            port = defaultPort;
         }
         else
         {
+            int firstColon = hostPort.IndexOf(':');
             int lastColon = hostPort.LastIndexOf(':');
+
+            if (firstColon != lastColon)
+                throw new FormatException(
+                    $"'{definitionString}' is not a valid IPv6 address; an IPv6 address with a port must be written as [address]:port."
+                );
 
             if (lastColon < 0)
             {
