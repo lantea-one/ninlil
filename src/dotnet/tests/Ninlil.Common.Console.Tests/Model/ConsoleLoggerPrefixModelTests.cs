@@ -187,4 +187,28 @@ public class ConsoleLoggerPrefixModelTests
 
         Assert.Empty(model);
     }
+
+    /// <summary>Verifies that <see cref="ConsoleLoggerPrefixModel.WithoutPart(object)" /> ignores an index past the end, like an out-of-range negative index.</summary>
+    [Fact]
+    public void WithoutPart_ByIndexOutsideTheList_ChangesNothing()
+    {
+        var model = new ConsoleLoggerPrefixModel().WithParts("first", "second");
+
+        model.WithoutPart(5);
+        model.WithoutPart(2);
+        model.WithoutPart(-5);
+
+        Assert.Equal(["first", "second"], model);
+    }
+
+    /// <summary>Verifies that <see cref="ConsoleLoggerPrefixModel.WithoutPart(object)" /> removes the last part by its highest valid index.</summary>
+    [Fact]
+    public void WithoutPart_ByLastIndex_RemovesTheSecondPart()
+    {
+        var model = new ConsoleLoggerPrefixModel().WithParts("first", "second");
+
+        model.WithoutPart(1);
+
+        Assert.Equal(["first"], model);
+    }
 }

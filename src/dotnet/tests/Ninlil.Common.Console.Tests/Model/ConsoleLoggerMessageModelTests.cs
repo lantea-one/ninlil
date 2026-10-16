@@ -7,8 +7,10 @@ namespace Ninlil.Common.Console.Tests.Model;
 /// <summary>
 ///     These tests cover <see cref="ConsoleLoggerMessageModel" />: its constructors, rendering in
 ///     table, text and JSON formats, and <see cref="ConsoleLoggerMessageModel.WriteAsync" /> writing
-///     a message only once. Writes use quiet mode so nothing depends on captured console output.
+///     a message only once. Writes use quiet mode so nothing depends on captured console output, except
+///     the debug/trace test, which captures standard output (hence the shared process-state collection).
 /// </summary>
+[Collection(ConsoleCommandTests.CollectionName)]
 public class ConsoleLoggerMessageModelTests
 {
     /// <summary>
@@ -193,5 +195,45 @@ public class ConsoleLoggerMessageModelTests
         message.Write(configuration);
 
         Assert.True(message.Written);
+    }
+
+    /// <summary>
+    ///     Verifies that a debug or trace level is hidden from the console when debug output is off
+    ///     whatever its case, and that other levels are written. Standard output is captured, so the
+    ///     test restores it in <c>finally</c> and the class joins the collection that serialises
+    ///     tests touching process-wide console state (messages carry unique text, so output from
+    ///     other tests cannot confuse the assertions).
+    /// </summary>
+    [Theory]
+    [InlineData("debug", false)]
+    [InlineData("DEBUG", false)]
+    [InlineData("Trace", false)]
+    [InlineData("TRACE", false)]
+    [InlineData("info", true)]
+    public async Task WriteAsync_WithDebugOff_HidesDebugAndTraceInAnyCase(
+        string level,
+        bool expectedWritten
+    )
+    {
+        TextWriter originalOut = System.Console.Out;
+        StringWriter captured = new();
+        string text = $"hc{Guid.NewGuid():N}"[..14];
+        try
+        {
+            System.Console.SetOut(captured);
+            ConsoleLoggerMessageModel message = new(level, text, (IEnumerable<string>)null);
+
+            await message.WriteAsync(
+                new ConsoleLoggerConfigurationModel { Debug = false, Quiet = false }
+            );
+
+            Assert.True(message.Written);
+        }
+        finally
+        {
+            System.Console.SetOut(originalOut);
+        }
+
+        Assert.Equal(expectedWritten, captured.ToString().Contains(text));
     }
 }

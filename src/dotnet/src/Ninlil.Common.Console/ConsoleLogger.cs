@@ -99,12 +99,25 @@ public class ConsoleLogger : IConsoleLogger
         new ConsoleLoggerConfigurationModel();
 
     /// <summary>
-    ///     This property holds every message logged by this instance. It is never trimmed.
+    ///     This property holds the messages not written yet and up to <see cref="MaxRetainedMessages" />
+    ///     written ones, oldest first.
     /// </summary>
     [JsonPropertyName("messages")]
     [XmlElement("message")]
     [YamlMember(Alias = "messages")]
     public List<IConsoleLoggerMessageModel> Messages { get; set; } = [];
+
+    /// <summary>
+    ///     This property is the most written messages <see cref="Messages" /> keeps. After each
+    ///     <see cref="LogMessage(IConsoleLoggerMessageModel)" />, <see cref="Flush" /> and
+    ///     <see cref="WriteAsync" /> the oldest written messages beyond it are removed. Messages not
+    ///     written yet are never removed. A negative value keeps every message; 0 keeps no written
+    ///     message. The default is 1,000. It is on the class, not on <see cref="IConsoleLogger" />.
+    /// </summary>
+    [JsonPropertyName("maxRetainedMessages")]
+    [XmlElement("maxRetainedMessages")]
+    [YamlMember(Alias = "maxRetainedMessages")]
+    public int MaxRetainedMessages { get; set; } = 1000;
 
     /// <summary>
     ///     This is the default constructor for the <see cref="ConsoleLogger" /> class.
@@ -173,6 +186,9 @@ public class ConsoleLogger : IConsoleLogger
         // and write them to the console using the current configuration.
         foreach (var message in Messages.Where(m => !m.Written))
             message.Write(Configuration);
+
+        // Trim after writing so the messages just written count toward the cap.
+        TrimWrittenMessages();
 
         // We're done flushing the messages, so return the current instance of the console logger for method chaining.
         return this;
@@ -401,12 +417,11 @@ public class ConsoleLogger : IConsoleLogger
         // Add the provided log message to the list of messages in the logger.
         Messages.Add(message);
 
-        // Find the longest prefix part across all messages, ignoring timestamp parts, plus two for
-        // the surrounding brackets.
+        // Find the longest prefix part of this message alone, ignoring timestamp parts, plus two for
+        // the surrounding brackets. The width only grows, so the earlier messages need no rescan:
+        // the result equals the maximum over all messages.
         int maxPrefixLength =
-            Messages
-                .Where(m => m.Prefix?.GetParts().Count > 0)
-                .SelectMany(m => m.Prefix.GetParts())
+            (message.Prefix?.GetParts() ?? [])
                 .Where(p => !DateTime.TryParse(p, out _))
                 .Select(p => p.Length)
                 .DefaultIfEmpty(0)
@@ -418,6 +433,9 @@ public class ConsoleLogger : IConsoleLogger
 
         // Write the log message to the console using the current configuration.
         message.Write(Configuration);
+
+        // Drop the oldest written messages beyond the retention cap.
+        TrimWrittenMessages();
 
         // We're done, return the current instance of the console logger for method chaining.
         return this;
@@ -607,6 +625,31 @@ public class ConsoleLogger : IConsoleLogger
     ) => LogMessage("warn", message, prefix, data, buffer, padding, format, color);
 
     /// <summary>
+    ///     This method removes the oldest written messages beyond <see cref="MaxRetainedMessages" />.
+    ///     Messages not written yet stay, because dropping one would lose output the host has not seen.
+    /// </summary>
+    private void TrimWrittenMessages()
+    {
+        // A negative cap keeps everything.
+        if (MaxRetainedMessages < 0)
+            return;
+
+        // Count the written messages; nothing to do when they fit the cap.
+        int excess = Messages.Count(m => m.Written) - MaxRetainedMessages;
+        if (excess <= 0)
+            return;
+
+        // Remove the oldest written messages in one pass, keeping the order of the rest.
+        Messages.RemoveAll(m =>
+        {
+            if (excess <= 0 || !m.Written)
+                return false;
+            excess--;
+            return true;
+        });
+    }
+
+    /// <summary>
     ///     This method creates a new instance of the <see cref="IConsoleLoggerMessageModel" />
     ///     interface with the specified parameters, including log <paramref name="level" />,
     ///     <paramref name="message" /> content, optional <paramref name="prefix" />, <paramref name="data" />,
@@ -713,6 +756,9 @@ public class ConsoleLogger : IConsoleLogger
         // Write each message; messages already written are skipped by the message itself.
         foreach (var message in Messages)
             await message.WriteAsync(Configuration, stoppingToken);
+
+        // Trim after writing so the messages just written count toward the cap.
+        TrimWrittenMessages();
 
         // We're done, return the current instance of the console logger for method chaining.
         return this;

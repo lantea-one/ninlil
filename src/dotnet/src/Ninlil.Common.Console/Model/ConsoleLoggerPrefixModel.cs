@@ -185,7 +185,7 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
     /// </summary>
     /// <param name="part">
     ///     The part text to remove, or an <see cref="int" /> index. A negative index removes that many
-    ///     parts from the end; a positive index out of range throws.
+    ///     parts from the end. An index outside the list, positive or negative, changes nothing.
     /// </param>
     /// <returns>
     ///     The current instance of <see cref="IConsoleLoggerPrefixModel" /> with the specified part removed.
@@ -216,8 +216,10 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
                 return this;
             }
 
-            // Remove the part at the specified index (List.RemoveAt throws when it is out of range).
-            RemoveAt(intPart);
+            // Remove the part at the specified index. An index past the end is a no-op, like an
+            // out-of-range negative index, so a caller can trim without checking the length first.
+            if (intPart < Count)
+                RemoveAt(intPart);
 
             // We're done, return the current instance of the ConsoleLoggerPrefixModel after removing the specified part.
             return this;

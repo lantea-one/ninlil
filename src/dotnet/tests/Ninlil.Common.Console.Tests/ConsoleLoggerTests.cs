@@ -264,4 +264,93 @@ public class ConsoleLoggerTests
 
         Assert.Single(logger.Configuration.Prefix, p => p == nameof(ConsoleLoggerTests));
     }
+
+    /// <summary>Verifies that the logger keeps at most 1,000 written messages by default and the newest survive.</summary>
+    [Fact]
+    public void LogMessage_BeyondTheDefaultCap_KeepsTheNewestThousand()
+    {
+        ConsoleLogger logger = new() { Configuration = { Quiet = true } };
+
+        for (int i = 0; i < 1500; i++)
+            logger.LogInformation($"message {i}");
+
+        Assert.Equal(1000, logger.Messages.Count);
+        Assert.Equal("message 1499", logger.Messages[^1].Message);
+        Assert.Equal("message 500", logger.Messages[0].Message);
+    }
+
+    /// <summary>Verifies that a negative <see cref="ConsoleLogger.MaxRetainedMessages" /> keeps every message.</summary>
+    [Fact]
+    public void LogMessage_WithNegativeCap_KeepsEverything()
+    {
+        ConsoleLogger logger = new() { Configuration = { Quiet = true }, MaxRetainedMessages = -1 };
+
+        for (int i = 0; i < 1500; i++)
+            logger.LogInformation($"message {i}");
+
+        Assert.Equal(1500, logger.Messages.Count);
+    }
+
+    /// <summary>Verifies that a cap of 0 keeps no written message.</summary>
+    [Fact]
+    public void LogMessage_WithCapOfZero_KeepsNoWrittenMessage()
+    {
+        ConsoleLogger logger = new() { Configuration = { Quiet = true }, MaxRetainedMessages = 0 };
+
+        logger.LogInformation("one").LogInformation("two");
+
+        Assert.Empty(logger.Messages);
+    }
+
+    /// <summary>Verifies that trimming never removes a message that is not written yet, and that Flush writes it and then trims.</summary>
+    [Fact]
+    public void Flush_KeepsUnwrittenMessagesThroughATrimAndTrimsAfterWriting()
+    {
+        ConsoleLogger logger = new() { Configuration = { Quiet = true }, MaxRetainedMessages = 1 };
+        ConsoleLoggerMessageModel queued = new("info", "queued", (IEnumerable<string>)null);
+        logger.Messages.Add(queued);
+
+        logger.LogInformation("a").LogInformation("b");
+
+        Assert.Contains(queued, logger.Messages);
+        Assert.False(queued.Written);
+        Assert.Equal(2, logger.Messages.Count);
+
+        logger.Flush();
+
+        // The queued message is now written and the oldest, so it is the one dropped.
+        Assert.True(queued.Written);
+        Assert.Single(logger.Messages);
+        Assert.Equal("b", logger.Messages[0].Message);
+    }
+
+    /// <summary>Verifies that <see cref="ConsoleLogger.WriteAsync" /> trims written messages beyond the cap.</summary>
+    [Fact]
+    public async Task WriteAsync_TrimsWrittenMessagesBeyondTheCap()
+    {
+        ConsoleLogger logger = new() { Configuration = { Quiet = true }, MaxRetainedMessages = 1 };
+        logger.Messages.Add(new ConsoleLoggerMessageModel("info", "x", (IEnumerable<string>)null));
+        logger.Messages.Add(new ConsoleLoggerMessageModel("info", "y", (IEnumerable<string>)null));
+
+        await logger.WriteAsync();
+
+        Assert.Single(logger.Messages);
+        Assert.Equal("y", logger.Messages[0].Message);
+    }
+
+    /// <summary>Verifies that the prefix width tracks the longest part seen so far, even after earlier messages are trimmed away.</summary>
+    [Fact]
+    public void LogMessage_PrefixWidth_IsTheLongestPartPlusTwoAndSurvivesTrimming()
+    {
+        ConsoleLogger logger = new() { Configuration = { Quiet = true }, MaxRetainedMessages = 0 };
+
+        logger.LogInformation("m", ["a"]);
+        Assert.Equal(3, logger.Configuration.MaxPrefixLength);
+
+        logger.LogInformation("m", ["longer-part"]);
+        Assert.Equal(13, logger.Configuration.MaxPrefixLength);
+
+        logger.LogInformation("m", ["a"]);
+        Assert.Equal(13, logger.Configuration.MaxPrefixLength);
+    }
 }

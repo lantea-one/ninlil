@@ -498,7 +498,8 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     /// <summary>
     ///     This method writes the message once. It appends the rendered text to the configured log
     ///     file, if any, and writes it to the console unless the configuration is quiet. Debug and
-    ///     trace messages only reach the console when the configuration enables debug output.
+    ///     trace messages (the level is compared ignoring case) only reach the console when the
+    ///     configuration enables debug output.
     /// </summary>
     /// <param name="configuration">
     ///     The logger configuration model that specifies how the log message should be formatted and output.
@@ -530,8 +531,12 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
                 stoppingToken
             );
 
-        // Determine if the log level is "debug" or "trace" for conditional console output.
-        bool isDebugOrTrace = ConsoleLogger.GetSanitizedPart(Level, true) is "debug" or "trace";
+        // Determine if the log level is "debug" or "trace" for conditional console output. The
+        // comparison ignores case because the level colour table does too, so DEBUG is hidden like debug.
+        string sanitizedLevel = ConsoleLogger.GetSanitizedPart(Level, true);
+        bool isDebugOrTrace =
+            string.Equals(sanitizedLevel, "debug", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(sanitizedLevel, "trace", StringComparison.OrdinalIgnoreCase);
 
         // If the configuration is not set to quiet mode and either the log level is not "debug" or "trace", or
         // the configuration allows debug output, write the log message to the console with the appropriate color.
