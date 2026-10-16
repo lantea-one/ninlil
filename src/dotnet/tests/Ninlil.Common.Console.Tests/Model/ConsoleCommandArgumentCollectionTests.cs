@@ -838,4 +838,260 @@ public class ConsoleCommandArgumentCollectionTests
         Assert.True(result.Succeeded);
         Assert.Equal("hello", Assert.IsType<ParentWithNestedVerbModel>(result.Model).Child.Value);
     }
+
+    /// <summary>
+    ///     This model has a non-default verb and two positional arguments, to check that positions
+    ///     count from the first token after the verb.
+    /// </summary>
+    [ConsoleVerb("copy", "Copies a file.")]
+    public sealed class CopyVerbModel : ConsoleCommandInputModel
+    {
+        /// <summary>The required source file.</summary>
+        [PositionalConsoleArgument(0, "The source file.")]
+        public string Source { get; set; }
+
+        /// <summary>The optional destination file.</summary>
+        [PositionalConsoleArgument(1, "The destination file.", false, "out.txt")]
+        public string Destination { get; set; }
+    }
+
+    /// <summary>
+    ///     This model has an optional named argument and a nested verb, to check that a named
+    ///     argument's value is never taken for the verb.
+    /// </summary>
+    public sealed class NamedAndNestedVerbModel : ConsoleCommandInputModel
+    {
+        /// <summary>The optional name.</summary>
+        [NamedConsoleArgument("name", "The name.", false)]
+        public string Name { get; set; }
+
+        /// <summary>The nested child command.</summary>
+        [NestedConsoleVerb("child", "The nested child command.")]
+        public ChildInputModel Child { get; set; }
+    }
+
+    /// <summary>Verifies that a positional token's position ignores named tokens and their values.</summary>
+    [Fact]
+    public void Constructor_WithNamedArgumentBefore_NumbersPositionalTokensAmongThemselves()
+    {
+        ConsoleCommandArgumentCollection collection = new(["--name", "x", "in.txt", "out.txt"]);
+
+        ConsoleCommandArgument first = collection[1];
+        ConsoleCommandArgument second = collection[2];
+        Assert.Equal(0, first.Position);
+        Assert.Equal(2, first.Index);
+        Assert.Equal(1, second.Position);
+        Assert.Equal(3, second.Index);
+        Assert.Equal(-1, collection[0].Position);
+    }
+
+    /// <summary>Verifies that a lone double dash is not a token and everything after it is positional.</summary>
+    [Fact]
+    public void Constructor_WithDoubleDash_EndsOptionParsing()
+    {
+        ConsoleCommandArgumentCollection collection = new(["--", "--not-an-option", "-x", "--"]);
+
+        Assert.Equal(3, collection.Count);
+        Assert.All(collection, a => Assert.Equal(ConsoleCommandArgumentType.Positional, a.Type));
+        Assert.Equal(["--not-an-option", "-x", "--"], collection.Select(a => a.Value));
+        Assert.Equal([0, 1, 2], collection.Select(a => a.Position));
+        Assert.Equal([1, 2, 3], collection.Select(a => a.Index));
+    }
+
+    /// <summary>Verifies that named arguments before the double dash are still named.</summary>
+    [Fact]
+    public void Constructor_WithNamedArgumentBeforeDoubleDash_KeepsItNamed()
+    {
+        ConsoleCommandArgumentCollection collection = new(["--verbose", "--", "file"]);
+
+        Assert.Equal(2, collection.Count);
+        Assert.Equal(ConsoleCommandArgumentType.Named, collection[0].Type);
+        Assert.Equal("true", collection[0].Value);
+        Assert.Equal(0, collection[1].Position);
+    }
+
+    /// <summary>Verifies that positional arguments are found after a named argument and its value.</summary>
+    [Fact]
+    public void GetParseResult_WithNamedArgumentBeforePositionals_MatchesPositionals()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--output-format",
+            "json",
+            "in.txt",
+            "out.txt",
+        ]).GetParseResult(typeof(PositionalArgsModel));
+
+        Assert.True(result.Succeeded);
+        PositionalArgsModel model = Assert.IsType<PositionalArgsModel>(result.Model);
+        Assert.Equal("in.txt", model.Source);
+        Assert.Equal("out.txt", model.Destination);
+    }
+
+    /// <summary>Verifies that the twin through Parse matches positionals after a named argument.</summary>
+    [Fact]
+    public void Parse_WithNamedArgumentBeforePositionals_PopulatesPositionals()
+    {
+        PositionalArgsModel model = Assert.IsType<PositionalArgsModel>(
+            new ConsoleCommandArgumentCollection(["--output-format", "json", "in.txt"]).Parse(
+                typeof(PositionalArgsModel)
+            )
+        );
+
+        Assert.Equal("in.txt", model.Source);
+        Assert.Equal("out.txt", model.Destination);
+    }
+
+    /// <summary>Verifies that positions count from the first token after the verb.</summary>
+    [Fact]
+    public void GetParseResult_WithVerbAndPositionals_CountsFromTheVerb()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "copy",
+            "a",
+            "b",
+        ]).GetParseResult(typeof(CopyVerbModel));
+
+        Assert.True(result.Succeeded);
+        CopyVerbModel model = Assert.IsType<CopyVerbModel>(result.Model);
+        Assert.Equal("a", model.Source);
+        Assert.Equal("b", model.Destination);
+    }
+
+    /// <summary>Verifies that the verb alone leaves the required positional argument missing.</summary>
+    [Fact]
+    public void GetParseResult_WithVerbAndNoPositionals_IsInvalid()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection(["copy"]).GetParseResult(
+            typeof(CopyVerbModel)
+        );
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+    }
+
+    /// <summary>Verifies that a token after the double dash fills a positional argument.</summary>
+    [Fact]
+    public void GetParseResult_WithOptionLikeValueAfterDoubleDash_FillsThePositionalArgument()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--",
+            "--not-an-option",
+        ]).GetParseResult(typeof(PositionalArgsModel));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("--not-an-option", Assert.IsType<PositionalArgsModel>(result.Model).Source);
+    }
+
+    /// <summary>Verifies that without the double dash the same token is a named argument.</summary>
+    [Fact]
+    public void GetParseResult_WithOptionLikeValueAndNoDoubleDash_MissesThePositionalArgument()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--not-an-option",
+        ]).GetParseResult(typeof(PositionalArgsModel));
+
+        Assert.Equal(ConsoleParseOutcomeEnum.Invalid, result.Outcome);
+    }
+
+    /// <summary>Verifies that a named argument's value equal to the verb name is not the nested verb.</summary>
+    [Fact]
+    public void GetParseResult_WithNamedValueEqualToNestedVerb_DoesNotSelectTheNestedVerb()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--name",
+            "child",
+            "--value",
+            "x",
+        ]).GetParseResult(typeof(NamedAndNestedVerbModel));
+
+        Assert.True(result.Succeeded);
+        NamedAndNestedVerbModel model = Assert.IsType<NamedAndNestedVerbModel>(result.Model);
+        Assert.Equal("child", model.Name);
+        // The verb was not given, so the child is a plain new instance: its attribute defaults are
+        // not applied and nothing from "--value x" reaches it.
+        Assert.NotNull(model.Child);
+        Assert.Null(model.Child.Value);
+    }
+
+    /// <summary>Verifies that ParseNestedVerbs ignores a named argument's value.</summary>
+    [Fact]
+    public void ParseNestedVerbs_WithNamedValueEqualToVerb_IsNotFound()
+    {
+        ConsoleCommandArgumentCollection collection = new(["--name", "child"]);
+
+        ParsedConsoleArgument parsed = Assert.Single(
+            collection.ParseNestedVerbs(typeof(ParentWithNestedVerbModel))
+        );
+
+        Assert.False(parsed.Found);
+    }
+
+    /// <summary>Verifies that a switch after the nested verb belongs to the nested model only.</summary>
+    [Fact]
+    public void GetParseResult_WithSwitchAfterNestedVerb_GivesItToTheNestedModel()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "child",
+            "--value",
+            "x",
+            "-s",
+        ]).GetParseResult(typeof(ParentWithNestedVerbModel));
+
+        Assert.True(result.Succeeded);
+        ParentWithNestedVerbModel model = Assert.IsType<ParentWithNestedVerbModel>(result.Model);
+        Assert.False(model.Silent);
+        Assert.True(model.Child.Silent);
+        Assert.Equal("x", model.Child.Value);
+    }
+
+    /// <summary>Verifies that a named argument before the nested verb stays with the parent.</summary>
+    [Fact]
+    public void GetParseResult_WithNamedArgumentBeforeNestedVerb_KeepsItOnTheParent()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--name",
+            "n",
+            "child",
+            "--value",
+            "x",
+        ]).GetParseResult(typeof(NamedAndNestedVerbModel));
+
+        Assert.True(result.Succeeded);
+        NamedAndNestedVerbModel model = Assert.IsType<NamedAndNestedVerbModel>(result.Model);
+        Assert.Equal("n", model.Name);
+        Assert.Equal("x", model.Child.Value);
+    }
+
+    /// <summary>Verifies that tokens after the nested verb do not reach the parent's unknown arguments.</summary>
+    [Fact]
+    public void GetParseResult_WithTokensAfterNestedVerb_LeavesParentUnknownArgumentsEmpty()
+    {
+        ConsoleParseResult result = new ConsoleCommandArgumentCollection([
+            "--extra",
+            "1",
+            "child",
+            "--value",
+            "x",
+        ]).GetParseResult(typeof(UnknownAndNestedVerbModel));
+
+        Assert.True(result.Succeeded);
+        UnknownAndNestedVerbModel model = Assert.IsType<UnknownAndNestedVerbModel>(result.Model);
+        ConsoleCommandArgument unknown = Assert.Single(model.Unknown);
+        Assert.Equal("extra", unknown.Name);
+        Assert.Equal("x", model.Child.Value);
+    }
+
+    /// <summary>
+    ///     This model has an unknown-arguments capture and a nested verb, to check which tokens the
+    ///     capture sees when a nested verb splits the command line.
+    /// </summary>
+    public sealed class UnknownAndNestedVerbModel : ConsoleCommandInputModel
+    {
+        /// <summary>The tokens no argument claimed.</summary>
+        [UnknownConsoleArguments]
+        public ConsoleCommandArgumentCollection Unknown { get; set; }
+
+        /// <summary>The nested child command.</summary>
+        [NestedConsoleVerb("child", "The nested child command.")]
+        public ChildInputModel Child { get; set; }
+    }
 }

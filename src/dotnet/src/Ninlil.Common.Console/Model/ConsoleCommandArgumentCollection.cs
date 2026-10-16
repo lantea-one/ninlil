@@ -91,8 +91,12 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
 
     /// <summary>
     ///     This constructor tokenizes raw command-line arguments. Each token keeps its index in the
-    ///     raw list. A positional token's <see cref="ConsoleCommandArgument.Position" /> is that raw
-    ///     index, so named arguments and their values count towards positions.
+    ///     raw list. A positional token's <see cref="ConsoleCommandArgument.Position" /> is its
+    ///     ordinal among the positional tokens (0, 1, 2, ...): named tokens and the values they
+    ///     consume do not count, so <c>--format json in.txt</c> puts <c>in.txt</c> at position 0.
+    ///     A lone <c>--</c> ends option parsing: it is not added as a token, and every later token is
+    ///     positional, even when it starts with a dash. This is the usual command-line convention
+    ///     for passing a value that looks like an option.
     /// </summary>
     /// <param name="arguments">
     ///     The raw command-line arguments. A token starting with <c>-</c> is named (short form
@@ -103,18 +107,33 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
         // Ensure we have arguments to parse.
         arguments = arguments?.ToList() ?? [];
 
+        // The next positional token's ordinal. Named tokens and their values do not advance it, and
+        // neither does the "--" that ends the options.
+        int positionalCount = 0;
+
+        // Set once a lone "--" is seen: every later token is a value, never a named argument.
+        bool optionsEnded = false;
+
         // Iterate through the provided arguments and parse them into ConsoleCommandArgument instances.
         for (int a = 0; a < arguments.Count(); ++a)
         {
             // Localize the argument for easier access. A null element is read as an empty token.
             string argument = arguments.ElementAt(a)?.Trim() ?? string.Empty;
 
+            // A lone "--" ends option parsing. It is a marker, not a token; the first one only, so a
+            // second "--" after it is an ordinary positional value.
+            if (!optionsEnded && argument is "--")
+            {
+                optionsEnded = true;
+                continue;
+            }
+
             // Instantiate our new console argument instance.
             ConsoleCommandArgument commandArgument = new() { Index = a };
 
             // Check for a positional argument. A lone "-" is the usual stdin marker, so it is a value,
             // not a named argument with no name.
-            if (!IsNamedToken(argument))
+            if (optionsEnded || !IsNamedToken(argument))
             {
                 // Ensure we have an empty character on the argument, as this is a positional argument.
                 commandArgument.Character = char.MinValue;
@@ -122,8 +141,8 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
                 // Ensure we have an empty name on the argument, as this is a positional argument.
                 commandArgument.Name = null;
 
-                // This is a positional argument, so we set the position and value accordingly.
-                commandArgument.Position = a;
+                // The position is the ordinal among positional tokens, not the raw index.
+                commandArgument.Position = positionalCount++;
 
                 // Set the type to positional for this argument, as it does not have a character or name.
                 commandArgument.Type = ConsoleCommandArgumentType.Positional;
@@ -259,8 +278,9 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
 
     /// <summary>
     ///     This method pairs each property of <paramref name="inputModelType" /> that has a
-    ///     <see cref="NestedConsoleVerbAttribute" /> with the tokens whose value is the verb's name
-    ///     (ignoring case).
+    ///     <see cref="NestedConsoleVerbAttribute" /> with the positional tokens whose value is the
+    ///     verb's name (ignoring case). A named argument's value never matches, so
+    ///     <c>--name child</c> does not select the verb <c>child</c>.
     /// </summary>
     /// <param name="inputModelType">The input model type to inspect.</param>
     /// <returns>One <see cref="ParsedConsoleArgument" /> per nested-verb property.</returns>
@@ -275,10 +295,13 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
             })
             .Select(p => new ParsedConsoleArgument
             {
-                // Match any token whose value is the nested verb's name.
+                // Match positional tokens only: a verb is a bare word, and a named argument's value
+                // that happens to read like the verb is data.
                 Arguments = new(
                     this.Where(a =>
-                        a.Value.Equals(p.Attribute.Name, StringComparison.OrdinalIgnoreCase)
+                        a.Type is ConsoleCommandArgumentType.Positional
+                        && a.Value?.Equals(p.Attribute.Name, StringComparison.OrdinalIgnoreCase)
+                            == true
                     )
                 ),
 
@@ -292,7 +315,12 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
 
     /// <summary>
     ///     This method pairs each property of <paramref name="inputModelType" /> that has a
-    ///     <see cref="PositionalConsoleArgumentAttribute" /> with the token at that position.
+    ///     <see cref="PositionalConsoleArgumentAttribute" /> with the positional token at that
+    ///     position. Position <c>p</c> is the <c>p</c>-th positional token of this collection in
+    ///     <see cref="ConsoleCommandArgument.Index" /> order (counting from 0); named tokens and the
+    ///     values they consume do not count. The stored <see cref="ConsoleCommandArgument.Position" />
+    ///     is not read, so a collection that lost leading tokens (the verb) is renumbered by
+    ///     construction.
     /// </summary>
     /// <param name="inputModelType">The input model type to inspect.</param>
     /// <returns>One <see cref="ParsedConsoleArgument" /> per positional-argument property.</returns>
@@ -307,8 +335,14 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
             })
             .Select(p => new ParsedConsoleArgument
             {
-                // Match the token whose raw position equals the attribute's position.
-                Arguments = new(this.Where(a => a.Position.Equals(p.Attribute.Position))),
+                // Match the p-th positional token, counted here rather than read from Position, because a
+                // working copy that dropped the verb token keeps the old stored positions.
+                Arguments = new(
+                    this.Where(a => a.Type is ConsoleCommandArgumentType.Positional)
+                        .OrderBy(a => a.Index)
+                        .Skip(p.Attribute.Position)
+                        .Take(p.Attribute.Position >= 0 ? 1 : 0)
+                ),
 
                 // Keep the attribute so the value can be converted and defaulted later.
                 Attribute = p.Attribute,
@@ -340,7 +374,10 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
     ///             <see cref="ConsoleParseOutcomeEnum.Invalid" />.
     ///         </item>
     ///         <item>
-    ///             Otherwise the tokens are matched to the model's arguments. A missing required
+    ///             Otherwise the tokens are matched to the model's arguments. Positional arguments
+    ///             are counted among positional tokens only. The first positional token that names
+    ///             a nested verb splits the tokens: the model's own arguments come from the tokens
+    ///             before it and the nested model gets the tokens after it. A missing required
     ///             argument, a value that does not convert to its property type, or an invalid
     ///             nested verb makes the result <see cref="ConsoleParseOutcomeEnum.Invalid" />,
     ///             with one error per problem. Tokens nothing claimed go to the property marked
@@ -706,10 +743,33 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
     /// <returns>A parsed, help-requested (from a nested verb) or invalid result.</returns>
     private ConsoleParseResult GetMatchedResult(System.Type inputModelType)
     {
-        // Localize the model's arguments and the tokens each one matched.
-        List<ParsedConsoleArgument> namedArguments = ParseNamedArguments(inputModelType);
+        // The first positional token that names a nested verb splits the command line: the model's
+        // own arguments are the tokens before it, and the nested model owns the tokens after it. A
+        // switch after the verb (for example -s) therefore belongs to the nested verb, not the parent.
         List<ParsedConsoleArgument> nestedVerbs = ParseNestedVerbs(inputModelType);
-        List<ParsedConsoleArgument> positionalArguments = ParsePositionalArguments(inputModelType);
+        int splitIndex = nestedVerbs
+            .Where(v => v.Found)
+            .Select(v => v.Arguments.Min(a => a.Index))
+            .DefaultIfEmpty(-1)
+            .Min();
+
+        // Only the verb at the split is given; a later token with another verb's name belongs to the
+        // nested model's arguments.
+        foreach (ParsedConsoleArgument nestedVerb in nestedVerbs)
+            if (nestedVerb.Found && nestedVerb.Arguments.Min(a => a.Index) != splitIndex)
+                nestedVerb.Arguments.Clear();
+            else if (nestedVerb.Found)
+                nestedVerb.Arguments.RemoveAll(a => a.Index != splitIndex);
+
+        // The tokens the model's own named, positional and unknown arguments are matched against.
+        ConsoleCommandArgumentCollection own =
+            splitIndex < 0 ? this : new(this.Where(a => a.Index < splitIndex));
+
+        // Localize the model's arguments and the tokens each one matched.
+        List<ParsedConsoleArgument> namedArguments = own.ParseNamedArguments(inputModelType);
+        List<ParsedConsoleArgument> positionalArguments = own.ParsePositionalArguments(
+            inputModelType
+        );
 
         // Collect every problem instead of stopping at the first.
         List<string> errors = [];
@@ -764,7 +824,7 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
             ?.SetValue(
                 inputModel,
                 new ConsoleCommandArgumentCollection(
-                    this.Where(a =>
+                    own.Where(a =>
                             !namedArguments
                                 .Concat(nestedVerbs)
                                 .Concat(positionalArguments)
@@ -779,7 +839,7 @@ public class ConsoleCommandArgumentCollection : List<ConsoleCommandArgument>
         // convert is an error, never a silent default: running with a value nobody typed is worse
         // than saying what was rejected.
         foreach (ParsedConsoleArgument argument in namedArguments.Concat(positionalArguments))
-            if (argument.TryGetParsedValue(this, out object value))
+            if (argument.TryGetParsedValue(own, out object value))
                 argument.Property?.SetValue(inputModel, value);
             else
                 errors.Add(GetConversionError(argument));

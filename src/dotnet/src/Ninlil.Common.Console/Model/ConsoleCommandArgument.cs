@@ -44,8 +44,12 @@ public class ConsoleCommandArgument
     public string Name { get; set; }
 
     /// <summary>
-    ///     This property contains the position of a positional token (its raw index), or -1 for a
-    ///     named token.
+    ///     This property contains the position of a positional token, or -1 for a named token. The
+    ///     position is the token's ordinal among the positional tokens (0 for the first), set by
+    ///     <see cref="ConsoleCommandArgumentCollection" />'s tokenizer: named tokens and the values
+    ///     they consume do not count. <see cref="Index" /> is the raw index. After the verb is
+    ///     dropped from a working copy this field is stale; the parser counts positional tokens
+    ///     again instead of reading it.
     /// </summary>
     [JsonPropertyName("position")]
     [XmlAttribute("position")]
