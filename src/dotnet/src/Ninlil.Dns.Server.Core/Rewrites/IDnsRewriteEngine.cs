@@ -16,7 +16,9 @@ public interface IDnsRewriteEngine
     ///     This method checks the request's first question against every enabled rewrite and,
     ///     if one matches, builds the complete response. The pipeline calls it after the cookie,
     ///     schedule and filter checks (a rewrite never overrides a denial) and before the
-    ///     dispatcher, so no resolver sees a rewritten query.
+    ///     dispatcher, so no resolver sees a rewritten query. A CNAME answer to an A or AAAA
+    ///     question is built as the CNAME alone; the pipeline then resolves the target and adds
+    ///     its records, so an implementation does not chase the target itself.
     /// </summary>
     /// <param name="request">The decoded request.</param>
     /// <param name="remoteAddress">

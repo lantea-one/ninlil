@@ -54,7 +54,9 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///             REFUSED or BADCOOKIE when cookies are required.</item>
 ///             <item>Client pause and time-of-day schedule (<see cref="IDnsClientScheduleEngine" />).</item>
 ///             <item>The domain block/allow lists (<see cref="IDnsFilterEngine.EvaluateDomainAsync" />).</item>
-///             <item>DNS rewrites (<see cref="IDnsRewriteEngine" />), which answer directly.</item>
+///             <item>DNS rewrites (<see cref="IDnsRewriteEngine" />), which answer directly. A
+///             CNAME answer to an A or AAAA question is completed with the target's records,
+///             resolved through the dispatcher (<c>RewriteTargetChaser</c>).</item>
 ///             <item>Otherwise, <see cref="IDnsQueryDispatcher" />, which offers the query to each
 ///             registered <see cref="IDnsQueryResolver" /> in turn (NOTIFY, dynamic update,
 ///             authoritative, forwarding, recursive).</item>
@@ -699,11 +701,22 @@ public sealed class DnsQueryProcessingPipeline(
             );
 
             if (response is not null)
+            {
                 logger.LogDebug(
                     "Answering a query for {Name} from {RemoteAddress} via a configured DNS rewrite.",
                     request.Questions.Count > 0 ? request.Questions[0].Name : null,
                     message.RemoteAddress
                 );
+
+                // A CNAME answer to an A or AAAA question gets the target's addresses, so a stub
+                // resolver that does not chase CNAMEs can use it.
+                response = await RewriteTargetChaser.CompleteAsync(
+                    context,
+                    response,
+                    dispatcher,
+                    stoppingToken
+                );
+            }
         }
 
         response ??= await dispatcher.DispatchAsync(context, stoppingToken);

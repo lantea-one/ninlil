@@ -7,7 +7,8 @@ namespace Ninlil.Dns.Server.Core.Resolution;
 
 /// <summary>
 ///     This class implements <see cref="IDnsQueryDispatcher" />. It publishes
-///     <see cref="DnsQueryReceivedEvent" />, answers FORMERR for a query with no question,
+///     <see cref="DnsQueryReceivedEvent" /> (except for an internal lookup,
+///     <see cref="DnsQueryContext.IsInternalLookup" />), answers FORMERR for a query with no question,
 ///     NOTIMP for an opcode other than QUERY, NOTIFY and UPDATE (the kinds of message this server
 ///     implements) and BADVERS for an EDNS version above 0, then offers the query to each registered
 ///     <see cref="IDnsQueryResolver" /> in registration order and returns the first answer.
@@ -50,15 +51,18 @@ public class DnsQueryDispatcher(
     {
         DnsMessage request = context.Request;
 
-        eventPublisher.Publish(
-            new DnsQueryReceivedEvent(
-                DateTimeOffset.UtcNow,
-                context.Protocol,
-                context.RemoteAddress,
-                request.Questions.Count > 0 ? request.Questions[0].Name.ToString() : null,
-                request.Questions.Count > 0 ? request.Questions[0].Type : null
-            )
-        );
+        // A lookup the pipeline makes for a client (see DnsQueryContext.IsInternalLookup) is not
+        // a query the client sent, so it is not announced.
+        if (!context.IsInternalLookup)
+            eventPublisher.Publish(
+                new DnsQueryReceivedEvent(
+                    DateTimeOffset.UtcNow,
+                    context.Protocol,
+                    context.RemoteAddress,
+                    request.Questions.Count > 0 ? request.Questions[0].Name.ToString() : null,
+                    request.Questions.Count > 0 ? request.Questions[0].Type : null
+                )
+            );
 
         // A query with no question cannot be answered.
         if (request.Questions.Count == 0)

@@ -55,6 +55,15 @@ public record DnsQueryContext(
     public DnsTransactionSignature TransactionSignature { get; init; }
 
     /// <summary>
+    ///     This property is <see langword="true" /> for a lookup the pipeline makes on a client's
+    ///     behalf (the chase of a rewrite's CNAME target, see <c>RewriteTargetChaser</c>) rather
+    ///     than a query a client sent. <see cref="DnsQueryDispatcher" /> publishes no
+    ///     <see cref="Events.DnsQueryReceivedEvent" /> for it, so the query log and the live feed
+    ///     show the client's query once.
+    /// </summary>
+    public bool IsInternalLookup { get; init; }
+
+    /// <summary>
     ///     This property contains the client's IP address in canonical form; see the
     ///     <c>RemoteAddress</c> parameter. The initializer covers the constructor, and the
     ///     <see langword="init" /> accessor covers <c>with</c> expressions.

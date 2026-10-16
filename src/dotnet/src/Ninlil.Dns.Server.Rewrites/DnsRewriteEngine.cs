@@ -33,9 +33,10 @@ namespace Ninlil.Dns.Server.Rewrites;
 ///     <para>
 ///         <strong>Record types.</strong> An A target answers only <c>A</c> questions and an
 ///         AAAA target only <c>AAAA</c>. A CNAME target answers <c>A</c>, <c>AAAA</c> and
-///         <c>CNAME</c> questions with the CNAME record alone. The target is not resolved into the
-///         same response (unlike the authoritative resolver's in-zone CNAME chase); the client
-///         follows it with its own query. Any other type, <c>ANY</c> included, is not intercepted.
+///         <c>CNAME</c> questions with the CNAME record alone. The engine does not resolve the target;
+///         for an <c>A</c> or <c>AAAA</c> question the pipeline completes the answer with the
+///         target's records (<c>RewriteTargetChaser</c>), and a <c>CNAME</c> question keeps the
+///         CNAME alone. Any other type, <c>ANY</c> included, is not intercepted.
 ///     </para>
 ///     <para>
 ///         <strong>Client scoping.</strong> A rewrite with neither
