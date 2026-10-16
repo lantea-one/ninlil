@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Schema;
@@ -14,14 +13,15 @@ namespace Ninlil.Common.Serializer.Model;
 ///     accept the format, <see cref="ParseMatch" /> to fill its properties from a match, and
 ///     <see cref="ToString(IDictionary{string, object})" /> to write the string back. The JSON and
 ///     YAML structured-string converters and the XML methods here make the model serialize as that
-///     string. Equality compares the string forms.
+///     string. Equality compares the string forms, and a null model equals an invalid (empty) one.
 /// </summary>
 [XmlRoot("structuredString")]
 public abstract class StructuredStringModel : IStructuredStringModel
 {
     /// <summary>
-    ///     This operator compares two models by their string forms. A null left operand is never
-    ///     equal, so <c>null == null</c> is <see langword="false" />.
+    ///     This operator compares two models by their string forms. Two null operands are equal, a
+    ///     null operand equals a model that is invalid (<see cref="IsNull" />), and the result is the
+    ///     same in both operand orders.
     /// </summary>
     /// <param name="left">The left instance of <see cref="StructuredStringModel" /> to be compared.</param>
     /// <param name="right">The right instance of <see cref="StructuredStringModel" /> to be compared.</param>
@@ -29,7 +29,11 @@ public abstract class StructuredStringModel : IStructuredStringModel
     ///     <see langword="true" /> if the two instances are considered equal; otherwise, <see langword="false" />.
     /// </returns>
     public static bool operator ==(StructuredStringModel left, StructuredStringModel right) =>
-        left?.Equals(right) is true;
+        // The pattern checks bypass this operator, which would otherwise recurse.
+        left is null
+            ? right is null || right.IsNull()
+        : right is null ? left.IsNull()
+        : left.Equals(right);
 
     /// <summary>
     ///     This operator negates <c>==</c>.
@@ -48,23 +52,38 @@ public abstract class StructuredStringModel : IStructuredStringModel
     public static Regex Anything = new("^.*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
-    ///     This method checks <paramref name="value" /> against a model type's patterns. It creates the
-    ///     instance with <c>Activator.CreateInstance&lt;StructuredStringModel&gt;()</c>, which fails
-    ///     for the abstract base, so it throws <see cref="MissingMethodException" /> for any
-    ///     structured-string type.
+    ///     This method checks <paramref name="value" /> against the patterns of a model type. It
+    ///     creates an instance of <paramref name="stringModelType" /> to read them.
     /// </summary>
     /// <param name="stringModelType">
     ///     The type of the string model to be validated, which must implement <see cref="IStructuredStringModel" />.
     /// </param>
     /// <param name="value">The <see cref="string" /> value to be validated.</param>
     /// <returns>
-    ///     <see langword="false" /> when <paramref name="stringModelType" /> is not a structured-string
-    ///     type.
+    ///     <see langword="true" /> when a pattern matches. <see langword="false" /> when none does,
+    ///     when <paramref name="value" /> is <see langword="null" />, or when
+    ///     <paramref name="stringModelType" /> is not a structured-string type that has a public
+    ///     parameterless constructor (the abstract base has none).
     /// </returns>
-    public static bool IsMatch(Type stringModelType, string value) =>
-        stringModelType.IsAssignableTo(typeof(IStructuredStringModel))
-        && Activator.CreateInstance<StructuredStringModel>()?.Patterns.Any(p => p.IsMatch(value))
-            is true;
+    public static bool IsMatch(Type stringModelType, string value)
+    {
+        // Only structured-string models have patterns to test.
+        if (!stringModelType.IsAssignableTo(typeof(StructuredStringModel)) || value is null)
+            return false;
+
+        // Create the instance to read its patterns, a type that cannot be created has none.
+        try
+        {
+            return (
+                Activator.CreateInstance(stringModelType) as StructuredStringModel
+            )?.Patterns.Any(p => p.IsMatch(value))
+                is true;
+        }
+        catch (MissingMethodException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     ///     This static method is responsible for validating the provided
@@ -420,9 +439,9 @@ public abstract class StructuredStringModel : IStructuredStringModel
             throw new FormatException(
                 string.Format(
                     "The provided value '{0}' does not match any of the defined patterns for {1}:{2}\t{3}",
+                    value,
                     GetType().Name,
                     Environment.NewLine,
-                    value,
                     string.Join($"{Environment.NewLine}\t", Patterns.Select(p => p.ToString()))
                 )
             );
@@ -432,46 +451,45 @@ public abstract class StructuredStringModel : IStructuredStringModel
     }
 
     /// <summary>
-    ///     This method reads the model from an XML element's text and copies the parsed properties
-    ///     onto this instance. It parses through <c>Activator.CreateInstance&lt;StructuredStringModel&gt;()</c>,
-    ///     which fails for the abstract base class, so it currently throws for every model.
+    ///     This method reads the model from an XML element's text and parses it into this instance.
+    ///     It consumes the whole element (start tag, text and end tag), so the reader stands on the
+    ///     next node when it returns and the properties after this one are still read. A blank
+    ///     element leaves the instance empty when <see cref="AllowNullOrEmpty" /> is set.
     /// </summary>
     /// <param name="reader">The XML reader to read the structured string value from.</param>
+    /// <exception cref="FormatException">
+    ///     When the element's text is not blank and does not parse into a valid model, or when it is
+    ///     blank and <see cref="AllowNullOrEmpty" /> is not set.
+    /// </exception>
     public void ReadXml(XmlReader reader)
     {
-        // Move the reader to the content.
+        // Move the reader to the content, then read the element and step past its end tag.
         reader.MoveToContent();
+        string value = reader.ReadElementContentAsString();
 
-        // Parse the element's text into a new model instance.
+        // A blank value is an empty model when the model allows one.
+        if (string.IsNullOrWhiteSpace(value) && AllowNullOrEmpty)
+            return;
+
+        // Parse into this instance: every subclass fills itself in ParseMatch. A value that matches
+        // no pattern makes Parse throw a FormatException that names the value.
         if (
-            Activator.CreateInstance<StructuredStringModel>().Parse(reader.ReadString())
-                is not StructuredStringModel model
-            || model.IsNull()
+            !string.IsNullOrWhiteSpace(value)
+            && Parse(value) is StructuredStringModel parsed
+            && !parsed.IsNull()
         )
-        {
-            // Check for allowed null or empty values.
-            if (AllowNullOrEmpty)
-                return;
+            return;
 
-            // We're done, throw a format exception since we couldn't parse the value into a valid model instance.
-            throw new FormatException(
-                string.Format(
-                    "The provided XML value '{0}' does not match any of the defined patterns for {1}:{2}\t{3}",
-                    reader.ReadString(),
-                    Environment.NewLine,
-                    reader.ReadString(),
-                    string.Join($"{Environment.NewLine}\t", Patterns.Select(p => p.ToString()))
-                )
-            );
-        }
-
-        // Copy the parsed property values onto this instance.
-        foreach (
-            var property in GetType()
-                .GetProperties(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-                .Where(p => p.CanRead && p.CanWrite)
-        )
-            property.SetValue(this, property.GetValue(model));
+        // We're done, throw a format exception since we couldn't parse the value into a valid model instance.
+        throw new FormatException(
+            string.Format(
+                "The provided XML value '{0}' does not match any of the defined patterns for {1}:{2}\t{3}",
+                value,
+                GetType().Name,
+                Environment.NewLine,
+                string.Join($"{Environment.NewLine}\t", Patterns.Select(p => p.ToString()))
+            )
+        );
     }
 
     /// <summary>
