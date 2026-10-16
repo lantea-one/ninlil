@@ -16,9 +16,19 @@ public static class XmlSerializer
 {
     /// <summary>
     ///     This field holds the namespace prefixes written on every serialized document. It is
-    ///     shared process-wide and not synchronized.
+    ///     shared process-wide and copy-on-write: a published instance is never changed. Writers
+    ///     build a new one under <see cref="_namespacesLock" /> and publish it with
+    ///     <c>Volatile.Write</c>; readers take one
+    ///     <c>Volatile.Read</c> snapshot, so a document is never written
+    ///     while the set changes under it.
     /// </summary>
-    private static XmlSerializerNamespaces _namespaces = new([new(string.Empty, String.Empty)]);
+    private static XmlSerializerNamespaces _namespaces = DefaultNamespaces();
+
+    /// <summary>
+    ///     This field serializes the writers of <see cref="_namespaces" /> so two concurrent adds
+    ///     cannot lose one another's prefix.
+    /// </summary>
+    private static readonly object _namespacesLock = new();
 
     /// <summary>
     ///     This property contains the library-default XML reader settings.
@@ -78,13 +88,33 @@ public static class XmlSerializer
     /// </summary>
     /// <param name="prefix">The prefix of the custom namespace.</param>
     /// <param name="uri">Optional namespace URI.</param>
-    public static void AddNamespace(string prefix, string uri = null) =>
-        _namespaces.Add(prefix, uri ?? $"http://{prefix}");
+    public static void AddNamespace(string prefix, string uri = null)
+    {
+        lock (_namespacesLock)
+        {
+            // Copy the published set, add to the copy and publish it.
+            XmlSerializerNamespaces copy = new(Volatile.Read(ref _namespaces));
+            copy.Add(prefix, uri ?? $"http://{prefix}");
+            Volatile.Write(ref _namespaces, copy);
+        }
+    }
 
     /// <summary>
     ///     This method clears any custom namespaces from the serializer.
     /// </summary>
-    public static void ClearNamespaces() => _namespaces = new([new(string.Empty, String.Empty)]);
+    public static void ClearNamespaces()
+    {
+        lock (_namespacesLock)
+            Volatile.Write(ref _namespaces, DefaultNamespaces());
+    }
+
+    /// <summary>
+    ///     This method builds the default set: the empty prefix with the empty namespace, which stops
+    ///     the serializer from writing its own <c>xsi</c> and <c>xsd</c> declarations.
+    /// </summary>
+    /// <returns>A new default <see cref="XmlSerializerNamespaces" />.</returns>
+    private static XmlSerializerNamespaces DefaultNamespaces() =>
+        new([new(string.Empty, string.Empty)]);
 
     /// <summary>
     ///     This method deserializes an <paramref name="xml" /> string into a <paramref name="type"/> object.
@@ -105,8 +135,9 @@ public static class XmlSerializer
         // Define our namespace manager.
         XmlNamespaceManager xmlNamespaceManager = new XmlNamespaceManager(nameTable);
 
-        // Add the custom namespaces to the manager.
-        _namespaces
+        // Add the custom namespaces to the manager, from one snapshot of the published set.
+        Volatile
+            .Read(ref _namespaces)
             .ToArray()
             .ToList()
             .ForEach(ns => xmlNamespaceManager.AddNamespace(ns.Name, ns.Namespace));
@@ -208,7 +239,7 @@ public static class XmlSerializer
         using XmlWriter xmlWriter = XmlWriter.Create(xmlBuilder, xmlWriterSettings);
 
         // Serialize the XML.
-        xmlSerializer.Serialize(xmlWriter, payload, _namespaces);
+        xmlSerializer.Serialize(xmlWriter, payload, Volatile.Read(ref _namespaces));
 
         // We're done with the writer.
         xmlWriter.Close();

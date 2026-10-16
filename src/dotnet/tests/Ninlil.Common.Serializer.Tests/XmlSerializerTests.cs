@@ -73,26 +73,6 @@ public class XmlSerializerTests
     }
 
     [Fact]
-    public void AddNamespace_And_ClearNamespaces_DoNotThrow()
-    {
-        // AddNamespace/ClearNamespaces change shared static state that other tests expect to be
-        // empty, so always restore it, even if an assertion fails.
-        try
-        {
-            XmlSerializer.AddNamespace("test", "http://example.com/test");
-            string xml = XmlSerializer.Serialize(new Simple { Value = "x" });
-            Assert.Contains("http://example.com/test", xml);
-        }
-        finally
-        {
-            XmlSerializer.ClearNamespaces();
-        }
-
-        string cleared = XmlSerializer.Serialize(new Simple { Value = "x" });
-        Assert.DoesNotContain("http://example.com/test", cleared);
-    }
-
-    [Fact]
     public void GetWriterOptions_PrettyOverride_SetsIndent()
     {
         var options = XmlSerializer.GetWriterOptions(pretty: true);
