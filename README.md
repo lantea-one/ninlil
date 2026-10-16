@@ -961,6 +961,16 @@ zone, signed-zone and access-rule caches have no timer and always read the prima
   sets `synchronous = NORMAL`, which keeps the database consistent after a crash; a power cut can
   lose the last second of writes. It also runs `PRAGMA optimize` at every start and after the
   query log cleanup deleted rows, so queries on large logs choose good indexes.
+- **A DHCP relay sends its replies out the client's link.** The DHCPv4 relay sends replies to
+  clients from its `giaddr` address, bound (on Linux) to the interface that owns it, so a
+  broadcast reply does not leave on the interface of the default route. The DHCPv6 relay gives a
+  client's link-local address the scope of the interface that owns its link-address. When no
+  interface holds `giaddr` (DHCPv4) or the link-address (DHCPv6), the relay logs one Warning at
+  start and falls back to the routing table's choice. The automated tests cover this on the
+  loopback interface only. A relay with two real links is checked by hand with
+  `src/script/development/dhcp-relay-two-link-test.sh /path/to/Ninlil.Web` (as root; it needs
+  `tcpdump`, a DHCPv4 and a DHCPv6 client, and asks you to create one DHCPv4 and one DHCPv6 scope
+  in the server instance). CI does not run the script, so run it after a change to the relay sockets.
 - **Filter data is loaded when Ninlil starts.** A background service loads the clients, the filter
   configuration and the entries of every list in use, so the first DNS query does not wait for
   them. It does not delay readiness. It does nothing while filtering is off at start.
