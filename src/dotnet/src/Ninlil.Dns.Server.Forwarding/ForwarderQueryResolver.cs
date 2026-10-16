@@ -46,8 +46,7 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         served if the RFC 8767 setting allows it; otherwise the result is
 ///         <see cref="DnsQueryResolution.NotHandled" />, so the dispatcher falls through to
 ///         <see cref="RecursiveQueryResolver" />, which is permitted for this client by the same
-///         rule. A SERVFAIL reply for a client not permitted that fallback is kept in the code but
-///         cannot be reached while forwarding and recursion share one permission.
+///         rule.
 ///     </para>
 ///     <para>
 ///         <b>The outbound query.</b> Every hop gets a query built for it (see
@@ -374,34 +373,9 @@ public sealed class ForwarderQueryResolver(
             return DnsQueryResolution.Handled(stale);
         }
 
-        // The recursive resolver is next and is permitted for this client by the same rule that let
-        // this resolver run, so it gets the query. If the permission rules ever differ, a client
-        // that cannot recurse gets SERVFAIL (RFC 1035 §4.1.1: the server could not process the
-        // query) rather than the REFUSED the dispatcher would answer, which would say the client
-        // is not allowed.
-        return recursionPermitted
-            ? DnsQueryResolution.NotHandled
-            : DnsQueryResolution.Handled(BuildServerFailure(context.Request));
-    }
-
-    /// <summary>
-    ///     This method builds the SERVFAIL reply for <paramref name="request" /> with the question
-    ///     echoed and RA set, for a query every forwarder failed and no other resolver will take.
-    /// </summary>
-    private static DnsMessage BuildServerFailure(DnsMessage request)
-    {
-        DnsMessage reply = new()
-        {
-            Id = request.Id,
-            IsResponse = true,
-            Opcode = request.Opcode,
-            RecursionDesired = request.RecursionDesired,
-            RecursionAvailable = true,
-            ResponseCode = DnsResponseCodeEnum.ServerFailure,
-        };
-        reply.Questions.AddRange(request.Questions);
-
-        return reply;
+        // Only clients permitted recursion reach this point, so the recursive resolver, next in
+        // the dispatcher, takes the query.
+        return DnsQueryResolution.NotHandled;
     }
 
     /// <summary>
