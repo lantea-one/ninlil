@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Ninlil.Dhcp.Common.Enum;
+using Ninlil.Dhcp.Common.OptionCatalog;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
@@ -18,7 +19,8 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     Circuit ID, Agent Remote ID).
 ///     <para>
 ///         An option with value source <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
-///         ignores <c>ValueHex</c> and carries the 4 bytes of the address from
+///         ignores <c>ValueHex</c> and carries the address (text or 4 bytes, see
+///         <c>ApplyRawOption</c>) from
 ///         <paramref name="serverIdentifierProvider" />, the same address the reply's Server
 ///         Identifier option (RFC 2132 Section 9.7) carries.
 ///     </para>
@@ -169,12 +171,15 @@ public sealed class Dhcpv4OptionOverlayService(
     /// <summary>
     ///     This method puts one option on the reply, replacing any option with the same tag. A
     ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option carries the server's IPv4
-    ///     address as 4 raw bytes (<see cref="System.Net.IPAddress.GetAddressBytes" />); a
+    ///     address in the form the catalog gives the tag
+    ///     (<see cref="Dhcpv4OptionCatalog.EncodeServerAddress" />: dotted-quad text for a
+    ///     <c>String</c> option such as 66, 4 raw bytes otherwise); a
     ///     <see cref="DhcpOptionValueSourceEnum.Custom" /> option carries its decoded
     ///     <paramref name="valueHex" />, and is skipped if that is not valid hex, since validation
     ///     belongs to the REST layer when the value is written. An option whose tag or length fails
-    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a row stored before the REST
-    ///     layer enforced the rules) is skipped with a warning, because writing it would corrupt
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> or whose value fails
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4Value" /> (a row stored before the REST
+    ///     layer enforced the rules) is skipped with one warning, because writing it would corrupt
     ///     or abort the reply.
     /// </summary>
     private void ApplyRawOption(
@@ -188,7 +193,7 @@ public sealed class Dhcpv4OptionOverlayService(
         byte[] value;
 
         if (valueSource == DhcpOptionValueSourceEnum.ServerAddress)
-            value = serverIdentifierProvider.Value.GetAddressBytes();
+            value = Dhcpv4OptionCatalog.EncodeServerAddress(tag, serverIdentifierProvider.Value);
         else
             try
             {
@@ -199,7 +204,10 @@ public sealed class Dhcpv4OptionOverlayService(
                 return;
             }
 
-        if (!DhcpRawOptionRules.TryValidateDhcpv4(tag, value.Length, out string error))
+        if (
+            !DhcpRawOptionRules.TryValidateDhcpv4(tag, value.Length, out string error)
+            || !DhcpRawOptionRules.TryValidateDhcpv4Value(tag, value, out error)
+        )
         {
             logger.LogWarning("Skipping {Source} option: {Error}", source, error);
             return;

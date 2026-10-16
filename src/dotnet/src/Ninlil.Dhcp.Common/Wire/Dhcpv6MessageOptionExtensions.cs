@@ -508,14 +508,7 @@ public static class Dhcpv6MessageOptionExtensions
             return false;
         }
 
-        if (!TryDecodeDomainNames(option.Data, out List<string> decoded))
-        {
-            domains = null;
-            return false;
-        }
-
-        domains = decoded;
-        return true;
+        return DhcpDomainNameListCodec.TryDecode(option.Data, out domains, out _);
     }
 
     /// <summary>
@@ -530,12 +523,10 @@ public static class Dhcpv6MessageOptionExtensions
         if (domains is not { Count: > 0 })
             throw new ArgumentException("Must contain at least one domain name.", nameof(domains));
 
-        using MemoryStream buffer = new();
+        if (!DhcpDomainNameListCodec.TryEncode(domains, out byte[] value, out string error))
+            throw new ArgumentException(error, nameof(domains));
 
-        foreach (string domain in domains)
-            EncodeDomainName(domain, buffer);
-
-        SetOption(message, Dhcpv6OptionCodeEnum.DomainSearchList, buffer.ToArray());
+        SetOption(message, Dhcpv6OptionCodeEnum.DomainSearchList, value);
     }
 
     /// <summary>
@@ -932,85 +923,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method decodes one or more RFC 1035 length-prefixed domain names back to back,
-    ///     each ending in a zero-length root label. Compression is not supported (see
-    ///     <see cref="TryGetDomainSearchList" />).
-    /// </summary>
-    private static bool TryDecodeDomainNames(byte[] data, out List<string> domains)
-    {
-        domains = [];
-        int offset = 0;
-
-        while (offset < data.Length)
-        {
-            StringBuilder domain = new();
-            bool sawRootLabel = false;
-
-            while (offset < data.Length)
-            {
-                byte labelLength = data[offset];
-                offset++;
-
-                // Either of the top two bits set marks an RFC 1035 Section 4.1.4 compression
-                // pointer (or a reserved label type), which is not supported.
-                if ((labelLength & 0xC0) != 0)
-                    return false;
-
-                if (labelLength == 0)
-                {
-                    sawRootLabel = true;
-                    break;
-                }
-
-                if (offset + labelLength > data.Length)
-                    return false;
-
-                if (domain.Length > 0)
-                    domain.Append('.');
-
-                domain.Append(Encoding.ASCII.GetString(data, offset, labelLength));
-                offset += labelLength;
-            }
-
-            if (!sawRootLabel)
-                return false;
-
-            domains.Add(domain.ToString());
-        }
-
-        return domains.Count > 0;
-    }
-
-    /// <summary>
-    ///     This method encodes one RFC 1035 length-prefixed domain name, ending in a zero-length
-    ///     root label, into <paramref name="buffer" />. Empty labels (from doubled or trailing
-    ///     dots) are dropped.
-    /// </summary>
-    private static void EncodeDomainName(string domain, MemoryStream buffer)
-    {
-        if (string.IsNullOrWhiteSpace(domain))
-            throw new ArgumentException("A domain name cannot be empty.", nameof(domain));
-
-        foreach (string label in domain.Split('.', StringSplitOptions.RemoveEmptyEntries))
-        {
-            byte[] labelBytes = Encoding.ASCII.GetBytes(label);
-
-            if (labelBytes.Length > 63)
-                throw new ArgumentException(
-                    $"The label \"{label}\" is longer than the 63 bytes a DNS label can hold.",
-                    nameof(domain)
-                );
-
-            buffer.WriteByte((byte)labelBytes.Length);
-            buffer.Write(labelBytes);
-        }
-
-        buffer.WriteByte(0);
-    }
-
-    /// <summary>
     ///     This method decodes the Client FQDN Domain Name field (RFC 4704 Section 4.2). It cannot
-    ///     reuse <see cref="TryDecodeDomainNames" />, which requires every name to end in a root
+    ///     reuse <see cref="DhcpDomainNameListCodec.TryDecode" />, which requires every name to end in a root
     ///     label so it can split a packed list. RFC 4704 allows three forms of the single name:
     ///     empty ("a client MAY ... leave the Domain Name field empty if it desires the server to
     ///     provide a name"), fully qualified ("including the terminating zero-length label"), and
@@ -1054,7 +968,7 @@ public static class Dhcpv6MessageOptionExtensions
             byte labelLength = data[offset];
             offset++;
 
-            // Compression pointers are not supported, as in TryDecodeDomainNames.
+            // Compression pointers are not supported, as in DhcpDomainNameListCodec.TryDecode.
             if ((labelLength & 0xC0) != 0)
                 return false;
 
@@ -1089,7 +1003,7 @@ public static class Dhcpv6MessageOptionExtensions
     /// <summary>
     ///     This method encodes the Client FQDN Domain Name field, the inverse of
     ///     <see cref="TryDecodeClientFqdnDomainName" /> (which explains why it is separate from
-    ///     <see cref="EncodeDomainName" />).
+    ///     <see cref="DhcpDomainNameListCodec.TryEncode" />).
     /// </summary>
     /// <param name="domainName">The dot-joined domain name to encode, or <see langword="null" /> or empty for an empty field.</param>
     /// <param name="isFullyQualified">Whether to terminate the encoded name with a zero-length root label.</param>

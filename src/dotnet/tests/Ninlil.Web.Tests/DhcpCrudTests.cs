@@ -631,6 +631,92 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task RawOptionValues_OnTftpServerNameAndDomainSearchList_AreCheckedByType()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpScopeDetail scope = await CreateScopeAsync(client, $"raw-values-{Guid.NewGuid():N}");
+        string customOptionsUrl = $"/api/dhcp-scopes/{scope.Id}/custom-options";
+
+        // C0000201 is the 4 binary octets of 192.0.2.1; option 66 is text (RFC 2132 Section 9.4).
+        HttpResponseMessage binaryResponse = await client.PostAsJsonAsync(
+            customOptionsUrl,
+            new { optionTag = 66, valueHex = "C0000201" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, binaryResponse.StatusCode);
+        Assert.Contains("printable ASCII", await binaryResponse.Content.ReadAsStringAsync());
+
+        // The hex of the text "192.168.1.10".
+        HttpResponseMessage textResponse = await client.PostAsJsonAsync(
+            customOptionsUrl,
+            new { optionTag = 66, valueHex = "3139322E3136382E312E3130" }
+        );
+        Assert.Equal(HttpStatusCode.Created, textResponse.StatusCode);
+
+        // "This server's address" needs no stored value, so the value rule is not applied to it.
+        // Tag 66 is taken by the row above (one option per tag and scope), so use tag 150.
+        HttpResponseMessage serverAddressResponse = await client.PostAsJsonAsync(
+            customOptionsUrl,
+            new { optionTag = 150, valueSource = "ServerAddress" }
+        );
+        Assert.Equal(HttpStatusCode.Created, serverAddressResponse.StatusCode);
+
+        HttpResponseMessage v6ScopeResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            new
+            {
+                name = $"raw-values-v6-{Guid.NewGuid():N}",
+                protocolVersion = "IPv6",
+                rangeStartAddress = "2001:db8:b19::100",
+                rangeEndAddress = "2001:db8:b19::200",
+                subnetPrefixLength = 64,
+                defaultLeaseDuration = "1.00:00:00",
+                maxLeaseDuration = "7.00:00:00",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, v6ScopeResponse.StatusCode);
+        DhcpScopeDetail v6Scope =
+            await v6ScopeResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        HttpResponseMessage v6RuleResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new { name = $"raw-values-v6-{Guid.NewGuid():N}", scopeId = v6Scope.Id }
+        );
+        Assert.Equal(HttpStatusCode.Created, v6RuleResponse.StatusCode);
+        DhcpTagRuleDetail v6Rule =
+            await v6RuleResponse.Content.ReadFromJsonAsync<DhcpTagRuleDetail>();
+        string optionsUrl = $"/api/dhcp-tag-rules/{v6Rule.Id}/options";
+
+        // The hex of the text "example.com" is not a wire-format name list.
+        HttpResponseMessage textListResponse = await client.PostAsJsonAsync(
+            optionsUrl,
+            new { optionTag = 24, valueHex = "6578616D706C652E636F6D" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, textListResponse.StatusCode);
+
+        // 07example03com00.
+        HttpResponseMessage wireListResponse = await client.PostAsJsonAsync(
+            optionsUrl,
+            new { optionTag = 24, valueHex = "076578616D706C6503636F6D00" }
+        );
+        Assert.Equal(HttpStatusCode.Created, wireListResponse.StatusCode);
+
+        // Code 2 is the Server Identifier, which the engine writes itself.
+        HttpResponseMessage serverIdResponse = await client.PostAsJsonAsync(
+            optionsUrl,
+            new { optionTag = 2, valueHex = "00030001AABBCCDDEEFF" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, serverIdResponse.StatusCode);
+        Assert.Contains("Server Identifier", await serverIdResponse.Content.ReadAsStringAsync());
+
+        // Preference stays allowed.
+        HttpResponseMessage preferenceResponse = await client.PostAsJsonAsync(
+            optionsUrl,
+            new { optionTag = 7, valueHex = "05" }
+        );
+        Assert.Equal(HttpStatusCode.Created, preferenceResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task DhcpEndpoints_WithoutAToken_ReturnUnauthorized()
     {
         HttpClient client = factory.CreateClient();

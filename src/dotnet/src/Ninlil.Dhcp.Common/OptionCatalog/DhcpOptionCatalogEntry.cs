@@ -25,7 +25,9 @@ namespace Ninlil.Dhcp.Common.OptionCatalog;
 /// <param name="IsServerAddressEligible">
 ///     Whether the UI offers "use this server's address" instead of a typed value (see
 ///     <see cref="Dhcpv4OptionCatalog" /> for the reasoning). It is only <see langword="true" />
-///     when <see cref="ValueType" /> is address-shaped
+///     when <see cref="ValueType" /> is address-shaped or
+///     <see cref="DhcpOptionValueTypeEnum.String" /> (the address is then sent as text; see
+///     <c>Dhcpv4OptionCatalog.EncodeServerAddress</c>). The address types are
 ///     (<see cref="DhcpOptionValueTypeEnum.IPv4Address" />,
 ///     <see cref="DhcpOptionValueTypeEnum.IPv4AddressList" />,
 ///     <see cref="DhcpOptionValueTypeEnum.IPv6Address" /> or

@@ -7,7 +7,7 @@ namespace Ninlil.Dhcp.Common.Tests;
 ///     This test class checks the invariants of <see cref="Dhcpv4OptionCatalog" /> and
 ///     <see cref="Dhcpv6OptionCatalog" /> that the admin console's value entry relies on: every
 ///     entry has a name and description, no tag or code repeats within a protocol, and the "use
-///     this server's address" flag is set only on address-shaped options (and on at least one
+///     this server's address" flag is set only on address-shaped or string options (and on at least one
 ///     option per protocol). It runs against the static catalogs in memory.
 /// </summary>
 public class DhcpOptionCatalogTests
@@ -59,7 +59,7 @@ public class DhcpOptionCatalogTests
 
     [Theory]
     [MemberData(nameof(BothCatalogs))]
-    public void ServerAddressEligible_IsOnlyEverTrueForAnAddressTypedOption(
+    public void ServerAddressEligible_IsOnlyEverTrueForAnAddressOrStringTypedOption(
         IReadOnlyList<DhcpOptionCatalogEntry> catalog
     )
     {
@@ -69,6 +69,8 @@ public class DhcpOptionCatalogTests
             DhcpOptionValueTypeEnum.IPv4AddressList,
             DhcpOptionValueTypeEnum.IPv6Address,
             DhcpOptionValueTypeEnum.IPv6AddressList,
+            // A String option (TFTP Server Name) gets the address as dotted-quad text.
+            DhcpOptionValueTypeEnum.String,
         ];
 
         foreach (
@@ -110,5 +112,77 @@ public class DhcpOptionCatalogTests
     {
         yield return [Dhcpv4OptionCatalog.Entries];
         yield return [Dhcpv6OptionCatalog.Entries];
+    }
+
+    [Fact]
+    public void Dhcpv4Catalog_TftpServerName_IsAServerAddressEligibleString()
+    {
+        DhcpOptionCatalogEntry entry = Assert.Single(
+            Dhcpv4OptionCatalog.Entries,
+            candidate => candidate.Code == 66
+        );
+
+        Assert.Equal(DhcpOptionValueTypeEnum.String, entry.ValueType);
+        Assert.True(entry.IsServerAddressEligible);
+    }
+
+    [Fact]
+    public void Dhcpv4Catalog_TftpServerAddress_IsAnEligibleIPv4AddressList()
+    {
+        DhcpOptionCatalogEntry entry = Assert.Single(
+            Dhcpv4OptionCatalog.Entries,
+            candidate => candidate.Code == 150
+        );
+
+        Assert.Equal(DhcpOptionValueTypeEnum.IPv4AddressList, entry.ValueType);
+        Assert.True(entry.IsServerAddressEligible);
+    }
+
+    [Fact]
+    public void Dhcpv6Catalog_DomainSearchList_IsADomainNameList()
+    {
+        DhcpOptionCatalogEntry entry = Assert.Single(
+            Dhcpv6OptionCatalog.Entries,
+            candidate => candidate.Code == 24
+        );
+
+        Assert.Equal(DhcpOptionValueTypeEnum.DomainNameList, entry.ValueType);
+        Assert.False(entry.IsServerAddressEligible);
+    }
+
+    [Fact]
+    public void Dhcpv4EncodeServerAddress_ForAStringOption_GivesTheAddressText()
+    {
+        byte[] value = Dhcpv4OptionCatalog.EncodeServerAddress(
+            66,
+            System.Net.IPAddress.Parse("192.0.2.1")
+        );
+
+        Assert.Equal("192.0.2.1"u8.ToArray(), value);
+    }
+
+    [Theory]
+    [InlineData((byte)6)]
+    [InlineData((byte)150)]
+    [InlineData((byte)200)]
+    public void Dhcpv4EncodeServerAddress_ForAnAddressOrUnknownTag_GivesFourOctets(byte tag)
+    {
+        byte[] value = Dhcpv4OptionCatalog.EncodeServerAddress(
+            tag,
+            System.Net.IPAddress.Parse("192.0.2.1")
+        );
+
+        Assert.Equal(new byte[] { 192, 0, 2, 1 }, value);
+    }
+
+    [Fact]
+    public void Dhcpv6EncodeServerAddress_ForTheDnsOption_GivesSixteenOctets()
+    {
+        System.Net.IPAddress address = System.Net.IPAddress.Parse("2001:db8::1");
+
+        Assert.Equal(
+            address.GetAddressBytes(),
+            Dhcpv6OptionCatalog.EncodeServerAddress(23, address)
+        );
     }
 }

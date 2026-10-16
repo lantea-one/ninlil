@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using Ninlil.Dhcp.Common.Enum;
 
 // Define our namespace.
@@ -55,14 +57,13 @@ public static class Dhcpv6OptionCatalog
             DhcpOptionValueTypeEnum.IPv6AddressList,
             IsServerAddressEligible: true
         ),
-        // RFC 3646: a list of domain names, sent on the wire as uncompressed RFC 1035 §3.1 names
-        // back to back. Tagged as String (see DhcpOptionValueTypeEnum.String), which does not
-        // produce that encoding.
+        // RFC 3646 §4: a list of domain names, sent on the wire as uncompressed RFC 1035 §3.1
+        // names back to back (DhcpDomainNameListCodec).
         new DhcpOptionCatalogEntry(
             (int)Dhcpv6OptionCodeEnum.DomainSearchList,
             "Domain Search List",
-            "RFC 3646 §3.1 -- one or more domain names for a client to search when resolving an unqualified host name.",
-            DhcpOptionValueTypeEnum.String,
+            "RFC 3646 §4 -- one or more domain names for a client to search when resolving an unqualified host name.",
+            DhcpOptionValueTypeEnum.DomainNameList,
             IsServerAddressEligible: false
         ),
         // RFC 8415 §21.23.
@@ -92,4 +93,26 @@ public static class Dhcpv6OptionCatalog
             IsServerAddressEligible: false
         ),
     ];
+
+    /// <summary>
+    ///     This method returns the value bytes for an option whose value is "this server's
+    ///     address", the counterpart of <see cref="Dhcpv4OptionCatalog.EncodeServerAddress" />: a
+    ///     <see cref="DhcpOptionValueTypeEnum.String" /> option carries the address as ASCII text
+    ///     and every other option carries its octets (16 for an IPv6 address).
+    ///     <c>Dhcpv6OptionOverlayService</c> calls it for each
+    ///     <c>DhcpOptionValueSourceEnum.ServerAddress</c> row.
+    /// </summary>
+    /// <param name="code">The DHCPv6 option code.</param>
+    /// <param name="address">The server's IPv6 address.</param>
+    /// <returns>The ASCII text of the address, or its octets.</returns>
+    public static byte[] EncodeServerAddress(ushort code, IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        DhcpOptionCatalogEntry entry = Entries.FirstOrDefault(candidate => candidate.Code == code);
+
+        return entry is { ValueType: DhcpOptionValueTypeEnum.String }
+            ? Encoding.ASCII.GetBytes(address.ToString())
+            : address.GetAddressBytes();
+    }
 }

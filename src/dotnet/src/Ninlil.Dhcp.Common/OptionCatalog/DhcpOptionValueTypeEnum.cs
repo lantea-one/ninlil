@@ -32,12 +32,17 @@ public enum DhcpOptionValueTypeEnum
     IPv6AddressList,
 
     /// <summary>
-    ///     A text value; RFC 2132 and RFC 8415 describe most of these as NVT ASCII strings with no
-    ///     terminating null. A few entries that carry a list of domain names (RFC 3646's Domain
-    ///     Search List, for example) are also tagged this way, although on the wire those options
-    ///     use RFC 1035 Section 3.1 domain-name encoding, which nothing here produces.
+    ///     A text value; RFC 2132 and RFC 8415 describe these as strings with no terminating
+    ///     null. "This server's address" is sent as the address's text for these options.
     /// </summary>
     String,
+
+    /// <summary>
+    ///     One or more domain names, each in uncompressed RFC 1035 Section 3.1 wire form (length
+    ///     prefixed labels ending in a zero-length root label), back to back (RFC 3646 Section 4).
+    ///     <c>DhcpDomainNameListCodec</c> reads and writes it.
+    /// </summary>
+    DomainNameList,
 
     /// <summary>
     ///     A single-octet boolean flag: <c>1</c> for true, <c>0</c> for false (the RFC 2132

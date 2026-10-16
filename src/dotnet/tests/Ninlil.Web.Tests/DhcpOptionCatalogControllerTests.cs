@@ -100,7 +100,7 @@ public class DhcpOptionCatalogControllerTests(NinlilDnsWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task List_ServerAddressEligibleEntries_AreAlwaysAddressTyped()
+    public async Task List_ServerAddressEligibleEntries_AreAlwaysAddressOrStringTyped()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
@@ -121,6 +121,8 @@ public class DhcpOptionCatalogControllerTests(NinlilDnsWebApplicationFactory fac
                 DhcpOptionValueTypeEnum.IPv4AddressList,
                 DhcpOptionValueTypeEnum.IPv6Address,
                 DhcpOptionValueTypeEnum.IPv6AddressList,
+                // TFTP Server Name (66) is text and gets the address as dotted-quad text.
+                DhcpOptionValueTypeEnum.String,
             ];
 
             Assert.All(
@@ -162,5 +164,31 @@ public class DhcpOptionCatalogControllerTests(NinlilDnsWebApplicationFactory fac
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task List_ForBothProtocols_ShowsTheStructuredValueTypes()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        List<DhcpOptionCatalogEntryDetail> v4 = await client.GetFromJsonAsync<
+            List<DhcpOptionCatalogEntryDetail>
+        >("/api/dhcp-option-catalog?protocolVersion=IPv4");
+        List<DhcpOptionCatalogEntryDetail> v6 = await client.GetFromJsonAsync<
+            List<DhcpOptionCatalogEntryDetail>
+        >("/api/dhcp-option-catalog?protocolVersion=IPv6");
+
+        Assert.Equal(
+            DhcpOptionValueTypeEnum.String,
+            Assert.Single(v4, entry => entry.Code == 66).ValueType
+        );
+        Assert.Equal(
+            DhcpOptionValueTypeEnum.IPv4AddressList,
+            Assert.Single(v4, entry => entry.Code == 150).ValueType
+        );
+        Assert.Equal(
+            DhcpOptionValueTypeEnum.DomainNameList,
+            Assert.Single(v6, entry => entry.Code == 24).ValueType
+        );
     }
 }

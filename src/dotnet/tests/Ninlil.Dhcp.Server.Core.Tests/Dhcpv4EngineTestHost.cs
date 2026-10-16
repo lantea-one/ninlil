@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
@@ -63,6 +64,12 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     public List<IDnsServerEvent> PublishedEvents { get; } = [];
 
     /// <summary>
+    ///     This property records the Warning-or-worse log messages of the host, so a test can check
+    ///     how many warnings the option overlay logged for a skipped stored row.
+    /// </summary>
+    public CapturingLoggerProvider Logs { get; } = new();
+
+    /// <summary>
     ///     This method builds the host (without starting it) and creates the schema with
     ///     <c>EnsureCreatedAsync</c> instead of running the migrations.
     /// </summary>
@@ -74,6 +81,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
         builder.Configuration["DhcpServer:Core:ServerIdentifierAddress"] = ServerIdentifierAddress;
         builder.Configuration["DhcpServer:Core:OfferHoldDuration"] = "00:00:10";
         builder.Configuration["DhcpServer:Core:DeclinedAddressQuarantineDuration"] = "00:00:05";
+
+        builder.Logging.AddProvider(Logs);
 
         builder
             .Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration)

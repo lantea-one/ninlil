@@ -240,8 +240,12 @@ public class DhcpTagRuleOptionsController(
     ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the value is never read. The tag
     ///     and value length must also pass <see cref="DhcpRawOptionRules.TryValidateDhcpv6" /> for
     ///     a DHCPv6 rule (<paramref name="isDhcpv6" />) and
-    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> otherwise. A server address is 4
-    ///     bytes for DHCPv4 and 16 for DHCPv6.
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> otherwise (the DHCPv6 rule refuses
+    ///     the codes the engine writes itself, such as 2 Server Identifier). A typed value must
+    ///     also pass <see cref="DhcpRawOptionRules.TryValidateDhcpv6Value" /> or
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4Value" />: DHCPv6 code 24 is a list of
+    ///     wire-format domain names and DHCPv4 tags 66 and 67 are printable ASCII text. A server
+    ///     address is 4 bytes for DHCPv4 and 16 for DHCPv6.
     /// </summary>
     private static bool TryValidate(
         DhcpTagRuleOptionWriteRequest request,
@@ -288,12 +292,21 @@ public class DhcpTagRuleOptionsController(
             return false;
         }
 
-        return TryValidateRawOption(
-            request.OptionTag,
-            normalizedValueHex.Length / 2,
-            isDhcpv6,
-            out error
-        );
+        if (
+            !TryValidateRawOption(
+                request.OptionTag,
+                normalizedValueHex.Length / 2,
+                isDhcpv6,
+                out error
+            )
+        )
+            return false;
+
+        byte[] value = Convert.FromHexString(normalizedValueHex);
+
+        return isDhcpv6
+            ? DhcpRawOptionRules.TryValidateDhcpv6Value(request.OptionTag, value, out error)
+            : DhcpRawOptionRules.TryValidateDhcpv4Value(request.OptionTag, value, out error);
     }
 
     /// <summary>

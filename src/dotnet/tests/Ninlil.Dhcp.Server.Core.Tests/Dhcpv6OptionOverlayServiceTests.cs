@@ -470,6 +470,102 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
         Assert.NotEmpty(Dhcpv6MessageWriter.Write(advertise));
     }
 
+    [Fact]
+    public async Task Solicit_WithTagRuleDomainSearchListHoldingText_SkipsItWithOneWarning()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "text-search-list-scope",
+            "2001:db8:d::10",
+            "2001:db8:d::12"
+        );
+
+        // "example.com" as ASCII text is what an older admin console stored for code 24. The
+        // option is a list of wire-format names, so the overlay must drop it.
+        DhcpTagRuleEntity rule = await _host.SeedTagRuleAsync(
+            "Text search list",
+            new Dictionary<byte, string> { [24] = "6578616D706C652E636F6D" },
+            scopeId: scope.Id
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x0d, 0x0d, 0x0d, 0x0d, 0x00, 0x0d];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x1d60);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.False(advertise.TryGetRawOption(24, out _));
+        Assert.Single(_host.Logs.Warnings, warning => warning.Contains(rule.Id.ToString()));
+    }
+
+    [Fact]
+    public async Task Solicit_WithTagRuleDomainSearchListInWireForm_DeliversIt()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "wire-search-list-scope",
+            "2001:db8:e::10",
+            "2001:db8:e::12"
+        );
+
+        // 07example03com00 is "example.com" in RFC 1035 Section 3.1 wire form.
+        await _host.SeedTagRuleAsync(
+            "Wire search list",
+            new Dictionary<byte, string> { [24] = "076578616D706C6503636F6D00" },
+            scopeId: scope.Id
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x0e, 0x0e, 0x0e, 0x0e, 0x00, 0x0e];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x1e60);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetDomainSearchList(out IReadOnlyList<string> domains));
+        Assert.Equal("example.com", Assert.Single(domains));
+    }
+
+    [Fact]
+    public async Task Solicit_WithTagRuleServerIdentifier_KeepsTheEnginesOwnServerIdentifier()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "server-identifier-rule-scope",
+            "2001:db8:f::10",
+            "2001:db8:f::12"
+        );
+
+        // Code 2 is the Server Identifier, which the engine writes itself. A rule option with that
+        // code would replace it and every client would reject the reply.
+        DhcpTagRuleEntity rule = await _host.SeedTagRuleAsync(
+            "Server identifier override",
+            new Dictionary<byte, string> { [2] = "00030001AABBCCDDEEFF" },
+            scopeId: scope.Id
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x0f, 0x0f, 0x0f, 0x0f, 0x00, 0x0f];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x1f60);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetRawOption(2, out byte[] serverIdentifier));
+        Assert.NotEqual(Convert.FromHexString("00030001AABBCCDDEEFF"), serverIdentifier);
+        Assert.Single(_host.Logs.Warnings, warning => warning.Contains(rule.Id.ToString()));
+    }
+
     private static Dhcpv6Message NewSolicit(byte[] clientDuid, uint transactionId)
     {
         Dhcpv6Message solicit = new()

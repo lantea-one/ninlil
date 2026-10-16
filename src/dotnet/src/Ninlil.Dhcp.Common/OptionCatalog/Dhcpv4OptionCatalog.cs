@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using Ninlil.Dhcp.Common.Enum;
 
 // Define our namespace.
@@ -39,9 +41,12 @@ namespace Ninlil.Dhcp.Common.OptionCatalog;
 ///                 Interval and Garbage).
 ///             </item>
 ///             <item>
-///                 The RFC 2132 §8.4 site-specific range (tags 128-254), which has no IANA names
-///                 or shapes. This includes the "WPAD" option that many servers put at tag 252: it
-///                 is a convention, not an IANA or RFC option.
+///                 The tags 128-254, which are site-specific or hold only informal and
+///                 vendor-specific IANA entries with no shape (RFC 3942 reclassified 128-223 as
+///                 new options to be assigned, so IANA lists several uses per tag). Tag 150, the
+///                 RFC 5859 TFTP Server Address, is the one exception and is in the catalog. This
+///                 includes the "WPAD" option that many servers put at tag 252: it is a
+///                 convention, not an IANA or RFC option.
 ///             </item>
 ///         </list>
 ///         Leaving an option out is a scope choice, not a claim that it is invalid. Any tag can
@@ -49,9 +54,10 @@ namespace Ninlil.Dhcp.Common.OptionCatalog;
 ///     </para>
 ///     <para>
 ///         <b>Server-address eligibility</b> (see <see cref="DhcpOptionCatalogEntry.IsServerAddressEligible" />)
-///         is set only for address-shaped options whose value is plausibly this host: Domain Name
-///         Server (Ninlil is a DNS server), TFTP Server Name (<c>Ninlil.Dhcp.Server.Tftp</c> runs a
-///         TFTP server), and Network Time Protocol Servers (an operator may run an NTP daemon such
+///         is set only for options whose value is plausibly this host and is an address or the text
+///         of one: Domain Name Server (Ninlil is a DNS server), TFTP Server Name
+///         (<c>Ninlil.Dhcp.Server.Tftp</c> runs a TFTP server; the value is text, so the address
+///         is sent as its dotted-quad text), TFTP Server Address (option 150, binary), and Network Time Protocol Servers (an operator may run an NTP daemon such
 ///         as <c>chrony</c> on the same host, although Ninlil has no NTP service). Subnet Mask and
 ///         Broadcast Address are network values, not a server identity; the router is usually a
 ///         different device; and Ninlil has no NetBIOS name or datagram service, so offering its
@@ -233,15 +239,16 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.Duration,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §9.4. Server-address eligible: Ninlil.Dhcp.Server.Tftp runs a TFTP server.
-        // Modeled as a single IPv4 address, although RFC 2132 defines the value as a string and
-        // Dhcpv4OptionDeliveryService sends the address in text form; a value entered or
-        // substituted through this entry is sent as 4 binary octets.
+        // RFC 2132 §9.4. The value is the name of the TFTP server: the option layout is a run of
+        // characters, not an address, and the IANA registry calls it Server-Name. Server-address
+        // eligible: Ninlil.Dhcp.Server.Tftp runs a TFTP server, and "this server's address" is
+        // sent as its dotted-quad text (see EncodeServerAddress). A client that wants binary
+        // addresses reads option 150 instead.
         new DhcpOptionCatalogEntry(
             (int)Dhcpv4OptionTagEnum.TftpServerName,
             "TFTP Server Name",
-            "RFC 2132 §9.4 -- an alternative, PRL-gated way to convey the TFTP server a PXE client should fetch its boot file from.",
-            DhcpOptionValueTypeEnum.IPv4Address,
+            "RFC 2132 §9.4 -- the name of the TFTP server a PXE client should fetch its boot file from, sent as text. \"This server's address\" is sent as the server's dotted-quad address text. An alternative, PRL-gated way to convey the TFTP server when the 'sname' field is in use.",
+            DhcpOptionValueTypeEnum.String,
             IsServerAddressEligible: true
         ),
         // RFC 2132 §9.5.
@@ -252,5 +259,38 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.String,
             IsServerAddressEligible: false
         ),
+        // RFC 5859 §3: the binary counterpart of option 66. IANA lists tag 150 for RFC 5859
+        // ("TFTP server address"; the same number is also used informally by Etherboot and GRUB,
+        // which the registry notes). Server-address eligible for the same reason as option 66,
+        // here as one 4-octet address.
+        new DhcpOptionCatalogEntry(
+            150,
+            "TFTP Server Address",
+            "RFC 5859 §3 -- one or more IPv4 addresses of the TFTP (VoIP configuration) server, in order of preference, as binary addresses instead of the host name that option 66 carries.",
+            DhcpOptionValueTypeEnum.IPv4AddressList,
+            IsServerAddressEligible: true
+        ),
     ];
+
+    /// <summary>
+    ///     This method returns the value bytes for an option whose value is "this server's
+    ///     address". The catalog decides the wire form: a <see cref="DhcpOptionValueTypeEnum.String" />
+    ///     option such as TFTP Server Name (66) carries the address as dotted-quad ASCII text, as
+    ///     RFC 2132 §9.4 describes a string; every other option carries the 4 address octets.
+    ///     <c>Dhcpv4OptionOverlayService</c> calls it for each
+    ///     <c>DhcpOptionValueSourceEnum.ServerAddress</c> row.
+    /// </summary>
+    /// <param name="tag">The DHCPv4 option tag.</param>
+    /// <param name="address">The server's IPv4 address.</param>
+    /// <returns>The ASCII text of the address, or its 4 octets.</returns>
+    public static byte[] EncodeServerAddress(byte tag, IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        DhcpOptionCatalogEntry entry = Entries.FirstOrDefault(candidate => candidate.Code == tag);
+
+        return entry is { ValueType: DhcpOptionValueTypeEnum.String }
+            ? Encoding.ASCII.GetBytes(address.ToString())
+            : address.GetAddressBytes();
+    }
 }

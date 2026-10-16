@@ -468,6 +468,66 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
         Assert.NotEmpty(Dhcpv4MessageWriter.Write(offer));
     }
 
+    [Fact]
+    public async Task Discover_WithServerAddressOnTheTftpServerName_DeliversTheAddressAsText()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "server-address-tftp-name-scope",
+            "192.0.2.200",
+            "192.0.2.202"
+        );
+
+        // Tag 66 is a string option (RFC 2132 Section 9.4), so "this server's address" is its
+        // dotted-quad text and not the 4 octets that tag 6 carries.
+        await _host.SeedCustomOptionAsync(
+            scope.Id,
+            66,
+            valueHex: string.Empty,
+            valueSource: DhcpOptionValueSourceEnum.ServerAddress
+        );
+
+        Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
+            NewDiscover([0x10, 0x10, 0x10, 0x10, 0x10, 0x10], 0x500f),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(offer);
+        Assert.True(offer.TryGetRawOption(66, out byte[] rawValue));
+        Assert.Equal(
+            Dhcpv4EngineTestHost.ServerIdentifierAddress,
+            System.Text.Encoding.ASCII.GetString(rawValue)
+        );
+    }
+
+    [Fact]
+    public async Task Discover_WithAStoredBinaryTftpServerName_SkipsItWithOneWarning()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "binary-tftp-name-scope",
+            "192.0.2.210",
+            "192.0.2.212"
+        );
+
+        // C0000201 is 192.0.2.1 as 4 octets, which an older build allowed under tag 66. The value
+        // is not printable ASCII, so the overlay must drop it and say so once.
+        DhcpScopeCustomOptionEntity row = await _host.SeedCustomOptionAsync(
+            scope.Id,
+            66,
+            "C0000201"
+        );
+
+        Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
+            NewDiscover([0x11, 0x11, 0x11, 0x11, 0x11, 0x11], 0x5010),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(offer);
+        Assert.False(offer.TryGetRawOption(66, out _));
+        Assert.Single(_host.Logs.Warnings, warning => warning.Contains(row.Id.ToString()));
+    }
+
     private static Dhcpv4Message NewDiscover(byte[] clientHardwareAddress, uint transactionId)
     {
         Dhcpv4Message discover = new()

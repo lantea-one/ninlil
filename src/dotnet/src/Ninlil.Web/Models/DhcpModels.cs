@@ -167,7 +167,9 @@ public record DhcpReservationDetail(
 /// <param name="OptionTag">
 ///     The option's numeric tag. Use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)
 ///     and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and
-///     255 (End) are reserved markers. The value is at most 255 bytes.
+///     255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name)
+///     and 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in
+///     tag 150.
 /// </param>
 /// <param name="ValueHex">
 ///     The option's raw value bytes as a hexadecimal string with an even number of digits; it is
@@ -273,7 +275,9 @@ public record DhcpTagRuleDetail(
 /// <param name="OptionTag">
 ///     The option's numeric tag, as in <see cref="DhcpScopeCustomOptionWriteRequest.OptionTag" />.
 ///     Those limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6
-///     scope only rejects tag 0 and values over 65 535 bytes.
+///     scope rejects tag 0, values over 65 535 bytes and the option codes the server writes
+///     itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24
+///     (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4).
 /// </param>
 /// <param name="ValueHex">
 ///     The option's raw value bytes as hexadecimal, as in

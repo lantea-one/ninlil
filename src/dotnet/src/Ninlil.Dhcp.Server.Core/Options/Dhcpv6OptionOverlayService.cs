@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Ninlil.Dhcp.Common.Enum;
+using Ninlil.Dhcp.Common.OptionCatalog;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
@@ -23,7 +24,8 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     as the DHCPv6 option code.
 ///     <para>
 ///         An option with value source <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
-///         ignores <c>ValueHex</c> and carries the 16 bytes of the IPv6 address from
+///         ignores <c>ValueHex</c> and carries the IPv6 address (16 bytes unless the catalog makes the
+///         code a text option) from
 ///         <paramref name="serverAddressProvider" /> (see
 ///         <see cref="Identity.Dhcpv6ServerAddressProvider" />), not the DUID from
 ///         <see cref="IDhcpv6ServerIdentifierProvider" />, which is not an address.
@@ -183,8 +185,11 @@ public sealed class Dhcpv6OptionOverlayService(
     /// <summary>
     ///     This method puts one option on the reply, like the helper of the same name in
     ///     <see cref="Dhcpv4OptionOverlayService" />, with the 16-byte IPv6 address for a
-    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option and invalid hex skipped. An option that fails
-    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv6" /> is skipped with a warning.
+    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option (in the form
+    ///     <see cref="Dhcpv6OptionCatalog.EncodeServerAddress" /> gives the code) and invalid hex
+    ///     skipped. An option that fails <see cref="DhcpRawOptionRules.TryValidateDhcpv6" /> (this
+    ///     includes the codes the engine writes itself, such as 2 Server Identifier) or
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv6Value" /> is skipped with one warning.
     /// </summary>
     private void ApplyRawOption(
         Dhcpv6Message reply,
@@ -197,7 +202,7 @@ public sealed class Dhcpv6OptionOverlayService(
         byte[] value;
 
         if (valueSource == DhcpOptionValueSourceEnum.ServerAddress)
-            value = serverAddressProvider.Value.GetAddressBytes();
+            value = Dhcpv6OptionCatalog.EncodeServerAddress(tag, serverAddressProvider.Value);
         else
             try
             {
@@ -208,7 +213,10 @@ public sealed class Dhcpv6OptionOverlayService(
                 return;
             }
 
-        if (!DhcpRawOptionRules.TryValidateDhcpv6(tag, value.Length, out string error))
+        if (
+            !DhcpRawOptionRules.TryValidateDhcpv6(tag, value.Length, out string error)
+            || !DhcpRawOptionRules.TryValidateDhcpv6Value(tag, value, out error)
+        )
         {
             logger.LogWarning("Skipping {Source} option: {Error}", source, error);
             return;

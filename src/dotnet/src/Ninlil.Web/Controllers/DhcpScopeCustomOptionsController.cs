@@ -222,7 +222,9 @@ public class DhcpScopeCustomOptionsController(
     ///     sent. For <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the server's address is
     ///     sent instead and the value is never read, so a blank value is stored as an empty string.
     ///     For a DHCPv4 <paramref name="scope" /> the tag and value length must also pass
-    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a server address is 4 bytes).
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a server address is 4 bytes) and a
+    ///     typed value must pass <see cref="DhcpRawOptionRules.TryValidateDhcpv4Value" /> (tags 66
+    ///     and 67 are printable ASCII text).
     /// </summary>
     private static bool TryValidate(
         DhcpScopeCustomOptionWriteRequest request,
@@ -265,11 +267,33 @@ public class DhcpScopeCustomOptionsController(
         }
 
         return TryValidateRawOption(
-            request.OptionTag,
-            normalizedValueHex.Length / 2,
-            scope,
-            out error
-        );
+                request.OptionTag,
+                normalizedValueHex.Length / 2,
+                scope,
+                out error
+            ) && TryValidateRawValue(request.OptionTag, normalizedValueHex, scope, out error);
+    }
+
+    /// <summary>
+    ///     This method applies <see cref="DhcpRawOptionRules.TryValidateDhcpv4Value" /> to a typed
+    ///     option of a DHCPv4 scope, so a TFTP Server Name that is not text is refused with 400.
+    ///     A DHCPv6 scope is not checked yet, because its custom options are not delivered.
+    /// </summary>
+    private static bool TryValidateRawValue(
+        byte tag,
+        string normalizedValueHex,
+        DhcpScopeEntity scope,
+        out string error
+    )
+    {
+        error = null;
+
+        return scope.ProtocolVersion != InternetProtocolVersionEnum.IPv4
+            || DhcpRawOptionRules.TryValidateDhcpv4Value(
+                tag,
+                Convert.FromHexString(normalizedValueHex),
+                out error
+            );
     }
 
     /// <summary>
