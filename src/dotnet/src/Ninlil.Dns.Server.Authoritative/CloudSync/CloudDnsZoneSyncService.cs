@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,9 +23,11 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 ///     The SOA, apex NS and ExcludeFromSync records are never synced, and the provider's own apex NS
 ///     and SOA records are ignored on both sides.
 ///     It also implements <see cref="ICloudZoneSyncTrigger" />, so a caller can sync one zone at
-///     once. A semaphore lets only one sync run at a time, whether it comes from the loop or from
-///     the trigger, so a manual push never overlaps a loop pass. The dependency injection
-///     container registers one instance that serves as the trigger and as the hosted service.
+///     once (<see cref="SyncZoneNowAsync" />, which waits) or ask for a sync without waiting
+///     (<see cref="RequestSync" />, which marks the zone and wakes the loop). A semaphore lets only
+///     one sync run at a time, whether it comes from the loop or from the trigger, so a manual
+///     push never overlaps a loop pass. The dependency injection container registers one instance
+///     that serves as the trigger and as the hosted service.
 /// </summary>
 /// <param name="scopeFactory">The factory used to create a scope per zone sync.</param>
 /// <param name="providers">Every registered <see cref="ICloudDnsProvider" /> implementation.</param>
@@ -61,6 +64,20 @@ public sealed class CloudDnsZoneSyncService(
     /// </summary>
     private readonly SemaphoreSlim _syncLock = new(1, 1);
 
+    /// <summary>
+    ///     This field holds the zones <see cref="RequestSync" /> asked for and the loop has not yet
+    ///     started to sync. It is a set: the value is unused.
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, byte> _pending = new();
+
+    /// <summary>
+    ///     This field is the wake signal of the loop. <see cref="RequestSync" /> releases it, and
+    ///     the loop waits on it instead of sleeping for the whole tick. Its count stays at 0 or 1
+    ///     in practice: one release is enough to start a pass, and the pass serves every zone
+    ///     marked in <see cref="_pending" /> by then.
+    /// </summary>
+    private readonly SemaphoreSlim _wake = new(0);
+
     /// <inheritdoc />
     public async Task SyncZoneNowAsync(Guid zoneId, CancellationToken stoppingToken)
     {
@@ -90,6 +107,22 @@ public sealed class CloudDnsZoneSyncService(
     }
 
     /// <inheritdoc />
+    public void RequestSync(Guid zoneId)
+    {
+        // Mark first, then signal: a loop woken by the signal must find the mark. A request that
+        // lands while its zone is syncing marks it again, so the change that caused the request is
+        // pushed by the pass after the one in flight, never lost. A request that lands before the
+        // zone's sync starts joins that sync, so a burst costs at most two syncs.
+        _pending[zoneId] = 0;
+
+        // The signal is skipped when one is already waiting. The check is not atomic with the
+        // release, so two racing callers can both release; the cost is one extra pass that finds
+        // nothing due.
+        if (_wake.CurrentCount == 0)
+            _wake.Release();
+    }
+
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -110,7 +143,8 @@ public sealed class CloudDnsZoneSyncService(
 
             try
             {
-                await Task.Delay(TickInterval, stoppingToken);
+                // Ends at the next tick or as soon as RequestSync signals.
+                await _wake.WaitAsync(TickInterval, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -138,6 +172,17 @@ public sealed class CloudDnsZoneSyncService(
             stoppingToken
         );
 
+        // A request for a zone that is not in this list (unknown, disabled or not a cloud zone) is
+        // dropped here, so such ids never pile up and a zone enabled later does not start with a
+        // stale request.
+        HashSet<Guid> listedZoneIds = [.. zones.Select(zone => zone.Id)];
+
+        foreach (Guid pendingZoneId in _pending.Keys)
+        {
+            if (!listedZoneIds.Contains(pendingZoneId))
+                _pending.TryRemove(pendingZoneId, out _);
+        }
+
         foreach (ZoneEntity zone in zones)
         {
             // Held across the due check and the sync, so an on-demand sync of the same zone
@@ -147,8 +192,13 @@ public sealed class CloudDnsZoneSyncService(
             try
             {
                 DateTimeOffset now = DateTimeOffset.UtcNow;
+
+                // The mark is taken here, under the lock and just before the sync starts. A request
+                // that arrives from now on marks the zone again and is served by the next pass.
+                bool isRequested = _pending.TryRemove(zone.Id, out _);
                 bool isDue =
-                    !_lastSyncedAtUtc.TryGetValue(zone.Id, out DateTimeOffset lastSyncedAtUtc)
+                    isRequested
+                    || !_lastSyncedAtUtc.TryGetValue(zone.Id, out DateTimeOffset lastSyncedAtUtc)
                     || now - lastSyncedAtUtc >= zone.CloudSyncInterval;
 
                 if (!isDue)

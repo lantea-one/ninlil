@@ -369,6 +369,12 @@ public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
         /// <summary>Whether a request throws.</summary>
         public bool Fail { get; set; }
 
+        /// <summary>The zone of every non-waiting sync request, in order.</summary>
+        public List<Guid> AsyncRequests { get; } = [];
+
+        /// <inheritdoc />
+        public void RequestSync(Guid zoneId) => AsyncRequests.Add(zoneId);
+
         /// <inheritdoc />
         public Task SyncZoneNowAsync(Guid zoneId, CancellationToken stoppingToken)
         {
