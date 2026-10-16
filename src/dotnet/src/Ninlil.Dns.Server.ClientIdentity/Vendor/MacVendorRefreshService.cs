@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Dns.Common.IO;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
@@ -332,9 +333,10 @@ public sealed class MacVendorRefreshService(
     }
 
     /// <summary>
-    ///     This method writes a table to a temporary file beside the target and renames it over
-    ///     the target, so a process that stops mid-write leaves the previous file in place rather
-    ///     than a truncated one.
+    ///     This method writes a table through <see cref="AtomicFile" />: a uniquely named
+    ///     temporary file beside the target is renamed over it, so a process that stops mid-write
+    ///     leaves the previous file in place rather than a truncated one, and two writers never
+    ///     share a temporary file. An existing file keeps its mode.
     /// </summary>
     private static void Persist(MacVendorTable table, string path)
     {
@@ -342,11 +344,9 @@ public sealed class MacVendorRefreshService(
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        string temporaryPath = path + ".tmp";
-        using (FileStream stream = File.Create(temporaryPath))
-            MacVendorSnapshotCodec.Write(stream, table);
-
-        File.Move(temporaryPath, path, overwrite: true);
+        using MemoryStream stream = new();
+        MacVendorSnapshotCodec.Write(stream, table);
+        AtomicFile.WriteAllBytes(path, stream.ToArray(), AtomicFilePermissions.PreserveExisting);
     }
 
     /// <summary>
@@ -369,7 +369,13 @@ public sealed class MacVendorRefreshService(
             if (!string.IsNullOrEmpty(directory))
                 Directory.CreateDirectory(directory);
 
-            File.WriteAllText(path, JsonSerializer.Serialize(status, StateSerializerOptions));
+            // Atomic, so a crash mid-write cannot leave a truncated file that LoadStatus would
+            // discard; an existing file keeps its mode.
+            AtomicFile.WriteAllBytes(
+                path,
+                Encoding.UTF8.GetBytes(JsonSerializer.Serialize(status, StateSerializerOptions)),
+                AtomicFilePermissions.PreserveExisting
+            );
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
