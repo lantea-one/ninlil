@@ -251,7 +251,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
     }
 
     /**
-     * This action updates a list\&#39;s settings as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Replace(System.Guid,Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken). Requires &#x60;filterlists:write&#x60;.
+     * This action updates a list\&#39;s settings as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Replace(System.Guid,Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken): a &#x60;refreshInterval&#x60; under one hour is rejected with 400, and &#x60;null&#x60; restores the 24-hour default. Requires &#x60;filterlists:write&#x60;.
      * @endpoint patch /api/filter-lists/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -395,7 +395,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
     }
 
     /**
-     * This action creates a block or allow list. A subscribed list needs a subscription URL; the URL and refresh interval are dropped for a local list. Returns 400 for a missing name or URL and 409 when the name is taken. Requires &#x60;filterlists:write&#x60;.
+     * This action creates a block or allow list. A subscribed list needs a subscription URL; the URL and refresh interval are dropped for a local list. A subscribed list with no refresh interval is fetched every 24 hours. Returns 400 for a missing name or URL, or a refresh interval under one hour, and 409 when the name is taken. Requires &#x60;filterlists:write&#x60;.
      * @endpoint post /api/filter-lists
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

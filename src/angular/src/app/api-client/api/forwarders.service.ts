@@ -395,7 +395,7 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
     }
 
     /**
-     * This action creates a server-wide forwarder. Returns 400 for a missing name or a definition string the forwarder parser rejects, and 409 when the name is taken. Requires &#x60;forwarders:write&#x60;.
+     * This action creates a server-wide forwarder. Returns 400 for a missing name or a definition string whose syntax the forwarder parser rejects, and 409 when the name is taken. A host name is not looked up when the forwarder is saved, so one that does not resolve is accepted. Requires &#x60;forwarders:write&#x60;.
      * @endpoint post /api/forwarders
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

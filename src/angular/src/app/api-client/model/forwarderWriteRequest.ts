@@ -18,7 +18,7 @@ export interface ForwarderWriteRequest {
      */
     name?: string | null;
     /**
-     * The forwarder definition, in the style Technitium and AdGuard Home use: a bare address; a `udp://`, `tcp://`, `tls://`, `https://` or `quic://` URL; or an `sdns://` DNSCrypt stamp. It is checked with `IUpstreamForwarderDefinitionParser` (and `DnsCryptStampParser` for a stamp) before it is saved, much as Ninlil.Web.Controllers.RecordsController checks a record\'s `data`.
+     * The forwarder definition, in the style Technitium and AdGuard Home use: a bare address; a `udp://`, `tcp://`, `tls://`, `https://` or `quic://` URL; or an `sdns://` DNSCrypt stamp. An IPv6 address with a port is written in brackets, for example `[2001:db8::1]:53`. The syntax is checked with `IUpstreamForwarderDefinitionParser` (and `DnsCryptStampParser` for a stamp) before it is saved, much as Ninlil.Web.Controllers.RecordsController checks a record\'s `data`. A host name is not looked up at that point, so one that does not resolve is still saved; the server resolves it in the background and again about every five minutes.
      */
     definitionString?: string | null;
     /**

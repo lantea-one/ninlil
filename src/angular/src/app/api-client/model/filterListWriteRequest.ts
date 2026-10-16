@@ -28,7 +28,7 @@ export interface FilterListWriteRequest {
      */
     subscriptionUrl?: string | null;
     /**
-     * How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is fetched again. Ignored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.
+     * How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is fetched again. `null` means every 24 hours. The minimum is one hour (`01:00:00`); a smaller value is rejected with 400. Ignored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.
      */
     refreshInterval?: string | null;
     /**

@@ -17555,7 +17555,7 @@
         "tags": [
           "FilterLists"
         ],
-        "summary": "This action creates a block or allow list. A subscribed list needs a subscription URL;\nthe URL and refresh interval are dropped for a local list. Returns 400 for a missing\nname or URL and 409 when the name is taken. Requires `filterlists:write`.",
+        "summary": "This action creates a block or allow list. A subscribed list needs a subscription URL;\nthe URL and refresh interval are dropped for a local list. A subscribed list with no\nrefresh interval is fetched every 24 hours. Returns 400 for a missing name or URL, or a\nrefresh interval under one hour, and 409 when the name is taken. Requires\n`filterlists:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -18080,7 +18080,7 @@
         "tags": [
           "FilterLists"
         ],
-        "summary": "This action updates a list's settings as an RFC 7396 merge patch: an absent field is\nunchanged, a JSON `null` clears a nullable field, and any other value replaces it.\nValidation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Replace(System.Guid,Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken). Requires\n`filterlists:write`.",
+        "summary": "This action updates a list's settings as an RFC 7396 merge patch: an absent field is\nunchanged, a JSON `null` clears a nullable field, and any other value replaces it.\nValidation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Replace(System.Guid,Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken): a `refreshInterval` under\none hour is rejected with 400, and `null` restores the 24-hour default. Requires\n`filterlists:write`.",
         "parameters": [
           {
             "name": "id",
@@ -18151,7 +18151,7 @@
         "tags": [
           "FilterPatternPreview"
         ],
-        "summary": "This action tests a candidate pattern against the caller's sample domains, or\nNinlil.Web.Controllers.FilterPatternPreviewController.DefaultSampleDomains when none are given, and reports which match. An\ninvalid pattern is reported in the 200 response, not as an error status. Each match is\nbounded by the engine's regex timeout (see M:Ninlil.Web.Controllers.FilterPatternPreviewController.Compile(System.String,System.String)). Requires\n`filterlists:read`.",
+        "summary": "This action tests a candidate pattern against the caller's sample domains, or\nNinlil.Web.Controllers.FilterPatternPreviewController.DefaultSampleDomains when none are given, and reports which match. An\ninvalid pattern is reported in the 200 response, not as an error status. Each match is\nbounded by the engine's regex timeout (see M:Ninlil.Web.Controllers.FilterPatternPreviewController.Compile(System.String,System.String)). More than\nNinlil.Web.Controllers.FilterPatternPreviewController.MaxSampleDomains sample domains, or a sample domain that is null, blank or\nlonger than Ninlil.Web.Controllers.FilterPatternPreviewController.MaxSampleDomainLength characters, is rejected with 400.\nRequires `filterlists:read`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -18530,7 +18530,7 @@
         "tags": [
           "Forwarders"
         ],
-        "summary": "This action creates a server-wide forwarder. Returns 400 for a missing name or a\ndefinition string the forwarder parser rejects, and 409 when the name is taken. Requires\n`forwarders:write`.",
+        "summary": "This action creates a server-wide forwarder. Returns 400 for a missing name or a\ndefinition string whose syntax the forwarder parser rejects, and 409 when the name is\ntaken. A host name is not looked up when the forwarder is saved, so one that does not\nresolve is accepted. Requires `forwarders:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -43004,7 +43004,7 @@
           },
           "refreshInterval": {
             "type": "string",
-            "description": "How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is fetched again.\nIgnored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.",
+            "description": "How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is fetched again.\n`null` means every 24 hours. The minimum is one hour (`01:00:00`); a smaller\nvalue is rejected with 400. Ignored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.",
             "format": "date-span",
             "nullable": true
           },
@@ -43051,7 +43051,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The domains to test Ninlil.Web.Models.FilterPatternPreviewRequest.Value against. When omitted or empty, the small built-in\nset `FilterPatternPreviewController.DefaultSampleDomains` is used.",
+            "description": "The domains to test Ninlil.Web.Models.FilterPatternPreviewRequest.Value against. When omitted or empty, the small built-in\nset `FilterPatternPreviewController.DefaultSampleDomains` is used. At most 20 domains\nare accepted, each non-blank and at most 253 characters; anything else is rejected with 400.",
             "nullable": true
           }
         },
@@ -43245,7 +43245,7 @@
           },
           "definitionString": {
             "type": "string",
-            "description": "The forwarder definition, in the style Technitium and AdGuard Home use: a bare address; a\n`udp://`, `tcp://`, `tls://`, `https://` or `quic://` URL; or an\n`sdns://` DNSCrypt stamp. It is checked with `IUpstreamForwarderDefinitionParser`\n(and `DnsCryptStampParser` for a stamp) before it is saved, much as\nNinlil.Web.Controllers.RecordsController checks a record's `data`.",
+            "description": "The forwarder definition, in the style Technitium and AdGuard Home use: a bare address; a\n`udp://`, `tcp://`, `tls://`, `https://` or `quic://` URL; or an\n`sdns://` DNSCrypt stamp. An IPv6 address with a port is written in brackets, for example\n`[2001:db8::1]:53`. The syntax is checked with `IUpstreamForwarderDefinitionParser`\n(and `DnsCryptStampParser` for a stamp) before it is saved, much as\nNinlil.Web.Controllers.RecordsController checks a record's `data`. A host name is not looked up\nat that point, so one that does not resolve is still saved; the server resolves it in the\nbackground and again about every five minutes.",
             "nullable": true
           },
           "sortOrder": {
@@ -43271,7 +43271,7 @@
         "properties": {
           "enable": {
             "type": "boolean",
-            "description": "Whether the configured forwarders are used at all. Defaults to false."
+            "description": "Whether the configured forwarders are used at all. Defaults to false. Forwarding also needs the client to set the recursion-desired bit and to be allowed recursion: either the recursive setting EnableRecursion is on, or an access rule grants the client recursion access."
           },
           "failoverStrategy": {
             "$ref": "#/components/schemas/ForwarderFailoverStrategyEnum"
@@ -44226,7 +44226,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the recursive resolver settings\n(`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A\n`PATCH` to the same endpoint accepts the same fields. The two override lists are read\nonce at startup or first seed, so the GET shows the saved lists, which may not be the ones\nin use; every other field takes effect at once. `RecursiveServerOptions` documents\neach field and its default.\n\n`InsecureDomains` is the list of Insecure domains (negative trust anchors) in\n    force: a query for a name at or below one skips DNSSEC validation and is never answered\n    with AD. It is the built-in list while `UseCustomInsecureDomains` is\n    false. A `PATCH` with an array replaces the whole list and makes\n    it custom; a `PATCH` with null restores the built-in list.\n    `BuiltInInsecureDomains` is that built-in list (`home.arpa`, `internal`\n    and the locally-served reverse zones of RFC 6303), for comparison and for a \"restore\n    defaults\" action; it is read-only."
+        "description": "This record is the REST shape of the recursive resolver settings\n(`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A\n`PATCH` to the same endpoint accepts the same fields. The two override lists are read\nonce at startup or first seed, so the GET shows the saved lists, which may not be the ones\nin use; every other field takes effect at once. `RecursiveServerOptions` documents\neach field and its default.\n\n`InsecureDomains` is the list of Insecure domains (negative trust anchors) in\n    force: a query for a name at or below one skips DNSSEC validation and is never answered\n    with AD. It is the built-in list while `UseCustomInsecureDomains` is\n    false. A `PATCH` with an array replaces the whole list and makes\n    it custom; a `PATCH` with null restores the built-in list.\n    `BuiltInInsecureDomains` is that built-in list (`home.arpa`, `internal`\n    and the locally-served reverse zones of RFC 6303), for comparison and for a \"restore\n    defaults\" action; it is read-only.\n`EnableRecursion` turns on recursive service for every client, by iterating from\n    the root and by forwarding to the configured forwarders (forwarding also needs its own\n    switch). While it is off, an access rule granting recursion access still lets\n    particular clients use both."
       },
       "RecursiveTrustAnchorDetail": {
         "type": "object",

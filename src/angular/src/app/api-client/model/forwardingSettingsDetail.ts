@@ -15,7 +15,7 @@ import { ForwarderFailoverStrategyEnum } from './forwarderFailoverStrategyEnum';
  */
 export interface ForwardingSettingsDetail { 
     /**
-     * Whether the configured forwarders are used at all. Defaults to false.
+     * Whether the configured forwarders are used at all. Defaults to false. Forwarding also needs the client to set the recursion-desired bit and to be allowed recursion: either the recursive setting EnableRecursion is on, or an access rule grants the client recursion access.
      */
     enable?: boolean;
     failoverStrategy?: ForwarderFailoverStrategyEnum;

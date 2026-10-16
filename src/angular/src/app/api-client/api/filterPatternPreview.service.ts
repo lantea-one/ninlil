@@ -42,7 +42,7 @@ export class FilterPatternPreviewService extends BaseService implements FilterPa
     }
 
     /**
-     * This action tests a candidate pattern against the caller\&#39;s sample domains, or Ninlil.Web.Controllers.FilterPatternPreviewController.DefaultSampleDomains when none are given, and reports which match. An invalid pattern is reported in the 200 response, not as an error status. Each match is bounded by the engine\&#39;s regex timeout (see M:Ninlil.Web.Controllers.FilterPatternPreviewController.Compile(System.String,System.String)). Requires &#x60;filterlists:read&#x60;.
+     * This action tests a candidate pattern against the caller\&#39;s sample domains, or Ninlil.Web.Controllers.FilterPatternPreviewController.DefaultSampleDomains when none are given, and reports which match. An invalid pattern is reported in the 200 response, not as an error status. Each match is bounded by the engine\&#39;s regex timeout (see M:Ninlil.Web.Controllers.FilterPatternPreviewController.Compile(System.String,System.String)). More than Ninlil.Web.Controllers.FilterPatternPreviewController.MaxSampleDomains sample domains, or a sample domain that is null, blank or longer than Ninlil.Web.Controllers.FilterPatternPreviewController.MaxSampleDomainLength characters, is rejected with 400. Requires &#x60;filterlists:read&#x60;.
      * @endpoint post /api/filter-pattern-preview
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
