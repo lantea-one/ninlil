@@ -147,6 +147,85 @@ public class FilterPatternPreviewControllerTests(NinlilDnsWebApplicationFactory 
     }
 
     [Fact]
+    public async Task Preview_WithTwentyOneSampleDomains_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await PostSamplesAsync(client, NumberedDomains(21));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Preview_WithTwentySampleDomains_ReturnsAllTwentyMatches()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await PostSamplesAsync(client, NumberedDomains(20));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        FilterPatternPreviewResult result =
+            await response.Content.ReadFromJsonAsync<FilterPatternPreviewResult>();
+        Assert.Equal(20, result.Matches.Count);
+    }
+
+    [Fact]
+    public async Task Preview_WithANullSampleDomain_ReturnsBadRequestNotServerError()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await PostSamplesAsync(client, ["example.com", null]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Preview_WithABlankSampleDomain_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await PostSamplesAsync(client, ["example.com", "  "]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Preview_WithA254CharacterSampleDomain_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await PostSamplesAsync(client, [new string('a', 254)]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Preview_WithA253CharacterSampleDomain_ReturnsOk()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await PostSamplesAsync(client, [new string('a', 253)]);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Preview_WithAnEmptySampleList_UsesTheDefaultSet()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await PostSamplesAsync(client, []);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        FilterPatternPreviewResult result =
+            await response.Content.ReadFromJsonAsync<FilterPatternPreviewResult>();
+        Assert.Equal(
+            FilterPatternPreviewController.DefaultSampleDomains.Count,
+            result.Matches.Count
+        );
+    }
+
+    [Fact]
     public async Task FilterPatternPreviewEndpoint_WithoutAToken_ReturnsUnauthorized()
     {
         HttpClient client = factory.CreateClient();
@@ -158,6 +237,24 @@ public class FilterPatternPreviewControllerTests(NinlilDnsWebApplicationFactory 
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    /// <summary>
+    ///     This method posts a domain-kind preview of "example.com" against the given sample list.
+    /// </summary>
+    private static Task<HttpResponseMessage> PostSamplesAsync(
+        HttpClient client,
+        IReadOnlyList<string> samples
+    ) =>
+        client.PostAsJsonAsync(
+            "/api/filter-pattern-preview",
+            new FilterPatternPreviewRequest(DnsFilterEntryKindEnum.Domain, "example.com", samples)
+        );
+
+    /// <summary>
+    ///     This method builds <paramref name="count" /> distinct short sample domains.
+    /// </summary>
+    private static List<string> NumberedDomains(int count) =>
+        [.. Enumerable.Range(1, count).Select(index => $"host{index}.example.com")];
 
     private static bool Match(FilterPatternPreviewResult result, string domain) =>
         result.Matches.Single(match => match.Domain == domain).IsMatch;

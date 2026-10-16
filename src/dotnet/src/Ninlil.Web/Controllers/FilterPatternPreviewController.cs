@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Filtering;
 using Ninlil.Web.Examples.FilterPatternPreview;
@@ -53,11 +54,26 @@ public class FilterPatternPreviewController : ControllerBase
     ];
 
     /// <summary>
+    ///     This constant is the most sample domains one preview accepts. It bounds the work and the
+    ///     response size of an action that anyone with <c>filterlists:read</c> can call while typing.
+    /// </summary>
+    public const int MaxSampleDomains = 20;
+
+    /// <summary>
+    ///     This constant is the longest sample domain accepted, in characters: 253 is the longest
+    ///     domain name in presentation form (RFC 1035 §2.3.4 allows 255 octets on the wire, which
+    ///     is 253 characters of text without the root dot).
+    /// </summary>
+    public const int MaxSampleDomainLength = 253;
+
+    /// <summary>
     ///     This action tests a candidate pattern against the caller's sample domains, or
     ///     <see cref="DefaultSampleDomains" /> when none are given, and reports which match. An
     ///     invalid pattern is reported in the 200 response, not as an error status. Each match is
-    ///     bounded by the engine's regex timeout (see <see cref="Compile" />). Requires
-    ///     <c>filterlists:read</c>.
+    ///     bounded by the engine's regex timeout (see <see cref="Compile" />). More than
+    ///     <see cref="MaxSampleDomains" /> sample domains, or a sample domain that is null, blank or
+    ///     longer than <see cref="MaxSampleDomainLength" /> characters, is rejected with 400.
+    ///     Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("filterlists:read")]
@@ -70,6 +86,8 @@ public class FilterPatternPreviewController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request?.Value))
             return Ok(new FilterPatternPreviewResult(false, "A pattern is required.", []));
+
+        ValidateSampleDomains(request.SampleDomains);
 
         IReadOnlyList<string> sampleDomains = request.SampleDomains is { Count: > 0 }
             ? request.SampleDomains
@@ -101,6 +119,33 @@ public class FilterPatternPreviewController : ControllerBase
         ];
 
         return Ok(new FilterPatternPreviewResult(true, null, results));
+    }
+
+    /// <summary>
+    ///     This method rejects a sample list that is too long or holds an unusable entry, so the
+    ///     preview does bounded work and a null entry is a 400 instead of a 500.
+    /// </summary>
+    /// <exception cref="ValidationException">A rule above is broken.</exception>
+    private static void ValidateSampleDomains(IReadOnlyList<string> sampleDomains)
+    {
+        if (sampleDomains is null)
+            return;
+
+        if (sampleDomains.Count > MaxSampleDomains)
+            throw new ValidationException(
+                $"'sampleDomains' holds at most {MaxSampleDomains} domains."
+            );
+
+        foreach (string domain in sampleDomains)
+        {
+            if (string.IsNullOrWhiteSpace(domain))
+                throw new ValidationException("'sampleDomains' must not hold a blank entry.");
+
+            if (domain.Length > MaxSampleDomainLength)
+                throw new ValidationException(
+                    $"A sample domain is at most {MaxSampleDomainLength} characters long."
+                );
+        }
     }
 
     /// <summary>

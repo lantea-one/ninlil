@@ -15,7 +15,8 @@ namespace Ninlil.Web.Models;
 /// <param name="Value">The candidate pattern text.</param>
 /// <param name="SampleDomains">
 ///     The domains to test <see cref="Value" /> against. When omitted or empty, the small built-in
-///     set <c>FilterPatternPreviewController.DefaultSampleDomains</c> is used.
+///     set <c>FilterPatternPreviewController.DefaultSampleDomains</c> is used. At most 20 domains
+///     are accepted, each non-blank and at most 253 characters; anything else is rejected with 400.
 /// </param>
 public record FilterPatternPreviewRequest(
     DnsFilterEntryKindEnum Kind,
