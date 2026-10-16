@@ -121,6 +121,21 @@ public record RuntimeSettingsWriteResult(string Note)
         + "still needed for those changes to take effect.";
 
     /// <summary>
+    ///     This constant contains the note <see cref="Controllers.DhcpSettingsController.PatchCore" />
+    ///     returns when one write changes <c>leaseExpirySweepInterval</c>, which the lease expiry
+    ///     sweep reads before each wait, together with <c>serverIdentifierAddress</c>,
+    ///     <c>offerHoldDuration</c> or <c>declinedAddressQuarantineDuration</c>, which need a
+    ///     restart. A write of the sweep interval alone returns <see cref="HotReloadedNote" />,
+    ///     and a write of the other fields alone returns <see cref="RestartRequiredNote" />.
+    /// </summary>
+    public const string DhcpCoreMixedReloadNote =
+        "Written to the configuration file. 'leaseExpirySweepInterval' takes effect at the next "
+        + "sweep, no restart required; every other field in this same write "
+        + "('serverIdentifierAddress'/'offerHoldDuration'/'declinedAddressQuarantineDuration') "
+        + "is only read once, at startup, so a restart is still needed for those changes to "
+        + "take effect.";
+
+    /// <summary>
     ///     This constant contains the note <see cref="Controllers.TransportSettingsController" />
     ///     returns when a write changed only a transport's <c>enable</c> flag. That takes effect at
     ///     once because, after writing the file, the controller starts or stops the transport's

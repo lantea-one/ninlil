@@ -31,12 +31,11 @@ namespace Ninlil.Web.Controllers;
 ///     TFTP server, and Router Advertisement transport and content. Reading needs
 ///     <c>dhcpsettings:read</c> and writing needs <c>dhcpsettings:write</c> for every section.
 ///     <para>
-///         <b>Every field needs a process restart.</b> <see cref="DhcpServerOptions" />,
+///         <b>Most fields need a process restart.</b> <see cref="DhcpServerOptions" />,
 ///         <see cref="Dhcpv4ProtocolOptions" />, <see cref="Dhcpv4RelayOptions" />,
 ///         <see cref="Dhcpv6ProtocolOptions" />, <see cref="Dhcpv6RelayOptions" />,
-///         <see cref="TftpServerOptions" />, <see cref="RaProtocolOptions" /> and
-///         <see cref="RaOptions" /> are all read through
-///         <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />, so the GET actions also
+///         <see cref="TftpServerOptions" /> and <see cref="RaProtocolOptions" /> are read through
+///         <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />, so the GET actions
 ///         show the values loaded at startup until the server restarts.
 ///         <see cref="Dhcpv4RelayOptions.Enable" /> and <see cref="Dhcpv6RelayOptions.Enable" />
 ///         each decide, once in <c>Program.cs</c> before dependency injection is built, whether the
@@ -44,9 +43,22 @@ namespace Ninlil.Web.Controllers;
 ///         independently), as the message-broker and OIDC scheme choices are made. The
 ///         <c>Enable</c> flags of DHCPv4, DHCPv6 and Router Advertisement are read once at boot by
 ///         each listener's hosted-service wrapper. <see cref="DhcpServiceControlController" /> can
-///         stop and start the listeners, but they keep the settings they started with. Every PATCH
-///         therefore returns
+///         stop and start the listeners, but they keep the settings they started with. These
+///         PATCH actions therefore return
 ///         <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
+///     </para>
+///     <para>
+///         <b>Two things apply without a restart.</b> The Router Advertisement content
+///         (<see cref="RaOptions"/>) is read per send through
+///         <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> by
+///         <c>RaAdvertisementProvider</c>, and so is
+///         <see cref="DhcpServerOptions.LeaseExpirySweepInterval" /> by the lease expiry sweep.
+///         <see cref="PatchRa" /> returns <see cref="RuntimeSettingsWriteResult.HotReloadedNote" />.
+///         <see cref="PatchCore" /> returns it for a write of the sweep interval alone,
+///         <see cref="RuntimeSettingsWriteResult.DhcpCoreMixedReloadNote" /> when that field is
+///         written with others, and the restart note otherwise. <see cref="GetRa" /> and the
+///         sweep interval of <see cref="GetCore" /> read the monitor, so they show the value in
+///         effect.
 ///     </para>
 ///     <para>
 ///         <b><see cref="GetRa" /> and <see cref="PatchRa" /> leave out
@@ -63,25 +75,27 @@ namespace Ninlil.Web.Controllers;
 ///     </para>
 /// </summary>
 /// <param name="coreOptions">The shared DHCP engine settings loaded at startup.</param>
+/// <param name="liveCoreOptions">The shared DHCP engine settings as they are now; only the lease expiry sweep interval is read from it.</param>
 /// <param name="protocolOptions">The DHCPv4 transport settings loaded at startup.</param>
 /// <param name="relayOptions">The DHCPv4 relay agent settings loaded at startup.</param>
 /// <param name="dhcpv6ProtocolOptions">The DHCPv6 transport settings loaded at startup.</param>
 /// <param name="dhcpv6RelayOptions">The DHCPv6 relay agent settings loaded at startup.</param>
 /// <param name="tftpOptions">The TFTP server settings loaded at startup.</param>
 /// <param name="raProtocolOptions">The Router Advertisement transport and timing settings loaded at startup.</param>
-/// <param name="raOptions">The Router Advertisement content settings loaded at startup.</param>
+/// <param name="raOptions">The Router Advertisement content settings as they are now.</param>
 /// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/dhcp-settings")]
 public class DhcpSettingsController(
     IOptions<DhcpServerOptions> coreOptions,
+    IOptionsMonitor<DhcpServerOptions> liveCoreOptions,
     IOptions<Dhcpv4ProtocolOptions> protocolOptions,
     IOptions<Dhcpv4RelayOptions> relayOptions,
     IOptions<Dhcpv6ProtocolOptions> dhcpv6ProtocolOptions,
     IOptions<Dhcpv6RelayOptions> dhcpv6RelayOptions,
     IOptions<TftpServerOptions> tftpOptions,
     IOptions<RaProtocolOptions> raProtocolOptions,
-    IOptions<RaOptions> raOptions,
+    IOptionsMonitor<RaOptions> raOptions,
     RuntimeConfigurationOptions runtimeConfigurationOptions
 ) : ControllerBase
 {
@@ -111,15 +125,18 @@ public class DhcpSettingsController(
             new DhcpCoreSettingsDetail(
                 coreOptions.Value.ServerIdentifierAddress,
                 coreOptions.Value.OfferHoldDuration,
-                coreOptions.Value.DeclinedAddressQuarantineDuration
+                coreOptions.Value.DeclinedAddressQuarantineDuration,
+                liveCoreOptions.CurrentValue.LeaseExpirySweepInterval
             )
         );
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Core</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
-    ///     <paramref name="patch" /> keeps its value. The change needs a restart. Returns 400 for
-    ///     an invalid value. Requires <c>dhcpsettings:write</c>.
+    ///     <paramref name="patch" /> keeps its value. A change to <c>leaseExpirySweepInterval</c>
+    ///     applies at the next sweep; every other field needs a restart, and the returned note
+    ///     says which applies (see the class summary). Returns 400 for an invalid value. Requires
+    ///     <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("core")]
     [RequirePermission("dhcpsettings:write")]
@@ -186,6 +203,35 @@ public class DhcpSettingsController(
                     declinedAddressQuarantineDuration.ToString()
                 )
             );
+
+        // The sweep interval is the one live core field; the note depends on whether any
+        // restart-only field travels with it.
+        bool hasSweepInterval = patch.TryGetMergePatchDuration(
+            "leaseExpirySweepInterval",
+            out TimeSpan leaseExpirySweepInterval,
+            PositiveDurationMinimum,
+            DurationMaximum
+        );
+
+        if (hasSweepInterval)
+        {
+            bool hasRestartOnlyField = settings.Count > 0;
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    DhcpServerOptions.SectionName,
+                    nameof(DhcpServerOptions.LeaseExpirySweepInterval),
+                    leaseExpirySweepInterval.ToString()
+                )
+            );
+
+            return await ApplyAsync(
+                settings,
+                hasRestartOnlyField
+                    ? RuntimeSettingsWriteResult.DhcpCoreMixedReloadNote
+                    : RuntimeSettingsWriteResult.HotReloadedNote
+            );
+        }
 
         return await ApplyAsync(settings);
     }
@@ -798,22 +844,26 @@ public class DhcpSettingsController(
     [HttpGet("ra")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpRaSettingsDetailExample))]
-    public ActionResult<DhcpRaSettingsDetail> GetRa() =>
-        Ok(
+    public ActionResult<DhcpRaSettingsDetail> GetRa()
+    {
+        // One read, so a reload between two fields cannot mix two versions.
+        RaOptions current = raOptions.CurrentValue;
+
+        return Ok(
             new DhcpRaSettingsDetail(
-                raOptions.Value.ManagedAddressConfiguration,
-                raOptions.Value.OtherConfiguration,
-                raOptions.Value.RouterLifetime,
-                raOptions.Value.CurrentHopLimit,
-                raOptions.Value.ReachableTime,
-                raOptions.Value.RetransTimer,
-                raOptions.Value.LinkMtu,
-                raOptions.Value.RecursiveDnsServers,
-                raOptions.Value.RecursiveDnsServerLifetime,
-                raOptions.Value.DnsSearchListDomains,
-                raOptions.Value.DnsSearchListLifetime,
+                current.ManagedAddressConfiguration,
+                current.OtherConfiguration,
+                current.RouterLifetime,
+                current.CurrentHopLimit,
+                current.ReachableTime,
+                current.RetransTimer,
+                current.LinkMtu,
+                current.RecursiveDnsServers,
+                current.RecursiveDnsServerLifetime,
+                current.DnsSearchListDomains,
+                current.DnsSearchListLifetime,
                 [
-                    .. raOptions.Value.Routes.Select(route => new DhcpRaRouteDetail(
+                    .. current.Routes.Select(route => new DhcpRaRouteDetail(
                         route.Prefix,
                         route.PrefixLength,
                         route.Preference,
@@ -821,7 +871,7 @@ public class DhcpSettingsController(
                     )),
                 ],
                 [
-                    .. raOptions.Value.InterfaceOverrides.Select(
+                    .. current.InterfaceOverrides.Select(
                         overrideEntry => new DhcpRaInterfaceOverrideDetail(
                             overrideEntry.InterfaceName,
                             overrideEntry.Exclude,
@@ -841,12 +891,16 @@ public class DhcpSettingsController(
                 ]
             )
         );
+    }
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Ra</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />; <c>routes</c> and
-    ///     <c>interfaceOverrides</c> each replace the whole list. The change needs a restart.
-    ///     Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
+    ///     <c>interfaceOverrides</c> each replace the whole list. The change applies at the next
+    ///     advertisement, with no restart. Returns 400 for an invalid value, including more than
+    ///     <see cref="RaContentRules.MaxRecursiveDnsServers" /> RDNSS addresses or a search list
+    ///     that encodes to more than <see cref="RaContentRules.MaxDnsSearchListOctets" /> octets,
+    ///     the sizes that fit one advertisement. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("ra")]
     [RequirePermission("dhcpsettings:write")]
@@ -1033,6 +1087,9 @@ public class DhcpSettingsController(
                     );
             }
 
+            if (RaContentRules.CheckDnsSearchListSize(domainNames) is { } sizeError)
+                throw new ValidationException(sizeError);
+
             settings.Add(
                 new PresetConfigurationSetting(
                     RaOptions.SectionName,
@@ -1105,7 +1162,7 @@ public class DhcpSettingsController(
             );
         }
 
-        return await ApplyAsync(settings);
+        return await ApplyAsync(settings, RuntimeSettingsWriteResult.HotReloadedNote);
     }
 
     /// <summary>
@@ -1304,6 +1361,9 @@ public class DhcpSettingsController(
                     );
             }
 
+            if (RaContentRules.CheckDnsSearchListSize(parsedDomains) is { } sizeError)
+                throw new ValidationException($"'{interfaceName}': {sizeError}");
+
             dnsSearchListDomains = parsedDomains;
         }
 
@@ -1399,11 +1459,15 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This method writes the collected settings to the configuration file and returns
-    ///     <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />, since no DHCP setting
-    ///     takes effect without a restart (see the class summary).
+    ///     <paramref name="note" />, which is
+    ///     <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" /> unless the caller knows
+    ///     that every field written applies at once (see the class summary).
     /// </summary>
+    /// <param name="settings">The settings to merge into the configuration file.</param>
+    /// <param name="note">When the change takes effect.</param>
     private async Task<ActionResult<RuntimeSettingsWriteResult>> ApplyAsync(
-        List<PresetConfigurationSetting> settings
+        List<PresetConfigurationSetting> settings,
+        string note = RuntimeSettingsWriteResult.RestartRequiredNote
     )
     {
         if (settings.Count == 0)
@@ -1414,7 +1478,7 @@ public class DhcpSettingsController(
             runtimeConfigurationOptions.ConfigurationFilePath
         );
 
-        return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.RestartRequiredNote));
+        return Ok(new RuntimeSettingsWriteResult(note));
     }
 
     /// <summary>

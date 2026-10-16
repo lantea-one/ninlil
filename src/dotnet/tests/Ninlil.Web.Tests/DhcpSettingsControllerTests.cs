@@ -22,7 +22,9 @@ namespace Ninlil.Web.Tests;
 ///     reading the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
 ///     returned note, and input validation. The note is compared with
-///     <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
+///     <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" /> for the settings that need a
+///     restart, and with <see cref="RuntimeSettingsWriteResult.HotReloadedNote" /> for the
+///     Router Advertisement content and the lease sweep interval, which apply at once.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -73,6 +75,58 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Null(detail.ServerIdentifierAddress);
         Assert.Equal(TimeSpan.FromSeconds(30), detail.OfferHoldDuration);
         Assert.Equal(TimeSpan.FromMinutes(10), detail.DeclinedAddressQuarantineDuration);
+        Assert.Equal(TimeSpan.FromMinutes(1), detail.LeaseExpirySweepInterval);
+    }
+
+    [Fact]
+    public async Task PatchCore_WithOnlyTheLeaseExpirySweepInterval_WritesItAndReportsItAppliesAtOnce()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/core", new { leaseExpirySweepInterval = "00:02:00" })
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
+
+        JsonObject root = (JsonObject)
+            JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+        JsonObject section = (JsonObject)root["DhcpServer"]["Core"];
+        Assert.Equal("00:02:00", section["LeaseExpirySweepInterval"].GetValue<string>());
+    }
+
+    [Fact]
+    public async Task PatchCore_WithTheSweepIntervalAndAnotherField_NamesTheFieldThatAppliesAtOnce()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/core",
+                new { leaseExpirySweepInterval = "00:02:00", offerHoldDuration = "00:00:45" }
+            )
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.DhcpCoreMixedReloadNote, result.Note);
+        Assert.Contains("leaseExpirySweepInterval", result.Note);
+    }
+
+    [Fact]
+    public async Task PatchCore_WithANonPositiveSweepInterval_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/core", new { leaseExpirySweepInterval = "00:00:00" })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -688,6 +742,102 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task PatchRa_WithMoreRdnssAddressesThanFitOneAdvertisement_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage atTheLimit = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/ra", new { recursiveDnsServers = RdnssAddresses(75) })
+        );
+        HttpResponseMessage overTheLimit = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/ra", new { recursiveDnsServers = RdnssAddresses(76) })
+        );
+
+        atTheLimit.EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.BadRequest, overTheLimit.StatusCode);
+        Assert.Contains("75", await overTheLimit.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task PatchRa_WithAnOverrideHoldingMoreRdnssAddressesThanFitOneAdvertisement_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/ra",
+                new
+                {
+                    interfaceOverrides = new object[]
+                    {
+                        new { interfaceName = "eth9", recursiveDnsServers = RdnssAddresses(76) },
+                    },
+                }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchRa_WithASearchListThatEncodesLargerThanOneAdvertisementAllows_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        // 18 names of 65 octets fit 1208 octets with the option header; 19 do not.
+        HttpResponseMessage fits = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/ra", new { dnsSearchListDomains = SearchNames(18) })
+        );
+        HttpResponseMessage tooLarge = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/ra", new { dnsSearchListDomains = SearchNames(19) })
+        );
+        HttpResponseMessage overrideTooLarge = await client.SendAsync(
+            PatchRequest(
+                "/api/dhcp-settings/ra",
+                new
+                {
+                    interfaceOverrides = new object[]
+                    {
+                        new { interfaceName = "eth9", dnsSearchListDomains = SearchNames(19) },
+                    },
+                }
+            )
+        );
+
+        fits.EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.BadRequest, tooLarge.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, overrideTooLarge.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchRa_WithValidContent_ReportsThatItAppliesAtOnce()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/ra", new { currentHopLimit = 64 })
+        );
+        response.EnsureSuccessStatusCode();
+
+        RuntimeSettingsWriteResult result =
+            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+        Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
+    }
+
+    /// <summary>
+    ///     This method returns the given number of distinct, valid RDNSS addresses.
+    /// </summary>
+    private static string[] RdnssAddresses(int count) =>
+        [.. Enumerable.Range(1, count).Select(index => $"2001:db8::{index:x}")];
+
+    /// <summary>
+    ///     This method returns distinct search domains that each encode to 65 octets (a
+    ///     60-character label, a 2-character label, the length bytes and the root label).
+    /// </summary>
+    private static string[] SearchNames(int count) =>
+        [.. Enumerable.Range(10, count).Select(index => new string('a', 60) + "." + index)];
+
+    [Fact]
     public async Task PatchRa_WithRoutes_WritesThemToTheConfigurationFileAsAWholeArrayReplace()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
@@ -723,7 +873,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
             await patchResponse.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
         // Every DHCP setting needs a restart (see DhcpSettingsController), so the write is
         // checked in the settings file, not with a later GetRa.
-        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
+        Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -901,7 +1051,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await patchResponse.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
+        Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
@@ -1065,7 +1215,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task PatchRa_WithADnsSearchList_WritesItToTheConfigurationFileAndWarnsRestartRequired()
+    public async Task PatchRa_WithADnsSearchList_WritesItToTheConfigurationFileAndReportsItAppliesAtOnce()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
@@ -1083,7 +1233,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Equal(RuntimeSettingsWriteResult.RestartRequiredNote, result.Note);
+        Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));

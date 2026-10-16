@@ -348,10 +348,15 @@ public record DhcpLeaseDetail(
 /// </param>
 /// <param name="OfferHoldDuration">How long an offered address is held for the client before it is reclaimed. Defaults to 30 seconds.</param>
 /// <param name="DeclinedAddressQuarantineDuration">How long an address a client declined is kept out of use. Defaults to 10 minutes.</param>
+/// <param name="LeaseExpirySweepInterval">
+///     How often the server looks for leases that have expired. Defaults to one minute. This is the
+///     one core setting that applies without a restart: the value shown is the one in effect now.
+/// </param>
 public record DhcpCoreSettingsDetail(
     string ServerIdentifierAddress,
     TimeSpan OfferHoldDuration,
-    TimeSpan DeclinedAddressQuarantineDuration
+    TimeSpan DeclinedAddressQuarantineDuration,
+    TimeSpan LeaseExpirySweepInterval
 );
 
 /// <summary>
