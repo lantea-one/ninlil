@@ -248,7 +248,9 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
 
     /// <summary>
     ///     This method saves a tag rule and its options through the repositories in separate
-    ///     scopes. Tags listed in <c>serverAddressOptionTags</c> get the
+    ///     scopes. <c>relayInterfaceIdHex</c> and <c>vendorClassEnterpriseNumber</c> are DHCPv6-only
+    ///     criteria, seeded to prove that a DHCPv4 rule carrying them never matches. Tags listed
+    ///     in <c>serverAddressOptionTags</c> get the
     ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> value source.
     /// </summary>
     public async Task<DhcpTagRuleEntity> SeedTagRuleAsync(
@@ -263,7 +265,9 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
         string relayAgentCircuitIdHex = null,
         string relayAgentRemoteIdHex = null,
         bool isDisabled = false,
-        IReadOnlySet<byte> serverAddressOptionTags = null
+        IReadOnlySet<byte> serverAddressOptionTags = null,
+        string relayInterfaceIdHex = null,
+        uint? vendorClassEnterpriseNumber = null
     )
     {
         DhcpTagRuleEntity rule = new()
@@ -279,6 +283,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
             UserClassMatchMode = userClassMatchMode,
             RelayAgentCircuitIdHex = relayAgentCircuitIdHex,
             RelayAgentRemoteIdHex = relayAgentRemoteIdHex,
+            RelayInterfaceIdHex = relayInterfaceIdHex,
+            VendorClassEnterpriseNumber = vendorClassEnterpriseNumber,
             IsDisabled = isDisabled,
         };
 

@@ -303,9 +303,9 @@ public sealed class Dhcpv6EngineTestHost : IAsyncDisposable
 
     /// <summary>
     ///     This method saves a tag rule and its options, like
-    ///     <see cref="Dhcpv4EngineTestHost.SeedTagRuleAsync" />, with the DHCPv6 criteria. There is
-    ///     no Circuit ID parameter, since
-    ///     <see cref="Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService" /> ignores it.
+    ///     <see cref="Dhcpv4EngineTestHost.SeedTagRuleAsync" />, with the DHCPv6 criteria.
+    ///     <c>relayAgentCircuitIdHex</c> is a DHCPv4-only criterion, seeded to prove that a DHCPv6
+    ///     rule carrying it never matches.
     /// </summary>
     public async Task<DhcpTagRuleEntity> SeedTagRuleAsync(
         string name,
@@ -320,7 +320,8 @@ public sealed class Dhcpv6EngineTestHost : IAsyncDisposable
         string relayInterfaceIdHex = null,
         string relayRemoteIdHex = null,
         bool isDisabled = false,
-        IReadOnlySet<byte> serverAddressOptionTags = null
+        IReadOnlySet<byte> serverAddressOptionTags = null,
+        string relayAgentCircuitIdHex = null
     )
     {
         DhcpTagRuleEntity rule = new()
@@ -337,6 +338,7 @@ public sealed class Dhcpv6EngineTestHost : IAsyncDisposable
             UserClassMatchMode = userClassMatchMode,
             RelayInterfaceIdHex = relayInterfaceIdHex,
             RelayAgentRemoteIdHex = relayRemoteIdHex,
+            RelayAgentCircuitIdHex = relayAgentCircuitIdHex,
             IsDisabled = isDisabled,
         };
 

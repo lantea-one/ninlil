@@ -12,7 +12,8 @@ namespace Ninlil.Dhcp.Server.Core.Tests;
 ///     Interface-ID and Remote-ID), the server-address value source and priority order, and the
 ///     scope custom options a DHCPv6 scope delivers (code 32, code 23 replacing the DNS servers,
 ///     disabled rows, tag rule precedence, a stored reserved code) and the DNS servers of the
-///     wrong address family. Each
+///     wrong address family. Global rules are DHCPv4 rules and never reach a DHCPv6 reply, and a
+///     rule with a DHCPv4-only criterion never matches. Each
 ///     test calls <see cref="Dhcpv6RequestHandler.HandleRequestAsync" /> or
 ///     <see cref="Dhcpv6RequestHandler.HandleRelayMessageAsync" /> on a
 ///     <see cref="Dhcpv6EngineTestHost" />, like <see cref="Dhcpv4OptionOverlayServiceTests" />.
@@ -373,19 +374,25 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Solicit_TwoMatchingGlobalRulesSameTag_HigherPriorityWins()
+    public async Task Solicit_TwoMatchingScopeRulesSameTag_HigherPriorityWins()
     {
-        await _host.SeedAddressScopeAsync("priority-scope", "2001:db8:a::10", "2001:db8:a::12");
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "priority-scope",
+            "2001:db8:a::10",
+            "2001:db8:a::12"
+        );
 
-        // Both rules have no criteria, so they match every eligible client.
+        // Both rules have no criteria, so they match every client of the scope.
         await _host.SeedTagRuleAsync(
             "Low priority",
             new Dictionary<byte, string> { [210] = "01" },
+            scopeId: scope.Id,
             priority: 1
         );
         await _host.SeedTagRuleAsync(
             "High priority",
             new Dictionary<byte, string> { [210] = "02" },
+            scopeId: scope.Id,
             priority: 10
         );
 
@@ -402,6 +409,97 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
         Assert.NotNull(advertise);
         Assert.True(advertise.TryGetRawOption(210, out byte[] value));
         Assert.Equal(0x02, Assert.Single(value));
+    }
+
+    [Fact]
+    public async Task Solicit_GlobalRuleWithNoCriteria_IsNotAppliedToADhcpv6Reply()
+    {
+        await _host.SeedAddressScopeAsync(
+            "global-rule-scope",
+            "2001:db8:d1::10",
+            "2001:db8:d1::12"
+        );
+
+        // A global rule is a DHCPv4 rule. Its tag would be written as a DHCPv6 option code of
+        // the same number, which means something else.
+        await _host.SeedTagRuleAsync(
+            "Global DHCPv4 rule",
+            new Dictionary<byte, string> { [214] = "01" }
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x0d, 0x0d, 0x0d, 0x0d, 0x00, 0x0d];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x1d01);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.False(advertise.TryGetRawOption(214, out _));
+    }
+
+    [Fact]
+    public async Task Solicit_ScopeRuleWithNoCriteria_IsApplied()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "scope-rule-scope",
+            "2001:db8:d2::10",
+            "2001:db8:d2::12"
+        );
+
+        await _host.SeedTagRuleAsync(
+            "Scope rule",
+            new Dictionary<byte, string> { [212] = "01" },
+            scopeId: scope.Id
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x0e, 0x0e, 0x0e, 0x0e, 0x00, 0x0e];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x1d02);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetRawOption(212, out _));
+    }
+
+    [Fact]
+    public async Task Solicit_ScopeRuleWithOnlyACircuitId_NeverMatches()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "circuit-rule-scope",
+            "2001:db8:d3::10",
+            "2001:db8:d3::12"
+        );
+
+        // The Circuit ID is a DHCPv4 criterion. A DHCPv6 engine cannot check it, so the rule
+        // must not widen to every client.
+        await _host.SeedTagRuleAsync(
+            "Circuit rule",
+            new Dictionary<byte, string> { [213] = "01" },
+            scopeId: scope.Id,
+            relayAgentCircuitIdHex: "0102"
+        );
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x0f, 0x0f, 0x0f, 0x0f, 0x00, 0x0f];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x1d03);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.False(advertise.TryGetRawOption(213, out _));
     }
 
     [Fact]

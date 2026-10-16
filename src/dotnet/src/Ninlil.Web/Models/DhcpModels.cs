@@ -221,7 +221,9 @@ public record DhcpScopeCustomOptionDetail(
 /// </summary>
 /// <param name="Name">An operator-chosen, descriptive name for the rule.</param>
 /// <param name="ScopeId">
-///     The one scope the rule applies to, or <see langword="null" /> for clients of any scope.
+///     The one scope the rule applies to, or <see langword="null" /> for a DHCPv4 rule that applies
+///     to clients of every DHCPv4 scope. A DHCPv6 rule must name a DHCPv6 scope; there is no rule
+///     for every DHCPv6 scope.
 /// </param>
 /// <param name="Priority">The rule's evaluation order, ascending; a later rule's option overrides an earlier one's. Defaults to 0.</param>
 /// <param name="IsDisabled">Whether the rule is disabled.</param>
@@ -229,10 +231,10 @@ public record DhcpScopeCustomOptionDetail(
 /// <param name="VendorClassIdentifierMatchMode">How <paramref name="VendorClassIdentifierMatch" /> is compared.</param>
 /// <param name="UserClassMatch">The User Class value the rule matches, or <see langword="null" />.</param>
 /// <param name="UserClassMatchMode">How <paramref name="UserClassMatch" /> is compared.</param>
-/// <param name="RelayAgentCircuitIdHex">The Agent Circuit ID the rule requires, as hex, or <see langword="null" /> (DHCPv4 only).</param>
+/// <param name="RelayAgentCircuitIdHex">The Agent Circuit ID the rule requires, as hex, or <see langword="null" /> (DHCPv4 rules only; a DHCPv6-scope rule with it is refused).</param>
 /// <param name="RelayAgentRemoteIdHex">The relay agent (DHCPv4) or DHCPv6 Remote ID the rule requires, as hex, or <see langword="null" />.</param>
-/// <param name="RelayInterfaceIdHex">The DHCPv6 Interface-ID the rule requires, as hex, or <see langword="null" /> (DHCPv6 only).</param>
-/// <param name="VendorClassEnterpriseNumber">The IANA Enterprise Number a DHCPv6 Vendor Class option must carry, or <see langword="null" /> (DHCPv6 only).</param>
+/// <param name="RelayInterfaceIdHex">The DHCPv6 Interface-ID the rule requires, as hex, or <see langword="null" /> (DHCPv6-scope rules only; a global or DHCPv4-scope rule with it is refused).</param>
+/// <param name="VendorClassEnterpriseNumber">The IANA Enterprise Number a DHCPv6 Vendor Class option must carry, or <see langword="null" /> (DHCPv6-scope rules only; a global or DHCPv4-scope rule with it is refused).</param>
 /// <param name="Comments">Free-form operator notes about the rule.</param>
 public record DhcpTagRuleWriteRequest(
     string Name,

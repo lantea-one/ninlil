@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
+using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
@@ -83,8 +84,11 @@ public class DhcpTagRulesController(
 
     /// <summary>
     ///     This action creates a tag rule. Relay ID hex values are stored in uppercase. Returns 400
-    ///     for a missing name, an unknown scope or a relay ID that is not even-length hex. Requires
-    ///     <c>dhcptagrules:write</c>.
+    ///     for a missing name, an unknown scope, a relay ID that is not even-length hex, or a
+    ///     criterion that does not fit the rule's protocol: a global rule or one on a DHCPv4 scope
+    ///     is a DHCPv4 rule and cannot set <c>relayInterfaceIdHex</c> or
+    ///     <c>vendorClassEnterpriseNumber</c>; a rule on a DHCPv6 scope cannot set
+    ///     <c>relayAgentCircuitIdHex</c>. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcptagrules:write")]
@@ -169,8 +173,12 @@ public class DhcpTagRulesController(
     /// <summary>
     ///     This action updates a tag rule as an RFC 7396 merge patch: an absent field is unchanged,
     ///     a JSON <c>null</c> clears a nullable field, and any other value replaces it. Returns 400
-    ///     for an empty name, an unknown scope, an unknown match mode or bad hex, and 404 for an
-    ///     unknown id. Requires <c>dhcptagrules:write</c>.
+    ///     for an empty name, an unknown scope, an unknown match mode, bad hex or a criterion that
+    ///     does not fit the rule's protocol, and 404 for an unknown id. The protocol rules apply
+    ///     to the rule as it would be after the patch, so moving a rule to <c>scopeId: null</c>
+    ///     while it keeps a DHCPv6-only criterion is a 400. A rule that moves between protocols
+    ///     keeps its options; the engine skips, with a warning, any that break the new protocol's
+    ///     option rules. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("dhcptagrules:write")]
@@ -282,6 +290,18 @@ public class DhcpTagRulesController(
 
         if (patch.TryGetMergePatchField("comments", out JsonElement comments))
             rule.Comments = comments.ValueKind == JsonValueKind.Null ? null : comments.GetString();
+
+        // Validate the merged result, so a patch that only moves the rule to another protocol
+        // is checked against the criteria the rule already holds.
+        string protocolError = await TryGetCriteriaProtocolErrorAsync(
+            rule.ScopeId,
+            rule.RelayAgentCircuitIdHex,
+            rule.RelayInterfaceIdHex,
+            rule.VendorClassEnterpriseNumber,
+            stoppingToken
+        );
+        if (protocolError is not null)
+            throw new ValidationException(protocolError);
 
         rule.UpdatedAtUtc = DateTimeOffset.UtcNow;
         tagRuleRepository.Update(rule);
@@ -422,7 +442,55 @@ public class DhcpTagRulesController(
             }
         }
 
+        string protocolError = await TryGetCriteriaProtocolErrorAsync(
+            request.ScopeId,
+            request.RelayAgentCircuitIdHex,
+            request.RelayInterfaceIdHex,
+            request.VendorClassEnterpriseNumber,
+            stoppingToken
+        );
+        if (protocolError is not null)
+            return (false, protocolError);
+
         return (true, null);
+    }
+
+    /// <summary>
+    ///     This method returns the error for a rule whose criteria its protocol cannot evaluate,
+    ///     or <see langword="null" /> when they fit. The protocol comes from the scope: no scope or
+    ///     a DHCPv4 scope is DHCPv4, a DHCPv6 scope is DHCPv6 (see
+    ///     <see cref="DhcpTagRuleEntity" />). DHCPv6-only criteria on a DHCPv4 rule, or the
+    ///     DHCPv4-only Circuit ID on a DHCPv6 rule, would never match in the engine, so they are
+    ///     refused here instead of being stored. The scope is known to exist when this runs; an
+    ///     unknown scope counts as DHCPv4 and is rejected by the caller's own check.
+    /// </summary>
+    private async Task<string> TryGetCriteriaProtocolErrorAsync(
+        Guid? scopeId,
+        string relayAgentCircuitIdHex,
+        string relayInterfaceIdHex,
+        uint? vendorClassEnterpriseNumber,
+        CancellationToken stoppingToken
+    )
+    {
+        DhcpScopeEntity scope = scopeId is { } id
+            ? await scopeRepository.GetByIdAsync(id, stoppingToken)
+            : null;
+
+        if (scope?.ProtocolVersion == InternetProtocolVersionEnum.IPv6)
+            return string.IsNullOrEmpty(relayAgentCircuitIdHex)
+                ? null
+                : "'relayAgentCircuitIdHex' applies only to DHCPv4 rules; a rule on a DHCPv6 "
+                    + "scope is a DHCPv6 rule.";
+
+        if (!string.IsNullOrEmpty(relayInterfaceIdHex))
+            return "'relayInterfaceIdHex' applies only to DHCPv6 rules; a DHCPv6 rule names a "
+                + "DHCPv6 scope.";
+
+        if (vendorClassEnterpriseNumber is not null)
+            return "'vendorClassEnterpriseNumber' applies only to DHCPv6 rules; a DHCPv6 rule "
+                + "names a DHCPv6 scope.";
+
+        return null;
     }
 
     /// <summary>

@@ -40,7 +40,8 @@ public interface IDhcpTagRuleRepository : IRepository<DhcpTagRuleEntity>
     ///     <see cref="DhcpTagRuleEntity.ScopeId" /> is <paramref name="scopeId" /> or
     ///     <see langword="null" /> (global). It is unpaged, since every eligible rule is evaluated
     ///     for each request, and unsorted; the caller applies the order described on
-    ///     <see cref="DhcpTagRuleEntity" />.
+    ///     <see cref="DhcpTagRuleEntity" />. Global rules are DHCPv4 rules, so the DHCPv6 overlay
+    ///     keeps only the rules whose scope is <paramref name="scopeId" />.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope a request was resolved into.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

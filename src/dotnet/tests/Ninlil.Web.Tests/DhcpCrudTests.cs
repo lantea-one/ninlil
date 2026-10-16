@@ -17,8 +17,9 @@ namespace Ninlil.Web.Tests;
 ///     <see cref="DhcpScopeCustomOptionsController" />, <see cref="DhcpTagRulesController" /> and
 ///     <see cref="DhcpTagRuleOptionsController" />, and the rules around them: a scope's range must
 ///     match its protocol version, PXE and prefix-delegation fields are validated, a reservation is
-///     unique per scope by client identifier and by address, and deleting a scope or tag rule
-///     removes its reservations or options. No DHCP traffic is involved.
+///     unique per scope by client identifier and by address, a tag rule's criteria must fit its
+///     protocol (global and DHCPv4-scope rules are DHCPv4 rules, a DHCPv6 rule names a DHCPv6
+///     scope), and deleting a scope or tag rule removes its reservations or options. No DHCP traffic is involved.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -919,6 +920,123 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
             new { optionTag = 7, valueHex = "05" }
         );
         Assert.Equal(HttpStatusCode.Created, preferenceResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task TagRuleCriteria_ThatDoNotFitTheRulesProtocol_AreRejected()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpScopeDetail v6Scope = await CreateV6ScopeAsync(
+            client,
+            $"rule-proto-v6-{Guid.NewGuid():N}",
+            "2001:db8:b193"
+        );
+        DhcpScopeDetail v4Scope = await CreateScopeAsync(
+            client,
+            $"rule-proto-v4-{Guid.NewGuid():N}"
+        );
+
+        // A global rule is a DHCPv4 rule: the DHCPv6 criteria are refused.
+        HttpResponseMessage globalInterfaceId = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new { name = $"g-if-{Guid.NewGuid():N}", relayInterfaceIdHex = "0A0B" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, globalInterfaceId.StatusCode);
+        Assert.Contains("relayInterfaceIdHex", await globalInterfaceId.Content.ReadAsStringAsync());
+
+        HttpResponseMessage globalEnterprise = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new { name = $"g-ent-{Guid.NewGuid():N}", vendorClassEnterpriseNumber = 32473 }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, globalEnterprise.StatusCode);
+
+        // A rule on a DHCPv6 scope cannot use the DHCPv4 Circuit ID.
+        HttpResponseMessage v6Circuit = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new
+            {
+                name = $"v6-circuit-{Guid.NewGuid():N}",
+                scopeId = v6Scope.Id,
+                relayAgentCircuitIdHex = "0102",
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, v6Circuit.StatusCode);
+        Assert.Contains("relayAgentCircuitIdHex", await v6Circuit.Content.ReadAsStringAsync());
+
+        // A rule on a DHCPv4 scope may use the Circuit ID (guard) but not the Interface-ID.
+        HttpResponseMessage v4Circuit = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new
+            {
+                name = $"v4-circuit-{Guid.NewGuid():N}",
+                scopeId = v4Scope.Id,
+                relayAgentCircuitIdHex = "0102",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, v4Circuit.StatusCode);
+
+        HttpResponseMessage v4InterfaceId = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new
+            {
+                name = $"v4-if-{Guid.NewGuid():N}",
+                scopeId = v4Scope.Id,
+                relayInterfaceIdHex = "0A0B",
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, v4InterfaceId.StatusCode);
+
+        // A DHCPv6-scope rule with an Interface-ID is valid (guard); PUT moving it to a global
+        // rule keeps the Interface-ID and is refused.
+        HttpResponseMessage v6InterfaceId = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new
+            {
+                name = $"v6-if-{Guid.NewGuid():N}",
+                scopeId = v6Scope.Id,
+                relayInterfaceIdHex = "0A0B",
+                vendorClassEnterpriseNumber = 32473,
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, v6InterfaceId.StatusCode);
+        DhcpTagRuleDetail v6Rule =
+            await v6InterfaceId.Content.ReadFromJsonAsync<DhcpTagRuleDetail>();
+
+        HttpResponseMessage putGlobal = await client.PutAsJsonAsync(
+            $"/api/dhcp-tag-rules/{v6Rule.Id}",
+            new
+            {
+                name = v6Rule.Name,
+                scopeId = (Guid?)null,
+                relayInterfaceIdHex = "0A0B",
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, putGlobal.StatusCode);
+
+        // PATCH validates the merged result: moving the rule to scopeId null while it keeps the
+        // DHCPv6-only criteria is refused and leaves the rule unchanged.
+        HttpResponseMessage patchGlobal = await client.SendAsync(
+            PatchRequest($"/api/dhcp-tag-rules/{v6Rule.Id}", new { scopeId = (Guid?)null })
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patchGlobal.StatusCode);
+        DhcpTagRuleDetail unchanged = await (
+            await client.GetAsync($"/api/dhcp-tag-rules/{v6Rule.Id}")
+        ).Content.ReadFromJsonAsync<DhcpTagRuleDetail>();
+        Assert.Equal(v6Scope.Id, unchanged.ScopeId);
+
+        // Clearing the criteria in the same patch makes the move valid.
+        HttpResponseMessage patchClear = await client.SendAsync(
+            PatchRequest(
+                $"/api/dhcp-tag-rules/{v6Rule.Id}",
+                new
+                {
+                    scopeId = (Guid?)null,
+                    relayInterfaceIdHex = (string)null,
+                    vendorClassEnterpriseNumber = (uint?)null,
+                }
+            )
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patchClear.StatusCode);
     }
 
     [Fact]

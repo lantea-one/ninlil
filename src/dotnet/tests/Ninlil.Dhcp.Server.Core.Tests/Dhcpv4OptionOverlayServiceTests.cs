@@ -10,7 +10,8 @@ namespace Ninlil.Dhcp.Server.Core.Tests;
 ///     This test class covers <see cref="Options.Dhcpv4OptionOverlayService" />: scope custom
 ///     options (including overriding a standard option and the server-address value source) and
 ///     tag rules on each criterion (Vendor Class Identifier, User Class, Agent Circuit ID and
-///     Remote ID), scope eligibility and priority order. Each test calls
+///     Remote ID), scope eligibility, priority order, and that a rule with a DHCPv6-only
+///     criterion never matches. Each test calls
 ///     <see cref="Dhcpv4RequestHandler.HandleRequestAsync" /> on a <see cref="Dhcpv4EngineTestHost" />
 ///     with a temporary SQLite file.
 /// </summary>
@@ -379,6 +380,50 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
         Assert.NotNull(offer);
         Assert.True(offer.TryGetRawOption(201, out _));
         Assert.NotEqual(Guid.Empty, scope.Id);
+    }
+
+    [Fact]
+    public async Task Discover_GlobalRuleWithOnlyARelayInterfaceId_NeverMatches()
+    {
+        await _host.SeedScopeAsync("v6-interface-id-scope", "192.0.2.160", "192.0.2.162");
+
+        // The Interface-ID is a DHCPv6 criterion. A DHCPv4 engine cannot check it, so the rule
+        // must not widen to every client.
+        await _host.SeedTagRuleAsync(
+            "Interface-ID rule",
+            new Dictionary<byte, string> { [203] = "01" },
+            relayInterfaceIdHex: "0A0B"
+        );
+
+        Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
+            NewDiscover([0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b], 0x500b),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(offer);
+        Assert.False(offer.TryGetRawOption(203, out _));
+    }
+
+    [Fact]
+    public async Task Discover_GlobalRuleWithOnlyAVendorClassEnterpriseNumber_NeverMatches()
+    {
+        await _host.SeedScopeAsync("v6-enterprise-scope", "192.0.2.170", "192.0.2.172");
+
+        await _host.SeedTagRuleAsync(
+            "Enterprise rule",
+            new Dictionary<byte, string> { [204] = "01" },
+            vendorClassEnterpriseNumber: 32473
+        );
+
+        Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
+            NewDiscover([0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c], 0x500c),
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(offer);
+        Assert.False(offer.TryGetRawOption(204, out _));
     }
 
     [Fact]

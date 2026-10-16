@@ -13,13 +13,14 @@ namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 ///     <c>Dhcpv6OptionOverlayService</c> evaluate the rules; <c>DhcpTagRulesController</c> manages
 ///     them.
 ///     <para>
-///         <b>Protocol.</b> There is no protocol field. A rule with a <see cref="ScopeId" /> is
-///         only evaluated for that scope's protocol. A global rule is evaluated by both engines,
-///         and each engine checks only the criteria it understands: the DHCPv4 engine ignores
-///         <see cref="RelayInterfaceIdHex" /> and <see cref="VendorClassEnterpriseNumber" />, the
-///         DHCPv6 engine ignores <see cref="RelayAgentCircuitIdHex" />. A global rule whose
-///         criteria all belong to one protocol therefore has no criteria for the other protocol
-///         and matches every request of that protocol too.
+///         <b>Protocol.</b> There is no protocol field; the scope decides. A global rule
+///         (<see cref="ScopeId" /> is <see langword="null" />) and a rule on a DHCPv4 scope are
+///         DHCPv4 rules. A DHCPv6 rule names a DHCPv6 scope. The DHCPv6 engine ignores global
+///         rules, since their option tags are DHCPv4 tags. A criterion the rule's protocol
+///         cannot evaluate makes the rule match nothing, instead of being skipped:
+///         <see cref="RelayInterfaceIdHex" /> and <see cref="VendorClassEnterpriseNumber" />
+///         are DHCPv6-only, <see cref="RelayAgentCircuitIdHex" /> is DHCPv4-only. The REST API
+///         refuses such a combination with 400.
 ///     </para>
 ///     <para>
 ///         <b>Criteria are combined with AND.</b> Every criterion with a value must match. A rule
@@ -30,9 +31,10 @@ namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 ///     </para>
 ///     <para>
 ///         <b>Eligibility.</b> A <see cref="ScopeId" /> restricts the rule to clients resolved into
-///         that scope; <see langword="null" /> makes it eligible in every scope, which suits
-///         criteria such as a device family's Vendor Class Identifier that do not depend on the
-///         network segment.
+///         that scope; <see langword="null" /> makes it eligible in every DHCPv4 scope, which
+///         suits criteria such as a device family's Vendor Class Identifier that do not depend
+///         on the network segment. There is no rule for every DHCPv6 scope: create one rule
+///         per DHCPv6 scope.
 ///     </para>
 ///     <para>
 ///         <b>Order and conflicts.</b> The eligible rules that match are applied in ascending
@@ -55,8 +57,8 @@ public class DhcpTagRuleEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property optionally restricts this rule to clients resolved into one specific
-    ///     scope; <see langword="null" /> makes the rule eligible against a client resolved into
-    ///     any scope. See the class summary.
+    ///     scope; <see langword="null" /> makes the rule a DHCPv4 rule, eligible in every DHCPv4
+    ///     scope. A DHCPv6 rule must name a DHCPv6 scope. See the class summary.
     /// </summary>
     public Guid? ScopeId { get; set; }
 
@@ -109,7 +111,8 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     ///     byte equality (case-insensitively as hex). The value is often a binary VLAN or port
     ///     identifier with no text form, so there is no prefix mode. A request that was not
     ///     relayed has no Circuit ID and does not match. <see langword="null" /> or empty means
-    ///     the Circuit ID is not checked. Only the DHCPv4 engine checks it.
+    ///     the Circuit ID is not checked. Only the DHCPv4 engine checks it, so a DHCPv6 rule must
+    ///     not set it (a stored one never matches).
     /// </summary>
     public string RelayAgentCircuitIdHex { get; set; }
 
@@ -118,8 +121,7 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     ///     <see cref="RelayAgentCircuitIdHex" />. The DHCPv4 engine compares it with the Agent
     ///     Remote ID sub-option (RFC 3046 Section 2.2, inside option 82) and the DHCPv6 engine
     ///     with the Remote-ID option (RFC 4649, option 37); both name the client or its attachment
-    ///     point as the relay agent chose. A global rule is checked by both engines with the same
-    ///     value.
+    ///     point as the relay agent chose. Both protocols check it, so it fits any rule.
     /// </summary>
     public string RelayAgentRemoteIdHex { get; set; }
 
@@ -130,7 +132,8 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     ///     (which relay interface the client is behind), though the options are unrelated on the
     ///     wire. A request that was not relayed, or whose relay sent no Interface-ID, does not
     ///     match. <see langword="null" /> or empty means it is not checked. Only
-    ///     <c>Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService</c> checks it.
+    ///     <c>Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService</c> checks it, so a
+    ///     DHCPv4 rule (global or on a DHCPv4 scope) must not set it (a stored one never matches).
     /// </summary>
     public string RelayInterfaceIdHex { get; set; }
 
@@ -140,7 +143,8 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     ///     <see cref="VendorClassIdentifierMatch" />, or on its own when that is empty (any vendor
     ///     class from this enterprise). <see langword="null" /> means any enterprise number. The
     ///     DHCPv4 Vendor Class Identifier has no enterprise number, so only
-    ///     <c>Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService</c> checks it.
+    ///     <c>Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService</c> checks it, and a
+    ///     DHCPv4 rule (global or on a DHCPv4 scope) must not set it (a stored one never matches).
     /// </summary>
     public uint? VendorClassEnterpriseNumber { get; set; }
 

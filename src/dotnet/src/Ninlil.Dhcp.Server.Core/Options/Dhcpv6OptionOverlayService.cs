@@ -23,9 +23,15 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     <see cref="DhcpTagRuleEntity.UserClassMatch" /> (against the DHCPv6 options),
 ///     <see cref="DhcpTagRuleEntity.VendorClassEnterpriseNumber" />,
 ///     <see cref="DhcpTagRuleEntity.RelayInterfaceIdHex" /> and
-///     <see cref="DhcpTagRuleEntity.RelayAgentRemoteIdHex" /> (against the RFC 4649 Remote-ID);
-///     <see cref="DhcpTagRuleEntity.RelayAgentCircuitIdHex" /> is ignored. A rule's tag is used
-///     as the DHCPv6 option code.
+///     <see cref="DhcpTagRuleEntity.RelayAgentRemoteIdHex" /> (against the RFC 4649 Remote-ID).
+///     A rule's tag is used as the DHCPv6 option code.
+///     <para>
+///         Only rules of the scope itself apply. A global rule (no scope) is a DHCPv4 rule and
+///         is ignored here, because its option tags are DHCPv4 tags and would be written as
+///         DHCPv6 option codes. A rule that sets
+///         <see cref="DhcpTagRuleEntity.RelayAgentCircuitIdHex" />, a DHCPv4-only criterion,
+///         never matches.
+///     </para>
 ///     <para>
 ///         An option with value source <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
 ///         ignores <c>ValueHex</c> and carries the IPv6 address (16 bytes unless the catalog makes the
@@ -79,8 +85,10 @@ public sealed class Dhcpv6OptionOverlayService(
         IReadOnlyList<DhcpTagRuleEntity> candidateRules =
             await tagRuleRepository.ListEnabledForScopeAsync(scope.Id, cancellationToken);
 
+        // The repository also returns global rules; those belong to DHCPv4 (see the class
+        // summary), so only the scope's own rules are evaluated here.
         IEnumerable<DhcpTagRuleEntity> matchingRulesInOrder = candidateRules
-            .Where(rule => Matches(rule, request))
+            .Where(rule => rule.ScopeId == scope.Id && Matches(rule, request))
             .OrderBy(rule => rule.Priority)
             .ThenBy(rule => rule.CreatedAtUtc)
             .ThenBy(rule => rule.Id);
@@ -104,11 +112,17 @@ public sealed class Dhcpv6OptionOverlayService(
     /// <summary>
     ///     This method reports whether a request meets all of a rule's DHCPv6 criteria (combined
     ///     with AND), like the <c>Matches</c> method of <see cref="Dhcpv4OptionOverlayService" />.
-    ///     Unset criteria are not checked, so a rule with no DHCPv6 criteria, including one with
-    ///     only a Circuit ID, matches every eligible DHCPv6 request.
+    ///     Unset criteria are not checked, so a rule with no criteria matches every eligible
+    ///     DHCPv6 request. The DHCPv4-only <see cref="DhcpTagRuleEntity.RelayAgentCircuitIdHex" />
+    ///     cannot be evaluated for a DHCPv6 request, so a rule that sets it never matches.
+    ///     Ignoring it would widen the rule to every client.
     /// </summary>
     private static bool Matches(DhcpTagRuleEntity rule, Dhcpv6Message request)
     {
+        // The API refuses this on a DHCPv6 rule; this guard covers rows stored before it did.
+        if (!string.IsNullOrEmpty(rule.RelayAgentCircuitIdHex))
+            return false;
+
         if (!string.IsNullOrEmpty(rule.VendorClassIdentifierMatch))
         {
             if (

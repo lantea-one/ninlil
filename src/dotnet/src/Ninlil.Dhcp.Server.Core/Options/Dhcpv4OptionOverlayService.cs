@@ -16,7 +16,9 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     already run), then the options of every enabled, eligible tag rule whose criteria the
 ///     request meets, in the order described on <see cref="DhcpTagRuleEntity" />, so the last rule
 ///     to set a tag wins. Only the DHCPv4 criteria are checked (vendor class, user class, Agent
-///     Circuit ID, Agent Remote ID).
+///     Circuit ID, Agent Remote ID). A global rule (no scope) is a DHCPv4 rule, so every
+///     eligible rule reaches this service; a rule that carries a DHCPv6-only criterion never
+///     matches (see <c>Matches</c>).
 ///     <para>
 ///         An option with value source <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
 ///         ignores <c>ValueHex</c> and carries the address (text or 4 bytes, see
@@ -92,10 +94,19 @@ public sealed class Dhcpv4OptionOverlayService(
     ///     This method reports whether a request meets all of a rule's DHCPv4 criteria (combined
     ///     with AND). Unset criteria are not checked, so a rule with none matches every request.
     ///     The DHCPv6-only <see cref="DhcpTagRuleEntity.RelayInterfaceIdHex" /> and
-    ///     <see cref="DhcpTagRuleEntity.VendorClassEnterpriseNumber" /> are ignored here.
+    ///     <see cref="DhcpTagRuleEntity.VendorClassEnterpriseNumber" /> cannot be evaluated for a
+    ///     DHCPv4 request, so a rule that sets either one never matches. Ignoring them would
+    ///     widen the rule to every client.
     /// </summary>
     private static bool Matches(DhcpTagRuleEntity rule, Dhcpv4Message request)
     {
+        // The API refuses these on a DHCPv4 rule; this guard covers rows stored before it did.
+        if (
+            !string.IsNullOrEmpty(rule.RelayInterfaceIdHex)
+            || rule.VendorClassEnterpriseNumber is not null
+        )
+            return false;
+
         if (!string.IsNullOrEmpty(rule.VendorClassIdentifierMatch))
         {
             if (
