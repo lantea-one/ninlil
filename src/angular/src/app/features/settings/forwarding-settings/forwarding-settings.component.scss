@@ -30,3 +30,9 @@
 .override-note {
   margin-top: var(--ninlil-space-2);
 }
+
+.hint {
+  margin: 0 0 var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-sm);
+  color: var(--cui-secondary-color);
+}

@@ -76,6 +76,28 @@ describe('FilterListFormComponent', () => {
     ).toBeFalse();
   });
 
+  it('rejects a refreshIntervalText under one hour with belowMinimum, as the backend does', async () => {
+    const fixture = await createComponent(null);
+    const control = fixture.componentInstance.form.controls.refreshIntervalText;
+
+    control.setValue('00:59:59');
+    expect(control.hasError('belowMinimum')).toBeTrue();
+
+    control.setValue('01:00:00');
+    expect(control.hasError('belowMinimum')).toBeFalse();
+
+    control.setValue('1.00:00:00');
+    expect(control.hasError('belowMinimum')).toBeFalse();
+  });
+
+  it('accepts a blank refreshIntervalText, which the backend reads as every 24 hours', async () => {
+    const fixture = await createComponent(null);
+    const control = fixture.componentInstance.form.controls.refreshIntervalText;
+
+    control.setValue('');
+    expect(control.valid).toBeTrue();
+  });
+
   it('create mode: defaults to Local source, with no owning list to load', async () => {
     const fixture = await createComponent(null);
 

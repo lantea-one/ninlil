@@ -1,5 +1,11 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -39,6 +45,25 @@ import {
  * `[d.]hh:mm:ss`. The interval can exceed 24 hours, so the days prefix is allowed.
  */
 const REFRESH_INTERVAL_PATTERN = /^(\d{1,2}\.)?\d{1,2}:\d{2}:\d{2}$/;
+
+/** The shortest refresh interval the backend accepts for a subscribed list, in seconds. */
+const MINIMUM_REFRESH_INTERVAL_SECONDS = 3600;
+
+/**
+ * Rejects a refresh interval shorter than one hour with `belowMinimum`, matching the 400 the
+ * filter-lists API returns for it. Blank (the 24-hour default) and text the pattern validator
+ * already rejects pass here, so each mistake shows one message.
+ */
+function minimumRefreshIntervalValidator(
+  control: AbstractControl<string>,
+): ValidationErrors | null {
+  const match = /^(?:(\d{1,2})\.)?(\d{1,2}):(\d{2}):(\d{2})$/.exec(control.value.trim());
+  if (match === null) return null;
+  const [, days, hours, minutes, seconds] = match;
+  const totalSeconds =
+    Number(days ?? 0) * 86400 + Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+  return totalSeconds < MINIMUM_REFRESH_INTERVAL_SECONDS ? { belowMinimum: true } : null;
+}
 
 /** The request body of every filter list `POST` and `PUT` this page sends. */
 interface FilterListWriteRequestValue {
@@ -125,7 +150,10 @@ export class FilterListFormComponent implements OnInit {
     action: [FILTER_LIST_ACTION_OPTIONS[0]],
     source: [DnsFilterListSourceEnum.Local as DnsFilterListSourceEnum],
     subscriptionUrl: [''],
-    refreshIntervalText: ['', [Validators.pattern(REFRESH_INTERVAL_PATTERN)]],
+    refreshIntervalText: [
+      '',
+      [Validators.pattern(REFRESH_INTERVAL_PATTERN), minimumRefreshIntervalValidator],
+    ],
     isDisabled: [false],
     comments: [''],
   });

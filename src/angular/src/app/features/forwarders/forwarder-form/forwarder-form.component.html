@@ -109,12 +109,16 @@
           <code>tls://1.1.1.1</code> is DNS-over-TLS on port 853 by default;
           <code>quic://dns.example.com</code> is DNS-over-QUIC, also port 853 by default. For both,
           a hostname (rather than a bare address) lets the certificate be validated by name, not
-          just trusted blind. <code>https://cloudflare-dns.com/dns-query</code> is DNS-over-HTTPS --
-          the complete query URL, not just a host. An <code>sdns://</code> value is a DNSCrypt
-          stamp: a base64url-encoded blob carrying the resolver's address, public key, and provider
-          name together, meant to be copied whole from wherever the resolver publishes it, never
-          typed by hand. Every form above is validated by the real backend parser on save, so an
-          unrecognized or malformed line is rejected rather than silently ignored.
+          just trusted blind. An IPv6 address with a port goes in brackets
+          (<code>[2001:db8::1]:53</code>); a bare IPv6 address uses the default port. A hostname is
+          looked up in the background, not when you save, and again about every five minutes; until
+          its first lookup succeeds the forwarder is skipped.
+          <code>https://cloudflare-dns.com/dns-query</code> is DNS-over-HTTPS -- the complete query
+          URL, not just a host. An <code>sdns://</code> value is a DNSCrypt stamp: a
+          base64url-encoded blob carrying the resolver's address, public key, and provider name
+          together, meant to be copied whole from wherever the resolver publishes it, never typed by
+          hand. Every form above is validated by the real backend parser on save, so an unrecognized
+          or malformed line is rejected rather than silently ignored.
           @if (!isEditMode) {
             Each non-blank line above becomes its own forwarder.
           }

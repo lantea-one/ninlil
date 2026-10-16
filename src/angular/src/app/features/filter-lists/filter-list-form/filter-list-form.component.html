@@ -129,10 +129,14 @@
                   cFormControl
                   id="filter-list-refresh-interval"
                   formControlName="refreshIntervalText"
-                  placeholder="01:00:00"
+                  placeholder="1.00:00:00"
                 />
+                <div class="hint">Blank means every 24 hours; the minimum is one hour.</div>
                 @if (form.controls.refreshIntervalText.hasError('pattern')) {
-                  <div class="field-error">Use hh:mm:ss, e.g. 01:00:00.</div>
+                  <div class="field-error">Use hh:mm:ss or d.hh:mm:ss, e.g. 06:00:00.</div>
+                }
+                @if (form.controls.refreshIntervalText.hasError('belowMinimum')) {
+                  <div class="field-error">The refresh interval must be at least 01:00:00.</div>
                 }
               </div>
             </section>
@@ -159,10 +163,14 @@
                   cFormControl
                   id="filter-list-refresh-interval"
                   formControlName="refreshIntervalText"
-                  placeholder="01:00:00"
+                  placeholder="1.00:00:00"
                 />
+                <div class="hint">Blank means every 24 hours; the minimum is one hour.</div>
                 @if (form.controls.refreshIntervalText.hasError('pattern')) {
-                  <div class="field-error">Use hh:mm:ss, e.g. 01:00:00.</div>
+                  <div class="field-error">Use hh:mm:ss or d.hh:mm:ss, e.g. 06:00:00.</div>
+                }
+                @if (form.controls.refreshIntervalText.hasError('belowMinimum')) {
+                  <div class="field-error">The refresh interval must be at least 01:00:00.</div>
                 }
               </div>
             </section>
