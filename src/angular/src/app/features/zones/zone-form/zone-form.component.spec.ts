@@ -116,14 +116,37 @@ describe('ZoneFormComponent', () => {
     return fixture;
   }
 
-  it('rejects an nsec3Iterations value above 65535, the real 16-bit unsigned backend bound', async () => {
+  it('rejects an nsec3Iterations value above 150, the API maximum, and accepts 150', async () => {
     const fixture = await createComponent(null);
 
-    fixture.componentInstance.form.controls.nsec3Iterations.setValue(65536);
+    fixture.componentInstance.form.controls.nsec3Iterations.setValue(151);
     expect(fixture.componentInstance.form.controls.nsec3Iterations.hasError('max')).toBeTrue();
 
-    fixture.componentInstance.form.controls.nsec3Iterations.setValue(65535);
+    fixture.componentInstance.form.controls.nsec3Iterations.setValue(150);
     expect(fixture.componentInstance.form.controls.nsec3Iterations.hasError('max')).toBeFalse();
+  });
+
+  it('a new zone starts at 0 NSEC3 iterations', async () => {
+    const fixture = await createComponent(null);
+
+    expect(fixture.componentInstance.form.controls.nsec3Iterations.value).toBe(0);
+  });
+
+  it('edit mode: a zone loaded without an NSEC3 iteration count shows 0', async () => {
+    const fixture = await createComponent('zone-1', () => {
+      zonesApiSpy.apiZonesIdGet.and.returnValue(
+        of({
+          id: 'zone-1',
+          name: 'example.com',
+          type: ZoneTypeEnum.Primary,
+          isDnssecSigned: false,
+          isDisabled: false,
+          cloudSyncInterval: '00:05:00',
+        }),
+      );
+    });
+
+    expect(fixture.componentInstance.form.controls.nsec3Iterations.value).toBe(0);
   });
 
   it('accepts a cloudSyncIntervalText value with a days prefix, a real TimeSpan "c" format shape the backend accepts', async () => {
@@ -933,14 +956,88 @@ describe('ZoneFormComponent', () => {
     expect(fixture.componentInstance.form.controls.ptrIpv4PrefixLength.valid).toBeTrue();
   });
 
-  it('rejects a ptrIpv6PrefixLength value outside 16-124', async () => {
+  it('rejects a ptrIpv6PrefixLength value outside 16-124 or not a multiple of 4, and shows the error', async () => {
     const fixture = await createComponent(null);
+    const control = fixture.componentInstance.form.controls.ptrIpv6PrefixLength;
+    const element: HTMLElement = fixture.nativeElement;
 
-    fixture.componentInstance.form.controls.ptrIpv6PrefixLength.setValue(8);
-    expect(fixture.componentInstance.form.controls.ptrIpv6PrefixLength.hasError('min')).toBeTrue();
+    for (const value of [8, 128, 18]) {
+      control.setValue(value);
+      expect(control.hasError('ptrIpv6PrefixLength')).toBeTrue();
+    }
+    expect(fixture.componentInstance.form.valid).toBeFalse();
 
-    fixture.componentInstance.form.controls.ptrIpv6PrefixLength.setValue(128);
-    expect(fixture.componentInstance.form.controls.ptrIpv6PrefixLength.hasError('max')).toBeTrue();
+    control.markAsTouched();
+    fixture.detectChanges();
+    expect(element.textContent).toContain('Must be a multiple of 4 between 16 and 124');
+  });
+
+  it('accepts a ptrIpv6PrefixLength of 64 and an empty one', async () => {
+    const fixture = await createComponent(null);
+    const control = fixture.componentInstance.form.controls.ptrIpv6PrefixLength;
+
+    control.setValue(64);
+    expect(control.valid).toBeTrue();
+    control.setValue(null);
+    expect(control.valid).toBeTrue();
+  });
+
+  it('CloudPrimary zone: shows the dynamic-update checkbox, the update keys and the cloud hint', async () => {
+    const fixture = await createComponent(null);
+    const element: HTMLElement = fixture.nativeElement;
+
+    fixture.componentInstance.form.patchValue({ type: ZoneTypeEnum.CloudPrimary });
+    fixture.detectChanges();
+
+    expect(element.querySelector('#zone-dynamic-update')).not.toBeNull();
+    expect(element.querySelector('#zone-update-keys')).not.toBeNull();
+    expect(element.querySelector('#zone-dynamic-update-cloud-hint')?.textContent).toContain(
+      'pushed to the cloud provider',
+    );
+  });
+
+  it('Primary zone: shows the dynamic-update checkbox and the update keys without the cloud hint', async () => {
+    const fixture = await createComponent(null);
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('#zone-dynamic-update')).not.toBeNull();
+    expect(element.querySelector('#zone-update-keys')).not.toBeNull();
+    expect(element.querySelector('#zone-dynamic-update-cloud-hint')).toBeNull();
+  });
+
+  it('save() sends dynamicUpdateEnabled false for a type without dynamic updates, even when the control is ticked', async () => {
+    const fixture = await createComponent(null, () => {
+      zonesApiSpy.apiZonesPost.and.returnValue(of({ id: 'new-zone' }));
+    });
+
+    fixture.componentInstance.form.patchValue({
+      name: 'example.com',
+      type: ZoneTypeEnum.Secondary,
+      primaryServerAddressesText: '192.0.2.1',
+      dynamicUpdateEnabled: true,
+    });
+    await fixture.componentInstance.save();
+
+    expect(zonesApiSpy.apiZonesPost).toHaveBeenCalledWith({
+      zoneWriteRequest: jasmine.objectContaining({ dynamicUpdateEnabled: false }),
+    });
+  });
+
+  it('save() sends dynamicUpdateEnabled true for a CloudPrimary zone with the box ticked', async () => {
+    const fixture = await createComponent(null, () => {
+      zonesApiSpy.apiZonesPost.and.returnValue(of({ id: 'new-zone' }));
+    });
+
+    fixture.componentInstance.form.patchValue({
+      name: 'example.com',
+      type: ZoneTypeEnum.CloudPrimary,
+      dynamicUpdateEnabled: true,
+    });
+    await fixture.componentInstance.save();
+
+    expect(zonesApiSpy.apiZonesPost).toHaveBeenCalledWith({
+      zoneWriteRequest: jasmine.objectContaining({ dynamicUpdateEnabled: true }),
+    });
   });
 
   it('showReconcileNowSection() is false in create mode (no saved zone id to act on)', async () => {

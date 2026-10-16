@@ -43,10 +43,14 @@ import { isSigningProhibited, SIGNING_DNSSEC_ALGORITHMS } from '../dnssec-keys/d
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import {
+  DEFAULT_NSEC3_ITERATIONS,
   isCloudZoneType,
   isLocallyOriginatedZoneType,
+  MAX_NSEC3_ITERATIONS,
+  ptrIpv6PrefixLengthValidator,
   requiresForwarderAddresses,
   requiresPrimaryServerAddresses,
+  supportsDynamicUpdate,
   ZONE_TYPE_OPTIONS,
 } from '../zone.model';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -82,8 +86,10 @@ const CUSTOM_CLOUD_CREDENTIAL_OPTION = '__custom__';
  * The type-specific sections (transfer source, forwarding, cloud sync, DNSSEC signing, dynamic
  * updates, automatic CAA/PTR records) show or hide with the selected {@link ZoneTypeEnum}, using
  * the helpers in `zone.model.ts`. Hidden fields stay in the `FormGroup`, so switching type and back
- * keeps what was typed, and every field is sent on save. `ZonesController.ApplyWrite` stores them
- * all; the server ignores the ones that do not apply to the zone's type.
+ * keeps what was typed, and every field is sent on save, with one exception: `dynamicUpdateEnabled`
+ * is sent as `false` unless the type supports dynamic updates ({@link supportsDynamicUpdate}), so
+ * a stored flag never survives on a type that ignores it. `ZonesController.ApplyWrite` stores the
+ * fields; the server ignores the ones that do not apply to the zone's type.
  *
  * In edit mode the page also manages RFC 9432 catalog membership and runs CAA and PTR
  * reconciliation on demand, through the `/api/zones/{id}/catalog-membership`,
@@ -185,8 +191,11 @@ export class ZoneFormComponent implements OnInit {
     denialOfExistenceMode: [
       DnssecDenialOfExistenceModeEnum.Nsec3 as DnssecDenialOfExistenceModeEnum,
     ],
-    // ZoneEntity.Nsec3Iterations is a 16-bit unsigned integer.
-    nsec3Iterations: [10, [Validators.min(0), Validators.max(65535)]],
+    // The range mirrors ZonesController.ValidateNsec3Iterations: 0 (RFC 9276 §3.1) to 150.
+    nsec3Iterations: [
+      DEFAULT_NSEC3_ITERATIONS,
+      [Validators.min(0), Validators.max(MAX_NSEC3_ITERATIONS)],
+    ],
     nsec3SaltHex: [''],
     cloudProviderCredentialId: [''],
     // UI-only, like tsigKeySelection: '' (none), a listed credential's id, or
@@ -199,10 +208,10 @@ export class ZoneFormComponent implements OnInit {
     autoManageCaaRecords: [null as boolean | null],
     caaIssuerDomain: [''],
     autoManagePtrRecords: [null as boolean | null],
-    // Null inherits the PtrSyncOptions default. The min/max mirror ZonesController's ranges
-    // (IPv4 24 to 30, IPv6 16 to 124); the IPv6 "multiple of 4" rule is checked only by the server.
+    // Null inherits the PtrSyncOptions default. The validators mirror ZonesController's rules
+    // (IPv4 24 to 30; IPv6 16 to 124 in steps of 4, see ptrIpv6PrefixLengthValidator).
     ptrIpv4PrefixLength: [null as number | null, [Validators.min(24), Validators.max(30)]],
-    ptrIpv6PrefixLength: [null as number | null, [Validators.min(16), Validators.max(124)]],
+    ptrIpv6PrefixLength: [null as number | null, [ptrIpv6PrefixLengthValidator]],
   });
 
   /** The zone type currently selected, tracked as a plain signal since `valueChanges` isn't one. */
@@ -215,6 +224,21 @@ export class ZoneFormComponent implements OnInit {
   readonly showCloudSection = computed(() => isCloudZoneType(this.selectedType()));
   readonly showOriginationSections = computed(() =>
     isLocallyOriginatedZoneType(this.selectedType()),
+  );
+
+  /**
+   * Whether the "Accept RFC 2136 dynamic updates" checkbox and the update-key list show. Today
+   * every type that shows the origination sections qualifies, so this guards against a future type
+   * and states the rule in one place ({@link supportsDynamicUpdate}).
+   */
+  readonly showDynamicUpdateFields = computed(() => supportsDynamicUpdate(this.selectedType()));
+
+  /**
+   * Whether the dynamic-update checkbox carries the cloud hint: a `CloudPrimary` zone pushes an
+   * accepted update to its provider, which also limits the record types an update may add.
+   */
+  readonly showCloudDynamicUpdateHint = computed(
+    () => this.selectedType() === ZoneTypeEnum.CloudPrimary,
   );
 
   /**
@@ -444,7 +468,8 @@ export class ZoneFormComponent implements OnInit {
       validateDnssec: value.validateDnssec,
       notifyAddresses: splitAddressLines(value.notifyAddressesText),
       tsigKeyName: value.tsigKeyName.trim().length > 0 ? value.tsigKeyName : null,
-      dynamicUpdateEnabled: value.dynamicUpdateEnabled,
+      // The resolver ignores the flag on other types, so a stored true must not survive them.
+      dynamicUpdateEnabled: supportsDynamicUpdate(value.type) && value.dynamicUpdateEnabled,
       updateTsigKeyNames: this.updateKeyNames(),
       transferTsigKeyNames: this.transferKeyNames(),
       isDnssecSigned: value.isDnssecSigned,
@@ -535,7 +560,7 @@ export class ZoneFormComponent implements OnInit {
           ? zone.dnssecAlgorithm
           : DnssecAlgorithmEnum.Ecdsap256Sha256,
       denialOfExistenceMode: zone.denialOfExistenceMode ?? DnssecDenialOfExistenceModeEnum.Nsec3,
-      nsec3Iterations: zone.nsec3Iterations ?? 10,
+      nsec3Iterations: zone.nsec3Iterations ?? DEFAULT_NSEC3_ITERATIONS,
       nsec3SaltHex: zone.nsec3SaltHex ?? '',
       cloudProviderCredentialId,
       cloudProviderCredentialSelection,

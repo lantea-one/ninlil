@@ -332,20 +332,25 @@
                         type="number"
                         formControlName="nsec3Iterations"
                       />
+                      @if (
+                        form.controls.nsec3Iterations.hasError('min') ||
+                        form.controls.nsec3Iterations.hasError('max')
+                      ) {
+                        <div class="field-error">Must be between 0 and 150 inclusive.</div>
+                      }
                       <p class="hint">
-                        Only meaningful once NSEC3 is selected above. Each extra iteration re-hashes
-                        an owner name that many more times, adding real CPU cost to every signing
-                        pass this server does and to every validation a resolver performs against it
-                        -- for only a marginal increase in how expensive a dictionary/rainbow-table
-                        attack against the hashed names becomes. RFC 9276 now recommends 0
-                        iterations for exactly this reason: on modern hardware, the extra hashing no
-                        longer buys meaningful protection. There's no harm in setting this to 0 for
-                        a new zone.
+                        Only meaningful once NSEC3 is selected above. 0 is the default and what RFC
+                        9276 recommends: each extra iteration re-hashes an owner name once more,
+                        adding CPU cost to every signing pass and to every validation a resolver
+                        performs, for only a marginal gain against dictionary attacks on the hashed
+                        names. Values above 150 are refused, because validators, this server's own
+                        included, treat such a zone as insecure.
                       </p>
                     </div>
                     <div class="field">
                       <label cLabel for="zone-nsec3-salt">NSEC3 salt (hex)</label>
                       <input cFormControl id="zone-nsec3-salt" formControlName="nsec3SaltHex" />
+                      <p class="hint">Leave it empty: RFC 9276 advises against using a salt.</p>
                     </div>
                   </section>
                 }
@@ -372,17 +377,26 @@
             </button>
             @if (isSectionOpen('dynamic-updates')) {
               <div class="form-section-body" id="section-dynamic-updates-body">
-                <c-form-check class="mb-3">
-                  <input
-                    cFormCheckInput
-                    type="checkbox"
-                    id="zone-dynamic-update"
-                    formControlName="dynamicUpdateEnabled"
-                  />
-                  <label cFormCheckLabel for="zone-dynamic-update"
-                    >Accept RFC 2136 dynamic updates</label
-                  >
-                </c-form-check>
+                @if (showDynamicUpdateFields()) {
+                  <c-form-check class="mb-3">
+                    <input
+                      cFormCheckInput
+                      type="checkbox"
+                      id="zone-dynamic-update"
+                      formControlName="dynamicUpdateEnabled"
+                    />
+                    <label cFormCheckLabel for="zone-dynamic-update"
+                      >Accept RFC 2136 dynamic updates</label
+                    >
+                    @if (showCloudDynamicUpdateHint()) {
+                      <div cFormText id="zone-dynamic-update-cloud-hint">
+                        An accepted update is applied here at once and pushed to the cloud provider
+                        right after. An update that adds a record type the providers cannot hold
+                        (anything but A, AAAA, CNAME, MX, NS, TXT, SRV and CAA) is refused.
+                      </div>
+                    }
+                  </c-form-check>
+                }
                 <section class="field-row">
                   <div class="field full-width">
                     <label cLabel for="zone-notify-addresses"
@@ -396,24 +410,26 @@
                     ></textarea>
                   </div>
                 </section>
-                <fieldset class="field full-width mb-3" id="zone-update-keys">
-                  <legend class="form-label">Keys allowed to send dynamic updates</legend>
-                  @for (name of keyChoices(updateKeyNames()); track name) {
-                    <c-form-check>
-                      <input
-                        cFormCheckInput
-                        type="checkbox"
-                        [id]="'zone-update-key-' + name"
-                        [checked]="updateKeyNames().includes(name)"
-                        (change)="toggleBoundKey('update', name, $any($event.target).checked)"
-                      />
-                      <label cFormCheckLabel [for]="'zone-update-key-' + name">{{ name }}</label>
-                    </c-form-check>
-                  } @empty {
-                    <p class="hint">No TSIG keys to choose from.</p>
-                  }
-                  <p class="hint">With none ticked, no key can update this zone.</p>
-                </fieldset>
+                @if (showDynamicUpdateFields()) {
+                  <fieldset class="field full-width mb-3" id="zone-update-keys">
+                    <legend class="form-label">Keys allowed to send dynamic updates</legend>
+                    @for (name of keyChoices(updateKeyNames()); track name) {
+                      <c-form-check>
+                        <input
+                          cFormCheckInput
+                          type="checkbox"
+                          [id]="'zone-update-key-' + name"
+                          [checked]="updateKeyNames().includes(name)"
+                          (change)="toggleBoundKey('update', name, $any($event.target).checked)"
+                        />
+                        <label cFormCheckLabel [for]="'zone-update-key-' + name">{{ name }}</label>
+                      </c-form-check>
+                    } @empty {
+                      <p class="hint">No TSIG keys to choose from.</p>
+                    }
+                    <p class="hint">With none ticked, no key can update this zone.</p>
+                  </fieldset>
+                }
                 <fieldset class="field full-width mb-3" id="zone-transfer-keys">
                   <legend class="form-label">
                     Keys allowed to transfer this zone (AXFR and IXFR)
@@ -520,10 +536,7 @@
                       step="4"
                       placeholder="Inherit server default (64)"
                     />
-                    @if (
-                      form.controls.ptrIpv6PrefixLength.hasError('min') ||
-                      form.controls.ptrIpv6PrefixLength.hasError('max')
-                    ) {
+                    @if (form.controls.ptrIpv6PrefixLength.hasError('ptrIpv6PrefixLength')) {
                       <div class="field-error">
                         Must be a multiple of 4 between 16 and 124 inclusive.
                       </div>
