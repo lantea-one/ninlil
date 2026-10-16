@@ -19,16 +19,19 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 ///     listener in <c>Ninlil.Dns.Protocol.DnsCrypt</c> answers. The crypto and wire-format code
 ///     from <c>Server.DnsCrypt</c> (<see cref="DnsCryptCryptoBox" />,
 ///     <see cref="DnsCryptCertificateCodec" />, <see cref="DnsCryptEnvelopeCodec" />) is shared
-///     with the server role. The encrypted query goes over UDP, with TCP as a fallback (see
-///     <see cref="SendUdpAsync" />).
+///     with the server role. The encrypted query goes over UDP; a reply that has
+///     the TC flag set (or fills the receive buffer) is asked again over TCP.
 ///     <para>
 ///         A discovered certificate is not cached: there is no background service tracking the
 ///         upstream's certificate rotation, so every forwarded query discovers it again, at the
 ///         cost of an extra round trip.
 ///     </para>
 ///     <para>
-///         The forwarded query carries a new random message ID, and the decrypted reply must carry
-///         that ID and repeat the question, otherwise the attempt fails with an
+///         Each forwarded query, and the TCP retry of a truncated one, is encrypted anew with its
+///         own key pair, nonce and random message ID. The decrypted reply must carry that ID and
+///         repeat the question. Over UDP any datagram that comes from another source, fails to
+///         decrypt or authenticate, or does not match is ignored and the wait goes on until the
+///         caller's token ends it; over TCP a bad reply fails the attempt with an
 ///         <see cref="InvalidDataException" />. The reply handed back carries the ID of the query
 ///         the caller passed in. Certificate discovery keeps its own plaintext query, protected by
 ///         the certificate signature instead.
@@ -80,6 +83,60 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
             stoppingToken
         );
 
+        DnsMessage response = await ExchangeAsync(
+            certificate,
+            query,
+            endpoint,
+            overTcp: false,
+            stoppingToken
+        );
+
+        if (response is null || response.IsTruncated)
+        {
+            // The UDP answer was cut short (or filled the buffer): ask again over TCP, which has
+            // no size limit. The retry is a new query with its own key pair, nonce and ID.
+            response = await ExchangeAsync(
+                certificate,
+                query,
+                endpoint,
+                overTcp: true,
+                stoppingToken
+            );
+        }
+
+        response.Id = query.Id;
+
+        return response;
+    }
+
+    /// <summary>
+    ///     This method encrypts the query with a fresh client key pair, a fresh nonce half and a
+    ///     fresh message ID, sends it over UDP or TCP and returns the decrypted reply. Every call
+    ///     is a new query, so the UDP and TCP attempts never share a nonce under one key pair (the
+    ///     DNSCrypt v2 specification requires the client nonce to be unique per query under a
+    ///     key pair; unverified, the specification was not reachable).
+    /// </summary>
+    /// <param name="certificate">The certificate the resolver's keys and magic come from.</param>
+    /// <param name="query">The caller's query; its ID is replaced on the wire.</param>
+    /// <param name="endpoint">The upstream's address and port.</param>
+    /// <param name="overTcp">Whether to use TCP instead of UDP.</param>
+    /// <param name="stoppingToken">Ends the attempt, including a wait for a valid UDP reply.</param>
+    /// <returns>
+    ///     The reply, or <see langword="null" /> when a UDP datagram filled the receive buffer and
+    ///     the caller must use TCP.
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    ///     Thrown when a TCP reply does not decrypt or does not answer the query: a stream has no
+    ///     stray datagrams to skip, so the attempt fails.
+    /// </exception>
+    private async Task<DnsMessage> ExchangeAsync(
+        DnsCryptCertificate certificate,
+        DnsMessage query,
+        IPEndPoint endpoint,
+        bool overTcp,
+        CancellationToken stoppingToken
+    )
+    {
         (byte[] clientPublicKey, byte[] clientSecretKey) = DnsCryptCryptoBox.GenerateKeyPair(
             certificate.EsVersion
         );
@@ -98,29 +155,83 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
             DnsMessageWriter.Write(sent)
         );
 
-        byte[] responsePacket = await SendUdpAsync(queryPacket, endpoint, stoppingToken);
+        // Decrypts a packet and checks it answers "sent". Throws CryptographicException or
+        // FormatException for a packet that is not an authentic reply, and returns null for an
+        // authentic one that answers another question or ID.
+        DnsMessage Decode(ReadOnlySpan<byte> packet)
+        {
+            byte[] plaintext = DnsCryptEnvelopeCodec.DecryptResponse(
+                certificate.EsVersion,
+                packet,
+                clientNonceHalf,
+                clientSecretKey,
+                certificate.ResolverPublicKey
+            );
+            DnsMessage reply = DnsMessageReader.Read(plaintext);
 
-        if (responsePacket is null)
-            responsePacket = await SendTcpAsync(queryPacket, endpoint, stoppingToken);
+            return reply.Id == sent.Id && ForwarderQueryMessage.IsReplyTo(sent, reply)
+                ? reply
+                : null;
+        }
 
-        byte[] plaintext = DnsCryptEnvelopeCodec.DecryptResponse(
-            certificate.EsVersion,
-            responsePacket,
-            clientNonceHalf,
-            clientSecretKey,
-            certificate.ResolverPublicKey
-        );
+        if (overTcp)
+        {
+            byte[] responsePacket = await SendTcpAsync(queryPacket, endpoint, stoppingToken);
 
-        DnsMessage response = DnsMessageReader.Read(plaintext);
+            try
+            {
+                return Decode(responsePacket)
+                    ?? throw new InvalidDataException(
+                        "The DNSCrypt response does not match the query that was sent."
+                    );
+            }
+            catch (Exception exception)
+                when (exception is CryptographicException or FormatException)
+            {
+                throw new InvalidDataException(
+                    "The DNSCrypt TCP response could not be decrypted.",
+                    exception
+                );
+            }
+        }
 
-        if (response.Id != sent.Id || !ForwarderQueryMessage.IsReplyTo(sent, response))
-            throw new InvalidDataException(
-                "The DNSCrypt response does not match the query that was sent."
+        using Socket socket = new(endpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        await socket.SendToAsync(queryPacket, endpoint, stoppingToken);
+
+        byte[] receiveBuffer = new byte[MaximumDatagramSize];
+
+        while (true)
+        {
+            SocketReceiveFromResult result = await socket.ReceiveFromAsync(
+                receiveBuffer,
+                endpoint,
+                stoppingToken
             );
 
-        response.Id = query.Id;
+            // The socket is unconnected, so anyone can send to it. A datagram from elsewhere,
+            // one that fails authentication, or one that answers another query is dropped and the
+            // wait continues until the caller's token ends it (RFC 5452 §9.1 for the plain case).
+            if (!Equals(result.RemoteEndPoint, endpoint))
+                continue;
 
-        return response;
+            if (result.ReceivedBytes >= MaximumDatagramSize)
+                return null;
+
+            DnsMessage reply;
+
+            try
+            {
+                reply = Decode(receiveBuffer.AsSpan(0, result.ReceivedBytes));
+            }
+            catch (Exception exception)
+                when (exception is CryptographicException or FormatException)
+            {
+                continue;
+            }
+
+            if (reply is not null)
+                return reply;
+        }
     }
 
     /// <summary>
@@ -243,34 +354,6 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
         );
 
         return DnsMessageReader.Read(receiveBuffer.AsSpan(0, result.ReceivedBytes));
-    }
-
-    /// <summary>
-    ///     This method sends an encrypted packet over UDP and returns the first datagram received,
-    ///     still encrypted. It returns <see langword="null" />, so the caller retries over TCP,
-    ///     only when the datagram fills the receive buffer; a decrypted answer with the TC flag set
-    ///     is not retried.
-    /// </summary>
-    private static async Task<byte[]> SendUdpAsync(
-        byte[] packet,
-        IPEndPoint endpoint,
-        CancellationToken stoppingToken
-    )
-    {
-        using Socket socket = new(endpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-        await socket.SendToAsync(packet, endpoint, stoppingToken);
-
-        byte[] receiveBuffer = new byte[MaximumDatagramSize];
-        SocketReceiveFromResult result = await socket.ReceiveFromAsync(
-            receiveBuffer,
-            endpoint,
-            stoppingToken
-        );
-
-        if (result.ReceivedBytes >= MaximumDatagramSize)
-            return null;
-
-        return receiveBuffer.AsSpan(0, result.ReceivedBytes).ToArray();
     }
 
     /// <summary>
