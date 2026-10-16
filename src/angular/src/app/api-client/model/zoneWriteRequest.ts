@@ -29,11 +29,11 @@ export interface ZoneWriteRequest {
     dnssecAlgorithm?: DnssecAlgorithmEnum;
     denialOfExistenceMode?: DnssecDenialOfExistenceModeEnum;
     /**
-     * How many additional times a signed zone\'s NSEC3 chain hashes.
+     * How many additional times a signed zone\'s NSEC3 chain hashes. Defaults to 0 (RFC 9276 §3.1); at most 150, because validators may treat a higher count as insecure.
      */
     nsec3Iterations?: number;
     /**
-     * A signed zone\'s NSEC3 salt, as hexadecimal text.
+     * A signed zone\'s NSEC3 salt, as hexadecimal text. Leave it empty: RFC 9276 §3.1 advises against a salt.
      */
     nsec3SaltHex?: string | null;
     /**
@@ -57,7 +57,7 @@ export interface ZoneWriteRequest {
      */
     tsigKeyName?: string | null;
     /**
-     * Whether the zone accepts RFC 2136 dynamic updates.
+     * Whether the zone accepts RFC 2136 dynamic updates. Applies to Primary and CloudPrimary zones. A CloudPrimary zone pushes an accepted update to its provider within moments and refuses an update that adds a record type the providers cannot hold (anything but A, AAAA, CNAME, MX, NS, TXT, SRV and CAA).
      */
     dynamicUpdateEnabled?: boolean;
     /**

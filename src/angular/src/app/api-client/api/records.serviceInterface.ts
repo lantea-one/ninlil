@@ -82,7 +82,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, extraHttpRequestParams?: any): Observable<RecordDetail>;
 
     /**
-     * This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Changing &#x60;type&#x60; without new &#x60;data&#x60; re-checks the existing data against the new type and returns 400 if it does not fit, and 409 when the patch would change the type to or from SOA or rename the SOA record. Requires &#x60;zones:write&#x60;.
+     * This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Changing &#x60;type&#x60; without new &#x60;data&#x60; re-checks the existing data against the new type and returns 400 if it does not fit (as does new APL data that is not in canonical form, RFC 3123 §4), and 409 when the patch would change the type to or from SOA or rename the SOA record. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint patch /api/zones/{zoneId}/records/{id}
 * @param requestParameters
@@ -90,7 +90,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdPatch(requestParameters: ApiZonesZoneIdRecordsIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action replaces a record\&#39;s fields, keeping its id. Returns 400 when the data does not fit the record type and 404 when the record does not exist or belongs to another zone, and 409 when the edit would change the type to or from SOA or rename the SOA record (a zone has exactly one SOA). Requires &#x60;zones:write&#x60;.
+     * This action replaces a record\&#39;s fields, keeping its id. Returns 400 when the data does not fit the record type (an APL item must be in canonical form, RFC 3123 §4) and 404 when the record does not exist or belongs to another zone, and 409 when the edit would change the type to or from SOA or rename the SOA record (a zone has exactly one SOA). Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint put /api/zones/{zoneId}/records/{id}
 * @param requestParameters
@@ -98,7 +98,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdPut(requestParameters: ApiZonesZoneIdRecordsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds a record to the zone. A zone\&#39;s first record must be its SOA, since without it there is no serial to advance; that first record bootstraps the zone through M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken), and later records go through M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken,Ninlil.Dns.Common.Wire.DnsResourceRecord). Returns 400 when the first record is not an SOA or the data does not fit the record type, 404 for an unknown zone, and 409 for a second SOA. Requires &#x60;zones:write&#x60;.
+     * This action adds a record to the zone. A zone\&#39;s first record must be its SOA, since without it there is no serial to advance; that first record bootstraps the zone through M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken), and later records go through M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken,Ninlil.Dns.Common.Wire.DnsResourceRecord). Returns 400 when the first record is not an SOA or the data does not fit the record type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and 409 for a second SOA. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones/{zoneId}/records
 * @param requestParameters

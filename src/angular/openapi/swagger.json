@@ -21202,7 +21202,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken), and later records go through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken,Ninlil.Dns.Common.Wire.DnsResourceRecord). Returns 400 when the first record\nis not an SOA or the data does not fit the record type, 404 for an unknown zone, and 409\nfor a second SOA. Requires `zones:write`.",
+        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken), and later records go through\nM:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken,Ninlil.Dns.Common.Wire.DnsResourceRecord). Returns 400 when the first record\nis not an SOA or the data does not fit the record type (an APL item must be in canonical\nform, RFC 3123 §4), 404 for an unknown zone, and 409\nfor a second SOA. Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -21860,8 +21860,8 @@
                     "data": {
                       "hashAlgorithm": 1,
                       "isOptOut": false,
-                      "iterations": 10,
-                      "salt": "obLD1A==",
+                      "iterations": 0,
+                      "salt": "",
                       "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                       "types": [
                         "A",
@@ -21883,8 +21883,8 @@
                     "timeToLiveSeconds": 3600,
                     "data": {
                       "hashAlgorithm": 1,
-                      "iterations": 10,
-                      "salt": "obLD1A=="
+                      "iterations": 0,
+                      "salt": ""
                     },
                     "class": "IN",
                     "isDisabled": false,
@@ -22538,8 +22538,8 @@
                     "data": {
                       "hashAlgorithm": 1,
                       "isOptOut": false,
-                      "iterations": 10,
-                      "salt": "obLD1A==",
+                      "iterations": 0,
+                      "salt": "",
                       "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                       "types": [
                         "A",
@@ -22561,8 +22561,8 @@
                     "timeToLiveSeconds": 3600,
                     "data": {
                       "hashAlgorithm": 1,
-                      "iterations": 10,
-                      "salt": "obLD1A=="
+                      "iterations": 0,
+                      "salt": ""
                     },
                     "class": "IN",
                     "isDisabled": false,
@@ -23216,8 +23216,8 @@
                     "data": {
                       "hashAlgorithm": 1,
                       "isOptOut": false,
-                      "iterations": 10,
-                      "salt": "obLD1A==",
+                      "iterations": 0,
+                      "salt": "",
                       "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                       "types": [
                         "A",
@@ -23239,8 +23239,8 @@
                     "timeToLiveSeconds": 3600,
                     "data": {
                       "hashAlgorithm": 1,
-                      "iterations": 10,
-                      "salt": "obLD1A=="
+                      "iterations": 0,
+                      "salt": ""
                     },
                     "class": "IN",
                     "isDisabled": false,
@@ -24043,8 +24043,8 @@
                       "data": {
                         "hashAlgorithm": 1,
                         "isOptOut": false,
-                        "iterations": 10,
-                        "salt": "obLD1A==",
+                        "iterations": 0,
+                        "salt": "",
                         "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                         "types": [
                           "A",
@@ -24070,8 +24070,8 @@
                       "timeToLiveSeconds": 3600,
                       "data": {
                         "hashAlgorithm": 1,
-                        "iterations": 10,
-                        "salt": "obLD1A=="
+                        "iterations": 0,
+                        "salt": ""
                       },
                       "isDisabled": false,
                       "comments": "Published at this zone's own apex so a resolver knows how to compute the matching NSEC3 hash itself.",
@@ -24869,8 +24869,8 @@
                       "data": {
                         "hashAlgorithm": 1,
                         "isOptOut": false,
-                        "iterations": 10,
-                        "salt": "obLD1A==",
+                        "iterations": 0,
+                        "salt": "",
                         "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                         "types": [
                           "A",
@@ -24896,8 +24896,8 @@
                       "timeToLiveSeconds": 3600,
                       "data": {
                         "hashAlgorithm": 1,
-                        "iterations": 10,
-                        "salt": "obLD1A=="
+                        "iterations": 0,
+                        "salt": ""
                       },
                       "isDisabled": false,
                       "comments": "Published at this zone's own apex so a resolver knows how to compute the matching NSEC3 hash itself.",
@@ -25695,8 +25695,8 @@
                       "data": {
                         "hashAlgorithm": 1,
                         "isOptOut": false,
-                        "iterations": 10,
-                        "salt": "obLD1A==",
+                        "iterations": 0,
+                        "salt": "",
                         "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                         "types": [
                           "A",
@@ -25722,8 +25722,8 @@
                       "timeToLiveSeconds": 3600,
                       "data": {
                         "hashAlgorithm": 1,
-                        "iterations": 10,
-                        "salt": "obLD1A=="
+                        "iterations": 0,
+                        "salt": ""
                       },
                       "isDisabled": false,
                       "comments": "Published at this zone's own apex so a resolver knows how to compute the matching NSEC3 hash itself.",
@@ -26556,8 +26556,8 @@
                       "data": {
                         "hashAlgorithm": 1,
                         "isOptOut": false,
-                        "iterations": 10,
-                        "salt": "obLD1A==",
+                        "iterations": 0,
+                        "salt": "",
                         "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                         "types": [
                           "A",
@@ -26583,8 +26583,8 @@
                       "timeToLiveSeconds": 3600,
                       "data": {
                         "hashAlgorithm": 1,
-                        "iterations": 10,
-                        "salt": "obLD1A=="
+                        "iterations": 0,
+                        "salt": ""
                       },
                       "isDisabled": false,
                       "comments": "Published at this zone's own apex so a resolver knows how to compute the matching NSEC3 hash itself.",
@@ -27382,8 +27382,8 @@
                       "data": {
                         "hashAlgorithm": 1,
                         "isOptOut": false,
-                        "iterations": 10,
-                        "salt": "obLD1A==",
+                        "iterations": 0,
+                        "salt": "",
                         "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                         "types": [
                           "A",
@@ -27409,8 +27409,8 @@
                       "timeToLiveSeconds": 3600,
                       "data": {
                         "hashAlgorithm": 1,
-                        "iterations": 10,
-                        "salt": "obLD1A=="
+                        "iterations": 0,
+                        "salt": ""
                       },
                       "isDisabled": false,
                       "comments": "Published at this zone's own apex so a resolver knows how to compute the matching NSEC3 hash itself.",
@@ -28208,8 +28208,8 @@
                       "data": {
                         "hashAlgorithm": 1,
                         "isOptOut": false,
-                        "iterations": 10,
-                        "salt": "obLD1A==",
+                        "iterations": 0,
+                        "salt": "",
                         "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                         "types": [
                           "A",
@@ -28235,8 +28235,8 @@
                       "timeToLiveSeconds": 3600,
                       "data": {
                         "hashAlgorithm": 1,
-                        "iterations": 10,
-                        "salt": "obLD1A=="
+                        "iterations": 0,
+                        "salt": ""
                       },
                       "isDisabled": false,
                       "comments": "Published at this zone's own apex so a resolver knows how to compute the matching NSEC3 hash itself.",
@@ -28255,7 +28255,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action replaces a record's fields, keeping its id. Returns 400 when the data does\nnot fit the record type and 404 when the record does not exist or belongs to another\nzone, and 409 when the edit would change the type to or from SOA or rename\nthe SOA record (a zone has exactly one SOA). Requires `zones:write`.",
+        "summary": "This action replaces a record's fields, keeping its id. Returns 400 when the data does\nnot fit the record type (an APL item must be in canonical form, RFC 3123 §4) and 404 when the record does not exist or belongs to another\nzone, and 409 when the edit would change the type to or from SOA or rename\nthe SOA record (a zone has exactly one SOA). Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -28922,8 +28922,8 @@
                     "data": {
                       "hashAlgorithm": 1,
                       "isOptOut": false,
-                      "iterations": 10,
-                      "salt": "obLD1A==",
+                      "iterations": 0,
+                      "salt": "",
                       "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                       "types": [
                         "A",
@@ -28945,8 +28945,8 @@
                     "timeToLiveSeconds": 3600,
                     "data": {
                       "hashAlgorithm": 1,
-                      "iterations": 10,
-                      "salt": "obLD1A=="
+                      "iterations": 0,
+                      "salt": ""
                     },
                     "class": "IN",
                     "isDisabled": false,
@@ -29600,8 +29600,8 @@
                     "data": {
                       "hashAlgorithm": 1,
                       "isOptOut": false,
-                      "iterations": 10,
-                      "salt": "obLD1A==",
+                      "iterations": 0,
+                      "salt": "",
                       "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                       "types": [
                         "A",
@@ -29623,8 +29623,8 @@
                     "timeToLiveSeconds": 3600,
                     "data": {
                       "hashAlgorithm": 1,
-                      "iterations": 10,
-                      "salt": "obLD1A=="
+                      "iterations": 0,
+                      "salt": ""
                     },
                     "class": "IN",
                     "isDisabled": false,
@@ -30278,8 +30278,8 @@
                     "data": {
                       "hashAlgorithm": 1,
                       "isOptOut": false,
-                      "iterations": 10,
-                      "salt": "obLD1A==",
+                      "iterations": 0,
+                      "salt": "",
                       "nextHashedOwnerName": "v99z0bdbfWVqvV/2g1WVvFjrjxA=",
                       "types": [
                         "A",
@@ -30301,8 +30301,8 @@
                     "timeToLiveSeconds": 3600,
                     "data": {
                       "hashAlgorithm": 1,
-                      "iterations": 10,
-                      "salt": "obLD1A=="
+                      "iterations": 0,
+                      "salt": ""
                     },
                     "class": "IN",
                     "isDisabled": false,
@@ -30324,7 +30324,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a\nJSON `null` clears a nullable field, and any other value replaces it. Changing\n`type` without new `data` re-checks the existing data against the new type and\nreturns 400 if it does not fit, and 409 when the patch would change the type to or\nfrom SOA or rename the SOA record. Requires `zones:write`.",
+        "summary": "This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a\nJSON `null` clears a nullable field, and any other value replaces it. Changing\n`type` without new `data` re-checks the existing data against the new type and\nreturns 400 if it does not fit (as does new APL data that is not in canonical form, RFC\n3123 §4), and 409 when the patch would change the type to or\nfrom SOA or rename the SOA record. Requires `zones:write`.",
         "parameters": [
           {
             "name": "zoneId",
@@ -36157,8 +36157,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -36243,8 +36243,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -36329,8 +36329,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -36410,7 +36410,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action creates a zone with no records, not even an SOA; add them through\nNinlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name, a PTR prefix\nlength or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires `zones:write`.",
+        "summary": "This action creates a zone with no records, not even an SOA; add them through\nNinlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name, a PTR prefix\nlength, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires `zones:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -36426,8 +36426,8 @@
                     "isDnssecSigned": true,
                     "dnssecAlgorithm": "ECDSAP256SHA256",
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
-                    "nsec3SaltHex": "a1b2c3d4",
+                    "nsec3Iterations": 0,
+                    "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
                     "forwarderAddresses": null,
@@ -36464,7 +36464,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": [
@@ -36498,7 +36498,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
@@ -36539,8 +36539,8 @@
                     "isDnssecSigned": true,
                     "dnssecAlgorithm": "ECDSAP256SHA256",
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
-                    "nsec3SaltHex": "a1b2c3d4",
+                    "nsec3Iterations": 0,
+                    "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
                     "forwarderAddresses": null,
@@ -36577,7 +36577,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": [
@@ -36611,7 +36611,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
@@ -36652,8 +36652,8 @@
                     "isDnssecSigned": true,
                     "dnssecAlgorithm": "ECDSAP256SHA256",
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
-                    "nsec3SaltHex": "a1b2c3d4",
+                    "nsec3Iterations": 0,
+                    "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
                     "forwarderAddresses": null,
@@ -36690,7 +36690,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": [
@@ -36724,7 +36724,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
@@ -36772,8 +36772,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -36859,8 +36859,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -36946,8 +36946,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -37059,8 +37059,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -37146,8 +37146,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -37233,8 +37233,8 @@
                       "isDnssecSigned": true,
                       "dnssecAlgorithm": "ECDSAP256SHA256",
                       "denialOfExistenceMode": "NSEC3",
-                      "nsec3Iterations": 10,
-                      "nsec3SaltHex": "a1b2c3d4",
+                      "nsec3Iterations": 0,
+                      "nsec3SaltHex": null,
                       "isDisabled": false,
                       "primaryServerAddresses": null,
                       "forwarderAddresses": null,
@@ -37341,8 +37341,8 @@
                     "isDnssecSigned": true,
                     "dnssecAlgorithm": "ECDSAP256SHA256",
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
-                    "nsec3SaltHex": "a1b2c3d4",
+                    "nsec3Iterations": 0,
+                    "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
                     "forwarderAddresses": null,
@@ -37379,7 +37379,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": [
@@ -37413,7 +37413,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
@@ -37454,8 +37454,8 @@
                     "isDnssecSigned": true,
                     "dnssecAlgorithm": "ECDSAP256SHA256",
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
-                    "nsec3SaltHex": "a1b2c3d4",
+                    "nsec3Iterations": 0,
+                    "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
                     "forwarderAddresses": null,
@@ -37492,7 +37492,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": [
@@ -37526,7 +37526,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
@@ -37567,8 +37567,8 @@
                     "isDnssecSigned": true,
                     "dnssecAlgorithm": "ECDSAP256SHA256",
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
-                    "nsec3SaltHex": "a1b2c3d4",
+                    "nsec3Iterations": 0,
+                    "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
                     "forwarderAddresses": null,
@@ -37605,7 +37605,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": [
@@ -37639,7 +37639,7 @@
                     "isDnssecSigned": false,
                     "dnssecAlgorithm": null,
                     "denialOfExistenceMode": "NSEC3",
-                    "nsec3Iterations": 10,
+                    "nsec3Iterations": 0,
                     "nsec3SaltHex": null,
                     "isDisabled": false,
                     "primaryServerAddresses": null,
@@ -37679,7 +37679,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action updates a zone's settings as an RFC 7396 merge patch: an absent field is\nunchanged, a JSON `null` clears a nullable field, and any other value replaces it.\nReturns 400 for an invalid name or PTR prefix length, 404 for an unknown id and 409 when\na new name is taken. Requires `zones:write`.",
+        "summary": "This action updates a zone's settings as an RFC 7396 merge patch: an absent field is\nunchanged, a JSON `null` clears a nullable field, and any other value replaces it.\nReturns 400 for an invalid name, PTR prefix length or NSEC3 iteration count (above 150),\n404 for an unknown id and 409 when a new name is taken. Requires `zones:write`.",
         "parameters": [
           {
             "name": "id",
@@ -45935,12 +45935,12 @@
           },
           "nsec3Iterations": {
             "type": "integer",
-            "description": "How many additional times a signed zone's NSEC3 chain hashes.",
+            "description": "How many additional times a signed zone's NSEC3 chain hashes. A new zone starts at 0 (RFC 9276 §3.1); a zone saved earlier keeps its count.",
             "format": "int32"
           },
           "nsec3SaltHex": {
             "type": "string",
-            "description": "A signed zone's NSEC3 salt, as hexadecimal text.",
+            "description": "A signed zone's NSEC3 salt, as hexadecimal text; empty or null means no salt.",
             "nullable": true
           },
           "isDisabled": {
@@ -45978,7 +45978,7 @@
           },
           "dynamicUpdateEnabled": {
             "type": "boolean",
-            "description": "Whether the zone accepts RFC 2136 dynamic updates."
+            "description": "Whether the zone accepts RFC 2136 dynamic updates. Applies to Primary and CloudPrimary\nzones. A CloudPrimary zone pushes an accepted update to its provider within moments and\nrefuses an update that adds a record type the providers cannot hold (anything but A, AAAA,\nCNAME, MX, NS, TXT, SRV and CAA)."
           },
           "updateTsigKeyNames": {
             "type": "array",
@@ -46244,12 +46244,12 @@
           },
           "nsec3Iterations": {
             "type": "integer",
-            "description": "How many additional times a signed zone's NSEC3 chain hashes.",
+            "description": "How many additional times a signed zone's NSEC3 chain hashes. Defaults to 0 (RFC 9276 §3.1); at most 150, because validators may treat a higher count as insecure.",
             "format": "int32"
           },
           "nsec3SaltHex": {
             "type": "string",
-            "description": "A signed zone's NSEC3 salt, as hexadecimal text.",
+            "description": "A signed zone's NSEC3 salt, as hexadecimal text. Leave it empty: RFC 9276 §3.1 advises against a salt.",
             "nullable": true
           },
           "isDisabled": {
@@ -46287,7 +46287,7 @@
           },
           "dynamicUpdateEnabled": {
             "type": "boolean",
-            "description": "Whether the zone accepts RFC 2136 dynamic updates."
+            "description": "Whether the zone accepts RFC 2136 dynamic updates. Applies to Primary and CloudPrimary\nzones. A CloudPrimary zone pushes an accepted update to its provider within moments and\nrefuses an update that adds a record type the providers cannot hold (anything but A, AAAA,\nCNAME, MX, NS, TXT, SRV and CAA)."
           },
           "comments": {
             "type": "string",

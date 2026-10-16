@@ -457,7 +457,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action updates a zone\&#39;s settings as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Returns 400 for an invalid name or PTR prefix length, 404 for an unknown id and 409 when a new name is taken. Requires &#x60;zones:write&#x60;.
+     * This action updates a zone\&#39;s settings as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Returns 400 for an invalid name, PTR prefix length or NSEC3 iteration count (above 150), 404 for an unknown id and 409 when a new name is taken. Requires &#x60;zones:write&#x60;.
      * @endpoint patch /api/zones/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -725,7 +725,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action creates a zone with no records, not even an SOA; add them through Ninlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name, a PTR prefix length or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
+     * This action creates a zone with no records, not even an SOA; add them through Ninlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name, a PTR prefix length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
