@@ -2,7 +2,9 @@ using System.Buffers.Text;
 using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Net.Http.Headers;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Pipeline;
 
 // Define our namespace.
@@ -32,8 +34,9 @@ internal static class DnsOverHttpsRequestHandler
 {
     /// <summary>
     ///     This constant contains the media type RFC 8484 §6 registers for a wire-format DNS
-    ///     message over HTTP, required on a POST body and set on every response. A POST whose
-    ///     Content-Type differs in any way, parameters included, gets <c>415</c>.
+    ///     message over HTTP, required on a POST body and set on every response. A POST matches
+    ///     it case-insensitively and whatever the parameters (RFC 9110 §8.3.1, for example
+    ///     <c>; charset=utf-8</c>); any other media type, or none, gets <c>415</c>.
     /// </summary>
     private const string DnsMessageContentType = "application/dns-message";
 
@@ -122,7 +125,7 @@ internal static class DnsOverHttpsRequestHandler
             return;
         }
 
-        if (context.Request.ContentType != DnsMessageContentType)
+        if (!IsDnsMessageContentType(context.Request.ContentType))
         {
             context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
             return;
@@ -168,7 +171,7 @@ internal static class DnsOverHttpsRequestHandler
             new DnsInboundMessage(
                 requestBytes,
                 DnsTransportProtocolEnum.Https,
-                context.Connection.RemoteIpAddress ?? IPAddress.Loopback,
+                ClientAddressOf(context),
                 (responseBytes, _) =>
                 {
                     outcomeSource.TrySetResult((responseBytes.ToArray(), null));
@@ -214,6 +217,79 @@ internal static class DnsOverHttpsRequestHandler
         }
 
         context.Response.ContentType = DnsMessageContentType;
+        context.Response.Headers[HeaderNames.CacheControl] = CacheControlFor(outcome.Response);
         await context.Response.Body.WriteAsync(outcome.Response, context.RequestAborted);
+    }
+
+    /// <summary>
+    ///     This method returns the address the pipeline sees as the client: the connection's
+    ///     remote address (which the forwarded-headers handling may have set from a trusted
+    ///     proxy), or the unspecified address <c>::</c> when the connection has none. The
+    ///     fallback is not loopback, because access rules and grants may trust loopback.
+    /// </summary>
+    /// <param name="context">The current HTTP request.</param>
+    internal static IPAddress ClientAddressOf(HttpContext context) =>
+        context.Connection.RemoteIpAddress ?? IPAddress.IPv6None;
+
+    /// <summary>
+    ///     This method tells whether a Content-Type header names <c>application/dns-message</c>:
+    ///     the media type is compared case-insensitively and its parameters are ignored
+    ///     (RFC 9110 §8.3.1). A missing or unparsable header does not match.
+    /// </summary>
+    private static bool IsDnsMessageContentType(string contentType) =>
+        MediaTypeHeaderValue.TryParse(contentType, out MediaTypeHeaderValue parsed)
+        && parsed.MediaType.Equals(DnsMessageContentType, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     This method builds the <c>Cache-Control</c> value for a reply (RFC 8484 §5.1). The
+    ///     freshness lifetime is the smallest TTL in the Answer section; with no answer records
+    ///     and an SOA in the Authority section it is the smaller of the SOA's TTL and its
+    ///     MINIMUM field (RFC 2308 §5); otherwise (SERVFAIL, REFUSED, an empty reply without an
+    ///     SOA, bytes that do not decode) it is 0. The value is <c>private</c> because an answer
+    ///     depends on who asks (filters, rewrites, schedules, access rules, the
+    ///     <c>{clientid}</c> path), so a shared HTTP cache must not hand it to another client.
+    /// </summary>
+    /// <param name="response">The wire-format reply.</param>
+    private static string CacheControlFor(byte[] response)
+    {
+        uint maxAge = 0;
+
+        try
+        {
+            DnsMessage message = DnsMessageReader.Read(response);
+
+            // Only NOERROR and NXDOMAIN replies are worth caching; SERVFAIL, REFUSED and the
+            // rest are errors that must be asked again.
+            bool cacheable =
+                message.ResponseCode is DnsResponseCodeEnum.NoError or DnsResponseCodeEnum.NxDomain;
+
+            if (cacheable && message.Answers.Count > 0)
+            {
+                maxAge = message.Answers.Min(record => record.TimeToLive);
+            }
+            else if (cacheable)
+            {
+                DnsResourceRecord soa = message.AuthorityRecords.FirstOrDefault(record =>
+                    record.Type == DnsResourceRecordTypeEnum.Soa && record.Data.Length >= 20
+                );
+
+                if (soa is not null)
+                {
+                    // MINIMUM is the last of the five 32-bit fields that end the SOA RDATA
+                    // (RFC 1035 §3.3.13), so it is the final four bytes whatever the names' length.
+                    uint minimum = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(
+                        soa.Data.AsSpan(soa.Data.Length - 4)
+                    );
+                    maxAge = Math.Min(soa.TimeToLive, minimum);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Undecodable bytes are still sent, but nothing may cache them.
+            maxAge = 0;
+        }
+
+        return $"private, max-age={maxAge}";
     }
 }

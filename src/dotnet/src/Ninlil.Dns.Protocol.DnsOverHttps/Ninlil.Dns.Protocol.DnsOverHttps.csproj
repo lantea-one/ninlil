@@ -20,6 +20,11 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- The tests call the handler's internal ClientAddressOf. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Protocol.DnsOverHttps.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
