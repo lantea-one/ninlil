@@ -33324,7 +33324,7 @@
         "tags": [
           "TransportSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsCrypt` as an\nRFC 7396 merge patch. `enable` starts or stops the UDP and TCP listeners and the\ncertificate rotation loop at once; every other field needs a restart of those services.\nReturns 400 for\na field of the wrong JSON type, a port outside 0-65535, a connection or stream limit\nbelow 1, an idle timeout outside 1 second to 1 day, a certificate rotation interval, validity duration or clock-skew tolerance\nbeyond the timer limit (rotation and validity must also be positive, validity longer\nthan rotation), an invalid listen address or cipher name, or an empty cipher list.\nRequires `transportsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Protocol:DnsCrypt` as an\nRFC 7396 merge patch. `enable` starts or stops the UDP and TCP listeners and the\ncertificate rotation loop at once; every other field needs a restart of those services.\nReturns 400 for\na field of the wrong JSON type, a port outside 0-65535, a connection or stream limit\nbelow 1, an idle timeout outside 1 second to 1 day, a certificate rotation interval, validity duration or clock-skew tolerance\nbeyond the timer limit (rotation and validity must also be positive, validity longer\nthan rotation), an invalid listen address or cipher name, an empty cipher list, or a\n`providerName` that is not a domain name (with or without the\n`2.dnscrypt-cert.` prefix; null clears it). Requires\n`transportsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
