@@ -184,6 +184,64 @@ public class AccessControlRuleCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    ///     A bare IPv4 or IPv6 address, or a CIDR network, is a valid rule target and is stored as
+    ///     entered.
+    /// </summary>
+    [Theory]
+    [InlineData("192.0.2.7")]
+    [InlineData("2001:db8::7")]
+    [InlineData("192.0.2.0/24")]
+    public async Task Create_WithABareAddressOrACidr_IsAcceptedAndStoredAsEntered(string cidr)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/access-control-rules",
+            new
+            {
+                name = $"bare-{Guid.NewGuid():N}",
+                cidr,
+                capabilities = new[] { "RecursionAccess" },
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        DnsAccessControlRuleDetail created =
+            await response.Content.ReadFromJsonAsync<DnsAccessControlRuleDetail>();
+        Assert.Equal(cidr, created.Cidr);
+        await client.DeleteAsync($"/api/access-control-rules/{created.Id}");
+    }
+
+    /// <summary>
+    ///     A malformed address, a zone-scoped address and an out-of-range prefix length are
+    ///     rejected with the one message that names the accepted forms.
+    /// </summary>
+    [Theory]
+    [InlineData("192.0.2.300")]
+    [InlineData("fe80::1%2")]
+    [InlineData("192.0.2.0/33")]
+    public async Task Create_WithAMalformedAddress_ReturnsBadRequestNamingTheAcceptedForms(
+        string cidr
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/access-control-rules",
+            new
+            {
+                name = $"bad-{Guid.NewGuid():N}",
+                cidr,
+                capabilities = new[] { "RecursionAccess" },
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("is not a valid IP address or CIDR network (for example 192.0.2.7", body);
+    }
+
     [Fact]
     public async Task Create_WithNoCapabilities_IsAcceptedAndGrantsNothing()
     {

@@ -15,8 +15,8 @@ public class DnsAccessControlRuleWriteRequestExample
 {
     /// <summary>
     ///     This method returns two rules that between them use both capability names: a trusted /24
-    ///     granted both, and a single /32 host granted only the rate-limit bypass. A single host is
-    ///     written as /32 because a bare address is rejected.
+    ///     granted both, and a single /32 host granted only the rate-limit bypass. A single host may
+    ///     also be written as a bare address (192.168.1.50).
     /// </summary>
     public IEnumerable<SwaggerExample<DnsAccessControlRuleWriteRequest>> GetExamples() =>
         [

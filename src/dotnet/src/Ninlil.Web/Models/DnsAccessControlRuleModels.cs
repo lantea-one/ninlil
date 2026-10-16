@@ -10,10 +10,10 @@ namespace Ninlil.Web.Models;
 /// </summary>
 /// <param name="Name">An operator-chosen, human-readable name for the rule (for example, "Trusted LAN").</param>
 /// <param name="Cidr">
-///     The network the rule applies to, in CIDR notation with a prefix length (a bare address is
-///     rejected; write <c>/32</c> or <c>/128</c> for one host). It must parse with
-///     <see cref="System.Net.IPNetwork.TryParse(string, out System.Net.IPNetwork)" />, the parser
-///     <c>DnsAccessControlRuleCache</c> matches with at query time.
+///     The address or network the rule applies to: a bare IPv4 or IPv6 address (one host, matched
+///     exactly) or a network in CIDR notation. A zone index (<c>fe80::1%2</c>) and an
+///     out-of-range prefix length are rejected with a 400. The value is stored as entered
+///     (trimmed) and matched by <c>DnsAccessControlRuleCache</c> at query time.
 /// </param>
 /// <param name="Capabilities">
 ///     The capabilities the rule grants a client whose source address is in <see cref="Cidr" />,

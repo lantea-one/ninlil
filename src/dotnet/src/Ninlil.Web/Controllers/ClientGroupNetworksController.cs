@@ -6,6 +6,7 @@ using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.ClientGroupNetworks;
 using Ninlil.Web.Models;
 using Ninlil.Web.Routing;
+using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -93,7 +94,7 @@ public class ClientGroupNetworksController(
 
     /// <summary>
     ///     This action adds a member to the group. Returns 400 unless exactly one of <c>cidr</c>
-    ///     and <c>clientId</c> is given or when the CIDR does not parse, and 404 for an unknown
+    ///     and <c>clientId</c> is given or when the address or CIDR network does not parse, and 404 for an unknown
     ///     group. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
@@ -119,7 +120,7 @@ public class ClientGroupNetworksController(
         {
             Id = Guid.NewGuid(),
             ClientGroupId = groupId,
-            Cidr = request.Cidr,
+            Cidr = request.Cidr?.Trim(),
             ClientId = request.ClientId,
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
@@ -158,7 +159,7 @@ public class ClientGroupNetworksController(
         if (!TryValidateRequest(request?.Cidr, request?.ClientId, out string error))
             throw new ValidationException(error);
 
-        network.Cidr = request.Cidr;
+        network.Cidr = request.Cidr?.Trim();
         network.ClientId = request.ClientId;
 
         networkRepository.Update(network);
@@ -190,8 +191,8 @@ public class ClientGroupNetworksController(
 
     /// <summary>
     ///     This method checks that exactly one of <c>Cidr</c> and <c>ClientId</c> is set and that a
-    ///     CIDR parses with <c>System.Net.IPNetwork</c>, the parser <c>DnsFilterEngine</c> matches
-    ///     with, so an accepted network can match. A ClientID is an operator-chosen label matched
+    ///     value is a bare IP address or a CIDR network (<see cref="NetworkEntryFormat" />), the
+    ///     forms <c>ClientAddress.NetworkContains</c> matches, so an accepted entry can match. A ClientID is an operator-chosen label matched
     ///     by case-insensitive equality, so it has no format to check.
     /// </summary>
     private static bool TryValidateRequest(string cidr, string clientId, out string error)
@@ -209,9 +210,9 @@ public class ClientGroupNetworksController(
             return false;
         }
 
-        if (hasCidr && !System.Net.IPNetwork.TryParse(cidr, out _))
+        if (hasCidr && !NetworkEntryFormat.TryParse(cidr, out _))
         {
-            error = $"'{cidr}' is not a valid IP address or CIDR network.";
+            error = string.Format(NetworkEntryFormat.InvalidMessageFormat, cidr);
             return false;
         }
 

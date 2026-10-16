@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.ClientIdentity;
 using Ninlil.Web.Examples.ClientStaticAddressMappings;
 using Ninlil.Web.Models;
 using Ninlil.Web.Routing;
+using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -240,9 +241,9 @@ public class DnsClientStaticAddressMappingsController(
             return false;
         }
 
-        if (!TryParseAddressFamily(request.Cidr, out System.Net.Sockets.AddressFamily family))
+        if (!NetworkEntryFormat.TryParse(request.Cidr, out System.Net.Sockets.AddressFamily family))
         {
-            error = $"'{request.Cidr}' is not a valid IP address or CIDR network.";
+            error = string.Format(NetworkEntryFormat.InvalidMessageFormat, request.Cidr);
             return false;
         }
 
@@ -257,36 +258,6 @@ public class DnsClientStaticAddressMappingsController(
             return false;
         }
 
-        return true;
-    }
-
-    /// <summary>
-    ///     This method reports the address family of a bare address or a <c>/</c>-qualified CIDR
-    ///     network, the two forms <see cref="DnsClientStaticAddressMappingEntity.Cidr" /> accepts.
-    /// </summary>
-    private static bool TryParseAddressFamily(
-        string value,
-        out System.Net.Sockets.AddressFamily family
-    )
-    {
-        family = default;
-
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        if (value.Contains('/'))
-        {
-            if (!IPNetwork.TryParse(value, out IPNetwork network))
-                return false;
-
-            family = network.BaseAddress.AddressFamily;
-            return true;
-        }
-
-        if (!IPAddress.TryParse(value, out IPAddress address))
-            return false;
-
-        family = address.AddressFamily;
         return true;
     }
 

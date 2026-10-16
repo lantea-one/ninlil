@@ -15,7 +15,7 @@ public class ClientGroupNetworkWriteRequestExample
     /// <summary>
     ///     This method returns an IPv4 and an IPv6 network, since a group usually has to match
     ///     clients of both families, and a DNS-over-HTTPS ClientID row, which leaves <c>cidr</c>
-    ///     unset. Both networks carry a prefix length; a bare address is rejected.
+    ///     unset. A bare address (192.168.1.7) is accepted as one host.
     /// </summary>
     public IEnumerable<SwaggerExample<ClientGroupNetworkWriteRequest>> GetExamples() =>
         [

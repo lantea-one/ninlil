@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Web.Examples.AccessControlRules;
 using Ninlil.Web.Models;
 using Ninlil.Web.Routing;
+using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -162,7 +163,7 @@ public class DnsAccessControlRulesController(
         {
             Id = Guid.NewGuid(),
             Name = request.Name,
-            Cidr = request.Cidr,
+            Cidr = request.Cidr.Trim(),
             Capabilities = capabilities,
             IsDisabled = request.IsDisabled,
             CreatedAtUtc = DateTimeOffset.UtcNow,
@@ -216,7 +217,7 @@ public class DnsAccessControlRulesController(
             throw new ValidationException(capabilitiesError);
 
         rule.Name = request.Name;
-        rule.Cidr = request.Cidr;
+        rule.Cidr = request.Cidr.Trim();
         rule.Capabilities = capabilities;
         rule.IsDisabled = request.IsDisabled;
         rule.UpdatedAtUtc = DateTimeOffset.UtcNow;
@@ -255,9 +256,9 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This method checks that a CIDR value parses with <see cref="System.Net.IPNetwork" />,
-    ///     the parser <c>ClientGroupNetworksController.TryValidateCidr</c> uses and
-    ///     <c>DnsAccessControlRuleCache</c> matches with, so an accepted rule can match queries.
+    ///     This method checks that the value is a bare IP address or a CIDR network
+    ///     (<see cref="NetworkEntryFormat" />), the forms <c>ClientAddress.NetworkContains</c>
+    ///     matches in <c>DnsAccessControlRuleCache</c>, so an accepted rule can match queries.
     /// </summary>
     private static bool TryValidateCidr(string cidr, out string error)
     {
@@ -269,9 +270,9 @@ public class DnsAccessControlRulesController(
             return false;
         }
 
-        if (!System.Net.IPNetwork.TryParse(cidr, out _))
+        if (!NetworkEntryFormat.TryParse(cidr, out _))
         {
-            error = $"'{cidr}' is not a valid IP address or CIDR network.";
+            error = string.Format(NetworkEntryFormat.InvalidMessageFormat, cidr);
             return false;
         }
 

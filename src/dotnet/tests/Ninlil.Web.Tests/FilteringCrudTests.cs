@@ -621,6 +621,55 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.False(firstAfter.IsDefault);
     }
 
+    /// <summary>
+    ///     A group network accepts a bare IPv4 or IPv6 address as one host and rejects a
+    ///     zone-scoped or malformed address with the shared message.
+    /// </summary>
+    [Fact]
+    public async Task ClientGroupNetwork_WithABareAddress_IsAcceptedAndAMalformedOneIsRejected()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        HttpResponseMessage groupResponse = await client.PostAsJsonAsync(
+            "/api/client-groups",
+            new { name = $"group-bare-{Guid.NewGuid():N}" }
+        );
+        Assert.Equal(HttpStatusCode.Created, groupResponse.StatusCode);
+        ClientGroupDetail group =
+            await groupResponse.Content.ReadFromJsonAsync<ClientGroupDetail>();
+
+        try
+        {
+            foreach (string cidr in new[] { "192.0.2.7", "2001:db8::7" })
+            {
+                HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+                    $"/api/client-groups/{group.Id}/networks",
+                    new { cidr }
+                );
+                Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+                ClientGroupNetworkDetail created =
+                    await createResponse.Content.ReadFromJsonAsync<ClientGroupNetworkDetail>();
+                Assert.Equal(cidr, created.Cidr);
+            }
+
+            foreach (string cidr in new[] { "fe80::1%2", "192.0.2.300", "192.0.2.0/33" })
+            {
+                HttpResponseMessage badResponse = await client.PostAsJsonAsync(
+                    $"/api/client-groups/{group.Id}/networks",
+                    new { cidr }
+                );
+                Assert.Equal(HttpStatusCode.BadRequest, badResponse.StatusCode);
+                Assert.Contains(
+                    "is not a valid IP address or CIDR network (for example 192.0.2.7",
+                    await badResponse.Content.ReadAsStringAsync()
+                );
+            }
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/client-groups/{group.Id}");
+        }
+    }
+
     [Fact]
     public async Task DeletingAClientGroup_RemovesItsOwnNetworksAndListAssignments()
     {

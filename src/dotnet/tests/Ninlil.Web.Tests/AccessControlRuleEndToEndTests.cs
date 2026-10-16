@@ -107,6 +107,57 @@ public class AccessControlRuleEndToEndTests(NinlilDnsWebApplicationFactory facto
     }
 
     /// <summary>
+    ///     A rule written as the bare address (no <c>/32</c>) is accepted and grants the
+    ///     capability to exactly that client. It stops at the cache check, so it needs no
+    ///     recursive lookup.
+    /// </summary>
+    [Fact]
+    public async Task ARuleWrittenAsABareAddress_GrantsItsCapabilityToThatClient()
+    {
+        _ = factory.Server;
+
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/access-control-rules",
+            new
+            {
+                name = $"e2e-bare-{Guid.NewGuid():N}",
+                cidr = MatchingAddress.ToString(),
+                capabilities = new[] { "RecursionAccess" },
+            }
+        );
+        createResponse.EnsureSuccessStatusCode();
+        DnsAccessControlRuleDetail rule =
+            await createResponse.Content.ReadFromJsonAsync<DnsAccessControlRuleDetail>();
+
+        try
+        {
+            DnsAccessControlRuleCache cache =
+                factory.Services.GetRequiredService<DnsAccessControlRuleCache>();
+            await WaitUntilAsync(
+                () =>
+                    cache.HasCapability(
+                        MatchingAddress,
+                        DnsAccessControlCapabilityEnum.RecursionAccess
+                    ),
+                TimeSpan.FromSeconds(10)
+            );
+
+            Assert.False(
+                cache.HasCapability(
+                    IPAddress.Loopback,
+                    DnsAccessControlCapabilityEnum.RecursionAccess
+                )
+            );
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/access-control-rules/{rule.Id}");
+        }
+    }
+
+    /// <summary>
     ///     This method sends one recursion-desired query for <c>example.com. A</c> from a UDP
     ///     socket bound to <paramref name="sourceAddress" /> to the host's Plain DNS listener, and
     ///     returns the response code.

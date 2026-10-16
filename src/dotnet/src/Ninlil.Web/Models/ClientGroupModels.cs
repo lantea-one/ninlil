@@ -53,9 +53,10 @@ public record ClientGroupDetail(
 ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity" />).
 /// </summary>
 /// <param name="Cidr">
-///     The network in CIDR notation, prefix length included (write a single address as
-///     <c>/32</c> or <c>/128</c>; a bare address is rejected). <see langword="null" /> when <paramref name="ClientId" /> is set
-///     instead.
+///     An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a
+///     bare IPv6 address one host (/128). A zone index (<c>fe80::1%2</c>) and an out-of-range
+///     prefix length are rejected with a 400. <see langword="null" /> when
+///     <paramref name="ClientId" /> is set instead.
 /// </param>
 /// <param name="ClientId">
 ///     A DNS-over-HTTPS ClientID label this row matches (see
