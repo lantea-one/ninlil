@@ -252,6 +252,23 @@ describe('DhcpScopeFormComponent', () => {
     expect(fixture.componentInstance.showKindField()).toBeFalse();
   });
 
+  it('hides the gateway field for an IPv6 scope and clears what was typed', async () => {
+    const fixture = await createComponent(null);
+    const component = fixture.componentInstance;
+    const gatewayField = () =>
+      (fixture.nativeElement as HTMLElement).querySelector('#dhcp-scope-gateways');
+
+    component.form.patchValue({ gatewayAddresses: '192.168.1.1' });
+    expect(component.showGatewayField()).toBeTrue();
+
+    component.form.controls.protocolVersion.setValue(InternetProtocolVersionEnum.Ipv6);
+    fixture.detectChanges();
+
+    expect(component.showGatewayField()).toBeFalse();
+    expect(gatewayField()).toBeNull();
+    expect(component.form.controls.gatewayAddresses.value).toBe('');
+  });
+
   it('includes kind/delegatedPrefixLength in the write request for a Prefix Delegation scope', async () => {
     const fixture = await createComponent(null);
     scopesApiSpy.apiDhcpScopesPost.and.returnValue(of({ id: 'scope-1' }));
@@ -505,7 +522,7 @@ describe('DhcpScopeFormComponent', () => {
       expect(fixture.componentInstance.errorMessage()).toContain('Option row 1');
     });
 
-    it('marks tag 0, 255 and the server-owned tags invalid on an IPv4 scope but not on an IPv6 scope', async () => {
+    it('applies the DHCPv4 tag limits on an IPv4 scope and the DHCPv6 code limits on an IPv6 scope', async () => {
       const fixture = await createComponentWithOptionsApis(null);
       fixture.componentInstance.addOptionRow();
       const tagControl = fixture.componentInstance.options.at(0).controls.optionTag;
@@ -517,11 +534,29 @@ describe('DhcpScopeFormComponent', () => {
       tagControl.setValue(66);
       expect(tagControl.valid).toBeTrue();
 
-      tagControl.setValue(0);
       fixture.componentInstance.form.controls.protocolVersion.setValue(
         InternetProtocolVersionEnum.Ipv6,
       );
+      tagControl.setValue(255);
       expect(tagControl.valid).toBeTrue();
+      for (const code of [0, 256, 2, 25, 39]) {
+        tagControl.setValue(code);
+        expect(tagControl.invalid).toBeTrue();
+      }
+      tagControl.setValue(53);
+      expect(tagControl.valid).toBeTrue();
+    });
+
+    it('shows the hints for options 66 and 150 on an IPv4 scope only', async () => {
+      const fixture = await createComponentWithOptionsApis(null);
+      const component = fixture.componentInstance;
+
+      expect(component.optionHint(66)).toContain('as text');
+      expect(component.optionHint(150)).toContain('RFC 5859');
+      expect(component.optionHint(6)).toBeNull();
+
+      component.form.controls.protocolVersion.setValue(InternetProtocolVersionEnum.Ipv6);
+      expect(component.optionHint(66)).toBeNull();
     });
 
     it('blocks save with a row-identifying message when a value is over 255 bytes', async () => {

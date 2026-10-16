@@ -47,7 +47,10 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { planDhcpOptionReconciliation } from '../../shared/dhcp-option-reconcile.util';
 import {
   assertDhcpv4OptionValueLength,
+  assertDhcpv6OptionValueLength,
+  dhcpv4OptionHint,
   dhcpv4OptionTagValidator,
+  dhcpv6OptionCodeValidator,
 } from '../../shared/dhcp-option-rules.util';
 import { decodeDhcpOptionValue, encodeDhcpOptionValue } from '../../shared/dhcp-option-value.util';
 import { joinLines, splitLines } from './dhcp-scope-form.model';
@@ -97,6 +100,10 @@ interface DhcpOptionRowViewState {
  * choice takes a typed tag and a raw hex value. On save the rows are written one call at a time
  * through `/api/dhcp-scopes/{id}/custom-options`, which has no bulk replace
  * ({@link planDhcpOptionReconciliation}).
+ *
+ * <p>Custom options of an IPv6 scope are delivered like those of an IPv4 scope, with the DHCPv6
+ * limits (codes 1 to 255 without the codes the engine owns). The gateway field shows for IPv4
+ * scopes only.
  *
  * <p>Gateways and DNS servers are one address per line ({@link splitLines}, {@link joinLines}).
  * Lease durations are .NET `TimeSpan` strings, such as `1.00:00:00` for one day.
@@ -214,15 +221,27 @@ export class DhcpScopeFormComponent implements OnInit {
     () => this.showKindField() && this.selectedKind() === DhcpScopeKindEnum.PrefixDelegation,
   );
 
+  /** Whether the gateway field is shown: IPv4 scopes only, because DHCPv6 has no router option (Router Advertisements supply routers). */
+  readonly showGatewayField = computed(
+    () => this.selectedProtocolVersion() === InternetProtocolVersionEnum.Ipv4,
+  );
+
   /**
-   * This validator applies the DHCPv4 tag limits (1 to 254, no server-owned tag) to an option
-   * row when the scope is IPv4, and the plain 0 to 255 range otherwise, since the server checks
-   * custom options of an IPv6 scope only for being a byte.
+   * This validator applies the protocol's option limits to an option row: tags 1 to 254 without
+   * the server-owned tags for DHCPv4, codes 1 to 255 without the codes the engine writes itself
+   * for DHCPv6 (the server rejects both on save).
    */
   private readonly optionTagValidator: ValidatorFn = (control) =>
     this.selectedProtocolVersion() === InternetProtocolVersionEnum.Ipv4
       ? dhcpv4OptionTagValidator(control)
-      : (Validators.min(0)(control) ?? Validators.max(255)(control));
+      : dhcpv6OptionCodeValidator(control);
+
+  /** This method returns the hint for a custom option row (IPv4 scopes only), or null. */
+  optionHint(tag: number | null): string | null {
+    return this.selectedProtocolVersion() === InternetProtocolVersionEnum.Ipv4
+      ? dhcpv4OptionHint(tag)
+      : null;
+  }
 
   constructor() {
     this.form.controls.protocolVersion.valueChanges.subscribe((protocolVersion) => {
@@ -230,6 +249,11 @@ export class DhcpScopeFormComponent implements OnInit {
 
       // The tag limits depend on the protocol, so every row is checked again.
       this.options.controls.forEach((row) => row.controls.optionTag.updateValueAndValidity());
+
+      // DHCPv6 has no router option, and the server rejects a gateway on an IPv6 scope.
+      if (protocolVersion === InternetProtocolVersionEnum.Ipv6) {
+        this.form.controls.gatewayAddresses.setValue('');
+      }
 
       // Prefix Delegation exists only for IPv6, so a non-IPv6 scope is reset to AddressAssignment.
       if (
@@ -330,7 +354,10 @@ export class DhcpScopeFormComponent implements OnInit {
       defaultLeaseDuration: value.defaultLeaseDuration,
       maxLeaseDuration: value.maxLeaseDuration,
       isDisabled: value.isDisabled,
-      gatewayAddresses: splitLines(value.gatewayAddresses),
+      gatewayAddresses:
+        value.protocolVersion === InternetProtocolVersionEnum.Ipv4
+          ? splitLines(value.gatewayAddresses)
+          : [],
       dnsServerAddresses: splitLines(value.dnsServerAddresses),
       comments: value.comments || null,
       dnsZoneId: value.dnsZoneId || null,
@@ -472,6 +499,8 @@ export class DhcpScopeFormComponent implements OnInit {
           valueHex = encodeDhcpOptionValue(entry?.valueType ?? null, raw.value);
           if (this.selectedProtocolVersion() === InternetProtocolVersionEnum.Ipv4) {
             assertDhcpv4OptionValueLength(valueHex);
+          } else {
+            assertDhcpv6OptionValueLength(valueHex);
           }
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);

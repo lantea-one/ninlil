@@ -122,17 +122,19 @@
           </div>
         </div>
 
-        <div class="field full-width">
-          <label cLabel for="dhcp-scope-gateways">Gateway addresses</label>
-          <textarea
-            cFormControl
-            id="dhcp-scope-gateways"
-            formControlName="gatewayAddresses"
-            rows="2"
-            placeholder="192.168.1.1"
-          ></textarea>
-          <div cFormText>One address per line, in order of preference.</div>
-        </div>
+        @if (showGatewayField()) {
+          <div class="field full-width">
+            <label cLabel for="dhcp-scope-gateways">Gateway addresses</label>
+            <textarea
+              cFormControl
+              id="dhcp-scope-gateways"
+              formControlName="gatewayAddresses"
+              rows="2"
+              placeholder="192.168.1.1"
+            ></textarea>
+            <div cFormText>One address per line, in order of preference.</div>
+          </div>
+        }
 
         <div class="field full-width">
           <label cLabel for="dhcp-scope-dns-servers">DNS server addresses</label>
@@ -332,6 +334,16 @@
                         />
                         <div cFormText>Seconds.</div>
                       }
+                      @case ('DomainNameList') {
+                        <textarea
+                          cFormControl
+                          rows="2"
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="example.com"
+                        ></textarea>
+                        <div cFormText>One domain name per line.</div>
+                      }
                       @case ('String') {
                         <input
                           cFormControl
@@ -356,6 +368,10 @@
                       is delivered.
                     </div>
                   </div>
+                }
+
+                @if (optionHint(row.controls.optionTag.value); as hint) {
+                  <div cFormText class="field full-width">{{ hint }}</div>
                 }
 
                 <div class="field-row option-row-footer">
