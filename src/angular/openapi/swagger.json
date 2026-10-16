@@ -98,7 +98,7 @@
         "tags": [
           "AcmeSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Acme` and\n`DnsServer:Acme:CaaAutoManagement` as an RFC 7396 merge patch, through\nNinlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. The response note says whether a restart is\nneeded. Returns 400 for an invalid directory URL, domain, contact address or duration, a\nnon-positive interval, or an empty path or organization. Requires\n`acmesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Acme` and\n`DnsServer:Acme:CaaAutoManagement` as an RFC 7396 merge patch, through\nNinlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. The response note says whether a restart is\nneeded. A domain must be a host name of letters, digits and hyphens with at least two\nlabels, optionally with a leading `*.` for a wildcard certificate. Returns 400 for\nan invalid directory URL, domain, contact address or duration, a\nnon-positive interval, or an empty path or organization. Requires\n`acmesettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2808,7 +2808,7 @@
         "tags": [
           "ClientGroupNetworks"
         ],
-        "summary": "This action adds a member to the group. Returns 400 unless exactly one of `cidr`\nand `clientId` is given or when the CIDR does not parse, and 404 for an unknown\ngroup. Requires `clientgroups:write`.",
+        "summary": "This action adds a member to the group. Returns 400 unless exactly one of `cidr`\nand `clientId` is given or when the address or CIDR network does not parse, and 404 for an unknown\ngroup. Requires `clientgroups:write`.",
         "parameters": [
           {
             "name": "groupId",
@@ -13034,7 +13034,7 @@
         "tags": [
           "Dns64Settings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Dns64` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. Ninlil.Dns.Server.Core.Dns64.Dns64Options.SynthesisPrefix\nis checked against the same RFC 6052 §2.2 rule\n`Dns64SynthesisService.TryParsePrefix` applies (an IPv6 prefix of /32, /40, /48,\n/56, /64 or /96), so a bad prefix returns 400 here instead of quietly disabling\nsynthesis later. Requires `dns64settings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Dns64` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value. Ninlil.Dns.Server.Core.Dns64.Dns64Options.SynthesisPrefix\nis checked against the same rule\n`Dns64SynthesisService.TryParsePrefix` applies (an IPv6 prefix of /32, /40, /48,\n/56, /64 or /96 with a zero \"u\" octet, outside `::ffff:0:0/96` and not\nmulticast; RFC 6052 §2.2, RFC 6147 §5.1.4), so a bad prefix returns 400 here instead of\nquietly disabling synthesis later. Requires `dns64settings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33262,7 +33262,7 @@
                 },
                 "example": {
                   "enable": true,
-                  "port": 5353,
+                  "port": 5443,
                   "listenAddresses": [ ],
                   "providerName": "2.dnscrypt-cert.resolver.example.",
                   "tcpIdleTimeout": "00:00:30",
@@ -33282,7 +33282,7 @@
                 },
                 "example": {
                   "enable": true,
-                  "port": 5353,
+                  "port": 5443,
                   "listenAddresses": [ ],
                   "providerName": "2.dnscrypt-cert.resolver.example.",
                   "tcpIdleTimeout": "00:00:30",
@@ -33302,7 +33302,7 @@
                 },
                 "example": {
                   "enable": true,
-                  "port": 5353,
+                  "port": 5443,
                   "listenAddresses": [ ],
                   "providerName": "2.dnscrypt-cert.resolver.example.",
                   "tcpIdleTimeout": "00:00:30",
@@ -33331,21 +33331,21 @@
               "schema": { },
               "example": {
                 "enable": true,
-                "providerName": "2.dnscrypt-cert.resolver.example."
+                "providerName": "2.dnscrypt-cert.resolver.example"
               }
             },
             "text/json": {
               "schema": { },
               "example": {
                 "enable": true,
-                "providerName": "2.dnscrypt-cert.resolver.example."
+                "providerName": "2.dnscrypt-cert.resolver.example"
               }
             },
             "application/*+json": {
               "schema": { },
               "example": {
                 "enable": true,
-                "providerName": "2.dnscrypt-cert.resolver.example."
+                "providerName": "2.dnscrypt-cert.resolver.example"
               }
             }
           }
@@ -39223,7 +39223,7 @@
         "properties": {
           "cidr": {
             "type": "string",
-            "description": "The network in CIDR notation, prefix length included (write a single address as\n`/32` or `/128`; a bare address is rejected). null when ClientId is set\ninstead.",
+            "description": "An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a\nbare IPv6 address one host (/128). A zone index (`fe80::1%2`) and an out-of-range\nprefix length are rejected with a 400. null when\nClientId is set instead.",
             "nullable": true
           },
           "clientId": {
@@ -41572,7 +41572,7 @@
           },
           "synthesisPrefix": {
             "type": "string",
-            "description": "The IPv6 prefix synthesized addresses are built in. Defaults to the well-known `64:ff9b::/96`.",
+            "description": "The IPv6 prefix synthesized addresses are built in. Defaults to the well-known `64:ff9b::/96`, under which only globally reachable IPv4 addresses are synthesized. A prefix with a non-zero \"u\" octet (bits 64 to 71), inside `::ffff:0:0/96` or multicast is rejected.",
             "nullable": true
           }
         },
@@ -41670,7 +41670,7 @@
           },
           "cidr": {
             "type": "string",
-            "description": "The network the rule applies to, in CIDR notation with a prefix length (a bare address is\nrejected; write `/32` or `/128` for one host). It must parse with\nM:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@), the parser\n`DnsAccessControlRuleCache` matches with at query time.",
+            "description": "The address or network the rule applies to: a bare IPv4 or IPv6 address (one host, matched\nexactly) or a network in CIDR notation. A zone index (`fe80::1%2`) and an\nout-of-range prefix length are rejected with a 400. The value is stored as entered\n(trimmed) and matched by `DnsAccessControlRuleCache` at query time.",
             "nullable": true
           },
           "capabilities": {
@@ -41934,7 +41934,7 @@
           },
           "port": {
             "type": "integer",
-            "description": "The port the transport binds to, for UDP and TCP. A change needs a listener restart.",
+            "description": "The port the transport binds to, for UDP and TCP. The default is 5443, not 5353, which multicast DNS uses. A change needs a listener restart.",
             "format": "int32"
           },
           "listenAddresses": {
@@ -41947,7 +41947,7 @@
           },
           "providerName": {
             "type": "string",
-            "description": "The provider name certificates are published under (clients query the TXT record `2.dnscrypt-cert.<ProviderName>`). Empty by default, and the listeners refuse to start while it is empty. A change needs a listener restart.",
+            "description": "The provider name certificates are published under (clients query the TXT record `2.dnscrypt-cert.<ProviderName>`). Either form works, `resolver.example` or `2.dnscrypt-cert.resolver.example`, and both publish at the same name. Empty by default, and the listeners refuse to start while it is empty or not a valid domain name. A change needs a listener restart.",
             "nullable": true
           },
           "tcpIdleTimeout": {

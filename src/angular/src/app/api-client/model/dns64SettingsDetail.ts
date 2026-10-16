@@ -18,7 +18,7 @@ export interface Dns64SettingsDetail {
      */
     enable?: boolean;
     /**
-     * The IPv6 prefix synthesized addresses are built in. Defaults to the well-known `64:ff9b::/96`.
+     * The IPv6 prefix synthesized addresses are built in. Defaults to the well-known `64:ff9b::/96`, under which only globally reachable IPv4 addresses are synthesized. A prefix with a non-zero \"u\" octet (bits 64 to 71), inside `::ffff:0:0/96` or multicast is rejected.
      */
     synthesisPrefix?: string | null;
 }

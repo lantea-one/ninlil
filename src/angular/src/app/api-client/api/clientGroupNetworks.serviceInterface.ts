@@ -84,7 +84,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksIdPut(requestParameters: ApiClientGroupsGroupIdNetworksIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds a member to the group. Returns 400 unless exactly one of &#x60;cidr&#x60; and &#x60;clientId&#x60; is given or when the CIDR does not parse, and 404 for an unknown group. Requires &#x60;clientgroups:write&#x60;.
+     * This action adds a member to the group. Returns 400 unless exactly one of &#x60;cidr&#x60; and &#x60;clientId&#x60; is given or when the address or CIDR network does not parse, and 404 for an unknown group. Requires &#x60;clientgroups:write&#x60;.
      * 
      * @endpoint post /api/client-groups/{groupId}/networks
 * @param requestParameters

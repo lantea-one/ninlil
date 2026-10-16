@@ -221,7 +221,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Acme&#x60; and &#x60;DnsServer:Acme:CaaAutoManagement&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The response note says whether a restart is needed. Returns 400 for an invalid directory URL, domain, contact address or duration, a non-positive interval, or an empty path or organization. Requires &#x60;acmesettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Acme&#x60; and &#x60;DnsServer:Acme:CaaAutoManagement&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The response note says whether a restart is needed. A domain must be a host name of letters, digits and hyphens with at least two labels, optionally with a leading &#x60;*.&#x60; for a wildcard certificate. Returns 400 for an invalid directory URL, domain, contact address or duration, a non-positive interval, or an empty path or organization. Requires &#x60;acmesettings:write&#x60;.
      * @endpoint patch /api/acme-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

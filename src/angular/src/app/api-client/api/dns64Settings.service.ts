@@ -99,7 +99,7 @@ export class Dns64SettingsService extends BaseService implements Dns64SettingsSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Dns64&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Ninlil.Dns.Server.Core.Dns64.Dns64Options.SynthesisPrefix is checked against the same RFC 6052 §2.2 rule &#x60;Dns64SynthesisService.TryParsePrefix&#x60; applies (an IPv6 prefix of /32, /40, /48, /56, /64 or /96), so a bad prefix returns 400 here instead of quietly disabling synthesis later. Requires &#x60;dns64settings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Dns64&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Ninlil.Dns.Server.Core.Dns64.Dns64Options.SynthesisPrefix is checked against the same rule &#x60;Dns64SynthesisService.TryParsePrefix&#x60; applies (an IPv6 prefix of /32, /40, /48, /56, /64 or /96 with a zero \&quot;u\&quot; octet, outside &#x60;::ffff:0:0/96&#x60; and not multicast; RFC 6052 §2.2, RFC 6147 §5.1.4), so a bad prefix returns 400 here instead of quietly disabling synthesis later. Requires &#x60;dns64settings:write&#x60;.
      * @endpoint patch /api/dns64-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

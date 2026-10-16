@@ -18,7 +18,7 @@ export interface DnsAccessControlRuleWriteRequest {
      */
     name?: string | null;
     /**
-     * The network the rule applies to, in CIDR notation with a prefix length (a bare address is rejected; write `/32` or `/128` for one host). It must parse with M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@), the parser `DnsAccessControlRuleCache` matches with at query time.
+     * The address or network the rule applies to: a bare IPv4 or IPv6 address (one host, matched exactly) or a network in CIDR notation. A zone index (`fe80::1%2`) and an out-of-range prefix length are rejected with a 400. The value is stored as entered (trimmed) and matched by `DnsAccessControlRuleCache` at query time.
      */
     cidr?: string | null;
     /**

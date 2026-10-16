@@ -18,7 +18,7 @@ export interface DnsCryptSettingsDetail {
      */
     enable?: boolean;
     /**
-     * The port the transport binds to, for UDP and TCP. A change needs a listener restart.
+     * The port the transport binds to, for UDP and TCP. The default is 5443, not 5353, which multicast DNS uses. A change needs a listener restart.
      */
     port?: number;
     /**
@@ -26,7 +26,7 @@ export interface DnsCryptSettingsDetail {
      */
     listenAddresses?: Array<string> | null;
     /**
-     * The provider name certificates are published under (clients query the TXT record `2.dnscrypt-cert.<ProviderName>`). Empty by default, and the listeners refuse to start while it is empty. A change needs a listener restart.
+     * The provider name certificates are published under (clients query the TXT record `2.dnscrypt-cert.<ProviderName>`). Either form works, `resolver.example` or `2.dnscrypt-cert.resolver.example`, and both publish at the same name. Empty by default, and the listeners refuse to start while it is empty or not a valid domain name. A change needs a listener restart.
      */
     providerName?: string | null;
     /**

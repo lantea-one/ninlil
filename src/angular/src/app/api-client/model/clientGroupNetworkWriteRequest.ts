@@ -14,7 +14,7 @@
  */
 export interface ClientGroupNetworkWriteRequest { 
     /**
-     * The network in CIDR notation, prefix length included (write a single address as `/32` or `/128`; a bare address is rejected). null when ClientId is set instead.
+     * An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a bare IPv6 address one host (/128). A zone index (`fe80::1%2`) and an out-of-range prefix length are rejected with a 400. null when ClientId is set instead.
      */
     cidr?: string | null;
     /**
