@@ -209,6 +209,65 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SolicitAndRequest_WithScopeCustomOption_BothRepliesCarryItAndTheLeaseStillWorks()
+    {
+        // End to end through the engine host: a custom option on a DHCPv6 scope reaches the
+        // ADVERTISE and the REPLY, and the exchange still ends with an active lease.
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "request-custom-option",
+            "2001:db8:c9::10",
+            "2001:db8:c9::12"
+        );
+        await _host.SeedCustomOptionAsync(scope.Id, 32, "00000E10");
+
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x7a, 0x7a, 0x7a, 0x7a, 0x00, 0x01];
+        Dhcpv6Message solicit = NewSolicit(clientDuid, 0x7000);
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+        Dhcpv6Message advertise = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetRawOption(32, out byte[] advertisedValue));
+        Assert.Equal(Convert.FromHexString("00000E10"), advertisedValue);
+        advertise.TryGetServerIdentifier(out byte[] serverDuid);
+        advertise.TryGetIdentityAssociationsForNonTemporaryAddresses(
+            out IReadOnlyList<Dhcpv6IdentityAssociationForNonTemporaryAddresses> offeredAssociations
+        );
+
+        Dhcpv6Message request = NewMessage(Dhcpv6MessageTypeEnum.Request, clientDuid, 0x7001);
+        request.SetServerIdentifier(serverDuid);
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses requestNa = NewNaRequest(1);
+        requestNa.Addresses.Add(
+            new Dhcpv6IdentityAssociationAddress
+            {
+                Address = offeredAssociations[0].Addresses[0].Address,
+            }
+        );
+        request.AddIdentityAssociationForNonTemporaryAddresses(requestNa);
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            request,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(reply);
+        Assert.Equal(Dhcpv6MessageTypeEnum.Reply, reply.MessageType);
+        Assert.True(reply.TryGetRawOption(32, out byte[] repliedValue));
+        Assert.Equal(Convert.FromHexString("00000E10"), repliedValue);
+
+        LeaseEntity lease = await _host.FindLeaseAsync(
+            "request-custom-option",
+            FormatDuid(clientDuid)
+        );
+        Assert.NotNull(lease);
+        Assert.Equal(LeaseStateEnum.Active, lease.State);
+    }
+
+    [Fact]
     public async Task Request_ForADifferentServerIdentifier_ReturnsNoReply()
     {
         await _host.SeedAddressScopeAsync(

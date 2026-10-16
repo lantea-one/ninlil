@@ -270,6 +270,38 @@ public sealed class Dhcpv6EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
+    ///     This method saves a scope custom option (the option code is <c>optionTag</c>) through
+    ///     the repository in a separate scope, like <see cref="Dhcpv4EngineTestHost.SeedCustomOptionAsync" />.
+    /// </summary>
+    public async Task<DhcpScopeCustomOptionEntity> SeedCustomOptionAsync(
+        Guid scopeId,
+        byte optionTag,
+        string valueHex,
+        bool isDisabled = false,
+        DhcpOptionValueSourceEnum valueSource = DhcpOptionValueSourceEnum.Custom
+    )
+    {
+        DhcpScopeCustomOptionEntity customOption = new()
+        {
+            Id = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ScopeId = scopeId,
+            OptionTag = optionTag,
+            ValueHex = valueHex,
+            IsDisabled = isDisabled,
+            ValueSource = valueSource,
+        };
+
+        await using AsyncServiceScope scope = Host.Services.CreateAsyncScope();
+        IDhcpScopeCustomOptionRepository repository =
+            scope.ServiceProvider.GetRequiredService<IDhcpScopeCustomOptionRepository>();
+        await repository.AddAsync(customOption);
+        await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+
+        return customOption;
+    }
+
+    /// <summary>
     ///     This method saves a tag rule and its options, like
     ///     <see cref="Dhcpv4EngineTestHost.SeedTagRuleAsync" />, with the DHCPv6 criteria. There is
     ///     no Circuit ID parameter, since

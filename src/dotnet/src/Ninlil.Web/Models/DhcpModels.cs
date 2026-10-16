@@ -23,8 +23,8 @@ namespace Ninlil.Web.Models;
 /// <param name="DefaultLeaseDuration">The lease duration granted to a client that does not ask for one.</param>
 /// <param name="MaxLeaseDuration">The longest lease duration the scope grants.</param>
 /// <param name="IsDisabled">Whether the scope is disabled.</param>
-/// <param name="GatewayAddresses">The router (default gateway) addresses the scope hands out, in order of preference.</param>
-/// <param name="DnsServerAddresses">The DNS server addresses the scope hands out, in order of preference.</param>
+/// <param name="GatewayAddresses">The router (default gateway) addresses the scope hands out, in order of preference. They must be IPv4 addresses, and the list must be empty on a DHCPv6 scope, because DHCPv6 has no router option (Router Advertisements supply routers).</param>
+/// <param name="DnsServerAddresses">The DNS server addresses the scope hands out, in order of preference. They must be of the scope's protocol (IPv4 on a DHCPv4 scope, IPv6 on a DHCPv6 scope).</param>
 /// <param name="Comments">Free-form operator notes about the scope.</param>
 /// <param name="DnsZoneId">
 ///     The DNS zone in which a lease from this scope registers an A or AAAA record for the
@@ -161,11 +161,16 @@ public record DhcpReservationDetail(
 );
 
 /// <summary>
-///     This class carries the fields used to create or fully replace a custom, raw DHCPv4 option
+///     This class carries the fields used to create or fully replace a custom, raw DHCP option
 ///     in a scope (<c>POST</c> and <c>PUT</c> under <c>/api/dhcp-scopes/{scopeId}/custom-options</c>).
+///     A DHCPv4 scope sends it as an option with that tag and a DHCPv6 scope as an option with
+///     that code, in every reply that carries configuration.
 /// </summary>
 /// <param name="OptionTag">
-///     The option's numeric tag. Use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)
+///     The option's numeric tag (on a DHCPv6 scope, its option code). On a DHCPv6 scope use 1 to
+///     255 except the codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19,
+///     20, 25, 26, 37 and 39), with a value of at most 65 535 bytes; code 24 (Domain Search List)
+///     must be domain names in uncompressed wire form (RFC 3646 Section 4). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)
 ///     and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and
 ///     255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name)
 ///     and 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in

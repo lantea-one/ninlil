@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 
@@ -15,7 +16,11 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     <para>
 ///         The Domain Search List and Preference options are not sent: <see cref="DhcpScopeEntity" />
 ///         has no field for a search list, and Preference only matters with several DHCPv6
-///         servers. A search list can be sent through a tag rule.
+///         servers. A search list can be sent through a custom option or a tag rule.
+///     </para>
+///     <para>
+///         Only IPv6 entries of <see cref="DhcpScopeEntity.DnsServerAddresses" /> are sent; an IPv4
+///         entry is skipped so a wrongly stored row never stops the reply.
 ///     </para>
 /// </summary>
 internal static class Dhcpv6OptionDeliveryService
@@ -56,7 +61,19 @@ internal static class Dhcpv6OptionDeliveryService
             )
             && TryParseAll(scope.DnsServerAddresses, out IReadOnlyList<IPAddress> dnsServers)
         )
-            reply.SetDnsServers(dnsServers);
+        {
+            // The writer throws for an IPv4 address, which would lose the whole reply. The API
+            // refuses such an entry on a DHCPv6 scope, so one here is stored data to leave out.
+            List<IPAddress> ipv6DnsServers =
+            [
+                .. dnsServers.Where(address =>
+                    address.AddressFamily == AddressFamily.InterNetworkV6
+                ),
+            ];
+
+            if (ipv6DnsServers.Count > 0)
+                reply.SetDnsServers(ipv6DnsServers);
+        }
     }
 
     /// <summary>
@@ -71,8 +88,8 @@ internal static class Dhcpv6OptionDeliveryService
 
     /// <summary>
     ///     This method parses every address in a list, failing if any one is invalid, as in
-    ///     <see cref="Dhcpv4OptionDeliveryService" />. IPv4 entries in the shared list parse but
-    ///     make <c>SetDnsServers</c> throw.
+    ///     <see cref="Dhcpv4OptionDeliveryService" />. IPv4 entries parse here; <c>Apply</c> then
+    ///     leaves them out, because <c>SetDnsServers</c> accepts IPv6 addresses only.
     /// </summary>
     private static bool TryParseAll(
         IReadOnlyList<string> addresses,

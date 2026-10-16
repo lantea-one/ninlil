@@ -9,7 +9,10 @@ namespace Ninlil.Dhcp.Server.Core.Tests;
 /// <summary>
 ///     This test class covers <see cref="Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService" />
 ///     on each DHCPv6 criterion (vendor-class-data, enterprise number, user class, relayed
-///     Interface-ID and Remote-ID), the server-address value source and priority order. Each
+///     Interface-ID and Remote-ID), the server-address value source and priority order, and the
+///     scope custom options a DHCPv6 scope delivers (code 32, code 23 replacing the DNS servers,
+///     disabled rows, tag rule precedence, a stored reserved code) and the DNS servers of the
+///     wrong address family. Each
 ///     test calls <see cref="Dhcpv6RequestHandler.HandleRequestAsync" /> or
 ///     <see cref="Dhcpv6RequestHandler.HandleRelayMessageAsync" /> on a
 ///     <see cref="Dhcpv6EngineTestHost" />, like <see cref="Dhcpv4OptionOverlayServiceTests" />.
@@ -564,6 +567,176 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
         Assert.True(advertise.TryGetRawOption(2, out byte[] serverIdentifier));
         Assert.NotEqual(Convert.FromHexString("00030001AABBCCDDEEFF"), serverIdentifier);
         Assert.Single(_host.Logs.Warnings, warning => warning.Contains(rule.Id.ToString()));
+    }
+
+    [Fact]
+    public async Task Solicit_WithScopeCustomOption_AdvertiseCarriesIt()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "custom-option-scope",
+            "2001:db8:c1::10",
+            "2001:db8:c1::12"
+        );
+
+        // Code 32 is Information Refresh Time (RFC 8415 Section 21.23); 4 octets, 3600 s.
+        await _host.SeedCustomOptionAsync(scope.Id, 32, "00000E10");
+
+        Dhcpv6Message advertise = await SolicitAsync(0x11, 0x2001);
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetRawOption(32, out byte[] value));
+        Assert.Equal(Convert.FromHexString("00000E10"), value);
+    }
+
+    [Fact]
+    public async Task InformationRequest_WithScopeCustomOption_ReplyCarriesIt()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "custom-option-inform-scope",
+            "2001:db8:c2::10",
+            "2001:db8:c2::12"
+        );
+        await _host.SeedCustomOptionAsync(scope.Id, 32, "00000E10");
+
+        Dhcpv6Message informationRequest = new()
+        {
+            MessageType = Dhcpv6MessageTypeEnum.InformationRequest,
+            TransactionId = 0x2002,
+        };
+        informationRequest.SetClientIdentifier([0x00, 0x01, 0x00, 0x01, 0x12, 0x12, 0x12, 0x12]);
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            informationRequest,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(reply);
+        Assert.Equal(Dhcpv6MessageTypeEnum.Reply, reply.MessageType);
+        Assert.True(reply.TryGetRawOption(32, out byte[] value));
+        Assert.Equal(Convert.FromHexString("00000E10"), value);
+    }
+
+    [Fact]
+    public async Task Solicit_WithCustomOptionForDnsServers_ReplacesTheScopesDnsServers()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "custom-dns-scope",
+            "2001:db8:c3::10",
+            "2001:db8:c3::12",
+            dnsServerAddresses: ["2001:db8:c3::1"]
+        );
+
+        // Code 23 (DNS Recursive Name Server) with one address.
+        await _host.SeedCustomOptionAsync(
+            scope.Id,
+            23,
+            Convert.ToHexString(IPAddress.Parse("2001:db8:c3::99").GetAddressBytes())
+        );
+
+        Dhcpv6Message advertise = await SolicitAsync(0x13, 0x2003);
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetDnsServers(out IReadOnlyList<IPAddress> dnsServers));
+        Assert.Equal(IPAddress.Parse("2001:db8:c3::99"), Assert.Single(dnsServers));
+    }
+
+    [Fact]
+    public async Task Solicit_WithDisabledCustomOption_DoesNotSendIt()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "custom-disabled-scope",
+            "2001:db8:c4::10",
+            "2001:db8:c4::12"
+        );
+        await _host.SeedCustomOptionAsync(scope.Id, 32, "00000E10", isDisabled: true);
+
+        Dhcpv6Message advertise = await SolicitAsync(0x14, 0x2004);
+
+        Assert.NotNull(advertise);
+        Assert.False(advertise.TryGetRawOption(32, out _));
+    }
+
+    [Fact]
+    public async Task Solicit_WithTagRuleAndCustomOptionForTheSameCode_TheTagRuleWins()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "custom-vs-rule-scope",
+            "2001:db8:c5::10",
+            "2001:db8:c5::12"
+        );
+        await _host.SeedCustomOptionAsync(scope.Id, 32, "00000E10");
+        await _host.SeedTagRuleAsync(
+            "Refresh time rule",
+            new Dictionary<byte, string> { [32] = "00001C20" },
+            scopeId: scope.Id
+        );
+
+        Dhcpv6Message advertise = await SolicitAsync(0x15, 0x2005);
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetRawOption(32, out byte[] value));
+        Assert.Equal(Convert.FromHexString("00001C20"), value);
+    }
+
+    [Fact]
+    public async Task Solicit_WithStoredCustomOptionForTheServerIdentifier_KeepsTheEnginesOwn()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "custom-server-id-scope",
+            "2001:db8:c6::10",
+            "2001:db8:c6::12"
+        );
+
+        // The API refuses code 2; a stored row (older data) must not replace the Server Identifier.
+        DhcpScopeCustomOptionEntity row = await _host.SeedCustomOptionAsync(
+            scope.Id,
+            2,
+            "00030001AABBCCDDEEFF"
+        );
+
+        Dhcpv6Message advertise = await SolicitAsync(0x16, 0x2006);
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetRawOption(2, out byte[] serverIdentifier));
+        Assert.NotEqual(Convert.FromHexString("00030001AABBCCDDEEFF"), serverIdentifier);
+        Assert.Single(_host.Logs.Warnings, warning => warning.Contains(row.Id.ToString()));
+    }
+
+    [Fact]
+    public async Task Solicit_WithAnIPv4DnsServerStoredOnTheScope_StillRepliesWithTheIPv6Ones()
+    {
+        await _host.SeedAddressScopeAsync(
+            "wrong-family-dns-scope",
+            "2001:db8:c7::10",
+            "2001:db8:c7::12",
+            dnsServerAddresses: ["192.0.2.53", "2001:db8::53"]
+        );
+
+        Dhcpv6Message advertise = await SolicitAsync(0x17, 0x2007);
+
+        Assert.NotNull(advertise);
+        Assert.True(advertise.TryGetDnsServers(out IReadOnlyList<IPAddress> dnsServers));
+        Assert.Equal(IPAddress.Parse("2001:db8::53"), Assert.Single(dnsServers));
+    }
+
+    /// <summary>
+    ///     This method sends a SOLICIT for one IA_NA from a client whose DUID ends in
+    ///     <paramref name="seed" /> and returns the ADVERTISE.
+    /// </summary>
+    private async Task<Dhcpv6Message> SolicitAsync(byte seed, uint transactionId)
+    {
+        Dhcpv6Message solicit = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, seed, seed, seed, seed, 0x00, seed],
+            transactionId
+        );
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        return await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
     }
 
     private static Dhcpv6Message NewSolicit(byte[] clientDuid, uint transactionId)

@@ -16,11 +16,12 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller manages the raw DHCPv4 options (tag and value) of one DHCP scope, nested
-///     under it at <c>/api/dhcp-scopes/{scopeId}/custom-options</c>. Only the DHCPv4 engine
-///     delivers them (see
+///     This controller manages the raw options (tag, or option code on a DHCPv6 scope, and value)
+///     of one DHCP scope, nested under it at <c>/api/dhcp-scopes/{scopeId}/custom-options</c>.
+///     Both engines deliver them (see
 ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity" /> for
-///     precedence over the standard options and the Parameter Request List). Reads need
+///     precedence over the standard options and the Parameter Request List). A DHCPv4 scope gets
+///     the DHCPv4 option rules and a DHCPv6 scope the DHCPv6 ones. Reads need
 ///     <c>dhcpscopes:read</c> and changes need <c>dhcpscopes:write</c>, as for
 ///     <see cref="DhcpScopesController" />.
 /// </summary>
@@ -99,7 +100,9 @@ public class DhcpScopeCustomOptionsController(
     ///     This action adds a custom option to a scope. The value is stored as uppercase hex.
     ///     Returns 400 for a value that is not even-length hex, or a missing value when the source
     ///     is <c>Custom</c>, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over
-    ///     255 bytes, and 404 for an unknown scope. Requires <c>dhcpscopes:write</c>.
+    ///     255 bytes, for a DHCPv6 scope code 0, a code the server writes itself (1, 2, 3, 4, 5,
+    ///     6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37, 39), a value over 65 535 bytes or a
+    ///     Domain Search List (code 24) that is not wire-format names, and 404 for an unknown scope. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -224,7 +227,10 @@ public class DhcpScopeCustomOptionsController(
     ///     For a DHCPv4 <paramref name="scope" /> the tag and value length must also pass
     ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a server address is 4 bytes) and a
     ///     typed value must pass <see cref="DhcpRawOptionRules.TryValidateDhcpv4Value" /> (tags 66
-    ///     and 67 are printable ASCII text).
+    ///     and 67 are printable ASCII text). For a DHCPv6 scope they must pass
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv6" /> (a server address is 16 bytes, and
+    ///     the codes the server writes itself are refused) and
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv6Value" /> (code 24 is wire-format names).
     /// </summary>
     private static bool TryValidate(
         DhcpScopeCustomOptionWriteRequest request,
@@ -247,7 +253,13 @@ public class DhcpScopeCustomOptionsController(
             if (request.ValueSource == DhcpOptionValueSourceEnum.ServerAddress)
             {
                 normalizedValueHex = string.Empty;
-                return TryValidateRawOption(request.OptionTag, 4, scope, out error);
+                // A server address is 4 octets on DHCPv4 and 16 on DHCPv6.
+                return TryValidateRawOption(
+                    request.OptionTag,
+                    scope.ProtocolVersion == InternetProtocolVersionEnum.IPv6 ? 16 : 4,
+                    scope,
+                    out error
+                );
             }
 
             error = "'valueHex' is required.";
@@ -275,9 +287,10 @@ public class DhcpScopeCustomOptionsController(
     }
 
     /// <summary>
-    ///     This method applies <see cref="DhcpRawOptionRules.TryValidateDhcpv4Value" /> to a typed
-    ///     option of a DHCPv4 scope, so a TFTP Server Name that is not text is refused with 400.
-    ///     A DHCPv6 scope is not checked yet, because its custom options are not delivered.
+    ///     This method applies the value rule of the scope's protocol to a typed option:
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4Value" /> (a TFTP Server Name that is
+    ///     not text is refused) or <see cref="DhcpRawOptionRules.TryValidateDhcpv6Value" /> (a
+    ///     Domain Search List that is not wire-format names is refused).
     /// </summary>
     private static bool TryValidateRawValue(
         byte tag,
@@ -286,33 +299,28 @@ public class DhcpScopeCustomOptionsController(
         out string error
     )
     {
-        error = null;
+        byte[] value = Convert.FromHexString(normalizedValueHex);
 
-        return scope.ProtocolVersion != InternetProtocolVersionEnum.IPv4
-            || DhcpRawOptionRules.TryValidateDhcpv4Value(
-                tag,
-                Convert.FromHexString(normalizedValueHex),
-                out error
-            );
+        return scope.ProtocolVersion == InternetProtocolVersionEnum.IPv6
+            ? DhcpRawOptionRules.TryValidateDhcpv6Value(tag, value, out error)
+            : DhcpRawOptionRules.TryValidateDhcpv4Value(tag, value, out error);
     }
 
     /// <summary>
-    ///     This method applies <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> to an option of
-    ///     a DHCPv4 scope. Only the DHCPv4 engine delivers custom options, so a DHCPv6 scope is
-    ///     not checked.
+    ///     This method applies <see cref="DhcpRawOptionRules.TryValidateDhcpv6" /> to an option of
+    ///     a DHCPv6 scope (the codes the engine writes itself are refused, because the overlay
+    ///     would replace them and break every reply) and
+    ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> to one of a DHCPv4 scope.
     /// </summary>
     private static bool TryValidateRawOption(
         byte tag,
         int valueLength,
         DhcpScopeEntity scope,
         out string error
-    )
-    {
-        error = null;
-
-        return scope.ProtocolVersion != InternetProtocolVersionEnum.IPv4
-            || DhcpRawOptionRules.TryValidateDhcpv4(tag, valueLength, out error);
-    }
+    ) =>
+        scope.ProtocolVersion == InternetProtocolVersionEnum.IPv6
+            ? DhcpRawOptionRules.TryValidateDhcpv6(tag, valueLength, out error)
+            : DhcpRawOptionRules.TryValidateDhcpv4(tag, valueLength, out error);
 
     /// <summary>
     ///     This method converts a custom option entity to its API representation.

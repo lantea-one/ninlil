@@ -7,7 +7,8 @@ namespace Ninlil.Dhcp.Data.Abstractions.Repository;
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with a scope's custom options:
 ///     paged listing (in the database) for <c>DhcpScopeCustomOptionsController</c>, and the
-///     unpaged list of enabled options for <c>Dhcpv4OptionOverlayService</c>.
+///     unpaged list of enabled options for <c>Dhcpv4OptionOverlayService</c> and
+///     <c>Dhcpv6OptionOverlayService</c>.
 /// </summary>
 public interface IDhcpScopeCustomOptionRepository : IRepository<DhcpScopeCustomOptionEntity>
 {

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
@@ -69,7 +70,7 @@ internal static class Dhcpv4OptionDeliveryService
                 requestedTags,
                 Dhcpv4OptionTagEnum.Router
             )
-            && TryParseAll(scope.GatewayAddresses, out IReadOnlyList<IPAddress> gateways)
+            && TryParseIPv4(scope.GatewayAddresses, out IReadOnlyList<IPAddress> gateways)
         )
             reply.SetRouters(gateways);
 
@@ -80,7 +81,7 @@ internal static class Dhcpv4OptionDeliveryService
                 requestedTags,
                 Dhcpv4OptionTagEnum.DomainNameServer
             )
-            && TryParseAll(scope.DnsServerAddresses, out IReadOnlyList<IPAddress> dnsServers)
+            && TryParseIPv4(scope.DnsServerAddresses, out IReadOnlyList<IPAddress> dnsServers)
         )
             reply.SetDomainNameServers(dnsServers);
 
@@ -157,10 +158,40 @@ internal static class Dhcpv4OptionDeliveryService
     }
 
     /// <summary>
+    ///     This method parses a list like <see cref="TryParseAll" /> and keeps the IPv4 entries
+    ///     only, failing when none is left. The writers (<c>SetRouters</c>,
+    ///     <c>SetDomainNameServers</c>) throw for an IPv6 address, which would lose the whole
+    ///     reply, so a wrong-family entry that the API would refuse but that is stored anyway is
+    ///     left out here.
+    /// </summary>
+    private static bool TryParseIPv4(
+        IReadOnlyList<string> addresses,
+        out IReadOnlyList<IPAddress> ipv4Addresses
+    )
+    {
+        ipv4Addresses = null;
+
+        if (!TryParseAll(addresses, out IReadOnlyList<IPAddress> parsed))
+            return false;
+
+        List<IPAddress> result =
+        [
+            .. parsed.Where(address => address.AddressFamily == AddressFamily.InterNetwork),
+        ];
+
+        if (result.Count == 0)
+            return false;
+
+        ipv4Addresses = result;
+        return true;
+    }
+
+    /// <summary>
     ///     This method parses every address in a list, failing if any one is invalid, in which
     ///     case the option is left out. <see cref="DhcpScopeEntity.GatewayAddresses" /> and
     ///     <see cref="DhcpScopeEntity.DnsServerAddresses" /> are validated when written, so a bad
-    ///     entry means bad stored data, which is not sent in part.
+    ///     entry means bad stored data, which is not sent in part. The address family is not
+    ///     checked here; <see cref="TryParseIPv4" /> does that for the callers that need IPv4.
     /// </summary>
     private static bool TryParseAll(
         IReadOnlyList<string> addresses,

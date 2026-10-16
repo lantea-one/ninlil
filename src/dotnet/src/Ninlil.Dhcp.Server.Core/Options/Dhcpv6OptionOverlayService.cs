@@ -11,10 +11,14 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 
 /// <summary>
 ///     This class implements <see cref="IDhcpv6OptionOverlayService" /> on the tag rule
-///     repositories, the counterpart of <see cref="Dhcpv4OptionOverlayService" /> without custom
-///     options. It applies the options of every enabled, eligible tag rule whose criteria the
-///     request meets, in the order described on <see cref="DhcpTagRuleEntity" />, so the last rule
-///     to set a tag wins. Only these criteria are checked:
+///     repositories, the counterpart of <see cref="Dhcpv4OptionOverlayService" />. It applies the
+///     scope's enabled custom options first (the option code is <see cref="DhcpScopeCustomOptionEntity.OptionTag" />;
+///     a custom option is sent whether or not the client's Option Request Option names it, as
+///     RFC 8415 Section 21.7 permits a server to send options the client did not request, and
+///     it replaces a standard option with the same code, such as 23), then the options of every
+///     enabled, eligible tag rule whose criteria the request meets, in the order described on
+///     <see cref="DhcpTagRuleEntity" />, so the last rule to set a code wins and a tag rule beats
+///     a custom option. Disabled custom options are not read. Only these criteria are checked:
 ///     <see cref="DhcpTagRuleEntity.VendorClassIdentifierMatch" /> and
 ///     <see cref="DhcpTagRuleEntity.UserClassMatch" /> (against the DHCPv6 options),
 ///     <see cref="DhcpTagRuleEntity.VendorClassEnterpriseNumber" />,
@@ -31,6 +35,7 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///         <see cref="IDhcpv6ServerIdentifierProvider" />, which is not an address.
 ///     </para>
 /// </summary>
+/// <param name="customOptionRepository">Used to read a scope's enabled custom options.</param>
 /// <param name="tagRuleRepository">Used to read the tag rules eligible for a scope.</param>
 /// <param name="tagRuleOptionRepository">Used to read the options a matching rule contributes.</param>
 /// <param name="serverAddressProvider">
@@ -39,6 +44,7 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 /// </param>
 /// <param name="logger">Reports a stored option that fails <see cref="DhcpRawOptionRules" />.</param>
 public sealed class Dhcpv6OptionOverlayService(
+    IDhcpScopeCustomOptionRepository customOptionRepository,
     IDhcpTagRuleRepository tagRuleRepository,
     IDhcpTagRuleOptionRepository tagRuleOptionRepository,
     IDhcpv6ServerAddressProvider serverAddressProvider,
@@ -53,10 +59,22 @@ public sealed class Dhcpv6OptionOverlayService(
         CancellationToken cancellationToken = default
     )
     {
-        // No scope for this exchange: no rule is eligible, as Dhcpv6OptionDeliveryService also
-        // skips scope options.
+        // No scope for this exchange: no custom option or rule is eligible, as
+        // Dhcpv6OptionDeliveryService also skips scope options.
         if (scope is null)
             return;
+
+        IReadOnlyList<DhcpScopeCustomOptionEntity> customOptions =
+            await customOptionRepository.ListEnabledByScopeIdAsync(scope.Id, cancellationToken);
+
+        foreach (DhcpScopeCustomOptionEntity customOption in customOptions)
+            ApplyRawOption(
+                reply,
+                $"scope custom option {customOption.Id}",
+                customOption.OptionTag,
+                customOption.ValueHex,
+                customOption.ValueSource
+            );
 
         IReadOnlyList<DhcpTagRuleEntity> candidateRules =
             await tagRuleRepository.ListEnabledForScopeAsync(scope.Id, cancellationToken);

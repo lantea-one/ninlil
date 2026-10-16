@@ -32,10 +32,10 @@ namespace Ninlil.Dhcp.Server.Core;
 ///     </para>
 ///     <para>
 ///         <b>Not handled.</b> IA_TA (temporary addresses) is ignored, and so is every IA after
-///         the first IA_NA and IA_PD (see <see cref="IDhcpv6LeaseAllocationService" />). Scope
-///         custom options (<see cref="DhcpScopeCustomOptionEntity" />) are not delivered over
-///         DHCPv6; <see cref="Dhcpv6OptionDeliveryService" /> adds only the standard options.
-///         Tag rules are applied (<see cref="IDhcpv6OptionOverlayService" />) to the replies that
+///         the first IA_NA and IA_PD (see <see cref="IDhcpv6LeaseAllocationService" />).
+///         <b>Options.</b> <see cref="Dhcpv6OptionDeliveryService" /> adds the standard options,
+///         then <see cref="IDhcpv6OptionOverlayService" /> adds the scope's custom options
+///         (<see cref="DhcpScopeCustomOptionEntity" />) and the tag rules to the replies that
 ///         carry configuration: SOLICIT, REQUEST/RENEW/REBIND and INFORMATION-REQUEST, as in
 ///         DHCPv4. RELEASE, DECLINE and CONFIRM replies carry only status. A REQUEST, RENEW or
 ///         REBIND for an address or prefix that cannot be confirmed always gets

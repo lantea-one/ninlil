@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
@@ -136,7 +137,8 @@ public class DhcpScopesController(
     /// <summary>
     ///     This action creates a DHCP scope. Returns 400 for a missing name, a range address of the
     ///     wrong family, a bad prefix length, a non-positive lease duration or a default above the
-    ///     maximum, an invalid gateway, DNS server or next-server address, a boot file name over
+    ///     maximum, an invalid gateway, DNS server or next-server address, a gateway or DNS server address of
+    ///     the other family than the scope's protocol, any gateway on a DHCPv6 scope, a boot file name over
     ///     128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and
     ///     409 when the name is taken. Requires <c>dhcpscopes:write</c>.
     /// </summary>
@@ -267,7 +269,8 @@ public class DhcpScopesController(
     ///     This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is
     ///     unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces it.
     ///     The protocol version cannot be changed. The patched scope is checked as for
-    ///     <see cref="Create" />; a lease duration must be a JSON string holding a positive
+    ///     <see cref="Create" /> (patched gateway and DNS entries must match the scope's
+    ///     protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive
     ///     duration (400 otherwise), and the range start must not be after the range end.
     ///     Renaming the scope moves its leases to the new name in the same save. Requires <c>dhcpscopes:write</c>.
     /// </summary>
@@ -349,10 +352,32 @@ public class DhcpScopesController(
             scope.IsDisabled = isDisabled.GetBoolean();
 
         if (patch.TryGetMergePatchField("gatewayAddresses", out JsonElement gatewayAddresses))
+        {
             scope.GatewayAddresses = ParseAddressList(gatewayAddresses);
+            if (
+                !TryValidateAddressFamilies(
+                    scope.ProtocolVersion,
+                    scope.GatewayAddresses,
+                    [],
+                    out string gatewayFamilyError
+                )
+            )
+                throw new ValidationException(gatewayFamilyError);
+        }
 
         if (patch.TryGetMergePatchField("dnsServerAddresses", out JsonElement dnsServerAddresses))
+        {
             scope.DnsServerAddresses = ParseAddressList(dnsServerAddresses);
+            if (
+                !TryValidateAddressFamilies(
+                    scope.ProtocolVersion,
+                    [],
+                    scope.DnsServerAddresses,
+                    out string dnsFamilyError
+                )
+            )
+                throw new ValidationException(dnsFamilyError);
+        }
 
         if (patch.TryGetMergePatchField("comments", out JsonElement comments))
             scope.Comments = comments.ValueKind == JsonValueKind.Null ? null : comments.GetString();
@@ -674,6 +699,16 @@ public class DhcpScopesController(
             return false;
         }
 
+        if (
+            !TryValidateAddressFamilies(
+                request.ProtocolVersion,
+                request.GatewayAddresses ?? [],
+                request.DnsServerAddresses ?? [],
+                out error
+            )
+        )
+            return false;
+
         if (!TryValidateBootFileName(request.BootFileName, out error))
             return false;
 
@@ -692,6 +727,61 @@ public class DhcpScopesController(
 
         return true;
     }
+
+    /// <summary>
+    ///     This method checks that gateway and DNS server entries (already known to parse) belong
+    ///     to the scope's protocol. A DHCPv4 scope takes IPv4 entries only. A DHCPv6 scope takes
+    ///     IPv6 DNS servers only and no gateway at all, because DHCPv6 has no router option (the
+    ///     Router Advertisement supplies routers). A wrong-family entry would make the option
+    ///     writers throw, so the API refuses it instead of storing it.
+    /// </summary>
+    private static bool TryValidateAddressFamilies(
+        InternetProtocolVersionEnum protocolVersion,
+        IReadOnlyList<string> gatewayAddresses,
+        IReadOnlyList<string> dnsServerAddresses,
+        out string error
+    )
+    {
+        error = null;
+        bool isIPv6 = protocolVersion == InternetProtocolVersionEnum.IPv6;
+
+        if (isIPv6 && gatewayAddresses.Count > 0)
+        {
+            error =
+                "A DHCPv6 scope has no gateways: DHCPv6 has no router option, so "
+                + "'gatewayAddresses' must be empty.";
+            return false;
+        }
+
+        foreach (string address in gatewayAddresses)
+            if (!IsOfFamily(address, isIPv6))
+            {
+                error =
+                    $"Gateway address '{address}' is not an {protocolVersion} address, which "
+                    + $"this {protocolVersion} scope requires.";
+                return false;
+            }
+
+        foreach (string address in dnsServerAddresses)
+            if (!IsOfFamily(address, isIPv6))
+            {
+                error =
+                    $"DNS server address '{address}' is not an {protocolVersion} address, "
+                    + $"which this {protocolVersion} scope requires.";
+                return false;
+            }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     This method reports whether a parsed address is IPv6 (when <paramref name="isIPv6" />)
+    ///     or IPv4.
+    /// </summary>
+    private static bool IsOfFamily(string address, bool isIPv6) =>
+        IPAddress.TryParse(address, out IPAddress parsed)
+        && parsed.AddressFamily
+            == (isIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
 
     /// <summary>
     ///     This method checks the scope kind against <c>DelegatedPrefixLength</c>. A

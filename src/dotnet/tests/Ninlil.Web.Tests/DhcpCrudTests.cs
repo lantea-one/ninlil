@@ -630,6 +630,211 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, v6ZeroResponse.StatusCode);
     }
 
+    /// <summary>
+    ///     This method creates a DHCPv6 scope with no gateway and returns it, for the tests of the
+    ///     DHCPv6 custom option and address family rules.
+    /// </summary>
+    private static async Task<DhcpScopeDetail> CreateV6ScopeAsync(
+        HttpClient client,
+        string name,
+        string prefix
+    )
+    {
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            new
+            {
+                name,
+                protocolVersion = "IPv6",
+                rangeStartAddress = $"{prefix}::100",
+                rangeEndAddress = $"{prefix}::200",
+                subnetPrefixLength = 64,
+                defaultLeaseDuration = "1.00:00:00",
+                maxLeaseDuration = "7.00:00:00",
+                dnsServerAddresses = new[] { $"{prefix}::1" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+    }
+
+    [Fact]
+    public async Task CustomOptions_OnADhcpv6Scope_GetTheDhcpv6Rules()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpScopeDetail scope = await CreateV6ScopeAsync(
+            client,
+            $"v6-custom-{Guid.NewGuid():N}",
+            "2001:db8:b192"
+        );
+        string url = $"/api/dhcp-scopes/{scope.Id}/custom-options";
+
+        // Codes the engine writes itself are refused; the message names the code.
+        foreach (int code in new[] { 1, 2, 13, 39 })
+        {
+            HttpResponseMessage reservedResponse = await client.PostAsJsonAsync(
+                url,
+                new { optionTag = code, valueHex = "00" }
+            );
+            Assert.Equal(HttpStatusCode.BadRequest, reservedResponse.StatusCode);
+            Assert.Contains($"code {code}", await reservedResponse.Content.ReadAsStringAsync());
+        }
+
+        // 70 000 bytes exceed the two-byte DHCPv6 option length.
+        HttpResponseMessage tooLongResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 32, valueHex = new string('A', 140_000) }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, tooLongResponse.StatusCode);
+
+        // A text search list is not wire format; the wire form is accepted.
+        HttpResponseMessage textListResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 24, valueHex = "6578616D706C652E636F6D" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, textListResponse.StatusCode);
+
+        HttpResponseMessage wireListResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 24, valueHex = "076578616D706C6503636F6D00" }
+        );
+        Assert.Equal(HttpStatusCode.Created, wireListResponse.StatusCode);
+
+        // Information Refresh Time (code 32) is a normal custom option, and a server address
+        // needs no stored value on code 23.
+        HttpResponseMessage refreshResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 32, valueHex = "00000E10" }
+        );
+        Assert.Equal(HttpStatusCode.Created, refreshResponse.StatusCode);
+
+        HttpResponseMessage serverAddressResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 23, valueSource = "ServerAddress" }
+        );
+        Assert.Equal(HttpStatusCode.Created, serverAddressResponse.StatusCode);
+
+        // The same rules apply to a replace.
+        DhcpScopeCustomOptionDetail refresh =
+            await refreshResponse.Content.ReadFromJsonAsync<DhcpScopeCustomOptionDetail>();
+        HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
+            $"{url}/{refresh.Id}",
+            new { optionTag = 2, valueHex = "00" }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, replaceResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ScopeWrites_WithAddressesOfTheWrongFamily_AreRejected()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        object V4Body(string gateway, string dns) =>
+            new
+            {
+                name = $"family-v4-{Guid.NewGuid():N}",
+                protocolVersion = "IPv4",
+                rangeStartAddress = "192.168.60.100",
+                rangeEndAddress = "192.168.60.200",
+                subnetPrefixLength = 24,
+                defaultLeaseDuration = "1.00:00:00",
+                maxLeaseDuration = "7.00:00:00",
+                gatewayAddresses = new[] { gateway },
+                dnsServerAddresses = new[] { dns },
+            };
+
+        // An IPv6 gateway or DNS server on a DHCPv4 scope.
+        HttpResponseMessage v4GatewayResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            V4Body("2001:db8::1", "192.168.60.1")
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, v4GatewayResponse.StatusCode);
+        Assert.Contains("2001:db8::1", await v4GatewayResponse.Content.ReadAsStringAsync());
+
+        HttpResponseMessage v4DnsResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            V4Body("192.168.60.1", "2001:db8::53")
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, v4DnsResponse.StatusCode);
+
+        object V6Body(string[] gateways, string[] dns) =>
+            new
+            {
+                name = $"family-v6-{Guid.NewGuid():N}",
+                protocolVersion = "IPv6",
+                rangeStartAddress = "2001:db8:b193::100",
+                rangeEndAddress = "2001:db8:b193::200",
+                subnetPrefixLength = 64,
+                defaultLeaseDuration = "1.00:00:00",
+                maxLeaseDuration = "7.00:00:00",
+                gatewayAddresses = gateways,
+                dnsServerAddresses = dns,
+            };
+
+        // An IPv4 DNS server on a DHCPv6 scope, and any gateway at all.
+        HttpResponseMessage v6DnsResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            V6Body([], ["192.0.2.53"])
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, v6DnsResponse.StatusCode);
+
+        HttpResponseMessage v6GatewayResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            V6Body(["2001:db8::1"], ["2001:db8::53"])
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, v6GatewayResponse.StatusCode);
+
+        // A correct pair is accepted.
+        HttpResponseMessage okResponse = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            V6Body([], ["2001:db8::53"])
+        );
+        Assert.Equal(HttpStatusCode.Created, okResponse.StatusCode);
+        DhcpScopeDetail ok = await okResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        // PUT checks the same rule.
+        HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
+            $"/api/dhcp-scopes/{ok.Id}",
+            new
+            {
+                name = ok.Name,
+                protocolVersion = "IPv6",
+                rangeStartAddress = "2001:db8:b193::100",
+                rangeEndAddress = "2001:db8:b193::200",
+                subnetPrefixLength = 64,
+                defaultLeaseDuration = "1.00:00:00",
+                maxLeaseDuration = "7.00:00:00",
+                dnsServerAddresses = new[] { "192.0.2.53" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, replaceResponse.StatusCode);
+
+        // PATCH checks the patched lists against the scope's protocol.
+        HttpResponseMessage patchDnsResponse = await client.SendAsync(
+            PatchRequest(
+                $"/api/dhcp-scopes/{ok.Id}",
+                new { dnsServerAddresses = new[] { "192.0.2.53" } }
+            )
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patchDnsResponse.StatusCode);
+
+        HttpResponseMessage patchGatewayResponse = await client.SendAsync(
+            PatchRequest(
+                $"/api/dhcp-scopes/{ok.Id}",
+                new { gatewayAddresses = new[] { "2001:db8::1" } }
+            )
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patchGatewayResponse.StatusCode);
+
+        HttpResponseMessage patchOkResponse = await client.SendAsync(
+            PatchRequest(
+                $"/api/dhcp-scopes/{ok.Id}",
+                new { dnsServerAddresses = new[] { "2001:db8::54" } }
+            )
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patchOkResponse.StatusCode);
+    }
+
     [Fact]
     public async Task RawOptionValues_OnTftpServerNameAndDomainSearchList_AreCheckedByType()
     {
