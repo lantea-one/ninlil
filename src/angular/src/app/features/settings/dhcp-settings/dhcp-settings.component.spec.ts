@@ -174,6 +174,38 @@ describe('DhcpSettingsComponent', () => {
     );
   });
 
+  it('saveCore() sends leaseExpirySweepInterval, and rejects zero and unparsable values', async () => {
+    const fixture = await createComponent();
+    dhcpSettingsApiSpy.apiDhcpSettingsCorePatch.and.returnValue(of({ note: 'Applied.' }));
+    const control = fixture.componentInstance.coreForm.controls.leaseExpirySweepInterval;
+
+    expect(control.value).toBe('00:01:00');
+    control.setValue('00:00:00');
+    expect(control.hasError('positiveDuration')).toBeTrue();
+    control.setValue('soon');
+    expect(control.hasError('positiveDuration')).toBeTrue();
+    control.setValue('00:00:30');
+    expect(control.valid).toBeTrue();
+
+    await fixture.componentInstance.saveCore();
+
+    expect(dhcpSettingsApiSpy.apiDhcpSettingsCorePatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ leaseExpirySweepInterval: '00:00:30' }),
+    });
+  });
+
+  it('the RDNSS textarea accepts 75 addresses and rejects 76', async () => {
+    const fixture = await createComponent();
+    const control = fixture.componentInstance.raForm.controls.recursiveDnsServers;
+    const lines = (count: number) =>
+      Array.from({ length: count }, (_, i) => `2001:db8::${i + 1}`).join('\n');
+
+    control.setValue(lines(75));
+    expect(control.valid).toBeTrue();
+    control.setValue(lines(76));
+    expect(control.hasError('maxEntries')).toBeTrue();
+  });
+
   it('saveProtocol() PATCHes protocol settings', async () => {
     const fixture = await createComponent();
     dhcpSettingsApiSpy.apiDhcpSettingsProtocolPatch.and.returnValue(of({ note: 'Saved.' }));

@@ -86,3 +86,8 @@
   gap: var(--ninlil-space-3);
   margin-bottom: var(--ninlil-space-2);
 }
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}

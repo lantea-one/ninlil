@@ -35,10 +35,12 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 import {
   joinLines,
+  maxRecursiveDnsServersValidator,
   parseOptionalLines,
   parseOptionalNumber,
   parseOptionalText,
   parseOptionalTriStateBoolean,
+  positiveDurationValidator,
   splitLines,
   triStateBooleanToSelectValue,
 } from './dhcp-settings.model';
@@ -92,9 +94,13 @@ type RaInterfaceOverrideFormGroup = FormGroup<{
  * cards match their DHCPv4 counterparts, except that the DHCPv6 relay has one Interface-ID field
  * (RFC 8415) where the DHCPv4 relay has Agent Circuit ID and Remote ID.
  *
- * <p><b>Every DHCP setting needs a restart.</b> `DhcpSettingsController` always returns the
- * restart note (for example, the relay `Enable` flags choose in `Program.cs`, at startup, whether
- * the local engine or the relay agent answers), and each card shows that note after a save.
+ * <p><b>Most DHCP settings need a restart.</b> `DhcpSettingsController` returns the restart note
+ * (for example, the relay `Enable` flags choose in `Program.cs`, at startup, whether the local
+ * engine or the relay agent answers), and each card shows the note the API returns after a save.
+ * Two things apply at once: the core `leaseExpirySweepInterval` (which must be positive) and the
+ * Router Advertisement content card (`raForm`), whose note says so. The RA card limits
+ * Recursive DNS Servers to 75 entries so one advertisement fits 1240 octets
+ * ({@link maxRecursiveDnsServersValidator}).
  *
  * <p>The two Router Advertisement cards split transport and timing (`raProtocolForm`) from content
  * (`raForm`). `raForm` has no control for `RaOptions.Prefixes`, which is set only in the
@@ -165,6 +171,7 @@ export class DhcpSettingsComponent implements OnInit {
     serverIdentifierAddress: [''],
     offerHoldDuration: ['00:02:00', [Validators.required]],
     declinedAddressQuarantineDuration: ['00:15:00', [Validators.required]],
+    leaseExpirySweepInterval: ['00:01:00', [Validators.required, positiveDurationValidator]],
   });
 
   readonly protocolForm = this.formBuilder.group({
@@ -219,7 +226,7 @@ export class DhcpSettingsComponent implements OnInit {
     reachableTime: ['00:00:00', [Validators.required]],
     retransTimer: ['00:00:00', [Validators.required]],
     linkMtu: this.formBuilder.control<number | null>(null, [Validators.min(1280)]),
-    recursiveDnsServers: [''],
+    recursiveDnsServers: ['', [maxRecursiveDnsServersValidator]],
     recursiveDnsServerLifetime: ['00:30:00', [Validators.required]],
     dnsSearchListDomains: [''],
     dnsSearchListLifetime: ['00:30:00', [Validators.required]],
@@ -296,7 +303,10 @@ export class DhcpSettingsComponent implements OnInit {
       reachableTime: [override?.reachableTime ?? ''],
       retransTimer: [override?.retransTimer ?? ''],
       linkMtu: [override?.linkMtu != null ? String(override.linkMtu) : '', [Validators.min(1280)]],
-      recursiveDnsServers: [joinLines(override?.recursiveDnsServers)],
+      recursiveDnsServers: [
+        joinLines(override?.recursiveDnsServers),
+        [maxRecursiveDnsServersValidator],
+      ],
       recursiveDnsServerLifetime: [override?.recursiveDnsServerLifetime ?? ''],
       dnsSearchListDomains: [joinLines(override?.dnsSearchListDomains)],
       dnsSearchListLifetime: [override?.dnsSearchListLifetime ?? ''],
@@ -319,6 +329,7 @@ export class DhcpSettingsComponent implements OnInit {
             serverIdentifierAddress: value.serverIdentifierAddress || null,
             offerHoldDuration: value.offerHoldDuration,
             declinedAddressQuarantineDuration: value.declinedAddressQuarantineDuration,
+            leaseExpirySweepInterval: value.leaseExpirySweepInterval,
           },
         }),
       );
@@ -567,6 +578,7 @@ export class DhcpSettingsComponent implements OnInit {
         serverIdentifierAddress: core.serverIdentifierAddress ?? '',
         offerHoldDuration: core.offerHoldDuration ?? '00:02:00',
         declinedAddressQuarantineDuration: core.declinedAddressQuarantineDuration ?? '00:15:00',
+        leaseExpirySweepInterval: core.leaseExpirySweepInterval ?? '00:01:00',
       });
 
       this.protocolForm.patchValue({

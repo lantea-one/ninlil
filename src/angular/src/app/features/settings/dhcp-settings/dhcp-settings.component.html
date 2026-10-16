@@ -55,7 +55,23 @@
             />
           </div>
         </div>
-        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+
+        <div class="field">
+          <label cLabel for="dhcp-core-lease-expiry-sweep">Lease expiry sweep interval</label>
+          <input
+            cFormControl
+            id="dhcp-core-lease-expiry-sweep"
+            formControlName="leaseExpirySweepInterval"
+            placeholder="00:01:00"
+          />
+          @if (coreForm.controls.leaseExpirySweepInterval.hasError('positiveDuration')) {
+            <div class="field-error">Enter a duration greater than zero, such as 00:01:00.</div>
+          }
+          <div cFormText>How often the server looks for expired leases. Applies at once.</div>
+        </div>
+        <div cFormText class="restart-note">
+          The sweep interval applies at once; every other field here needs this server to restart.
+        </div>
       </form>
     </c-card-body>
 
@@ -665,7 +681,13 @@
             rows="2"
             placeholder="2001:db8::1"
           ></textarea>
-          <div cFormText>One IPv6 address per line. RFC 8106 Section 5.1.</div>
+          <div cFormText>
+            One IPv6 address per line, at most 75 so the advertisement fits 1240 octets. RFC 8106
+            Section 5.1.
+          </div>
+          @if (raForm.controls.recursiveDnsServers.hasError('maxEntries')) {
+            <div class="field-error">At most 75 addresses fit one advertisement.</div>
+          }
         </div>
 
         <div class="field">
@@ -689,7 +711,10 @@
             rows="2"
             placeholder="homelab.internal"
           ></textarea>
-          <div cFormText>One domain suffix per line. RFC 8106 Section 5.2.</div>
+          <div cFormText>
+            One domain suffix per line. The encoded list (each name's length plus 2 octets) must fit
+            1208 octets; the server rejects a longer list. RFC 8106 Section 5.2.
+          </div>
         </div>
 
         <div class="field">
@@ -988,7 +1013,7 @@
           </button>
         </div>
 
-        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+        <div cFormText class="restart-note">These settings apply at once, without a restart.</div>
       </form>
     </c-card-body>
 
