@@ -28,8 +28,9 @@ public sealed class TftpServerOptions
     public int Port { get; set; } = 69;
 
     /// <summary>
-    ///     This property contains the directory files are served from. A leading <c>/</c>
-    ///     in a requested name means this directory. A request for a path that resolves outside it
+    ///     This property contains the directory files are served from. A requested name may use
+    ///     <c>/</c> or <c>\</c> between directories (Windows PXE clients send <c>\</c>), and a
+    ///     leading separator of either kind means this directory. A request for a path that resolves outside it
     ///     through <c>..</c> segments gets an Access Violation error. A symbolic link is followed
     ///     only when its target and every step on the way stay inside the directory; the directory
     ///     itself may be a link. Left empty (the default) or pointing at a
@@ -46,7 +47,10 @@ public sealed class TftpServerOptions
 
     /// <summary>
     ///     This property contains how many times one Data block is resent before the transfer is
-    ///     abandoned, so an unresponsive client cannot hold a socket and task open forever.
+    ///     abandoned, so an unresponsive client cannot hold a socket and task open forever. An
+    ///     abandoned transfer is logged at Debug and counted; the server logs one Warning per
+    ///     minute that summarizes the abandoned transfers, client errors, rejected paths and
+    ///     transfer socket failures since the last summary.
     /// </summary>
     public int MaxRetransmissions { get; set; } = 5;
 

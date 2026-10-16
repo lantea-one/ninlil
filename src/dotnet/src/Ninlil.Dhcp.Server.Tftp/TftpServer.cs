@@ -29,13 +29,23 @@ namespace Ninlil.Dhcp.Server.Tftp;
 ///         replies hold a slot too, because they use a transfer socket.
 ///     </para>
 ///     <para>
+///         <b>Transfer problems.</b> A transfer that the client never acknowledges, an Error
+///         packet from the client, a rejected path and a transfer socket that cannot be created
+///         are each logged at Debug and counted. A request source can be spoofed within the caps,
+///         so a Warning for each would let one sender flood the log. <see cref="ReportProblems" />
+///         instead logs one Warning per <see cref="DropReportInterval" /> with the count of each
+///         kind and the latest example. A socket failure ends only that transfer: the task still
+///         completes normally and its slots are freed.
+///     </para>
+///     <para>
 ///         <b>Octet mode only.</b> A request for <c>netascii</c> or <c>mail</c> gets an Illegal
 ///         Operation error. Boot files are binary, and <c>netascii</c> exists only to translate
 ///         text line endings between hosts. TFTP options (RFC 2347, such as <c>blksize</c> and
 ///         <c>tsize</c>) are ignored, so every transfer uses 512-byte blocks.
 ///     </para>
 ///     <para>
-///         <b>Path confinement.</b> <see cref="TftpPathResolver" /> treats a leading <c>/</c> as
+///         <b>Path confinement.</b> <see cref="TftpPathResolver" /> treats <c>\</c> like <c>/</c>
+///         (Windows PXE clients send it), treats a leading separator as
 ///         the root, rejects <c>..</c> escapes and follows a symbolic link only when every step and
 ///         the final real path stay inside the real root directory.
 ///     </para>
@@ -109,7 +119,44 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     /// <summary>
     ///     This field contains when the dropped count was last reported, or when the run started.
     /// </summary>
-    private DateTime _lastDropReportUtc;
+    private DateTimeOffset _lastDropReportUtc;
+
+    /// <summary>
+    ///     This field contains the transfers abandoned for lack of an acknowledgment since the
+    ///     last problem summary. Transfer tasks add with <see cref="Interlocked" />, and
+    ///     <see cref="ReportProblems" /> takes the value and resets it.
+    /// </summary>
+    private long _abandonedCount;
+
+    /// <summary>
+    ///     This field contains the transfers aborted by an Error packet from the client since the
+    ///     last problem summary (see <see cref="_abandonedCount" />).
+    /// </summary>
+    private long _clientErrorCount;
+
+    /// <summary>
+    ///     This field contains the requests refused for their path since the last problem
+    ///     summary (see <see cref="_abandonedCount" />). A path that names no file is not a
+    ///     refusal.
+    /// </summary>
+    private long _rejectedPathCount;
+
+    /// <summary>
+    ///     This field contains the transfers that could not get a socket since the last problem
+    ///     summary (see <see cref="_abandonedCount" />).
+    /// </summary>
+    private long _socketFailureCount;
+
+    /// <summary>
+    ///     This field contains the most recent transfer problem, for the summary. Transfer tasks
+    ///     replace it without a lock, so the summary may show any recent one.
+    /// </summary>
+    private TransferProblem _latestProblem;
+
+    /// <summary>
+    ///     This field contains when the problems were last summarized, or when the run started.
+    /// </summary>
+    private DateTimeOffset _lastProblemReportUtc;
 
     private Socket _socket;
 
@@ -133,10 +180,24 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     internal int MaxTransfersPerClient { get; set; } = 4;
 
     /// <summary>
-    ///     This property contains the minimum time between two warnings about dropped requests.
+    ///     This property contains the minimum time between two warnings about dropped requests,
+    ///     and between two summaries of transfer problems (see <see cref="ReportProblems" />).
     ///     Tests shorten it.
     /// </summary>
     internal TimeSpan DropReportInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    ///     This property contains the clock that times the report intervals. Tests replace it so
+    ///     they advance time instead of waiting.
+    /// </summary>
+    internal TimeProvider TimeSource { get; set; } = TimeProvider.System;
+
+    /// <summary>
+    ///     This property creates the socket one transfer sends from. The default is an unbound
+    ///     UDP socket; tests replace it to make socket creation fail or to count the sockets.
+    /// </summary>
+    internal Func<Socket> TransferSocketFactory { get; set; } =
+        () => new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
     /// <summary>
     ///     This property contains how many transfer tasks are in flight. Tests read it to check
@@ -224,7 +285,13 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             _clientTransferCounts.Clear();
             _droppedCount = 0;
             _reportedDropped = 0;
-            _lastDropReportUtc = DateTime.UtcNow;
+            _lastDropReportUtc = TimeSource.GetUtcNow();
+            _lastProblemReportUtc = _lastDropReportUtc;
+            Interlocked.Exchange(ref _abandonedCount, 0);
+            Interlocked.Exchange(ref _clientErrorCount, 0);
+            Interlocked.Exchange(ref _rejectedPathCount, 0);
+            Interlocked.Exchange(ref _socketFailureCount, 0);
+            _latestProblem = null;
 
             _socket = socket;
             _receiveLoopCts = receiveLoopCts;
@@ -372,6 +439,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                     failureReason
                 );
                 ReportDropped(force: false);
+                ReportProblems(force: false);
                 continue;
             }
 
@@ -379,6 +447,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             {
                 _droppedCount++;
                 ReportDropped(force: false);
+                ReportProblems(force: false);
                 continue;
             }
 
@@ -399,9 +468,12 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 },
                 TaskScheduler.Default
             );
+
+            ReportProblems(force: false);
         }
 
         ReportDropped(force: true);
+        ReportProblems(force: true);
     }
 
     /// <summary>
@@ -454,7 +526,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     /// </summary>
     private void ReportDropped(bool force)
     {
-        DateTime now = DateTime.UtcNow;
+        DateTimeOffset now = TimeSource.GetUtcNow();
 
         if (!force && now - _lastDropReportUtc < DropReportInterval)
             return;
@@ -473,6 +545,64 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
+    ///     This method logs one Warning that summarizes the transfer problems counted since the
+    ///     last summary (abandoned transfers, client Errors, rejected paths, socket failures)
+    ///     with the latest example, if there were any and if <see cref="DropReportInterval" /> has
+    ///     passed or <paramref name="force" /> is set. Only the receive loop calls it, on every
+    ///     datagram and when it ends, so the problems of a quiet period are reported with the
+    ///     next datagram or at the latest when the server stops. The summary replaces one Warning
+    ///     per problem, which a spoofed sender could use to flood the log.
+    /// </summary>
+    private void ReportProblems(bool force)
+    {
+        DateTimeOffset now = TimeSource.GetUtcNow();
+
+        if (!force && now - _lastProblemReportUtc < DropReportInterval)
+            return;
+
+        long abandoned = Interlocked.Exchange(ref _abandonedCount, 0);
+        long clientErrors = Interlocked.Exchange(ref _clientErrorCount, 0);
+        long rejectedPaths = Interlocked.Exchange(ref _rejectedPathCount, 0);
+        long socketFailures = Interlocked.Exchange(ref _socketFailureCount, 0);
+
+        if (abandoned + clientErrors + rejectedPaths + socketFailures == 0)
+            return;
+
+        _lastProblemReportUtc = now;
+        TransferProblem latest = _latestProblem;
+        logger.LogWarning(
+            "The TFTP server had transfer problems since the last report: {Abandoned} transfers without an acknowledgment, {ClientErrors} aborted by the client, {RejectedPaths} requests with a refused path, {SocketFailures} transfer socket failures. Latest: {Kind} for {RemoteEndPoint}, '{Filename}', {Detail}",
+            abandoned,
+            clientErrors,
+            rejectedPaths,
+            socketFailures,
+            latest?.Kind,
+            latest?.Client,
+            latest?.Filename,
+            latest?.Detail
+        );
+    }
+
+    /// <summary>
+    ///     This method counts one transfer problem for the next <see cref="ReportProblems" />
+    ///     summary, remembers it as the latest example and logs it at Debug.
+    /// </summary>
+    /// <param name="counter">The count field of the problem's kind.</param>
+    /// <param name="problem">The problem, kept as the latest example.</param>
+    private void CountProblem(ref long counter, TransferProblem problem)
+    {
+        Interlocked.Increment(ref counter);
+        Volatile.Write(ref _latestProblem, problem);
+        logger.LogDebug(
+            "TFTP transfer problem ({Kind}) for {RemoteEndPoint}, '{Filename}': {Detail}",
+            problem.Kind,
+            problem.Client,
+            problem.Filename,
+            problem.Detail
+        );
+    }
+
+    /// <summary>
     ///     This method handles one parsed request from the listening socket. It answers with an Error
     ///     packet when the request is a write, uses another mode than octet, names a path outside
     ///     the root or names a missing file, and otherwise sends the file.
@@ -486,15 +616,17 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
         CancellationToken stoppingToken
     )
     {
-        using Socket transferSocket = new(
-            AddressFamily.InterNetwork,
-            SocketType.Dgram,
-            ProtocolType.Udp
-        );
+        Socket transferSocket = null;
 
         try
         {
-            transferSocket.Bind(new IPEndPoint(IPAddress.Any, 0));
+            // Creating the socket can fail (for example, no free file descriptors). It happens
+            // inside the try so that the task still completes normally and the continuation in
+            // the receive loop frees the slots.
+            transferSocket = OpenTransferSocket(request, clientEndPoint);
+
+            if (transferSocket is null)
+                return;
 
             if (request.Opcode == TftpOpcodeEnum.WriteRequest)
             {
@@ -542,11 +674,14 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                     return;
                 }
 
-                logger.LogWarning(
-                    "Rejecting a TFTP request from {RemoteEndPoint} for '{Filename}': {Reason}",
-                    clientEndPoint,
-                    request.Filename,
-                    rejectReason
+                CountProblem(
+                    ref _rejectedPathCount,
+                    new TransferProblem(
+                        "rejected path",
+                        clientEndPoint,
+                        request.Filename,
+                        rejectReason
+                    )
                 );
                 await SendErrorAsync(
                     transferSocket,
@@ -558,7 +693,13 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 return;
             }
 
-            await TransferFileAsync(transferSocket, clientEndPoint, resolvedPath, stoppingToken);
+            await TransferFileAsync(
+                transferSocket,
+                request,
+                clientEndPoint,
+                resolvedPath,
+                stoppingToken
+            );
         }
         catch (OperationCanceledException)
         {
@@ -577,6 +718,41 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 clientEndPoint
             );
         }
+        finally
+        {
+            transferSocket?.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     This method creates and binds the socket one transfer sends from, through
+    ///     <see cref="TransferSocketFactory" />. A failure is counted as a socket failure and
+    ///     returns <see langword="null" />, which ends only this transfer.
+    /// </summary>
+    private Socket OpenTransferSocket(TftpRequestPacket request, IPEndPoint clientEndPoint)
+    {
+        Socket socket = null;
+
+        try
+        {
+            socket = TransferSocketFactory();
+            socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+            return socket;
+        }
+        catch (Exception exception)
+        {
+            socket?.Dispose();
+            CountProblem(
+                ref _socketFailureCount,
+                new TransferProblem(
+                    "socket failure",
+                    clientEndPoint,
+                    request.Filename,
+                    exception.Message
+                )
+            );
+            return null;
+        }
     }
 
     /// <summary>
@@ -586,6 +762,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     /// </summary>
     private async Task TransferFileAsync(
         Socket transferSocket,
+        TftpRequestPacket request,
         IPEndPoint clientEndPoint,
         string path,
         CancellationToken stoppingToken
@@ -604,22 +781,28 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 blockBuffer.AsSpan(0, bytesRead)
             );
 
-            bool acknowledged = await SendWithRetriesAsync(
+            BlockOutcome outcome = await SendWithRetriesAsync(
                 transferSocket,
+                request,
                 clientEndPoint,
                 dataPacket,
                 blockNumber,
                 stoppingToken
             );
 
-            if (!acknowledged)
+            if (outcome == BlockOutcome.ClientError)
+                return;
+
+            if (outcome == BlockOutcome.TimedOut)
             {
-                logger.LogWarning(
-                    "Aborting a TFTP transfer of '{Path}' to {RemoteEndPoint}: no acknowledgment after {MaxRetransmissions} retransmissions of block {BlockNumber}.",
-                    path,
-                    clientEndPoint,
-                    options.Value.MaxRetransmissions,
-                    blockNumber
+                CountProblem(
+                    ref _abandonedCount,
+                    new TransferProblem(
+                        "no acknowledgment",
+                        clientEndPoint,
+                        request.Filename,
+                        $"block {blockNumber} after {options.Value.MaxRetransmissions} retransmissions"
+                    )
                 );
                 return;
             }
@@ -636,12 +819,14 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     ///     avoids the Sorcerer's Apprentice problem.
     /// </summary>
     /// <returns>
-    ///     <see langword="true" /> if the client acknowledged this block;
-    ///     <see langword="false" /> if every attempt timed out or the client sent an Error
-    ///     packet.
+    ///     <see cref="BlockOutcome.Acknowledged" /> if the client acknowledged this block,
+    ///     <see cref="BlockOutcome.TimedOut" /> if every attempt timed out, or
+    ///     <see cref="BlockOutcome.ClientError" /> if the client sent an Error packet (already
+    ///     counted as a transfer problem).
     /// </returns>
-    private async Task<bool> SendWithRetriesAsync(
+    private async Task<BlockOutcome> SendWithRetriesAsync(
         Socket transferSocket,
+        TftpRequestPacket request,
         IPEndPoint clientEndPoint,
         byte[] dataPacket,
         ushort blockNumber,
@@ -683,7 +868,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                     )
                     {
                         if (acknowledgedBlockNumber == blockNumber)
-                            return true;
+                            return BlockOutcome.Acknowledged;
 
                         // An Acknowledgment for an earlier block, usually a duplicate.
                         continue;
@@ -698,13 +883,16 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                         )
                     )
                     {
-                        logger.LogWarning(
-                            "A TFTP transfer to {RemoteEndPoint} was aborted by the client: {ErrorCode} {ErrorMessage}",
-                            clientEndPoint,
-                            errorCode,
-                            errorMessage
+                        CountProblem(
+                            ref _clientErrorCount,
+                            new TransferProblem(
+                                "client error",
+                                clientEndPoint,
+                                request.Filename,
+                                $"{errorCode} {errorMessage}"
+                            )
                         );
-                        return false;
+                        return BlockOutcome.ClientError;
                     }
 
                     // Anything else is ignored.
@@ -720,7 +908,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             }
         }
 
-        return false;
+        return BlockOutcome.TimedOut;
     }
 
     /// <summary>
@@ -778,4 +966,34 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
 
         return totalRead;
     }
+
+    /// <summary>
+    ///     This enum is how waiting for the acknowledgment of one Data block ended.
+    /// </summary>
+    private enum BlockOutcome
+    {
+        /// <summary>The client acknowledged the block.</summary>
+        Acknowledged,
+
+        /// <summary>No acknowledgment arrived after the last retransmission.</summary>
+        TimedOut,
+
+        /// <summary>The client sent an Error packet.</summary>
+        ClientError,
+    }
+
+    /// <summary>
+    ///     This record is one transfer problem, kept as the latest example for the summary that
+    ///     <see cref="ReportProblems" /> logs.
+    /// </summary>
+    /// <param name="Kind">The kind, such as "rejected path".</param>
+    /// <param name="Client">The client the request came from.</param>
+    /// <param name="Filename">The file name the client asked for.</param>
+    /// <param name="Detail">The reason or error text.</param>
+    private sealed record TransferProblem(
+        string Kind,
+        IPEndPoint Client,
+        string Filename,
+        string Detail
+    );
 }

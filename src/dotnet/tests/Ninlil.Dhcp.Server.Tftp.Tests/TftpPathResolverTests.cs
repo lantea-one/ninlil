@@ -59,6 +59,55 @@ public sealed class TftpPathResolverTests : IDisposable
         Assert.Equal(Path.Combine(realRoot, "pxelinux.0"), path);
     }
 
+    [Theory]
+    [InlineData(@"boot\x64\wdsnbp.com")]
+    [InlineData(@"\boot\x64\wdsnbp.com")]
+    [InlineData(@"boot/x64\wdsnbp.com")]
+    [InlineData(@"\/boot//x64\wdsnbp.com")]
+    public void TryResolve_WithBackslashSeparators_ResolvesLikeTheSlashForm(string requested)
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "boot", "x64"));
+        File.WriteAllText(Path.Combine(_root, "boot", "x64", "wdsnbp.com"), "wds");
+        string realRoot = TftpPathResolver.ResolveRealRoot(_root);
+
+        bool ok = TftpPathResolver.TryResolve(realRoot, requested, out string path, out _, out _);
+
+        Assert.True(ok);
+        Assert.Equal(Path.Combine(realRoot, "boot", "x64", "wdsnbp.com"), path);
+    }
+
+    [Fact]
+    public void TryResolve_WithALeadingBackslash_ResolvesInsideTheRoot()
+    {
+        string realRoot = TftpPathResolver.ResolveRealRoot(_root);
+
+        bool ok = TftpPathResolver.TryResolve(
+            realRoot,
+            @"\pxelinux.0",
+            out string path,
+            out _,
+            out _
+        );
+
+        Assert.True(ok);
+        Assert.Equal(Path.Combine(realRoot, "pxelinux.0"), path);
+    }
+
+    [Theory]
+    [InlineData(@"..\..\etc\passwd")]
+    [InlineData(@"..\outside\secret.txt")]
+    [InlineData(@"images\..\..\outside\secret.txt")]
+    [InlineData(@"\..\outside\secret.txt")]
+    public void TryResolve_WithABackslashTraversal_IsDenied(string requested)
+    {
+        string realRoot = TftpPathResolver.ResolveRealRoot(_root);
+
+        bool ok = TftpPathResolver.TryResolve(realRoot, requested, out _, out _, out bool notFound);
+
+        Assert.False(ok);
+        Assert.False(notFound);
+    }
+
     [Fact]
     public void TryResolve_WithADotDotEscape_IsDenied()
     {

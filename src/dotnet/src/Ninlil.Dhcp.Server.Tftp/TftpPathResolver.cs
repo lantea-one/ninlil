@@ -51,7 +51,10 @@ internal static class TftpPathResolver
     }
 
     /// <summary>
-    ///     This method resolves a requested filename against the real root.
+    ///     This method resolves a requested filename against the real root. Both <c>/</c> and
+    ///     <c>\</c> separate directories (Windows PXE clients send <c>\</c>), alone or mixed, and a
+    ///     leading separator of either kind means the root. Matching stays case-sensitive on
+    ///     Linux.
     /// </summary>
     /// <param name="realRoot">The directory from <see cref="ResolveRealRoot" />.</param>
     /// <param name="requested">The filename as the client sent it.</param>
@@ -74,8 +77,11 @@ internal static class TftpPathResolver
         reason = null;
         notFound = false;
 
-        // A leading "/" means "from the root" for TFTP clients, as in other TFTP servers.
-        string relative = requested?.TrimStart('/');
+        // RFC 1350 gives file names no separator semantics, and Windows Deployment Services sends
+        // "\" between directories. Every "\" becomes "/" first, so "boot\x64\a.bin" and a
+        // leading "\" resolve like their "/" forms on every OS, and "..\.." is still caught by the
+        // confinement check below. A leading "/" means "from the root", as in other TFTP servers.
+        string relative = requested?.Replace('\\', '/').TrimStart('/');
         if (string.IsNullOrWhiteSpace(relative) || relative.Contains('\0'))
         {
             reason = "No filename was given.";

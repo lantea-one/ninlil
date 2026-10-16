@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Sockets;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Server.Tftp.Wire;
 
@@ -22,7 +21,7 @@ public sealed class TftpServerTransferCapTests : IAsyncLifetime
         $"ninlil-tftp-cap-root-{Guid.NewGuid()}"
     );
 
-    private readonly CapturingLogger _logger = new();
+    private readonly CapturingTftpLogger _logger = new();
     private TftpServer _server;
 
     /// <inheritdoc />
@@ -226,34 +225,4 @@ public sealed class TftpServerTransferCapTests : IAsyncLifetime
             .. "octet"u8.ToArray(),
             0x00,
         ];
-
-    /// <summary>
-    ///     This class collects the messages the server logs so a test can read the warnings.
-    /// </summary>
-    private sealed class CapturingLogger : ILogger<TftpServer>
-    {
-        private readonly List<(LogLevel Level, string Message)> _entries = [];
-
-        public IDisposable BeginScope<TState>(TState state) => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception exception,
-            Func<TState, Exception, string> formatter
-        )
-        {
-            lock (_entries)
-                _entries.Add((logLevel, formatter(state, exception)));
-        }
-
-        public List<string> Warnings()
-        {
-            lock (_entries)
-                return [.. _entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message)];
-        }
-    }
 }
