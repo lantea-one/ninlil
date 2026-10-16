@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Primitives;
+﻿using System.Net;
+using System.Net.Sockets;
 using Microsoft.Net.Http.Headers;
 
 // Define our namespace.
@@ -6,37 +7,50 @@ namespace Ninlil.Common.Extension.HttpContext;
 
 /// <summary>
 ///     This static class reads client details (address, bearer token, user agent) from an ASP.NET
-///     Core <see cref="Microsoft.AspNetCore.Http.HttpContext" />.
+///     Core <see cref="Microsoft.AspNetCore.Http.HttpContext" />. The address comes from the connection
+///     only, never from a forwarded header.
 /// </summary>
 public static class HttpContextExtensions
 {
     /// <summary>
-    ///     This method returns the client's IP address: the first address in an
-    ///     <c>X-Forwarded-For</c> header when one is present, otherwise the connection's remote
-    ///     address. The header is trusted as sent, so only use this behind a proxy that sets it.
+    ///     This method returns the address of the peer that opened the connection, in canonical
+    ///     form: an IPv4-mapped IPv6 address becomes IPv4, an IPv6 address loses its scope id and
+    ///     any other address is unchanged. It returns <see langword="null" /> when the connection
+    ///     has no remote address. Behind a reverse proxy, configure the forwarded-headers
+    ///     middleware with the proxies' addresses (<c>Ninlil.Web</c> does this from
+    ///     <c>ReverseProxy:KnownProxies</c> and <c>ReverseProxy:KnownNetworks</c>); it replaces the
+    ///     remote address for trusted peers only, and this method then returns the client's
+    ///     address.
     /// </summary>
     /// <param name="instance">The HttpContext instance to pull the IP address from.</param>
-    /// <returns>The IP address of the current client.</returns>
+    /// <returns>The IP address of the current client, or <see langword="null" />.</returns>
     public static string GetIpAddress(this Microsoft.AspNetCore.Http.HttpContext instance)
     {
-        // For a proxied request, return the first (original caller's) address in the forwarded
-        // chain. A missing or blank header falls through to RemoteIpAddress below.
-        if (
-            instance.Request.Headers.TryGetValue("x-forwarded-for", out StringValues forwardedFor)
-            && !string.IsNullOrWhiteSpace(forwardedFor.ToString())
-        )
-        {
-            return forwardedFor.ToString().Split(',')[0].Trim();
-        }
+        IPAddress remote = instance.Connection.RemoteIpAddress;
+        if (remote is null)
+            return null;
 
-        // We're done, return the IP address from the framework.
-        return instance.Connection.RemoteIpAddress?.MapToIPv4().ToString()
-            ?? instance.Connection.RemoteIpAddress?.MapToIPv6().ToString();
+        // Security decision: this method never reads X-Forwarded-For or any other forwarded
+        // header. Those headers are client-controlled unless the immediate peer is a trusted
+        // proxy, and this library has no trust list. Proxy trust lives in the forwarded-headers
+        // middleware (Program.cs in Ninlil.Web, gated by ReverseProxyTrustGatingMiddleware),
+        // which rewrites RemoteIpAddress for trusted peers only.
+        if (remote.IsIPv4MappedToIPv6)
+            return remote.MapToIPv4().ToString();
+
+        // A scope id (fe80::1%2) names a local interface, not part of the client's identity.
+        if (remote.AddressFamily == AddressFamily.InterNetworkV6 && remote.ScopeId != 0)
+            return new IPAddress(remote.GetAddressBytes()).ToString();
+
+        return remote.ToString();
     }
 
     /// <summary>
     ///     This method returns the token from an <c>Authorization: Bearer ...</c> header, or
-    ///     <see langword="null" /> when there is no bearer header.
+    ///     <see langword="null" /> when there is no bearer header. The scheme matches
+    ///     case-insensitively and must be followed by at least one space (RFC 6750 §2.1, RFC 9110
+    ///     §11.1), so <c>BearerXYZ</c> has no token. A header without a token gives
+    ///     <see langword="null" />.
     /// </summary>
     /// <param name="instance">The HttpContext instance to pull the authorization bearer from.</param>
     /// <returns>The authorization bearer from the HTTP request <paramref name="instance" /> if it exists.</returns>
@@ -56,10 +70,13 @@ public static class HttpContextExtensions
         if (authorizationHeader?.Trim() is null or "")
             return null;
 
-        // We're done, make sure we have an authorization bearer value and return.
-        return !authorizationHeader.StartsWith("bearer", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : authorizationHeader["bearer".Length..].Trim();
+        // The scheme and the token are separated by at least one space.
+        const string Scheme = "bearer ";
+        if (!authorizationHeader.StartsWith(Scheme, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        string token = authorizationHeader[Scheme.Length..].Trim();
+        return token.Length == 0 ? null : token;
     }
 
     /// <summary>
