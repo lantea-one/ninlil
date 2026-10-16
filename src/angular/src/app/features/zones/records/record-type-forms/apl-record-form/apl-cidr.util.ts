@@ -2,6 +2,11 @@
  * This module converts between CIDR text (`192.0.2.0/24`, `2001:db8::/32`) and the APL item shape
  * `AplRecordFormComponent` sends, for IPv4 and IPv6. The backend's `AplItem` stores the address as
  * a short `byte[]` (`AddressFamilyDependentPart`), which would be unusable to type by hand.
+ *
+ * The bytes are sent in canonical form: bits after the prefix are cleared and trailing zero octets
+ * are dropped, so `10.0.0.0/24` sends the single octet `0A`. RFC 3123 §4 says a sender MUST NOT
+ * include trailing zero octets in the address part, and the records API refuses an item that
+ * does (`RecordDataValidator`).
  */
 
 /** This interface is the APL item shape {@link parseCidr} produces. */
@@ -10,7 +15,10 @@ export interface AplCidrParts {
   addressFamily: number;
   /** The prefix length, in bits. */
   prefixLength: number;
-  /** The bytes the prefix covers (`ceil(prefixLength / 8)` of them), base64-encoded. */
+  /**
+   * The address bytes in canonical form (host bits cleared, trailing zero octets dropped, so at
+   * most `ceil(prefixLength / 8)` of them), base64-encoded.
+   */
   addressFamilyDependentPart: string;
 }
 
@@ -117,8 +125,11 @@ function base64ToBytes(base64: string): number[] {
 
 /**
  * This function parses a CIDR string (`192.0.2.0/24` or `2001:db8::/32`) into an address family,
- * prefix length and the address bytes the prefix covers. It throws on a malformed address or an
- * out-of-range prefix length.
+ * prefix length and the canonical address bytes: every bit after the prefix is cleared, then
+ * trailing zero octets are dropped. `0.0.0.0/0` gives no bytes, `10.0.0.0/24` gives `0A` and
+ * `10.1.255.0/20` gives `0A 01 F0`. Dropping trailing zeros is RFC 3123 §4; clearing the host bits
+ * is this module's choice, so the stored item always names exactly the prefix the operator typed.
+ * It throws on a malformed address or an out-of-range prefix length.
  */
 export function parseCidr(cidr: string): AplCidrParts {
   const [address, prefixText] = cidr.split('/');
@@ -132,13 +143,25 @@ export function parseCidr(cidr: string): AplCidrParts {
   }
 
   // Keep only the bytes the prefix covers (a /24 keeps 3 octets), rounding up so a /20 keeps its
-  // partial byte. Trailing zero bytes inside the prefix are kept.
+  // partial byte, and clear the bits after the prefix inside that partial byte. The mask keeps the
+  // top (prefixLength mod 8) bits; a whole-octet prefix needs none.
   const significantByteCount = Math.ceil(prefixLength / 8);
+  const significantBytes = fullBytes.slice(0, significantByteCount);
+  const partialBitCount = prefixLength % 8;
+
+  if (partialBitCount !== 0) {
+    significantBytes[significantByteCount - 1] &= (0xff << (8 - partialBitCount)) & 0xff;
+  }
+
+  // RFC 3123 §4: no trailing zero octets, whatever the prefix length says.
+  while (significantBytes.length > 0 && significantBytes[significantBytes.length - 1] === 0) {
+    significantBytes.pop();
+  }
 
   return {
     addressFamily: isIpv6 ? 2 : 1,
     prefixLength,
-    addressFamilyDependentPart: bytesToBase64(fullBytes.slice(0, significantByteCount)),
+    addressFamilyDependentPart: bytesToBase64(significantBytes),
   };
 }
 
