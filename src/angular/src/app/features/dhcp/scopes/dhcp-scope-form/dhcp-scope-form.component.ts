@@ -44,7 +44,10 @@ import {
 } from '../../../../api-client';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
-import { planDhcpOptionReconciliation } from '../../shared/dhcp-option-reconcile.util';
+import {
+  findDuplicateOptionTag,
+  planDhcpOptionReconciliation,
+} from '../../shared/dhcp-option-reconcile.util';
 import {
   assertDhcpv4OptionValueLength,
   assertDhcpv6OptionValueLength,
@@ -69,7 +72,23 @@ type DhcpScopeOptionRowFormGroup = FormGroup<{
   value: FormControl<string>;
   isDisabled: FormControl<boolean>;
   comments: FormControl<string>;
+  /** UI only, never sent: the catalog entry whose format the stored bytes did not fit, or `null`. */
+  storedValueNote: FormControl<string | null>;
 }>;
+
+/**
+ * This interface is one option write the save is about to make, with the row it came from so a
+ * failure can name the row and a created id can be written back to it.
+ */
+interface DhcpScopeOptionWrite {
+  /** The row's `FormGroup`; the created id is written to its `id` control. */
+  row: DhcpScopeOptionRowFormGroup;
+  /** The 1-based row number shown in messages. */
+  rowNumber: number;
+  /** The saved option's id, or `null` for a row not yet saved. */
+  id: string | null;
+  request: DhcpScopeCustomOptionWriteRequest;
+}
 
 /** The `catalogSelection` value for a tag typed by hand rather than chosen from the catalog. */
 const CUSTOM_TAG_SELECTION = 'custom';
@@ -100,6 +119,16 @@ interface DhcpOptionRowViewState {
  * choice takes a typed tag and a raw hex value. On save the rows are written one call at a time
  * through `/api/dhcp-scopes/{id}/custom-options`, which has no bulk replace
  * ({@link planDhcpOptionReconciliation}).
+ *
+ * <p>A stored value that does not decode for its catalog type is shown as a custom row with the
+ * raw hex and a note, and saves unchanged. Two rows with the same tag are refused before any
+ * call ({@link findDuplicateOptionTag}).
+ *
+ * <p>The save is not atomic. The scope is saved first, then its options in the order deletes,
+ * updates, creates. {@link savedScopeId} holds the scope's id once it exists, so a retry after a
+ * failed option call edits that scope instead of creating a second one, and each created option's
+ * id is written back to its row so the retry updates it instead of posting it again. The page
+ * navigates away only when the scope and every option call succeeded.
  *
  * <p>Custom options of an IPv6 scope are delivered like those of an IPv4 scope, with the DHCPv6
  * limits (codes 1 to 255 without the codes the engine owns). The gateway field shows for IPv4
@@ -154,12 +183,20 @@ export class DhcpScopeFormComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  private readonly scopeId = this.route.snapshot.paramMap.get('scopeId');
+  /** The `scopeId` route parameter: the scope to load, or `null` on the create page. */
+  private readonly routeScopeId = this.route.snapshot.paramMap.get('scopeId');
 
-  /** Whether this instance is editing an existing scope rather than creating a new one. */
-  readonly isEditMode = this.scopeId !== null;
+  /**
+   * The id of the scope this page edits: the route parameter, or the id the first successful
+   * `POST` returned. It is state, not a constant, so a save that created the scope but failed on
+   * an option row makes the next save a `PUT` instead of a second `POST`.
+   */
+  readonly savedScopeId = signal<string | null>(this.routeScopeId);
 
-  readonly loading = signal(this.isEditMode);
+  /** Whether the next save edits an existing scope: true on the edit page and after a create. */
+  readonly isEditMode = computed(() => this.savedScopeId() !== null);
+
+  readonly loading = signal(this.routeScopeId !== null);
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
@@ -287,7 +324,7 @@ export class DhcpScopeFormComponent implements OnInit {
   ngOnInit(): void {
     void this.loadEligibleZones();
     void this.loadOptionCatalog(this.form.controls.protocolVersion.value);
-    if (this.isEditMode) void this.loadExistingScope();
+    if (this.routeScopeId !== null) void this.loadExistingScope();
   }
 
   /** This method adds an empty option row, starting as a custom tag. */
@@ -318,13 +355,17 @@ export class DhcpScopeFormComponent implements OnInit {
 
     row.controls.value.setValue('');
     row.controls.valueSource.setValue(DhcpOptionValueSourceEnum.Custom);
+    row.controls.storedValueNote.setValue(null);
     this.recomputeOptionRowViewState();
   }
 
   /**
-   * This method checks every option value, creates the scope (`POST`) or replaces it (`PUT`), then
-   * saves the option rows one call at a time ({@link planDhcpOptionReconciliation}). A new scope's
-   * options are saved after the scope exists, since they need its id.
+   * This method checks every option value and tag, creates the scope (`POST`) or replaces it
+   * (`PUT`), then saves the option rows one call at a time ({@link reconcileOptions}). A new
+   * scope's options are saved after the scope exists, since they need its id.
+   *
+   * <p>When the scope is saved but an option call fails, the error says so and names the row, the
+   * page stays, and the next save edits the scope ({@link savedScopeId}).
    */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
@@ -332,7 +373,7 @@ export class DhcpScopeFormComponent implements OnInit {
     this.submitting.set(true);
     this.errorMessage.set(null);
 
-    let optionRequests: { id: string | null; request: DhcpScopeCustomOptionWriteRequest }[];
+    let optionRequests: DhcpScopeOptionWrite[];
 
     try {
       optionRequests = this.buildOptionWriteRequests();
@@ -367,27 +408,41 @@ export class DhcpScopeFormComponent implements OnInit {
       delegatedPrefixLength: value.delegatedPrefixLength,
     };
 
-    try {
-      let resolvedScopeId: string;
+    let scopeId = this.savedScopeId();
+    const isCreate = scopeId === null;
 
-      if (this.isEditMode && this.scopeId) {
+    try {
+      if (scopeId !== null) {
         await firstValueFrom(
           this.scopesApi.apiDhcpScopesIdPut({
-            id: this.scopeId,
+            id: scopeId,
             dhcpScopeWriteRequest: request,
           }),
         );
-        resolvedScopeId = this.scopeId;
       } else {
         const created = await firstValueFrom(
           this.scopesApi.apiDhcpScopesPost({ dhcpScopeWriteRequest: request }),
         );
-        resolvedScopeId = created.id!;
+        scopeId = created.id!;
+        // Remember the id before the options are saved: if one fails, a retry must PUT this scope.
+        this.savedScopeId.set(scopeId);
       }
+    } catch (error) {
+      this.errorMessage.set(extractErrorMessage(error, 'Could not save this scope.'));
+      this.submitting.set(false);
+      return;
+    }
 
-      await this.reconcileOptions(resolvedScopeId, optionRequests);
+    try {
+      await this.reconcileOptions(scopeId, optionRequests);
+    } catch (error) {
+      this.errorMessage.set(error instanceof Error ? error.message : 'An option failed to save.');
+      this.submitting.set(false);
+      return;
+    }
 
-      this.notification.success(this.isEditMode ? 'Scope saved.' : 'Scope created.');
+    try {
+      this.notification.success(isCreate ? 'Scope created.' : 'Scope saved.');
       await this.router.navigate(['/dhcp-scopes']);
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save this scope.'));
@@ -456,9 +511,9 @@ export class DhcpScopeFormComponent implements OnInit {
     const matchingEntry = existing
       ? this.optionCatalog().find((entry) => entry.code === optionTag)
       : undefined;
-    const catalogSelection = matchingEntry ? String(matchingEntry.code) : CUSTOM_TAG_SELECTION;
-
     let displayValue = '';
+    let storedValueNote: string | null = null;
+    let catalogSelection = matchingEntry ? String(matchingEntry.code) : CUSTOM_TAG_SELECTION;
     if (existing && valueSource === DhcpOptionValueSourceEnum.Custom) {
       try {
         displayValue = decodeDhcpOptionValue(
@@ -466,9 +521,13 @@ export class DhcpScopeFormComponent implements OnInit {
           existing.valueHex ?? '',
         );
       } catch {
-        // The stored bytes do not fit the catalog type, so keep the raw hex as the value rather
-        // than lose it. The row keeps its catalog selection, so its typed editor shows the hex.
+        // The stored bytes do not fit the catalog type (the server accepted them before the
+        // catalog knew the option, or by another route). A typed editor cannot show them and
+        // would fail to encode them on every save, so the row becomes a custom row whose raw hex
+        // editor writes the same bytes back. The note tells the operator why.
         displayValue = existing.valueHex ?? '';
+        storedValueNote = matchingEntry?.name ?? null;
+        catalogSelection = CUSTOM_TAG_SELECTION;
       }
     }
 
@@ -480,14 +539,24 @@ export class DhcpScopeFormComponent implements OnInit {
       value: [displayValue],
       isDisabled: [existing?.isDisabled ?? false],
       comments: [existing?.comments ?? ''],
+      storedValueNote: [storedValueNote],
     });
   }
 
-  /** This method turns the option rows into write requests, throwing a message naming the row whose value fails to encode. */
-  private buildOptionWriteRequests(): {
-    id: string | null;
-    request: DhcpScopeCustomOptionWriteRequest;
-  }[] {
+  /**
+   * This method turns the option rows into writes. It throws a message naming the rows when two
+   * share a tag (checked first, so no call is made) or naming the row whose value fails to encode.
+   */
+  private buildOptionWriteRequests(): DhcpScopeOptionWrite[] {
+    const duplicate = findDuplicateOptionTag(
+      this.options.controls.map((row) => row.getRawValue().optionTag),
+    );
+    if (duplicate) {
+      throw new Error(
+        `Option rows ${duplicate.firstRow} and ${duplicate.secondRow} both use tag ${duplicate.tag}; each tag can appear once.`,
+      );
+    }
+
     return this.options.controls.map((row, index) => {
       const raw = row.getRawValue();
       const entry = this.catalogEntryFor(row);
@@ -511,6 +580,8 @@ export class DhcpScopeFormComponent implements OnInit {
       }
 
       return {
+        row,
+        rowNumber: index + 1,
         id: raw.id,
         request: {
           optionTag: raw.optionTag,
@@ -523,46 +594,84 @@ export class DhcpScopeFormComponent implements OnInit {
     });
   }
 
-  private async reconcileOptions(
-    scopeId: string,
-    optionRequests: { id: string | null; request: DhcpScopeCustomOptionWriteRequest }[],
-  ): Promise<void> {
-    const plan = planDhcpOptionReconciliation(
-      optionRequests.map((entry) => ({ id: entry.id, request: entry.request })),
-      this.originallyLoadedOptionIds,
-    );
-
-    for (const entry of plan.toCreate) {
-      await firstValueFrom(
-        this.customOptionsApi.apiDhcpScopesScopeIdCustomOptionsPost({
-          scopeId,
-          dhcpScopeCustomOptionWriteRequest: entry.request,
-        }),
-      );
-    }
-
-    for (const entry of plan.toUpdate) {
-      await firstValueFrom(
-        this.customOptionsApi.apiDhcpScopesScopeIdCustomOptionsIdPut({
-          scopeId,
-          id: entry.id!,
-          dhcpScopeCustomOptionWriteRequest: entry.request,
-        }),
-      );
-    }
+  /**
+   * This method writes the option rows in the order deletes, updates, creates. The order matters
+   * because the server keeps one option per `(scope, tag)`: a row removed and a new row with the
+   * same tag in one save must have the old one deleted before the new one is posted.
+   *
+   * <p>The calls are not atomic, so progress is kept on the form after each success. A created
+   * option's id goes into its row, which turns the retry's call for that row into a `PUT`, and a
+   * deleted id leaves {@link originallyLoadedOptionIds}, so a retry repeats only the calls that
+   * did not succeed.
+   *
+   * @throws Error naming the failing row (or the removal) and saying the scope was saved.
+   */
+  private async reconcileOptions(scopeId: string, writes: DhcpScopeOptionWrite[]): Promise<void> {
+    const plan = planDhcpOptionReconciliation(writes, this.originallyLoadedOptionIds);
 
     for (const id of plan.toDeleteIds) {
-      await firstValueFrom(
-        this.customOptionsApi.apiDhcpScopesScopeIdCustomOptionsIdDelete({ scopeId, id }),
+      try {
+        await firstValueFrom(
+          this.customOptionsApi.apiDhcpScopesScopeIdCustomOptionsIdDelete({ scopeId, id }),
+        );
+      } catch (error) {
+        throw new Error(
+          `The scope was saved, but removing an option failed: ${extractErrorMessage(error, 'The server refused the request.')} Save again to retry.`,
+          { cause: error },
+        );
+      }
+      this.originallyLoadedOptionIds = this.originallyLoadedOptionIds.filter(
+        (loadedId) => loadedId !== id,
       );
+    }
+
+    for (const write of plan.toUpdate) {
+      try {
+        await firstValueFrom(
+          this.customOptionsApi.apiDhcpScopesScopeIdCustomOptionsIdPut({
+            scopeId,
+            id: write.id!,
+            dhcpScopeCustomOptionWriteRequest: write.request,
+          }),
+        );
+      } catch (error) {
+        throw this.optionRowFailure(write, error);
+      }
+    }
+
+    for (const write of plan.toCreate) {
+      try {
+        const created = await firstValueFrom(
+          this.customOptionsApi.apiDhcpScopesScopeIdCustomOptionsPost({
+            scopeId,
+            dhcpScopeCustomOptionWriteRequest: write.request,
+          }),
+        );
+        if (created.id) {
+          write.row.controls.id.setValue(created.id);
+          this.originallyLoadedOptionIds.push(created.id);
+        }
+      } catch (error) {
+        throw this.optionRowFailure(write, error);
+      }
     }
   }
 
+  /** This method builds the error for a failed option row call, naming the row and its tag. */
+  private optionRowFailure(write: DhcpScopeOptionWrite, error: unknown): Error {
+    return new Error(
+      `The scope was saved, but option row ${write.rowNumber} (tag ${write.request.optionTag}) was not: ${extractErrorMessage(error, 'The server refused the request.')} Correct the row and save again.`,
+      { cause: error },
+    );
+  }
+
   private async loadExistingScope(): Promise<void> {
-    if (!this.scopeId) return;
+    if (!this.routeScopeId) return;
 
     try {
-      const scope = await firstValueFrom(this.scopesApi.apiDhcpScopesIdGet({ id: this.scopeId }));
+      const scope = await firstValueFrom(
+        this.scopesApi.apiDhcpScopesIdGet({ id: this.routeScopeId }),
+      );
 
       // Keep this key order: the protocolVersion and kind subscriptions (constructor) can reset
       // kind and delegatedPrefixLength, so the loaded values must be applied after them.
@@ -591,7 +700,7 @@ export class DhcpScopeFormComponent implements OnInit {
 
       const optionsPage = await firstValueFrom(
         this.customOptionsApi.apiDhcpScopesScopeIdCustomOptionsGet({
-          scopeId: this.scopeId,
+          scopeId: this.routeScopeId,
           skip: 0,
           take: 500,
         }),

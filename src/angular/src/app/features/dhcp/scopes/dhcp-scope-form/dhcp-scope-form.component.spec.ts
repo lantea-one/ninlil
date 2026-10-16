@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { of, throwError } from 'rxjs';
 import {
   DhcpOptionCatalogService,
   DhcpOptionValueTypeEnum,
@@ -69,7 +70,7 @@ describe('DhcpScopeFormComponent', () => {
 
   it('is in create mode with no scopeId route param', async () => {
     const fixture = await createComponent(null);
-    expect(fixture.componentInstance.isEditMode).toBeFalse();
+    expect(fixture.componentInstance.isEditMode()).toBeFalse();
   });
 
   it('posts a new scope and navigates away on save', async () => {
@@ -133,7 +134,7 @@ describe('DhcpScopeFormComponent', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.isEditMode).toBeTrue();
+    expect(fixture.componentInstance.isEditMode()).toBeTrue();
     expect(fixture.componentInstance.form.controls.name.value).toBe('lan');
 
     await fixture.componentInstance.save();
@@ -360,7 +361,43 @@ describe('DhcpScopeFormComponent', () => {
       isServerAddressEligible: true,
     };
 
-    async function createComponentWithOptionsApis(scopeId: string | null) {
+    /** The scope the edit-mode option specs load; `IdGet` returns it. */
+    const loadedScope = {
+      id: 'scope-1',
+      name: 'lan',
+      protocolVersion: 'IPv4',
+      rangeStartAddress: '192.168.1.100',
+      rangeEndAddress: '192.168.1.200',
+      subnetPrefixLength: 24,
+      defaultLeaseDuration: '1.00:00:00',
+      maxLeaseDuration: '1.00:00:00',
+      isDisabled: false,
+      gatewayAddresses: [],
+      dnsServerAddresses: [],
+      comments: null,
+    };
+
+    /** The router's `navigate`, spied so the specs can assert that a failed save stays on the page. */
+    let navigateSpy: jasmine.Spy;
+
+    /** A 400 problem response, as the option endpoints answer a refused value. */
+    function badRequest(detail: string): HttpErrorResponse {
+      return new HttpErrorResponse({ status: 400, error: { detail } });
+    }
+
+    /** Fills the required scope fields so a new scope can be saved. */
+    function fillNewScope(fixture: { componentInstance: DhcpScopeFormComponent }): void {
+      fixture.componentInstance.form.patchValue({
+        name: 'lan',
+        rangeStartAddress: '192.168.1.100',
+        rangeEndAddress: '192.168.1.200',
+      });
+    }
+
+    async function createComponentWithOptionsApis(
+      scopeId: string | null,
+      configureApis?: () => void,
+    ) {
       scopesApiSpy = jasmine.createSpyObj('DhcpScopesService', [
         'apiDhcpScopesGet',
         'apiDhcpScopesIdGet',
@@ -391,6 +428,8 @@ describe('DhcpScopeFormComponent', () => {
       customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsIdPut.and.returnValue(of(undefined));
       customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsIdDelete.and.returnValue(of(undefined));
 
+      configureApis?.();
+
       await TestBed.configureTestingModule({
         imports: [DhcpScopeFormComponent],
         providers: [
@@ -408,6 +447,8 @@ describe('DhcpScopeFormComponent', () => {
           },
         ],
       }).compileComponents();
+
+      navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
 
       const fixture = TestBed.createComponent(DhcpScopeFormComponent);
       fixture.detectChanges();
@@ -576,6 +617,171 @@ describe('DhcpScopeFormComponent', () => {
       expect(scopesApiSpy.apiDhcpScopesPost).not.toHaveBeenCalled();
       expect(fixture.componentInstance.errorMessage()).toContain('Option row 1');
       expect(fixture.componentInstance.errorMessage()).toContain('255');
+    });
+
+    it('shows a stored value that does not fit its catalog type as a custom raw-hex row and saves it unchanged', async () => {
+      // Option 3 (Router) is an address list; two bytes cannot decode as one.
+      const fixture = await createComponentWithOptionsApis('scope-1', () => {
+        optionCatalogApiSpy.apiDhcpOptionCatalogGet.and.returnValue(
+          of([
+            {
+              code: 3,
+              name: 'Router',
+              description: '',
+              valueType: DhcpOptionValueTypeEnum.Ipv4AddressList,
+              isServerAddressEligible: true,
+            },
+          ]),
+        );
+        scopesApiSpy.apiDhcpScopesIdGet.and.returnValue(of(loadedScope));
+        scopesApiSpy.apiDhcpScopesIdPut.and.returnValue(of(undefined));
+        customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsGet.and.returnValue(
+          of({
+            items: [
+              { id: 'odd', scopeId: 'scope-1', optionTag: 3, valueHex: '0102', isDisabled: false },
+            ],
+            skip: 0,
+            take: 500,
+            totalCount: 1,
+          }),
+        );
+      });
+
+      const row = fixture.componentInstance.options.at(0);
+      expect(row.controls.catalogSelection.value).toBe('custom');
+      expect(row.controls.value.value).toBe('0102');
+      expect(fixture.nativeElement.textContent).toContain('does not fit the Router format');
+
+      await fixture.componentInstance.save();
+
+      expect(fixture.componentInstance.errorMessage()).toBeNull();
+      expect(customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsIdPut).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          id: 'odd',
+          dhcpScopeCustomOptionWriteRequest: jasmine.objectContaining({
+            optionTag: 3,
+            valueHex: '0102',
+          }),
+        }),
+      );
+    });
+
+    it('refuses two rows with the same tag before any call and names both rows', async () => {
+      const fixture = await createComponentWithOptionsApis(null);
+      fillNewScope(fixture);
+      for (let count = 0; count < 2; count++) {
+        fixture.componentInstance.addOptionRow();
+        fixture.componentInstance.options.at(count).controls.optionTag.setValue(200);
+      }
+
+      await fixture.componentInstance.save();
+
+      expect(scopesApiSpy.apiDhcpScopesPost).not.toHaveBeenCalled();
+      expect(customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsPost).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.errorMessage()).toContain('Option rows 1 and 2');
+      expect(fixture.componentInstance.errorMessage()).toContain('tag 200');
+    });
+
+    it('says the scope was saved when an option fails, stays on the page, and edits that scope on retry', async () => {
+      const fixture = await createComponentWithOptionsApis(null);
+      scopesApiSpy.apiDhcpScopesPost.and.returnValue(of({ id: 'scope-9' }));
+      scopesApiSpy.apiDhcpScopesIdPut.and.returnValue(of(undefined));
+      customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsPost.and.returnValues(
+        throwError(() => badRequest('Value refused.')),
+        of({ id: 'option-9' }),
+      );
+      fillNewScope(fixture);
+      fixture.componentInstance.addOptionRow();
+      fixture.componentInstance.options.at(0).controls.optionTag.setValue(200);
+      fixture.componentInstance.options.at(0).controls.value.setValue('AA');
+
+      await fixture.componentInstance.save();
+
+      expect(fixture.componentInstance.errorMessage()).toContain('The scope was saved');
+      expect(fixture.componentInstance.errorMessage()).toContain('option row 1 (tag 200)');
+      expect(fixture.componentInstance.errorMessage()).toContain('Value refused.');
+      expect(navigateSpy).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.isEditMode()).toBeTrue();
+
+      await fixture.componentInstance.save();
+
+      expect(scopesApiSpy.apiDhcpScopesPost).toHaveBeenCalledTimes(1);
+      expect(scopesApiSpy.apiDhcpScopesIdPut).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'scope-9' }),
+      );
+      expect(navigateSpy).toHaveBeenCalledWith(['/dhcp-scopes']);
+    });
+
+    it('keeps the id of an option that was created, so the retry updates it and posts only the failed row', async () => {
+      const fixture = await createComponentWithOptionsApis(null);
+      scopesApiSpy.apiDhcpScopesPost.and.returnValue(of({ id: 'scope-9' }));
+      scopesApiSpy.apiDhcpScopesIdPut.and.returnValue(of(undefined));
+      customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsPost.and.returnValues(
+        of({ id: 'option-a' }),
+        throwError(() => badRequest('Second refused.')),
+        of({ id: 'option-b' }),
+      );
+      fillNewScope(fixture);
+      for (const [index, tag] of [200, 201].entries()) {
+        fixture.componentInstance.addOptionRow();
+        fixture.componentInstance.options.at(index).controls.optionTag.setValue(tag);
+        fixture.componentInstance.options.at(index).controls.value.setValue('AA');
+      }
+
+      await fixture.componentInstance.save();
+      expect(fixture.componentInstance.errorMessage()).toContain('option row 2 (tag 201)');
+
+      await fixture.componentInstance.save();
+
+      const posts = customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsPost;
+      expect(posts).toHaveBeenCalledTimes(3);
+      expect(posts.calls.argsFor(2)[0].dhcpScopeCustomOptionWriteRequest.optionTag).toBe(201);
+      expect(customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsIdPut).toHaveBeenCalledTimes(1);
+      expect(customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsIdPut).toHaveBeenCalledWith(
+        jasmine.objectContaining({ scopeId: 'scope-9', id: 'option-a' }),
+      );
+      expect(navigateSpy).toHaveBeenCalledWith(['/dhcp-scopes']);
+    });
+
+    it('deletes a removed row before it creates a new row with the same tag', async () => {
+      const calls: string[] = [];
+      const fixture = await createComponentWithOptionsApis('scope-1', () => {
+        scopesApiSpy.apiDhcpScopesIdGet.and.returnValue(of(loadedScope));
+        scopesApiSpy.apiDhcpScopesIdPut.and.returnValue(of(undefined));
+        customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsGet.and.returnValue(
+          of({
+            items: [
+              {
+                id: 'old',
+                scopeId: 'scope-1',
+                optionTag: 6,
+                valueHex: 'C0A80101',
+                isDisabled: false,
+              },
+            ],
+            skip: 0,
+            take: 500,
+            totalCount: 1,
+          }),
+        );
+        customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsIdDelete.and.callFake(() => {
+          calls.push('delete');
+          return of(undefined);
+        });
+        customOptionsApiSpy.apiDhcpScopesScopeIdCustomOptionsPost.and.callFake(() => {
+          calls.push('post');
+          return of({ id: 'new' });
+        });
+      });
+
+      fixture.componentInstance.removeOptionRow(0);
+      fixture.componentInstance.addOptionRow();
+      fixture.componentInstance.options.at(0).controls.optionTag.setValue(6);
+      fixture.componentInstance.options.at(0).controls.value.setValue('AA');
+
+      await fixture.componentInstance.save();
+
+      expect(calls).toEqual(['delete', 'post']);
     });
 
     it('reconciles an edited existing option as a PUT and a removed one as a DELETE', async () => {
