@@ -39,12 +39,21 @@ namespace Ninlil.Dhcp.Server.Core;
 /// </param>
 /// <param name="serverIdentifierProvider">The server's Server Identifier address.</param>
 /// <param name="logger">The logger ignored requests are recorded to.</param>
+/// <param name="timeProvider">
+///     The clock for the rate limit on refusal warnings; <see cref="TimeProvider.System" /> when
+///     <see langword="null" />.
+/// </param>
 public sealed class Dhcpv4RequestHandler(
     IServiceScopeFactory scopeFactory,
     IDhcpServerIdentifierProvider serverIdentifierProvider,
-    ILogger<Dhcpv4RequestHandler> logger
+    ILogger<Dhcpv4RequestHandler> logger,
+    TimeProvider timeProvider = null
 ) : IDhcpv4RequestHandler
 {
+    private readonly LongClientIdentifierLimiter _longIdentifierLimiter = new(
+        timeProvider ?? TimeProvider.System
+    );
+
     /// <inheritdoc />
     public async ValueTask<Dhcpv4Message> HandleRequestAsync(
         Dhcpv4Message request,
@@ -58,6 +67,16 @@ public sealed class Dhcpv4RequestHandler(
                 "Ignoring a DHCPv4 message from {RemoteEndPoint} with no (or an unreadable) DHCP Message Type option.",
                 remoteEndPoint
             );
+            return null;
+        }
+
+        // A client key over 85 bytes cannot be stored (the column and index size), so the request
+        // gets no reply and nothing is allocated or saved.
+        byte[] clientKey = Dhcpv4ClientIdentifier.Resolve(request);
+
+        if (LongClientIdentifierLimiter.IsTooLong(clientKey))
+        {
+            _longIdentifierLimiter.Refuse(logger, "DHCPv4", remoteEndPoint, clientKey.Length);
             return null;
         }
 

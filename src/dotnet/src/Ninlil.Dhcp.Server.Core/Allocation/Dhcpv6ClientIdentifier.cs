@@ -13,6 +13,13 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         <see cref="Dhcpv6RequestHandler" /> then ignores the message.
 ///     </para>
 ///     <para>
+///         A DUID is at most <see cref="Ninlil.Dns.Common.Net.ClientIdentifierFormat.MaximumBytes" />
+///         bytes, the size of the stored identifier columns and of the composite unique indexes
+///         over them, which fit the SQL Server and MySQL index key limits only at that size.
+///         <see cref="Dhcpv6RequestHandler" /> refuses a longer DUID before it allocates or saves
+///         anything (see <see cref="LongClientIdentifierLimiter" />).
+///     </para>
+///     <para>
 ///         Formatting uses <see cref="Dhcpv4ClientIdentifier.Format(byte[])" />, which works on
 ///         any bytes despite the class name, so a DUID is stored in the same colon-separated
 ///         lowercase hex as a MAC address.

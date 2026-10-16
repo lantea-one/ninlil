@@ -59,13 +59,22 @@ namespace Ninlil.Dhcp.Server.Core;
 /// <param name="serverIdentifierProvider">The server's DUID.</param>
 /// <param name="options">The server engine configuration, read for Rapid Commit.</param>
 /// <param name="logger">The logger ignored messages are recorded to.</param>
+/// <param name="timeProvider">
+///     The clock for the rate limit on refusal warnings; <see cref="TimeProvider.System" /> when
+///     <see langword="null" />.
+/// </param>
 public sealed class Dhcpv6RequestHandler(
     IServiceScopeFactory scopeFactory,
     IDhcpv6ServerIdentifierProvider serverIdentifierProvider,
     IOptions<DhcpServerOptions> options,
-    ILogger<Dhcpv6RequestHandler> logger
+    ILogger<Dhcpv6RequestHandler> logger,
+    TimeProvider timeProvider = null
 ) : IDhcpv6RequestHandler, IDhcpv6RelayMessageHandler
 {
+    private readonly LongClientIdentifierLimiter _longIdentifierLimiter = new(
+        timeProvider ?? TimeProvider.System
+    );
+
     /// <summary>
     ///     This type holds what is decoded from a request's RFC 4704 Client FQDN option (code 39),
     ///     once, so it can supply the <c>hostName</c> of
@@ -228,6 +237,16 @@ public sealed class Dhcpv6RequestHandler(
     {
         // RFC 8415 requires a Client Identifier on the client messages handled here, and without
         // one no lease can be found or named.
+        byte[] clientDuid = Dhcpv6ClientIdentifier.Resolve(request);
+
+        // A DUID over 85 bytes cannot be stored (the column and index size), so the message gets
+        // no reply and nothing is allocated or saved.
+        if (LongClientIdentifierLimiter.IsTooLong(clientDuid))
+        {
+            _longIdentifierLimiter.Refuse(logger, "DHCPv6", remoteEndPoint, clientDuid.Length);
+            return null;
+        }
+
         string clientKey = Dhcpv6ClientIdentifier.Format(request);
 
         if (clientKey is null)

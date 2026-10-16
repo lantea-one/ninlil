@@ -24,6 +24,13 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         <see cref="Data.Abstractions.Repository.IDhcpReservationRepository.FindByClientIdentifierAsync" />).
 ///         <see cref="AreEqual" /> compares a stored lease's key with the request's.
 ///     </para>
+///     <para>
+///         A key is at most <see cref="ClientIdentifierFormat.MaximumBytes" /> bytes. That is the
+///         size of the stored identifier columns and of the composite unique indexes over them,
+///         which fit the SQL Server and MySQL index key limits only at that size.
+///         <see cref="Dhcpv4RequestHandler" /> refuses a longer key before it allocates or saves
+///         anything (see <see cref="LongClientIdentifierLimiter" />).
+///     </para>
 /// </summary>
 internal static class Dhcpv4ClientIdentifier
 {
@@ -56,9 +63,7 @@ internal static class Dhcpv4ClientIdentifier
     /// <summary>
     ///     This method reports whether two client identifier strings name the same identifier
     ///     under <see cref="ClientIdentifierFormat.AreEqual" />, so separators and case do not
-    ///     matter. Identical strings also match, which keeps an identifier longer than
-    ///     <see cref="ClientIdentifierFormat.MaximumBytes" /> matching itself. Empty or
-    ///     whitespace strings never match.
+    ///     matter. Identical strings also match. Empty or whitespace strings never match.
     /// </summary>
     /// <param name="first">The first client identifier string to compare.</param>
     /// <param name="second">The second client identifier string to compare.</param>
