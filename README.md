@@ -100,6 +100,15 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   delegation).
 - **Cloud DNS zone sync**: Cloudflare, AWS Route 53, and DigitalOcean, kept in sync alongside
   classic AXFR/IXFR zones, covering A/AAAA/CNAME/MX/NS/TXT/SRV/CAA records.
+  A CloudPrimary zone also accepts RFC 2136 dynamic updates, with the same rules as a primary
+  zone: the zone opts in, the update is TSIG-signed and the key is listed on the zone. An accepted
+  update is stored locally and answered at once, then pushed to the provider within moments. If
+  the push fails, the zone's regular sync retries it and a cloud-sync-failed event is raised;
+  records added directly at the provider are removed by the next push. An update that adds a
+  record type the providers cannot hold (anything but A, AAAA, CNAME, MX, NS, TXT, SRV and CAA)
+  is refused as a whole, so a CloudPrimary reverse zone cannot take PTR updates; deletions are
+  allowed. The provider keeps its own SOA and apex NS, so an update to them changes only what
+  this server serves. An update to a zone with no SOA record gets SERVFAIL until you add one.
 - **Filtering and parental controls**: block/allow-list filtering with subscribed external
   blocklists (hosts-file, plain-domain or adblock `||domain^`/`@@` syntax), CNAME-cloaking
   protection, a curated "blocked services" catalog, Safe Search enforcement, per-client and
