@@ -86,12 +86,35 @@ public class GetTypedValueStringExtensionTests
     [InlineData("y", true)]
     [InlineData("1", true)]
     [InlineData("on", true)]
+    [InlineData("ON", true)]
+    [InlineData(" yes ", true)]
     [InlineData("false", false)]
     [InlineData("no", false)]
+    [InlineData("off", false)]
+    [InlineData("f", false)]
+    [InlineData("n", false)]
     [InlineData("0", false)]
-    public void GetTypedValueOnBooleanUsesTheKeywordRegex(string value, bool expected)
+    public void GetTypedValueOnBoolean_WithABooleanWord_ReadsItWhole(string value, bool expected)
     {
         Assert.Equal(expected, value.GetTypedValue<bool>());
+    }
+
+    /// <summary>
+    ///     Text that only contains a boolean word ("not" holds <c>t</c>, "maybe" holds <c>y</c>) or is
+    ///     no boolean word at all is a format error, so <c>TryGetTypedValue</c> reports failure.
+    /// </summary>
+    [Theory]
+    [InlineData("not")]
+    [InlineData("maybe")]
+    [InlineData("bogus")]
+    [InlineData("monday")]
+    [InlineData("10")]
+    public void GetTypedValueOnBoolean_WithTextThatIsNoBooleanWord_ThrowsFormatException(
+        string value
+    )
+    {
+        Assert.Throws<FormatException>(() => value.GetTypedValue<bool>());
+        Assert.False(value.TryGetTypedValue(out bool _));
     }
 
     [Fact]

@@ -44,6 +44,30 @@ public class SanitizeStringExtensionTests
     }
 
     [Fact]
+    public void SanitizeForValueTyping_InsideSingleQuotes_UnescapesAnEscapedSingleQuote()
+    {
+        Assert.Equal("it's", "'it\\'s'".SanitizeForValueTyping());
+    }
+
+    /// <summary>
+    ///     Only one quote pair is stripped: the inner pair of <c>"'x'"</c> belongs to the value.
+    /// </summary>
+    [Fact]
+    public void SanitizeForValueTyping_WithTwoNestedQuotePairs_StripsOnlyTheOuterPair()
+    {
+        Assert.Equal("'x'", "\"'x'\"".SanitizeForValueTyping());
+        Assert.Equal("\"x\"", "'\"x\"'".SanitizeForValueTyping());
+    }
+
+    [Theory]
+    [InlineData("\"")]
+    [InlineData("'")]
+    public void SanitizeForValueTyping_WithALoneQuoteCharacter_ReturnsItUnchanged(string value)
+    {
+        Assert.Equal(value, value.SanitizeForValueTyping());
+    }
+
+    [Fact]
     public void SanitizeForValueTypingTrimsWhitespaceOnAnUnquotedString()
     {
         Assert.Equal("hello", "  hello  ".SanitizeForValueTyping());

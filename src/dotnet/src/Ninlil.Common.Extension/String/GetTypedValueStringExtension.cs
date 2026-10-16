@@ -24,7 +24,8 @@ namespace Ninlil.Common.Extension.String;
 ///             deserialized in that format.
 ///         </item>
 ///         <item>
-///             Scalars use their own parsers: enums by member name or number, bytes as hex, byte
+///             Scalars use their own parsers: enums by member name, description or number, booleans
+///             as a whole word (true/false, yes/no, on/off, t/f, y/n, 1/0), bytes as hex, byte
 ///             arrays as Base64, dates, numbers, GUIDs, IP and email addresses.
 ///         </item>
 ///         <item>
@@ -116,14 +117,12 @@ public static class GetTypeValueStringExtension
                     $"'{instance}' is not a value of {(Nullable.GetUnderlyingType(type) ?? type).Name}."
                 );
 
-        // Check for a boolean type. The pattern is not anchored, so any text containing one of
-        // the words (such as "not", which contains "t") reads as true.
+        // Check for a boolean type then read the whole text as a boolean word. Anything else is a
+        // format error, so TryGetTypedValue reports failure instead of guessing.
         if (type.IsBoolean())
-            return Regex.IsMatch(
-                instance,
-                "on|true|yes|t|y|1",
-                RegexOptions.Compiled | RegexOptions.IgnoreCase
-            );
+            return IsStringExtension.TryReadBoolean(instance, out bool boolean)
+                ? boolean
+                : throw new FormatException($"'{instance}' is not a boolean word.");
 
         // Check for one of our structured string models then parse and return the value.
         if (type.IsAssignableTo(typeof(IStructuredStringModel)))

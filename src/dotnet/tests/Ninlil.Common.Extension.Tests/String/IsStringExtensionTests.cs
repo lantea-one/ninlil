@@ -14,6 +14,8 @@ public class IsStringExtensionTests
     [InlineData("FALSE", true)]
     [InlineData("yes", true)]
     [InlineData("n", true)]
+    [InlineData("on", true)]
+    [InlineData("OFF", true)]
     [InlineData("1", true)]
     [InlineData("0", true)]
     [InlineData("maybe", false)]

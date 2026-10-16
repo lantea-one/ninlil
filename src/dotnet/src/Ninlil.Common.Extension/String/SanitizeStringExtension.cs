@@ -8,39 +8,32 @@ namespace Ninlil.Common.Extension.String;
 public static class SanitizeStringExtension
 {
     /// <summary>
-    ///     This method removes one pair of surrounding double or single quotes, unescapes escaped
-    ///     double quotes up to <paramref name="depth" /> levels deep, and trims the result.
+    ///     This method removes one pair of surrounding double or single quotes, unescapes the
+    ///     escaped form of that quote up to <paramref name="depth" /> levels deep, and trims the
+    ///     result. A lone quote character is returned trimmed and otherwise unchanged.
     /// </summary>
     /// <param name="instance">The <see cref="string" /> instance to sanitize.</param>
     /// <param name="depth">The number of backslash-escape levels to unescape.</param>
     /// <returns>The sanitized <see cref="string" /> <paramref name="instance" />.</returns>
     public static string SanitizeForValueTyping(this string instance, int depth = 13)
     {
-        // Remove the surrounding quote pair once, outside the loop. Each loop iteration then
-        // collapses one more level of escaping (level+1 backslashes before a quote become level
-        // backslashes), so a value quoted and escaped several times comes back to its content.
-        // Stripping inside the loop would cut two characters per iteration and throw on short
-        // values.
-        if (instance?.StartsWith('"') is true && instance.EndsWith('"'))
+        // Strip one surrounding quote pair of either kind, never both: an inner pair such as the
+        // single quotes of "'x'" belongs to the value. A length of at least 2 keeps a lone quote
+        // from counting as both the opening and the closing quote.
+        char quote =
+            instance is { Length: >= 2 } && instance[0] is '"' or '\'' ? instance[0] : '\0';
+
+        if (quote != '\0' && instance[^1] == quote)
         {
             instance = instance.Substring(1, instance.Length - 2);
 
+            // Each loop iteration collapses one more level of escaping (level+1 backslashes before
+            // the quote become level backslashes), so a value quoted and escaped several times
+            // comes back to its content. Only the quote that wrapped the value is unescaped.
             for (int level = 0; level < depth; ++level)
                 instance = instance.Replace(
-                    $@"{string.Join("", System.Linq.Enumerable.Repeat('\\', level + 1))}""",
-                    $@"{string.Join("", System.Linq.Enumerable.Repeat('\\', level))}"""
-                );
-        }
-
-        // Do the same for a single-quoted string. The loop unescapes double quotes, as above.
-        if (instance?.StartsWith('\'') is true && instance.EndsWith('\''))
-        {
-            instance = instance.Substring(1, instance.Length - 2);
-
-            for (int level = 0; level < depth; ++level)
-                instance = instance.Replace(
-                    $@"{string.Join("", System.Linq.Enumerable.Repeat('\\', level + 1))}""",
-                    $@"{string.Join("", System.Linq.Enumerable.Repeat('\\', level))}"""
+                    $"{new string('\\', level + 1)}{quote}",
+                    $"{new string('\\', level)}{quote}"
                 );
         }
 

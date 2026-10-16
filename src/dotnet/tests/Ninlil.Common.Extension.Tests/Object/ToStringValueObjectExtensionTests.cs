@@ -1,12 +1,15 @@
+using System.Net;
 using Ninlil.Common.Extension.Object;
+using Ninlil.Common.Extension.String;
+using Ninlil.Common.Extension.Tests.TestSupport;
 
 // Define our namespace.
 namespace Ninlil.Common.Extension.Tests.Object;
 
 /// <summary>
 ///     These tests check the string <see cref="ToStringValueObjectExtension.ToStringValue" /> gives
-///     for each branch: scalars, dates, enums, arrays, lists, dictionaries, tuples, a plain class
-///     and null.
+///     for each branch: scalars, dates, enums, arrays, lists, dictionaries, tuples, classes (with and
+///     without a <c>ToString</c> override, with a reference cycle and with an indexer) and null.
 /// </summary>
 public class ToStringValueObjectExtensionTests
 {
@@ -20,13 +23,31 @@ public class ToStringValueObjectExtensionTests
     }
 
     /// <summary>
-    ///     A minimal plain class with no custom <see cref="System.ComponentModel.TypeConverter" />, used to
-    ///     exercise the class fallback branch of <c>ToStringValue</c>.
+    ///     A class that points at itself, used to prove the property-dictionary branch stops at a
+    ///     reference it is already rendering.
     /// </summary>
-    private class PlainClass
+    private class SelfReferencingClass
     {
         public string Name { get; set; }
+
+        public SelfReferencingClass Self { get; set; }
     }
+
+    /// <summary>
+    ///     A class with an indexer, which the property-dictionary branch must skip because a property
+    ///     with index parameters cannot be read without an index.
+    /// </summary>
+    private class IndexedClass
+    {
+        public string Name { get; set; }
+
+        public string this[int index] => "item" + index;
+    }
+
+    /// <summary>
+    ///     A record, which overrides <c>ToString</c>, so it prints through that override.
+    /// </summary>
+    private record SampleRecord(string Name, int Number);
 
     [Fact]
     public void ToStringValueOnStringTrimsWhitespace()
@@ -102,6 +123,22 @@ public class ToStringValueObjectExtensionTests
         Assert.Equal("First", SampleEnum.First.ToStringValue());
     }
 
+    /// <summary>
+    ///     A member with an <c>[EnumMember]</c> value prints that value, not the member name, and the
+    ///     text parses back to the member through <c>GetTypedValue</c>.
+    /// </summary>
+    [Fact]
+    public void ToStringValueOnEnumWithAnEnumMemberValue_PrintsTheDescriptionAndRoundTrips()
+    {
+        string text = SampleSecondValueEnum.Second.ToStringValue();
+
+        Assert.Equal("second-value", text);
+        Assert.Equal(
+            SampleSecondValueEnum.Second,
+            text.GetTypedValue(typeof(SampleSecondValueEnum))
+        );
+    }
+
     [Fact]
     public void ToStringValueOnTimeOnlyUsesRoundTripFormat()
     {
@@ -174,21 +211,50 @@ public class ToStringValueObjectExtensionTests
     }
 
     /// <summary>
-    ///     A plain class with no custom <see cref="System.ComponentModel.TypeConverter" /> reaches the
-    ///     <c>TypeDescriptor.GetConverter(...).CanConvertTo(typeof(string))</c> branch. The base converter
-    ///     always answers <see langword="true" /> for <see cref="string" /> and calls
-    ///     <see cref="object.ToString" />, so the later property-dictionary branch is unreachable for an
-    ///     ordinary class.
+    ///     A plain class that does not override <c>ToString</c> prints its public properties in
+    ///     declaration order, not the type name.
     /// </summary>
     [Fact]
-    public void ToStringValueOnPlainClassUsesDefaultObjectToStringNotPropertyDictionary()
+    public void ToStringValueOnAPlainClass_PrintsItsPropertiesInDeclarationOrder()
     {
-        PlainClass value = new() { Name = "sample" };
+        SampleModel value = new() { Name = "n", Number = 7 };
 
-        string result = value.ToStringValue();
+        Assert.Equal("{Name:n,Number:7,FixedValue:fixed}", value.ToStringValue());
+    }
 
-        Assert.Equal(value.ToString(), result);
-        Assert.DoesNotContain("sample", result);
+    [Fact]
+    public void ToStringValueOnARecord_UsesItsToStringOverride()
+    {
+        SampleRecord value = new("n", 7);
+
+        Assert.Equal(value.ToString(), value.ToStringValue());
+    }
+
+    [Fact]
+    public void ToStringValueOnAnIpAddress_UsesItsToStringOverride()
+    {
+        Assert.Equal("192.0.2.1", IPAddress.Parse("192.0.2.1").ToStringValue());
+    }
+
+    /// <summary>
+    ///     A class that refers to itself finishes: the inner reference is written as the type name.
+    ///     Without the guard the recursion would overflow the stack.
+    /// </summary>
+    [Fact]
+    public void ToStringValueOnAClassWithAReferenceCycle_WritesTheTypeNameForTheRepeatedReference()
+    {
+        SelfReferencingClass value = new() { Name = "n" };
+        value.Self = value;
+
+        Assert.Equal("{Name:n,Self:SelfReferencingClass}", value.ToStringValue());
+    }
+
+    [Fact]
+    public void ToStringValueOnAClassWithAnIndexer_SkipsTheIndexer()
+    {
+        IndexedClass value = new() { Name = "n" };
+
+        Assert.Equal("{Name:n}", value.ToStringValue());
     }
 
     [Fact]
