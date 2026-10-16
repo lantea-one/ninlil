@@ -14,8 +14,8 @@ namespace Ninlil.Web.Models;
 /// <param name="IsDnssecSigned">Whether the zone is signed with DNSSEC.</param>
 /// <param name="DnssecAlgorithm">The algorithm used to sign the zone, if signed.</param>
 /// <param name="DenialOfExistenceMode">Which denial-of-existence mechanism a signed zone uses.</param>
-/// <param name="Nsec3Iterations">How many additional times a signed zone's NSEC3 chain hashes.</param>
-/// <param name="Nsec3SaltHex">A signed zone's NSEC3 salt, as hexadecimal text.</param>
+/// <param name="Nsec3Iterations">How many additional times a signed zone's NSEC3 chain hashes. Defaults to 0 (RFC 9276 §3.1); at most 150, because validators may treat a higher count as insecure.</param>
+/// <param name="Nsec3SaltHex">A signed zone's NSEC3 salt, as hexadecimal text. Leave it empty: RFC 9276 §3.1 advises against a salt.</param>
 /// <param name="IsDisabled">Whether the zone is disabled.</param>
 /// <param name="PrimaryServerAddresses">
 ///     The name servers a secondary or stub zone transfers from.
@@ -80,7 +80,7 @@ public record ZoneWriteRequest(
     bool IsDnssecSigned = false,
     DnssecAlgorithmEnum? DnssecAlgorithm = null,
     DnssecDenialOfExistenceModeEnum DenialOfExistenceMode = DnssecDenialOfExistenceModeEnum.Nsec3,
-    ushort Nsec3Iterations = 10,
+    ushort Nsec3Iterations = 0,
     string Nsec3SaltHex = null,
     bool IsDisabled = false,
     IReadOnlyList<string> PrimaryServerAddresses = null,
@@ -113,8 +113,8 @@ public record ZoneWriteRequest(
 /// <param name="IsDnssecSigned">Whether the zone is signed with DNSSEC.</param>
 /// <param name="DnssecAlgorithm">The algorithm used to sign the zone, if signed. An algorithm prohibited for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST) is rejected with 400.</param>
 /// <param name="DenialOfExistenceMode">Which denial-of-existence mechanism a signed zone uses.</param>
-/// <param name="Nsec3Iterations">How many additional times a signed zone's NSEC3 chain hashes.</param>
-/// <param name="Nsec3SaltHex">A signed zone's NSEC3 salt, as hexadecimal text.</param>
+/// <param name="Nsec3Iterations">How many additional times a signed zone's NSEC3 chain hashes. A new zone starts at 0 (RFC 9276 §3.1); a zone saved earlier keeps its count.</param>
+/// <param name="Nsec3SaltHex">A signed zone's NSEC3 salt, as hexadecimal text; empty or null means no salt.</param>
 /// <param name="IsDisabled">Whether the zone is disabled.</param>
 /// <param name="PrimaryServerAddresses">The name servers a secondary or stub zone transfers from.</param>
 /// <param name="ForwarderAddresses">The addresses a forwarder zone sends every query to.</param>

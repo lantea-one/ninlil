@@ -73,6 +73,14 @@ public class ZonesController(
 ) : ControllerBase
 {
     /// <summary>
+    ///     This constant contains the highest NSEC3 iteration count the API accepts. This server's
+    ///     own validating resolver (<c>DenialOfExistenceValidator.MaxNsec3Iterations</c>) treats a
+    ///     zone above it as insecure, and RFC 9276 §3.2 lets other validators do the same, so a
+    ///     zone signed with more would not be validated as secure.
+    /// </summary>
+    internal const ushort MaximumNsec3Iterations = 150;
+
+    /// <summary>
     ///     This action lists zones, one page at a time. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet]
@@ -118,7 +126,7 @@ public class ZonesController(
     /// <summary>
     ///     This action creates a zone with no records, not even an SOA; add them through
     ///     <see cref="RecordsController" />. Returns 400 for an invalid zone name, a PTR prefix
-    ///     length or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires <c>zones:write</c>.
+    ///     length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -136,6 +144,7 @@ public class ZonesController(
             throw new ConflictException($"A zone named '{request.Name}' already exists.");
 
         ValidateDnssecAlgorithm(request.DnssecAlgorithm);
+        ValidateNsec3Iterations(request.Nsec3Iterations);
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
         await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
@@ -191,6 +200,7 @@ public class ZonesController(
             throw new ConflictException($"A zone named '{request.Name}' already exists.");
 
         ValidateDnssecAlgorithm(request.DnssecAlgorithm);
+        ValidateNsec3Iterations(request.Nsec3Iterations);
         ValidatePtrIpv4PrefixLength(request.PtrIpv4PrefixLength);
         ValidatePtrIpv6PrefixLength(request.PtrIpv6PrefixLength);
         await ValidateTsigKeyNameAsync(request.TsigKeyName, stoppingToken);
@@ -218,8 +228,8 @@ public class ZonesController(
     /// <summary>
     ///     This action updates a zone's settings as an RFC 7396 merge patch: an absent field is
     ///     unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces it.
-    ///     Returns 400 for an invalid name or PTR prefix length, 404 for an unknown id and 409 when
-    ///     a new name is taken. Requires <c>zones:write</c>.
+    ///     Returns 400 for an invalid name, PTR prefix length or NSEC3 iteration count (above 150),
+    ///     404 for an unknown id and 409 when a new name is taken. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -277,7 +287,11 @@ public class ZonesController(
                 );
 
         if (patch.TryGetMergePatchField("nsec3Iterations", out JsonElement nsec3Iterations))
-            zone.Nsec3Iterations = nsec3Iterations.GetUInt16();
+        {
+            ushort iterations = nsec3Iterations.GetUInt16();
+            ValidateNsec3Iterations(iterations);
+            zone.Nsec3Iterations = iterations;
+        }
 
         if (patch.TryGetMergePatchField("nsec3SaltHex", out JsonElement nsec3SaltHex))
             zone.Nsec3SaltHex =
@@ -623,6 +637,17 @@ public class ZonesController(
         if (prefixLength is int value && (value < 24 || value > 30))
             throw new ValidationException(
                 $"'{value}' is not a valid PTR IPv4 prefix length -- it must be between 24 and 30 inclusive."
+            );
+    }
+
+    /// <summary>
+    ///     This method checks an NSEC3 iteration count: 0 to <see cref="MaximumNsec3Iterations" />.
+    /// </summary>
+    private static void ValidateNsec3Iterations(int iterations)
+    {
+        if (iterations > MaximumNsec3Iterations)
+            throw new ValidationException(
+                $"'{iterations}' is not a valid NSEC3 iteration count -- it must be between 0 and {MaximumNsec3Iterations}; RFC 9276 recommends 0."
             );
     }
 

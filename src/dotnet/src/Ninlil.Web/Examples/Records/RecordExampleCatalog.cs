@@ -46,8 +46,8 @@ internal sealed record RecordExampleEntry(
 ///     <c>example.com</c> zone of <see cref="Zones.ZoneWriteRequestExample" /> and
 ///     <see cref="Zones.ZoneDetailExample" /> (<see cref="ZoneId" /> is the id of its "Primary,
 ///     DNSSEC-signed zone" example) and reuse that zone's DNSSEC algorithm
-///     (<see cref="DnssecAlgorithmEnum.EcdsaP256Sha256" />) and NSEC3 salt (<c>a1b2c3d4</c>), so
-///     the examples across controllers describe one consistent deployment.
+///     (<see cref="DnssecAlgorithmEnum.EcdsaP256Sha256" />) and NSEC3 parameters (0 iterations
+///     and no salt, as RFC 9276 §3.1 recommends), so the examples across controllers describe one consistent deployment.
 ///     <para>
 ///         Every <see langword="byte[]" /> field (a digest, fingerprint, public key or signature)
 ///         is a computed value of the right length, mostly a SHA-1 or SHA-256 hash of a
@@ -716,12 +716,13 @@ internal static class RecordExampleCatalog
             Data: Data(
                 new
                 {
-                    // Hash algorithm 1 (SHA-1, the only one assigned), 10 iterations and salt
-                    // "a1b2c3d4", the zone's NSEC3 parameters in ZoneDetailExample.
+                    // Hash algorithm 1 (SHA-1, the only one assigned), 0 iterations and no
+                    // salt, the zone's NSEC3 parameters in ZoneDetailExample (RFC 9276 §3.1). The
+                    // hashes below stand in for real ones.
                     hashAlgorithm = 1,
                     isOptOut = false,
-                    iterations = 10,
-                    salt = Convert.FromHexString("a1b2c3d4"),
+                    iterations = 0,
+                    salt = Array.Empty<byte>(),
                     // A 20-byte SHA-1 digest standing in for the hash of the next owner name in
                     // hash order.
                     nextHashedOwnerName = Convert.FromHexString(
@@ -748,8 +749,8 @@ internal static class RecordExampleCatalog
                 new
                 {
                     hashAlgorithm = 1,
-                    iterations = 10,
-                    salt = Convert.FromHexString("a1b2c3d4"),
+                    iterations = 0,
+                    salt = Array.Empty<byte>(),
                 }
             ),
             Comments: "Published at this zone's own apex so a resolver knows how to compute the matching NSEC3 hash itself.",

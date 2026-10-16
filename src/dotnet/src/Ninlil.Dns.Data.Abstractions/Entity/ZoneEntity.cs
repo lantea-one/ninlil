@@ -44,10 +44,13 @@ public class ZoneEntity : AuditableEntityBase
     ///     This property contains how many additional times a signed zone's
     ///     <see cref="Nsec3RecordData" /> chain applies its hash, when
     ///     <see cref="DenialOfExistenceMode" /> is <see cref="DnssecDenialOfExistenceModeEnum.Nsec3" />.
-    ///     Keep it low: a high count costs validators more CPU than it costs a dictionary attacker
-    ///     (see RFC 9276).
+    ///     A new zone starts at 0, the value RFC 9276 §3.1 recommends ("no extra iterations"): a
+    ///     higher count costs validators more CPU than it costs a dictionary attacker, and
+    ///     validators may treat a zone above their limit as insecure (RFC 9276 §3.2). The default
+    ///     lives only in this initializer; the database column has none, and a stored zone keeps
+    ///     the count it was saved with.
     /// </summary>
-    public ushort Nsec3Iterations { get; set; } = 10;
+    public ushort Nsec3Iterations { get; set; } = 0;
 
     /// <summary>
     ///     This property contains the salt a signed zone's <see cref="Nsec3RecordData" /> chain mixes
