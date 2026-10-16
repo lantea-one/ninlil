@@ -3,7 +3,7 @@
 } @else {
   <c-card class="form-card">
     <c-card-header>
-      <strong>{{ isEditMode ? 'Edit tag rule' : 'New tag rule' }}</strong>
+      <strong>{{ isEditMode() ? 'Edit tag rule' : 'New tag rule' }}</strong>
     </c-card-header>
 
     <c-card-body>
@@ -333,6 +333,13 @@
                       This server's own real address is substituted automatically when this option
                       is delivered.
                     </div>
+                  </div>
+                }
+
+                @if (row.controls.storedValueNote.value; as name) {
+                  <div cFormText class="field full-width">
+                    The stored value does not fit the {{ name }} format, so it is shown as raw hex.
+                    Saving keeps these bytes; choose {{ name }} again to enter a new value.
                   </div>
                 }
 

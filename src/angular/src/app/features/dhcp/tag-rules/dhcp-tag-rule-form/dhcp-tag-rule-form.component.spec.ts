@@ -1,6 +1,7 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import {
   DhcpOptionCatalogService,
   DhcpScopesService,
@@ -13,6 +14,24 @@ import { DhcpTagRuleFormComponent } from './dhcp-tag-rule-form.component';
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+/** The rule the edit-mode option specs load; a global rule, so it is a DHCPv4 rule. */
+const RULE_GET = {
+  id: 'rule-1',
+  name: 'pxe',
+  scopeId: null,
+  priority: 0,
+  isDisabled: false,
+  vendorClassIdentifierMatch: null,
+  vendorClassIdentifierMatchMode: 'Exact',
+  vendorClassEnterpriseNumber: null,
+  userClassMatch: null,
+  userClassMatchMode: 'Exact',
+  relayAgentCircuitIdHex: null,
+  relayAgentRemoteIdHex: null,
+  relayInterfaceIdHex: null,
+  comments: null,
+};
 
 /**
  * These tests cover the tag rule form: create and edit, the match fields (including the DHCPv6
@@ -100,7 +119,7 @@ describe('DhcpTagRuleFormComponent', () => {
 
   it('is in create mode with no tagRuleId route param and loads the scope dropdown', async () => {
     const fixture = await createComponent(null);
-    expect(fixture.componentInstance.isEditMode).toBeFalse();
+    expect(fixture.componentInstance.isEditMode()).toBeFalse();
     expect(fixture.componentInstance.scopes().length).toBe(1);
   });
 
@@ -548,6 +567,166 @@ describe('DhcpTagRuleFormComponent', () => {
       expect(tagRulesApiSpy.apiDhcpTagRulesPost).not.toHaveBeenCalled();
       expect(fixture.componentInstance.errorMessage()).toContain('Option row 1');
       expect(fixture.componentInstance.errorMessage()).toContain('255');
+    });
+
+    it('shows a stored value that no catalog type decodes as a custom raw-hex row and saves it unchanged', async () => {
+      // Option 3 (Router) is an address list; two bytes cannot decode as one.
+      const fixture = await createComponent('rule-1', () => {
+        optionCatalogApiSpy.apiDhcpOptionCatalogGet.and.callFake(
+          (params: { protocolVersion: string }) =>
+            of(
+              params.protocolVersion === 'IPv4'
+                ? [
+                    {
+                      code: 3,
+                      name: 'Router',
+                      description: '',
+                      valueType: 'IPv4AddressList',
+                      isServerAddressEligible: true,
+                    },
+                  ]
+                : [],
+            ),
+        );
+        tagRulesApiSpy.apiDhcpTagRulesIdGet.and.returnValue(of(RULE_GET));
+        tagRulesApiSpy.apiDhcpTagRulesIdPut.and.returnValue(of(undefined));
+        tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsGet.and.returnValue(
+          of({
+            items: [{ id: 'odd', tagRuleId: 'rule-1', optionTag: 3, valueHex: '0102' }],
+            skip: 0,
+            take: 500,
+            totalCount: 1,
+          }),
+        );
+      });
+
+      const row = fixture.componentInstance.options.at(0);
+      expect(row.controls.catalogSelection.value).toBe('custom');
+      expect(row.controls.value.value).toBe('0102');
+      expect(fixture.nativeElement.textContent).toContain('does not fit the Router format');
+
+      await fixture.componentInstance.save();
+
+      expect(fixture.componentInstance.errorMessage()).toBeNull();
+      expect(tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsIdPut).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          id: 'odd',
+          dhcpTagRuleOptionWriteRequest: jasmine.objectContaining({
+            optionTag: 3,
+            valueHex: '0102',
+          }),
+        }),
+      );
+    });
+
+    it('refuses two rows with the same tag before any call and names both rows', async () => {
+      const fixture = await createComponent(null);
+      fixture.componentInstance.form.patchValue({ name: 'pxe' });
+      for (let count = 0; count < 2; count++) {
+        fixture.componentInstance.addOptionRow();
+        fixture.componentInstance.options.at(count).controls.optionTag.setValue(200);
+      }
+
+      await fixture.componentInstance.save();
+
+      expect(tagRulesApiSpy.apiDhcpTagRulesPost).not.toHaveBeenCalled();
+      expect(tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsPost).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.errorMessage()).toContain('Option rows 1 and 2');
+      expect(fixture.componentInstance.errorMessage()).toContain('tag 200');
+    });
+
+    it('says the rule was saved when an option fails, stays on the page, and edits that rule on retry', async () => {
+      const fixture = await createComponent(null, () => {
+        tagRulesApiSpy.apiDhcpTagRulesPost.and.returnValue(of({ id: 'rule-9' }));
+        tagRulesApiSpy.apiDhcpTagRulesIdPut.and.returnValue(of(undefined));
+        tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsPost.and.returnValues(
+          throwError(() => new HttpErrorResponse({ status: 400, error: { detail: 'Refused.' } })),
+          of({ id: 'option-9' }),
+        );
+      });
+      fixture.componentInstance.form.patchValue({ name: 'pxe' });
+      fixture.componentInstance.addOptionRow();
+      fixture.componentInstance.options.at(0).controls.optionTag.setValue(200);
+      fixture.componentInstance.options.at(0).controls.value.setValue('AA');
+
+      await fixture.componentInstance.save();
+
+      expect(fixture.componentInstance.errorMessage()).toContain('The rule was saved');
+      expect(fixture.componentInstance.errorMessage()).toContain('option row 1 (tag 200)');
+      expect(fixture.componentInstance.errorMessage()).toContain('Refused.');
+      expect(navigateSpy).not.toHaveBeenCalled();
+
+      await fixture.componentInstance.save();
+
+      expect(tagRulesApiSpy.apiDhcpTagRulesPost).toHaveBeenCalledTimes(1);
+      expect(tagRulesApiSpy.apiDhcpTagRulesIdPut).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'rule-9' }),
+      );
+      expect(navigateSpy).toHaveBeenCalledWith(['/dhcp-tag-rules']);
+    });
+
+    it('keeps the id of an option that was created, so the retry updates it and posts only the failed row', async () => {
+      const fixture = await createComponent(null, () => {
+        tagRulesApiSpy.apiDhcpTagRulesPost.and.returnValue(of({ id: 'rule-9' }));
+        tagRulesApiSpy.apiDhcpTagRulesIdPut.and.returnValue(of(undefined));
+        tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsPost.and.returnValues(
+          of({ id: 'option-a' }),
+          throwError(() => new HttpErrorResponse({ status: 400, error: { detail: 'Refused.' } })),
+          of({ id: 'option-b' }),
+        );
+      });
+      fixture.componentInstance.form.patchValue({ name: 'pxe' });
+      for (const [index, tag] of [200, 201].entries()) {
+        fixture.componentInstance.addOptionRow();
+        fixture.componentInstance.options.at(index).controls.optionTag.setValue(tag);
+        fixture.componentInstance.options.at(index).controls.value.setValue('AA');
+      }
+
+      await fixture.componentInstance.save();
+      expect(fixture.componentInstance.errorMessage()).toContain('option row 2 (tag 201)');
+
+      await fixture.componentInstance.save();
+
+      const posts = tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsPost;
+      expect(posts).toHaveBeenCalledTimes(3);
+      expect(posts.calls.argsFor(2)[0].dhcpTagRuleOptionWriteRequest.optionTag).toBe(201);
+      expect(tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsIdPut).toHaveBeenCalledWith(
+        jasmine.objectContaining({ tagRuleId: 'rule-9', id: 'option-a' }),
+      );
+      expect(navigateSpy).toHaveBeenCalledWith(['/dhcp-tag-rules']);
+    });
+
+    it('deletes a removed row before it creates a new row with the same tag', async () => {
+      const calls: string[] = [];
+      const fixture = await createComponent('rule-1', () => {
+        tagRulesApiSpy.apiDhcpTagRulesIdGet.and.returnValue(of(RULE_GET));
+        tagRulesApiSpy.apiDhcpTagRulesIdPut.and.returnValue(of(undefined));
+        tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsGet.and.returnValue(
+          of({
+            items: [{ id: 'old', tagRuleId: 'rule-1', optionTag: 6, valueHex: 'C0A80101' }],
+            skip: 0,
+            take: 500,
+            totalCount: 1,
+          }),
+        );
+        tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsIdDelete.and.callFake(() => {
+          calls.push('delete');
+          return of(undefined);
+        });
+        tagRuleOptionsApiSpy.apiDhcpTagRulesTagRuleIdOptionsPost.and.callFake(() => {
+          calls.push('post');
+          return of({ id: 'new' });
+        });
+      });
+
+      fixture.componentInstance.removeOptionRow(0);
+      fixture.componentInstance.addOptionRow();
+      fixture.componentInstance.options.at(0).controls.optionTag.setValue(6);
+      fixture.componentInstance.options.at(0).controls.value.setValue('AA');
+
+      await fixture.componentInstance.save();
+
+      expect(calls).toEqual(['delete', 'post']);
     });
 
     it('reconciles an edited existing option as a PUT and a removed one as a DELETE', async () => {

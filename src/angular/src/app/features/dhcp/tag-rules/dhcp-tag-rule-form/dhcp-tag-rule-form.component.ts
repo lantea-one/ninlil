@@ -44,7 +44,10 @@ import {
 } from '../../../../api-client';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
-import { planDhcpOptionReconciliation } from '../../shared/dhcp-option-reconcile.util';
+import {
+  findDuplicateOptionTag,
+  planDhcpOptionReconciliation,
+} from '../../shared/dhcp-option-reconcile.util';
 import {
   assertDhcpv4OptionValueLength,
   assertDhcpv6OptionValueLength,
@@ -74,7 +77,23 @@ type DhcpTagRuleOptionRowFormGroup = FormGroup<{
   optionTag: FormControl<number>;
   valueSource: FormControl<DhcpOptionValueSourceEnum>;
   value: FormControl<string>;
+  /** UI only, never sent: the catalog entry whose format the stored bytes did not fit, or `null`. */
+  storedValueNote: FormControl<string | null>;
 }>;
+
+/**
+ * This interface is one option write the save is about to make, with the row it came from so a
+ * failure can name the row and a created id can be written back to it.
+ */
+interface DhcpTagRuleOptionWrite {
+  /** The row's `FormGroup`; the created id is written to its `id` control. */
+  row: DhcpTagRuleOptionRowFormGroup;
+  /** The 1-based row number shown in messages. */
+  rowNumber: number;
+  /** The saved option's id, or `null` for a row not yet saved. */
+  id: string | null;
+  request: DhcpTagRuleOptionWriteRequest;
+}
 
 /** The `catalogSelection` value for a tag typed by hand, as on the scope form. */
 const CUSTOM_TAG_SELECTION = 'custom';
@@ -96,7 +115,15 @@ interface DhcpOptionRowViewState {
  * (`DhcpScopeFormComponent`) but drawing on both protocols' catalogs and without per-row
  * `isDisabled` and `comments`; the rule's `isDisabled` switches them all. On save the rows are
  * written one call at a time through `/api/dhcp-tag-rules/{id}/options`
- * ({@link planDhcpOptionReconciliation}).
+ * ({@link planDhcpOptionReconciliation}). A stored value that no candidate entry's type decodes
+ * is shown as a custom row with the raw hex and a note, and saves unchanged. Two rows with the
+ * same tag are refused before any call ({@link findDuplicateOptionTag}).
+ *
+ * <p>The save is not atomic. The rule is saved first, then its options in the order deletes,
+ * updates, creates. {@link savedTagRuleId} holds the rule's id once it exists, so a retry after a
+ * failed option call edits that rule instead of creating a second one, and each created option's
+ * id is written back to its row so the retry updates it instead of posting it again. The page
+ * navigates away only when the rule and every option call succeeded.
  *
  * <p>A rule belongs to one protocol (the server enforces it): a global rule and a rule on an IPv4
  * scope are DHCPv4 rules, a rule on an IPv6 scope is a DHCPv6 rule ({@link ruleProtocol}). The
@@ -141,12 +168,20 @@ export class DhcpTagRuleFormComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  private readonly tagRuleId = this.route.snapshot.paramMap.get('tagRuleId');
+  /** The `tagRuleId` route parameter: the rule to load, or `null` on the create page. */
+  private readonly routeTagRuleId = this.route.snapshot.paramMap.get('tagRuleId');
 
-  /** Whether this instance is editing an existing tag rule rather than creating a new one. */
-  readonly isEditMode = this.tagRuleId !== null;
+  /**
+   * The id of the rule this page edits: the route parameter, or the id the first successful
+   * `POST` returned. It is state, not a constant, so a save that created the rule but failed on
+   * an option row makes the next save a `PUT` instead of a second `POST`.
+   */
+  readonly savedTagRuleId = signal<string | null>(this.routeTagRuleId);
 
-  readonly loading = signal(this.isEditMode);
+  /** Whether the next save edits an existing rule: true on the edit page and after a create. */
+  readonly isEditMode = computed(() => this.savedTagRuleId() !== null);
+
+  readonly loading = signal(this.routeTagRuleId !== null);
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
@@ -222,7 +257,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
   ngOnInit(): void {
     this.scopesLoaded = this.loadScopes();
     void this.loadCombinedCatalog();
-    if (this.isEditMode) void this.loadExistingRule();
+    if (this.routeTagRuleId !== null) void this.loadExistingRule();
   }
 
   /**
@@ -318,17 +353,24 @@ export class DhcpTagRuleFormComponent implements OnInit {
 
     row.controls.value.setValue('');
     row.controls.valueSource.setValue(DhcpOptionValueSourceEnum.Custom);
+    row.controls.storedValueNote.setValue(null);
     this.recomputeOptionRowViewState();
   }
 
-  /** This method creates the rule (`POST`) or replaces it (`PUT`), then saves the option rows one call at a time. */
+  /**
+   * This method checks every option value and tag, creates the rule (`POST`) or replaces it
+   * (`PUT`), then saves the option rows one call at a time ({@link reconcileOptions}).
+   *
+   * <p>When the rule is saved but an option call fails, the error says so and names the row, the
+   * page stays, and the next save edits the rule ({@link savedTagRuleId}).
+   */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
     this.submitting.set(true);
     this.errorMessage.set(null);
 
-    let optionRequests: { id: string | null; request: DhcpTagRuleOptionWriteRequest }[];
+    let optionRequests: DhcpTagRuleOptionWrite[];
 
     try {
       optionRequests = this.buildOptionWriteRequests();
@@ -357,27 +399,41 @@ export class DhcpTagRuleFormComponent implements OnInit {
       comments: value.comments || null,
     };
 
-    try {
-      let resolvedTagRuleId: string;
+    let tagRuleId = this.savedTagRuleId();
+    const isCreate = tagRuleId === null;
 
-      if (this.isEditMode && this.tagRuleId) {
+    try {
+      if (tagRuleId !== null) {
         await firstValueFrom(
           this.tagRulesApi.apiDhcpTagRulesIdPut({
-            id: this.tagRuleId,
+            id: tagRuleId,
             dhcpTagRuleWriteRequest: request,
           }),
         );
-        resolvedTagRuleId = this.tagRuleId;
       } else {
         const created = await firstValueFrom(
           this.tagRulesApi.apiDhcpTagRulesPost({ dhcpTagRuleWriteRequest: request }),
         );
-        resolvedTagRuleId = created.id!;
+        tagRuleId = created.id!;
+        // Remember the id before the options are saved: if one fails, a retry must PUT this rule.
+        this.savedTagRuleId.set(tagRuleId);
       }
+    } catch (error) {
+      this.errorMessage.set(extractErrorMessage(error, 'Could not save this rule.'));
+      this.submitting.set(false);
+      return;
+    }
 
-      await this.reconcileOptions(resolvedTagRuleId, optionRequests);
+    try {
+      await this.reconcileOptions(tagRuleId, optionRequests);
+    } catch (error) {
+      this.errorMessage.set(error instanceof Error ? error.message : 'An option failed to save.');
+      this.submitting.set(false);
+      return;
+    }
 
-      this.notification.success(this.isEditMode ? 'Rule saved.' : 'Rule created.');
+    try {
+      this.notification.success(isCreate ? 'Rule created.' : 'Rule saved.');
       await this.router.navigate(['/dhcp-tag-rules']);
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save this rule.'));
@@ -474,6 +530,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
 
     let matchingEntry: CombinedCatalogEntry | undefined;
     let displayValue = '';
+    let storedValueNote: string | null = null;
 
     if (existing && valueSource === DhcpOptionValueSourceEnum.Custom && candidates.length > 0) {
       const decodable = candidates
@@ -496,10 +553,12 @@ export class DhcpTagRuleFormComponent implements OnInit {
         matchingEntry = decodable.candidate;
         displayValue = decodable.decoded;
       } else {
-        // No entry's type fits the stored bytes: keep the raw hex as the value rather than lose
-        // it. The row still selects the first entry, so its typed editor shows the hex.
-        matchingEntry = candidates[0];
+        // No entry's type fits the stored bytes. A typed editor cannot show them and would fail
+        // to encode them on every save, so the row becomes a custom row whose raw hex editor
+        // writes the same bytes back. The note names the entry the bytes were expected to fit.
+        matchingEntry = undefined;
         displayValue = existing.valueHex ?? '';
+        storedValueNote = candidates[0].entry.name ?? null;
       }
     } else {
       matchingEntry = candidates[0];
@@ -513,13 +572,24 @@ export class DhcpTagRuleFormComponent implements OnInit {
       optionTag: [optionTag, [Validators.required, this.optionTagValidator]],
       valueSource: [valueSource],
       value: [displayValue],
+      storedValueNote: [storedValueNote],
     });
   }
 
-  private buildOptionWriteRequests(): {
-    id: string | null;
-    request: DhcpTagRuleOptionWriteRequest;
-  }[] {
+  /**
+   * This method turns the option rows into writes. It throws a message naming the rows when two
+   * share a tag (checked first, so no call is made) or naming the row whose value fails to encode.
+   */
+  private buildOptionWriteRequests(): DhcpTagRuleOptionWrite[] {
+    const duplicate = findDuplicateOptionTag(
+      this.options.controls.map((row) => row.getRawValue().optionTag),
+    );
+    if (duplicate) {
+      throw new Error(
+        `Option rows ${duplicate.firstRow} and ${duplicate.secondRow} both use tag ${duplicate.tag}; each tag can appear once.`,
+      );
+    }
+
     return this.options.controls.map((row, index) => {
       const raw = row.getRawValue();
       const combined = this.catalogEntryFor(row);
@@ -540,6 +610,8 @@ export class DhcpTagRuleFormComponent implements OnInit {
       }
 
       return {
+        row,
+        rowNumber: index + 1,
         id: raw.id,
         request: {
           optionTag: raw.optionTag,
@@ -550,47 +622,86 @@ export class DhcpTagRuleFormComponent implements OnInit {
     });
   }
 
+  /**
+   * This method writes the option rows in the order deletes, updates, creates. The order matters
+   * because the server keeps one option per `(rule, tag)`: a row removed and a new row with the
+   * same tag in one save must have the old one deleted before the new one is posted.
+   *
+   * <p>The calls are not atomic, so progress is kept on the form after each success. A created
+   * option's id goes into its row, which turns the retry's call for that row into a `PUT`, and a
+   * deleted id leaves {@link originallyLoadedOptionIds}, so a retry repeats only the calls that
+   * did not succeed.
+   *
+   * @throws Error naming the failing row (or the removal) and saying the rule was saved.
+   */
   private async reconcileOptions(
     tagRuleId: string,
-    optionRequests: { id: string | null; request: DhcpTagRuleOptionWriteRequest }[],
+    writes: DhcpTagRuleOptionWrite[],
   ): Promise<void> {
-    const plan = planDhcpOptionReconciliation(
-      optionRequests.map((entry) => ({ id: entry.id, request: entry.request })),
-      this.originallyLoadedOptionIds,
-    );
-
-    for (const entry of plan.toCreate) {
-      await firstValueFrom(
-        this.tagRuleOptionsApi.apiDhcpTagRulesTagRuleIdOptionsPost({
-          tagRuleId,
-          dhcpTagRuleOptionWriteRequest: entry.request,
-        }),
-      );
-    }
-
-    for (const entry of plan.toUpdate) {
-      await firstValueFrom(
-        this.tagRuleOptionsApi.apiDhcpTagRulesTagRuleIdOptionsIdPut({
-          tagRuleId,
-          id: entry.id!,
-          dhcpTagRuleOptionWriteRequest: entry.request,
-        }),
-      );
-    }
+    const plan = planDhcpOptionReconciliation(writes, this.originallyLoadedOptionIds);
 
     for (const id of plan.toDeleteIds) {
-      await firstValueFrom(
-        this.tagRuleOptionsApi.apiDhcpTagRulesTagRuleIdOptionsIdDelete({ tagRuleId, id }),
+      try {
+        await firstValueFrom(
+          this.tagRuleOptionsApi.apiDhcpTagRulesTagRuleIdOptionsIdDelete({ tagRuleId, id }),
+        );
+      } catch (error) {
+        throw new Error(
+          `The rule was saved, but removing an option failed: ${extractErrorMessage(error, 'The server refused the request.')} Save again to retry.`,
+          { cause: error },
+        );
+      }
+      this.originallyLoadedOptionIds = this.originallyLoadedOptionIds.filter(
+        (loadedId) => loadedId !== id,
       );
+    }
+
+    for (const write of plan.toUpdate) {
+      try {
+        await firstValueFrom(
+          this.tagRuleOptionsApi.apiDhcpTagRulesTagRuleIdOptionsIdPut({
+            tagRuleId,
+            id: write.id!,
+            dhcpTagRuleOptionWriteRequest: write.request,
+          }),
+        );
+      } catch (error) {
+        throw this.optionRowFailure(write, error);
+      }
+    }
+
+    for (const write of plan.toCreate) {
+      try {
+        const created = await firstValueFrom(
+          this.tagRuleOptionsApi.apiDhcpTagRulesTagRuleIdOptionsPost({
+            tagRuleId,
+            dhcpTagRuleOptionWriteRequest: write.request,
+          }),
+        );
+        if (created.id) {
+          write.row.controls.id.setValue(created.id);
+          this.originallyLoadedOptionIds.push(created.id);
+        }
+      } catch (error) {
+        throw this.optionRowFailure(write, error);
+      }
     }
   }
 
+  /** This method builds the error for a failed option row call, naming the row and its tag. */
+  private optionRowFailure(write: DhcpTagRuleOptionWrite, error: unknown): Error {
+    return new Error(
+      `The rule was saved, but option row ${write.rowNumber} (tag ${write.request.optionTag}) was not: ${extractErrorMessage(error, 'The server refused the request.')} Correct the row and save again.`,
+      { cause: error },
+    );
+  }
+
   private async loadExistingRule(): Promise<void> {
-    if (!this.tagRuleId) return;
+    if (!this.routeTagRuleId) return;
 
     try {
       const rule = await firstValueFrom(
-        this.tagRulesApi.apiDhcpTagRulesIdGet({ id: this.tagRuleId }),
+        this.tagRulesApi.apiDhcpTagRulesIdGet({ id: this.routeTagRuleId }),
       );
 
       // The rule's protocol (from its scope) decides which catalog entries its rows can match.
@@ -618,7 +729,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
 
       const optionsPage = await firstValueFrom(
         this.tagRuleOptionsApi.apiDhcpTagRulesTagRuleIdOptionsGet({
-          tagRuleId: this.tagRuleId,
+          tagRuleId: this.routeTagRuleId,
           skip: 0,
           take: 500,
         }),
