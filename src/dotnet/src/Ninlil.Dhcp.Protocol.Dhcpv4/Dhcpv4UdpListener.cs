@@ -365,11 +365,13 @@ public sealed class Dhcpv4UdpListener(
     }
 
     /// <summary>
-    ///     This method encodes the reply and sends it where RFC 2131 Section 4.1 says, based on the
-    ///     request's "giaddr" and "ciaddr" fields and broadcast flag: to the relay agent, by
-    ///     broadcast, or by unicast to the client's address. A reply the writer rejects (an
-    ///     option longer than 255 bytes, for example) is logged and dropped. A DHCPNAK follows the
-    ///     same rules, so it is unicast to a client that set "ciaddr".
+    ///     This method chooses where a reply goes, as RFC 2131 Section 4.1 says. A request with
+    ///     "giaddr" set came through a relay agent, so every reply goes to that agent on the
+    ///     server port. With no "giaddr", a DHCPNAK is always broadcast, even when the request set
+    ///     "ciaddr" or cleared the broadcast flag, because the client may hold a wrong address
+    ///     and not answer ARP. Any other reply is broadcast when the request set the broadcast
+    ///     flag, unicast to "ciaddr" when the client has an address (renewing or rebinding), and
+    ///     broadcast otherwise.
     ///     <para>
     ///         RFC 2131 Section 4.1 has one more case: with no "giaddr", no "ciaddr" and no
     ///         broadcast flag, the reply should be unicast to "yiaddr" at the client's hardware
@@ -378,6 +380,51 @@ public sealed class Dhcpv4UdpListener(
     ///         instead. A client without an address still receives it; the broadcast is only less
     ///         efficient.
     ///     </para>
+    /// </summary>
+    /// <param name="request">The client request being answered.</param>
+    /// <param name="reply">The reply to send; its message type tells a DHCPNAK from the rest.</param>
+    /// <param name="serverPort">The DHCP server port a relay agent listens on.</param>
+    /// <param name="clientPort">The DHCP client port.</param>
+    internal static IPEndPoint ResolveReplyDestination(
+        Dhcpv4Message request,
+        Dhcpv4Message reply,
+        int serverPort,
+        int clientPort
+    )
+    {
+        if (!request.RelayAgentIpAddress.Equals(IPAddress.Any))
+        {
+            // A relay agent forwarded this request; the reply goes back to it on the server port
+            // for it to pass on to the client.
+            return new IPEndPoint(request.RelayAgentIpAddress, serverPort);
+        }
+
+        if (
+            reply.TryGetMessageType(out Dhcpv4MessageTypeEnum replyType)
+            && replyType == Dhcpv4MessageTypeEnum.Nak
+        )
+        {
+            // RFC 2131 Section 4.1: "when 'giaddr' is zero, the server broadcasts any DHCPNAK".
+            return new IPEndPoint(IPAddress.Broadcast, clientPort);
+        }
+
+        if (request.BroadcastFlagSet)
+            return new IPEndPoint(IPAddress.Broadcast, clientPort);
+
+        if (!request.ClientIpAddress.Equals(IPAddress.Any))
+        {
+            // The client has an address (renewing or rebinding) and can receive unicast there.
+            return new IPEndPoint(request.ClientIpAddress, clientPort);
+        }
+
+        // Broadcast instead of the unicast-to-hardware-address case (see the summary).
+        return new IPEndPoint(IPAddress.Broadcast, clientPort);
+    }
+
+    /// <summary>
+    ///     This method encodes the reply and sends it to the destination
+    ///     <see cref="ResolveReplyDestination" /> chooses. A reply the writer rejects (an option
+    ///     longer than 255 bytes, for example) is logged and dropped.
     /// </summary>
     private async Task SendReplyAsync(
         Socket socket,
@@ -405,28 +452,12 @@ public sealed class Dhcpv4UdpListener(
             return;
         }
 
-        IPEndPoint destination;
-
-        if (!request.RelayAgentIpAddress.Equals(IPAddress.Any))
-        {
-            // A relay agent forwarded this request; the reply goes back to it on the server port
-            // for it to pass on to the client.
-            destination = new IPEndPoint(request.RelayAgentIpAddress, options.Value.ServerPort);
-        }
-        else if (request.BroadcastFlagSet)
-        {
-            destination = new IPEndPoint(IPAddress.Broadcast, options.Value.ClientPort);
-        }
-        else if (!request.ClientIpAddress.Equals(IPAddress.Any))
-        {
-            // The client has an address (renewing or rebinding) and can receive unicast there.
-            destination = new IPEndPoint(request.ClientIpAddress, options.Value.ClientPort);
-        }
-        else
-        {
-            // Broadcast instead of the unicast-to-hardware-address case (see the summary).
-            destination = new IPEndPoint(IPAddress.Broadcast, options.Value.ClientPort);
-        }
+        IPEndPoint destination = ResolveReplyDestination(
+            request,
+            reply,
+            options.Value.ServerPort,
+            options.Value.ClientPort
+        );
 
         try
         {

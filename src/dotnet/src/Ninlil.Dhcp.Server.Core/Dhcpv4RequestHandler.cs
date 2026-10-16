@@ -365,13 +365,20 @@ public sealed class Dhcpv4RequestHandler(
 
     /// <summary>
     ///     This method builds a DHCPNAK (RFC 2131 Section 4.3.2), which carries only the message
-    ///     type and the Server Identifier.
+    ///     type and the Server Identifier. When the request was relayed (<c>giaddr</c> set), the
+    ///     NAK sets the broadcast bit, as RFC 2131 Section 4.3.2 requires, so the relay agent
+    ///     broadcasts it to a client whose address or subnet mask may be wrong. An unrelayed NAK
+    ///     keeps the request's flag; the UDP listener broadcasts it either way.
     /// </summary>
     private Dhcpv4Message BuildNak(Dhcpv4Message request)
     {
         Dhcpv4Message nak = NewReply(request, IPAddress.Any);
         nak.SetMessageType(Dhcpv4MessageTypeEnum.Nak);
         nak.SetServerIdentifier(serverIdentifierProvider.Value);
+
+        if (!request.RelayAgentIpAddress.Equals(IPAddress.Any))
+            nak.BroadcastFlagSet = true;
+
         return nak;
     }
 }

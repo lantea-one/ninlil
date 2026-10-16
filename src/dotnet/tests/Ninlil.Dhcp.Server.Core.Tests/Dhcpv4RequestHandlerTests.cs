@@ -290,6 +290,48 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
         Assert.Equal(Dhcpv4MessageTypeEnum.Nak, messageType);
     }
 
+    /// <summary>
+    ///     This test checks RFC 2131 Section 4.3.2: a NAK to a relayed request sets the broadcast
+    ///     bit so that the relay broadcasts it to the client, whatever the request's flag said.
+    ///     An unrelayed NAK keeps the request's flag (the listener broadcasts it anyway).
+    /// </summary>
+    [Theory]
+    [InlineData("192.0.2.1", false, true)]
+    [InlineData("192.0.2.1", true, true)]
+    [InlineData("0.0.0.0", false, false)]
+    [InlineData("0.0.0.0", true, true)]
+    public async Task RequestInitReboot_ForAnAddressHeldByAnotherClient_NakBroadcastBitFollowsRelayState(
+        string giaddr,
+        bool requestBroadcastFlag,
+        bool expectedBroadcastFlag
+    )
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            $"nak-bit-{giaddr}-{requestBroadcastFlag}",
+            "192.0.2.120",
+            "192.0.2.122"
+        );
+
+        await ConfirmAddressForNewClientAsync(scope, [0x57, 0x57, 0x57, 0x57, 0x57, 0x57]);
+
+        Dhcpv4Message request = NewMessage([0x68, 0x68, 0x68, 0x68, 0x68, 0x68], 0x7100);
+        request.SetMessageType(Dhcpv4MessageTypeEnum.Request);
+        request.SetRequestedIpAddress(IPAddress.Parse("192.0.2.120"));
+        request.RelayAgentIpAddress = IPAddress.Parse(giaddr);
+        request.BroadcastFlagSet = requestBroadcastFlag;
+
+        Dhcpv4Message reply = await _host.Handler.HandleRequestAsync(
+            request,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(reply);
+        Assert.True(reply.TryGetMessageType(out Dhcpv4MessageTypeEnum messageType));
+        Assert.Equal(Dhcpv4MessageTypeEnum.Nak, messageType);
+        Assert.Equal(expectedBroadcastFlag, reply.BroadcastFlagSet);
+    }
+
     [Fact]
     public async Task Release_FreesTheAddressForAnotherClientImmediately()
     {
