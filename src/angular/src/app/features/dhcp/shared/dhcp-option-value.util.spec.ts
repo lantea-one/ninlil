@@ -118,6 +118,70 @@ describe('dhcp-option-value.util', () => {
     });
   });
 
+  describe('DomainNameList', () => {
+    const type = DhcpOptionValueTypeEnum.DomainNameList;
+    const encodeWith = (text: string) => encodeDhcpOptionValue(type, text);
+
+    it('round-trips several names, one per line', () => {
+      const hex = encodeWith('example.com\nlab.example.org');
+      expect(hex).toBe('076578616D706C6503636F6D00' + '036C6162076578616D706C65036F726700');
+      expect(decodeDhcpOptionValue(type, hex)).toBe('example.com\nlab.example.org');
+    });
+
+    it('accepts one trailing dot and trims each name', () => {
+      expect(encodeWith('  example.com.  ')).toBe(encodeWith('example.com'));
+    });
+
+    it('rejects an empty list and a blank name', () => {
+      expect(() => encodeWith('')).toThrow();
+      expect(() => encodeWith('.')).toThrow();
+    });
+
+    it('rejects an empty label', () => {
+      expect(() => encodeWith('a..b')).toThrow();
+    });
+
+    it('accepts a 63-octet label and rejects a 64-octet one', () => {
+      expect(() => encodeWith(`${'a'.repeat(63)}.com`)).not.toThrow();
+      expect(() => encodeWith(`${'a'.repeat(64)}.com`)).toThrow();
+    });
+
+    it('rejects characters that are not printable ASCII', () => {
+      expect(() => encodeWith('exämple.com')).toThrow();
+      expect(() => encodeWith('a\tb.com')).toThrow();
+    });
+
+    it('accepts a name of 255 wire octets and rejects 256', () => {
+      // Three 63-octet labels (3 x 64) + a 61-octet label (62) + root (1) = 255.
+      const longest = [...'abc'.split('').map((c) => c.repeat(63)), 'd'.repeat(61)].join('.');
+      expect(() => encodeWith(longest)).not.toThrow();
+      expect(() => encodeWith(`${longest}x`)).toThrow();
+    });
+
+    it('rejects a compression pointer and a reserved label type when decoding', () => {
+      expect(() => decodeDhcpOptionValue(type, 'C00C')).toThrow();
+      expect(() => decodeDhcpOptionValue(type, '4000')).toThrow();
+    });
+
+    it('rejects a label that runs past the end and a missing root label', () => {
+      expect(() => decodeDhcpOptionValue(type, '0561')).toThrow();
+      expect(() => decodeDhcpOptionValue(type, '03616263')).toThrow();
+    });
+
+    it('rejects a non-printable label byte, an empty value and a name over 255 octets', () => {
+      expect(() =>
+        decodeDhcpOptionValue(type, '0161' + '0100'.slice(0, 0) + '0101' + '00'),
+      ).toThrow();
+      expect(() => decodeDhcpOptionValue(type, '')).toThrow();
+      const label = '3F' + '61'.repeat(63);
+      expect(() => decodeDhcpOptionValue(type, label.repeat(4) + '00')).toThrow();
+    });
+
+    it('rejects bytes after the last root label when they do not form a name', () => {
+      expect(() => decodeDhcpOptionValue(type, '0161' + '00' + '05')).toThrow();
+    });
+  });
+
   describe('OpaqueHex / uncataloged (null valueType)', () => {
     it('passes a valid hex string through, canonicalized to uppercase', () => {
       expect(encodeDhcpOptionValue(DhcpOptionValueTypeEnum.OpaqueHex, 'c0a8')).toBe('C0A8');

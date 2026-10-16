@@ -133,6 +133,124 @@ function parseIntInRange(text: string, min: number, max: number): number {
   return value;
 }
 
+/** The longest label of a domain name, in octets (RFC 1035 §2.3.4). */
+const MAX_LABEL_OCTETS = 63;
+
+/** The longest wire form of one domain name, in octets, with length bytes and root label. */
+const MAX_NAME_OCTETS = 255;
+
+/**
+ * This function encodes a list of domain names (one per line) in the uncompressed RFC 1035 §3.1
+ * wire form, back to back (RFC 3646 §4). It mirrors the backend `DhcpDomainNameListCodec`, so a
+ * value the form accepts is accepted on save: each name is trimmed, one trailing dot is optional,
+ * labels are 1-63 printable ASCII octets and a name is at most 255 octets on the wire.
+ */
+function encodeDomainNameList(rawValue: string): number[] {
+  const names = splitLines(rawValue);
+
+  if (names.length === 0) throw new Error('A domain name list needs at least one name.');
+
+  const bytes: number[] = [];
+
+  for (const rawName of names) {
+    const name = rawName.endsWith('.') ? rawName.slice(0, -1) : rawName;
+
+    if (name.length === 0) throw new Error('A domain name cannot be empty.');
+
+    const start = bytes.length;
+
+    for (const label of name.split('.')) {
+      if (label.length === 0) throw new Error(`The domain name "${rawName}" has an empty label.`);
+
+      if (label.length > MAX_LABEL_OCTETS) {
+        throw new Error(
+          `A label of the domain name "${rawName}" is longer than ${MAX_LABEL_OCTETS} octets.`,
+        );
+      }
+
+      bytes.push(label.length);
+
+      for (let i = 0; i < label.length; i++) {
+        const code = label.charCodeAt(i);
+        // Printable ASCII only: the bytes are written as-is.
+        if (code < 0x20 || code > 0x7e) {
+          throw new Error(
+            `The domain name "${rawName}" contains a character that is not printable ASCII.`,
+          );
+        }
+        bytes.push(code);
+      }
+    }
+
+    bytes.push(0);
+
+    if (bytes.length - start > MAX_NAME_OCTETS) {
+      throw new Error(
+        `The domain name "${rawName}" is longer than ${MAX_NAME_OCTETS} octets on the wire.`,
+      );
+    }
+  }
+
+  return bytes;
+}
+
+/**
+ * This function decodes the wire form of a domain name list into one dot-joined name per line. It
+ * throws on a compression pointer or reserved label type, a label that runs past the end, a name
+ * without a root label, a name over 255 octets, a non-printable byte or an empty value, so the
+ * caller shows the row as hex.
+ */
+function decodeDomainNameList(bytes: readonly number[]): string {
+  if (bytes.length === 0) throw new Error('A domain name list needs at least one name.');
+
+  const names: string[] = [];
+  let offset = 0;
+
+  while (offset < bytes.length) {
+    const nameStart = offset;
+    const labels: string[] = [];
+    let sawRootLabel = false;
+
+    while (offset < bytes.length) {
+      const labelLength = bytes[offset++];
+
+      // Either top bit set is a compression pointer or reserved label type; DHCPv6 names are
+      // never compressed.
+      if ((labelLength & 0xc0) !== 0) {
+        throw new Error('The domain name list uses a compressed or reserved label.');
+      }
+
+      if (labelLength === 0) {
+        sawRootLabel = true;
+        break;
+      }
+
+      if (offset + labelLength > bytes.length) {
+        throw new Error('A label runs past the end of the domain name list.');
+      }
+
+      const label = bytes.slice(offset, offset + labelLength);
+
+      if (label.some((byte) => byte < 0x20 || byte > 0x7e)) {
+        throw new Error('A label of the domain name list is not printable ASCII.');
+      }
+
+      labels.push(String.fromCharCode(...label));
+      offset += labelLength;
+    }
+
+    if (!sawRootLabel) throw new Error('A domain name has no terminating root label.');
+
+    if (offset - nameStart > MAX_NAME_OCTETS) {
+      throw new Error(`A domain name is longer than ${MAX_NAME_OCTETS} octets.`);
+    }
+
+    names.push(labels.join('.'));
+  }
+
+  return names.join('\n');
+}
+
 /**
  * This function encodes a display value into the hex string stored in `ValueHex`, the inverse of
  * {@link decodeDhcpOptionValue}. It throws when the value is invalid. A `null` `valueType` (an
@@ -190,6 +308,9 @@ export function encodeDhcpOptionValue(
 
     case DhcpOptionValueTypeEnum.String:
       return bytesToHex(Array.from(new TextEncoder().encode(rawValue)));
+
+    case DhcpOptionValueTypeEnum.DomainNameList:
+      return bytesToHex(encodeDomainNameList(rawValue));
 
     case DhcpOptionValueTypeEnum.OpaqueHex:
     default:
@@ -254,6 +375,9 @@ export function decodeDhcpOptionValue(
 
     case DhcpOptionValueTypeEnum.String:
       return new TextDecoder().decode(new Uint8Array(bytes));
+
+    case DhcpOptionValueTypeEnum.DomainNameList:
+      return decodeDomainNameList(bytes);
 
     case DhcpOptionValueTypeEnum.OpaqueHex:
     default:
