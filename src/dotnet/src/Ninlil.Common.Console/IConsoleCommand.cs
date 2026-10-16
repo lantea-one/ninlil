@@ -13,6 +13,19 @@ namespace Ninlil.Common.Console;
 public interface IConsoleCommand
 {
     /// <summary>
+    ///     This property contains the exit code of the last run: 0 before any run, after a parse and
+    ///     after a help request; 1 when no input model parsed. The command never ends the process, so
+    ///     a host returns this value from <c>Main</c> after awaiting the run.
+    /// </summary>
+    public int ExitCode { get; }
+
+    /// <summary>
+    ///     This property contains the result the last run reported (parsed, help requested, or the
+    ///     failure the not-parsed handlers received). It is null before any run.
+    /// </summary>
+    public ConsoleParseResult LastParseResult { get; }
+
+    /// <summary>
     ///     This delegate handles the case where no input model matches the command-line arguments.
     ///     It is synchronous despite its name.
     /// </summary>
@@ -153,7 +166,9 @@ public interface IConsoleCommand
         where TService : class;
 
     /// <summary>
-    ///     This method registers a handler to run when no input model matches the arguments.
+    ///     This method registers a handler to run when no input model matches the arguments. Each
+    ///     handler receives one <see cref="ConsoleParseException" /> carrying the reported result and
+    ///     every result tried. A help request is not a failure and calls no handler.
     /// </summary>
     /// <param name="handler">
     ///     The handler to execute when the command-line arguments are not parsed.
@@ -168,6 +183,9 @@ public interface IConsoleCommand
     /// <summary>
     ///     This method parses the command-line arguments and executes the provided
     ///     <paramref name="parsedDelegate" /> upon successful parsing of the <typeparamref name="TInputModel" />.
+    ///     A help request prints the help text and sets <see cref="ExitCode" /> to 0 without calling
+    ///     the delegate. A failure calls the not-parsed handlers and sets <see cref="ExitCode" /> to 1.
+    ///     The method never ends the process.
     /// </summary>
     /// <param name="parsedDelegate">
     ///     The <see cref="IConsoleCommand.CommandParsedAsyncDelegate{TInputModel}" />

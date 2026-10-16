@@ -13,11 +13,14 @@ namespace Ninlil.Common.Console;
 /// <summary>
 ///     This class is the command-line parser and runner at the centre of this library. It holds
 ///     the raw arguments and a service collection. <c>WithParsedAsync</c> tries each candidate
-///     input model type in turn through <see cref="ConsoleCommandInputModel.TryParse(Type, out object, string[])" /> and hands
+///     input model type in turn through <see cref="ConsoleCommandInputModel.GetParseResult(Type, string[])" /> and hands
 ///     the first match, with a freshly built service provider, to a delegate.
 ///     <see cref="ApplicationAsync(Type, CancellationToken)" /> does the same for an
 ///     <see cref="IConsoleApplication" /> type. A help switch as the first argument prints the help
-///     text for the candidate types and exits the process. The static properties hold the
+///     text for the candidate types and reports exit code 0. When no type parses, the not-parsed
+///     handlers receive one <see cref="ConsoleParseException" /> and the exit code is 1. The command
+///     never ends the process: the host reads <see cref="ExitCode" /> and <see cref="LastParseResult" />
+///     after the run and decides how to exit. The static properties hold the
 ///     application details shown in the help text and default to the entry assembly's metadata.
 /// </summary>
 /// <param name="arguments">The CLI arguments passed to the console command.</param>
@@ -101,7 +104,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <summary>
     ///     This field lists the switches that request the help text when given as the first
     ///     argument. They are compared after <see cref="NamedConsoleArgumentAttribute.SanitizeArgumentName" />
-    ///     and ignore case.
+    ///     and ignore case. A request prints the help and sets <see cref="ExitCode" /> to 0; it does
+    ///     not end the process.
     /// </summary>
     public static readonly string[] HelpRequestSwitches = ["?", "/?", "/h", "h", "help", "version"];
 
@@ -2950,13 +2954,30 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         );
 
     /// <summary>
+    ///     This property contains the exit code of the last <c>WithParsedAsync</c> or
+    ///     <c>ApplicationAsync</c> run: 0 before any run, after a parse and after a help request, and
+    ///     1 when no input model parsed. The command never ends the process; the host returns this
+    ///     value from <c>Main</c>. An exception thrown by the parsed delegate is not caught and does
+    ///     not change it.
+    /// </summary>
+    public int ExitCode { get; private set; }
+
+    /// <summary>
+    ///     This property contains the result the last run reported: the parsed result, the help
+    ///     request (with no input model type when the first argument asked for help), or the failure
+    ///     the not-parsed handlers received. It is null before any run.
+    /// </summary>
+    public ConsoleParseResult LastParseResult { get; private set; }
+
+    /// <summary>
     ///     This field contains the command-line arguments to parse.
     /// </summary>
     private readonly IEnumerable<string> _arguments = arguments;
 
     /// <summary>
     ///     This field maps an exception type to the handler that runs when no input model matches the
-    ///     arguments. The default <see cref="Exception" /> entry writes the error to the console;
+    ///     arguments. The default <see cref="Exception" /> entry writes the error to standard error and
+    ///     does not end the process;
     ///     <see cref="WithNotParsed{TException}" /> adds or replaces entries.
     /// </summary>
     private readonly Dictionary<
@@ -2965,7 +2986,7 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     > _notParsed = new([
         new KeyValuePair<Type, IConsoleCommand.CommandNotParsedAsyncDelegate<Exception>>(
             typeof(Exception),
-            e => ConsoleService.WriteLine(e, true)
+            e => ConsoleService.WriteLine(e)
         ),
     ]);
 
@@ -3024,10 +3045,13 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
 
     /// <summary>
     ///     This method parses the command-line arguments into the first of
-    ///     <paramref name="types" /> that accepts them. If the first argument is a help switch it
-    ///     prints the help text and exits the process. If the first argument names a verb on one of
-    ///     the types, only the types with that verb are tried. When nothing matches, every
-    ///     not-parsed handler is called.
+    ///     <paramref name="types" /> that accepts them and records the outcome in
+    ///     <see cref="ExitCode" /> and <see cref="LastParseResult" />. It never ends the process: the
+    ///     host owns the exit code. If the first argument is a help switch it prints the help text
+    ///     for the types and returns null (exit code 0). If the first argument names a verb on one of
+    ///     the types, only the types with that verb are tried. Every type is tried in order; one that
+    ///     does not match or is invalid does not stop the next. When none parses, every not-parsed
+    ///     handler receives one <see cref="ConsoleParseException" /> and the exit code is 1.
     /// </summary>
     /// <param name="types">The various types of input models to parse.</param>
     /// <returns>The parsed input model if successful, otherwise null.</returns>
@@ -3038,30 +3062,36 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     private TInputModel Parse<TInputModel>(params Type[] types)
         where TInputModel : class, IConsoleCommandInputModel
     {
+        // Every run starts from a clean outcome, so a command that runs twice never reports the
+        // first run's result.
+        ExitCode = 0;
+        LastParseResult = null;
+
         // Filter any bad types out of the list.
         types = types
             .Where(t => t is not null)
             .Where(t => typeof(IConsoleCommandInputModel).IsAssignableFrom(t))
             .ToArray();
 
-        // Check for a help request.
-        if (_arguments.Any())
+        // Localize the raw arguments once; the enumerable may be lazy.
+        string[] rawArguments = _arguments.ToArray();
+
+        // Check for a help request and for a verb that narrows the list of types.
+        if (rawArguments.Length > 0)
         {
-            // Check for a help-text call.
-            if (
-                HelpRequestSwitches.Contains(
-                    NamedConsoleArgumentAttribute.SanitizeArgumentName(_arguments.First()),
-                    StringComparer.OrdinalIgnoreCase
-                )
-            )
+            // Check for a help-text call. IsHelpRequest is false for a blank argument, which
+            // SanitizeArgumentName would reject.
+            if (IsHelpRequest(rawArguments[0]))
             {
-                // Print the help text for the provided types.
-                HelpText(types);
-
-                // Exit the process once the help text is printed.
-                Environment.Exit(0);
-
-                // Unreachable after Environment.Exit, but the compiler needs a return.
+                // Print the help text for the provided types, then report the help as a success.
+                // The host decides what to do next; the process is not ended here.
+                string helpText = GetHelpText(types);
+                ConsoleService.WriteLine(ConsoleColor.DarkCyan, helpText);
+                LastParseResult = new ConsoleParseResult(
+                    ConsoleParseOutcomeEnum.HelpRequested,
+                    null,
+                    helpText: helpText
+                );
                 return null;
             }
 
@@ -3069,46 +3099,73 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
             if (
                 types.Any(t =>
                     t.GetCustomAttribute<ConsoleVerbAttribute>(false)
-                        ?.Name?.Equals(_arguments.First(), StringComparison.OrdinalIgnoreCase)
+                        ?.Name?.Equals(rawArguments[0], StringComparison.OrdinalIgnoreCase)
                         is true
                 )
             )
                 types = types
                     .Where(t =>
                         t.GetCustomAttribute<ConsoleVerbAttribute>(false)
-                            ?.Name?.Equals(_arguments.First(), StringComparison.OrdinalIgnoreCase)
+                            ?.Name?.Equals(rawArguments[0], StringComparison.OrdinalIgnoreCase)
                             is true
                     )
                     .ToArray();
         }
 
-        // Iterate through the types and parse the command-line arguments.
+        // Collect every result so the not-parsed handlers can see why each type was rejected.
+        List<ConsoleParseResult> results = [];
+
+        // Iterate through the types and parse the command-line arguments. Each type gets a fresh
+        // collection, so one type's attempt cannot affect the next.
         foreach (Type type in types)
         {
-            // Localize the arguments into a local variable for parsing.
-            string[] arguments = [];
-
-            // Copy the arguments to the local variable.
-            foreach (string a in _arguments)
-                arguments = [.. arguments, a];
-
             // Try to parse the command-line arguments for the current type of input model.
-            if (ConsoleCommandInputModel.TryParse(type, out var model, arguments))
-                return model as TInputModel;
+            ConsoleParseResult result = ConsoleCommandInputModel.GetParseResult(type, rawArguments);
+            results.Add(result);
+
+            // The first type that parses wins.
+            if (result.Succeeded)
+            {
+                LastParseResult = result;
+                return result.Model as TInputModel;
+            }
+
+            // A help switch inside a verb prints that model's help and ends the attempt; it is not
+            // a failure.
+            if (result.Outcome is ConsoleParseOutcomeEnum.HelpRequested)
+            {
+                ConsoleService.WriteLine(ConsoleColor.DarkCyan, result.HelpText);
+                LastParseResult = result;
+                return null;
+            }
         }
 
-        // If we get here, no valid input model was found, execute the not parsed handler(s).
+        // No type parsed. Report the first invalid result, because the user meant that model; fall
+        // back to the first mismatch, or to a synthetic result when no type was given.
+        ConsoleParseResult reported =
+            results.FirstOrDefault(r => r.Outcome is ConsoleParseOutcomeEnum.Invalid)
+            ?? results.FirstOrDefault()
+            ?? new ConsoleParseResult(
+                ConsoleParseOutcomeEnum.NotMatched,
+                null,
+                errors: ["No input model type was given."]
+            );
+        if (results.Count is 0)
+            results.Add(reported);
+
+        // Record the failure before the handlers run, so a handler can read the exit code.
+        LastParseResult = reported;
+        ExitCode = reported.ExitCode;
+
+        // Execute the not parsed handler(s), each with the same exception.
+        ConsoleParseException exception = new(reported, results);
         foreach (
             KeyValuePair<
                 Type,
                 IConsoleCommand.CommandNotParsedAsyncDelegate<Exception>
             > handler in _notParsed
         )
-            handler.Value.Invoke(
-                new InvalidOperationException(
-                    $"No valid input model found for the provided command-line arguments from: {string.Join(", ", types.Select(t => t.Name))}"
-                )
-            );
+            handler.Value.Invoke(exception);
 
         // We're done, return null.
         return null;
@@ -3372,7 +3429,11 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
 
     /// <summary>
     ///     This method registers a handler to run when no input model matches the arguments. It
-    ///     replaces any handler already registered for <typeparamref name="TException" />.
+    ///     replaces any handler already registered for <typeparamref name="TException" />. Every
+    ///     registered handler runs once per failed run, each with the same
+    ///     <see cref="ConsoleParseException" /> (an <see cref="InvalidOperationException" />) that
+    ///     carries the reported result and every result tried. A help request is not a failure and
+    ///     calls no handler.
     /// </summary>
     /// <param name="handler">
     ///     The handler to execute when the command-line arguments are not parsed.
@@ -3402,6 +3463,9 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     /// <summary>
     ///     This method parses the command-line arguments and executes the provided
     ///     <paramref name="parsedDelegate" /> upon successful parsing of the <typeparamref name="TInputModel" />.
+    ///     A help request prints the help text and sets <see cref="ExitCode" /> to 0 without calling
+    ///     the delegate. A failure calls the not-parsed handlers (see <see cref="WithNotParsed{TException}" />)
+    ///     and sets <see cref="ExitCode" /> to 1. The method never ends the process.
     /// </summary>
     /// <param name="parsedDelegate">
     ///     The <see cref="IConsoleCommand.CommandParsedAsyncDelegate{TInputModel}" />
