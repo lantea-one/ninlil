@@ -67,6 +67,13 @@ public sealed class Dhcpv6RelayAgent
     /// </summary>
     private readonly Socket _outboundSocket;
 
+    /// <summary>
+    ///     This field contains the index of the interface that owns the relay's link-address, or
+    ///     <see langword="null" /> when none does. It is the client link, so it is the scope of
+    ///     a client's link-local address (see <see cref="BuildClientDestination" />).
+    /// </summary>
+    private readonly int? _clientInterfaceIndex;
+
     /// <param name="relayOptions">The upstream servers and Interface-ID settings.</param>
     /// <param name="protocolOptions">The transport options, read for the client port relayed replies go to.</param>
     /// <param name="addressProvider">The relay's link-address.</param>
@@ -76,6 +83,24 @@ public sealed class Dhcpv6RelayAgent
         IOptions<Dhcpv6ProtocolOptions> protocolOptions,
         IDhcpv6RelayAgentAddressProvider addressProvider,
         ILogger<Dhcpv6RelayAgent> logger
+    )
+        : this(relayOptions, protocolOptions, addressProvider, logger, FindInterfaceIndex) { }
+
+    /// <summary>
+    ///     This constructor lets a test replace the interface lookup, so the link-local scope
+    ///     can be checked with an interface the machine really has.
+    /// </summary>
+    /// <param name="relayOptions">The upstream servers and Interface-ID settings.</param>
+    /// <param name="protocolOptions">The transport options, read for the client port relayed replies go to.</param>
+    /// <param name="addressProvider">The relay's link-address.</param>
+    /// <param name="logger">The logger dropped and failed messages are recorded to.</param>
+    /// <param name="interfaceIndexOf">Returns the index of the interface that owns an address, or <see langword="null" />.</param>
+    internal Dhcpv6RelayAgent(
+        IOptions<Dhcpv6RelayOptions> relayOptions,
+        IOptions<Dhcpv6ProtocolOptions> protocolOptions,
+        IDhcpv6RelayAgentAddressProvider addressProvider,
+        ILogger<Dhcpv6RelayAgent> logger,
+        Func<IPAddress, int?> interfaceIndexOf
     )
     {
         _relayOptions = relayOptions;
@@ -89,6 +114,56 @@ public sealed class Dhcpv6RelayAgent
             ProtocolType.Udp
         );
         _outboundSocket.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+
+        // The link-address names the client link (RFC 8415 Section 19.1), so its interface is the
+        // one a client's link-local address belongs to. Found once: the address is fixed until a
+        // restart.
+        _clientInterfaceIndex = interfaceIndexOf(addressProvider.Value);
+
+        if (_clientInterfaceIndex == null)
+        {
+            logger.LogWarning(
+                "No network interface holds the relay link-address {LinkAddress}, so replies to DHCPv6 clients with a link-local address cannot be scoped to the clients' link and may not be delivered.",
+                addressProvider.Value
+            );
+        }
+    }
+
+    /// <summary>
+    ///     This method looks up the interface that owns an address with
+    ///     <see cref="RelayInterfaceLocator" />.
+    /// </summary>
+    private static int? FindInterfaceIndex(IPAddress address) =>
+        RelayInterfaceLocator.TryFind(address, out int interfaceIndex, out _)
+            ? interfaceIndex
+            : null;
+
+    /// <summary>
+    ///     This method builds the destination of a relayed reply. A link-local peer address
+    ///     arrives with no scope, because the wire format has none, and a link-local address is
+    ///     ambiguous without one: the send would fail or leave on the wrong link. It gets the
+    ///     client link's interface index as its scope ID. Any other address is used as it is.
+    /// </summary>
+    /// <param name="peerAddress">The peer-address of the RELAY-REPL, the client's address.</param>
+    /// <param name="clientInterfaceIndex">The index of the client link's interface, or <see langword="null" /> when unknown.</param>
+    /// <param name="clientPort">The client UDP port.</param>
+    internal static IPEndPoint BuildClientDestination(
+        IPAddress peerAddress,
+        int? clientInterfaceIndex,
+        int clientPort
+    )
+    {
+        if (
+            clientInterfaceIndex is int scopeId
+            && peerAddress.IsIPv6LinkLocal
+            && peerAddress.ScopeId == 0
+        )
+            return new IPEndPoint(
+                new IPAddress(peerAddress.GetAddressBytes(), scopeId),
+                clientPort
+            );
+
+        return new IPEndPoint(peerAddress, clientPort);
     }
 
     /// <inheritdoc />
@@ -370,9 +445,14 @@ public sealed class Dhcpv6RelayAgent
         }
 
         // The server copies peer-address from the RELAY-FORW, so it is the client's address. The
-        // relay sends the unwrapped message there (RFC 8415). The address carries no scope ID.
+        // relay sends the unwrapped message there (RFC 8415). The wire address carries no scope
+        // ID, so a link-local one is scoped with the client link's interface.
         int clientPort = _protocolOptions.Value.ClientPort;
-        IPEndPoint clientDestination = new(message.PeerAddress, clientPort);
+        IPEndPoint clientDestination = BuildClientDestination(
+            message.PeerAddress,
+            _clientInterfaceIndex,
+            clientPort
+        );
         byte[] innerReplyBytes = Dhcpv6MessageWriter.Write(innerReply);
 
         try

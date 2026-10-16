@@ -13,7 +13,8 @@ namespace Ninlil.Dhcp.Server.Relay.Tests;
 /// <summary>
 ///     This class tests the forwarding side of <see cref="Dhcpv4RelayAgent" />: <c>giaddr</c> and
 ///     hops handling for first and chained hops, Relay Agent Information, the hop limit and an
-///     empty upstream list. Each test calls <see cref="Dhcpv4RelayAgent.HandleRequestAsync" />
+///     empty upstream list, plus the client-side reply socket that leaves from the <c>giaddr</c>
+///     link. Each test calls <see cref="Dhcpv4RelayAgent.HandleRequestAsync" />
 ///     directly and reads what arrives on a loopback UDP socket acting as the upstream server.
 ///     The full path through <see cref="Dhcpv4UdpListener" /> is covered by
 ///     <see cref="Dhcpv4RelayRoundTripTests" />.
@@ -322,6 +323,89 @@ public sealed class Dhcpv4RelayAgentTests
         );
         Assert.True(forwarded.TryGetRelayAgentCircuitId(out byte[] circuitId));
         Assert.Equal("upstream-relay", System.Text.Encoding.ASCII.GetString(circuitId));
+    }
+
+    [Fact]
+    public async Task Reply_ForAGiaddrOnALocalLink_LeavesFromTheGiaddr()
+    {
+        // 127.0.0.2 is local on Linux (all of 127.0.0.0/8 is). Where it cannot be bound the test
+        // returns early, so it reports as passed, not skipped.
+        if (!CanBind(IPAddress.Parse("127.0.0.2")))
+            return;
+
+        int clientPort = GetFreeUdpPort();
+        IPAddress relayAddress = IPAddress.Parse("127.0.0.2");
+
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            relayAddress,
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamServerPort: 67,
+            clientPort: clientPort
+        );
+
+        await agent.HandleRequestAsync(
+            CreateOffer(relayAddress),
+            new IPEndPoint(IPAddress.Loopback, 67),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        UdpReceiveResult received = await clientSocket.ReceiveAsync(timeout.Token);
+
+        // The source address is the relay's address on the client link, not the address the
+        // routing table would pick.
+        Assert.Equal(relayAddress, received.RemoteEndPoint.Address);
+    }
+
+    [Fact]
+    public async Task Reply_ForAGiaddrNoInterfaceOwns_IsStillDeliveredAndOneWarningIsLogged()
+    {
+        int clientPort = GetFreeUdpPort();
+        IPAddress relayAddress = IPAddress.Parse("192.0.2.123");
+        WarningCountingLogger<Dhcpv4RelayAgent> logger = new();
+
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            relayAddress,
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamServerPort: 67,
+            clientPort: clientPort,
+            logger: logger
+        );
+
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            await agent.HandleRequestAsync(
+                CreateOffer(relayAddress),
+                new IPEndPoint(IPAddress.Loopback, 67),
+                CancellationToken.None
+            );
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+            UdpReceiveResult received = await clientSocket.ReceiveAsync(timeout.Token);
+            Assert.True(Dhcpv4MessageReader.TryRead(received.Buffer, out _, out _));
+        }
+
+        // One summary for the missing interface, however many replies follow.
+        Assert.Single(logger.Warnings);
+    }
+
+    /// <summary>
+    ///     This method says whether the machine lets a UDP socket bind the address. Tests that
+    ///     need an address such as <c>127.0.0.2</c> return early when it does not.
+    /// </summary>
+    private static bool CanBind(IPAddress address)
+    {
+        try
+        {
+            using UdpClient probe = new(new IPEndPoint(address, 0));
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

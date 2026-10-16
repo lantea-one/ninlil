@@ -1,9 +1,12 @@
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
+using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Relay.Tests;
@@ -14,7 +17,8 @@ namespace Ninlil.Dhcp.Server.Relay.Tests;
 ///     <see cref="Dhcpv6RelayAgent.HandleRequestAsync" /> or
 ///     <see cref="Dhcpv6RelayAgent.HandleRelayMessageAsync" /> directly and checks that it returns
 ///     <see langword="null" /> without throwing. The full path is covered by
-///     <see cref="Dhcpv6RelayRoundTripTests" />.
+///     <see cref="Dhcpv6RelayRoundTripTests" />. The link-local tests also check the scope ID
+///     the relay gives a client's address (a pure rule, and one live case on a real interface).
 /// </summary>
 public sealed class Dhcpv6RelayAgentTests
 {
@@ -150,6 +154,159 @@ public sealed class Dhcpv6RelayAgentTests
         );
     }
 
+    [Fact]
+    public void BuildClientDestination_ForALinkLocalPeer_ScopesItWithTheInterfaceIndex()
+    {
+        IPEndPoint destination = Dhcpv6RelayAgent.BuildClientDestination(
+            IPAddress.Parse("fe80::1"),
+            7,
+            546
+        );
+
+        Assert.Equal(IPAddress.Parse("fe80::1%7"), destination.Address);
+        Assert.Equal(7, destination.Address.ScopeId);
+        Assert.Equal(546, destination.Port);
+    }
+
+    [Fact]
+    public void BuildClientDestination_ForAGlobalPeer_IsUnchanged()
+    {
+        IPEndPoint destination = Dhcpv6RelayAgent.BuildClientDestination(
+            IPAddress.Parse("2001:db8::1"),
+            7,
+            546
+        );
+
+        Assert.Equal(IPAddress.Parse("2001:db8::1"), destination.Address);
+        Assert.Equal(0, destination.Address.ScopeId);
+    }
+
+    [Fact]
+    public void BuildClientDestination_ForALinkLocalPeerWithNoKnownInterface_IsUnchanged()
+    {
+        IPEndPoint destination = Dhcpv6RelayAgent.BuildClientDestination(
+            IPAddress.Parse("fe80::1"),
+            null,
+            546
+        );
+
+        Assert.Equal(IPAddress.Parse("fe80::1"), destination.Address);
+        Assert.Equal(0, destination.Address.ScopeId);
+    }
+
+    [Fact]
+    public void Constructor_WhenNoInterfaceOwnsTheLinkAddress_LogsOneWarning()
+    {
+        WarningCountingLogger<Dhcpv6RelayAgent> logger = new();
+
+        using Dhcpv6RelayAgent agent = new(
+            Options.Create(new Dhcpv6RelayOptions { Enable = true }),
+            Options.Create(new Dhcpv6ProtocolOptions()),
+            new FixedDhcpv6RelayAgentAddressProvider(IPAddress.Parse("2001:db8:1::1")),
+            logger,
+            interfaceIndexOf: _ => null
+        );
+
+        Assert.Single(logger.Warnings);
+    }
+
+    [Fact]
+    public async Task HandleRelayMessageAsync_ForAScopelessLinkLocalPeer_ReachesTheClientOnItsLink()
+    {
+        // The test needs an interface that holds a bindable fe80:: address; without one it
+        // returns early, so it reports as passed, not skipped.
+        (IPAddress linkLocal, int interfaceIndex) = FindBindableLinkLocalAddress();
+
+        if (linkLocal == null)
+            return;
+
+        using UdpClient clientSocket = new(new IPEndPoint(linkLocal, 0));
+        int clientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
+        IPAddress linkAddress = IPAddress.Parse("2001:db8:1::1");
+
+        using Dhcpv6RelayAgent agent = new(
+            Options.Create(
+                new Dhcpv6RelayOptions
+                {
+                    Enable = true,
+                    UpstreamServerAddresses = ["::1"],
+                    UpstreamServerPort = GetFreePort(),
+                }
+            ),
+            Options.Create(new Dhcpv6ProtocolOptions { ClientPort = clientPort }),
+            new FixedDhcpv6RelayAgentAddressProvider(linkAddress),
+            NullLogger<Dhcpv6RelayAgent>.Instance,
+            interfaceIndexOf: address =>
+                ClientAddress.IsSameAddress(address, linkAddress) ? interfaceIndex : null
+        );
+
+        Dhcpv6Message inner = new() { MessageType = Dhcpv6MessageTypeEnum.Reply };
+        inner.SetServerIdentifier([0x00, 0x02, 0x00, 0x00, 0xAB, 0xCD]);
+
+        Dhcpv6RelayMessage relayReply = new()
+        {
+            MessageType = Dhcpv6MessageTypeEnum.RelayReply,
+            LinkAddress = linkAddress,
+            // The server copies the peer-address from the RELAY-FORW, which carries no scope.
+            PeerAddress = new IPAddress(linkLocal.GetAddressBytes()),
+        };
+        relayReply.SetRelayMessagePayload(Dhcpv6MessageWriter.Write(inner));
+
+        await agent.HandleRelayMessageAsync(
+            relayReply,
+            new IPEndPoint(IPAddress.IPv6Loopback, 547),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        UdpReceiveResult received = await clientSocket.ReceiveAsync(timeout.Token);
+        Assert.True(Dhcpv6MessageReader.TryRead(received.Buffer, out Dhcpv6Message relayed, out _));
+        Assert.Equal(Dhcpv6MessageTypeEnum.Reply, relayed.MessageType);
+    }
+
+    /// <summary>
+    ///     This method finds the last up interface that holds a link-local IPv6 address a UDP
+    ///     socket can bind, so a test can use a real link-local client. The last one is taken
+    ///     because the system tends to pick the first interface for an unscoped link-local
+    ///     destination, and the test only proves the scope ID when the answer differs.
+    /// </summary>
+    /// <returns>The scoped address and its interface index, or a null address when there is none.</returns>
+    private static (IPAddress Address, int InterfaceIndex) FindBindableLinkLocalAddress()
+    {
+        if (!Socket.OSSupportsIPv6)
+            return (null, 0);
+
+        IPAddress found = null;
+
+        foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (networkInterface.OperationalStatus != OperationalStatus.Up)
+                continue;
+
+            foreach (
+                UnicastIPAddressInformation unicast in networkInterface
+                    .GetIPProperties()
+                    .UnicastAddresses
+            )
+            {
+                if (!unicast.Address.IsIPv6LinkLocal)
+                    continue;
+
+                try
+                {
+                    using UdpClient probe = new(new IPEndPoint(unicast.Address, 0));
+                    found = unicast.Address;
+                }
+                catch (SocketException)
+                {
+                    // Not bindable (for example an address still in duplicate detection).
+                }
+            }
+        }
+
+        return found == null ? (null, 0) : (found, (int)found.ScopeId);
+    }
+
     /// <summary>
     ///     This method hands the relay a RELAY-REPL addressed to a client socket on the loopback
     ///     address and says whether the inner message reached that socket.
@@ -161,12 +318,10 @@ public sealed class Dhcpv6RelayAgentTests
         bool expectRelayed
     )
     {
-        if (!System.Net.Sockets.Socket.OSSupportsIPv6)
+        if (!Socket.OSSupportsIPv6)
             return;
 
-        using System.Net.Sockets.UdpClient clientSocket = new(
-            new IPEndPoint(IPAddress.IPv6Loopback, 0)
-        );
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.IPv6Loopback, 0));
         int clientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
 
         using Dhcpv6RelayAgent agent = CreateAgent(
@@ -197,9 +352,7 @@ public sealed class Dhcpv6RelayAgentTests
 
         if (expectRelayed)
         {
-            System.Net.Sockets.UdpReceiveResult received = await clientSocket.ReceiveAsync(
-                timeout.Token
-            );
+            UdpReceiveResult received = await clientSocket.ReceiveAsync(timeout.Token);
             Assert.True(
                 Dhcpv6MessageReader.TryRead(received.Buffer, out Dhcpv6Message relayed, out _)
             );
@@ -245,7 +398,7 @@ public sealed class Dhcpv6RelayAgentTests
     /// <returns>A free TCP port number.</returns>
     private static int GetFreePort()
     {
-        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
+        using TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
         listener.Start();
         return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }

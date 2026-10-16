@@ -22,7 +22,18 @@ namespace Ninlil.Dhcp.Server.Relay;
 ///         <c>giaddr</c> set, Relay Agent Information possibly added) to the upstream servers, and
 ///         later sends the server's reply to the client subnet by a different rule.
 ///         <see cref="HandleRequestAsync" /> therefore always returns <see langword="null" /> and
-///         sends through a separate outbound socket.
+///         sends through separate sockets.
+///     </para>
+///     <para>
+///         <b>Two sending sockets.</b> Forwarded requests leave through
+///         <see cref="_outboundSocket" />, which the routing table steers to the upstream
+///         servers. Replies to clients leave through <see cref="_clientSideSocket" />, which is
+///         bound to <c>giaddr</c> and, on Linux, to the interface that owns it. A limited
+///         broadcast (255.255.255.255) is not routed, so without that binding it would leave on
+///         the interface of the default route, which on a relay is often the one facing the
+///         servers. The source port of that socket stays ephemeral: binding port 67 on
+///         <c>giaddr</c> would take the servers' replies away from the listener's wildcard
+///         socket, and RFC 2131 Section 4.1 names only the destination port.
 ///     </para>
 ///     <para>
 ///         <b>One listening socket for both directions.</b> The listener passes every datagram
@@ -49,13 +60,22 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
     private readonly ILogger<Dhcpv4RelayAgent> _logger;
 
     /// <summary>
-    ///     This field contains the socket both forwarded requests and relayed replies are sent
-    ///     from. It is bound to the wildcard address and an ephemeral port, since nothing needs to
-    ///     reach it: servers reply to <c>giaddr</c> on the server port, which the listener's socket
-    ///     owns. The operating system picks the outgoing interface by routing, including for
-    ///     broadcasts.
+    ///     This field contains the socket forwarded requests are sent from. It is bound to the
+    ///     wildcard address and an ephemeral port, since nothing needs to reach it: servers reply
+    ///     to <c>giaddr</c> on the server port, which the listener's socket owns. The operating
+    ///     system picks the outgoing interface by routing. It also carries replies to clients
+    ///     when <see cref="_clientSideSocket" /> is <see langword="null" />.
     /// </summary>
     private readonly Socket _outboundSocket;
+
+    /// <summary>
+    ///     This field contains the socket replies to clients are sent from: bound to
+    ///     <c>giaddr</c> and an ephemeral port, with broadcast enabled and, on Linux, bound to
+    ///     the interface that owns <c>giaddr</c>. It is <see langword="null" /> when
+    ///     <c>giaddr</c> is not an address of this host or the binding fails; replies then use
+    ///     <see cref="_outboundSocket" /> and one Warning says so.
+    /// </summary>
+    private readonly Socket _clientSideSocket;
 
     /// <summary>
     ///     These fields cache the encoded IDs (see <see cref="GetRelayAgentIds" />). Concurrent
@@ -90,6 +110,65 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
             EnableBroadcast = true,
         };
         _outboundSocket.Bind(new IPEndPoint(IPAddress.Any, 0));
+
+        _clientSideSocket = CreateClientSideSocket(addressProvider.Value, logger);
+    }
+
+    /// <summary>
+    ///     This method creates the socket that sends replies down to clients (see
+    ///     <see cref="_clientSideSocket" />). It never throws: a relay whose giaddr is not local,
+    ///     for example one behind address translation, still relays through the outbound socket.
+    /// </summary>
+    /// <returns>The bound socket, or <see langword="null" /> after one Warning when it cannot be made.</returns>
+    private static Socket CreateClientSideSocket(IPAddress giaddr, ILogger logger)
+    {
+        Socket socket = null;
+
+        try
+        {
+            if (!RelayInterfaceLocator.TryFind(giaddr, out _, out string interfaceName))
+            {
+                logger.LogWarning(
+                    "No network interface holds the relay address {Giaddr}, so replies to DHCPv4 clients leave through the interface the routing table picks, which may not be the clients' link.",
+                    giaddr
+                );
+                return null;
+            }
+
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
+            {
+                EnableBroadcast = true,
+            };
+
+            // SO_BINDTODEVICE (socket(7)) makes the socket send and receive only on that
+            // interface, so a limited broadcast leaves on the clients' link. It must be set
+            // before Bind. The option value is the interface name with a terminating NUL.
+            // Linux only: other systems send from the bound source address alone.
+            if (OperatingSystem.IsLinux())
+            {
+                const int SolSocket = 1;
+                const int SoBindToDevice = 25;
+                socket.SetRawSocketOption(
+                    SolSocket,
+                    SoBindToDevice,
+                    Encoding.ASCII.GetBytes(interfaceName + '\0')
+                );
+            }
+
+            // The source address of a reply is the relay's address on the client link.
+            socket.Bind(new IPEndPoint(giaddr, 0));
+            return socket;
+        }
+        catch (Exception exception) when (exception is SocketException or ArgumentException)
+        {
+            logger.LogWarning(
+                exception,
+                "Cannot bind a socket to the relay address {Giaddr} on its interface, so replies to DHCPv4 clients leave through the interface the routing table picks, which may not be the clients' link.",
+                giaddr
+            );
+            socket?.Dispose();
+            return null;
+        }
     }
 
     /// <inheritdoc />
@@ -109,7 +188,7 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
                 break;
         }
 
-        // Everything has been sent through the outbound socket (see the class summary); the
+        // Everything has been sent through the agent's own sockets (see the class summary); the
         // listener has nothing to send.
         return null;
     }
@@ -284,7 +363,8 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
     ///         broadcast flag is set, otherwise unicast to <c>ciaddr</c> if the client has one,
     ///         otherwise unicast to the client's hardware address without ARP. As in the listener,
     ///         that last case is replaced by a broadcast, since a managed <see cref="Socket" />
-    ///         cannot bypass ARP; a client without an address still receives it.
+    ///         cannot bypass ARP; a client without an address still receives it. The reply leaves
+    ///         through <see cref="_clientSideSocket" /> when there is one.
     ///     </para>
     /// </summary>
     private async Task RelayReplyDownToClientAsync(
@@ -336,7 +416,11 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
         try
         {
             byte[] wireBytes = Dhcpv4MessageWriter.Write(reply);
-            await _outboundSocket.SendToAsync(wireBytes, destination, cancellationToken);
+            await (_clientSideSocket ?? _outboundSocket).SendToAsync(
+                wireBytes,
+                destination,
+                cancellationToken
+            );
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -368,5 +452,9 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => _outboundSocket.Dispose();
+    public void Dispose()
+    {
+        _outboundSocket.Dispose();
+        _clientSideSocket?.Dispose();
+    }
 }
