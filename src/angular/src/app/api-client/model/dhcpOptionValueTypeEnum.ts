@@ -15,6 +15,7 @@ export const DhcpOptionValueTypeEnum = {
     Ipv6Address: 'IPv6Address',
     Ipv6AddressList: 'IPv6AddressList',
     String: 'String',
+    DomainNameList: 'DomainNameList',
     Boolean: 'Boolean',
     UInt8: 'UInt8',
     UInt16: 'UInt16',

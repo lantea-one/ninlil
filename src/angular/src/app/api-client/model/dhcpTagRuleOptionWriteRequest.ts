@@ -15,7 +15,7 @@ import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
  */
 export interface DhcpTagRuleOptionWriteRequest { 
     /**
-     * The option\'s numeric tag, as in Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest.OptionTag. Those limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6 scope only rejects tag 0 and values over 65 535 bytes.
+     * The option\'s numeric tag, as in Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest.OptionTag. Those limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6 scope rejects tag 0, values over 65 535 bytes and the option codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24 (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4).
      */
     optionTag?: number;
     /**

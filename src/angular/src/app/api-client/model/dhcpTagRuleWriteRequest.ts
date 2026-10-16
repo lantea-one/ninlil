@@ -19,7 +19,7 @@ export interface DhcpTagRuleWriteRequest {
      */
     name?: string | null;
     /**
-     * The one scope the rule applies to, or null for clients of any scope.
+     * The one scope the rule applies to, or null for a DHCPv4 rule that applies to clients of every DHCPv4 scope. A DHCPv6 rule must name a DHCPv6 scope; there is no rule for every DHCPv6 scope.
      */
     scopeId?: string | null;
     /**
@@ -41,7 +41,7 @@ export interface DhcpTagRuleWriteRequest {
     userClassMatch?: string | null;
     userClassMatchMode?: Dhcpv4TagMatchModeEnum;
     /**
-     * The Agent Circuit ID the rule requires, as hex, or null (DHCPv4 only).
+     * The Agent Circuit ID the rule requires, as hex, or null (DHCPv4 rules only; a DHCPv6-scope rule with it is refused).
      */
     relayAgentCircuitIdHex?: string | null;
     /**
@@ -49,11 +49,11 @@ export interface DhcpTagRuleWriteRequest {
      */
     relayAgentRemoteIdHex?: string | null;
     /**
-     * The DHCPv6 Interface-ID the rule requires, as hex, or null (DHCPv6 only).
+     * The DHCPv6 Interface-ID the rule requires, as hex, or null (DHCPv6-scope rules only; a global or DHCPv4-scope rule with it is refused).
      */
     relayInterfaceIdHex?: string | null;
     /**
-     * The IANA Enterprise Number a DHCPv6 Vendor Class option must carry, or null (DHCPv6 only).
+     * The IANA Enterprise Number a DHCPv6 Vendor Class option must carry, or null (DHCPv6-scope rules only; a global or DHCPv4-scope rule with it is refused).
      */
     vendorClassEnterpriseNumber?: number | null;
     /**

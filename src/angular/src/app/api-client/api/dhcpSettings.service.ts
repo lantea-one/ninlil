@@ -120,7 +120,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Core&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Core&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. A change to &#x60;leaseExpirySweepInterval&#x60; applies at the next sweep; every other field needs a restart, and the returned note says which applies (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/core
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -632,7 +632,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Ra&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier; &#x60;routes&#x60; and &#x60;interfaceOverrides&#x60; each replace the whole list. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Ra&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier; &#x60;routes&#x60; and &#x60;interfaceOverrides&#x60; each replace the whole list. The change applies at the next advertisement, with no restart. Returns 400 for an invalid value, including more than Ninlil.Dhcp.Server.Ra.RaContentRules.MaxRecursiveDnsServers RDNSS addresses or a search list that encodes to more than Ninlil.Dhcp.Server.Ra.RaContentRules.MaxDnsSearchListOctets octets, the sizes that fit one advertisement. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/ra
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

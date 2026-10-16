@@ -45,11 +45,11 @@ export interface DhcpScopeWriteRequest {
      */
     isDisabled?: boolean;
     /**
-     * The router (default gateway) addresses the scope hands out, in order of preference.
+     * The router (default gateway) addresses the scope hands out, in order of preference. They must be IPv4 addresses, and the list must be empty on a DHCPv6 scope, because DHCPv6 has no router option (Router Advertisements supply routers).
      */
     gatewayAddresses?: Array<string> | null;
     /**
-     * The DNS server addresses the scope hands out, in order of preference.
+     * The DNS server addresses the scope hands out, in order of preference. They must be of the scope\'s protocol (IPv4 on a DHCPv4 scope, IPv6 on a DHCPv6 scope).
      */
     dnsServerAddresses?: Array<string> | null;
     /**

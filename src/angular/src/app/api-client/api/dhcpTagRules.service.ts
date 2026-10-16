@@ -251,7 +251,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
-     * This action updates a tag rule as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Returns 400 for an empty name, an unknown scope, an unknown match mode or bad hex, and 404 for an unknown id. Requires &#x60;dhcptagrules:write&#x60;.
+     * This action updates a tag rule as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Returns 400 for an empty name, an unknown scope, an unknown match mode, bad hex or a criterion that does not fit the rule\&#39;s protocol, and 404 for an unknown id. The protocol rules apply to the rule as it would be after the patch, so moving a rule to &#x60;scopeId: null&#x60; while it keeps a DHCPv6-only criterion is a 400. A rule that moves between protocols keeps its options; the engine skips, with a warning, any that break the new protocol\&#39;s option rules. Requires &#x60;dhcptagrules:write&#x60;.
      * @endpoint patch /api/dhcp-tag-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -395,7 +395,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
-     * This action creates a tag rule. Relay ID hex values are stored in uppercase. Returns 400 for a missing name, an unknown scope or a relay ID that is not even-length hex. Requires &#x60;dhcptagrules:write&#x60;.
+     * This action creates a tag rule. Relay ID hex values are stored in uppercase. Returns 400 for a missing name, an unknown scope, a relay ID that is not even-length hex, or a criterion that does not fit the rule\&#39;s protocol: a global rule or one on a DHCPv4 scope is a DHCPv4 rule and cannot set &#x60;relayInterfaceIdHex&#x60; or &#x60;vendorClassEnterpriseNumber&#x60;; a rule on a DHCPv6 scope cannot set &#x60;relayAgentCircuitIdHex&#x60;. Requires &#x60;dhcptagrules:write&#x60;.
      * @endpoint post /api/dhcp-tag-rules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

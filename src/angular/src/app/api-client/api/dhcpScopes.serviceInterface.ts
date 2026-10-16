@@ -81,7 +81,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdGet(requestParameters: ApiDhcpScopesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeDetail>;
 
     /**
-     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken); a lease duration must be a JSON string holding a positive duration (400 otherwise), and the range start must not be after the range end. Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken) (patched gateway and DNS entries must match the scope\&#39;s protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive duration (400 otherwise), and the range start must not be after the range end. Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -105,7 +105,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdStatisticsGet(requestParameters: ApiDhcpScopesIdStatisticsGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeStatisticsDetail>;
 
     /**
-     * This action creates a DHCP scope. Returns 400 for a missing name, a range address of the wrong family, a bad prefix length, a non-positive lease duration or a default above the maximum, an invalid gateway, DNS server or next-server address, a boot file name over 128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and 409 when the name is taken. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action creates a DHCP scope. Returns 400 for a missing name, a range address of the wrong family, a bad prefix length, a non-positive lease duration or a default above the maximum, an invalid gateway, DNS server or next-server address, a gateway or DNS server address of the other family than the scope\&#39;s protocol, any gateway on a DHCPv6 scope, a boot file name over 128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and 409 when the name is taken. Requires &#x60;dhcpscopes:write&#x60;.
      * 
      * @endpoint post /api/dhcp-scopes
 * @param requestParameters

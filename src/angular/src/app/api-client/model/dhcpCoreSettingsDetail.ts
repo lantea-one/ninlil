@@ -25,5 +25,9 @@ export interface DhcpCoreSettingsDetail {
      * How long an address a client declined is kept out of use. Defaults to 10 minutes.
      */
     declinedAddressQuarantineDuration?: string;
+    /**
+     * How often the server looks for leases that have expired. Defaults to one minute. This is the one core setting that applies without a restart: the value shown is the one in effect now.
+     */
+    leaseExpirySweepInterval?: string;
 }
 

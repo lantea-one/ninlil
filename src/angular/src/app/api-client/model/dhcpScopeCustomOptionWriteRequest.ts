@@ -11,11 +11,11 @@ import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a custom, raw DHCPv4 option in a scope (`POST` and `PUT` under `/api/dhcp-scopes/{scopeId}/custom-options`).
+ * This class carries the fields used to create or fully replace a custom, raw DHCP option in a scope (`POST` and `PUT` under `/api/dhcp-scopes/{scopeId}/custom-options`). A DHCPv4 scope sends it as an option with that tag and a DHCPv6 scope as an option with that code, in every reply that carries configuration.
  */
 export interface DhcpScopeCustomOptionWriteRequest { 
     /**
-     * The option\'s numeric tag. Use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type) and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and 255 (End) are reserved markers. The value is at most 255 bytes.
+     * The option\'s numeric tag (on a DHCPv6 scope, its option code). On a DHCPv6 scope use 1 to 255 except the codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39), with a value of at most 65 535 bytes; code 24 (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type) and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and 255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name) and 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in tag 150.
      */
     optionTag?: number;
     /**
