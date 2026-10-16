@@ -866,33 +866,58 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method caches a referral's NS set (with a fixed one-hour TTL, not the referral's)
-    ///     and the glue for name servers inside the delegated zone. Glue for names outside it is
-    ///     discarded, since the parent has no authority over those names; their addresses are
-    ///     looked up separately when needed.
+    ///     This method caches a referral's NS set and the glue for name servers inside the
+    ///     delegated zone. Glue for names outside it is discarded, since the parent has no
+    ///     authority over those names; their addresses are looked up separately when needed.
+    ///     <para>
+    ///         The NS records keep the referral's own TTL. RFC 2181 §5.2 says the TTLs of an RRset
+    ///         must be the same, so a set whose records differ gets the lowest of them. A TTL of 0
+    ///         means the data is for the transaction in progress only (RFC 8767 §4), so the
+    ///         resolution uses it but nothing is cached.
+    ///     </para>
+    ///     <para>
+    ///         Referral data never replaces cached data for the same name and type. RFC 2181
+    ///         §5.4.1 ranks the data of an authoritative answer above the authority section of a
+    ///         non-authoritative answer (a referral) and its additional section (glue), and says
+    ///         such additional information "will be ignored if the cache contains data from an
+    ///         authoritative answer". Without the rule, a walk from the root (the DNSSEC DS chain)
+    ///         would overwrite a child's own NS set with the parent's.
+    ///     </para>
     /// </summary>
     private void CacheReferral(DnsName zoneCut, List<DnsName> nameServerNames, DnsMessage response)
     {
-        List<DnsResourceRecord> nsRecords =
+        List<DnsResourceRecord> referralRecords =
         [
-            .. nameServerNames.Select(nsName => new DnsResourceRecord(
-                zoneCut,
-                DnsResourceRecordTypeEnum.NS,
-                DnsClassEnum.Internet,
-                3600,
-                DnsRecordDataCodecRegistry.Encode(
-                    DnsResourceRecordTypeEnum.NS,
-                    new NsRecordData(nsName)
-                )
-            )),
+            .. response.AuthorityRecords.Where(record =>
+                record.Type == DnsResourceRecordTypeEnum.NS && record.Name == zoneCut
+            ),
         ];
-        cache.StorePositive(
-            zoneCut,
-            DnsResourceRecordTypeEnum.NS,
-            DnsClassEnum.Internet,
-            nsRecords,
-            []
-        );
+
+        if (referralRecords.Count > 0)
+        {
+            uint timeToLive = referralRecords.Min(record => record.TimeToLive);
+
+            if (
+                timeToLive > 0
+                && cache.TryGet(zoneCut, DnsResourceRecordTypeEnum.NS, DnsClassEnum.Internet)
+                    is null
+            )
+                cache.StorePositive(
+                    zoneCut,
+                    DnsResourceRecordTypeEnum.NS,
+                    DnsClassEnum.Internet,
+                    [
+                        .. referralRecords.Select(record => new DnsResourceRecord(
+                            record.Name,
+                            record.Type,
+                            record.Class,
+                            timeToLive,
+                            record.Data
+                        )),
+                    ],
+                    []
+                );
+        }
 
         foreach (DnsName nsName in nameServerNames)
         {
@@ -912,7 +937,11 @@ public sealed class IterativeResolutionEngine(
                 ),
             ];
 
-            if (glueA.Count > 0)
+            if (
+                glueA.Count > 0
+                && glueA.Min(record => record.TimeToLive) > 0
+                && cache.TryGet(nsName, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet) is null
+            )
                 cache.StorePositive(
                     nsName,
                     DnsResourceRecordTypeEnum.A,
@@ -921,7 +950,12 @@ public sealed class IterativeResolutionEngine(
                     []
                 );
 
-            if (glueAaaa.Count > 0)
+            if (
+                glueAaaa.Count > 0
+                && glueAaaa.Min(record => record.TimeToLive) > 0
+                && cache.TryGet(nsName, DnsResourceRecordTypeEnum.Aaaa, DnsClassEnum.Internet)
+                    is null
+            )
                 cache.StorePositive(
                     nsName,
                     DnsResourceRecordTypeEnum.Aaaa,

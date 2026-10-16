@@ -761,4 +761,54 @@ public class RecursiveCacheTests
 
         Assert.NotNull(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
     }
+
+    [Fact]
+    public void StorePositive_WithTheLargestTtl_ExpiresAfterSevenDays()
+    {
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+        RecursiveCache cache = CreateCacheWithClock(clock);
+        DnsName name = DnsName.Parse("www.example.com");
+
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, int.MaxValue)],
+            []
+        );
+
+        clock.Advance(TimeSpan.FromDays(7) - TimeSpan.FromSeconds(1));
+        Assert.NotNull(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+    }
+
+    [Fact]
+    public void StoreNegative_WithAHugeSoaTtl_ExpiresAfterSevenDays()
+    {
+        ManualTimeProvider clock = new(DateTimeOffset.UtcNow);
+        RecursiveCache cache = CreateCacheWithClock(clock);
+        DnsName name = DnsName.Parse("missing.example.com");
+        DnsResourceRecord template = BuildSoaRecord(DnsName.Parse("example.com"), int.MaxValue);
+        DnsResourceRecord soa = new(
+            template.Name,
+            template.Type,
+            template.Class,
+            int.MaxValue,
+            template.Data
+        );
+
+        cache.StoreNegative(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            DnsResponseCodeEnum.NxDomain,
+            soa,
+            []
+        );
+
+        clock.Advance(TimeSpan.FromDays(7) + TimeSpan.FromSeconds(1));
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+    }
 }

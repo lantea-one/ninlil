@@ -15,6 +15,10 @@ namespace Ninlil.Dns.Server.Recursive.Caching;
 ///     flush and per-name removal are what the cache REST endpoint reports and acts on, and
 ///     <see cref="DnsCacheEvictionService" /> sweeps it alongside the forwarded-response cache.
 ///     <para>
+///         No entry lives longer than <see cref="MaxLifetimeSeconds" />, whatever TTL the data
+///         carries.
+///     </para>
+///     <para>
 ///         Its hit and miss counts include the iterative engine's internal lookups (name
 ///         server addresses, delegations, CNAME hops), not only lookups for a client's question,
 ///         so they describe how much upstream traffic the cache saves rather than a per-query
@@ -62,6 +66,16 @@ public sealed class RecursiveCache(
     /// </summary>
     public const uint StaleAnswerTimeToLive = 30;
 
+    /// <summary>
+    ///     This constant contains the longest lifetime, in seconds, any stored entry keeps: 7 days
+    ///     (604,800 seconds). RFC 8767 §4 amends the TTL definition of RFC 1035 so that values
+    ///     "SHOULD be capped on the order of days to weeks, with a recommended cap of 604,800
+    ///     seconds (7 days)"; RFC 2181 §8 allows TTLs up to 2^31 - 1, which would let one record
+    ///     pin an answer or a delegation for about 68 years. It mirrors
+    ///     <c>ForwardedResponseCache.MaxPositiveLifetime</c>.
+    /// </summary>
+    public const uint MaxLifetimeSeconds = 604800;
+
     /// <inheritdoc />
     public string Name => CacheName;
 
@@ -98,7 +112,7 @@ public sealed class RecursiveCache(
         if (records.Count == 0)
             return;
 
-        uint ttlSeconds = records.Min(record => record.TimeToLive);
+        uint ttlSeconds = Math.Min(records.Min(record => record.TimeToLive), MaxLifetimeSeconds);
         DateTimeOffset now = _store.UtcNow;
         DateTimeOffset expiresAt = CapAtSignatureLifetime(
             now.AddSeconds(ttlSeconds),
@@ -136,7 +150,10 @@ public sealed class RecursiveCache(
         )
             return;
 
-        uint ttlSeconds = Math.Min(soa.TimeToLive, soaData.MinimumTtlSeconds);
+        uint ttlSeconds = Math.Min(
+            Math.Min(soa.TimeToLive, soaData.MinimumTtlSeconds),
+            MaxLifetimeSeconds
+        );
         DateTimeOffset now = _store.UtcNow;
         DateTimeOffset expiresAt = CapAtSignatureLifetime(
             now.AddSeconds(ttlSeconds),
