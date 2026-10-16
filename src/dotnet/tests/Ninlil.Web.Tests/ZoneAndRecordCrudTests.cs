@@ -504,6 +504,145 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task Zone_CreatedWithoutNsec3Iterations_StartsAtZero()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = $"nsec3-default-{Guid.NewGuid():N}.example.com", type = "Primary" }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        ZoneDetail zone = await createResponse.Content.ReadFromJsonAsync<ZoneDetail>();
+        Assert.Equal(0, zone.Nsec3Iterations);
+        Assert.Equal(
+            0,
+            (await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{zone.Id}")).Nsec3Iterations
+        );
+    }
+
+    [Fact]
+    public async Task Zone_WithMoreThan150Nsec3Iterations_IsRefusedOnCreateReplaceAndPatch()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"nsec3-range-{Guid.NewGuid():N}.example.com";
+
+        // The limit itself is accepted.
+        HttpResponseMessage atLimit = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = zoneName,
+                type = "Primary",
+                nsec3Iterations = 150,
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, atLimit.StatusCode);
+        ZoneDetail zone = await atLimit.Content.ReadFromJsonAsync<ZoneDetail>();
+        Assert.Equal(150, zone.Nsec3Iterations);
+
+        HttpResponseMessage createTooMany = await client.PostAsJsonAsync(
+            "/api/zones",
+            new
+            {
+                name = $"nsec3-range-2-{Guid.NewGuid():N}.example.com",
+                type = "Primary",
+                nsec3Iterations = 151,
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, createTooMany.StatusCode);
+        Assert.Contains("0 and 150", await createTooMany.Content.ReadAsStringAsync());
+
+        HttpResponseMessage replaceTooMany = await client.PutAsJsonAsync(
+            $"/api/zones/{zone.Id}",
+            new
+            {
+                name = zoneName,
+                type = "Primary",
+                nsec3Iterations = 151,
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, replaceTooMany.StatusCode);
+
+        HttpResponseMessage patchTooMany = await client.SendAsync(
+            PatchRequest($"/api/zones/{zone.Id}", new { nsec3Iterations = 151 })
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patchTooMany.StatusCode);
+
+        // The refused writes left the stored count alone.
+        Assert.Equal(
+            150,
+            (await client.GetFromJsonAsync<ZoneDetail>($"/api/zones/{zone.Id}")).Nsec3Iterations
+        );
+    }
+
+    [Fact]
+    public async Task CreateRecord_WithAnAplPartThatEndsInAZeroOctet_ReturnsBadRequestAndStoresNothing()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"apl-{Guid.NewGuid():N}.example.com";
+        HttpResponseMessage createZoneResponse = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = zoneName, type = "Primary" }
+        );
+        Assert.Equal(HttpStatusCode.Created, createZoneResponse.StatusCode);
+        ZoneDetail zone = await createZoneResponse.Content.ReadFromJsonAsync<ZoneDetail>();
+        // The zone needs its SOA first, so the 400 below can only come from the APL rule.
+        HttpResponseMessage soaResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/records",
+            new
+            {
+                name = zoneName,
+                type = "SOA",
+                timeToLiveSeconds = 3600,
+                data = new
+                {
+                    primaryNameServer = $"ns1.{zoneName}",
+                    responsiblePersonMailbox = $"admin.{zoneName}",
+                    serial = 1,
+                    refreshSeconds = 3600,
+                    retrySeconds = 600,
+                    expireSeconds = 604800,
+                    minimumTtlSeconds = 300,
+                },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, soaResponse.StatusCode);
+
+        // 0A 00 00 is 10.0.0.0/24 padded with the trailing zero octets RFC 3123 Section 4 forbids.
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/records",
+            new
+            {
+                name = zoneName,
+                type = "APL",
+                timeToLiveSeconds = 300,
+                data = new
+                {
+                    items = new[]
+                    {
+                        new
+                        {
+                            addressFamily = 1,
+                            prefixLength = 24,
+                            negated = false,
+                            addressFamilyDependentPart = new byte[] { 10, 0, 0 },
+                        },
+                    },
+                },
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        PagedResult<RecordDetail> page = await (
+            await client.GetAsync($"/api/zones/{zone.Id}/records")
+        ).Content.ReadFromJsonAsync<PagedResult<RecordDetail>>();
+        // Only the SOA exists.
+        Assert.Equal(1, page.TotalCount);
+    }
+
+    [Fact]
     public async Task CreateRecord_WithACnameTargetThatHasAnEmptyLabel_ReturnsBadRequestAndStoresNothing()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();

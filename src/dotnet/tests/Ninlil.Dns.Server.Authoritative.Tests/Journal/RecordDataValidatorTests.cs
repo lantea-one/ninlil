@@ -112,4 +112,104 @@ public sealed class RecordDataValidatorTests
             RecordDataValidator.EncodeDataFromJsonOrThrow(DnsResourceRecordTypeEnum.Cname, json)
         );
     }
+
+    /// <summary>
+    ///     This method builds the JSON of an APL record from (family, prefix length, base64 part)
+    ///     triples, as the REST API receives it (a byte array is base64 text).
+    /// </summary>
+    private static string AplJson(params (int Family, int Prefix, string PartBase64)[] items) =>
+        "{\"items\":["
+        + string.Join(
+            ",",
+            items.Select(item =>
+                $"{{\"addressFamily\":{item.Family},\"prefixLength\":{item.Prefix},\"negated\":false,\"addressFamilyDependentPart\":\"{item.PartBase64}\"}}"
+            )
+        )
+        + "]}";
+
+    [Fact]
+    public void EncodeDataFromJsonOrThrow_WithAnAplPartThatEndsInAZeroOctet_NamesTheItem()
+    {
+        // 0A 00 00 is 10.0.0.0/24 padded: RFC 3123 Section 4 forbids the trailing zero octets.
+        ValidationException exception = Assert.Throws<ValidationException>(() =>
+            RecordDataValidator.EncodeDataFromJsonOrThrow(
+                DnsResourceRecordTypeEnum.Apl,
+                AplJson((1, 24, "CgAA"))
+            )
+        );
+
+        Assert.Contains("APL item 1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EncodeDataFromJsonOrThrow_WithACanonicalAplPart_IsAccepted()
+    {
+        // 0A is 10.0.0.0/24 with its trailing zero octets dropped.
+        string dataJson = RecordDataValidator.EncodeDataFromJsonOrThrow(
+            DnsResourceRecordTypeEnum.Apl,
+            AplJson((1, 24, "Cg=="))
+        );
+
+        Assert.Contains("\"Items\"", dataJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EncodeDataFromJsonOrThrow_WithAnEmptyAplPart_IsAccepted()
+    {
+        // 0.0.0.0/0 has no significant octet at all.
+        RecordDataValidator.EncodeDataFromJsonOrThrow(
+            DnsResourceRecordTypeEnum.Apl,
+            AplJson((1, 0, ""))
+        );
+    }
+
+    [Fact]
+    public void EncodeDataFromJsonOrThrow_WithAnIpv6AplPartLongerThanSixteenOctets_IsRefused()
+    {
+        // 17 octets of 0x01.
+        string part = Convert.ToBase64String(Enumerable.Repeat((byte)1, 17).ToArray());
+
+        ValidationException exception = Assert.Throws<ValidationException>(() =>
+            RecordDataValidator.EncodeDataFromJsonOrThrow(
+                DnsResourceRecordTypeEnum.Apl,
+                AplJson((2, 128, part))
+            )
+        );
+
+        Assert.Contains("APL item 1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EncodeDataFromJsonOrThrow_WithAnIpv4AplPrefixLongerThanThirtyTwoBits_IsRefused()
+    {
+        Assert.Throws<ValidationException>(() =>
+            RecordDataValidator.EncodeDataFromJsonOrThrow(
+                DnsResourceRecordTypeEnum.Apl,
+                AplJson((1, 33, "Cg=="))
+            )
+        );
+    }
+
+    [Fact]
+    public void EncodeDataFromJsonOrThrow_WithAnAplItemOfAnotherFamily_PassesUnchecked()
+    {
+        // Family 3 is unknown to this rule, so its bytes are not judged.
+        RecordDataValidator.EncodeDataFromJsonOrThrow(
+            DnsResourceRecordTypeEnum.Apl,
+            AplJson((3, 8, "AA=="))
+        );
+    }
+
+    [Fact]
+    public void EncodeDataFromJsonOrThrow_WithABadSecondAplItem_NamesItemTwo()
+    {
+        ValidationException exception = Assert.Throws<ValidationException>(() =>
+            RecordDataValidator.EncodeDataFromJsonOrThrow(
+                DnsResourceRecordTypeEnum.Apl,
+                AplJson((1, 24, "Cg=="), (1, 24, "CgAA"))
+            )
+        );
+
+        Assert.Contains("APL item 2", exception.Message, StringComparison.Ordinal);
+    }
 }

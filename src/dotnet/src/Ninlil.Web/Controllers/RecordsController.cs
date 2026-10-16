@@ -103,7 +103,8 @@ public class RecordsController(
     ///     without it there is no serial to advance; that first record bootstraps the zone through
     ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" />, and later records go through
     ///     <see cref="IZoneUpdateService.ApplyChangesAsync" />. Returns 400 when the first record
-    ///     is not an SOA or the data does not fit the record type, 404 for an unknown zone, and 409
+    ///     is not an SOA or the data does not fit the record type (an APL item must be in canonical
+    ///     form, RFC 3123 §4), 404 for an unknown zone, and 409
     ///     for a second SOA. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
@@ -169,7 +170,7 @@ public class RecordsController(
 
     /// <summary>
     ///     This action replaces a record's fields, keeping its id. Returns 400 when the data does
-    ///     not fit the record type and 404 when the record does not exist or belongs to another
+    ///     not fit the record type (an APL item must be in canonical form, RFC 3123 §4) and 404 when the record does not exist or belongs to another
     ///     zone, and 409 when the edit would change the type to or from SOA or rename
     ///     the SOA record (a zone has exactly one SOA). Requires <c>zones:write</c>.
     /// </summary>
@@ -222,7 +223,8 @@ public class RecordsController(
     ///     This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a
     ///     JSON <c>null</c> clears a nullable field, and any other value replaces it. Changing
     ///     <c>type</c> without new <c>data</c> re-checks the existing data against the new type and
-    ///     returns 400 if it does not fit, and 409 when the patch would change the type to or
+    ///     returns 400 if it does not fit (as does new APL data that is not in canonical form, RFC
+    ///     3123 §4), and 409 when the patch would change the type to or
     ///     from SOA or rename the SOA record. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
