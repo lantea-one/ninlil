@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
@@ -51,6 +52,24 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
 
         return client;
     }
+
+    /// <summary>
+    ///     This method reads the shared runtime settings file as a JSON object. A file that does
+    ///     not exist yet (no test has written a setting) reads as an empty object.
+    /// </summary>
+    private async Task<JsonObject> ReadSettingsFileAsync() =>
+        File.Exists(factory.RuntimeConfigurationFilePath)
+            ? (JsonObject)
+                JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath))
+            : new JsonObject();
+
+    /// <summary>
+    ///     This method returns a deep copy of the <c>DnsServer:ReverseProxy</c> section of a
+    ///     settings file, or <see langword="null" /> when the section is absent. The copy keeps a
+    ///     later write from changing a value read earlier.
+    /// </summary>
+    private static JsonNode ReadHttpReverseProxySection(JsonObject root) =>
+        root["DnsServer"]?["ReverseProxy"]?.DeepClone();
 
     /// <summary>
     ///     This method decrypts the stored shared secret with the host's own key ring, which is
@@ -135,6 +154,7 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
     public async Task Patch_WithDnsOverTlsValues_WritesThemToTheSeparateProxyProtocolSection()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
+        JsonNode httpSectionBefore = ReadHttpReverseProxySection(await ReadSettingsFileAsync());
 
         HttpResponseMessage response = await client.SendAsync(
             PatchRequest(
@@ -152,22 +172,21 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
         );
         response.EnsureSuccessStatusCode();
 
-        JsonObject root = (JsonObject)
-            JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+        JsonObject root = await ReadSettingsFileAsync();
         JsonObject dnsOverTlsSection = (JsonObject)
             root["DnsServer"]["Protocol"]["DnsOverTls"]["ProxyProtocol"];
         Assert.True(dnsOverTlsSection["Enable"].GetValue<bool>());
         Assert.Equal("198.51.100.5", dnsOverTlsSection["KnownProxies"][0].GetValue<string>());
         Assert.Equal("172.16.0.0/16", dnsOverTlsSection["KnownNetworks"][0].GetValue<string>());
 
-        // A patch naming only dnsOverTls must leave the HTTP-side "ReverseProxy" section alone.
-        // That section may or may not exist yet, depending on test order (xUnit orders test cases
-        // by a hash of their names), so a missing section passes too. If
-        // Patch_WithNewValues_WritesThemToTheConfigurationFile ran first, its "Enable" key would
-        // already be in the shared file and this assertion would fail, so the test depends on
-        // running before that one.
-        JsonObject httpSection = root["DnsServer"]?["ReverseProxy"] as JsonObject;
-        Assert.False(httpSection?.ContainsKey("Enable") ?? false);
+        // A patch naming only dnsOverTls must leave the HTTP-side "ReverseProxy" section alone,
+        // whatever other tests wrote to the shared file before this one ran (xUnit orders test
+        // cases by a hash of their names), so the section is compared with its state before the
+        // PATCH, not with an empty one.
+        Assert.True(
+            JsonNode.DeepEquals(httpSectionBefore, ReadHttpReverseProxySection(root)),
+            "The PATCH changed DnsServer:ReverseProxy."
+        );
     }
 
     [Fact]
@@ -203,23 +222,35 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
     [Fact]
     public async Task Get_NeverReturnsTheConfiguredSharedSecretItself()
     {
-        HttpClient client = await CreateAuthenticatedClientAsync();
+        // The shared host never reloads its settings file, so a GET over HTTP never sees a
+        // configured secret and could not catch a leak. The controller is built from the host's
+        // services with options that hold a known secret instead; the explicit options argument
+        // wins over the registered one.
+        const string secret = "a-secret-value-that-must-not-leak";
+        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
+        ReverseProxySettingsController controller =
+            ActivatorUtilities.CreateInstance<ReverseProxySettingsController>(
+                scope.ServiceProvider,
+                Microsoft.Extensions.Options.Options.Create(
+                    new ReverseProxyOptions
+                    {
+                        Enable = true,
+                        SharedSecretHeaderName = "X-Test-Proxy-Secret",
+                        SharedSecret = secret,
+                    }
+                )
+            );
 
-        await client.SendAsync(
-            PatchRequest(
-                "/api/reverse-proxy-settings",
-                new { sharedSecret = "a-genuinely-secret-value" }
-            )
+        ActionResult<ReverseProxySettingsDetail> result = await controller.Get(
+            CancellationToken.None
         );
 
-        HttpResponseMessage response = await client.GetAsync("/api/reverse-proxy-settings");
-        string body = await response.Content.ReadAsStringAsync();
-
-        // ReverseProxyOptions is read through IOptions, and the test host never loads its settings
-        // file anyway, so the GET still sees no secret at all. The assertion therefore passes
-        // whether or not Get() would serialize ReverseProxyOptions.SharedSecret; it cannot catch
-        // a leak.
-        Assert.DoesNotContain("a-genuinely-secret-value", body);
+        ReverseProxySettingsDetail detail = Assert.IsType<ReverseProxySettingsDetail>(
+            Assert.IsType<OkObjectResult>(result.Result).Value
+        );
+        // Proves the controller saw the secret, so the absence below means something.
+        Assert.True(detail.SharedSecretConfigured);
+        Assert.DoesNotContain(secret, JsonSerializer.Serialize(detail));
     }
 
     [Fact]
