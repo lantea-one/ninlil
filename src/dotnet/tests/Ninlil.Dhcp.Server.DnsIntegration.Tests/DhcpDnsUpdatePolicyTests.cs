@@ -45,8 +45,7 @@ public sealed class DhcpDnsUpdatePolicyTests : IAsyncLifetime
     {
         _host.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
 
         return Task.CompletedTask;
     }
