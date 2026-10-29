@@ -1903,8 +1903,14 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.Property<long>("NewSerial")
                     .HasColumnType("INTEGER");
 
+                b.Property<string>("NewSoaRecordJson")
+                    .HasColumnType("TEXT");
+
                 b.Property<long>("OldSerial")
                     .HasColumnType("INTEGER");
+
+                b.Property<string>("OldSoaRecordJson")
+                    .HasColumnType("TEXT");
 
                 b.Property<string>("RemovedRecordsJson")
                     .IsRequired()

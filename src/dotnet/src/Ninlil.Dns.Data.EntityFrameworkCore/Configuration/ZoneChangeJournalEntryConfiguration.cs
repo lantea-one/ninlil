@@ -27,5 +27,10 @@ public class ZoneChangeJournalEntryConfiguration
 
         builder.Property(entry => entry.RemovedRecordsJson).IsRequired();
         builder.Property(entry => entry.AddedRecordsJson).IsRequired();
+
+        // Null is valid: entries written before SOA history existed have none, and the first
+        // entry of a zone has no older SOA.
+        builder.Property(entry => entry.OldSoaRecordJson).IsRequired(false);
+        builder.Property(entry => entry.NewSoaRecordJson).IsRequired(false);
     }
 }

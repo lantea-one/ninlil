@@ -45,4 +45,21 @@ public class ZoneChangeJournalEntryEntity : EntityBase
     ///     <see cref="RemovedRecordsJson" />.
     /// </summary>
     public string AddedRecordsJson { get; set; }
+
+    /// <summary>
+    ///     This property contains the zone's SOA record as it was before this change, as one JSON
+    ///     <see cref="RecordEntity" /> snapshot (owner name, class, TTL and data) in the same
+    ///     format as <see cref="RemovedRecordsJson" />. It is the SOA RR that RFC 1995 §4 puts at
+    ///     the start of the step's deleted records. It is null on entries written before SOA
+    ///     history was recorded, and on the first entry of a zone, which has no older version.
+    /// </summary>
+    public string OldSoaRecordJson { get; set; }
+
+    /// <summary>
+    ///     This property contains the zone's SOA record as it was after this change, serialized
+    ///     the same way as <see cref="OldSoaRecordJson" />. It is the SOA RR that RFC 1995 §4 puts
+    ///     at the start of the step's added records. It is null on entries written before SOA
+    ///     history was recorded.
+    /// </summary>
+    public string NewSoaRecordJson { get; set; }
 }

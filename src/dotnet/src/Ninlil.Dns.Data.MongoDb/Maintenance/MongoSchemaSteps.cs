@@ -26,8 +26,16 @@ public static class MongoSchemaSteps
     public const string ClusterKeyLinkLegacyBackfill = nameof(ClusterKeyLinkLegacyBackfill);
 
     /// <summary>
+    ///     This constant names the step that marks zone change journal entries carrying the SOA
+    ///     before and after each change. It has no backfill: entries written earlier keep no SOA
+    ///     history. Recording it makes an older build refuse a database this version has used, as
+    ///     the relational engines do after the matching migration.
+    /// </summary>
+    public const string ZoneJournalSoaHistory = nameof(ZoneJournalSoaHistory);
+
+    /// <summary>
     ///     This property contains every step this build knows, in the order they run.
     /// </summary>
     public static IReadOnlyList<string> Known { get; } =
-    [DnsClientAddressLegacyBackfill, ClusterKeyLinkLegacyBackfill];
+    [DnsClientAddressLegacyBackfill, ClusterKeyLinkLegacyBackfill, ZoneJournalSoaHistory];
 }

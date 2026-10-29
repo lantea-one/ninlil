@@ -61,6 +61,29 @@ public sealed class MongoStartupGuardTests(MongoDbEngineFixture fixture)
         );
     }
 
+    /// <summary>
+    ///     A database that already holds the <c>ZoneJournalSoaHistory</c> step (a start of this
+    ///     version) starts again: the step is known, and it has no backfill to run.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithTheZoneJournalSoaHistoryStepStored_StartsAndKeepsTheStep()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        NinlilDnsMongoContext context = GetContext(database);
+        await context.SchemaSteps.InsertOneAsync(
+            new BsonDocument("_id", MongoSchemaSteps.ZoneJournalSoaHistory)
+        );
+
+        await MongoStartupGuard.RunAsync(context, NullLogger.Instance);
+
+        Assert.Equal(
+            1,
+            await context.SchemaSteps.CountDocumentsAsync(
+                Builders<BsonDocument>.Filter.Eq("_id", MongoSchemaSteps.ZoneJournalSoaHistory)
+            )
+        );
+    }
+
     [Fact]
     public async Task RunAsync_WithAnUnknownStoredStep_RefusesAndRunsNoBackfill()
     {
