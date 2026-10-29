@@ -331,8 +331,7 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     {
         Host?.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
 
         return ValueTask.CompletedTask;
     }
