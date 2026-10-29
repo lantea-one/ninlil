@@ -17,11 +17,11 @@ namespace Ninlil.Web.Tests;
 ///     <para>
 ///         Only DHCPv6 is started, and only when the process may bind its server port 547: like
 ///         DHCPv4 (67/68) and TFTP (69) it is below <c>net.ipv4.ip_unprivileged_port_start</c>
-///         (1024 by default). <see cref="SocketPrivilegedPortBindProbe" />, the probe
-///         <c>PrivilegedPortStartupDiagnostics</c> uses at startup, is checked first, and without
-///         the privilege <see cref="Start_OnDhcpv6_GenuinelyBindsTheRealSocket_AndStopGenuinelyReleasesIt" />
-///         returns early and is reported as passed, as <c>Icmpv6RaListenerLiveServiceControlTests</c>
-///         does. Router Advertisement uses a raw socket that needs <c>CAP_NET_RAW</c> rather than a
+///         (1024 by default). Without the privilege
+///         <see cref="Start_OnDhcpv6_GenuinelyBindsTheRealSocket_AndStopGenuinelyReleasesIt" /> is
+///         skipped and shows as skipped in the report (<see cref="PrivilegedPortFactAttribute" />
+///         asks <see cref="SocketPrivilegedPortBindProbe" />, the probe
+///         <c>PrivilegedPortStartupDiagnostics</c> uses at startup). Router Advertisement uses a raw socket that needs <c>CAP_NET_RAW</c> rather than a
 ///         port, so it is not started here. Starting and stopping each service on real sockets is
 ///         covered by <c>Dhcpv4LiveServiceControlTests</c>, <c>Dhcpv6LiveServiceControlTests</c>,
 ///         <c>TftpServerLiveServiceControlTests</c> and <c>Icmpv6RaListenerLiveServiceControlTests</c>.
@@ -140,16 +140,12 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
     ///     longer bind the port) and stopping it releases the socket (the probe can bind again),
     ///     not just that <c>IsRunning</c> changes. It always leaves DHCPv6 stopped, since the
     ///     order of test classes is not fixed, as <see cref="ServicesControllerCrudTests" /> does.
-    ///     Without the privilege to bind port 547 it returns early and checks nothing.
+    ///     Without the privilege to bind port 547 it is skipped
+    ///     (<see cref="PrivilegedPortFactAttribute" />).
     /// </summary>
-    [Fact]
+    [PrivilegedPortFact(Dhcpv6ServerPort)]
     public async Task Start_OnDhcpv6_GenuinelyBindsTheRealSocket_AndStopGenuinelyReleasesIt()
     {
-        // Port 547 is privileged (see the class summary). Without the privilege the test returns
-        // early and is reported as passed rather than skipped.
-        if (!new SocketPrivilegedPortBindProbe().CanBind(Dhcpv6ServerPort))
-            return;
-
         HttpClient client = await CreateAuthenticatedClientAsync();
 
         // Disabled at startup, not running, and the port is free.
