@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -101,6 +102,16 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         answer. When every forwarder fails, an expired answer is served stale if the
 ///         server-wide RFC 8767 serve-stale setting allows it, before falling through to
 ///         recursion.
+///     </para>
+///     <para>
+///         <b>Identical queries in flight.</b> While the response cache is on, the first query
+///         that misses the cache for a key sends the upstream query and registers itself; an
+///         identical query that arrives meanwhile waits for it instead of sending its own copy.
+///         A waiting query is only ever answered from the cache, so it gets the answer a query
+///         of its own would have got. When the cache has nothing afterwards (every forwarder
+///         failed, the answer was not cacheable, it was Bogus for a client that set CD, or the
+///         first query was cancelled), the waiting query runs its own attempt and does not
+///         adopt the first query's outcome. Cancelling a waiting query stops only its wait.
 ///     </para>
 /// </summary>
 /// <param name="forwarderSets">
@@ -208,14 +219,191 @@ public sealed class ForwarderQueryResolver(
 
         FlushCacheWhenInsecureDomainsChanged();
 
-        (IReadOnlyList<string> definitionStrings, bool zoneValidates) =
-            await ResolveForwarderSetAsync(question.Name, stoppingToken);
+        ForwarderSet set = await forwarderSets.FindAsync(question.Name, stoppingToken);
+        IReadOnlyList<string> definitionStrings = set.Definitions;
 
         await RetainEndpointsAsync(stoppingToken);
 
         if (definitionStrings.Count == 0)
             return DnsQueryResolution.NotHandled;
 
+        // A query with no forwarder to send to is not handled even when the cache holds an answer
+        // for the set. Checked before the cache lookup, but the candidate list itself is built
+        // only on a miss.
+        if (!AnySendable(definitionStrings))
+        {
+            // Builds the list only for its debug lines, which name each skipped forwarder.
+            BuildCandidates(definitionStrings);
+            return DnsQueryResolution.NotHandled;
+        }
+
+        // The global switch is the master: a zone's own switch can only turn validation off.
+        bool validationEnabled =
+            recursiveOptions.CurrentValue.EnableDnssecValidation && set.Validates;
+
+        // Built once per query: the ECS option is the same whichever forwarder answers.
+        DnsEdnsOption clientSubnetOption = clientSubnetService?.BuildOutboundOption(
+            context.RemoteAddress,
+            context.Request
+        );
+
+        // Only a plain, single-question QUERY is cached: that is all a stub resolver ever sends,
+        // and anything else (a NOTIFY or UPDATE that reached here, a multi-question message) has
+        // no well-defined "same question" to reuse an answer for.
+        ForwardedResponseCacheKey? cacheKey =
+            responseCache is not null
+            && context.Request.Opcode == DnsOpcodeEnum.Query
+            && context.Request.Questions.Count == 1
+                ? ForwardedResponseCacheKey.Create(
+                    context.Request,
+                    SelectSubnet(context.Request, clientSubnetOption, validationEnabled),
+                    set.UpstreamKey,
+                    validationEnabled
+                )
+                : null;
+
+        if (cacheKey is not { } lookupKey)
+            return await AttemptAsync(
+                context,
+                set,
+                clientSubnetOption,
+                validationEnabled,
+                cacheKey: null,
+                stoppingToken
+            );
+
+        if (responseCache.TryGet(lookupKey, context.Request) is { } cached)
+            return DnsQueryResolution.Handled(cached);
+
+        // With the cache off nothing is ever stored, so a follower would wait for a leader and
+        // still find nothing. Each query then goes upstream by itself, as it always has.
+        if (!forwardingOptions.CurrentValue.EnableCache)
+            return await AttemptAsync(
+                context,
+                set,
+                clientSubnetOption,
+                validationEnabled,
+                lookupKey,
+                stoppingToken
+            );
+
+        TaskCompletionSource flight = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        if (_inFlight.TryAdd(lookupKey, flight.Task))
+        {
+            // This query is the leader. The entry is removed and the source completed in the
+            // finally block on every exit (answer, failure, cancellation), so no follower waits
+            // forever and no entry outlives its query. The source is completed, never faulted:
+            // followers do not adopt the leader's outcome, they only wake up and look in the cache.
+            try
+            {
+                // The query that stored the answer may have removed its entry between this
+                // query's cache lookup and its registration; the second lookup closes that gap.
+                if (responseCache.TryGet(lookupKey, context.Request) is { } stored)
+                    return DnsQueryResolution.Handled(stored);
+
+                return await AttemptAsync(
+                    context,
+                    set,
+                    clientSubnetOption,
+                    validationEnabled,
+                    lookupKey,
+                    stoppingToken
+                );
+            }
+            finally
+            {
+                // Remove exactly this entry (key and task), then wake the followers. The answer is
+                // in the cache before the entry goes (Answer stores first), so a query arriving
+                // after the removal finds it there.
+                _inFlight.TryRemove(
+                    new KeyValuePair<ForwardedResponseCacheKey, Task>(lookupKey, flight.Task)
+                );
+                flight.TrySetResult();
+            }
+        }
+
+        // A follower: an identical query is already on its way upstream. Wait for it with this
+        // query's own token, so cancelling this query stops the wait and leaves the leader alone.
+        // The follower is answered only from the cache, so it gets exactly the answer a query of
+        // its own could have got; when the cache has nothing (the leader failed, was cancelled,
+        // got an uncacheable answer, or a Bogus one for a client that set CD) it runs its own
+        // attempt, never registered, as if it had arrived alone.
+        // The leader may already be gone by now, which the cache lookup below covers too.
+        if (_inFlight.TryGetValue(lookupKey, out Task leader))
+        {
+            Interlocked.Increment(ref _followersWaiting);
+
+            try
+            {
+                await leader.WaitAsync(stoppingToken);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _followersWaiting);
+            }
+        }
+
+        if (responseCache.TryGet(lookupKey, context.Request) is { } afterWait)
+            return DnsQueryResolution.Handled(afterWait);
+
+        return await AttemptAsync(
+            context,
+            set,
+            clientSubnetOption,
+            validationEnabled,
+            lookupKey,
+            stoppingToken
+        );
+    }
+
+    /// <summary>
+    ///     This field is the forwarded queries now on their way upstream, by cache key. The first
+    ///     query that misses the cache for a key registers here and every identical query that
+    ///     arrives while it runs waits for it instead of sending its own copy. An entry exists
+    ///     only while its leader is inside <see cref="TryResolveAsync" /> and is removed on every
+    ///     exit of that query.
+    /// </summary>
+    private readonly ConcurrentDictionary<ForwardedResponseCacheKey, Task> _inFlight = new();
+
+    private int _followersWaiting;
+
+    /// <summary>
+    ///     This property is how many queries are now waiting for the query in flight with their
+    ///     key. Tests read it to know a follower has reached its wait.
+    /// </summary>
+    internal int FollowersWaiting => Volatile.Read(ref _followersWaiting);
+
+    /// <summary>
+    ///     This property is the number of keys with a query in flight. It is zero whenever no
+    ///     query is inside <see cref="TryResolveAsync" />.
+    /// </summary>
+    internal int InFlightCount => _inFlight.Count;
+
+    /// <summary>
+    ///     This method tells whether at least one definition in the set has an address to send to
+    ///     now (see <see cref="ForwarderEndpointCache.TryGetSendable" />).
+    /// </summary>
+    private bool AnySendable(IReadOnlyList<string> definitionStrings)
+    {
+        foreach (string definitionString in definitionStrings)
+        {
+            if (endpoints.TryGetSendable(definitionString) is not null)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     This method returns the definitions of the set that can be sent to now, in the set's
+    ///     order. A definition with no usable address (unparseable, or a host name whose lookup has
+    ///     not finished) is skipped and logged at debug level.
+    /// </summary>
+    private List<UpstreamForwarderDefinition> BuildCandidates(
+        IReadOnlyList<string> definitionStrings
+    )
+    {
         List<UpstreamForwarderDefinition> candidates = [];
 
         foreach (string definitionString in definitionStrings)
@@ -233,6 +421,39 @@ public sealed class ForwarderQueryResolver(
                 candidates.Add(definition);
         }
 
+        return candidates;
+    }
+
+    /// <summary>
+    ///     This method sends the query upstream: it orders the forwarders, builds the outbound
+    ///     request and tries each forwarder in turn until one gives an accepted answer. It runs
+    ///     for a cache miss only, so a cache hit does none of this work. When every forwarder has
+    ///     failed it serves a stale cached answer if allowed, and otherwise returns
+    ///     <see cref="DnsQueryResolution.NotHandled" />.
+    /// </summary>
+    /// <param name="context">The query.</param>
+    /// <param name="set">The forwarder set chosen for the query.</param>
+    /// <param name="clientSubnetOption">The ECS option built for this client, or <see langword="null" />.</param>
+    /// <param name="validationEnabled">Whether this server validates the answer.</param>
+    /// <param name="cacheKey">
+    ///     The cache key an accepted answer is stored under, or <see langword="null" /> when the
+    ///     query is not cached.
+    /// </param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    private async ValueTask<DnsQueryResolution> AttemptAsync(
+        DnsQueryContext context,
+        ForwarderSet set,
+        DnsEdnsOption clientSubnetOption,
+        bool validationEnabled,
+        ForwardedResponseCacheKey? cacheKey,
+        CancellationToken stoppingToken
+    )
+    {
+        DnsQuestion question = context.Request.Questions[0];
+        IReadOnlyList<string> definitionStrings = set.Definitions;
+
+        List<UpstreamForwarderDefinition> candidates = BuildCandidates(definitionStrings);
+
         if (candidates.Count == 0)
             return DnsQueryResolution.NotHandled;
 
@@ -242,16 +463,6 @@ public sealed class ForwarderQueryResolver(
                 ? healthTracker.OrderForAttempt(candidates)
                 : candidates;
 
-        // The global switch is the master: a zone's own switch can only turn validation off.
-        bool validationEnabled =
-            recursiveOptions.CurrentValue.EnableDnssecValidation && zoneValidates;
-
-        // Built once per query: the ECS option is the same whichever forwarder answers.
-        DnsEdnsOption clientSubnetOption = clientSubnetService?.BuildOutboundOption(
-            context.RemoteAddress,
-            context.Request
-        );
-
         // A fresh message for the upstream hop. context.Request is shared with the resolvers this
         // dispatch may still fall through to, and the pipeline signs the reply from its TSIG, so
         // it is never changed or sent.
@@ -260,27 +471,6 @@ public sealed class ForwarderQueryResolver(
             clientSubnetOption,
             validationEnabled
         );
-
-        // Only a plain, single-question QUERY is cached: that is all a stub resolver ever sends,
-        // and anything else (a NOTIFY or UPDATE that reached here, a multi-question message) has
-        // no well-defined "same question" to reuse an answer for.
-        ForwardedResponseCacheKey? cacheKey =
-            responseCache is not null
-            && context.Request.Opcode == DnsOpcodeEnum.Query
-            && context.Request.Questions.Count == 1
-                ? ForwardedResponseCacheKey.Create(
-                    context.Request,
-                    outboundRequest,
-                    definitionStrings,
-                    validationEnabled
-                )
-                : null;
-
-        if (
-            cacheKey is { } lookupKey
-            && responseCache.TryGet(lookupKey, context.Request) is { } cached
-        )
-            return DnsQueryResolution.Handled(cached);
 
         foreach (UpstreamForwarderDefinition definition in ordered)
         {
@@ -423,28 +613,6 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method finds the forwarder set for a query: the closest enabled
-    ///     <see cref="ZoneTypeEnum.Forwarder" /> or <see cref="ZoneTypeEnum.SecondaryForwarder" />
-    ///     zone with addresses, otherwise the enabled global <see cref="DnsForwarderEntity" /> set,
-    ///     in order (see <see cref="ForwarderSetCache" />). The result also says whether DNSSEC
-    ///     validation may run for the set: a zone's <see cref="ZoneEntity.ValidateDnssec" />, always
-    ///     <see langword="true" /> for the global set. A
-    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone gets its
-    ///     <see cref="ZoneEntity.ForwarderAddresses" /> from <c>SecondaryZoneRefreshService</c>,
-    ///     which transfers them from a forwarder-zone primary's apex TXT records; here it behaves
-    ///     like any forwarder zone. This reads no database rows while the cache copy is fresh.
-    /// </summary>
-    private async ValueTask<(
-        IReadOnlyList<string> Definitions,
-        bool Validates
-    )> ResolveForwarderSetAsync(DnsName queriedName, CancellationToken stoppingToken)
-    {
-        ForwarderSet set = await forwarderSets.FindAsync(queriedName, stoppingToken);
-
-        return (set.Definitions, set.Validates);
-    }
-
-    /// <summary>
     ///     This method empties the response cache when the Insecure domain list differs from the
     ///     one the last query saw. Entries store whether an answer was Secure (and so gets AD), and
     ///     the list decides that, so an entry made under another list must not be replayed. The
@@ -561,15 +729,7 @@ public sealed class ForwarderQueryResolver(
         };
         outbound.Questions.AddRange(clientRequest.Questions);
 
-        DnsEdnsOption subnet =
-            clientSubnetOption
-            ?? (
-                validating
-                    ? clientRequest.Edns?.Options.FirstOrDefault(option =>
-                        option.Code == (ushort)EdnsOptionCodeEnum.ClientSubnet
-                    )
-                    : null
-            );
+        DnsEdnsOption subnet = SelectSubnet(clientRequest, clientSubnetOption, validating);
 
         if (!validating && clientRequest.Edns is null && subnet is null)
             return outbound;
@@ -585,6 +745,29 @@ public sealed class ForwarderQueryResolver(
 
         return outbound;
     }
+
+    /// <summary>
+    ///     This method picks the ECS option the upstream query carries: the one built for this
+    ///     client, or, when validating without one, the client's own. The cache key and
+    ///     <see cref="BuildOutboundRequest" /> both use it, so the key always names the subnet the
+    ///     upstream was actually asked with.
+    /// </summary>
+    /// <param name="clientRequest">The client's request.</param>
+    /// <param name="clientSubnetOption">The ECS option built for this client, or <see langword="null" />.</param>
+    /// <param name="validating">Whether this server validates the answer.</param>
+    private static DnsEdnsOption SelectSubnet(
+        DnsMessage clientRequest,
+        DnsEdnsOption clientSubnetOption,
+        bool validating
+    ) =>
+        clientSubnetOption
+        ?? (
+            validating
+                ? clientRequest.Edns?.Options.FirstOrDefault(option =>
+                    option.Code == (ushort)EdnsOptionCodeEnum.ClientSubnet
+                )
+                : null
+        );
 
     /// <summary>
     ///     This method turns a forwarded response into the shape <see cref="IDnssecValidator" />

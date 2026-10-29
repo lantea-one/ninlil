@@ -5,6 +5,7 @@ using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientIdentity;
+using Ninlil.Dns.Server.Forwarding.Caching;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Forwarding;
@@ -188,7 +189,15 @@ public sealed class ForwarderSetCache : IDisposable
 ///     Whether validation may run: a zone's <see cref="ZoneEntity.ValidateDnssec" />, always
 ///     <see langword="true" /> for the global set.
 /// </param>
-public sealed record ForwarderSet(IReadOnlyList<string> Definitions, bool Validates);
+public sealed record ForwarderSet(IReadOnlyList<string> Definitions, bool Validates)
+{
+    /// <summary>
+    ///     This property is the definition strings joined once, as the forwarded-response cache
+    ///     key holds them (see <see cref="ForwardedResponseCacheKey.JoinUpstreamSet" />), so a
+    ///     query builds its key without joining strings. A set never changes after it is built.
+    /// </summary>
+    public string UpstreamKey { get; } = ForwardedResponseCacheKey.JoinUpstreamSet(Definitions);
+}
 
 /// <summary>
 ///     This class is one immutable copy of every forwarder set: the forwarder zones by name and

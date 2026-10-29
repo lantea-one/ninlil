@@ -139,21 +139,46 @@ public sealed class ForwarderHealthTracker(
         IReadOnlyList<UpstreamForwarderDefinition> candidates
     )
     {
-        foreach (UpstreamForwarderDefinition candidate in candidates)
-            EnsureTracked(candidate);
+        // Health is read once per candidate and remembered: a probe or a query can change it at
+        // any moment, and the two passes below must agree on who is in the pool.
+        Span<bool> healthy =
+            candidates.Count <= 128
+                ? stackalloc bool[candidates.Count]
+                : new bool[candidates.Count];
+        int healthyCount = 0;
 
-        List<UpstreamForwarderDefinition> healthy =
-        [
-            .. candidates.Where(candidate => IsHealthy(candidate.OriginalDefinitionString)),
-        ];
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            EnsureTracked(candidates[index]);
+            healthy[index] = IsHealthy(candidates[index].OriginalDefinitionString);
 
-        List<UpstreamForwarderDefinition> pool = healthy.Count > 0 ? healthy : [.. candidates];
+            if (healthy[index])
+                healthyCount++;
+        }
+
+        // When none is healthy every candidate is used, so forwarding is never locked out.
+        bool useAll = healthyCount == 0;
+        int poolCount = useAll ? candidates.Count : healthyCount;
 
         // One cursor shared by every query moves the starting point by one per call, spreading
         // first attempts across the healthy forwarders.
-        int start = Math.Abs(Interlocked.Increment(ref _roundRobinCursor)) % pool.Count;
+        int start = Math.Abs(Interlocked.Increment(ref _roundRobinCursor)) % poolCount;
 
-        return [.. pool.Skip(start), .. pool.Take(start)];
+        // The pool member at position i in candidate order goes to slot (i - start) modulo the
+        // pool size, which is the pool rotated left by start.
+        UpstreamForwarderDefinition[] ordered = new UpstreamForwarderDefinition[poolCount];
+        int position = 0;
+
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            if (!useAll && !healthy[index])
+                continue;
+
+            ordered[(position - start + poolCount) % poolCount] = candidates[index];
+            position++;
+        }
+
+        return ordered;
     }
 
     /// <summary>

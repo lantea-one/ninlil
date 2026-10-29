@@ -9,7 +9,7 @@ namespace Ninlil.Dns.Server.Forwarding.Caching;
 ///     be a correct answer to the other. The question alone is not enough: the same name can get
 ///     a different answer depending on the query's flags and where it was sent, so every such
 ///     input is part of the key. <see cref="ForwarderQueryResolver" /> builds it with
-///     <see cref="Create" />.
+///     <see cref="Create(DnsMessage, DnsMessage, IReadOnlyList{string}, bool)" />.
 /// </summary>
 /// <param name="Name">
 ///     The queried name. <see cref="DnsName" /> compares case-insensitively, so
@@ -81,12 +81,37 @@ public readonly record struct ForwardedResponseCacheKey(
         DnsMessage outboundRequest,
         IReadOnlyList<string> upstreamSet,
         bool validated
+    ) =>
+        Create(
+            clientRequest,
+            outboundRequest.Edns?.Options.FirstOrDefault(option =>
+                option.Code == (ushort)EdnsOptionCodeEnum.ClientSubnet
+            ),
+            JoinUpstreamSet(upstreamSet),
+            validated
+        );
+
+    /// <summary>
+    ///     This method builds the key from parts the caller already has, so a cache lookup needs
+    ///     neither the outbound request nor a joined string per query. It returns a key equal to
+    ///     the one the overload taking the outbound request builds for the same query.
+    /// </summary>
+    /// <param name="clientRequest">The client's request, for the question and header bits.</param>
+    /// <param name="clientSubnet">The ECS option sent upstream, or <see langword="null" /> when none is.</param>
+    /// <param name="upstreamSetKey">
+    ///     The forwarder definition strings joined by <see cref="JoinUpstreamSet" />, as held by
+    ///     <see cref="ForwarderSet.UpstreamKey" />.
+    /// </param>
+    /// <param name="validated">Whether forwarded answers are being DNSSEC re-validated.</param>
+    /// <returns>The key.</returns>
+    public static ForwardedResponseCacheKey Create(
+        DnsMessage clientRequest,
+        DnsEdnsOption clientSubnet,
+        string upstreamSetKey,
+        bool validated
     )
     {
         DnsQuestion question = clientRequest.Questions[0];
-        DnsEdnsOption clientSubnet = outboundRequest.Edns?.Options.FirstOrDefault(option =>
-            option.Code == (ushort)EdnsOptionCodeEnum.ClientSubnet
-        );
 
         return new ForwardedResponseCacheKey(
             question.Name,
@@ -97,10 +122,18 @@ public readonly record struct ForwardedResponseCacheKey(
             clientRequest.RecursionDesired,
             clientRequest.Edns is not null,
             validated,
-            // A newline cannot appear inside a definition string, so joining on it keeps two
-            // different lists from ever producing the same text.
-            string.Join('\n', upstreamSet),
+            upstreamSetKey,
             clientSubnet is null ? null : Convert.ToHexString(clientSubnet.Data)
         );
     }
+
+    /// <summary>
+    ///     This method joins a forwarder set's definition strings into the text kept in
+    ///     <see cref="UpstreamSet" />.
+    /// </summary>
+    /// <param name="upstreamSet">The definition strings, in order.</param>
+    public static string JoinUpstreamSet(IReadOnlyList<string> upstreamSet) =>
+        // A newline cannot appear inside a definition string, so joining on it keeps two
+        // different lists from ever producing the same text.
+        string.Join('\n', upstreamSet);
 }

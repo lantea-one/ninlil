@@ -385,6 +385,85 @@ public sealed class ForwarderHealthTrackerTests : IDisposable
     }
 
     [Fact]
+    public void OrderForAttempt_RotatesTheHealthyForwardersLikeTheReferenceOrder()
+    {
+        ForwarderHealthTracker tracker = CreateTracker();
+        UpstreamForwarderDefinition[] all =
+        [
+            Track(tracker, "127.0.0.1:5301"),
+            Track(tracker, "127.0.0.1:5302"),
+            Track(tracker, "127.0.0.1:5303"),
+            Track(tracker, "127.0.0.1:5304"),
+            Track(tracker, "127.0.0.1:5305"),
+        ];
+
+        // The third forwarder is unhealthy, so the pool is the other four.
+        for (
+            int failure = 0;
+            failure < ForwarderHealthTracker.UnhealthyAfterConsecutiveFailures;
+            failure++
+        )
+            tracker.RecordResult(all[2], succeeded: false);
+
+        UpstreamForwarderDefinition[] pool = [all[0], all[1], all[3], all[4]];
+
+        // The shared cursor starts below zero and rises by one per call, so call n starts the
+        // pool at n modulo its size.
+        for (int call = 0; call < 10; call++)
+        {
+            int start = call % pool.Length;
+
+            Assert.Equal([.. pool.Skip(start), .. pool.Take(start)], tracker.OrderForAttempt(all));
+        }
+    }
+
+    [Fact]
+    public void OrderForAttempt_WhenNoForwarderIsHealthy_UsesEveryCandidateInRotation()
+    {
+        ForwarderHealthTracker tracker = CreateTracker();
+        UpstreamForwarderDefinition[] all =
+        [
+            Track(tracker, "127.0.0.1:5301"),
+            Track(tracker, "127.0.0.1:5302"),
+            Track(tracker, "127.0.0.1:5303"),
+        ];
+
+        foreach (UpstreamForwarderDefinition definition in all)
+        {
+            for (
+                int failure = 0;
+                failure < ForwarderHealthTracker.UnhealthyAfterConsecutiveFailures;
+                failure++
+            )
+                tracker.RecordResult(definition, succeeded: false);
+        }
+
+        for (int call = 0; call < 7; call++)
+        {
+            int start = call % all.Length;
+
+            Assert.Equal([.. all.Skip(start), .. all.Take(start)], tracker.OrderForAttempt(all));
+        }
+    }
+
+    [Fact]
+    public void OrderForAttempt_WithMoreCandidatesThanTheStackBufferHolds_RotatesTheSameWay()
+    {
+        ForwarderHealthTracker tracker = CreateTracker();
+        UpstreamForwarderDefinition[] all =
+        [
+            .. Enumerable
+                .Range(0, 200)
+                .Select(index => Track(tracker, $"127.0.0.1:{6000 + index}")),
+        ];
+
+        for (int call = 0; call < 3; call++)
+        {
+            Assert.Equal([.. all.Skip(call), .. all.Take(call)], tracker.OrderForAttempt(all));
+        }
+    }
+
+    [Fact]
     public void RecordResult_ASuccessBetweenFailures_RestartsTheCount()
     {
         ForwarderHealthTracker tracker = CreateTracker();
