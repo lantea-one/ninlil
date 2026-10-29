@@ -67,8 +67,7 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
     {
         _context.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     private static string Payload(string name = "Ads", bool isDisabled = false) =>

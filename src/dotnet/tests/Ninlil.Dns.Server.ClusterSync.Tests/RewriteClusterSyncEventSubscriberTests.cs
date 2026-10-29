@@ -58,8 +58,7 @@ public sealed class RewriteClusterSyncEventSubscriberTests : IDisposable
         _services.Dispose();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     private async Task<Guid> AddRewriteAsync(Guid? clientId, Guid? clientGroupId)

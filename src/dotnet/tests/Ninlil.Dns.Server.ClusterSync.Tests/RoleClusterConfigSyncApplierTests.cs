@@ -55,8 +55,7 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
     {
         _context.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     private static string Payload(
