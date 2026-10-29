@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Server.Core.Pipeline;
@@ -21,6 +23,19 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///         writer task of the session writes the queue in order. A client that stops reading
 ///         therefore holds a queue entry, not a
 ///         <see cref="DnsQueryProcessingPipeline" /> slot.
+///     </para>
+///     <para>
+///         <b>Batched writes.</b> The writer takes every frame already waiting in the queue, up to
+///         <see cref="MaxBatchOctets" /> octets, builds each as its length prefix followed by its
+///         message in one buffer, and writes the buffer with one write and one flush under one
+///         deadline. A length and its message therefore always go to the transport in one write,
+///         as RFC 7766 §8 recommends (over TLS, in one record), and replies that finish together
+///         share a write instead of paying for one each. The writer never waits for more frames
+///         to arrive, so a lone reply is written at once. Frames leave in queue order, and each
+///         carries its own length, so a reply that finishes before an earlier query's reply is
+///         framed exactly as if it were alone; RFC 7766 §7 lets a server send replies to
+///         pipelined queries out of order. Every ticket of a batch is released once the batch has
+///         been written or abandoned.
 ///     </para>
 ///     <para>
 ///         <b>Limits.</b> At most <see cref="MaxInFlightQueriesPerConnection" /> queries are in
@@ -66,6 +81,14 @@ public sealed class FramedDnsStreamSession
     public const int OutboundQueueCapacity = 32;
 
     /// <summary>
+    ///     This constant contains the most octets, prefixes included, the writer puts into one
+    ///     write. A single frame longer than this (a reply of up to 65 535 octets) is written
+    ///     alone. The cap bounds the memory of a batch and keeps the one deadline a batch shares
+    ///     meaningful for a slow reader.
+    /// </summary>
+    public const int MaxBatchOctets = 65536;
+
+    /// <summary>
     ///     This field contains how long one zone transfer may run, after BIND's
     ///     <c>max-transfer-time-out</c> of 120 minutes. The idle timeout does not apply to a
     ///     transfer.
@@ -94,6 +117,13 @@ public sealed class FramedDnsStreamSession
         }
     );
     private readonly ConcurrentDictionary<QueryTicket, byte> _tickets = new();
+
+    /// <summary>
+    ///     This field is the two-octet buffer the read loop fills with each frame's length. Only
+    ///     the read loop touches it and it finishes with the value before it reads the message,
+    ///     so one buffer serves the whole session.
+    /// </summary>
+    private readonly byte[] _readPrefix = new byte[2];
 
     /// <summary>
     ///     This field contains the ticket of the message the handler is processing. Only the
@@ -189,7 +219,8 @@ public sealed class FramedDnsStreamSession
     ///     This method returns the delegate that sends a reply for the message the handler is
     ///     processing. It queues the frame and returns at once, so a pipeline slot never waits on
     ///     a socket. The slot of the message is released when the frame has been written, or when
-    ///     it is discarded.
+    ///     it is discarded. A reply that is a whole array is queued without a copy, so the caller
+    ///     must not change it afterwards; any other memory is copied.
     /// </summary>
     public DnsResponseSenderAsync CreateResponder()
     {
@@ -197,7 +228,7 @@ public sealed class FramedDnsStreamSession
 
         return (responseBytes, _) =>
         {
-            QueueQueryResponse(ticket, responseBytes.Span);
+            QueueQueryResponse(ticket, responseBytes);
             return ValueTask.CompletedTask;
         };
     }
@@ -222,8 +253,13 @@ public sealed class FramedDnsStreamSession
     {
         try
         {
+            if (messageBytes.Length > MaxFrameLength)
+                throw new ArgumentException("The message is longer than a frame can carry.");
+
+            // Copied: the caller may reuse its buffer as soon as this call returns, while the
+            // frame waits in the queue.
             await _outbound.Writer.WriteAsync(
-                new OutboundFrame(BuildFrame(messageBytes.Span), null),
+                new OutboundFrame(messageBytes.ToArray(), null),
                 token
             );
         }
@@ -321,15 +357,16 @@ public sealed class FramedDnsStreamSession
 
                 try
                 {
-                    byte[] lengthPrefix = new byte[2];
-
-                    if (!await ReadExactAsync(lengthPrefix, idleCts.Token))
+                    if (!await ReadExactAsync(_readPrefix, idleCts.Token))
                     {
                         ticket.Release();
                         return true;
                     }
 
-                    message = new byte[BinaryPrimitives.ReadUInt16BigEndian(lengthPrefix)];
+                    // The message is a new array for every query: the pipeline keeps a reference
+                    // to it for the life of the query (see DnsInboundMessage.RequestBytes), so it
+                    // must never be a slice of a reused buffer.
+                    message = new byte[BinaryPrimitives.ReadUInt16BigEndian(_readPrefix)];
 
                     if (!await ReadExactAsync(message, idleCts.Token))
                         throw new IOException("The connection closed partway through a frame.");
@@ -395,42 +432,87 @@ public sealed class FramedDnsStreamSession
     }
 
     /// <summary>
-    ///     This method writes the outbound queue, one frame at a time, each within the idle
-    ///     timeout. A failed or late write aborts the session; the loop then discards what is
-    ///     left. It never throws.
+    ///     This method writes the outbound queue in batches: each pass takes the first waiting
+    ///     frame and every frame behind it that fits <see cref="MaxBatchOctets" />, writes them
+    ///     together within the idle timeout and releases their tickets. A failed or late write
+    ///     aborts the session; the loop then discards what is left, still releasing every ticket.
+    ///     It never throws.
     /// </summary>
     private async Task WriteLoopAsync()
     {
+        List<OutboundFrame> batch = [];
+
         while (await _outbound.Reader.WaitToReadAsync())
         {
-            while (_outbound.Reader.TryRead(out OutboundFrame frame))
+            while (_outbound.Reader.TryRead(out OutboundFrame first))
             {
+                batch.Clear();
+                batch.Add(first);
+                int batchOctets = FrameOctets(first);
+
+                // This loop is the queue's only reader, so the frame that TryPeek shows is the
+                // one TryRead returns.
+                while (
+                    _outbound.Reader.TryPeek(out OutboundFrame next)
+                    && batchOctets + FrameOctets(next) <= MaxBatchOctets
+                    && _outbound.Reader.TryRead(out next)
+                )
+                {
+                    batch.Add(next);
+                    batchOctets += FrameOctets(next);
+                }
+
                 try
                 {
                     if (!Lifetime.IsCancellationRequested)
-                        await WriteFrameAsync(frame.Bytes);
+                        await WriteBatchAsync(batch, batchOctets);
                 }
                 finally
                 {
-                    frame.Ticket?.Release();
+                    // Once per frame: a ticket's release is idempotent, and the teardown sweep
+                    // may release the same ticket again.
+                    foreach (OutboundFrame frame in batch)
+                        frame.Ticket?.Release();
                 }
             }
         }
     }
 
     /// <summary>
-    ///     This method writes one frame under the write deadline and aborts the session when the
-    ///     write fails or misses it.
+    ///     This method gives the octets a frame takes on the wire: the two-octet length prefix and
+    ///     the message.
     /// </summary>
-    private async Task WriteFrameAsync(byte[] frameBytes)
+    private static int FrameOctets(OutboundFrame frame) => 2 + frame.Message.Length;
+
+    /// <summary>
+    ///     This method writes a batch of frames as one write and one flush under one write
+    ///     deadline, and aborts the session when the write fails or misses the deadline. The
+    ///     frames are copied into one rented buffer, each as its length prefix and its message, so
+    ///     a prefix and its message always share a write.
+    /// </summary>
+    private async Task WriteBatchAsync(List<OutboundFrame> batch, int batchOctets)
     {
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(batchOctets);
+
         try
         {
+            int offset = 0;
+
+            foreach (OutboundFrame frame in batch)
+            {
+                BinaryPrimitives.WriteUInt16BigEndian(
+                    buffer.AsSpan(offset),
+                    (ushort)frame.Message.Length
+                );
+                frame.Message.Span.CopyTo(buffer.AsSpan(offset + 2));
+                offset += FrameOctets(frame);
+            }
+
             using CancellationTokenSource deadline =
                 CancellationTokenSource.CreateLinkedTokenSource(Lifetime);
             deadline.CancelAfter(_idleTimeout);
 
-            await _stream.WriteAsync(frameBytes, deadline.Token);
+            await _stream.WriteAsync(buffer.AsMemory(0, batchOctets), deadline.Token);
             await _stream.FlushAsync(deadline.Token);
         }
         catch (Exception exception)
@@ -445,12 +527,16 @@ public sealed class FramedDnsStreamSession
 
             Abort();
         }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>
     ///     This method queues the reply of one query, or discards it and counts it.
     /// </summary>
-    private void QueueQueryResponse(QueryTicket ticket, ReadOnlySpan<byte> responseBytes)
+    private void QueueQueryResponse(QueryTicket ticket, ReadOnlyMemory<byte> responseBytes)
     {
         // A ticket that is already released belongs to a connection that has ended.
         if (ticket.IsReleased)
@@ -458,7 +544,9 @@ public sealed class FramedDnsStreamSession
 
         if (
             responseBytes.Length > MaxFrameLength
-            || !_outbound.Writer.TryWrite(new OutboundFrame(BuildFrame(responseBytes), ticket))
+            || !_outbound.Writer.TryWrite(
+                new OutboundFrame(WholeArrayOrCopy(responseBytes), ticket)
+            )
         )
         {
             Interlocked.Increment(ref _droppedResponses);
@@ -472,18 +560,18 @@ public sealed class FramedDnsStreamSession
     }
 
     /// <summary>
-    ///     This method prefixes a message with its two-octet length.
+    ///     This method returns the array behind an encoded reply when the memory covers all of it,
+    ///     and a copy otherwise. The pipeline hands each reply to the responder once and never
+    ///     touches it again, so the queue can keep the array until the writer has copied it into
+    ///     its batch buffer. A slice or memory without an array is copied, because the owner of
+    ///     that memory may reuse it.
     /// </summary>
-    private static byte[] BuildFrame(ReadOnlySpan<byte> messageBytes)
-    {
-        if (messageBytes.Length > MaxFrameLength)
-            throw new ArgumentException("The message is longer than a frame can carry.");
-
-        byte[] frame = new byte[2 + messageBytes.Length];
-        BinaryPrimitives.WriteUInt16BigEndian(frame, (ushort)messageBytes.Length);
-        messageBytes.CopyTo(frame.AsSpan(2));
-        return frame;
-    }
+    private static ReadOnlyMemory<byte> WholeArrayOrCopy(ReadOnlyMemory<byte> responseBytes) =>
+        MemoryMarshal.TryGetArray(responseBytes, out ArraySegment<byte> segment)
+        && segment.Offset == 0
+        && segment.Count == segment.Array.Length
+            ? responseBytes
+            : responseBytes.ToArray();
 
     private QueryTicket CurrentTicket() =>
         _currentTicket
@@ -522,11 +610,11 @@ public sealed class FramedDnsStreamSession
     }
 
     /// <summary>
-    ///     This record holds a framed message waiting for the writer, with the slot to release
-    ///     once it is written or discarded (<see langword="null" /> for frames outside the slot
-    ///     budget).
+    ///     This record holds a message waiting for the writer, which adds its length prefix, with
+    ///     the slot to release once it is written or discarded (<see langword="null" /> for frames
+    ///     outside the slot budget).
     /// </summary>
-    private sealed record OutboundFrame(byte[] Bytes, QueryTicket Ticket);
+    private sealed record OutboundFrame(ReadOnlyMemory<byte> Message, QueryTicket Ticket);
 
     /// <summary>
     ///     This class is the in-flight slot of one query. Releasing is idempotent, so a reply, a
