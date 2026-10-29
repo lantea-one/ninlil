@@ -106,7 +106,10 @@ dotnet test Ninlil.slnx                                               # everythi
 `src/dotnet/benchmarks/Ninlil.Benchmarks` measures the database layer with BenchmarkDotNet. It is a
 console program, not a test project: `dotnet test` skips it and the pipeline only builds it. Its
 benchmarks live under `Storage/` (data-layer queries), `Dns/` (what the filter, rewrite, schedule and
-forwarder lookups read from the database per query) and `Dhcp/` (the DHCPv4 offer path).
+forwarder lookups read from the database per query), `Dhcp/` (the DHCPv4 offer path), `Pipeline/`
+(whole DNS queries through `DnsQueryProcessingPipeline`, plus the data set, host and fake upstream
+they share), `Wire/` (the DNS wire format and `DnsName`), `Events/` (the event bus) and `Transport/`
+(real UDP and TCP listeners on loopback).
 
 ```bash
 dotnet run -c Release --project src/dotnet/benchmarks/Ninlil.Benchmarks -- \
@@ -120,6 +123,19 @@ dotnet run -c Release --project src/dotnet/benchmarks/Ninlil.Benchmarks -- \
   container (repeat for other engines; not for SQLite). The database name is replaced by the data
   set's (`ninlil_bench_<scale>_v<N>`). A database that already holds the data set is not seeded
   again, so a long-lived server pays the seed once.
+- The `Pipeline/`, `Events/` and `Transport/` classes run on SQLite only, on a purpose-built data set
+  of their own (`ninlil_bench_pipeline_<scale>_v1.sqlite3` in `--data-directory`, seeded on first
+  use and reused). After warm-up the caches hold everything a query needs, so the engine does not
+  matter, and each class proves it in its setup (the replies are the expected ones and 100 warm
+  queries run zero database commands). They still need `--engines Sqlite` (the program refuses to
+  start with no engine) and use a fake upstream resolver on loopback, never the internet:
+
+  ```bash
+  dotnet run -c Release --project src/dotnet/benchmarks/Ninlil.Benchmarks -- \
+    --filter '*PipelineLatency*' --engines Sqlite --scale Small
+  ```
+
+  `Wire/` needs no database but is started the same way.
 - `--scale Small|Large` (default `Small`). `Small` is about 1/100 of `Large` and proves that every
   benchmark runs; only `Large` numbers mean something. `Large` seeds 1,000,000 query-log entries,
   1,000 zones plus one of 50,000 records, three 100,000-entry filter lists and more, which takes
@@ -129,7 +145,8 @@ dotnet run -c Release --project src/dotnet/benchmarks/Ninlil.Benchmarks -- \
   file is reused). Every other argument (`--filter`, `--list flat`) goes to BenchmarkDotNet.
 - Containers are removed when the run ends, so the next run seeds again. Copy results into the
   work-package notes; do not commit `BenchmarkDotNet.Artifacts/`.
-- Changing the data-set generator (`Seeding/BenchmarkDataSet.cs`) means bumping its `Version`.
+- Changing the data-set generator (`Seeding/BenchmarkDataSet.cs`) means bumping its `Version`; the
+  same holds for `Pipeline/PipelineDataSet.cs`.
 
 ## Format and lint
 
