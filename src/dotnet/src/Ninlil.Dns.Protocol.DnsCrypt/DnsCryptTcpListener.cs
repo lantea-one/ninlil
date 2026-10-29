@@ -185,6 +185,12 @@ public sealed class DnsCryptTcpListener(
     {
         IPEndPoint remoteEndpoint = (IPEndPoint)connection.RemoteEndPoint;
 
+        // Every write is a complete reply batch that a client is waiting for. With Nagle's
+        // algorithm on (it holds a small segment while earlier data is unacknowledged), the next
+        // batch of a pipelined connection waits for the client's delayed acknowledgement, which is
+        // tens of milliseconds.
+        connection.NoDelay = true;
+
         try
         {
             using NetworkStream stream = new(connection, ownsSocket: false);
