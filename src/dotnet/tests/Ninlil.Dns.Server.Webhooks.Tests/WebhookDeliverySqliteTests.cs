@@ -72,8 +72,7 @@ public sealed class WebhookDeliverySqliteTests : IAsyncLifetime
         await _fakeServer.DisposeAsync();
         await _testHost.DisposeAsync();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     private string TargetUrl => $"{_fakeServer.Urls.First()}/webhook";
