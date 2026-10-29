@@ -28,10 +28,11 @@ public class SmtpEmailSenderHotReloadTests
         await using FakeTcpEndpoint endpointA = FakeTcpEndpoint.Start();
         await using FakeTcpEndpoint endpointB = FakeTcpEndpoint.Start();
 
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-smtp-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory.CreateTempSubdirectory("ninlil-dns-smtp-hot-reload-").FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         try
         {
@@ -61,18 +62,23 @@ public class SmtpEmailSenderHotReloadTests
             Assert.Equal(1, endpointA.ConnectionCount);
             Assert.Equal(0, endpointB.ConnectionCount);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             await WriteEmailSectionAsync(path, endpointB.Port);
 
-            // The JSON provider debounces file changes by a few hundred milliseconds, so wait for
-            // the reload instead of a fixed delay.
-            Task reloadCompleted = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
+            // The JSON configuration provider debounces file-change notifications by a few hundred
+            // milliseconds. Wait up to ten seconds for the written value itself, not for the first
+            // change notification: a notification can arrive for an earlier state of the file and
+            // reload before the final content is visible.
+            for (
+                int attempt = 0;
+                attempt < 200 && !(monitor.CurrentValue.SmtpPort == endpointB.Port);
+                attempt++
+            )
+                await Task.Delay(50);
+
+            Assert.True(
+                monitor.CurrentValue.SmtpPort == endpointB.Port,
+                "The configuration reload did not happen within the timeout."
             );
-            Assert.Same(reloaded.Task, reloadCompleted);
 
             await SendAndExpectFailureAsync(sender);
             Assert.Equal(1, endpointA.ConnectionCount);
@@ -82,11 +88,11 @@ public class SmtpEmailSenderHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temp file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }
