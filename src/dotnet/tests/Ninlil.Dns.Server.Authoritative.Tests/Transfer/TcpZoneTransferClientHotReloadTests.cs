@@ -87,10 +87,13 @@ public sealed class TcpZoneTransferClientHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_ChangesWhichPortTheVeryNextSoaQueryTargets_WithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-zone-transfer-client-primary-port-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-zone-transfer-client-primary-port-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         using UdpClient firstPrimary = new(new IPEndPoint(IPAddress.Loopback, 0));
         using UdpClient secondPrimary = new(new IPEndPoint(IPAddress.Loopback, 0));
@@ -158,7 +161,7 @@ public sealed class TcpZoneTransferClientHotReloadTests
             );
 
             // Poll the value itself rather than trusting one OnChange: a late notification from the
-            // first write can fire first and made this test flaky.
+            // first write can fire first.
             await WaitForReloadAsync(monitor, () => monitor.CurrentValue.PrimaryPort == secondPort);
 
             // The same client, built before the write, now uses the second listener, so the port is
@@ -175,11 +178,11 @@ public sealed class TcpZoneTransferClientHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temp file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

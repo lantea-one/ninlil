@@ -29,10 +29,13 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_MakesTheSameResolverInstanceAnswerChaosQueries_WithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-authoritative-chaos-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-authoritative-chaos-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         try
         {
@@ -96,9 +99,6 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
             );
             Assert.False(before.IsHandled);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             // The same write BrandingSettingsController.Patch makes.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
@@ -116,13 +116,26 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
                 path
             );
 
-            // The JSON provider debounces file-change notifications, so wait for the reload event
-            // rather than a fixed delay.
-            Task completed = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
+            // The JSON configuration provider debounces file-change notifications by a few hundred
+            // milliseconds. Wait up to ten seconds for the written value itself, not for the first
+            // change notification: a notification can arrive for an earlier state of the file and
+            // reload before the final content is visible.
+            for (
+                int attempt = 0;
+                attempt < 200
+                    && !(
+                        monitor.CurrentValue.EnableChaosVersionQueries
+                        && monitor.CurrentValue.HostnameString == "acme-ns1"
+                    );
+                attempt++
+            )
+                await Task.Delay(50);
+
+            Assert.True(
+                monitor.CurrentValue.EnableChaosVersionQueries
+                    && monitor.CurrentValue.HostnameString == "acme-ns1",
+                "The configuration reload did not happen within the timeout."
             );
-            Assert.Same(reloaded.Task, completed);
             Assert.True(monitor.CurrentValue.EnableChaosVersionQueries);
 
             // The same resolver, built before the write, now answers CHAOS queries, so the options are
@@ -143,11 +156,11 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temp file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

@@ -50,10 +50,16 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
         $"ninlil-dns-ptr-sync-hot-reload-{Guid.NewGuid()}.sqlite3"
     );
 
-    private readonly string _configurationPath = Path.Combine(
-        Path.GetTempPath(),
-        $"ninlil-dns-ptr-sync-hot-reload-{Guid.NewGuid():N}.json"
-    );
+    // A directory of its own rather than the shared temp directory: the file watcher behind
+    // reloadOnChange reports every change in the directory it watches, and on a busy machine
+    // unrelated churn there can overflow its queue and drop the change a test waits for. Only the
+    // configuration file lives here; the database stays outside so its writes cannot disturb the
+    // watcher.
+    private readonly string _configurationDirectory = Directory
+        .CreateTempSubdirectory("ninlil-dns-ptr-sync-hot-reload-")
+        .FullName;
+
+    private string _configurationPath => Path.Combine(_configurationDirectory, "appsettings.json");
 
     private IHost _host;
     private IZoneRepository _zoneRepository;
@@ -95,8 +101,8 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
         if (File.Exists(_databasePath))
             File.Delete(_databasePath);
 
-        if (File.Exists(_configurationPath))
-            File.Delete(_configurationPath);
+        if (Directory.Exists(_configurationDirectory))
+            Directory.Delete(_configurationDirectory, recursive: true);
 
         return Task.CompletedTask;
     }
@@ -187,9 +193,6 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
         await service.ReconcileZoneAsync(zoneId);
         Assert.Null(await _zoneRepository.FindByNameAsync("2.0.192.in-addr.arpa"));
 
-        TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
         // The same write PtrSyncSettingsController.Patch makes.
         await PresetConfigurationFileApplier.ApplyAsync(
             [
@@ -202,11 +205,17 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
             _configurationPath
         );
 
-        // The JSON provider debounces file-change notifications, so wait for the reload event
-        // rather than a fixed delay.
-        Task completed = await Task.WhenAny(reloaded.Task, Task.Delay(TimeSpan.FromSeconds(10)));
-        Assert.Same(reloaded.Task, completed);
-        Assert.True(monitor.CurrentValue.DefaultEnabled);
+        // The JSON configuration provider debounces file-change notifications by a few hundred
+        // milliseconds. Wait up to ten seconds for the written value itself, not for the first
+        // change notification: a notification can arrive for an earlier state of the file and
+        // reload before the final content is visible.
+        for (int attempt = 0; attempt < 200 && !(monitor.CurrentValue.DefaultEnabled); attempt++)
+            await Task.Delay(50);
+
+        Assert.True(
+            monitor.CurrentValue.DefaultEnabled,
+            "The configuration reload did not happen within the timeout."
+        );
 
         // The same instance, built before the write, now creates the reverse zone, so the default
         // is re-read per call.

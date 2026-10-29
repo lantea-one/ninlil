@@ -73,7 +73,7 @@ public sealed class ZoneTransferOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temporary file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

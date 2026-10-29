@@ -24,10 +24,13 @@ public sealed class UdpNotifySenderHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_ChangesWhichPortTheVerySendAsyncCallTargets_WithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-notify-secondary-port-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-notify-secondary-port-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         using UdpClient firstSecondary = new(new IPEndPoint(IPAddress.Loopback, 0));
         using UdpClient secondSecondary = new(new IPEndPoint(IPAddress.Loopback, 0));
@@ -111,7 +114,7 @@ public sealed class UdpNotifySenderHotReloadTests
             );
 
             // Poll the value itself rather than trusting one OnChange: a late notification from the
-            // first write can fire first and made this test flaky.
+            // first write can fire first.
             await WaitForReloadAsync(
                 monitor,
                 () => monitor.CurrentValue.SecondaryPort == secondPort
@@ -127,11 +130,11 @@ public sealed class UdpNotifySenderHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temp file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }
