@@ -154,4 +154,48 @@ public sealed class DnsQueryLogWriterServiceTests : IAsyncLifetime
         Assert.Equal(700, await CountRowsAsync());
         Assert.True(scopeFactory.SaveChangesCount >= 2);
     }
+
+    [Fact]
+    public async Task StopAsync_WhenTheLoopNeverRan_StillSavesTheEntriesStillQueued()
+    {
+        DnsQueryLogQueue queue = new();
+        CountingScopeFactory scopeFactory = new(
+            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>()
+        );
+        DnsQueryLogWriterService writer = NewWriter(queue, scopeFactory);
+
+        for (int i = 0; i < 700; i++)
+            queue.TryEnqueue(NewEntry());
+
+        // A start with an already-cancelled token is the same state as a host that stops before
+        // a thread-pool thread picks ExecuteAsync up: the loop never runs, so the drain must
+        // come from StopAsync.
+        using CancellationTokenSource cancelled = new();
+        await cancelled.CancelAsync();
+        await writer.StartAsync(cancelled.Token);
+        await writer.StopAsync(CancellationToken.None);
+
+        Assert.Equal(700, await CountRowsAsync());
+        Assert.Equal(2, scopeFactory.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenTheLoopRan_SavesEveryEntryExactlyOnce()
+    {
+        DnsQueryLogQueue queue = new();
+        CountingScopeFactory scopeFactory = new(
+            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>()
+        );
+        DnsQueryLogWriterService writer = NewWriter(queue, scopeFactory);
+
+        for (int i = 0; i < 700; i++)
+            queue.TryEnqueue(NewEntry());
+
+        // Waiting for the rows proves the loop ran, so StopAsync must leave the drain to it.
+        await writer.StartAsync(CancellationToken.None);
+        await WaitForRowsAsync(700);
+        await writer.StopAsync(CancellationToken.None);
+
+        Assert.Equal(700, await CountRowsAsync());
+    }
 }

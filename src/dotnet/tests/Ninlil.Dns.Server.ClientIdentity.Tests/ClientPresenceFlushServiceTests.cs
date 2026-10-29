@@ -331,6 +331,48 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This test checks that stopping a service whose loop never ran still persists the queued
+    ///     sightings. A start with an already-cancelled token is the same state as a host that
+    ///     stops before a thread-pool thread picks <c>ExecuteAsync</c> up: the loop never runs, so
+    ///     the final flush must come from <c>StopAsync</c>.
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenTheLoopNeverRan_StillPersistsTheQueuedSightings()
+    {
+        Guid[] ids = await SeedDeviceAsync((Mac, InternetProtocolVersionEnum.IPv4));
+        _tracker.RecordIdentity(
+            Mac,
+            InternetProtocolVersionEnum.IPv4,
+            IPAddress.Parse("192.0.2.10"),
+            DateTimeOffset.UtcNow
+        );
+
+        using CancellationTokenSource cancelled = new();
+        await cancelled.CancelAsync();
+        await _flush.StartAsync(cancelled.Token);
+        await _flush.StopAsync(CancellationToken.None);
+
+        Assert.NotNull((await ReadAsync(ids[0])).LastSeenUtc);
+    }
+
+    /// <summary>
+    ///     This test checks that a start followed at once by a stop persists the queued sightings
+    ///     whether the loop got to run or not, and that the two final flushes never both claim them.
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_RightAfterStart_PersistsTheQueuedSightings()
+    {
+        Guid[] ids = await SeedDeviceAsync((Mac, InternetProtocolVersionEnum.IPv4));
+        DateTimeOffset seen = DateTimeOffset.UtcNow;
+        _tracker.RecordIdentity(Mac, InternetProtocolVersionEnum.IPv4, null, seen);
+
+        await _flush.StartAsync(CancellationToken.None);
+        await _flush.StopAsync(CancellationToken.None);
+
+        Assert.Equal(seen, (await ReadAsync(ids[0])).LastSeenUtc);
+    }
+
+    /// <summary>
     ///     This test checks that the tracker keeps only the most recent sighting per key, regardless of
     ///     recording order.
     /// </summary>

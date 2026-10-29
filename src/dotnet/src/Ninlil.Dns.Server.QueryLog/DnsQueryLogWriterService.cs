@@ -17,7 +17,9 @@ namespace Ninlil.Dns.Server.QueryLog;
 ///         A batch ends at <see cref="BatchSize" /> entries or <see cref="FlushInterval" /> after
 ///         its first entry, whichever comes first. A failed save is logged as an error and loses
 ///         that batch; the next batch starts clean. On shutdown the entries still queued are
-///         saved before the service stops.
+///         saved before the service stops: by the loop when it ran, and by
+///         <see cref="StopAsync" /> when the host stopped before the loop started. The queue has one
+///         reader at any time; see <see cref="_state" />.
 ///     </para>
 ///     <para>
 ///         When <see cref="DnsQueryLogQueue" /> drops entries because it is full, this service logs
@@ -39,6 +41,30 @@ public sealed class DnsQueryLogWriterService(
     /// </summary>
     public const int BatchSize = 500;
 
+    /// <summary>
+    ///     This constant is <see cref="_state" /> before the loop or the stop has claimed the queue.
+    /// </summary>
+    private const int NotStarted = 0;
+
+    /// <summary>
+    ///     This constant is <see cref="_state" /> once <see cref="ExecuteAsync" /> owns the queue.
+    /// </summary>
+    private const int Running = 1;
+
+    /// <summary>
+    ///     This constant is <see cref="_state" /> once <see cref="StopAsync" /> drained the queue
+    ///     because the loop never ran.
+    /// </summary>
+    private const int DrainedByStop = 2;
+
+    /// <summary>
+    ///     This field says who reads the queue. <see cref="ExecuteAsync" /> and
+    ///     <see cref="StopAsync" /> each try to move it away from <see cref="NotStarted" /> with
+    ///     <see cref="Interlocked.CompareExchange(ref int, int, int)" />, and only the winner
+    ///     reads, so the queue never has two readers.
+    /// </summary>
+    private int _state = NotStarted;
+
     private long _reportedDropped;
     private DateTime _lastDropReportUtc = DateTime.UtcNow;
 
@@ -57,6 +83,11 @@ public sealed class DnsQueryLogWriterService(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // The host can cancel the stopping token before a thread-pool thread runs this method;
+        // StopAsync then drains instead, and this call must not read the queue as well.
+        if (Interlocked.CompareExchange(ref _state, Running, NotStarted) != NotStarted)
+            return;
+
         try
         {
             while (await queue.Reader.WaitToReadAsync(stoppingToken))
@@ -70,6 +101,22 @@ public sealed class DnsQueryLogWriterService(
         {
             // Expected during a graceful shutdown; the remainder is drained below.
         }
+
+        await DrainAsync();
+        ReportDropped(force: true);
+    }
+
+    /// <summary>
+    ///     This method stops the service and, when the loop never started, saves the entries still
+    ///     queued, so a host that stops right after it started loses nothing.
+    /// </summary>
+    /// <param name="cancellationToken">The token that bounds the wait for the loop to end.</param>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+
+        if (Interlocked.CompareExchange(ref _state, DrainedByStop, NotStarted) != NotStarted)
+            return;
 
         await DrainAsync();
         ReportDropped(force: true);

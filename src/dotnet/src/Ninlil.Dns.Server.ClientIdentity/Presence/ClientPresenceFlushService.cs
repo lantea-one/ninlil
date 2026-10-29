@@ -41,6 +41,10 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 ///         (<see cref="EntityChangeSuppression" />), so it does not make
 ///         <see cref="DnsClientDirectory" /> reload.
 ///     </para>
+///     <para>
+///         On shutdown the sightings still buffered are flushed once: by the loop when it ran, and
+///         by <see cref="StopAsync" /> when the host stopped before the loop started.
+///     </para>
 /// </summary>
 /// <param name="tracker">The buffer sightings are drained from.</param>
 /// <param name="scopeFactory">The factory each flush opens a new scope from.</param>
@@ -63,9 +67,40 @@ public sealed class ClientPresenceFlushService(
         AddressFamily.Unspecified,
     ];
 
+    /// <summary>
+    ///     This field says whether the loop or the stop makes the final flush.
+    ///     <see cref="ExecuteAsync" /> and <see cref="StopAsync" /> each try to move it away from
+    ///     <see cref="NotStarted" /> with
+    ///     <see cref="Interlocked.CompareExchange(ref int, int, int)" />, and only the winner
+    ///     flushes at shutdown.
+    /// </summary>
+    private int _state = NotStarted;
+
+    /// <summary>
+    ///     This constant is <see cref="_state" /> before the loop or the stop has claimed the final
+    ///     flush.
+    /// </summary>
+    private const int NotStarted = 0;
+
+    /// <summary>
+    ///     This constant is <see cref="_state" /> once <see cref="ExecuteAsync" /> owns the flush.
+    /// </summary>
+    private const int Running = 1;
+
+    /// <summary>
+    ///     This constant is <see cref="_state" /> once <see cref="StopAsync" /> made the final flush
+    ///     because the loop never ran.
+    /// </summary>
+    private const int FlushedByStop = 2;
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // The host can cancel the stopping token before a thread-pool thread runs this method;
+        // StopAsync then makes the final flush, and this call must not run a second one.
+        if (Interlocked.CompareExchange(ref _state, Running, NotStarted) != NotStarted)
+            return;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -87,8 +122,28 @@ public sealed class ClientPresenceFlushService(
             }
         }
 
-        // Persist whatever arrived since the last flush before shutting down, on a fresh token
-        // since the stopping one is already cancelled.
+        await FlushOnShutdownAsync();
+    }
+
+    /// <summary>
+    ///     This method stops the service and, when the loop never started, persists the buffered
+    ///     sightings, so a host that stops right after it started loses none.
+    /// </summary>
+    /// <param name="cancellationToken">The token that bounds the wait for the loop to end.</param>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+
+        if (Interlocked.CompareExchange(ref _state, FlushedByStop, NotStarted) == NotStarted)
+            await FlushOnShutdownAsync();
+    }
+
+    /// <summary>
+    ///     This method persists whatever arrived since the last flush, on a fresh token because the
+    ///     stopping one is already cancelled. A failure is logged, never thrown, so shutdown goes on.
+    /// </summary>
+    private async Task FlushOnShutdownAsync()
+    {
         try
         {
             await FlushAsync(CancellationToken.None);
