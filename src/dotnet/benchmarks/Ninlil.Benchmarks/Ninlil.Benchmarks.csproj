@@ -28,6 +28,14 @@
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Forwarding\Ninlil.Dns.Server.Forwarding.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Rewrites\Ninlil.Dns.Server.Rewrites.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.ClientSchedule\Ninlil.Dns.Server.ClientSchedule.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.Plain\Ninlil.Dns.Protocol.Plain.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.AccessControl\Ninlil.Dns.Server.AccessControl.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.RateLimiting\Ninlil.Dns.Server.RateLimiting.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.QueryLog\Ninlil.Dns.Server.QueryLog.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.ClientIdentity\Ninlil.Dns.Server.ClientIdentity.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj" />
   </ItemGroup>

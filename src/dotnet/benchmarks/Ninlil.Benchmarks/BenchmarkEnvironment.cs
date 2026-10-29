@@ -24,6 +24,13 @@ public static class BenchmarkEnvironment
     public const string ScaleVariable = "BENCHMARK_SCALE";
 
     /// <summary>
+    ///     This constant contains the variable that holds the directory of the SQLite files, so
+    ///     the benchmarks that keep a database of their own (the pipeline classes) put it beside
+    ///     the data set of <c>Program</c>.
+    /// </summary>
+    public const string DataDirectoryVariable = "BENCHMARK_DATA_DIRECTORY";
+
+    /// <summary>
     ///     This method returns the name of the variable that holds the connection string of the
     ///     seeded database of <paramref name="engine" />.
     /// </summary>
@@ -49,6 +56,15 @@ public static class BenchmarkEnvironment
         )
             ? scale
             : BenchmarkScaleEnum.Small;
+
+    /// <summary>
+    ///     This property contains the directory for SQLite files (the <c>--data-directory</c> of
+    ///     <c>Program</c>), or the default <c>BenchmarkDotNet.Artifacts/data</c> when the
+    ///     variable is not set.
+    /// </summary>
+    public static string DataDirectory =>
+        Environment.GetEnvironmentVariable(DataDirectoryVariable)
+        ?? Path.GetFullPath(Path.Combine("BenchmarkDotNet.Artifacts", "data"));
 
     /// <summary>
     ///     This method returns the connection string of the seeded database of

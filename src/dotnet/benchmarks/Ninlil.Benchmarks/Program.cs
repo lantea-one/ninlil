@@ -160,6 +160,10 @@ public static class Program
                 scale.ToString()
             );
             Environment.SetEnvironmentVariable(StorageConfig.JobVariable, job);
+            Environment.SetEnvironmentVariable(
+                BenchmarkEnvironment.DataDirectoryVariable,
+                dataDirectory
+            );
 
             return Run([.. remaining]);
         }
