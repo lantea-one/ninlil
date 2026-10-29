@@ -219,6 +219,98 @@ public class DnsCacheStoreTests
     }
 
     [Fact]
+    public void Snapshot_AfterSeveralHits_ReportsTheLatestLookupTime()
+    {
+        var store = CreateStore();
+        DnsName name = DnsName.Parse("busy.example");
+        store.Set((name, 1), ExpiringIn(600));
+
+        store.TryGetFresh((name, 1), out _);
+        _clock.Advance(TimeSpan.FromSeconds(90));
+        store.TryGetFresh((name, 1), out _);
+
+        Assert.Equal(_clock.GetUtcNow(), Assert.Single(store.Snapshot()).LastAccessedUtc);
+    }
+
+    [Fact]
+    public void Snapshot_AfterAStaleLookup_ReportsTheLookupTime()
+    {
+        var store = CreateStore();
+        DnsName name = DnsName.Parse("stale.example");
+        store.Set((name, 1), ExpiringIn(10));
+        _clock.Advance(TimeSpan.FromSeconds(30));
+
+        Assert.True(store.TryGetStale((name, 1), TimeSpan.FromMinutes(1), out _));
+
+        Assert.Equal(_clock.GetUtcNow(), Assert.Single(store.Snapshot()).LastAccessedUtc);
+    }
+
+    [Fact]
+    public void Set_OverAnEntryThatWasLookedUp_KeepsItsLastLookupTime()
+    {
+        var store = CreateStore();
+        DnsName name = DnsName.Parse("refreshed.example");
+        store.Set((name, 1), ExpiringIn(60));
+        store.TryGetFresh((name, 1), out _);
+        DateTimeOffset lookedUp = _clock.GetUtcNow();
+
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        store.Set((name, 1), ExpiringIn(60));
+
+        Assert.Equal(lookedUp, Assert.Single(store.Snapshot()).LastAccessedUtc);
+    }
+
+    [Fact]
+    public void Snapshot_AfterRemoveName_HasNoEntryAndNoLookupTimeForTheRemovedKey()
+    {
+        var store = CreateStore();
+        DnsName gone = DnsName.Parse("gone.example");
+        DnsName kept = DnsName.Parse("kept.example");
+        store.Set((gone, 1), ExpiringIn(60));
+        store.Set((kept, 1), ExpiringIn(60));
+        store.TryGetFresh((gone, 1), out _);
+        store.TryGetFresh((kept, 1), out _);
+
+        store.RemoveName(gone);
+
+        Assert.Equal(kept, Assert.Single(store.Snapshot()).Key.Name);
+
+        // A key stored again after its removal starts with no lookup time.
+        store.Set((gone, 1), ExpiringIn(60));
+        Assert.Null(store.Snapshot().Single(item => item.Key.Name == gone).LastAccessedUtc);
+    }
+
+    [Fact]
+    public void Flush_ClearsTheEntriesAndTheirLookupTimes()
+    {
+        var store = CreateStore();
+        DnsName name = DnsName.Parse("flushed.example");
+        store.Set((name, 1), ExpiringIn(60));
+        store.TryGetFresh((name, 1), out _);
+
+        Assert.Equal(1, store.Flush());
+
+        Assert.Empty(store.Snapshot());
+
+        // Stored again after the flush, the key has no lookup time left over.
+        store.Set((name, 1), ExpiringIn(60));
+        Assert.Null(Assert.Single(store.Snapshot()).LastAccessedUtc);
+    }
+
+    [Fact]
+    public void TryGetFresh_FromManyThreads_CountsEveryHitAndKeepsALookupTime()
+    {
+        var store = CreateStore();
+        DnsName name = DnsName.Parse("contended.example");
+        store.Set((name, 1), ExpiringIn(600));
+
+        Parallel.For(0, 4_000, iteration => store.TryGetFresh((name, 1), out _));
+
+        Assert.Equal(4_000, store.GetStatistics().Hits);
+        Assert.Equal(_clock.GetUtcNow(), Assert.Single(store.Snapshot()).LastAccessedUtc);
+    }
+
+    [Fact]
     public void DnsCacheEvictionService_SweepsEveryRegisteredCache()
     {
         FakeCache first = new("first", evicts: 2);
