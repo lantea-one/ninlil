@@ -115,10 +115,21 @@ public class ForgotPasswordTests(NinlilDnsWebApplicationFactory factory)
     public async Task ForgotPassword_WithAMalformedOrEmptyEmail_StillReturnsTheGenericOkResponse()
     {
         HttpResponseMessage response = await CreateClient()
-            // Only the empty address is tried, not a malformed one.
             .PostAsJsonAsync("/api/auth/forgot-password", new ForgotPasswordRequest(""));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        HttpResponseMessage malformedResponse = await CreateClient()
+            .PostAsJsonAsync(
+                "/api/auth/forgot-password",
+                new ForgotPasswordRequest("not-an-email-address")
+            );
+
+        Assert.Equal(HttpStatusCode.OK, malformedResponse.StatusCode);
+        Assert.Equal(
+            await response.Content.ReadAsStringAsync(),
+            await malformedResponse.Content.ReadAsStringAsync()
+        );
     }
 
     [Fact]
