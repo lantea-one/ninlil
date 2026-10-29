@@ -30,12 +30,27 @@ public sealed class OidcUnreadableSecretTests
 
     /// <summary>
     ///     This sink records every log entry so a test can assert on level and on what is absent.
+    ///     The host keeps logging after a response reaches the test (request-finished diagnostics),
+    ///     so <see cref="Entries" /> returns a copy taken under the writers' lock; enumerating the
+    ///     live list would throw "Collection was modified" when a write lands mid-enumeration.
     /// </summary>
     private sealed class CapturingLoggerProvider : ILoggerProvider
     {
-        public List<(LogLevel Level, string Text)> Entries { get; } = [];
+        private readonly List<(LogLevel Level, string Text)> _entries = [];
 
-        public ILogger CreateLogger(string categoryName) => new Capture(Entries);
+        /// <summary>
+        ///     This property returns a snapshot of the entries logged so far.
+        /// </summary>
+        public (LogLevel Level, string Text)[] Entries
+        {
+            get
+            {
+                lock (_entries)
+                    return [.. _entries];
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => new Capture(_entries);
 
         public void Dispose() { }
 
@@ -110,7 +125,7 @@ public sealed class OidcUnreadableSecretTests
         await using (app)
         using (client)
         {
-            // Twice: the failure used to repeat on every request, not only the first.
+            // Twice: the options callback runs on every request, so a failure must not repeat.
             for (int attempt = 0; attempt < 2; attempt++)
             {
                 using HttpResponseMessage response = await client.GetAsync("/status");
