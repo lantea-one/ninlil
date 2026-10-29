@@ -121,7 +121,7 @@ public class ZoneTransferServiceIxfrChainTests
                 );
         }
 
-        await host.Services.GetRequiredService<AuthoritativeZoneCache>().ReloadZoneAsync(zoneId);
+        await WaitForCachedSerialAsync(host, 101);
 
         List<DnsResourceRecord> records = await RunIxfrAsync(host, 100);
 
@@ -202,7 +202,7 @@ public class ZoneTransferServiceIxfrChainTests
 
     /// <summary>
     ///     This method applies one incoming-IXFR-style step through <see cref="IZoneUpdateService" />
-    ///     and reloads the zone cache, which the event dispatcher would do after a real change.
+    ///     and waits until the zone cache serves the step's serial.
     /// </summary>
     private static async Task ApplyAsync(
         TsigTransferHost host,
@@ -233,7 +233,43 @@ public class ZoneTransferServiceIxfrChainTests
                 );
         }
 
-        await host.Services.GetRequiredService<AuthoritativeZoneCache>().ReloadZoneAsync(zoneId);
+        await WaitForCachedSerialAsync(host, replacement.Serial);
+    }
+
+    /// <summary>
+    ///     This method waits until the zone cache holds an SOA with <paramref name="serial" />,
+    ///     polling for at most 30 seconds. The cache reloads on the zone-changed event that the
+    ///     update publishes, on the dispatcher's thread. The test must wait for that reload instead
+    ///     of reloading itself: a reload the dispatcher started earlier reads the zone before the
+    ///     transfer key is bound (<see cref="TsigTransferHost.AddKeyAsync" />) and can store that
+    ///     older copy after the key's own reload, which makes the transfer answer Refused.
+    /// </summary>
+    private static async Task WaitForCachedSerialAsync(TsigTransferHost host, uint serial)
+    {
+        AuthoritativeZoneCache cache = host.Services.GetRequiredService<AuthoritativeZoneCache>();
+        DnsName apex = DnsName.Parse(TsigTransferHost.ZoneName);
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
+
+        while (true)
+        {
+            RecordEntity soa = cache
+                .FindZone(apex)
+                ?.GetRecords(apex, DnsResourceRecordTypeEnum.Soa)
+                .SingleOrDefault();
+
+            if (
+                soa is not null
+                && RecordEntityCodec.DecodeTypedData(soa) is SoaRecordData data
+                && data.Serial == serial
+            )
+                return;
+
+            Assert.False(
+                timeout.IsCancellationRequested,
+                $"The cache never reached serial {serial}."
+            );
+            await Task.Delay(10);
+        }
     }
 
     /// <summary>
