@@ -34,7 +34,11 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 ///     Route 53 writes every octet outside <c>a-z 0-9 - _</c> in a name as a backslash and three
 ///     octal digits (<c>*</c> is <c>\052</c>). Names are decoded to presentation form on the way in
 ///     (<see cref="DecodeRoute53Name" />) and encoded the same way on the way out
-///     (<see cref="EncodeRoute53Name" />).
+///     (<see cref="EncodeRoute53Name" />). The same octal escapes appear inside values: the
+///     Route 53 Developer Guide pages "DNS domain name format" and "Supported DNS record types"
+///     describe only octal escapes, never RFC 1035 §5.1 decimal ones. Names inside CNAME, NS, MX and
+///     SRV values use the name rules above, and TXT and CAA values use <see cref="DecodeRoute53Text" />
+///     and <see cref="EncodeRoute53Text" />.
 ///     </para>
 ///     <para>
 ///     Alias record sets (<c>AliasTarget</c>) and routing-policy record sets (<c>SetIdentifier</c>:
@@ -443,6 +447,110 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
     }
 
     /// <summary>
+    ///     This method writes a name that sits inside a record value in Route 53's form, with the
+    ///     trailing dot Route 53 expects (see <see cref="EncodeRoute53Name" />).
+    /// </summary>
+    private static string EncodeValueName(string name) =>
+        EncodeRoute53Name(DnsName.Parse(EnsureTrailingDot(name)));
+
+    /// <summary>
+    ///     This method reads the text between the quotes of a TXT or CAA value into octets.
+    ///     <c>\ddd</c> with three octal digits is that octet (the Developer Guide's TXT format, for
+    ///     example <c>\344</c>), <c>\"</c> and <c>\\</c> are the quote and the backslash, and every other
+    ///     character is its UTF-8 octets.
+    /// </summary>
+    private static byte[] DecodeRoute53Text(string text)
+    {
+        List<byte> octets = [];
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (
+                text[i] == '\\'
+                && i + 3 < text.Length
+                && IsOctalDigit(text[i + 1])
+                && IsOctalDigit(text[i + 2])
+                && IsOctalDigit(text[i + 3])
+                && Convert.ToInt32(text.Substring(i + 1, 3), 8) is int octet
+                && octet <= 255
+            )
+            {
+                octets.Add((byte)octet);
+                i += 3;
+            }
+            else if (text[i] == '\\' && i + 1 < text.Length && text[i + 1] is '"' or '\\')
+            {
+                octets.Add((byte)text[i + 1]);
+                i++;
+            }
+            else
+            {
+                octets.AddRange(Encoding.UTF8.GetBytes(text[i].ToString()));
+            }
+        }
+
+        return [.. octets];
+    }
+
+    /// <summary>
+    ///     This method writes octets as the inside of a quoted TXT or CAA value: a quote or backslash
+    ///     is escaped with a backslash, and a control octet or an octet from 0x7F up is a backslash and
+    ///     three octal digits. A space stays as it is because it sits inside the quotes.
+    /// </summary>
+    private static string EncodeRoute53Text(ReadOnlySpan<byte> octets)
+    {
+        StringBuilder builder = new();
+
+        foreach (byte octet in octets)
+        {
+            if (octet is (byte)'"' or (byte)'\\')
+                builder.Append('\\').Append((char)octet);
+            else if (octet < 0x20 || octet >= 0x7F)
+                builder.Append('\\').Append(Convert.ToString(octet, 8).PadLeft(3, '0'));
+            else
+                builder.Append((char)octet);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    ///     This method joins the character-strings of TXT RDATA into one octet sequence (RFC 1035
+    ///     §3.3.14), the form Route 53 stores as one quoted value.
+    /// </summary>
+    private static byte[] ReadTxtOctets(byte[] rdata)
+    {
+        List<byte> octets = [];
+
+        for (int offset = 0; offset < rdata.Length; )
+        {
+            int length = Math.Min(rdata[offset], rdata.Length - offset - 1);
+            octets.AddRange(rdata.AsSpan(offset + 1, length).ToArray());
+            offset += 1 + length;
+        }
+
+        return [.. octets];
+    }
+
+    /// <summary>
+    ///     This method splits octets into TXT character-strings of at most 255 octets each (RFC 1035
+    ///     §3.3.14), one empty string for no octets.
+    /// </summary>
+    private static byte[] BuildTxtRdata(byte[] octets)
+    {
+        List<byte> rdata = [];
+
+        for (int offset = 0; offset == 0 || offset < octets.Length; offset += 255)
+        {
+            int length = Math.Min(255, octets.Length - offset);
+            rdata.Add((byte)length);
+            rdata.AddRange(octets.AsSpan(offset, length).ToArray());
+        }
+
+        return [.. rdata];
+    }
+
+    /// <summary>
     ///     This method tells whether a character is an octal digit.
     /// </summary>
     private static bool IsOctalDigit(char c) => c is >= '0' and <= '7';
@@ -493,16 +601,19 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
         if (record.Type == DnsResourceRecordTypeEnum.Caa)
             return BuildCaaValue(record);
 
+        // A TXT value is built from the raw character-string octets, because the string the mapper
+        // returns cannot hold an octet that is not valid UTF-8.
+        if (record.Type == DnsResourceRecordTypeEnum.Txt)
+            return $"\"{EncodeRoute53Text(ReadTxtOctets(record.Data))}\"";
+
         (string content, ushort mxPreference) = CloudDnsRecordMapper.FromWireRecord(record);
 
         return record.Type switch
         {
-            DnsResourceRecordTypeEnum.MX => $"{mxPreference} {EnsureTrailingDot(content)}",
-            DnsResourceRecordTypeEnum.Cname or DnsResourceRecordTypeEnum.NS => EnsureTrailingDot(
+            DnsResourceRecordTypeEnum.MX => $"{mxPreference} {EncodeValueName(content)}",
+            DnsResourceRecordTypeEnum.Cname or DnsResourceRecordTypeEnum.NS => EncodeValueName(
                 content
             ),
-            // Route 53 stores a TXT value as an RFC 1035 character-string in double quotes.
-            DnsResourceRecordTypeEnum.Txt => $"\"{content}\"",
             _ => content,
         };
     }
@@ -516,7 +627,7 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
         (ushort priority, ushort weight, ushort port, string target) =
             CloudDnsRecordMapper.FromSrvWireRecord(record);
 
-        return $"{priority} {weight} {port} {EnsureTrailingDot(target)}";
+        return $"{priority} {weight} {port} {EncodeValueName(target)}";
     }
 
     /// <summary>
@@ -529,12 +640,12 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
             record
         );
 
-        return $"{(isCritical ? 128 : 0)} {tag} \"{value}\"";
+        return $"{(isCritical ? 128 : 0)} {tag} \"{EncodeRoute53Text(Encoding.UTF8.GetBytes(value))}\"";
     }
 
     /// <summary>
-    ///     This method reverses <see cref="ToRoute53Value" /> for the six single-value types; SRV and
-    ///     CAA are parsed in <see cref="ParseRoute53Record" />.
+    ///     This method reverses <see cref="ToRoute53Value" /> for the single-value types except TXT;
+    ///     SRV, CAA and TXT are parsed in <see cref="ParseRoute53Record" />.
     /// </summary>
     private static (string Content, ushort MxPreference) FromRoute53Value(
         DnsResourceRecordTypeEnum type,
@@ -546,16 +657,14 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
             case DnsResourceRecordTypeEnum.MX:
                 string[] parts = value.Split(' ', 2);
                 return (
-                    parts.Length > 1 ? parts[1] : value,
+                    DecodeRoute53Name(parts.Length > 1 ? parts[1] : value),
                     parts.Length > 1 && ushort.TryParse(parts[0], out ushort preference)
                         ? preference
                         : (ushort)0
                 );
-            case DnsResourceRecordTypeEnum.Txt:
-                return (
-                    value.Length >= 2 && value[0] == '"' && value[^1] == '"' ? value[1..^1] : value,
-                    (ushort)0
-                );
+            case DnsResourceRecordTypeEnum.Cname:
+            case DnsResourceRecordTypeEnum.NS:
+                return (DecodeRoute53Name(value), (ushort)0);
             default:
                 return (value, (ushort)0);
         }
@@ -586,7 +695,7 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
                 ushort.Parse(parts[0]),
                 ushort.Parse(parts[1]),
                 ushort.Parse(parts[2]),
-                parts[3],
+                DecodeRoute53Name(parts[3]),
                 ttl
             );
         }
@@ -606,8 +715,24 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
                 name,
                 (byte.Parse(parts[0]) & 0x80) != 0,
                 parts[1],
-                value,
+                Encoding.UTF8.GetString(DecodeRoute53Text(value)),
                 ttl
+            );
+        }
+
+        if (type == DnsResourceRecordTypeEnum.Txt)
+        {
+            string quoted =
+                rawValue.Length >= 2 && rawValue[0] == '"' && rawValue[^1] == '"'
+                    ? rawValue[1..^1]
+                    : rawValue;
+
+            return new DnsResourceRecord(
+                DnsName.Parse(name),
+                type,
+                DnsClassEnum.Internet,
+                ttl,
+                BuildTxtRdata(DecodeRoute53Text(quoted))
             );
         }
 
