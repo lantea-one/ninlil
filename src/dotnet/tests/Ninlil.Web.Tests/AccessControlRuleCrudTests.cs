@@ -145,14 +145,13 @@ public class AccessControlRuleCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task Create_WithACombinedOrNumericCapabilityString_ReturnsBadRequest()
+    public async Task Create_WithACombinedCapabilityString_ReturnsBadRequest()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
         // "RecursionAccess, RateLimitBypass" as one element parses as the combined flags value
         // with Enum.TryParse, but Enum.IsDefined rejects it because no member has that value.
-        // The controller must accept one name per array element. Despite the test name, only
-        // the combined form is sent; a numeric string is not tried.
+        // The controller must accept one name per array element.
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/access-control-rules",
             new
