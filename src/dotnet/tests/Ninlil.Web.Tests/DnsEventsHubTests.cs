@@ -92,8 +92,12 @@ public class DnsEventsHubTests(NinlilDnsWebApplicationFactory factory)
             )
             .Build();
 
-        // Any exception passes, so this does not check that the failure is a 401.
-        await Assert.ThrowsAnyAsync<Exception>(() => connection.StartAsync());
+        // The negotiate request is refused, and the client reports the refusal as an
+        // HttpRequestException that carries the status code.
+        HttpRequestException failure = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            connection.StartAsync()
+        );
+        Assert.Equal(HttpStatusCode.Unauthorized, failure.StatusCode);
     }
 
     [Fact]
