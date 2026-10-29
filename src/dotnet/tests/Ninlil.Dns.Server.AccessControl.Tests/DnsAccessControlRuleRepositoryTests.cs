@@ -37,8 +37,7 @@ public sealed class DnsAccessControlRuleRepositoryTests : IDisposable
     {
         _context.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     [Fact]
