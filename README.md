@@ -1531,7 +1531,6 @@ docker-compose.yml      Example deployment: Ninlil + PostgreSQL, with a host-net
 src/archlinux/          The ninlil, ninlil-git-stable, and ninlil-git-next Arch Linux packages
 src/linux-packages/     The Deb and RPM package definition (nFPM) and its install scripts
 src/script/             Operational scripts: database helpers and a systemd unit
-src/terraform/          Reusable Terraform modules for packaging and publishing
 ```
 
 The reasoning behind a specific design choice lives with the code: every class and public member

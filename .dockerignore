@@ -22,10 +22,9 @@ packages/
 .claude/
 .config/
 
-# Packaging and operations files the image does not use: Arch packages, Terraform modules and the
-# installer and database scripts.
+# Packaging and operations files the image does not use: Arch packages and the installer and
+# database scripts.
 src/archlinux/
-src/terraform/
 src/script/
 
 # Angular dependencies and build output. node_modules/ alone is several hundred MB and would
