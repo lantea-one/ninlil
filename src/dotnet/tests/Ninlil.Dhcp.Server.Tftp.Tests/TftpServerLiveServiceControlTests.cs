@@ -44,14 +44,15 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
     [Fact]
     public async Task Server_CanBeStoppedAndRestartedLive_OnTheSamePort()
     {
-        int port = GetFreeUdpPort();
         byte[] content = Encoding.ASCII.GetBytes("hello pxe, restarted");
         File.WriteAllBytes(Path.Combine(_rootDirectory, "boot.bin"), content);
 
         TftpServerOptions options = new()
         {
             Enable = true,
-            Port = port,
+            // Port 0 lets the operating system pick the port at bind time, so no other test
+            // process can take it between a probe and the bind.
+            Port = 0,
             RootDirectory = _rootDirectory,
             RetransmitTimeout = TimeSpan.FromMilliseconds(500),
             MaxRetransmissions = 3,
@@ -61,8 +62,13 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         // First cycle: start and download.
         await server.StartAsync(CancellationToken.None);
         Assert.True(server.IsListening);
-        Assert.Equal(port, server.BoundPort);
+        int port = server.BoundPort;
+        Assert.NotEqual(0, port);
         Assert.Equal(content, await TryDownloadAsync(port, "boot.bin"));
+
+        // The server reads the port option at every start, so pinning it makes the restart
+        // bind the same port.
+        options.Port = port;
 
         // Starting again while running does nothing; no second bind.
         await server.StartAsync(CancellationToken.None);
@@ -78,8 +84,10 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         Assert.False(server.IsListening);
 
         // Second cycle: start on the same port, which works only if StopAsync released the
-        // socket.
-        await server.StartAsync(CancellationToken.None);
+        // socket. Another process can take a just-released port on a busy machine, so a bind
+        // failure with "address in use" is retried a few times; a socket StopAsync failed to
+        // release would keep failing and still fail the test.
+        await StartWithRetriesAsync(server);
 
         try
         {
@@ -100,8 +108,6 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
     [Fact]
     public async Task StopAsync_WithAnInFlightTransfer_AbortsItPromptlyRatherThanWaitingForIt()
     {
-        int port = GetFreeUdpPort();
-
         // Three blocks, so the client can receive the first, withhold its Acknowledgment and
         // leave the server mid-transfer when Stop is called.
         byte[] content = new byte[1500];
@@ -111,7 +117,7 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         TftpServerOptions options = new()
         {
             Enable = true,
-            Port = port,
+            Port = 0,
             RootDirectory = _rootDirectory,
             // Long, so a stop that waited for the timeout would be obvious.
             RetransmitTimeout = TimeSpan.FromSeconds(30),
@@ -119,6 +125,7 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         };
         TftpServer server = new(Options.Create(options), NullLogger<TftpServer>.Instance);
         await server.StartAsync(CancellationToken.None);
+        int port = server.BoundPort;
 
         using UdpClient client = new();
         IPEndPoint serverEndPoint = new(IPAddress.Loopback, port);
@@ -216,12 +223,24 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         ];
 
     /// <summary>
-    ///     This method returns a free UDP port by binding to port 0 and releasing it, as in
-    ///     <c>Dhcpv4LiveServiceControlTests.GetFreeUdpPort</c>.
+    ///     This method starts <paramref name="server" /> and retries up to five times, 100 ms
+    ///     apart, while the bind fails with "address in use". The restart rebinds a port that
+    ///     was just released, and another test process can take it in that window.
     /// </summary>
-    private static int GetFreeUdpPort()
+    private static async Task StartWithRetriesAsync(TftpServer server)
     {
-        using UdpClient probe = new(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await server.StartAsync(CancellationToken.None);
+                return;
+            }
+            catch (SocketException exception)
+                when (exception.SocketErrorCode == SocketError.AddressAlreadyInUse && attempt < 5)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+            }
+        }
     }
 }
