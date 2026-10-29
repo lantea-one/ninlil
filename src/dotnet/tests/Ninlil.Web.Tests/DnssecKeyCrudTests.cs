@@ -4,6 +4,9 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Web.Models;
 
 // Define our namespace.
@@ -175,12 +178,13 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpResponseMessage deleteZoneResponse = await client.DeleteAsync($"/api/zones/{zone.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteZoneResponse.StatusCode);
 
-        // Get answers 404 for a missing zone as well as a missing key, so this status alone does
-        // not show that the key row was removed.
-        HttpResponseMessage afterDeleteResponse = await client.GetAsync(
-            $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
-        );
-        Assert.Equal(HttpStatusCode.NotFound, afterDeleteResponse.StatusCode);
+        // The GET endpoint answers 404 for a missing zone as well as a missing key, so its status
+        // cannot show that the key row is gone. The repository can.
+        using IServiceScope scope = factory.Services.CreateScope();
+        DnssecKeyEntity remaining = await scope
+            .ServiceProvider.GetRequiredService<IDnssecKeyRepository>()
+            .GetByIdAsync(created.Id);
+        Assert.Null(remaining);
     }
 
     [Fact]
