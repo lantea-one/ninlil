@@ -130,6 +130,19 @@ public sealed class DnsCryptUdpListener(
     /// <summary>
     ///     This method receives packets on one socket until shutdown. Each listen address gets its
     ///     own loop, and every response leaves through the socket its query arrived on.
+    ///     <para>
+    ///         The loop receives into the buffer and the sender's <see cref="SocketAddress" /> it
+    ///         owns, which the next receive overwrites. The packet is handed to
+    ///         <see cref="DnsCryptQueryHandler.HandlePacketAsync" /> as a view of that buffer: the
+    ///         handler finishes with it before it returns, and the query it enqueues is a freshly
+    ///         decrypted array, so the pipeline never sees receive-buffer memory. The reply
+    ///         endpoint is built before the next receive, because the reply is sent after that
+    ///         receive has started and overwritten the sender address. Replies go out through the
+    ///         <see cref="IPEndPoint" /> overload of
+    ///         <see cref="Socket.SendToAsync(ReadOnlyMemory{byte},EndPoint,CancellationToken)" />,
+    ///         as in <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>, which explains why not the
+    ///         <see cref="SocketAddress" /> overload.
+    ///     </para>
     /// </summary>
     private async Task ReceiveLoopAsync(
         Socket socket,
@@ -138,7 +151,11 @@ public sealed class DnsCryptUdpListener(
     )
     {
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
-        EndPoint anySender = new IPEndPoint(
+        SocketAddress senderAddress = new(socket.AddressFamily);
+
+        // The template that turns a SocketAddress into an IPEndPoint has to match the socket's
+        // family.
+        IPEndPoint addressTemplate = new(
             socket.AddressFamily == AddressFamily.InterNetworkV6
                 ? IPAddress.IPv6Any
                 : IPAddress.Any,
@@ -147,11 +164,19 @@ public sealed class DnsCryptUdpListener(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            SocketReceiveFromResult result;
+            int receivedBytes;
 
             try
             {
-                result = await socket.ReceiveFromAsync(receiveBuffer, anySender, stoppingToken);
+                // The socket writes the sender's address length back on completion, so it is
+                // reset before each receive.
+                senderAddress.Size = senderAddress.Buffer.Length;
+                receivedBytes = await socket.ReceiveFromAsync(
+                    receiveBuffer,
+                    SocketFlags.None,
+                    senderAddress,
+                    stoppingToken
+                );
             }
             catch (OperationCanceledException)
             {
@@ -170,11 +195,12 @@ public sealed class DnsCryptUdpListener(
                 continue;
             }
 
-            byte[] datagram = receiveBuffer[..result.ReceivedBytes];
-            IPEndPoint senderEndpoint = (IPEndPoint)result.RemoteEndPoint;
+            // A new endpoint per datagram: the reply is sent after the next receive has started
+            // and overwritten senderAddress.
+            IPEndPoint senderEndpoint = (IPEndPoint)addressTemplate.Create(senderAddress);
 
             await DnsCryptQueryHandler.HandlePacketAsync(
-                datagram,
+                receiveBuffer.AsMemory(0, receivedBytes),
                 senderEndpoint.Address,
                 DnsTransportProtocolEnum.DnsCrypt,
                 isDatagram: true,

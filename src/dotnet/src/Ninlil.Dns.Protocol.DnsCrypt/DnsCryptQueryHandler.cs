@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
@@ -49,6 +50,11 @@ internal static class DnsCryptQueryHandler
     ///         query is reported to <paramref name="onDropped" />, while a discovery answer still
     ///         goes to <paramref name="sendAsync" />. A datagram listener omits both and every
     ///         answer goes to <paramref name="sendAsync" />.
+    ///     </para>
+    ///     <para>
+    ///         <paramref name="packet" /> is read only during the call: the query handed to the
+    ///         pipeline is a freshly decrypted array and nothing else keeps a reference, so a
+    ///         datagram listener may pass a view of its receive buffer.
     ///     </para>
     /// </summary>
     /// <returns>
@@ -152,7 +158,7 @@ internal static class DnsCryptQueryHandler
                         certificateEntry,
                         clientPublicKey,
                         clientNonceHalf,
-                        responseBytes.ToArray()
+                        WholeArrayOf(responseBytes)
                     );
 
                     return queryResponder is not null
@@ -170,6 +176,19 @@ internal static class DnsCryptQueryHandler
 
         return true;
     }
+
+    /// <summary>
+    ///     This method returns the array behind an encoded response when the memory covers all of
+    ///     it, and a copy otherwise. <see cref="DnsCryptEnvelopeCodec.EncryptResponse" /> only
+    ///     reads its input (padding builds a new array), and the pipeline hands each response to
+    ///     the sender once and never touches it again, so the array needs no copy of its own.
+    /// </summary>
+    private static byte[] WholeArrayOf(ReadOnlyMemory<byte> responseBytes) =>
+        MemoryMarshal.TryGetArray(responseBytes, out ArraySegment<byte> segment)
+        && segment.Offset == 0
+        && segment.Count == segment.Array.Length
+            ? segment.Array
+            : responseBytes.ToArray();
 
     /// <summary>
     ///     This method returns the largest plaintext DNS response that

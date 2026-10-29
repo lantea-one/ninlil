@@ -45,7 +45,7 @@ public sealed class UdpDnsListener(
     ///     This field contains the bound sockets, one per listen address (or a single dual-stack
     ///     one when none are configured). <see cref="StopAsync" /> closes them, which unblocks each
     ///     receive loop's pending
-    ///     <see cref="Socket.ReceiveFromAsync(Memory{byte},SocketFlags,EndPoint,CancellationToken)" />
+    ///     <see cref="Socket.ReceiveFromAsync(Memory{byte},SocketFlags,SocketAddress,CancellationToken)" />
     ///     call.
     /// </summary>
     private ListenSocketSet _sockets = ListenSocketSet.Empty;
@@ -95,13 +95,32 @@ public sealed class UdpDnsListener(
     ///     This method receives datagrams on one socket until shutdown. Each socket gets its own
     ///     loop, and every response goes back out through the socket its query arrived on, so the
     ///     client sees the reply come from the address it asked.
+    ///     <para>
+    ///         The loop receives into a buffer and a sender <see cref="SocketAddress" /> that it
+    ///         owns and the next receive overwrites. Everything handed on is therefore built
+    ///         before the next receive: a new array with the datagram bytes (the pipeline keeps a
+    ///         reference to <see cref="DnsInboundMessage.RequestBytes" /> for the life of the
+    ///         query, so a slice of the receive buffer would be overwritten under it) and a new
+    ///         <see cref="IPEndPoint" /> for the reply. Each loop must keep its own buffer and
+    ///         address for the same reason.
+    ///     </para>
+    ///     <para>
+    ///         The reply goes out through the <see cref="IPEndPoint" /> overload of
+    ///         <see cref="Socket.SendToAsync(ReadOnlyMemory{byte},EndPoint,CancellationToken)" />.
+    ///         The <see cref="SocketAddress" /> overload throws an
+    ///         <see cref="ArgumentException" /> ("Null is not a valid value for
+    ///         e.RemoteEndPoint") now and then when many replies are sent at once, which would
+    ///         lose the reply.
+    ///     </para>
     /// </summary>
     private async Task ReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
     {
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
+        SocketAddress senderAddress = new(socket.AddressFamily);
 
-        // The "any sender" placeholder ReceiveFromAsync needs has to match the socket's family.
-        EndPoint anySender = new IPEndPoint(
+        // The template that turns a SocketAddress into an IPEndPoint has to match the socket's
+        // family.
+        IPEndPoint addressTemplate = new(
             socket.AddressFamily == AddressFamily.InterNetworkV6
                 ? IPAddress.IPv6Any
                 : IPAddress.Any,
@@ -110,11 +129,19 @@ public sealed class UdpDnsListener(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            SocketReceiveFromResult result;
+            int receivedBytes;
 
             try
             {
-                result = await socket.ReceiveFromAsync(receiveBuffer, anySender, stoppingToken);
+                // The sender's address length is reset before each receive, as the socket
+                // writes it back on completion.
+                senderAddress.Size = senderAddress.Buffer.Length;
+                receivedBytes = await socket.ReceiveFromAsync(
+                    receiveBuffer,
+                    SocketFlags.None,
+                    senderAddress,
+                    stoppingToken
+                );
             }
             catch (OperationCanceledException)
             {
@@ -140,8 +167,9 @@ public sealed class UdpDnsListener(
                 continue;
             }
 
-            byte[] datagram = receiveBuffer[..result.ReceivedBytes];
-            IPEndPoint senderEndpoint = (IPEndPoint)result.RemoteEndPoint;
+            // A fresh array and a fresh endpoint per datagram: see the summary above.
+            byte[] datagram = receiveBuffer.AsSpan(0, receivedBytes).ToArray();
+            IPEndPoint senderEndpoint = (IPEndPoint)addressTemplate.Create(senderAddress);
 
             await pipeline.EnqueueAsync(
                 new DnsInboundMessage(
