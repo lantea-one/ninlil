@@ -18,6 +18,11 @@
     <PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
   </ItemGroup>
 
+  <!-- The tests call the internal shutdown-handler helper directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.Events.RabbitMq.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />

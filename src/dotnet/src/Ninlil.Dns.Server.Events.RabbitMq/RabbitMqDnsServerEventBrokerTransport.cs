@@ -192,7 +192,7 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
     )
     {
         if (connection is not null)
-            connection.ConnectionShutdownAsync -= shutdownHandler;
+            RemoveShutdownHandler(connection, shutdownHandler);
 
         if (channel is not null)
         {
@@ -380,8 +380,34 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
             }
             finally
             {
-                connection.ConnectionShutdownAsync -= shutdownHandler;
+                RemoveShutdownHandler(connection, shutdownHandler);
             }
+        }
+    }
+
+    /// <summary>
+    ///     This method unsubscribes a shutdown handler from a connection. The connection loop
+    ///     (<see cref="MaintainConnectionAsync" />) disposes the connection it shares with the
+    ///     consumer as soon as the connection is lost, and RabbitMQ.Client throws
+    ///     <see cref="ObjectDisposedException" /> from the event's remove accessor on a disposed
+    ///     connection. The consumer's <c>finally</c> block can run after that disposal, and an
+    ///     exception there would escape the consumer loop and stop it for good. A disposed
+    ///     connection raises no more events, so there is nothing left to unsubscribe.
+    /// </summary>
+    /// <param name="connection">The connection the handler was added to.</param>
+    /// <param name="shutdownHandler">The handler to remove.</param>
+    internal static void RemoveShutdownHandler(
+        IConnection connection,
+        AsyncEventHandler<ShutdownEventArgs> shutdownHandler
+    )
+    {
+        try
+        {
+            connection.ConnectionShutdownAsync -= shutdownHandler;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed first by the connection loop; see the summary.
         }
     }
 

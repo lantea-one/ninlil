@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Core.Events.Broker;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.RabbitMq.Tests;
@@ -141,6 +142,27 @@ public sealed class RabbitMqConnectionLifecycleTests : IAsyncLifetime
 
         Assert.True((await ListConnectionsAsync()).Count <= 1);
         Assert.False(transport.IsConnected);
+    }
+
+    [Fact]
+    public async Task RemoveShutdownHandler_OnADisposedConnection_DoesNotThrow()
+    {
+        AsyncEventHandler<ShutdownEventArgs> handler = (_, _) => Task.CompletedTask;
+
+        // The transport turns automatic recovery off, so the test does too: the connection type
+        // is the one the consumer loop sees.
+        ConnectionFactory factory = NewFactory();
+        factory.AutomaticRecoveryEnabled = false;
+        IConnection connection = await factory.CreateConnectionAsync();
+        connection.ConnectionShutdownAsync += handler;
+        await connection.DisposeAsync();
+
+        // The client library throws from the event's remove accessor once the connection is
+        // disposed. The consumer loop's finally block can run after the connection loop disposed
+        // the shared connection, so the helper must absorb exactly this exception.
+        Assert.Throws<ObjectDisposedException>(() => connection.ConnectionShutdownAsync -= handler);
+
+        RabbitMqDnsServerEventBrokerTransport.RemoveShutdownHandler(connection, handler);
     }
 
     private ConnectionFactory NewFactory() =>
