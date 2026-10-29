@@ -3,7 +3,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Authoritative.CloudSync;
 using Ninlil.Web.Models;
 
 // Define our namespace.
@@ -52,6 +56,21 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
                 "application/json"
             ),
         };
+
+    /// <summary>
+    ///     Reads a stored credential set's ApiToken back through the repository and the protector.
+    ///     The REST API never returns secrets, so this is the only way to see what is stored.
+    /// </summary>
+    private async Task<string> ReadStoredApiTokenAsync(Guid id)
+    {
+        using IServiceScope scope = factory.Services.CreateScope();
+        CloudDnsProviderCredentialEntity stored = await scope
+            .ServiceProvider.GetRequiredService<ICloudDnsProviderCredentialRepository>()
+            .GetByIdAsync(id);
+        return scope
+            .ServiceProvider.GetRequiredService<CloudCredentialProtector>()
+            .Unprotect(stored.CredentialsEncrypted)["ApiToken"];
+    }
 
     [Fact]
     public async Task CloudProviderCredentialLifecycle_CreateRotateAndDelete_WorksEndToEnd()
@@ -133,13 +152,14 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
         Assert.Equal(renamedName, replaced.Name);
         Assert.True(replaced.IsDisabled);
         Assert.Equal("replaced via PUT", replaced.Comments);
+        // The rotation reached the store: the old token is gone and the new one is readable.
+        Assert.Equal(rotatedToken, await ReadStoredApiTokenAsync(created.Credential.Id));
 
         // The PUT response does not echo the new secret.
         string replaceBody = await replaceResponse.Content.ReadAsStringAsync();
         Assert.DoesNotContain(rotatedToken, replaceBody, StringComparison.Ordinal);
 
-        // A JSON Merge Patch without 'credentials' changes only metadata. (The stored secrets are
-        // not readable, so their survival is not checked.)
+        // A JSON Merge Patch without 'credentials' changes only metadata and keeps the secrets.
         HttpResponseMessage patchResponse = await client.SendAsync(
             PatchRequest(
                 $"/api/cloud-provider-credentials/{created.Credential.Id}",
@@ -157,6 +177,7 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
         // The field the patch never mentioned must survive untouched.
         Assert.Equal(renamedName, patched.Name);
         Assert.Equal("replaced via PUT", patched.Comments);
+        Assert.Equal(rotatedToken, await ReadStoredApiTokenAsync(created.Credential.Id));
 
         // Deleting works and is reflected immediately.
         HttpResponseMessage deleteResponse = await client.DeleteAsync(
