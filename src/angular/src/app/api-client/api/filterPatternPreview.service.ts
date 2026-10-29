@@ -49,10 +49,10 @@ export class FilterPatternPreviewService extends BaseService implements FilterPa
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterPatternPreviewResult>;
-    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterPatternPreviewResult>>;
-    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterPatternPreviewResult>>;
-    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterPatternPreviewResult>;
+    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterPatternPreviewResult>>;
+    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterPatternPreviewResult>>;
+    public apiFilterPatternPreviewPost(requestParameters?: ApiFilterPatternPreviewPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const filterPatternPreviewRequest = requestParameters?.filterPatternPreviewRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -61,9 +61,7 @@ export class FilterPatternPreviewService extends BaseService implements FilterPa
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -76,9 +74,7 @@ export class FilterPatternPreviewService extends BaseService implements FilterPa
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

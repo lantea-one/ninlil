@@ -47,10 +47,10 @@ export class ClientActivityService extends BaseService implements ClientActivity
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsQueryLogEntryDetailPagedResult>;
-    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsQueryLogEntryDetailPagedResult>>;
-    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsQueryLogEntryDetailPagedResult>>;
-    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsQueryLogEntryDetailPagedResult>;
+    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsQueryLogEntryDetailPagedResult>>;
+    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsQueryLogEntryDetailPagedResult>>;
+    public apiClientsClientIdActivityGet(requestParameters: ApiClientsClientIdActivityGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdActivityGet.');
@@ -62,7 +62,7 @@ export class ClientActivityService extends BaseService implements ClientActivity
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -71,7 +71,7 @@ export class ClientActivityService extends BaseService implements ClientActivity
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -84,9 +84,7 @@ export class ClientActivityService extends BaseService implements ClientActivity
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

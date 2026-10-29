@@ -50,10 +50,10 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsCacheRemovalResult>;
-    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsCacheRemovalResult>>;
-    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsCacheRemovalResult>>;
-    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsCacheRemovalResult>;
+    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsCacheRemovalResult>>;
+    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsCacheRemovalResult>>;
+    public apiDnsCacheDelete(requestParameters?: ApiDnsCacheDeleteRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const cache = requestParameters?.cache;
 
         let localVarQueryParameters = new OpenApiHttpParams(this.encoder);
@@ -73,9 +73,7 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -121,10 +119,10 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsCacheRemovalResult>;
-    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsCacheRemovalResult>>;
-    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsCacheRemovalResult>>;
-    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsCacheRemovalResult>;
+    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsCacheRemovalResult>>;
+    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsCacheRemovalResult>>;
+    public apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const name = requestParameters?.name;
         if (name === null || name === undefined) {
             throw new Error('Required parameter name was null or undefined when calling apiDnsCacheEntriesNameDelete.');
@@ -148,9 +146,7 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -195,10 +191,10 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDnsCacheGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<DnsCacheDetail>>;
-    public apiDnsCacheGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<DnsCacheDetail>>>;
-    public apiDnsCacheGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<DnsCacheDetail>>>;
-    public apiDnsCacheGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDnsCacheGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<DnsCacheDetail>>;
+    public apiDnsCacheGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<DnsCacheDetail>>>;
+    public apiDnsCacheGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<DnsCacheDetail>>>;
+    public apiDnsCacheGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -206,9 +202,7 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

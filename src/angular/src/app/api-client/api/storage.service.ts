@@ -50,10 +50,10 @@ export class StorageService extends BaseService implements StorageServiceInterfa
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiStorageGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<StorageStatus>;
-    public apiStorageGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<StorageStatus>>;
-    public apiStorageGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<StorageStatus>>;
-    public apiStorageGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiStorageGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<StorageStatus>;
+    public apiStorageGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<StorageStatus>>;
+    public apiStorageGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<StorageStatus>>;
+    public apiStorageGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -61,9 +61,7 @@ export class StorageService extends BaseService implements StorageServiceInterfa
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -162,10 +160,10 @@ export class StorageService extends BaseService implements StorageServiceInterfa
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<StorageSwitchScheduled>;
-    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<StorageSwitchScheduled>>;
-    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<StorageSwitchScheduled>>;
-    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<StorageSwitchScheduled>;
+    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<StorageSwitchScheduled>>;
+    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<StorageSwitchScheduled>>;
+    public apiStorageSwitchPost(requestParameters?: ApiStorageSwitchPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const storageEngineSwitchApiRequest = requestParameters?.storageEngineSwitchApiRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -174,9 +172,7 @@ export class StorageService extends BaseService implements StorageServiceInterfa
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -189,9 +185,7 @@ export class StorageService extends BaseService implements StorageServiceInterfa
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

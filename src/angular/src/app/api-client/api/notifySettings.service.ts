@@ -48,10 +48,10 @@ export class NotifySettingsService extends BaseService implements NotifySettings
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiNotifySettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<NotifySettingsDetail>;
-    public apiNotifySettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<NotifySettingsDetail>>;
-    public apiNotifySettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<NotifySettingsDetail>>;
-    public apiNotifySettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiNotifySettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<NotifySettingsDetail>;
+    public apiNotifySettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<NotifySettingsDetail>>;
+    public apiNotifySettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<NotifySettingsDetail>>;
+    public apiNotifySettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -59,9 +59,7 @@ export class NotifySettingsService extends BaseService implements NotifySettings
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -106,10 +104,10 @@ export class NotifySettingsService extends BaseService implements NotifySettings
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
-    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
-    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
-    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
+    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
+    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
+    public apiNotifySettingsPatch(requestParameters?: ApiNotifySettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
@@ -118,9 +116,7 @@ export class NotifySettingsService extends BaseService implements NotifySettings
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -133,9 +129,7 @@ export class NotifySettingsService extends BaseService implements NotifySettings
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

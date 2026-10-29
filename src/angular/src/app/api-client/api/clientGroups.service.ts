@@ -60,10 +60,10 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetailPagedResult>;
-    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetailPagedResult>>;
-    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetailPagedResult>>;
-    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetailPagedResult>;
+    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetailPagedResult>>;
+    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetailPagedResult>>;
+    public apiClientGroupsGet(requestParameters?: ApiClientGroupsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const skip = requestParameters?.skip;
         const take = requestParameters?.take;
 
@@ -71,7 +71,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -80,7 +80,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -93,9 +93,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -200,10 +198,10 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
-    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
-    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
-    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
+    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
+    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
+    public apiClientGroupsIdGet(requestParameters: ApiClientGroupsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiClientGroupsIdGet.');
@@ -215,9 +213,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -290,9 +286,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -334,10 +328,10 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
-    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
-    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
-    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
+    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
+    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
+    public apiClientGroupsIdPausePost(requestParameters: ApiClientGroupsIdPausePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiClientGroupsIdPausePost.');
@@ -350,9 +344,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -365,9 +357,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -437,9 +427,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -481,10 +469,10 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
-    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
-    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
-    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
+    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
+    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
+    public apiClientGroupsIdResumePost(requestParameters: ApiClientGroupsIdResumePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiClientGroupsIdResumePost.');
@@ -496,9 +484,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -543,10 +529,10 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
-    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
-    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
-    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupDetail>;
+    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupDetail>>;
+    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupDetail>>;
+    public apiClientGroupsPost(requestParameters?: ApiClientGroupsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientGroupWriteRequest = requestParameters?.clientGroupWriteRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -555,9 +541,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -570,9 +554,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

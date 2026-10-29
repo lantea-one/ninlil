@@ -51,10 +51,10 @@ export class AppearanceSettingsService extends BaseService implements Appearance
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAppearanceSettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<AppearanceSettingsDetail>;
-    public apiAppearanceSettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AppearanceSettingsDetail>>;
-    public apiAppearanceSettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AppearanceSettingsDetail>>;
-    public apiAppearanceSettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAppearanceSettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AppearanceSettingsDetail>;
+    public apiAppearanceSettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AppearanceSettingsDetail>>;
+    public apiAppearanceSettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AppearanceSettingsDetail>>;
+    public apiAppearanceSettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -62,9 +62,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -108,10 +106,10 @@ export class AppearanceSettingsService extends BaseService implements Appearance
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAppearanceSettingsMeGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<UserAppearancePreferenceDetail>;
-    public apiAppearanceSettingsMeGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<UserAppearancePreferenceDetail>>;
-    public apiAppearanceSettingsMeGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<UserAppearancePreferenceDetail>>;
-    public apiAppearanceSettingsMeGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAppearanceSettingsMeGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<UserAppearancePreferenceDetail>;
+    public apiAppearanceSettingsMeGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<UserAppearancePreferenceDetail>>;
+    public apiAppearanceSettingsMeGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<UserAppearancePreferenceDetail>>;
+    public apiAppearanceSettingsMeGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -119,9 +117,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -166,10 +162,10 @@ export class AppearanceSettingsService extends BaseService implements Appearance
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<UserAppearancePreferenceDetail>;
-    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<UserAppearancePreferenceDetail>>;
-    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<UserAppearancePreferenceDetail>>;
-    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<UserAppearancePreferenceDetail>;
+    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<UserAppearancePreferenceDetail>>;
+    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<UserAppearancePreferenceDetail>>;
+    public apiAppearanceSettingsMePatch(requestParameters?: ApiAppearanceSettingsMePatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
@@ -178,9 +174,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -193,9 +187,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -237,10 +229,10 @@ export class AppearanceSettingsService extends BaseService implements Appearance
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
-    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
-    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
-    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
+    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
+    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
+    public apiAppearanceSettingsPatch(requestParameters?: ApiAppearanceSettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
@@ -249,9 +241,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -264,9 +254,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

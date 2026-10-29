@@ -63,10 +63,10 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookSubscriptionDetailPagedResult>;
-    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookSubscriptionDetailPagedResult>>;
-    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookSubscriptionDetailPagedResult>>;
-    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookSubscriptionDetailPagedResult>;
+    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookSubscriptionDetailPagedResult>>;
+    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookSubscriptionDetailPagedResult>>;
+    public apiWebhooksGet(requestParameters?: ApiWebhooksGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const skip = requestParameters?.skip;
         const take = requestParameters?.take;
 
@@ -74,7 +74,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -83,7 +83,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -96,9 +96,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -203,10 +201,10 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookDeliveryAttemptDetailPagedResult>;
-    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookDeliveryAttemptDetailPagedResult>>;
-    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookDeliveryAttemptDetailPagedResult>>;
-    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookDeliveryAttemptDetailPagedResult>;
+    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookDeliveryAttemptDetailPagedResult>>;
+    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookDeliveryAttemptDetailPagedResult>>;
+    public apiWebhooksIdDeliveryAttemptsGet(requestParameters: ApiWebhooksIdDeliveryAttemptsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiWebhooksIdDeliveryAttemptsGet.');
@@ -218,7 +216,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -227,7 +225,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -240,9 +238,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -288,10 +284,10 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookSubscriptionDetail>;
-    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookSubscriptionDetail>>;
-    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookSubscriptionDetail>>;
-    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookSubscriptionDetail>;
+    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookSubscriptionDetail>>;
+    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookSubscriptionDetail>>;
+    public apiWebhooksIdGet(requestParameters: ApiWebhooksIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiWebhooksIdGet.');
@@ -303,9 +299,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -378,9 +372,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -450,9 +442,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -494,10 +484,10 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookSubscriptionCreateResponse>;
-    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookSubscriptionCreateResponse>>;
-    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookSubscriptionCreateResponse>>;
-    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<WebhookSubscriptionCreateResponse>;
+    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<WebhookSubscriptionCreateResponse>>;
+    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<WebhookSubscriptionCreateResponse>>;
+    public apiWebhooksPost(requestParameters?: ApiWebhooksPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const webhookSubscriptionCreateRequest = requestParameters?.webhookSubscriptionCreateRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -506,9 +496,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -521,9 +509,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

@@ -48,10 +48,10 @@ export class ServicesService extends BaseService implements ServicesServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiServicesGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<ManagedServiceSummary>>;
-    public apiServicesGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<ManagedServiceSummary>>>;
-    public apiServicesGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<ManagedServiceSummary>>>;
-    public apiServicesGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiServicesGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<ManagedServiceSummary>>;
+    public apiServicesGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<ManagedServiceSummary>>>;
+    public apiServicesGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<ManagedServiceSummary>>>;
+    public apiServicesGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -59,9 +59,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -106,10 +104,10 @@ export class ServicesService extends BaseService implements ServicesServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ManagedServiceSummary>;
-    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ManagedServiceSummary>>;
-    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ManagedServiceSummary>>;
-    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ManagedServiceSummary>;
+    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ManagedServiceSummary>>;
+    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ManagedServiceSummary>>;
+    public apiServicesNameRestartPost(requestParameters: ApiServicesNameRestartPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const name = requestParameters?.name;
         if (name === null || name === undefined) {
             throw new Error('Required parameter name was null or undefined when calling apiServicesNameRestartPost.');
@@ -121,9 +119,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -168,10 +164,10 @@ export class ServicesService extends BaseService implements ServicesServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ManagedServiceSummary>;
-    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ManagedServiceSummary>>;
-    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ManagedServiceSummary>>;
-    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ManagedServiceSummary>;
+    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ManagedServiceSummary>>;
+    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ManagedServiceSummary>>;
+    public apiServicesNameStartPost(requestParameters: ApiServicesNameStartPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const name = requestParameters?.name;
         if (name === null || name === undefined) {
             throw new Error('Required parameter name was null or undefined when calling apiServicesNameStartPost.');
@@ -183,9 +179,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -230,10 +224,10 @@ export class ServicesService extends BaseService implements ServicesServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ManagedServiceSummary>;
-    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ManagedServiceSummary>>;
-    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ManagedServiceSummary>>;
-    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ManagedServiceSummary>;
+    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ManagedServiceSummary>>;
+    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ManagedServiceSummary>>;
+    public apiServicesNameStopPost(requestParameters: ApiServicesNameStopPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const name = requestParameters?.name;
         if (name === null || name === undefined) {
             throw new Error('Required parameter name was null or undefined when calling apiServicesNameStopPost.');
@@ -245,9 +239,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

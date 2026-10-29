@@ -49,10 +49,10 @@ export class DhcpOptionCatalogService extends BaseService implements DhcpOptionC
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<DhcpOptionCatalogEntryDetail>>;
-    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<DhcpOptionCatalogEntryDetail>>>;
-    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<DhcpOptionCatalogEntryDetail>>>;
-    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<DhcpOptionCatalogEntryDetail>>;
+    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<DhcpOptionCatalogEntryDetail>>>;
+    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<DhcpOptionCatalogEntryDetail>>>;
+    public apiDhcpOptionCatalogGet(requestParameters?: ApiDhcpOptionCatalogGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const protocolVersion = requestParameters?.protocolVersion;
 
         let localVarQueryParameters = new OpenApiHttpParams(this.encoder);
@@ -72,9 +72,7 @@ export class DhcpOptionCatalogService extends BaseService implements DhcpOptionC
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

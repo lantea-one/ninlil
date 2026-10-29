@@ -54,10 +54,10 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientListAssignmentDetailPagedResult>;
-    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientListAssignmentDetailPagedResult>>;
-    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientListAssignmentDetailPagedResult>>;
-    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientListAssignmentDetailPagedResult>;
+    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientListAssignmentDetailPagedResult>>;
+    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientListAssignmentDetailPagedResult>>;
+    public apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdListAssignmentsGet.');
@@ -69,7 +69,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -78,7 +78,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -91,9 +91,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -202,10 +200,10 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientListAssignmentDetail>;
-    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientListAssignmentDetail>>;
-    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientListAssignmentDetail>>;
-    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientListAssignmentDetail>;
+    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientListAssignmentDetail>>;
+    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientListAssignmentDetail>>;
+    public apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdListAssignmentsIdGet.');
@@ -221,9 +219,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -268,10 +264,10 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientListAssignmentDetail>;
-    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientListAssignmentDetail>>;
-    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientListAssignmentDetail>>;
-    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientListAssignmentDetail>;
+    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientListAssignmentDetail>>;
+    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientListAssignmentDetail>>;
+    public apiClientsClientIdListAssignmentsPost(requestParameters: ApiClientsClientIdListAssignmentsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdListAssignmentsPost.');
@@ -284,9 +280,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -299,9 +293,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

@@ -56,10 +56,10 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RecordDetailPagedResult>;
-    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecordDetailPagedResult>>;
-    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecordDetailPagedResult>>;
-    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RecordDetailPagedResult>;
+    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecordDetailPagedResult>>;
+    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecordDetailPagedResult>>;
+    public apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const zoneId = requestParameters?.zoneId;
         if (zoneId === null || zoneId === undefined) {
             throw new Error('Required parameter zoneId was null or undefined when calling apiZonesZoneIdRecordsGet.');
@@ -71,7 +71,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -80,7 +80,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -93,9 +93,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -204,10 +202,10 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RecordDetail>;
-    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecordDetail>>;
-    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecordDetail>>;
-    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RecordDetail>;
+    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecordDetail>>;
+    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecordDetail>>;
+    public apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const zoneId = requestParameters?.zoneId;
         if (zoneId === null || zoneId === undefined) {
             throw new Error('Required parameter zoneId was null or undefined when calling apiZonesZoneIdRecordsIdGet.');
@@ -223,9 +221,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -302,9 +298,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -378,9 +372,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -422,10 +414,10 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RecordDetail>;
-    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecordDetail>>;
-    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecordDetail>>;
-    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RecordDetail>;
+    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecordDetail>>;
+    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecordDetail>>;
+    public apiZonesZoneIdRecordsPost(requestParameters: ApiZonesZoneIdRecordsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const zoneId = requestParameters?.zoneId;
         if (zoneId === null || zoneId === undefined) {
             throw new Error('Required parameter zoneId was null or undefined when calling apiZonesZoneIdRecordsPost.');
@@ -438,9 +430,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -453,9 +443,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

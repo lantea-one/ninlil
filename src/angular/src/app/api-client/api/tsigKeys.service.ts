@@ -60,10 +60,10 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<TsigKeyDetailPagedResult>;
-    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TsigKeyDetailPagedResult>>;
-    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TsigKeyDetailPagedResult>>;
-    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<TsigKeyDetailPagedResult>;
+    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TsigKeyDetailPagedResult>>;
+    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TsigKeyDetailPagedResult>>;
+    public apiTsigKeysGet(requestParameters?: ApiTsigKeysGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const skip = requestParameters?.skip;
         const take = requestParameters?.take;
 
@@ -71,7 +71,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -80,7 +80,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -93,9 +93,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -200,10 +198,10 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<TsigKeyDetail>;
-    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TsigKeyDetail>>;
-    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TsigKeyDetail>>;
-    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<TsigKeyDetail>;
+    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TsigKeyDetail>>;
+    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TsigKeyDetail>>;
+    public apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiTsigKeysIdGet.');
@@ -215,9 +213,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -290,9 +286,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -362,9 +356,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -406,10 +398,10 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<TsigKeyCreateResponse>;
-    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TsigKeyCreateResponse>>;
-    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TsigKeyCreateResponse>>;
-    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<TsigKeyCreateResponse>;
+    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TsigKeyCreateResponse>>;
+    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TsigKeyCreateResponse>>;
+    public apiTsigKeysPost(requestParameters?: ApiTsigKeysPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const tsigKeyCreateRequest = requestParameters?.tsigKeyCreateRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -418,9 +410,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -433,9 +423,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

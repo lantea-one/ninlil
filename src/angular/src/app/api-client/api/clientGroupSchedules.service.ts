@@ -55,10 +55,10 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupScheduleDetailPagedResult>;
-    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupScheduleDetailPagedResult>>;
-    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupScheduleDetailPagedResult>>;
-    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupScheduleDetailPagedResult>;
+    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupScheduleDetailPagedResult>>;
+    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupScheduleDetailPagedResult>>;
+    public apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const groupId = requestParameters?.groupId;
         if (groupId === null || groupId === undefined) {
             throw new Error('Required parameter groupId was null or undefined when calling apiClientGroupsGroupIdSchedulesGet.');
@@ -70,7 +70,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -79,7 +79,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -92,9 +92,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -203,10 +201,10 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupScheduleDetail>;
-    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupScheduleDetail>>;
-    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupScheduleDetail>>;
-    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupScheduleDetail>;
+    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupScheduleDetail>>;
+    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupScheduleDetail>>;
+    public apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const groupId = requestParameters?.groupId;
         if (groupId === null || groupId === undefined) {
             throw new Error('Required parameter groupId was null or undefined when calling apiClientGroupsGroupIdSchedulesIdGet.');
@@ -222,9 +220,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -301,9 +297,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -345,10 +339,10 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupScheduleDetail>;
-    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupScheduleDetail>>;
-    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupScheduleDetail>>;
-    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupScheduleDetail>;
+    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupScheduleDetail>>;
+    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupScheduleDetail>>;
+    public apiClientGroupsGroupIdSchedulesPost(requestParameters: ApiClientGroupsGroupIdSchedulesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const groupId = requestParameters?.groupId;
         if (groupId === null || groupId === undefined) {
             throw new Error('Required parameter groupId was null or undefined when calling apiClientGroupsGroupIdSchedulesPost.');
@@ -361,9 +355,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -376,9 +368,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

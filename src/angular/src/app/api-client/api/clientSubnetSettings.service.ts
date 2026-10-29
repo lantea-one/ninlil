@@ -48,10 +48,10 @@ export class ClientSubnetSettingsService extends BaseService implements ClientSu
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientSubnetSettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientSubnetSettingsDetail>;
-    public apiClientSubnetSettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientSubnetSettingsDetail>>;
-    public apiClientSubnetSettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientSubnetSettingsDetail>>;
-    public apiClientSubnetSettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientSubnetSettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientSubnetSettingsDetail>;
+    public apiClientSubnetSettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientSubnetSettingsDetail>>;
+    public apiClientSubnetSettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientSubnetSettingsDetail>>;
+    public apiClientSubnetSettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -59,9 +59,7 @@ export class ClientSubnetSettingsService extends BaseService implements ClientSu
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -106,10 +104,10 @@ export class ClientSubnetSettingsService extends BaseService implements ClientSu
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
-    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
-    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
-    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
+    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
+    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
+    public apiClientSubnetSettingsPatch(requestParameters?: ApiClientSubnetSettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
@@ -118,9 +116,7 @@ export class ClientSubnetSettingsService extends BaseService implements ClientSu
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -133,9 +129,7 @@ export class ClientSubnetSettingsService extends BaseService implements ClientSu
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

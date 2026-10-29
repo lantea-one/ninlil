@@ -48,10 +48,10 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiQueryLogDelete(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<QueryLogClearResult>;
-    public apiQueryLogDelete(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<QueryLogClearResult>>;
-    public apiQueryLogDelete(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<QueryLogClearResult>>;
-    public apiQueryLogDelete(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiQueryLogDelete(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<QueryLogClearResult>;
+    public apiQueryLogDelete(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<QueryLogClearResult>>;
+    public apiQueryLogDelete(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<QueryLogClearResult>>;
+    public apiQueryLogDelete(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -59,9 +59,7 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -106,10 +104,10 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsQueryLogEntryDetailPagedResult>;
-    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsQueryLogEntryDetailPagedResult>>;
-    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsQueryLogEntryDetailPagedResult>>;
-    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsQueryLogEntryDetailPagedResult>;
+    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsQueryLogEntryDetailPagedResult>>;
+    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsQueryLogEntryDetailPagedResult>>;
+    public apiQueryLogGet(requestParameters?: ApiQueryLogGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientAddress = requestParameters?.clientAddress;
         const domain = requestParameters?.domain;
         const queriedType = requestParameters?.queriedType;
@@ -197,7 +195,7 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -206,7 +204,7 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -219,9 +217,7 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

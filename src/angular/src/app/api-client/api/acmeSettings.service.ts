@@ -52,10 +52,10 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<AcmeCertificateInventoryEntry>;
-    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AcmeCertificateInventoryEntry>>;
-    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AcmeCertificateInventoryEntry>>;
-    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AcmeCertificateInventoryEntry>;
+    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AcmeCertificateInventoryEntry>>;
+    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AcmeCertificateInventoryEntry>>;
+    public apiAcmeSettingsCertificatesDomainIssuePost(requestParameters: ApiAcmeSettingsCertificatesDomainIssuePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const domain = requestParameters?.domain;
         if (domain === null || domain === undefined) {
             throw new Error('Required parameter domain was null or undefined when calling apiAcmeSettingsCertificatesDomainIssuePost.');
@@ -67,9 +67,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -113,10 +111,10 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAcmeSettingsCertificatesGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<AcmeCertificateInventoryEntry>>;
-    public apiAcmeSettingsCertificatesGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<AcmeCertificateInventoryEntry>>>;
-    public apiAcmeSettingsCertificatesGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<AcmeCertificateInventoryEntry>>>;
-    public apiAcmeSettingsCertificatesGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAcmeSettingsCertificatesGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<AcmeCertificateInventoryEntry>>;
+    public apiAcmeSettingsCertificatesGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<AcmeCertificateInventoryEntry>>>;
+    public apiAcmeSettingsCertificatesGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<AcmeCertificateInventoryEntry>>>;
+    public apiAcmeSettingsCertificatesGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -124,9 +122,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -170,10 +166,10 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAcmeSettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<AcmeSettingsDetail>;
-    public apiAcmeSettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AcmeSettingsDetail>>;
-    public apiAcmeSettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AcmeSettingsDetail>>;
-    public apiAcmeSettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAcmeSettingsGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AcmeSettingsDetail>;
+    public apiAcmeSettingsGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AcmeSettingsDetail>>;
+    public apiAcmeSettingsGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AcmeSettingsDetail>>;
+    public apiAcmeSettingsGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -181,9 +177,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -228,10 +222,10 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
-    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
-    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
-    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RuntimeSettingsWriteResult>;
+    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RuntimeSettingsWriteResult>>;
+    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RuntimeSettingsWriteResult>>;
+    public apiAcmeSettingsPatch(requestParameters?: ApiAcmeSettingsPatchRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
@@ -240,9 +234,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -255,9 +247,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

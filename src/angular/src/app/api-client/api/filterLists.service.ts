@@ -56,10 +56,10 @@ export class FilterListsService extends BaseService implements FilterListsServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterListDetailPagedResult>;
-    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterListDetailPagedResult>>;
-    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterListDetailPagedResult>>;
-    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterListDetailPagedResult>;
+    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterListDetailPagedResult>>;
+    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterListDetailPagedResult>>;
+    public apiFilterListsGet(requestParameters?: ApiFilterListsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const skip = requestParameters?.skip;
         const take = requestParameters?.take;
 
@@ -67,7 +67,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -76,7 +76,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -89,9 +89,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -196,10 +194,10 @@ export class FilterListsService extends BaseService implements FilterListsServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterListDetail>;
-    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterListDetail>>;
-    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterListDetail>>;
-    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterListDetail>;
+    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterListDetail>>;
+    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterListDetail>>;
+    public apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiFilterListsIdGet.');
@@ -211,9 +209,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -286,9 +282,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -358,9 +352,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -402,10 +394,10 @@ export class FilterListsService extends BaseService implements FilterListsServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterListDetail>;
-    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterListDetail>>;
-    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterListDetail>>;
-    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<FilterListDetail>;
+    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<FilterListDetail>>;
+    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<FilterListDetail>>;
+    public apiFilterListsPost(requestParameters?: ApiFilterListsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const filterListWriteRequest = requestParameters?.filterListWriteRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -414,9 +406,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -429,9 +419,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

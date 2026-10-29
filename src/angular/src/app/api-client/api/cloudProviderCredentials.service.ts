@@ -60,10 +60,10 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<CloudProviderCredentialDetailPagedResult>;
-    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<CloudProviderCredentialDetailPagedResult>>;
-    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<CloudProviderCredentialDetailPagedResult>>;
-    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<CloudProviderCredentialDetailPagedResult>;
+    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<CloudProviderCredentialDetailPagedResult>>;
+    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<CloudProviderCredentialDetailPagedResult>>;
+    public apiCloudProviderCredentialsGet(requestParameters?: ApiCloudProviderCredentialsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const skip = requestParameters?.skip;
         const take = requestParameters?.take;
 
@@ -71,7 +71,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -80,7 +80,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -93,9 +93,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -200,10 +198,10 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<CloudProviderCredentialDetail>;
-    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<CloudProviderCredentialDetail>>;
-    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<CloudProviderCredentialDetail>>;
-    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<CloudProviderCredentialDetail>;
+    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<CloudProviderCredentialDetail>>;
+    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<CloudProviderCredentialDetail>>;
+    public apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiCloudProviderCredentialsIdGet.');
@@ -215,9 +213,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -290,9 +286,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -362,9 +356,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -406,10 +398,10 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<CloudProviderCredentialCreateResponse>;
-    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<CloudProviderCredentialCreateResponse>>;
-    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<CloudProviderCredentialCreateResponse>>;
-    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<CloudProviderCredentialCreateResponse>;
+    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<CloudProviderCredentialCreateResponse>>;
+    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<CloudProviderCredentialCreateResponse>>;
+    public apiCloudProviderCredentialsPost(requestParameters?: ApiCloudProviderCredentialsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const cloudProviderCredentialCreateRequest = requestParameters?.cloudProviderCredentialCreateRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -418,9 +410,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -433,9 +423,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

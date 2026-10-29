@@ -62,10 +62,10 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetailPagedResult>;
-    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetailPagedResult>>;
-    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetailPagedResult>>;
-    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetailPagedResult>;
+    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetailPagedResult>>;
+    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetailPagedResult>>;
+    public apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const zoneId = requestParameters?.zoneId;
         if (zoneId === null || zoneId === undefined) {
             throw new Error('Required parameter zoneId was null or undefined when calling apiZonesZoneIdDnssecKeysGet.');
@@ -77,7 +77,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -86,7 +86,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -99,9 +99,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -273,10 +271,10 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetail>;
-    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetail>>;
-    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetail>>;
-    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetail>;
+    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetail>>;
+    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetail>>;
+    public apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const zoneId = requestParameters?.zoneId;
         if (zoneId === null || zoneId === undefined) {
             throw new Error('Required parameter zoneId was null or undefined when calling apiZonesZoneIdDnssecKeysIdGet.');
@@ -292,9 +290,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -371,9 +367,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -447,9 +441,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -491,10 +483,10 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetail>;
-    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetail>>;
-    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetail>>;
-    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetail>;
+    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetail>>;
+    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetail>>;
+    public apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const zoneId = requestParameters?.zoneId;
         if (zoneId === null || zoneId === undefined) {
             throw new Error('Required parameter zoneId was null or undefined when calling apiZonesZoneIdDnssecKeysIdRollPost.');
@@ -511,9 +503,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -526,9 +516,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -570,10 +558,10 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetail>;
-    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetail>>;
-    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetail>>;
-    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnssecKeyDetail>;
+    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnssecKeyDetail>>;
+    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnssecKeyDetail>>;
+    public apiZonesZoneIdDnssecKeysPost(requestParameters: ApiZonesZoneIdDnssecKeysPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const zoneId = requestParameters?.zoneId;
         if (zoneId === null || zoneId === undefined) {
             throw new Error('Required parameter zoneId was null or undefined when calling apiZonesZoneIdDnssecKeysPost.');
@@ -586,9 +574,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -601,9 +587,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

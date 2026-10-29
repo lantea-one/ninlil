@@ -49,10 +49,10 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<SafeSearchDetail>>;
-    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<SafeSearchDetail>>>;
-    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<SafeSearchDetail>>>;
-    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<SafeSearchDetail>>;
+    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<SafeSearchDetail>>>;
+    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<SafeSearchDetail>>>;
+    public apiSafeSearchGet(requestParameters?: ApiSafeSearchGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         const clientGroupId = requestParameters?.clientGroupId;
 
@@ -82,9 +82,7 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -212,10 +210,10 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<SafeSearchDetail>;
-    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<SafeSearchDetail>>;
-    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<SafeSearchDetail>>;
-    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<SafeSearchDetail>;
+    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<SafeSearchDetail>>;
+    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<SafeSearchDetail>>;
+    public apiSafeSearchKeyPost(requestParameters: ApiSafeSearchKeyPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const key = requestParameters?.key;
         if (key === null || key === undefined) {
             throw new Error('Required parameter key was null or undefined when calling apiSafeSearchKeyPost.');
@@ -249,9 +247,7 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

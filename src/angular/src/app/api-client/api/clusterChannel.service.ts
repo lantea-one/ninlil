@@ -87,9 +87,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -155,9 +153,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -223,9 +219,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -267,10 +261,10 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClusterQueryStatsSnapshot>;
-    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClusterQueryStatsSnapshot>>;
-    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClusterQueryStatsSnapshot>>;
-    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClusterQueryStatsSnapshot>;
+    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClusterQueryStatsSnapshot>>;
+    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClusterQueryStatsSnapshot>>;
+    public apiClusterChannelQueryStatsPost(requestParameters?: ApiClusterChannelQueryStatsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clusterQueryStatsRequest = requestParameters?.clusterQueryStatsRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -279,9 +273,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -294,9 +286,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -338,10 +328,10 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClusterUsernameCheckResult>;
-    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClusterUsernameCheckResult>>;
-    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClusterUsernameCheckResult>>;
-    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClusterUsernameCheckResult>;
+    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClusterUsernameCheckResult>>;
+    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClusterUsernameCheckResult>>;
+    public apiClusterChannelUsernameCheckPost(requestParameters?: ApiClusterChannelUsernameCheckPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clusterUsernameCheckRequest = requestParameters?.clusterUsernameCheckRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -350,9 +340,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -365,9 +353,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

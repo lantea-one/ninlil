@@ -69,10 +69,10 @@ export class AuthService extends BaseService implements AuthServiceInterface {
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ForgotPasswordResult>;
-    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ForgotPasswordResult>>;
-    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ForgotPasswordResult>>;
-    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ForgotPasswordResult>;
+    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ForgotPasswordResult>>;
+    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ForgotPasswordResult>>;
+    public apiAuthForgotPasswordPost(requestParameters?: ApiAuthForgotPasswordPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const forgotPasswordRequest = requestParameters?.forgotPasswordRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -81,9 +81,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -96,9 +94,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -140,10 +136,10 @@ export class AuthService extends BaseService implements AuthServiceInterface {
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<LoginResponse>;
-    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<LoginResponse>>;
-    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<LoginResponse>>;
-    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<LoginResponse>;
+    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<LoginResponse>>;
+    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<LoginResponse>>;
+    public apiAuthLoginPost(requestParameters?: ApiAuthLoginPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const loginRequest = requestParameters?.loginRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -152,9 +148,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -167,9 +161,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -235,9 +227,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -279,10 +269,10 @@ export class AuthService extends BaseService implements AuthServiceInterface {
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<LoginResponse>;
-    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<LoginResponse>>;
-    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<LoginResponse>>;
-    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<LoginResponse>;
+    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<LoginResponse>>;
+    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<LoginResponse>>;
+    public apiAuthLoginTwoFactorPost(requestParameters?: ApiAuthLoginTwoFactorPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const twoFactorLoginRequest = requestParameters?.twoFactorLoginRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -291,9 +281,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -306,9 +294,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -374,9 +360,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -418,10 +402,10 @@ export class AuthService extends BaseService implements AuthServiceInterface {
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<AuthenticationResult>;
-    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AuthenticationResult>>;
-    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AuthenticationResult>>;
-    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AuthenticationResult>;
+    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AuthenticationResult>>;
+    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AuthenticationResult>>;
+    public apiAuthRefreshPost(requestParameters?: ApiAuthRefreshPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const refreshRequest = requestParameters?.refreshRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -430,9 +414,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -445,9 +427,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -513,9 +493,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

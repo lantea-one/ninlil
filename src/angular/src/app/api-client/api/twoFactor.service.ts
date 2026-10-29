@@ -79,9 +79,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -123,10 +121,10 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<AuthenticatorSetupResult>;
-    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AuthenticatorSetupResult>>;
-    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AuthenticatorSetupResult>>;
-    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AuthenticatorSetupResult>;
+    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AuthenticatorSetupResult>>;
+    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AuthenticatorSetupResult>>;
+    public apiAuthTwoFactorAuthenticatorSetupPost(requestParameters?: ApiAuthTwoFactorAuthenticatorSetupPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const twoFactorCodeRequest = requestParameters?.twoFactorCodeRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -135,9 +133,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -150,9 +146,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -218,9 +212,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -315,10 +307,10 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<RecoveryCodesResult>;
-    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecoveryCodesResult>>;
-    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecoveryCodesResult>>;
-    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<RecoveryCodesResult>;
+    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<RecoveryCodesResult>>;
+    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<RecoveryCodesResult>>;
+    public apiAuthTwoFactorRecoveryCodesGeneratePost(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -326,9 +318,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -372,10 +362,10 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiAuthTwoFactorStatusGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<TwoFactorStatus>;
-    public apiAuthTwoFactorStatusGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TwoFactorStatus>>;
-    public apiAuthTwoFactorStatusGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TwoFactorStatus>>;
-    public apiAuthTwoFactorStatusGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiAuthTwoFactorStatusGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<TwoFactorStatus>;
+    public apiAuthTwoFactorStatusGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<TwoFactorStatus>>;
+    public apiAuthTwoFactorStatusGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<TwoFactorStatus>>;
+    public apiAuthTwoFactorStatusGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -383,9 +373,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

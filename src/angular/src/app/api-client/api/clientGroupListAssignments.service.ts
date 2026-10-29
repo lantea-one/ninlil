@@ -54,10 +54,10 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupListAssignmentDetailPagedResult>;
-    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupListAssignmentDetailPagedResult>>;
-    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupListAssignmentDetailPagedResult>>;
-    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupListAssignmentDetailPagedResult>;
+    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupListAssignmentDetailPagedResult>>;
+    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupListAssignmentDetailPagedResult>>;
+    public apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const groupId = requestParameters?.groupId;
         if (groupId === null || groupId === undefined) {
             throw new Error('Required parameter groupId was null or undefined when calling apiClientGroupsGroupIdListAssignmentsGet.');
@@ -69,7 +69,7 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -78,7 +78,7 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -91,9 +91,7 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -202,10 +200,10 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupListAssignmentDetail>;
-    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupListAssignmentDetail>>;
-    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupListAssignmentDetail>>;
-    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupListAssignmentDetail>;
+    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupListAssignmentDetail>>;
+    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupListAssignmentDetail>>;
+    public apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const groupId = requestParameters?.groupId;
         if (groupId === null || groupId === undefined) {
             throw new Error('Required parameter groupId was null or undefined when calling apiClientGroupsGroupIdListAssignmentsIdGet.');
@@ -221,9 +219,7 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -268,10 +264,10 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupListAssignmentDetail>;
-    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupListAssignmentDetail>>;
-    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupListAssignmentDetail>>;
-    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientGroupListAssignmentDetail>;
+    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientGroupListAssignmentDetail>>;
+    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientGroupListAssignmentDetail>>;
+    public apiClientGroupsGroupIdListAssignmentsPost(requestParameters: ApiClientGroupsGroupIdListAssignmentsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const groupId = requestParameters?.groupId;
         if (groupId === null || groupId === undefined) {
             throw new Error('Required parameter groupId was null or undefined when calling apiClientGroupsGroupIdListAssignmentsPost.');
@@ -284,9 +280,7 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -299,9 +293,7 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

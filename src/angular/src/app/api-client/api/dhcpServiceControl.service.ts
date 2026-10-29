@@ -49,10 +49,10 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpServicesGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<DhcpServiceStatus>>;
-    public apiDhcpServicesGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<DhcpServiceStatus>>>;
-    public apiDhcpServicesGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<DhcpServiceStatus>>>;
-    public apiDhcpServicesGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpServicesGet(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<DhcpServiceStatus>>;
+    public apiDhcpServicesGet(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<DhcpServiceStatus>>>;
+    public apiDhcpServicesGet(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<DhcpServiceStatus>>>;
+    public apiDhcpServicesGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
 
@@ -60,9 +60,7 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -107,10 +105,10 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpServiceStatus>;
-    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpServiceStatus>>;
-    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpServiceStatus>>;
-    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpServiceStatus>;
+    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpServiceStatus>>;
+    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpServiceStatus>>;
+    public apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const kind = requestParameters?.kind;
         if (kind === null || kind === undefined) {
             throw new Error('Required parameter kind was null or undefined when calling apiDhcpServicesKindStartPost.');
@@ -122,9 +120,7 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -169,10 +165,10 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpServiceStatus>;
-    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpServiceStatus>>;
-    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpServiceStatus>>;
-    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpServiceStatus>;
+    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpServiceStatus>>;
+    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpServiceStatus>>;
+    public apiDhcpServicesKindStopPost(requestParameters: ApiDhcpServicesKindStopPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const kind = requestParameters?.kind;
         if (kind === null || kind === undefined) {
             throw new Error('Required parameter kind was null or undefined when calling apiDhcpServicesKindStopPost.');
@@ -184,9 +180,7 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);

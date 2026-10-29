@@ -55,10 +55,10 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpReservationDetailPagedResult>;
-    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpReservationDetailPagedResult>>;
-    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpReservationDetailPagedResult>>;
-    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpReservationDetailPagedResult>;
+    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpReservationDetailPagedResult>>;
+    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpReservationDetailPagedResult>>;
+    public apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const scopeId = requestParameters?.scopeId;
         if (scopeId === null || scopeId === undefined) {
             throw new Error('Required parameter scopeId was null or undefined when calling apiDhcpScopesScopeIdReservationsGet.');
@@ -70,7 +70,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -79,7 +79,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -92,9 +92,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -203,10 +201,10 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpReservationDetail>;
-    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpReservationDetail>>;
-    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpReservationDetail>>;
-    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpReservationDetail>;
+    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpReservationDetail>>;
+    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpReservationDetail>>;
+    public apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const scopeId = requestParameters?.scopeId;
         if (scopeId === null || scopeId === undefined) {
             throw new Error('Required parameter scopeId was null or undefined when calling apiDhcpScopesScopeIdReservationsIdGet.');
@@ -222,9 +220,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -301,9 +297,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -345,10 +339,10 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpReservationDetail>;
-    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpReservationDetail>>;
-    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpReservationDetail>>;
-    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpReservationDetail>;
+    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpReservationDetail>>;
+    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpReservationDetail>>;
+    public apiDhcpScopesScopeIdReservationsPost(requestParameters: ApiDhcpScopesScopeIdReservationsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const scopeId = requestParameters?.scopeId;
         if (scopeId === null || scopeId === undefined) {
             throw new Error('Required parameter scopeId was null or undefined when calling apiDhcpScopesScopeIdReservationsPost.');
@@ -361,9 +355,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -376,9 +368,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

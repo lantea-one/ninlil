@@ -54,10 +54,10 @@ export class ClientAddressesService extends BaseService implements ClientAddress
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientAddressDetailPagedResult>;
-    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientAddressDetailPagedResult>>;
-    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientAddressDetailPagedResult>>;
-    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientAddressDetailPagedResult>;
+    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientAddressDetailPagedResult>>;
+    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientAddressDetailPagedResult>>;
+    public apiClientsClientIdAddressesGet(requestParameters: ApiClientsClientIdAddressesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdAddressesGet.');
@@ -69,7 +69,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -78,7 +78,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -91,9 +91,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -202,10 +200,10 @@ export class ClientAddressesService extends BaseService implements ClientAddress
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientAddressDetail>;
-    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientAddressDetail>>;
-    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientAddressDetail>>;
-    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientAddressDetail>;
+    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientAddressDetail>>;
+    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientAddressDetail>>;
+    public apiClientsClientIdAddressesIdGet(requestParameters: ApiClientsClientIdAddressesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdAddressesIdGet.');
@@ -221,9 +219,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -268,10 +264,10 @@ export class ClientAddressesService extends BaseService implements ClientAddress
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientAddressDetail>;
-    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientAddressDetail>>;
-    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientAddressDetail>>;
-    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientAddressDetail>;
+    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientAddressDetail>>;
+    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientAddressDetail>>;
+    public apiClientsClientIdAddressesPost(requestParameters: ApiClientsClientIdAddressesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdAddressesPost.');
@@ -284,9 +280,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -299,9 +293,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

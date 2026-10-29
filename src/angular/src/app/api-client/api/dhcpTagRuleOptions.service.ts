@@ -55,10 +55,10 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpTagRuleOptionDetailPagedResult>;
-    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpTagRuleOptionDetailPagedResult>>;
-    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpTagRuleOptionDetailPagedResult>>;
-    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpTagRuleOptionDetailPagedResult>;
+    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpTagRuleOptionDetailPagedResult>>;
+    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpTagRuleOptionDetailPagedResult>>;
+    public apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const tagRuleId = requestParameters?.tagRuleId;
         if (tagRuleId === null || tagRuleId === undefined) {
             throw new Error('Required parameter tagRuleId was null or undefined when calling apiDhcpTagRulesTagRuleIdOptionsGet.');
@@ -70,7 +70,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -79,7 +79,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -92,9 +92,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -203,10 +201,10 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpTagRuleOptionDetail>;
-    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpTagRuleOptionDetail>>;
-    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpTagRuleOptionDetail>>;
-    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpTagRuleOptionDetail>;
+    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpTagRuleOptionDetail>>;
+    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpTagRuleOptionDetail>>;
+    public apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const tagRuleId = requestParameters?.tagRuleId;
         if (tagRuleId === null || tagRuleId === undefined) {
             throw new Error('Required parameter tagRuleId was null or undefined when calling apiDhcpTagRulesTagRuleIdOptionsIdGet.');
@@ -222,9 +220,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -301,9 +297,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -345,10 +339,10 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpTagRuleOptionDetail>;
-    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpTagRuleOptionDetail>>;
-    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpTagRuleOptionDetail>>;
-    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DhcpTagRuleOptionDetail>;
+    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DhcpTagRuleOptionDetail>>;
+    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DhcpTagRuleOptionDetail>>;
+    public apiDhcpTagRulesTagRuleIdOptionsPost(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const tagRuleId = requestParameters?.tagRuleId;
         if (tagRuleId === null || tagRuleId === undefined) {
             throw new Error('Required parameter tagRuleId was null or undefined when calling apiDhcpTagRulesTagRuleIdOptionsPost.');
@@ -361,9 +355,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -376,9 +368,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

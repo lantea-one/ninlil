@@ -74,9 +74,7 @@ export class BackupService extends BaseService implements BackupServiceInterface
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -118,10 +116,10 @@ export class BackupService extends BaseService implements BackupServiceInterface
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<BackupRestoreResponse>;
-    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<BackupRestoreResponse>>;
-    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<BackupRestoreResponse>>;
-    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<BackupRestoreResponse>;
+    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<BackupRestoreResponse>>;
+    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<BackupRestoreResponse>>;
+    public apiBackupRestorePost(requestParameters?: ApiBackupRestorePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const archive = requestParameters?.archive;
         const passphrase = requestParameters?.passphrase;
 
@@ -131,9 +129,7 @@ export class BackupService extends BaseService implements BackupServiceInterface
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -163,10 +159,10 @@ export class BackupService extends BaseService implements BackupServiceInterface
         }
 
         if (archive !== undefined) {
-            localVarFormParams = localVarFormParams.append('Archive', <any>archive) as any || localVarFormParams;
+            localVarFormParams = localVarFormParams.append('archive', <any>archive) as any || localVarFormParams;
         }
         if (passphrase !== undefined) {
-            localVarFormParams = localVarFormParams.append('Passphrase', <any>passphrase) as any || localVarFormParams;
+            localVarFormParams = localVarFormParams.append('passphrase', <any>passphrase) as any || localVarFormParams;
         }
 
         let responseType_: 'text' | 'json' | 'blob' = 'json';

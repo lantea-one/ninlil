@@ -55,10 +55,10 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsClientStaticAddressMappingDetailPagedResult>;
-    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsClientStaticAddressMappingDetailPagedResult>>;
-    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsClientStaticAddressMappingDetailPagedResult>>;
-    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsClientStaticAddressMappingDetailPagedResult>;
+    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsClientStaticAddressMappingDetailPagedResult>>;
+    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsClientStaticAddressMappingDetailPagedResult>>;
+    public apiClientStaticAddressMappingsGet(requestParameters?: ApiClientStaticAddressMappingsGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const skip = requestParameters?.skip;
         const take = requestParameters?.take;
 
@@ -66,7 +66,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -75,7 +75,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -88,9 +88,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -195,10 +193,10 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsClientStaticAddressMappingDetail>;
-    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsClientStaticAddressMappingDetail>>;
-    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsClientStaticAddressMappingDetail>>;
-    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsClientStaticAddressMappingDetail>;
+    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsClientStaticAddressMappingDetail>>;
+    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsClientStaticAddressMappingDetail>>;
+    public apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiClientStaticAddressMappingsIdGet.');
@@ -210,9 +208,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -285,9 +281,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -329,10 +323,10 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsClientStaticAddressMappingDetail>;
-    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsClientStaticAddressMappingDetail>>;
-    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsClientStaticAddressMappingDetail>>;
-    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsClientStaticAddressMappingDetail>;
+    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsClientStaticAddressMappingDetail>>;
+    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsClientStaticAddressMappingDetail>>;
+    public apiClientStaticAddressMappingsPost(requestParameters?: ApiClientStaticAddressMappingsPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const dnsClientStaticAddressMappingWriteRequest = requestParameters?.dnsClientStaticAddressMappingWriteRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -341,9 +335,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -356,9 +348,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

@@ -55,10 +55,10 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientScheduleDetailPagedResult>;
-    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientScheduleDetailPagedResult>>;
-    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientScheduleDetailPagedResult>>;
-    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientScheduleDetailPagedResult>;
+    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientScheduleDetailPagedResult>>;
+    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientScheduleDetailPagedResult>>;
+    public apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdSchedulesGet.');
@@ -70,7 +70,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -79,7 +79,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -92,9 +92,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -203,10 +201,10 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientScheduleDetail>;
-    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientScheduleDetail>>;
-    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientScheduleDetail>>;
-    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientScheduleDetail>;
+    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientScheduleDetail>>;
+    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientScheduleDetail>>;
+    public apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdSchedulesIdGet.');
@@ -222,9 +220,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -301,9 +297,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -345,10 +339,10 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientScheduleDetail>;
-    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientScheduleDetail>>;
-    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientScheduleDetail>>;
-    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ClientScheduleDetail>;
+    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ClientScheduleDetail>>;
+    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ClientScheduleDetail>>;
+    public apiClientsClientIdSchedulesPost(requestParameters: ApiClientsClientIdSchedulesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const clientId = requestParameters?.clientId;
         if (clientId === null || clientId === undefined) {
             throw new Error('Required parameter clientId was null or undefined when calling apiClientsClientIdSchedulesPost.');
@@ -361,9 +355,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -376,9 +368,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {

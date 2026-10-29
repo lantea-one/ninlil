@@ -56,10 +56,10 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsRewriteDetailPagedResult>;
-    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsRewriteDetailPagedResult>>;
-    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsRewriteDetailPagedResult>>;
-    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsRewriteDetailPagedResult>;
+    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsRewriteDetailPagedResult>>;
+    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsRewriteDetailPagedResult>>;
+    public apiDnsRewritesGet(requestParameters?: ApiDnsRewritesGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const skip = requestParameters?.skip;
         const take = requestParameters?.take;
 
@@ -67,7 +67,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Skip',
+            'skip',
             <any>skip,
             QueryParamStyle.Form,
             true,
@@ -76,7 +76,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
 
         localVarQueryParameters = this.addToHttpParams(
             localVarQueryParameters,
-            'Take',
+            'take',
             <any>take,
             QueryParamStyle.Form,
             true,
@@ -89,9 +89,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -196,10 +194,10 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsRewriteDetail>;
-    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsRewriteDetail>>;
-    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsRewriteDetail>>;
-    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsRewriteDetail>;
+    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsRewriteDetail>>;
+    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsRewriteDetail>>;
+    public apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const id = requestParameters?.id;
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling apiDnsRewritesIdGet.');
@@ -211,9 +209,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -286,9 +282,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -358,9 +352,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
@@ -402,10 +394,10 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsRewriteDetail>;
-    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsRewriteDetail>>;
-    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsRewriteDetail>>;
-    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'text/plain' | 'application/json' | 'text/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<DnsRewriteDetail>;
+    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<DnsRewriteDetail>>;
+    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<DnsRewriteDetail>>;
+    public apiDnsRewritesPost(requestParameters?: ApiDnsRewritesPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         const dnsRewriteWriteRequest = requestParameters?.dnsRewriteWriteRequest;
 
         let localVarHeaders = this.defaultHeaders;
@@ -414,9 +406,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'text/plain',
-            'application/json',
-            'text/json'
+            'application/json'
         ]);
         if (localVarHttpHeaderAcceptSelected !== undefined) {
             localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
@@ -429,9 +419,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
 
         // to determine the Content-Type header
         const consumes: string[] = [
-            'application/json',
-            'text/json',
-            'application/*+json'
+            'application/json'
         ];
         const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
         if (httpContentTypeSelected !== undefined) {
