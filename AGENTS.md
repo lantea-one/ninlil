@@ -87,7 +87,9 @@ dotnet test Ninlil.slnx                                               # everythi
 - Tests use OS-assigned free ports, never fixed ones, and need no root.
 - `Ninlil.Web.Tests`:
   - Every class joins `[Collection(WebTestCollection.Name)]` and shares one
-    `NinlilDnsWebApplicationFactory` host. Never create a second host with `WithWebHostBuilder`: it
+    `NinlilDnsWebApplicationFactory` host. A test that needs a second host calls
+    `factory.CreateSecondHost(...)`, never `WithWebHostBuilder` directly: the plain call reuses the
+    shared host's DNS listener ports, the bind fails, the host stops itself and the first request
     throws `ObjectDisposedException`.
   - Data is shared across tests: users, zones and other rows created by other tests are visible.
     Never assume an empty table or an exact count; look up what you created (for example, page

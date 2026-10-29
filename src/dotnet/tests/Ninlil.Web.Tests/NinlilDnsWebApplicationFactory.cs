@@ -218,6 +218,50 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     }
 
     /// <summary>
+    ///     This method builds an additional host next to the shared one, with its own free DNS
+    ///     listener ports. A host built with plain <c>WithWebHostBuilder</c> reads the same
+    ///     environment variables, so it binds the shared host's Plain DNS and DNSCrypt ports; the
+    ///     bind fails with "address already in use", the hosted listener's exception stops that
+    ///     host (<c>BackgroundServiceExceptionBehavior.StopHost</c>), and its service provider is
+    ///     disposed before the first request, which then throws
+    ///     <see cref="ObjectDisposedException" />. The ports are environment variables, so they
+    ///     are replaced only while the new host is built and restored afterwards. The host shares
+    ///     the SQLite file and the runtime settings file with the shared host. Callers dispose the
+    ///     returned factory and must not run concurrently with another test, which the shared
+    ///     <see cref="WebTestCollection" /> guarantees.
+    /// </summary>
+    /// <param name="configure">Extra configuration for the new host, for example test services.</param>
+    /// <returns>A started second factory whose host has its own listener ports.</returns>
+    public WebApplicationFactory<Program> CreateSecondHost(Action<IWebHostBuilder> configure)
+    {
+        string[] portVariables =
+        [
+            "NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT",
+            "NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PORT",
+            "NINLIL_DNS_SERVER_WEB_HTTP_PORT",
+            "NINLIL_DNS_SERVER_WEB_HTTPS_PORT",
+        ];
+        string[] previous = portVariables.Select(Environment.GetEnvironmentVariable).ToArray();
+        try
+        {
+            foreach (string name in portVariables)
+                Environment.SetEnvironmentVariable(name, GetFreePort().ToString());
+
+            WebApplicationFactory<Program> second = WithWebHostBuilder(configure);
+
+            // The host is built on first access to Server, and that read of the environment is
+            // the one that must see the new ports.
+            _ = second.Server;
+            return second;
+        }
+        finally
+        {
+            for (int i = 0; i < portVariables.Length; i++)
+                Environment.SetEnvironmentVariable(portVariables[i], previous[i]);
+        }
+    }
+
+    /// <summary>
     ///     This method asks the operating system for a currently unused port, by binding to port 0
     ///     on loopback and reading back what was assigned.
     /// </summary>
