@@ -70,9 +70,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         );
         await _listener.StartAsync(CancellationToken.None);
 
-        // Give ExecuteAsync a moment to bind before any test connects: BackgroundService runs it
-        // as a continuation, so it may not have bound when StartAsync returns.
-        await Task.Delay(200);
+        await WaitUntilListeningAsync(_listener);
     }
 
     /// <inheritdoc />
@@ -287,7 +285,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         try
         {
             await listener.StartAsync(CancellationToken.None);
-            await Task.Delay(200);
+            await WaitUntilListeningAsync(listener);
 
             using TcpClient client = new();
             await client.ConnectAsync(IPAddress.Loopback, restrictedPort);
@@ -414,7 +412,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             NullLogger<DnsOverTlsListener>.Instance
         );
         await listener.StartAsync(CancellationToken.None);
-        await Task.Delay(200);
+        await WaitUntilListeningAsync(listener);
 
         return (pipeline, listener, resolver);
     }
@@ -628,15 +626,23 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             logger
         );
         await listener.StartAsync(CancellationToken.None);
+        await WaitUntilListeningAsync(listener);
 
-        // ExecuteAsync binds after StartAsync returns, and sets IsListening only once every
-        // address was tried and the failed ones recorded, so waiting for it is the bind signal.
+        return (pipeline, listener, port);
+    }
+
+    /// <summary>
+    ///     This method waits, for at most 10 seconds, until <paramref name="listener" /> is bound.
+    ///     <c>ExecuteAsync</c> binds after <c>StartAsync</c> returns, and sets
+    ///     <see cref="DnsOverTlsListener.IsListening" /> only once every address was tried and the
+    ///     failed ones recorded, so it is the bind signal; a fixed sleep is not.
+    /// </summary>
+    private static async Task WaitUntilListeningAsync(DnsOverTlsListener listener)
+    {
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
         while (!listener.IsListening)
             await Task.Delay(10, timeout.Token);
-
-        return (pipeline, listener, port);
     }
 
     /// <summary>
