@@ -55,10 +55,10 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
             throw new SocketException((int)SocketError.TooManyOpenSockets);
 
         using UdpClient failing = new(new IPEndPoint(IPAddress.Loopback, 0));
-        await failing.SendAsync(BuildReadRequest("file.bin"), ServerEndPoint());
+        await failing.SendAsync(TftpTestClient.BuildReadRequest("file.bin"), ServerEndPoint());
         // The Debug entry shows that the failure happened before the factory is replaced.
-        await PollAsync(() => _logger.Contains(LogLevel.Debug, "socket failure"));
-        await PollAsync(() => _server.ActiveTransferCount == 0);
+        await TftpTestClient.PollAsync(() => _logger.Contains(LogLevel.Debug, "socket failure"));
+        await TftpTestClient.PollAsync(() => _server.ActiveTransferCount == 0);
 
         // A working factory serves the next request, which proves the slot came back. The
         // request may arrive before the slot is released and then it is dropped silently, so it
@@ -66,7 +66,9 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
         _server.TransferSocketFactory = () =>
             new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         using UdpClient working = new(new IPEndPoint(IPAddress.Loopback, 0));
-        Assert.True(await RequestUntilAnsweredAsync(working, "file.bin"));
+        Assert.NotNull(
+            await TftpTestClient.RequestUntilAnsweredAsync(working, ServerEndPoint(), "file.bin")
+        );
 
         await TriggerReportAsync();
 
@@ -91,13 +93,16 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
             {
                 UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
                 clients.Add(client);
-                await client.SendAsync(BuildReadRequest("file.bin"), ServerEndPoint());
+                await client.SendAsync(
+                    TftpTestClient.BuildReadRequest("file.bin"),
+                    ServerEndPoint()
+                );
                 await client.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
             }
 
             // Each transfer counts its problem before it ends, so no active transfer left means
             // all ten are counted.
-            await PollAsync(() => _server.ActiveTransferCount == 0);
+            await TftpTestClient.PollAsync(() => _server.ActiveTransferCount == 0);
         }
         finally
         {
@@ -121,12 +126,12 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
         foreach (string name in names)
         {
             using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
-            await client.SendAsync(BuildReadRequest(name), ServerEndPoint());
+            await client.SendAsync(TftpTestClient.BuildReadRequest(name), ServerEndPoint());
             // The Access Violation reply shows that the request was handled.
             await client.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
 
-        await PollAsync(() => _server.ActiveTransferCount == 0);
+        await TftpTestClient.PollAsync(() => _server.ActiveTransferCount == 0);
         await TriggerReportAsync();
 
         string warning = Assert.Single(_logger.Warnings());
@@ -145,7 +150,7 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
         );
 
         using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
-        await client.SendAsync(BuildReadRequest("file.bin"), ServerEndPoint());
+        await client.SendAsync(TftpTestClient.BuildReadRequest("file.bin"), ServerEndPoint());
         UdpReceiveResult first = await client.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
 
         // An Error packet (opcode 5, code 0, message "no") to the transfer's own port.
@@ -153,7 +158,7 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
             new byte[] { 0x00, 0x05, 0x00, 0x00, (byte)'n', (byte)'o', 0x00 },
             first.RemoteEndPoint
         );
-        await PollAsync(() => _server.ActiveTransferCount == 0);
+        await TftpTestClient.PollAsync(() => _server.ActiveTransferCount == 0);
 
         Assert.Empty(_logger.Warnings());
         await TriggerReportAsync();
@@ -170,8 +175,13 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
             throw new SocketException((int)SocketError.TooManyOpenSockets);
 
         using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
-        await client.SendAsync(BuildReadRequest("file.bin"), ServerEndPoint());
-        await PollAsync(() => _server.ActiveTransferCount == 0);
+        await client.SendAsync(TftpTestClient.BuildReadRequest("file.bin"), ServerEndPoint());
+        // The count is 0 before the request is even received, so it proves nothing here. The
+        // Debug entry is logged by the receive loop when it counts the failed socket, and the
+        // loop stops reading once StopAsync cancels it, so only this entry shows that the
+        // datagram was taken off the socket and counted.
+        await TftpTestClient.PollAsync(() => _logger.Contains(LogLevel.Debug, "socket failure"));
+        await TftpTestClient.PollAsync(() => _server.ActiveTransferCount == 0);
 
         // The interval has not passed, so only the forced report at the end of the loop logs.
         await _server.StopAsync(CancellationToken.None);
@@ -221,7 +231,7 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
         _clock.Advance(ReportInterval + TimeSpan.FromSeconds(1));
         using UdpClient trigger = new(new IPEndPoint(IPAddress.Loopback, 0));
         await trigger.SendAsync(new byte[] { 0xFF }, ServerEndPoint());
-        await PollAsync(() => _logger.Warnings().Count > 0);
+        await TftpTestClient.PollAsync(() => _logger.Warnings().Count > 0);
     }
 
     /// <summary>
@@ -230,47 +240,5 @@ public sealed class TftpServerProblemSummaryTests : IAsyncLifetime
     private List<string> ProblemWarnings() =>
         [.. _logger.Warnings().Where(w => w.Contains("transfer problems"))];
 
-    /// <summary>
-    ///     This method sends a read request every 100 ms until a reply arrives, and returns
-    ///     <see langword="false" /> after five seconds without one.
-    /// </summary>
-    private async Task<bool> RequestUntilAnsweredAsync(UdpClient client, string filename)
-    {
-        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
-        while (DateTime.UtcNow < deadline)
-        {
-            await client.SendAsync(BuildReadRequest(filename), ServerEndPoint());
-            try
-            {
-                await client.ReceiveAsync().WaitAsync(TimeSpan.FromMilliseconds(100));
-                return true;
-            }
-            catch (TimeoutException) { }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    ///     This method waits up to five seconds for a condition and returns when it holds or the
-    ///     time is up, so the assertion that follows reports the failure.
-    /// </summary>
-    private static async Task PollAsync(Func<bool> condition)
-    {
-        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!condition() && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
-    }
-
     private IPEndPoint ServerEndPoint() => new(IPAddress.Loopback, _server.BoundPort);
-
-    private static byte[] BuildReadRequest(string filename) =>
-        [
-            0x00,
-            0x01,
-            .. System.Text.Encoding.ASCII.GetBytes(filename),
-            0x00,
-            .. "octet"u8.ToArray(),
-            0x00,
-        ];
 }
