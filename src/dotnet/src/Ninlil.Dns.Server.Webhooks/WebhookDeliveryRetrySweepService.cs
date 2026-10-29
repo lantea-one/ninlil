@@ -135,12 +135,12 @@ public sealed class WebhookDeliveryRetrySweepService(
     ///         that is still in the past, or a save that did not stick) is read again, first,
     ///         because the oldest come first; if a whole batch is made of such rows the sweep
     ///         ends, and the rows behind them wait for the next sweep. An exception ends the
-    ///         sweep, as before, and the rows are read again by the next one.
+    ///         sweep, and the rows are read again by the next one.
     ///     </para>
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>How many deliveries were resumed, and how many completed rows were removed.</returns>
-    public async Task<(int Resumed, int Retained)> SweepAsync(
+    public async Task<(int Resumed, int Removed)> SweepAsync(
         CancellationToken stoppingToken = default
     )
     {

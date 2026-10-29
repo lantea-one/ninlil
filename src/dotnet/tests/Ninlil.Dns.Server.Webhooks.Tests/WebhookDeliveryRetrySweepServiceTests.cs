@@ -302,6 +302,57 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This test seeds a completed row older than the default 30-day retention period and a
+    ///     recent one, runs one sweep and checks that the second value of the result counts the
+    ///     one removed row. The values are read by name so a rename of the field breaks the build.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_WithCompletedRowsPastTheRetention_ReturnsHowManyItRemoved()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        await using (AsyncServiceScope scope = _testHost.Host.Services.CreateAsyncScope())
+        {
+            IWebhookDeliveryAttemptRepository repository =
+                scope.ServiceProvider.GetRequiredService<IWebhookDeliveryAttemptRepository>();
+            IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            foreach (
+                (string name, DateTimeOffset completedAtUtc) in new[]
+                {
+                    ("past-retention", now.AddDays(-40)),
+                    ("inside-retention", now.AddMinutes(-5)),
+                }
+            )
+            {
+                await repository.AddAsync(
+                    new WebhookDeliveryAttemptEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        CreatedAtUtc = completedAtUtc,
+                        SubscriptionId = Guid.NewGuid(),
+                        SubscriptionName = name,
+                        EventTypeName = "DnsZoneChanged",
+                        PayloadJson = "{}",
+                        Status = WebhookDeliveryAttemptStatusEnum.Succeeded,
+                        AttemptCount = 1,
+                        MaxAttempts = 5,
+                        LastAttemptedAtUtc = completedAtUtc,
+                        CompletedAtUtc = completedAtUtc,
+                    }
+                );
+            }
+
+            await unitOfWork.SaveChangesAsync();
+        }
+
+        var result = await GetSweepService().SweepAsync();
+
+        Assert.Equal(0, result.Resumed);
+        Assert.Equal(1, result.Removed);
+    }
+
+    /// <summary>
     ///     This method saves a subscription and a delivery whose first attempt failed, without
     ///     calling <see cref="WebhookDeliveryService.DeliverAsync" /> or sending a request: the row
     ///     is <see cref="WebhookDeliveryAttemptStatusEnum.Pending" /> with a
