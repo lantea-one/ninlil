@@ -127,7 +127,7 @@ public class StorageControllerSwitchTests(NinlilDnsWebApplicationFactory factory
         finally
         {
             await client.DeleteAsync("/api/storage/switch");
-            File.Delete(secondDatabasePath);
+            TemporaryFiles.DeleteSqliteDatabase(secondDatabasePath);
         }
     }
 

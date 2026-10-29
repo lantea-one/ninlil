@@ -51,6 +51,11 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
         $"ninlil-dns-acme-settings-direct-tests-{Guid.NewGuid()}.sqlite3"
     );
 
+    private readonly string _accountStatePath = Path.Combine(
+        Path.GetTempPath(),
+        $"ninlil-dns-acme-settings-direct-tests-{Guid.NewGuid():N}-account.json"
+    );
+
     private IHost _host;
 
     /// <summary>
@@ -132,10 +137,7 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
             // once with connection refused.
             options.DirectoryUri = new Uri("http://127.0.0.1:1/directory");
             options.Domains = [UnreachableCaDomain];
-            options.AccountStateFilePath = Path.Combine(
-                Path.GetTempPath(),
-                $"ninlil-dns-acme-settings-direct-tests-{Guid.NewGuid():N}-account.json"
-            );
+            options.AccountStateFilePath = _accountStatePath;
         });
         builder.Services.Configure<CaaAutoManagementOptions>(_ => { });
 
@@ -163,8 +165,8 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
         await _host.StopAsync();
         _host.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
+        TemporaryFiles.DeleteFile(_accountStatePath);
     }
 
     private const string UnreachableCaDomain =

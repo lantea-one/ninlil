@@ -47,8 +47,7 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     [Fact]

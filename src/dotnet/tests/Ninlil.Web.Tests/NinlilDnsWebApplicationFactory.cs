@@ -198,7 +198,7 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
 
         try
         {
-            File.Delete(_sqlitePath);
+            TemporaryFiles.DeleteSqliteDatabase(_sqlitePath);
         }
         catch (IOException)
         {

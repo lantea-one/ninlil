@@ -73,8 +73,7 @@ public sealed class BlockedServicesAndSafeSearchClusterEventTests : IDisposable
         _context.Dispose();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     private BlockedServicesController CreateBlockedServices() =>
