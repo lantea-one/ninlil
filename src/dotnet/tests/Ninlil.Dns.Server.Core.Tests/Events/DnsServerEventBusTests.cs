@@ -447,6 +447,27 @@ public class DnsServerEventBusTests
                 await PushAsync(envelope);
         }
 
+        /// <summary>
+        ///     This method waits until the transport holds at least <paramref name="count" />
+        ///     drain-marker envelopes, so a test knows the broker pump has published everything it
+        ///     queued before the markers.
+        /// </summary>
+        public async Task WaitForMarkersAsync(int count)
+        {
+            DateTime deadline = DateTime.UtcNow + Wait;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                lock (Published)
+                    if (Published.Count(item => item.EventTypeName == "DnsQueryAnswered") >= count)
+                        return;
+
+                await Task.Delay(10);
+            }
+
+            throw new TimeoutException("The broker transport did not receive the drain marker.");
+        }
+
         public async Task WaitForPublishedAsync(int count)
         {
             DateTime deadline = DateTime.UtcNow + Wait;
@@ -470,8 +491,14 @@ public class DnsServerEventBusTests
     {
         private readonly ServiceProvider _provider;
         private readonly List<IHostedService> _services = [];
+        private readonly bool _broker;
+        private int _markersPublished;
 
-        private Bus(ServiceProvider provider) => _provider = provider;
+        private Bus(ServiceProvider provider, bool broker)
+        {
+            _provider = provider;
+            _broker = broker;
+        }
 
         public DnsServerEventPublisher Publisher =>
             _provider.GetRequiredService<DnsServerEventPublisher>();
@@ -551,7 +578,7 @@ public class DnsServerEventBusTests
             services.AddSingleton<BrokerEventPublishService>();
             services.AddSingleton<DnsServerEventDispatcher>();
 
-            Bus bus = new(services.BuildServiceProvider());
+            Bus bus = new(services.BuildServiceProvider(), broker);
 
             if (broker)
             {
@@ -581,7 +608,11 @@ public class DnsServerEventBusTests
         /// <summary>
         ///     This method waits until everything published before it has been dispatched. The
         ///     marker is a per-query event: the dispatcher reads every control event first, then
-        ///     the per-query queue in order, so the marker is the last event handled.
+        ///     the per-query queue in order, so the marker is the last event handled locally. With a
+        ///     broker, broker publishing is a separate pump (one FIFO reader), so the local marker
+        ///     says nothing about it: the method also waits until the transport holds the marker's
+        ///     envelope. The marker crosses the broker, so every earlier broker-bound event has
+        ///     been published by then.
         /// </summary>
         public async Task DrainAsync()
         {
@@ -600,6 +631,9 @@ public class DnsServerEventBusTests
             );
 
             await Local.MarkerSeen.WaitAsync(Wait);
+
+            if (_broker)
+                await Transport.WaitForMarkersAsync(++_markersPublished);
         }
 
         /// <summary>
