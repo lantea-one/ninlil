@@ -3,7 +3,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Enum;
+using Ninlil.Dhcp.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
 
@@ -423,7 +427,6 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
 
         // Prefix delegation scopes do not support reservations, so a reservation write to one is
         // rejected with a ValidationException rather than stored as an address reservation.
-        // Despite the test name, only create is tested, not replace.
         HttpResponseMessage pdCreateResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -452,6 +455,35 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
             }
         );
         Assert.Equal(HttpStatusCode.BadRequest, reservationCreateResponse.StatusCode);
+
+        // The API cannot create a reservation on such a scope, so the row that Replace finds is
+        // stored through the repository.
+        Guid reservationId = Guid.NewGuid();
+        using (IServiceScope serviceScope = factory.Services.CreateScope())
+        {
+            await serviceScope
+                .ServiceProvider.GetRequiredService<IDhcpReservationRepository>()
+                .AddAsync(
+                    new DhcpReservationEntity
+                    {
+                        Id = reservationId,
+                        ScopeId = pdScope.Id,
+                        ClientIdentifier = "00:01:00:01:2c:8b:9c:3d:aa:bb:cc:dd:ee:02",
+                        IpAddress = "2001:db8:4000::1",
+                    }
+                );
+            await serviceScope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        HttpResponseMessage reservationReplaceResponse = await client.PutAsJsonAsync(
+            $"/api/dhcp-scopes/{pdScope.Id}/reservations/{reservationId}",
+            new
+            {
+                clientIdentifier = "00:01:00:01:2c:8b:9c:3d:aa:bb:cc:dd:ee:02",
+                ipAddress = "2001:db8:4000::2",
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, reservationReplaceResponse.StatusCode);
 
         await client.DeleteAsync($"/api/dhcp-scopes/{pdScope.Id}");
     }
