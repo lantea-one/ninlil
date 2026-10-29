@@ -108,12 +108,40 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
             await hosted.StopAsync(CancellationToken.None);
     }
 
-    private static async Task WaitForAsync(Func<bool> condition, string what)
+    /// <summary>
+    ///     This constant contains the text <see cref="ReplicaHealthMonitor" /> puts in the reason of
+    ///     a status when the probe itself threw (timeout, refused connection). Such a status has
+    ///     no schema or lag verdict, so a wait for a verdict must not accept it.
+    /// </summary>
+    private const string ProbeFailedMarker = "The replica check failed";
+
+    /// <summary>
+    ///     This method polls the router until a published status satisfies
+    ///     <paramref name="condition" /> and returns that status. Callers assert on the returned
+    ///     object only: the monitor publishes a new status every second, so reading
+    ///     <c>router.ReplicaHealth</c> again could see a later one.
+    /// </summary>
+    /// <param name="router">The router the monitor reports to.</param>
+    /// <param name="condition">The condition the status must meet.</param>
+    /// <param name="what">What is awaited, for the timeout message.</param>
+    /// <returns>The first status that met the condition.</returns>
+    private static async Task<ReplicaHealthStatus> WaitForStatusAsync(
+        IStorageReadRouter router,
+        Func<ReplicaHealthStatus, bool> condition,
+        string what
+    )
     {
         DateTime deadline = DateTime.UtcNow + PollTimeout;
-        while (!condition())
+        while (true)
         {
-            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting for: {what}.");
+            ReplicaHealthStatus status = router.ReplicaHealth;
+            if (condition(status))
+                return status;
+
+            Assert.True(
+                DateTime.UtcNow < deadline,
+                $"Timed out waiting for: {what}. Last status: {status.Reason}"
+            );
             await Task.Delay(250);
         }
     }
@@ -155,10 +183,14 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
         await StartMonitorAsync(services);
         try
         {
-            await WaitForAsync(() => router.ReplicaHealth.IsEligible, "the replica to be eligible");
+            ReplicaHealthStatus eligible = await WaitForStatusAsync(
+                router,
+                status => status.IsEligible,
+                "the replica to be eligible"
+            );
             // MongoDB optimes have whole-second resolution, so a healthy secondary can show 1 s.
-            Assert.InRange(router.ReplicaHealth.LagSeconds.Value, 0, 1);
-            Assert.True(router.ReplicaHealth.SchemaCurrent);
+            Assert.InRange(eligible.LagSeconds.Value, 0, 1);
+            Assert.True(eligible.SchemaCurrent);
 
             await ReplicaScopeZoneCountAsync(services);
             Assert.Equal(1, router.ReadsToReplica);
@@ -184,7 +216,7 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
         await StartMonitorAsync(services);
         try
         {
-            await WaitForAsync(() => router.ReplicaHealth.IsEligible, "the first eligibility");
+            await WaitForStatusAsync(router, status => status.IsEligible, "the first eligibility");
 
             await host.PauseReplicationAsync(database);
             try
@@ -194,11 +226,12 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
                 await Task.Delay(TimeSpan.FromSeconds(3));
                 await WriteZoneAsync(services, $"health-{Guid.NewGuid():N}.test.");
 
-                await WaitForAsync(
-                    () => !router.ReplicaHealth.IsEligible,
+                ReplicaHealthStatus lagging = await WaitForStatusAsync(
+                    router,
+                    status => !status.IsEligible,
                     "the lagging replica to become ineligible"
                 );
-                Assert.NotEmpty(router.ReplicaHealth.Reason);
+                Assert.NotEmpty(lagging.Reason);
 
                 long toReplica = router.ReadsToReplica;
                 Assert.Equal(1, await ReplicaScopeZoneCountAsync(services));
@@ -210,8 +243,9 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
             }
 
             await host.WaitForCatchUpAsync(database);
-            await WaitForAsync(
-                () => router.ReplicaHealth.IsEligible,
+            await WaitForStatusAsync(
+                router,
+                status => status.IsEligible,
                 "the caught-up replica to be eligible again"
             );
 
@@ -241,10 +275,15 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
         try
         {
             if (BehindDatabaseStartsEligible)
-                await WaitForAsync(() => router.ReplicaHealth.IsEligible, "the first eligibility");
+                await WaitForStatusAsync(
+                    router,
+                    status => status.IsEligible,
+                    "the first eligibility"
+                );
             else
-                await WaitForAsync(
-                    () => router.ReplicaHealth.CheckedAtUtc.HasValue,
+                await WaitForStatusAsync(
+                    router,
+                    status => status.CheckedAtUtc.HasValue,
                     "the first check"
                 );
 
@@ -254,17 +293,20 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
                 await ApplyLastSchemaStepOnPrimaryAsync(database);
                 // The wait is for the schema verdict, not for ineligibility: a last step with
                 // several statements takes long enough that the paused replica can first be
-                // ineligible for lag alone.
-                await WaitForAsync(
-                    () => !router.ReplicaHealth.SchemaCurrent,
+                // ineligible for lag alone. A status from a probe that threw (timeout, refused
+                // connection) also has SchemaCurrent false but carries no verdict and no schema
+                // reason, so it does not end the wait. The status before the first check has
+                // the same shape and is excluded by its missing check time.
+                ReplicaHealthStatus behind = await WaitForStatusAsync(
+                    router,
+                    status =>
+                        status.CheckedAtUtc.HasValue
+                        && !status.SchemaCurrent
+                        && !status.Reason.Contains(ProbeFailedMarker, StringComparison.Ordinal),
                     "the replica one schema step behind to be seen as behind"
                 );
-                Assert.False(router.ReplicaHealth.IsEligible);
-                Assert.Contains(
-                    "schema",
-                    router.ReplicaHealth.Reason,
-                    StringComparison.OrdinalIgnoreCase
-                );
+                Assert.False(behind.IsEligible);
+                Assert.Contains("schema", behind.Reason, StringComparison.OrdinalIgnoreCase);
 
                 long toReplica = router.ReadsToReplica;
                 await ReplicaScopeZoneCountAsync(services);
@@ -276,11 +318,12 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
             }
 
             await host.WaitForCatchUpAsync(database);
-            await WaitForAsync(
-                () => router.ReplicaHealth.IsEligible,
+            ReplicaHealthStatus current = await WaitForStatusAsync(
+                router,
+                status => status.IsEligible,
                 "the replica to be eligible with the new schema step"
             );
-            Assert.True(router.ReplicaHealth.SchemaCurrent);
+            Assert.True(current.SchemaCurrent);
         }
         finally
         {
