@@ -126,10 +126,13 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_ChangesTheAmplificationCapTheVeryNextQueryUses_WithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-pipeline-amplification-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-pipeline-amplification-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         DnsQueryProcessingPipeline pipeline = null;
 
@@ -201,7 +204,7 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             );
 
             // Poll the value itself rather than trusting one OnChange: a late notification from
-            // the first write can fire first and made this test flaky.
+            // the first write can fire first.
             await WaitForReloadAsync(
                 monitor,
                 () => monitor.CurrentValue.MaxUdpAmplificationFactor == 1000.0
@@ -233,11 +236,11 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
 
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temp file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }
@@ -245,10 +248,13 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_OnlyChangesChannelCapacityAfterARestart_NeverLive()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-pipeline-channel-capacity-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-pipeline-channel-capacity-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         DnsQueryProcessingPipeline pipeline = null;
 
@@ -338,6 +344,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             );
             Task enqueueCTask = enqueueCValueTask.AsTask();
 
+            // A negative window: no signal exists for "the enqueue is still waiting", so give a
+            // wrongly completing enqueue a moment to show itself.
             await Task.Delay(200);
             Assert.False(
                 enqueueCTask.IsCompleted,
@@ -358,11 +366,13 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             );
 
             // Poll the value itself rather than trusting one OnChange: a late notification from
-            // the first write can fire first and made this test flaky.
+            // the first write can fire first.
             await WaitForReloadAsync(monitor, () => monitor.CurrentValue.ChannelCapacity == 100);
 
             // The options now say 100, but the running channel was built with capacity 1 and is
             // only rebuilt on restart, so the third enqueue is still waiting.
+            // A negative window, as above: a capacity change that wrongly took effect would let
+            // the waiting enqueue complete, and no signal marks the absence of that.
             await Task.Delay(200);
             Assert.False(
                 enqueueCTask.IsCompleted,
@@ -421,11 +431,11 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
 
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temp file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

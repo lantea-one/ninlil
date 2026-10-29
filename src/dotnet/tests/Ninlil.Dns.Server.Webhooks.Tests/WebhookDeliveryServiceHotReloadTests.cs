@@ -64,10 +64,13 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_ChangesTheRetryDelayTheVeryNextAttemptComputes_WithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-webhook-initial-retry-delay-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-webhook-initial-retry-delay-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         try
         {
@@ -167,7 +170,7 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
             );
 
             // Poll for the new value rather than waiting for one OnChange: a late notification
-            // from the first write can race this one, which made the test flaky.
+            // from the first write can race this one.
             await WaitForReloadAsync(
                 monitor,
                 () => monitor.CurrentValue.InitialRetryDelay == TimeSpan.FromSeconds(1)
@@ -191,11 +194,11 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temporary file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

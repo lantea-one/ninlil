@@ -88,10 +88,13 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_ChangesWhatTheVeryNextGenerateKeyCallAllows_WithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-dnssec-algorithm-policy-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-dnssec-algorithm-policy-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         try
         {
@@ -129,9 +132,6 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
             );
             Assert.Equal(DnssecAlgorithmEnum.Ed25519, before.Algorithm);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             // The same write DnssecPolicySettingsController.Patch makes, limiting new keys to the
             // FIPS preset's list: RSASHA256, ECDSAP256SHA256 and ECDSAP384SHA384.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
@@ -150,13 +150,17 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
                 path
             );
 
-            // The JSON provider debounces file-change notifications, so wait for the reload
-            // event rather than a fixed delay.
-            Task completed = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
-            );
-            Assert.Same(reloaded.Task, completed);
+            // The JSON provider debounces file-change notifications by a few hundred milliseconds.
+            // Wait up to ten seconds for the written value itself, not for the first change
+            // notification: a notification can arrive for an earlier, partial state of the file
+            // and reload before the final content is visible.
+            for (
+                int attempt = 0;
+                attempt < 200 && monitor.CurrentValue.AllowedAlgorithms.Count != 3;
+                attempt++
+            )
+                await Task.Delay(50);
+
             Assert.Equal(3, monitor.CurrentValue.AllowedAlgorithms.Count);
 
             // The same instance, built before the write, now rejects Ed25519, so the policy is
@@ -181,11 +185,11 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temp file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }
