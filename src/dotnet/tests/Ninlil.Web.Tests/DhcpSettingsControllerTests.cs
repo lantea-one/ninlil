@@ -1353,11 +1353,17 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
 
         HttpResponseMessage response = await client.SendAsync(
-            // A malformed value, not a negative one as the test name says.
-            PatchRequest("/api/dhcp-settings/ra", new { routerLifetime = "not-a-timespan" })
+            PatchRequest("/api/dhcp-settings/ra", new { routerLifetime = "-00:00:01" })
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // A value that is not a time span at all is refused too.
+        HttpResponseMessage malformedResponse = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/ra", new { routerLifetime = "not-a-timespan" })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, malformedResponse.StatusCode);
     }
 
     [Fact]
