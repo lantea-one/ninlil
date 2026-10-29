@@ -33,7 +33,7 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
     ///     whole list and never mutates it in place, so a concurrent reader never sees a
     ///     half-built snapshot.
     /// </summary>
-    private volatile IReadOnlyList<DnsAccessControlRuleEntity> _rules = [];
+    private volatile ParsedRule[] _rules = [];
 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken) =>
@@ -53,14 +53,14 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
     {
         // Read the snapshot reference once: ReloadAsync may swap _rules concurrently, and one
         // check must see a single consistent list, never a mix of old and new.
-        IReadOnlyList<DnsAccessControlRuleEntity> rules = _rules;
+        ParsedRule[] rules = _rules;
 
-        foreach (DnsAccessControlRuleEntity rule in rules)
+        foreach (ParsedRule rule in rules)
         {
-            if (!rule.Capabilities.HasFlag(capability))
+            if ((rule.Capabilities & capability) != capability)
                 continue;
 
-            if (ClientAddress.NetworkContains(rule.Cidr, remoteAddress))
+            if (rule.Network.Contains(remoteAddress))
                 return true;
         }
 
@@ -81,6 +81,29 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
         IDnsAccessControlRuleRepository repository =
             scope.ServiceProvider.GetRequiredService<IDnsAccessControlRuleRepository>();
 
-        _rules = await repository.ListEnabledAsync(stoppingToken);
+        IReadOnlyList<DnsAccessControlRuleEntity> entities = await repository.ListEnabledAsync(
+            stoppingToken
+        );
+
+        // Each rule's CIDR text is parsed here, once per load. A rule whose text does not parse
+        // could never match an address, so it is left out and the others keep their order.
+        List<ParsedRule> parsed = [];
+
+        foreach (DnsAccessControlRuleEntity entity in entities)
+        {
+            if (NetworkEntry.TryParse(entity.Cidr, out NetworkEntry network))
+                parsed.Add(new ParsedRule(network, entity.Capabilities));
+        }
+
+        _rules = [.. parsed];
     }
+
+    /// <summary>
+    ///     This record is one enabled rule as the query path needs it: the parsed network and the
+    ///     capabilities it grants.
+    /// </summary>
+    private sealed record ParsedRule(
+        NetworkEntry Network,
+        DnsAccessControlCapabilityEnum Capabilities
+    );
 }

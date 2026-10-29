@@ -1,4 +1,5 @@
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Filtering;
@@ -84,11 +85,35 @@ public sealed record DnsFilterGroup(
 );
 
 /// <summary>
-///     This record is one network row of a group.
+///     This record is one network row of a group. The CIDR text is parsed once, when the row is
+///     built with the configuration snapshot, so matching a client address against it parses
+///     nothing.
 /// </summary>
 /// <param name="Cidr">The address or CIDR network, or <see langword="null" /> on a ClientID row.</param>
 /// <param name="ClientId">The DNS-over-HTTPS ClientID label, or <see langword="null" /> on a CIDR row.</param>
-public sealed record DnsFilterGroupNetwork(string Cidr, string ClientId);
+public sealed record DnsFilterGroupNetwork(string Cidr, string ClientId)
+{
+    /// <summary>
+    ///     This property is the parsed <see cref="Cidr" />, or <see langword="null" /> when the row
+    ///     has none or the text does not parse (such a row matches no address, as
+    ///     <see cref="ClientAddress.NetworkContains" /> does).
+    /// </summary>
+    public NetworkEntry Network { get; } =
+        NetworkEntry.TryParse(Cidr, out NetworkEntry parsed) ? parsed : null;
+
+    /// <summary>
+    ///     This method compares the two text fields only. <see cref="Network" /> is derived from
+    ///     <see cref="Cidr" />, and the generated comparison would otherwise compare parsed
+    ///     objects by reference, so two rows with the same text would differ.
+    /// </summary>
+    public bool Equals(DnsFilterGroupNetwork other) =>
+        other is not null && Cidr == other.Cidr && ClientId == other.ClientId;
+
+    /// <summary>
+    ///     This method hashes the same two text fields <see cref="Equals(DnsFilterGroupNetwork)" /> compares.
+    /// </summary>
+    public override int GetHashCode() => HashCode.Combine(Cidr, ClientId);
+}
 
 /// <summary>
 ///     This record is one enabled filter list without its entries.

@@ -110,7 +110,7 @@ public sealed class StaticAddressMappingClientIdentityResolver(
 
         foreach (Mapping mapping in snapshot.Mappings)
         {
-            if (ClientAddress.NetworkContains(mapping.Cidr, normalizedAddress))
+            if (mapping.Network.Contains(normalizedAddress))
                 return mapping.Resolution;
         }
 
@@ -133,19 +133,32 @@ public sealed class StaticAddressMappingClientIdentityResolver(
         IReadOnlyList<DnsClientStaticAddressMappingEntity> mappings =
             await repository.ListEnabledAsync(stoppingToken);
 
-        return new MappingSnapshot([
-            .. mappings.Select(mapping => new Mapping(
-                mapping.Cidr,
-                new ClientIdentityResolution(mapping.ClientIdentifier, mapping.ProtocolVersion)
-            )),
-        ]);
+        // The CIDR text is parsed here, once per load. A mapping whose text does not parse could
+        // never match an address, so it is left out and the others keep their order.
+        List<Mapping> parsed = [];
+
+        foreach (DnsClientStaticAddressMappingEntity mapping in mappings)
+        {
+            if (NetworkEntry.TryParse(mapping.Cidr, out NetworkEntry network))
+                parsed.Add(
+                    new Mapping(
+                        network,
+                        new ClientIdentityResolution(
+                            mapping.ClientIdentifier,
+                            mapping.ProtocolVersion
+                        )
+                    )
+                );
+        }
+
+        return new MappingSnapshot(parsed);
     }
 
     /// <summary>
-    ///     This record is one enabled mapping: the address or CIDR network it covers and the
-    ///     identity it gives.
+    ///     This record is one enabled mapping: the parsed address or CIDR network it covers and
+    ///     the identity it gives.
     /// </summary>
-    private sealed record Mapping(string Cidr, ClientIdentityResolution Resolution);
+    private sealed record Mapping(NetworkEntry Network, ClientIdentityResolution Resolution);
 
     /// <summary>
     ///     This record is the immutable list of enabled mappings, in repository order.

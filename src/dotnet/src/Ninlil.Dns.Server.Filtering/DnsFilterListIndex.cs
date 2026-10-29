@@ -54,9 +54,15 @@ public sealed class DnsFilterListIndex
     private readonly HashSet<string>.AlternateLookup<ReadOnlySpan<char>> _exceptionLookup;
 
     /// <summary>
-    ///     This field is the entry values of a network list.
+    ///     This field is the parsed entries of a network list, in list order. An entry that does
+    ///     not parse is left out: it never matches an address.
     /// </summary>
-    private readonly string[] _networkValues;
+    private readonly NetworkEntry[] _networks;
+
+    /// <summary>
+    ///     This field is the number of network entries the list had, parsed or not.
+    /// </summary>
+    private readonly int _networkEntryCount;
 
     /// <summary>
     ///     This constructor wraps the already built parts.
@@ -73,7 +79,15 @@ public sealed class DnsFilterListIndex
         _exceptions = exceptions;
         _exceptionLookup = exceptions.GetAlternateLookup<ReadOnlySpan<char>>();
         Patterns = patterns;
-        _networkValues = networkValues;
+        _networkEntryCount = networkValues.Length;
+        _networks =
+        [
+            .. networkValues
+                .Select(value =>
+                    NetworkEntry.TryParse(value, out NetworkEntry network) ? network : null
+                )
+                .Where(network => network is not null),
+        ];
     }
 
     /// <summary>
@@ -84,8 +98,7 @@ public sealed class DnsFilterListIndex
     /// <summary>
     ///     This property is the number of entries the index was built from, for diagnostics.
     /// </summary>
-    public int EntryCount =>
-        _rules.Count + _exceptions.Count + Patterns.Count + _networkValues.Length;
+    public int EntryCount => _rules.Count + _exceptions.Count + Patterns.Count + _networkEntryCount;
 
     /// <summary>
     ///     This method builds the index of one list from its entries.
@@ -193,14 +206,15 @@ public sealed class DnsFilterListIndex
     }
 
     /// <summary>
-    ///     This method says whether any entry of a network list contains an address.
+    ///     This method says whether any entry of a network list contains an address. The entries
+    ///     are parsed when the index is built, so a query parses nothing.
     /// </summary>
     /// <param name="address">The address to test.</param>
     public bool ContainsAddress(IPAddress address)
     {
-        foreach (string value in _networkValues)
+        foreach (NetworkEntry network in _networks)
         {
-            if (ClientAddress.NetworkContains(value, address))
+            if (network.Contains(address))
                 return true;
         }
 

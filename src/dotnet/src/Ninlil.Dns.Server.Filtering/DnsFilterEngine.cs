@@ -453,7 +453,7 @@ public sealed class DnsFilterEngine(
             // matching the ClientID from a DNS-over-HTTPS URL path (see
             // DnsClientGroupNetworkEntity.ClientId).
             bool matchesNetwork = group.Networks.Any(network =>
-                ClientAddress.NetworkContains(network.Cidr, remoteAddress)
+                network.Network?.Contains(remoteAddress) == true
             );
             bool matchesClientId =
                 clientId is not null
@@ -540,7 +540,7 @@ public sealed class DnsFilterEngine(
     /// <summary>
     ///     This method checks one IP address against already-resolved network lists
     ///     (<see cref="DnsFilterListKindEnum.ClientSource" /> or <see cref="DnsFilterListKindEnum.ResponseIp" />).
-    ///     Entries are matched with <see cref="ClientAddress.NetworkContains" />, which treats
+    ///     Entries are matched with <see cref="NetworkEntry.Contains" />, which treats
     ///     an IPv4-mapped IPv6 address as its IPv4 form.
     /// </summary>
     private async Task<DnsFilterDecision> EvaluateNetworkListsAsync(

@@ -258,4 +258,32 @@ public sealed class StaticAddressMappingClientIdentityResolverTests : IAsyncLife
 
         Assert.NotNull(await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42")));
     }
+
+    [Fact]
+    public async Task ResolveAsync_AMappingWhoseCidrDoesNotParse_MatchesNothingAndTheOthersStillResolve()
+    {
+        await _host.SeedMappingAsync(
+            "not a network",
+            "aa:aa:aa:aa:aa:aa",
+            InternetProtocolVersionEnum.IPv4
+        );
+        await _host.SeedMappingAsync(
+            "10.77.0.0/99",
+            "bb:bb:bb:bb:bb:bb",
+            InternetProtocolVersionEnum.IPv4
+        );
+        await _host.SeedMappingAsync(
+            "10.77.0.0/24",
+            "cc:cc:cc:cc:cc:cc",
+            InternetProtocolVersionEnum.IPv4
+        );
+
+        ClientIdentityResolution resolution = await _host.Resolver.ResolveAsync(
+            IPAddress.Parse("10.77.0.5")
+        );
+
+        Assert.NotNull(resolution);
+        Assert.Equal("cc:cc:cc:cc:cc:cc", resolution.ClientIdentifier);
+        Assert.Null(await _host.Resolver.ResolveAsync(IPAddress.Parse("10.78.0.5")));
+    }
 }
