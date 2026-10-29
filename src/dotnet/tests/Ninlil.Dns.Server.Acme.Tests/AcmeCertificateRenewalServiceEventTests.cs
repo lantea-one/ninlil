@@ -32,6 +32,11 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
         $"ninlil-dns-acme-renewal-event-tests-{Guid.NewGuid()}.sqlite3"
     );
 
+    private readonly string _accountStatePath = Path.Combine(
+        Path.GetTempPath(),
+        $"ninlil-dns-acme-renewal-event-tests-{Guid.NewGuid()}-account.json"
+    );
+
     private IHost _host;
     private RecordingEventPublisher _publisher;
 
@@ -65,10 +70,7 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
             // refused at once instead of waiting for a timeout, as an unreachable address would.
             options.DirectoryUri = new Uri("http://127.0.0.1:1/directory");
             options.Domains = ["example.invalid"];
-            options.AccountStateFilePath = Path.Combine(
-                Path.GetTempPath(),
-                $"ninlil-dns-acme-renewal-event-tests-{Guid.NewGuid()}-account.json"
-            );
+            options.AccountStateFilePath = _accountStatePath;
         });
         builder.Services.Configure<CaaAutoManagementOptions>(_ => { });
 
@@ -100,8 +102,8 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
         await _host.StopAsync();
         _host.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
+        TemporaryFiles.DeleteFile(_accountStatePath);
     }
 
     [Fact]
