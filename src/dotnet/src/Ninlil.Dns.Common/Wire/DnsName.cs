@@ -1,5 +1,3 @@
-using System.Text;
-
 // Define our namespace.
 namespace Ninlil.Dns.Common.Wire;
 
@@ -9,6 +7,13 @@ namespace Ninlil.Dns.Common.Wire;
 ///     rather than one joined string. RFC 1035 §3.1 allows any bytes in a label, so this class
 ///     does not assume ASCII, although almost all names are ASCII or the "xn--" punycode form of
 ///     an internationalized name. Comparison is case-insensitive for ASCII letters only.
+///     <para>
+///         A name is immutable. It keeps the label list and the label arrays it is given, hands
+///         them out through <see cref="Labels" /> and shares them with the names
+///         <see cref="Suffix" /> returns, so nothing may write into a label array or change the
+///         list after the name is built. The hash code and the presentation text are computed on
+///         first use and kept, which is only correct because the labels never change.
+///     </para>
 /// </summary>
 public sealed class DnsName : IEquatable<DnsName>
 {
@@ -37,6 +42,25 @@ public sealed class DnsName : IEquatable<DnsName>
     public IReadOnlyList<byte[]> Labels { get; }
 
     /// <summary>
+    ///     This field contains the uncompressed wire length, computed once by the constructor.
+    /// </summary>
+    private readonly int wireLength;
+
+    /// <summary>
+    ///     This field contains the hash code once <see cref="GetHashCode" /> has computed it, and
+    ///     zero before. It is one <see langword="int" /> so a concurrent first call can at worst
+    ///     compute and store the same value twice; no reader sees a half-written pair of flag and
+    ///     value.
+    /// </summary>
+    private int hashCode;
+
+    /// <summary>
+    ///     This field contains the presentation text once <see cref="ToString" /> has built it. A
+    ///     reference write is atomic, and every builder produces equal text.
+    /// </summary>
+    private string text;
+
+    /// <summary>
     ///     This property indicates whether this is the root name.
     /// </summary>
     public bool IsRoot => Labels.Count == 0;
@@ -45,7 +69,7 @@ public sealed class DnsName : IEquatable<DnsName>
     ///     This property contains the uncompressed wire length of this name: one length octet plus
     ///     the content of each label, plus the final root octet.
     /// </summary>
-    public int WireLength => Labels.Sum(label => label.Length + 1) + 1;
+    public int WireLength => wireLength;
 
     /// <summary>
     ///     This method instantiates a name from its labels. Most callers should use
@@ -59,6 +83,8 @@ public sealed class DnsName : IEquatable<DnsName>
     /// </exception>
     public DnsName(IReadOnlyList<byte[]> labels)
     {
+        int length = 1;
+
         foreach (byte[] label in labels)
         {
             if (label.Length == 0)
@@ -69,15 +95,84 @@ public sealed class DnsName : IEquatable<DnsName>
                     $"A DNS label may not exceed {MaximumLabelLength} octets.",
                     nameof(labels)
                 );
+
+            length += label.Length + 1;
         }
 
-        Labels = labels;
-
-        if (WireLength > MaximumWireLength)
+        if (length > MaximumWireLength)
             throw new ArgumentException(
                 $"A DNS name may not exceed {MaximumWireLength} octets once encoded.",
                 nameof(labels)
             );
+
+        Labels = labels;
+        wireLength = length;
+    }
+
+    /// <summary>
+    ///     This method instantiates a name from labels that the caller has already checked, for
+    ///     <see cref="DnsMessageReader" />, which validates each label length and the running
+    ///     wire length while it reads, and for <see cref="Suffix" />, whose labels come from a
+    ///     valid name. It skips the validation the public constructor repeats.
+    /// </summary>
+    /// <param name="labels">
+    ///     Non-empty labels of at most <see cref="MaximumLabelLength" /> octets. The name keeps
+    ///     this array.
+    /// </param>
+    /// <param name="wireLength">
+    ///     The uncompressed wire length of the labels, at most <see cref="MaximumWireLength" />.
+    /// </param>
+    internal DnsName(byte[][] labels, int wireLength)
+    {
+        Labels = labels;
+        this.wireLength = wireLength;
+    }
+
+    /// <summary>
+    ///     This method returns this name without its first <paramref name="skipLabels" /> labels:
+    ///     for <c>www.example.com</c>, skipping 1 gives <c>example.com</c>. Walking a name's
+    ///     parent zones this way costs one small array per step instead of a new validated name.
+    ///     The result shares this name's label arrays (no byte is copied) and skips validation,
+    ///     because a suffix of a valid name is valid; sharing is safe because a name never changes.
+    /// </summary>
+    /// <param name="skipLabels">
+    ///     How many labels to drop from the left, from 0 (this name) to the label count (the root).
+    /// </param>
+    /// <returns>
+    ///     This same instance when <paramref name="skipLabels" /> is 0, <see cref="Root" /> when it
+    ///     equals the label count, and a new name otherwise.
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     Thrown when <paramref name="skipLabels" /> is negative or greater than the label count.
+    /// </exception>
+    public DnsName Suffix(int skipLabels)
+    {
+        int count = Labels.Count;
+
+        if ((uint)skipLabels > (uint)count)
+            throw new ArgumentOutOfRangeException(
+                nameof(skipLabels),
+                skipLabels,
+                $"A name with {count} labels has no suffix that skips {skipLabels}."
+            );
+
+        if (skipLabels == 0)
+            return this;
+
+        if (skipLabels == count)
+            return Root;
+
+        // Subtract the skipped labels from the known wire length rather than summing what is
+        // left; the shorter side is usually the skipped one.
+        int suffixWireLength = wireLength;
+        for (int i = 0; i < skipLabels; i++)
+            suffixWireLength -= Labels[i].Length + 1;
+
+        byte[][] suffixLabels = new byte[count - skipLabels][];
+        for (int i = 0; i < suffixLabels.Length; i++)
+            suffixLabels[i] = Labels[skipLabels + i];
+
+        return new DnsName(suffixLabels, suffixWireLength);
     }
 
     /// <summary>
@@ -220,40 +315,75 @@ public sealed class DnsName : IEquatable<DnsName>
     private static string NonAsciiError(string presentation, int position) =>
         $"'{presentation}' contains a non-ASCII character at position {position}; use the xn-- form or a \\DDD escape.";
 
-    /// <inheritdoc />
-    public override string ToString()
+    /// <summary>
+    ///     This method returns the presentation form of this name: each label followed by a dot,
+    ///     with <c>\.</c> and <c>\\</c> for a literal dot or backslash and a three-digit decimal
+    ///     escape for any byte outside printable ASCII. The text is built on the first call and the
+    ///     same instance is returned afterwards.
+    /// </summary>
+    public override string ToString() => text ??= BuildText();
+
+    /// <summary>
+    ///     This method builds the presentation text for <see cref="ToString" />.
+    /// </summary>
+    private string BuildText()
     {
         if (IsRoot)
             return ".";
 
-        StringBuilder builder = new();
+        // Count the characters first so the string is allocated once at its final size: one for
+        // an ordinary byte, two for an escaped dot or backslash, four for a decimal escape, and
+        // one for the dot after each label.
+        int length = 0;
 
         foreach (byte[] label in Labels)
         {
             foreach (byte b in label)
-            {
-                // Escape the two characters that are ambiguous in presentation form, and write any
-                // byte outside printable ASCII as a three-digit decimal escape.
-                if (b is (byte)'.' or (byte)'\\')
-                {
-                    builder.Append('\\').Append((char)b);
-                }
-                else if (b is < 0x20 or > 0x7E)
-                {
-                    builder.Append('\\').Append(b.ToString("D3"));
-                }
-                else
-                {
-                    builder.Append((char)b);
-                }
-            }
+                length +=
+                    b is (byte)'.' or (byte)'\\' ? 2
+                    : b is < 0x20 or > 0x7E ? 4
+                    : 1;
 
-            builder.Append('.');
+            length++;
         }
 
-        // Every label, including the last, is followed by a dot, which gives the
-        // fully-qualified form.
-        return builder.ToString();
+        return string.Create(
+            length,
+            Labels,
+            static (span, labels) =>
+            {
+                int position = 0;
+
+                foreach (byte[] label in labels)
+                {
+                    foreach (byte b in label)
+                    {
+                        // Escape the two characters that are ambiguous in presentation form, and
+                        // write any byte outside printable ASCII as a three-digit decimal escape.
+                        if (b is (byte)'.' or (byte)'\\')
+                        {
+                            span[position++] = '\\';
+                            span[position++] = (char)b;
+                        }
+                        else if (b is < 0x20 or > 0x7E)
+                        {
+                            span[position++] = '\\';
+                            span[position++] = (char)('0' + (b / 100));
+                            span[position++] = (char)('0' + (b / 10 % 10));
+                            span[position++] = (char)('0' + (b % 10));
+                        }
+                        else
+                        {
+                            span[position++] = (char)b;
+                        }
+                    }
+
+                    // Every label, including the last, is followed by a dot, which gives the
+                    // fully-qualified form.
+                    span[position++] = '.';
+                }
+            }
+        );
     }
 
     /// <inheritdoc />
@@ -289,16 +419,31 @@ public sealed class DnsName : IEquatable<DnsName>
     /// <inheritdoc />
     public override bool Equals(object obj) => Equals(obj as DnsName);
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     This method returns a hash code that agrees with <see cref="Equals(DnsName)" />: it
+    ///     hashes the labels' bytes with ASCII letters upper-cased, so names that differ only in
+    ///     case hash alike. The value is computed on the first call and kept. It is stable only
+    ///     within one process.
+    /// </summary>
     public override int GetHashCode()
     {
+        int cached = hashCode;
+
+        if (cached != 0)
+            return cached;
+
         HashCode hash = new();
 
         foreach (byte[] label in Labels)
         foreach (byte b in label)
             hash.Add(AsciiUpper(b));
 
-        return hash.ToHashCode();
+        // Zero marks "not computed yet", so a name whose hash is zero stores one instead. Equal
+        // names still agree because every name goes through this same remapping.
+        int computed = hash.ToHashCode();
+        cached = computed == 0 ? 1 : computed;
+        hashCode = cached;
+        return cached;
     }
 
     /// <summary>

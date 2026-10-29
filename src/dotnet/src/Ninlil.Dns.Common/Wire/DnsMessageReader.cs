@@ -311,7 +311,11 @@ public static class DnsMessageReader
     /// </exception>
     internal static DnsName ReadName(ReadOnlySpan<byte> buffer, ref int offset)
     {
-        List<byte[]> labels = [];
+        // Where each label's length octet sits in the message. A name has at most 127 labels
+        // (each takes two or more of the 255 wire octets), so the offsets fit on the stack and
+        // the label array can be allocated once at its final size.
+        Span<int> labelOffsets = stackalloc int[(DnsName.MaximumWireLength - 1) / 2];
+        int labelCount = 0;
         // The running uncompressed wire length: the root octet plus 1 + length per label. It is
         // checked before the name is built so a long pointer-free name costs no allocation.
         int wireLength = 1;
@@ -370,13 +374,26 @@ public static class DnsMessageReader
                     $"A DNS name may not exceed {DnsName.MaximumWireLength} octets once encoded."
                 );
 
-            labels.Add(buffer.Slice(currentOffset + 1, lengthOrPointer).ToArray());
+            // The slice checks that the label lies inside the message before the name is built.
+            _ = buffer.Slice(currentOffset + 1, lengthOrPointer);
+            labelOffsets[labelCount++] = currentOffset;
             currentOffset += 1 + lengthOrPointer;
         }
 
         offset = returnOffset ?? currentOffset;
 
-        return new DnsName(labels);
+        if (labelCount == 0)
+            return DnsName.Root;
+
+        // Every label is 1 to 63 octets (the length octet's top bits are 00 and it is not zero)
+        // and the total is within 255 octets (checked above), so the name needs no second
+        // validation.
+        byte[][] labels = new byte[labelCount][];
+
+        for (int i = 0; i < labelCount; i++)
+            labels[i] = buffer.Slice(labelOffsets[i] + 1, buffer[labelOffsets[i]]).ToArray();
+
+        return new DnsName(labels, wireLength);
     }
 
     /// <summary>

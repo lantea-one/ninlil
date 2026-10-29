@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Text;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire.Records;
 
@@ -29,58 +28,126 @@ public static class DnsMessageWriter
     private const int MaximumCompressionPointerOffset = 0x3FFF;
 
     /// <summary>
+    ///     This constant contains the largest buffer capacity, in octets, a thread keeps between
+    ///     messages. A thread that writes a rare very large message gives the memory back instead
+    ///     of holding it for the life of the thread.
+    /// </summary>
+    private const int MaximumRetainedBufferCapacity = 64 * 1024;
+
+    /// <summary>
+    ///     This constant contains the largest compression map, in entries, a thread keeps between
+    ///     messages, for the same reason as <see cref="MaximumRetainedBufferCapacity" />.
+    /// </summary>
+    private const int MaximumRetainedMapEntries = 1024;
+
+    /// <summary>
+    ///     This field holds the calling thread's reusable buffer and compression map, or
+    ///     <see langword="null" /> when none is free. It is per thread, so no lock is needed, and
+    ///     each message starts from a cleared state, so no name or byte leaks from one message into
+    ///     the next.
+    /// </summary>
+    [ThreadStatic]
+    private static WriterState threadState;
+
+    /// <summary>
     ///     This method encodes a complete DNS message.
     /// </summary>
     /// <param name="message">The message to encode.</param>
     /// <returns>The encoded message, ready to hand to any transport.</returns>
     public static byte[] Write(DnsMessage message)
     {
-        ArrayBufferWriter<byte> buffer = new();
-        Dictionary<string, ushort> compressionOffsetsByName = new();
+        WriterState state = AcquireState();
 
-        (byte baseResponseCode, byte extendedResponseCode) = SplitResponseCode(
-            message.ResponseCode
-        );
-
-        WriteUInt16(buffer, message.Id);
-        WriteUInt16(buffer, ComputeFlags(message, baseResponseCode));
-        WriteUInt16(buffer, (ushort)message.Questions.Count);
-        WriteUInt16(buffer, (ushort)message.Answers.Count);
-        WriteUInt16(buffer, (ushort)message.AuthorityRecords.Count);
-        WriteUInt16(
-            buffer,
-            (ushort)(
-                message.AdditionalRecords.Count
-                + (message.Edns is null ? 0 : 1)
-                + (message.Tsig is null ? 0 : 1)
-            )
-        );
-
-        foreach (DnsQuestion question in message.Questions)
+        try
         {
-            WriteName(buffer, question.Name, compressionOffsetsByName);
-            WriteUInt16(buffer, (ushort)question.Type);
-            WriteUInt16(buffer, (ushort)question.Class);
+            ArrayBufferWriter<byte> buffer = state.Buffer;
+            Dictionary<SuffixKey, ushort> compressionOffsetsByName = state.CompressionOffsets;
+
+            (byte baseResponseCode, byte extendedResponseCode) = SplitResponseCode(
+                message.ResponseCode
+            );
+
+            WriteUInt16(buffer, message.Id);
+            WriteUInt16(buffer, ComputeFlags(message, baseResponseCode));
+            WriteUInt16(buffer, (ushort)message.Questions.Count);
+            WriteUInt16(buffer, (ushort)message.Answers.Count);
+            WriteUInt16(buffer, (ushort)message.AuthorityRecords.Count);
+            WriteUInt16(
+                buffer,
+                (ushort)(
+                    message.AdditionalRecords.Count
+                    + (message.Edns is null ? 0 : 1)
+                    + (message.Tsig is null ? 0 : 1)
+                )
+            );
+
+            foreach (DnsQuestion question in message.Questions)
+            {
+                WriteName(buffer, question.Name, compressionOffsetsByName);
+                WriteUInt16(buffer, (ushort)question.Type);
+                WriteUInt16(buffer, (ushort)question.Class);
+            }
+
+            foreach (DnsResourceRecord record in message.Answers)
+                WriteResourceRecord(buffer, record, compressionOffsetsByName);
+
+            foreach (DnsResourceRecord record in message.AuthorityRecords)
+                WriteResourceRecord(buffer, record, compressionOffsetsByName);
+
+            foreach (DnsResourceRecord record in message.AdditionalRecords)
+                WriteResourceRecord(buffer, record, compressionOffsetsByName);
+
+            if (message.Edns is not null)
+                WriteOptRecord(buffer, message.Edns, extendedResponseCode);
+
+            // RFC 8945 §5.2 requires the TSIG record to be the last record in the message, so it
+            // comes after everything else, including the OPT record.
+            if (message.Tsig is not null)
+                WriteTsigRecord(buffer, message.Tsig);
+
+            return buffer.WrittenSpan.ToArray();
         }
+        finally
+        {
+            ReleaseState(state);
+        }
+    }
 
-        foreach (DnsResourceRecord record in message.Answers)
-            WriteResourceRecord(buffer, record, compressionOffsetsByName);
+    /// <summary>
+    ///     This method takes the calling thread's writer state, or builds a new one when the thread
+    ///     has none or it is already in use.
+    /// </summary>
+    private static WriterState AcquireState()
+    {
+        WriterState state = threadState;
 
-        foreach (DnsResourceRecord record in message.AuthorityRecords)
-            WriteResourceRecord(buffer, record, compressionOffsetsByName);
+        // Taking the state out of the field makes a re-entrant call on the same thread build its
+        // own instead of sharing a buffer that is being written.
+        if (state is null)
+            return new WriterState();
 
-        foreach (DnsResourceRecord record in message.AdditionalRecords)
-            WriteResourceRecord(buffer, record, compressionOffsetsByName);
+        threadState = null;
+        return state;
+    }
 
-        if (message.Edns is not null)
-            WriteOptRecord(buffer, message.Edns, extendedResponseCode);
+    /// <summary>
+    ///     This method clears a writer state and gives it back to the calling thread, unless a
+    ///     message made it grow past the retention limits, in which case it is dropped.
+    /// </summary>
+    private static void ReleaseState(WriterState state)
+    {
+        // The map holds references to the message's names, so it is cleared on every exit,
+        // including an exception, and no name outlives its message.
+        state.CompressionOffsets.Clear();
 
-        // RFC 8945 §5.2 requires the TSIG record to be the last record in the message, so it
-        // comes after everything else, including the OPT record.
-        if (message.Tsig is not null)
-            WriteTsigRecord(buffer, message.Tsig);
+        if (
+            state.Buffer.Capacity > MaximumRetainedBufferCapacity
+            || state.CompressionOffsets.Count > MaximumRetainedMapEntries
+        )
+            return;
 
-        return buffer.WrittenSpan.ToArray();
+        state.Buffer.ResetWrittenCount();
+        threadState = state;
     }
 
     /// <summary>
@@ -134,7 +201,7 @@ public static class DnsMessageWriter
     private static void WriteResourceRecord(
         ArrayBufferWriter<byte> buffer,
         DnsResourceRecord record,
-        Dictionary<string, ushort> compressionOffsetsByName
+        Dictionary<SuffixKey, ushort> compressionOffsetsByName
     )
     {
         WriteName(buffer, record.Name, compressionOffsetsByName);
@@ -171,21 +238,22 @@ public static class DnsMessageWriter
             | (edns.DnssecOk ? 0x8000u : 0u);
         WriteUInt32(buffer, ttl);
 
-        // The RDATA length must be written before the RDATA, so the RDATA is built in a
-        // separate buffer first.
-        ArrayBufferWriter<byte> rdata = new();
+        // The RDATA length is the sum of the options' sizes, so it is known before the options
+        // are written and they go straight into the message.
+        int rdataLength = 0;
+
+        foreach (DnsEdnsOption option in edns.Options)
+            rdataLength += 4 + option.Data.Length;
+
+        WriteUInt16(buffer, (ushort)rdataLength);
 
         foreach (DnsEdnsOption option in edns.Options)
         {
-            WriteUInt16(rdata, option.Code);
-            WriteUInt16(rdata, (ushort)option.Data.Length);
-            option.Data.CopyTo(rdata.GetSpan(option.Data.Length));
-            rdata.Advance(option.Data.Length);
+            WriteUInt16(buffer, option.Code);
+            WriteUInt16(buffer, (ushort)option.Data.Length);
+            option.Data.CopyTo(buffer.GetSpan(option.Data.Length));
+            buffer.Advance(option.Data.Length);
         }
-
-        WriteUInt16(buffer, (ushort)rdata.WrittenCount);
-        rdata.WrittenSpan.CopyTo(buffer.GetSpan(rdata.WrittenCount));
-        buffer.Advance(rdata.WrittenCount);
     }
 
     /// <summary>
@@ -202,25 +270,24 @@ public static class DnsMessageWriter
         WriteUInt16(buffer, (ushort)DnsClassEnum.Any);
         WriteUInt32(buffer, 0);
 
-        // The RDATA length must be written before the RDATA, so the RDATA is built in a
-        // separate buffer first.
-        ArrayBufferWriter<byte> rdata = new();
+        // The RDATA length is known before the RDATA is written: the uncompressed algorithm
+        // name, then Time Signed (6), Fudge (2), MAC size (2), the MAC, Original ID (2), Error
+        // (2), Other Len (2) and the other data.
+        int rdataLength =
+            tsig.AlgorithmName.WireLength + 16 + tsig.Mac.Length + tsig.OtherData.Length;
+        WriteUInt16(buffer, (ushort)rdataLength);
 
-        UncompressedDnsNameCodec.Write(rdata, tsig.AlgorithmName);
-        WriteUInt48(rdata, tsig.TimeSigned);
-        WriteUInt16(rdata, tsig.Fudge);
-        WriteUInt16(rdata, (ushort)tsig.Mac.Length);
-        tsig.Mac.CopyTo(rdata.GetSpan(tsig.Mac.Length));
-        rdata.Advance(tsig.Mac.Length);
-        WriteUInt16(rdata, tsig.OriginalId);
-        WriteUInt16(rdata, (ushort)tsig.Error);
-        WriteUInt16(rdata, (ushort)tsig.OtherData.Length);
-        tsig.OtherData.CopyTo(rdata.GetSpan(tsig.OtherData.Length));
-        rdata.Advance(tsig.OtherData.Length);
-
-        WriteUInt16(buffer, (ushort)rdata.WrittenCount);
-        rdata.WrittenSpan.CopyTo(buffer.GetSpan(rdata.WrittenCount));
-        buffer.Advance(rdata.WrittenCount);
+        UncompressedDnsNameCodec.Write(buffer, tsig.AlgorithmName);
+        WriteUInt48(buffer, tsig.TimeSigned);
+        WriteUInt16(buffer, tsig.Fudge);
+        WriteUInt16(buffer, (ushort)tsig.Mac.Length);
+        tsig.Mac.CopyTo(buffer.GetSpan(tsig.Mac.Length));
+        buffer.Advance(tsig.Mac.Length);
+        WriteUInt16(buffer, tsig.OriginalId);
+        WriteUInt16(buffer, (ushort)tsig.Error);
+        WriteUInt16(buffer, (ushort)tsig.OtherData.Length);
+        tsig.OtherData.CopyTo(buffer.GetSpan(tsig.OtherData.Length));
+        buffer.Advance(tsig.OtherData.Length);
     }
 
     /// <summary>
@@ -236,10 +303,22 @@ public static class DnsMessageWriter
     private static void WriteName(
         ArrayBufferWriter<byte> buffer,
         DnsName name,
-        Dictionary<string, ushort> compressionOffsetsByName
+        Dictionary<SuffixKey, ushort> compressionOffsetsByName
     )
     {
         IReadOnlyList<byte[]> labels = name.Labels;
+
+        // The hash of each suffix of this name, computed once from the last label backward, so
+        // looking up and recording every suffix costs one pass over the name and no allocation. A
+        // name has at most 127 labels (each takes two or more of its 255 wire octets).
+        Span<int> suffixHashes = stackalloc int[labels.Count];
+        int suffixHash = 0;
+
+        for (int i = labels.Count - 1; i >= 0; i--)
+        {
+            suffixHash = HashLabel(suffixHash, labels[i]);
+            suffixHashes[i] = suffixHash;
+        }
 
         // Look for the longest suffix of this name, starting with the whole name, that has
         // already been written.
@@ -247,7 +326,7 @@ public static class DnsMessageWriter
         {
             if (
                 !compressionOffsetsByName.TryGetValue(
-                    BuildSuffixKey(labels, start),
+                    new SuffixKey(name, start, suffixHashes[start]),
                     out ushort pointerTarget
                 )
             )
@@ -255,7 +334,7 @@ public static class DnsMessageWriter
 
             // Write the labels before the match literally, then a pointer to the matched suffix.
             for (int i = 0; i < start; i++)
-                WriteLabel(buffer, labels, i, compressionOffsetsByName);
+                WriteLabel(buffer, name, i, suffixHashes[i], compressionOffsetsByName);
 
             WriteUInt16(buffer, (ushort)(0xC000 | pointerTarget));
             return;
@@ -264,7 +343,7 @@ public static class DnsMessageWriter
         // No earlier name shares a suffix with this one: write every label literally and
         // record each suffix's offset for later names.
         for (int i = 0; i < labels.Count; i++)
-            WriteLabel(buffer, labels, i, compressionOffsetsByName);
+            WriteLabel(buffer, name, i, suffixHashes[i], compressionOffsetsByName);
 
         buffer.GetSpan(1)[0] = 0;
         buffer.Advance(1);
@@ -276,17 +355,21 @@ public static class DnsMessageWriter
     /// </summary>
     private static void WriteLabel(
         ArrayBufferWriter<byte> buffer,
-        IReadOnlyList<byte[]> labels,
+        DnsName name,
         int index,
-        Dictionary<string, ushort> compressionOffsetsByName
+        int suffixHash,
+        Dictionary<SuffixKey, ushort> compressionOffsetsByName
     )
     {
         int currentOffset = buffer.WrittenCount;
 
         if (currentOffset <= MaximumCompressionPointerOffset)
-            compressionOffsetsByName.TryAdd(BuildSuffixKey(labels, index), (ushort)currentOffset);
+            compressionOffsetsByName.TryAdd(
+                new SuffixKey(name, index, suffixHash),
+                (ushort)currentOffset
+            );
 
-        byte[] label = labels[index];
+        byte[] label = name.Labels[index];
         buffer.GetSpan(1)[0] = (byte)label.Length;
         buffer.Advance(1);
         label.CopyTo(buffer.GetSpan(label.Length));
@@ -294,25 +377,20 @@ public static class DnsMessageWriter
     }
 
     /// <summary>
-    ///     This method builds a case-insensitive key for the suffix of a name starting at
-    ///     <paramref name="start" />, used to find where that suffix was first written. Each label is
-    ///     length-prefixed as on the wire, so two different label sequences cannot produce the same
-    ///     key.
+    ///     This method folds one label into the hash of the labels to its right: the label's
+    ///     length, then its bytes with ASCII letters upper-cased, so equal suffixes under the
+    ///     case-insensitive comparison of <see cref="DnsName" /> hash alike.
     /// </summary>
-    private static string BuildSuffixKey(IReadOnlyList<byte[]> labels, int start)
+    /// <param name="hashOfLabelsToTheRight">The hash of the suffix after this label.</param>
+    /// <param name="label">The label to fold in.</param>
+    private static int HashLabel(int hashOfLabelsToTheRight, byte[] label)
     {
-        StringBuilder builder = new();
+        int hash = (hashOfLabelsToTheRight * 16777619) ^ label.Length;
 
-        for (int i = start; i < labels.Count; i++)
-        {
-            byte[] label = labels[i];
-            builder.Append((char)label.Length);
+        foreach (byte b in label)
+            hash = (hash * 16777619) ^ AsciiUpper(b);
 
-            foreach (byte b in label)
-                builder.Append((char)AsciiUpper(b));
-        }
-
-        return builder.ToString();
+        return hash;
     }
 
     /// <summary>
@@ -354,5 +432,78 @@ public static class DnsMessageWriter
             span[i] = (byte)(value >> ((5 - i) * 8));
 
         buffer.Advance(6);
+    }
+
+    /// <summary>
+    ///     This class holds the buffer and compression map one thread reuses across messages.
+    /// </summary>
+    private sealed class WriterState
+    {
+        /// <summary>
+        ///     This property contains the buffer the message is written into.
+        /// </summary>
+        public ArrayBufferWriter<byte> Buffer { get; } = new(1024);
+
+        /// <summary>
+        ///     This property contains every name suffix written so far and the offset it starts
+        ///     at.
+        /// </summary>
+        public Dictionary<SuffixKey, ushort> CompressionOffsets { get; } =
+            new(SuffixKeyComparer.Instance);
+    }
+
+    /// <summary>
+    ///     This struct identifies the suffix of <see cref="Name" /> that starts at label
+    ///     <see cref="Start" /> without building a new <see cref="DnsName" /> or a key string. Two
+    ///     keys are equal when their suffixes are equal under <see cref="DnsName.Equals(DnsName)" />
+    ///     (same label count and lengths, ASCII-case-insensitive bytes), which is the relation the
+    ///     old length-prefixed upper-cased string key had, so the first offset written for a suffix
+    ///     wins exactly as before and the output bytes do not change.
+    /// </summary>
+    /// <param name="Name">The name the suffix belongs to.</param>
+    /// <param name="Start">The index of the suffix's first label in <paramref name="Name" />.</param>
+    /// <param name="Hash">The suffix's hash, from <see cref="HashLabel" />.</param>
+    private readonly record struct SuffixKey(DnsName Name, int Start, int Hash);
+
+    /// <summary>
+    ///     This class compares <see cref="SuffixKey" /> values by the labels of their suffixes.
+    /// </summary>
+    private sealed class SuffixKeyComparer : IEqualityComparer<SuffixKey>
+    {
+        /// <summary>
+        ///     This property contains the shared, stateless comparer.
+        /// </summary>
+        public static SuffixKeyComparer Instance { get; } = new();
+
+        /// <inheritdoc />
+        public bool Equals(SuffixKey left, SuffixKey right)
+        {
+            if (left.Hash != right.Hash)
+                return false;
+
+            IReadOnlyList<byte[]> leftLabels = left.Name.Labels;
+            IReadOnlyList<byte[]> rightLabels = right.Name.Labels;
+
+            if (leftLabels.Count - left.Start != rightLabels.Count - right.Start)
+                return false;
+
+            for (int i = left.Start, j = right.Start; i < leftLabels.Count; i++, j++)
+            {
+                byte[] leftLabel = leftLabels[i];
+                byte[] rightLabel = rightLabels[j];
+
+                if (leftLabel.Length != rightLabel.Length)
+                    return false;
+
+                for (int k = 0; k < leftLabel.Length; k++)
+                    if (AsciiUpper(leftLabel[k]) != AsciiUpper(rightLabel[k]))
+                        return false;
+            }
+
+            return true;
+        }
+
+        /// <inheritdoc />
+        public int GetHashCode(SuffixKey key) => key.Hash;
     }
 }
