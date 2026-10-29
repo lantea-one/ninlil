@@ -279,8 +279,7 @@ public sealed class ReadYourOwnWritesTests
         }
         finally
         {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            File.Delete(file);
+            TemporaryFiles.DeleteSqliteDatabase(file);
         }
     }
 }
