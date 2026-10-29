@@ -22,8 +22,8 @@ namespace Ninlil.Dns.Protocol.DnsOverHttps.Tests;
 ///     <see cref="DnsQueryProcessingPipeline" /> drops: 429 when rate limited, 400 for a
 ///     malformed message, 500 for an internal failure, and an aborted connection for a denied
 ///     client. It runs a real Kestrel server over HTTPS on a free loopback port, with a fake
-///     limiter, filter engine or resolver in the pipeline. Every request must finish within a
-///     second, which proves the handler no longer waits for a reply that never comes.
+///     limiter, filter engine or resolver in the pipeline. After a throwaway warm-up request,
+///     the timed request must finish within a second, which proves the handler no longer waits for a reply that never comes.
 /// </summary>
 public sealed class DnsOverHttpsDropTests
 {
@@ -140,8 +140,27 @@ public sealed class DnsOverHttpsDropTests
                 BaseAddress = new Uri($"https://127.0.0.1:{port}/dns-query"),
                 Timeout = TimeSpan.FromSeconds(10),
             };
-            using ByteArrayContent content = new(body);
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/dns-message");
+
+            // The first request pays for the TLS handshake and the first use of the server's
+            // code paths, which is not what the one-second bound is about: it guards against a
+            // handler that waits for a reply that never comes, and such a wait lasts far longer
+            // than one second. A throwaway request first lets the timed one measure only the
+            // handler. The outcome is ignored; a denied client aborts this connection, so the
+            // timed request then pays for a new handshake, but the server is warm by then.
+            try
+            {
+                using ByteArrayContent warmUpContent = NewContent(body);
+                using HttpResponseMessage warmUpResponse = await client.PostAsync(
+                    "",
+                    warmUpContent
+                );
+            }
+            catch (HttpRequestException)
+            {
+                // Expected when the pipeline drops the connection.
+            }
+
+            using ByteArrayContent content = NewContent(body);
 
             Stopwatch stopwatch = Stopwatch.StartNew();
             try
@@ -160,6 +179,14 @@ public sealed class DnsOverHttpsDropTests
             await pipeline.StopAsync(CancellationToken.None);
             await pipeline.DisposeAsync();
         }
+    }
+
+    private static ByteArrayContent NewContent(byte[] body)
+    {
+        ByteArrayContent content = new(body);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/dns-message");
+
+        return content;
     }
 
     private static int GetFreePort()
