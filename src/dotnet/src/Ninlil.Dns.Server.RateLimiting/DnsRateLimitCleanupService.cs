@@ -59,7 +59,7 @@ public sealed class DnsRateLimitCleanupService(
                 isStale = bucket.LastTouchedUtc < cutoff;
 
             if (isStale)
-                rateLimiter.Buckets.TryRemove(address, out _);
+                rateLimiter.TryRemoveBucket(address);
         }
 
         foreach (
@@ -75,7 +75,7 @@ public sealed class DnsRateLimitCleanupService(
                 isStale = window.LastTouchedUtc < cutoff;
 
             if (isStale)
-                rateLimiter.SubnetWindows.TryRemove(subnetKey, out _);
+                rateLimiter.TryRemoveSubnetWindow(subnetKey);
         }
     }
 }

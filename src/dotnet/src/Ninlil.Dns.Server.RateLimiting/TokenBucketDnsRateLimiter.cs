@@ -72,6 +72,92 @@ public sealed class TokenBucketDnsRateLimiter(
     /// </summary>
     public ConcurrentDictionary<IPAddress, SubnetWindow> SubnetWindows { get; } = new();
 
+    /// <summary>
+    ///     This field counts the entries of <see cref="Buckets" /> the limiter added and the
+    ///     cleanup removed through <see cref="TryRemoveBucket" />. It stands in for
+    ///     <c>ConcurrentDictionary.Count</c>, which takes every bucket lock, on the path where
+    ///     every query from a new address would otherwise pay for that. A slot is reserved before
+    ///     the entry is added, so concurrent first queries cannot push the table past
+    ///     <see cref="DnsRateLimitOptions.MaxTrackedClients" />. Entries put into the public
+    ///     dictionary by other code (tests) are not counted.
+    /// </summary>
+    private int _trackedClientCount;
+
+    /// <summary>
+    ///     This field counts the entries of <see cref="SubnetWindows" /> the same way
+    ///     <see cref="_trackedClientCount" /> counts the buckets.
+    /// </summary>
+    private int _trackedSubnetCount;
+
+    /// <summary>
+    ///     This field is the parsed form of <see cref="DnsRateLimitOptions.SubnetBypassCidrs" />,
+    ///     built the first time a query needs it and again if the options hold a different list
+    ///     (a new options instance). It is replaced as a whole, never changed in place, so a
+    ///     concurrent query reads one consistent snapshot.
+    /// </summary>
+    private volatile BypassSnapshot _bypass;
+
+    /// <summary>
+    ///     This property is the number of tracked client buckets the limiter counts. It is what
+    ///     the cap on <see cref="DnsRateLimitOptions.MaxTrackedClients" /> compares against.
+    /// </summary>
+    public int TrackedClientCount => Volatile.Read(ref _trackedClientCount);
+
+    /// <summary>
+    ///     This property is the number of tracked subnet windows the limiter counts, compared
+    ///     against <see cref="DnsRateLimitOptions.MaxTrackedClients" /> in the same way.
+    /// </summary>
+    public int TrackedSubnetCount => Volatile.Read(ref _trackedSubnetCount);
+
+    /// <summary>
+    ///     This method removes one client bucket and keeps the count in step.
+    ///     <see cref="DnsRateLimitCleanupService" /> evicts idle buckets through it.
+    /// </summary>
+    /// <param name="address">The client address the bucket is keyed by.</param>
+    /// <returns><see langword="true" /> when a bucket was removed.</returns>
+    public bool TryRemoveBucket(IPAddress address)
+    {
+        if (!Buckets.TryRemove(address, out _))
+            return false;
+
+        ReleaseSlot(ref _trackedClientCount);
+        return true;
+    }
+
+    /// <summary>
+    ///     This method removes one subnet window and keeps the count in step.
+    ///     <see cref="DnsRateLimitCleanupService" /> evicts idle windows through it.
+    /// </summary>
+    /// <param name="subnetKey">The masked network address the window is keyed by.</param>
+    /// <returns><see langword="true" /> when a window was removed.</returns>
+    public bool TryRemoveSubnetWindow(IPAddress subnetKey)
+    {
+        if (!SubnetWindows.TryRemove(subnetKey, out _))
+            return false;
+
+        ReleaseSlot(ref _trackedSubnetCount);
+        return true;
+    }
+
+    /// <summary>
+    ///     This method gives one reserved slot back, never taking a counter below zero (entries
+    ///     put into the public dictionaries directly were never counted).
+    /// </summary>
+    private static void ReleaseSlot(ref int counter)
+    {
+        int current = Volatile.Read(ref counter);
+
+        while (current > 0)
+        {
+            int seen = Interlocked.CompareExchange(ref counter, current - 1, current);
+
+            if (seen == current)
+                return;
+
+            current = seen;
+        }
+    }
+
     /// <inheritdoc />
     public async ValueTask<bool> TryAcquireAsync(
         IPAddress remoteAddress,
@@ -96,11 +182,20 @@ public sealed class TokenBucketDnsRateLimiter(
         if (!Buckets.TryGetValue(remoteAddress, out Bucket bucket))
         {
             // A new address is only tracked while there is room; see
-            // DnsRateLimitOptions.MaxTrackedClients for why a full table fails open.
-            if (Buckets.Count >= options.Value.MaxTrackedClients)
+            // DnsRateLimitOptions.MaxTrackedClients for why a full table fails open. The slot is
+            // reserved first, so the table never passes the cap.
+            if (Interlocked.Increment(ref _trackedClientCount) > options.Value.MaxTrackedClients)
+            {
+                Interlocked.Decrement(ref _trackedClientCount);
                 return true;
+            }
 
-            bucket = Buckets.GetOrAdd(remoteAddress, _ => new Bucket(options.Value.BurstSize));
+            Bucket created = new(options.Value.BurstSize);
+            bucket = Buckets.GetOrAdd(remoteAddress, created);
+
+            // Another query from the same address added its bucket first: give the slot back.
+            if (!ReferenceEquals(bucket, created))
+                Interlocked.Decrement(ref _trackedClientCount);
         }
 
         // Refill, then spend, under the bucket's lock so concurrent queries from one client do
@@ -149,7 +244,7 @@ public sealed class TokenBucketDnsRateLimiter(
         )
             return DnsSubnetRateLimitDecisionEnum.Allow;
 
-        if (IsBypassed(remoteAddress, options.Value.SubnetBypassCidrs))
+        if (IsBypassed(remoteAddress, GetBypass(options.Value.SubnetBypassCidrs)))
             return DnsSubnetRateLimitDecisionEnum.Allow;
 
         IPAddress subnetKey = MaskToPrefix(
@@ -158,15 +253,22 @@ public sealed class TokenBucketDnsRateLimiter(
             options.Value.SubnetPrefixLengthIPv6
         );
 
-        if (
-            !SubnetWindows.TryGetValue(subnetKey, out SubnetWindow window)
-            && SubnetWindows.Count >= options.Value.MaxTrackedClients
-        )
+        if (!SubnetWindows.TryGetValue(subnetKey, out SubnetWindow window))
+        {
             // A full subnet table fails open, as the per-IP table does (see
-            // DnsRateLimitOptions.MaxTrackedClients).
-            return DnsSubnetRateLimitDecisionEnum.Allow;
+            // DnsRateLimitOptions.MaxTrackedClients). The slot is reserved before the add.
+            if (Interlocked.Increment(ref _trackedSubnetCount) > options.Value.MaxTrackedClients)
+            {
+                Interlocked.Decrement(ref _trackedSubnetCount);
+                return DnsSubnetRateLimitDecisionEnum.Allow;
+            }
 
-        window = SubnetWindows.GetOrAdd(subnetKey, _ => new SubnetWindow(Stopwatch.GetTimestamp()));
+            SubnetWindow created = new(Stopwatch.GetTimestamp());
+            window = SubnetWindows.GetOrAdd(subnetKey, created);
+
+            if (!ReferenceEquals(window, created))
+                Interlocked.Decrement(ref _trackedSubnetCount);
+        }
 
         lock (window)
         {
@@ -213,14 +315,23 @@ public sealed class TokenBucketDnsRateLimiter(
     }
 
     /// <summary>
-    ///     This method checks whether <paramref name="address" /> falls within any CIDR entry in
-    ///     <paramref name="bypassCidrs" />. A malformed entry is skipped rather than throwing, so a
-    ///     configuration mistake disables one entry instead of breaking query handling. An entry
-    ///     must name the network address itself: host bits after the prefix make it match
-    ///     nothing.
+    ///     This method returns the parsed bypass entries for the configured list, parsing them
+    ///     only when the list is not the one already parsed. A malformed entry is skipped rather
+    ///     than throwing, so a configuration mistake disables one entry instead of breaking query
+    ///     handling. An entry must name the network address itself: host bits after the prefix
+    ///     make it match nothing.
     /// </summary>
-    private static bool IsBypassed(IPAddress address, List<string> bypassCidrs)
+    private BypassSnapshot GetBypass(List<string> bypassCidrs)
     {
+        BypassSnapshot snapshot = _bypass;
+
+        // The options list is bound at startup and changes only with a restart, so the list
+        // reference identifies one parse. Two threads may parse it at once; the results are equal.
+        if (snapshot != null && ReferenceEquals(snapshot.Source, bypassCidrs))
+            return snapshot;
+
+        List<BypassNetwork> networks = [];
+
         foreach (string entry in bypassCidrs)
         {
             int slashIndex = entry.IndexOf('/');
@@ -241,10 +352,39 @@ public sealed class TokenBucketDnsRateLimiter(
 
             network = ClientAddress.Normalize(network);
 
-            if (network.AddressFamily != address.AddressFamily)
+            networks.Add(new BypassNetwork(network.GetAddressBytes(), prefixLength));
+        }
+
+        snapshot = new BypassSnapshot(bypassCidrs, [.. networks]);
+        _bypass = snapshot;
+        return snapshot;
+    }
+
+    /// <summary>
+    ///     This method checks whether <paramref name="address" /> falls within any parsed bypass
+    ///     entry: the address masked to the entry's prefix must equal the entry's network address.
+    ///     An entry of the other address family never matches.
+    /// </summary>
+    private static bool IsBypassed(IPAddress address, BypassSnapshot bypass)
+    {
+        if (bypass.Networks.Length == 0)
+            return false;
+
+        Span<byte> addressBytes = stackalloc byte[16];
+
+        if (!address.TryWriteBytes(addressBytes, out int length))
+            return false;
+
+        Span<byte> masked = stackalloc byte[16];
+
+        foreach (BypassNetwork network in bypass.Networks)
+        {
+            if (network.Bytes.Length != length)
                 continue;
 
-            if (Equals(MaskToPrefix(address, prefixLength, prefixLength), network))
+            MaskBytes(addressBytes[..length], masked[..length], network.PrefixLength);
+
+            if (masked[..length].SequenceEqual(network.Bytes))
                 return true;
         }
 
@@ -256,7 +396,7 @@ public sealed class TokenBucketDnsRateLimiter(
     ///     <paramref name="prefixLengthIPv4" /> or <paramref name="prefixLengthIPv6" /> leading
     ///     bits and zeroing the rest. The result is the subnet window key: addresses with the same
     ///     masked value share a window. The pipeline passes normalized addresses, so an IPv4 client on a
-    ///     dual-stack socket is masked as IPv4.
+    ///     dual-stack socket is masked as IPv4. Only the key's own address object is allocated.
     /// </summary>
     private static IPAddress MaskToPrefix(
         IPAddress address,
@@ -264,24 +404,52 @@ public sealed class TokenBucketDnsRateLimiter(
         byte prefixLengthIPv6
     )
     {
-        byte[] addressBytes = address.GetAddressBytes();
+        Span<byte> addressBytes = stackalloc byte[16];
+        address.TryWriteBytes(addressBytes, out int length);
         byte prefixLength =
             address.AddressFamily == AddressFamily.InterNetworkV6
                 ? prefixLengthIPv6
                 : prefixLengthIPv4;
+
+        MaskBytes(addressBytes[..length], addressBytes[..length], prefixLength);
+
+        return new IPAddress(addressBytes[..length]);
+    }
+
+    /// <summary>
+    ///     This method copies <paramref name="source" /> into <paramref name="destination" />
+    ///     keeping the first <paramref name="prefixLength" /> bits and zeroing the rest. A prefix
+    ///     longer than the address keeps every bit. The two spans may be the same span.
+    /// </summary>
+    private static void MaskBytes(
+        ReadOnlySpan<byte> source,
+        Span<byte> destination,
+        byte prefixLength
+    )
+    {
         int fullBytes = prefixLength / 8;
         int remainderBits = prefixLength % 8;
 
-        for (int i = 0; i < addressBytes.Length; i++)
+        for (int i = 0; i < source.Length; i++)
             if (i < fullBytes)
-                continue;
+                destination[i] = source[i];
             else if (i == fullBytes && remainderBits > 0)
-                addressBytes[i] &= (byte)(0xFF << (8 - remainderBits));
+                destination[i] = (byte)(source[i] & (byte)(0xFF << (8 - remainderBits)));
             else
-                addressBytes[i] = 0;
-
-        return new IPAddress(addressBytes);
+                destination[i] = 0;
     }
+
+    /// <summary>
+    ///     This record is the bypass list as it was parsed, with the list it came from so a
+    ///     different list triggers a new parse.
+    /// </summary>
+    private sealed record BypassSnapshot(List<string> Source, BypassNetwork[] Networks);
+
+    /// <summary>
+    ///     This record is one valid bypass entry: the network address bytes (IPv4 or IPv6) and the
+    ///     prefix length to mask a client address to before comparing.
+    /// </summary>
+    private sealed record BypassNetwork(byte[] Bytes, byte PrefixLength);
 
     /// <summary>
     ///     This class holds one subnet's fixed-window query counters. Every access to its fields

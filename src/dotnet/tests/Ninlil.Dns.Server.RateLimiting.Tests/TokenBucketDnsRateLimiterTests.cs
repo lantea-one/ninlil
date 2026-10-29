@@ -577,4 +577,223 @@ public class TokenBucketDnsRateLimiterSubnetTests
             await limiter.CheckSubnetLimitAsync(ClientA, isUdp: true)
         );
     }
+
+    /// <summary>
+    ///     This method is the bypass match as it parsed the entry text on every query. It is the
+    ///     reference the parsed-once bypass list must equal.
+    /// </summary>
+    private static bool ReferenceIsBypassed(IPAddress address, List<string> bypassCidrs)
+    {
+        foreach (string entry in bypassCidrs)
+        {
+            int slashIndex = entry.IndexOf('/');
+
+            if (slashIndex < 0)
+                continue;
+
+            if (
+                !IPAddress.TryParse(entry.AsSpan(0, slashIndex), out IPAddress network)
+                || !byte.TryParse(entry.AsSpan(slashIndex + 1), out byte prefixLength)
+            )
+                continue;
+
+            if (network.IsIPv4MappedToIPv6 && prefixLength >= 96)
+                prefixLength -= 96;
+
+            network = Ninlil.Dns.Common.Net.ClientAddress.Normalize(network);
+
+            if (network.AddressFamily != address.AddressFamily)
+                continue;
+
+            byte[] bytes = address.GetAddressBytes();
+            int fullBytes = prefixLength / 8;
+            int remainderBits = prefixLength % 8;
+
+            for (int i = 0; i < bytes.Length; i++)
+                if (i < fullBytes)
+                    continue;
+                else if (i == fullBytes && remainderBits > 0)
+                    bytes[i] &= (byte)(0xFF << (8 - remainderBits));
+                else
+                    bytes[i] = 0;
+
+            if (Equals(new IPAddress(bytes), network))
+                return true;
+        }
+
+        return false;
+    }
+
+    [Fact]
+    public async Task EveryBypassEntryForm_GivesTheSameAnswerAsParsingPerQuery()
+    {
+        List<string> entries =
+        [
+            "203.0.113.0/24",
+            "203.0.113.5/24",
+            "10.0.0.0/8",
+            "0.0.0.0/0",
+            "192.0.2.0/33",
+            "192.0.2.0/40",
+            "::ffff:198.51.100.0/120",
+            "::ffff:198.51.100.0/24",
+            "2001:db8::/32",
+            "2001:db8::1/32",
+            "fd00::/8",
+            "::/0",
+            "203.0.113.7",
+            "junk/24",
+            "10.0.0.0/999",
+            "/8",
+            "10.0.0.0/",
+        ];
+        string[] addresses =
+        [
+            "203.0.113.9",
+            "203.0.114.9",
+            "10.9.9.9",
+            "11.0.0.1",
+            "192.0.2.5",
+            "198.51.100.77",
+            "198.51.101.77",
+            "2001:db8::5",
+            "2001:db9::5",
+            "fd12::1",
+            "fe80::1",
+            "::1",
+        ];
+
+        foreach (string text in addresses)
+        {
+            IPAddress address = IPAddress.Parse(text);
+
+            // A fresh limiter per address, with a subnet limit of 0: a query is dropped unless
+            // the bypass list lets it skip the subnet layer.
+            TokenBucketDnsRateLimiter limiter = CreateLimiter(
+                new DnsRateLimitOptions
+                {
+                    Enable = true,
+                    SubnetUdpQueryLimit = 0,
+                    SubnetSampleWindow = TimeSpan.FromHours(1),
+                    SubnetTruncatePercentage = 0,
+                    SubnetBypassCidrs = entries,
+                }
+            );
+
+            DnsSubnetRateLimitDecisionEnum expected = ReferenceIsBypassed(address, entries)
+                ? DnsSubnetRateLimitDecisionEnum.Allow
+                : DnsSubnetRateLimitDecisionEnum.Drop;
+
+            Assert.True(
+                expected == await limiter.CheckSubnetLimitAsync(address, isUdp: true),
+                $"address {text}"
+            );
+        }
+    }
+
+    [Fact]
+    public async Task AMalformedBypassEntry_MatchesNothingAndDoesNotStopTheOthers()
+    {
+        TokenBucketDnsRateLimiter limiter = CreateLimiter(
+            new DnsRateLimitOptions
+            {
+                Enable = true,
+                SubnetUdpQueryLimit = 0,
+                SubnetSampleWindow = TimeSpan.FromHours(1),
+                SubnetTruncatePercentage = 0,
+                SubnetBypassCidrs = ["not a network", "300.1.1.1/8", "203.0.113.0/24"],
+            }
+        );
+
+        Assert.Equal(
+            DnsSubnetRateLimitDecisionEnum.Allow,
+            await limiter.CheckSubnetLimitAsync(ClientA, isUdp: true)
+        );
+        Assert.Equal(
+            DnsSubnetRateLimitDecisionEnum.Drop,
+            await limiter.CheckSubnetLimitAsync(IPAddress.Parse("198.51.100.5"), isUdp: true)
+        );
+    }
+
+    [Fact]
+    public async Task TheCountersFollowTheTablesAndReturnToZeroAfterTheCleanupRemovesEveryEntry()
+    {
+        TokenBucketDnsRateLimiter limiter = CreateLimiter(
+            new DnsRateLimitOptions { Enable = true, SubnetSampleWindow = TimeSpan.FromHours(1) }
+        );
+
+        IPAddress[] clients =
+        [
+            IPAddress.Parse("203.0.113.1"),
+            IPAddress.Parse("203.0.113.2"),
+            IPAddress.Parse("198.51.100.1"),
+        ];
+
+        foreach (IPAddress client in clients)
+        {
+            await limiter.TryAcquireAsync(client);
+            await limiter.CheckSubnetLimitAsync(client, isUdp: true);
+        }
+
+        // A repeat query from a known address adds nothing.
+        await limiter.TryAcquireAsync(clients[0]);
+
+        Assert.Equal(3, limiter.TrackedClientCount);
+        Assert.Equal(2, limiter.TrackedSubnetCount);
+        Assert.Equal(3, limiter.Buckets.Count);
+        Assert.Equal(2, limiter.SubnetWindows.Count);
+
+        // Age every entry past the expiry, under the lock the limiter and the cleanup use.
+        foreach (TokenBucketDnsRateLimiter.Bucket bucket in limiter.Buckets.Values)
+            lock (bucket)
+                bucket.LastTouchedUtc = DateTimeOffset.UtcNow - TimeSpan.FromHours(1);
+
+        foreach (TokenBucketDnsRateLimiter.SubnetWindow window in limiter.SubnetWindows.Values)
+            lock (window)
+                window.LastTouchedUtc = DateTimeOffset.UtcNow - TimeSpan.FromHours(1);
+
+        new DnsRateLimitCleanupService(
+            limiter,
+            Options.Create(
+                new DnsRateLimitOptions
+                {
+                    Enable = true,
+                    TrackedClientExpiry = TimeSpan.FromMinutes(5),
+                }
+            )
+        ).Sweep();
+
+        Assert.Empty(limiter.Buckets);
+        Assert.Empty(limiter.SubnetWindows);
+        Assert.Equal(0, limiter.TrackedClientCount);
+        Assert.Equal(0, limiter.TrackedSubnetCount);
+
+        // The freed slots are usable again.
+        Assert.True(await limiter.TryAcquireAsync(clients[0]));
+        Assert.Equal(1, limiter.TrackedClientCount);
+    }
+
+    [Fact]
+    public async Task ConcurrentFirstQueriesFromManyAddresses_NeverPassTheTrackedClientCap()
+    {
+        TokenBucketDnsRateLimiter limiter = CreateLimiter(
+            new DnsRateLimitOptions
+            {
+                Enable = true,
+                BurstSize = 1,
+                QueriesPerSecond = 0,
+                MaxTrackedClients = 8,
+            }
+        );
+
+        await Parallel.ForEachAsync(
+            Enumerable.Range(1, 200),
+            new ParallelOptions { MaxDegreeOfParallelism = 16 },
+            async (index, stoppingToken) =>
+                await limiter.TryAcquireAsync(IPAddress.Parse($"203.0.113.{index}"), stoppingToken)
+        );
+
+        Assert.Equal(8, limiter.Buckets.Count);
+        Assert.Equal(8, limiter.TrackedClientCount);
+    }
 }
