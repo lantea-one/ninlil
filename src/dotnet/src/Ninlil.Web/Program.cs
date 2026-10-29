@@ -92,6 +92,7 @@ using Ninlil.Web.Extension;
 using Ninlil.Web.HealthChecks;
 using Ninlil.Web.Hubs;
 using Ninlil.Web.Middleware;
+using Ninlil.Web.OpenApi;
 using Ninlil.Web.Options;
 using Ninlil.Web.Routing;
 using Ninlil.Web.Services;
@@ -725,6 +726,26 @@ builder.Services.AddSwaggerGen(options =>
     // writing the matching Examples provider's value into the OpenAPI document's "example" and
     // "examples" fields.
     options.ExampleFilters();
+
+    // The operation id is the route path in camel case plus the HTTP method. The admin console's
+    // generated API client names its methods after these ids; see OperationIdConvention.
+    options.CustomOperationIds(api =>
+        OperationIdConvention.Build(api.RelativePath, api.HttpMethod)
+    );
+
+    // The one non-controller tag would otherwise default to the assembly name "Ninlil.Web", whose
+    // dot breaks the client generator's file layout. Controller tags are the controller names.
+    options.TagActionsBy(api =>
+        [
+            api.ActionDescriptor.RouteValues.TryGetValue("controller", out string controllerName)
+            && controllerName != "Ninlil.Web"
+                ? controllerName
+                : "NinlilWeb",
+        ]
+    );
+
+    // Query and form names to camel case and JSON-only media types; see ClientShapeOperationFilter.
+    options.OperationFilter<ClientShapeOperationFilter>();
 
     options.AddSecurityDefinition(
         "Bearer",
