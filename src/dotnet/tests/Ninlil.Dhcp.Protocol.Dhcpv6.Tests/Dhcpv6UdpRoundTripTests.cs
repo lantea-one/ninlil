@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
+using Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Fakes;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Protocol.Dhcpv6.Tests;
@@ -27,6 +28,9 @@ public class Dhcpv6UdpRoundTripTests
     [Fact]
     public async Task SolicitThenAdvertise_RoundTripsOverARealSocket()
     {
+        if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
+            return;
+
         int serverPort = GetFreeUdpPort();
         int clientPort = GetFreeUdpPort();
 

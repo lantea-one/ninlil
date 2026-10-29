@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
+using Ninlil.Dhcp.Server.Relay.Tests.Fakes;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Relay.Tests;
@@ -27,6 +28,9 @@ public sealed class Dhcpv6RelayRoundTripTests
     [Fact]
     public async Task Solicit_IsForwardedUpstreamWrappedInRelayForward_AndTheUpstreamsReplyIsRelayedBackToTheClient()
     {
+        if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
+            return;
+
         int relayListenPort = GetFreeUdpPort();
         int relayClientPort = GetFreeUdpPort();
         int upstreamPort = GetFreeUdpPort();

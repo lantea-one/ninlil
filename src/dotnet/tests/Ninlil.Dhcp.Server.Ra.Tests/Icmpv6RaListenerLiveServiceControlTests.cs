@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Control;
 using Ninlil.Dhcp.Common.Wire.Ra;
 using Ninlil.Dhcp.Protocol.Ra;
+using Ninlil.Dhcp.Server.Ra.Tests.Fakes;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Ra.Tests;
@@ -18,7 +19,7 @@ namespace Ninlil.Dhcp.Server.Ra.Tests;
 ///     <para>
 ///         <b>It needs a raw ICMPv6 socket</b> (<c>CAP_NET_RAW</c> or root), which CI runners
 ///         usually do not grant (see <see cref="Icmpv6RaListener" />). The test first tries to
-///         open one with <see cref="CanOpenRawIcmpv6Socket" /> and, if that fails, returns at once
+///         open one with <see cref="CanUseRawIcmpv6OnLoopback" /> and, if that fails, returns at once
 ///         and is reported as passed rather than skipped, as
 ///         <c>Ninlil.Dns.Protocol.DnsOverQuic.Tests.DnsOverQuicListenerTests</c> does for QUIC. Run
 ///         with root or <c>CAP_NET_RAW</c>, it performs the full round trip.
@@ -29,7 +30,7 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
     [Fact]
     public async Task Listener_CanBeStoppedAndRestartedLive_AndAnswersRealSolicitationsWhileRunning()
     {
-        if (!CanOpenRawIcmpv6Socket())
+        if (!CanUseRawIcmpv6OnLoopback())
             return;
 
         RaOptions raOptions = new() { RouterLifetime = TimeSpan.FromSeconds(1800) };
@@ -77,7 +78,7 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
     [Fact]
     public async Task Listener_WithAProviderThatFailsAtFirst_AnswersOnceItRecovers_AndStopsCleanly()
     {
-        if (!CanOpenRawIcmpv6Socket())
+        if (!CanUseRawIcmpv6OnLoopback())
             return;
 
         FlakyProvider provider = new() { Failing = true };
@@ -120,10 +121,11 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method reports whether the process can open a raw ICMPv6 socket, by trying to,
-    ///     rather than guessing from the platform or a setting.
+    ///     This method reports whether the process can open a raw ICMPv6 socket and the host can
+    ///     bind the IPv6 loopback address, by trying to, rather than guessing from the platform
+    ///     or a setting. The live tests send their solicitation over <c>::1</c>.
     /// </summary>
-    private static bool CanOpenRawIcmpv6Socket()
+    private static bool CanUseRawIcmpv6OnLoopback()
     {
         try
         {
@@ -132,7 +134,7 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
                 SocketType.Raw,
                 ProtocolType.IcmpV6
             );
-            return true;
+            return LocalAddresses.CanBind(IPAddress.IPv6Loopback);
         }
         catch (SocketException)
         {

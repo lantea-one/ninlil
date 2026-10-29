@@ -5,6 +5,7 @@ using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
+using Ninlil.Dhcp.Server.Core.Tests.Fakes;
 using Ninlil.Dns.Common.Enum;
 // The alias is needed for the reason given in Dhcpv4UdpRoundTripTests.
 using MicrosoftOptions = Microsoft.Extensions.Options.Options;
@@ -23,6 +24,7 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
 {
     private Dhcpv6EngineTestHost _host;
     private Dhcpv6UdpListener _listener;
+    private bool _ipv6LoopbackAvailable;
     private int _serverPort;
     private int _clientPort;
 
@@ -31,6 +33,12 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
     {
         _host = new Dhcpv6EngineTestHost();
         await _host.InitializeAsync();
+
+        // Without an IPv6 loopback there is no socket to open; the tests return early and
+        // DisposeAsync skips the listener.
+        _ipv6LoopbackAvailable = LocalAddresses.CanBind(IPAddress.IPv6Loopback);
+        if (!_ipv6LoopbackAvailable)
+            return;
 
         _serverPort = GetFreeUdpPort();
         _clientPort = GetFreeUdpPort();
@@ -57,13 +65,18 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
     /// <inheritdoc />
     public async Task DisposeAsync()
     {
-        await _listener.StopAsync(CancellationToken.None);
+        if (_listener is not null)
+            await _listener.StopAsync(CancellationToken.None);
+
         await _host.DisposeAsync();
     }
 
     [Fact]
     public async Task SolicitThenRequest_ThenRelease_AllWorkOverARealSocket()
     {
+        if (!_ipv6LoopbackAvailable)
+            return;
+
         await _host.SeedAddressScopeAsync(
             "udp-round-trip-v6",
             "2001:db8:9999::10",
@@ -148,6 +161,9 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task Solicit_WithServerAddressTagRuleOption_DeliversThisServersOwnAddressOverARealSocket()
     {
+        if (!_ipv6LoopbackAvailable)
+            return;
+
         DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
             "udp-round-trip-v6-server-address",
             "2001:db8:9998::10",

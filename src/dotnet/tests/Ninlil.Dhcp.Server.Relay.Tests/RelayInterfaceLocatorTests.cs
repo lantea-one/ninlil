@@ -1,4 +1,5 @@
 using System.Net;
+using Ninlil.Dhcp.Server.Relay.Tests.Fakes;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Relay.Tests;
@@ -16,7 +17,7 @@ public sealed class RelayInterfaceLocatorTests
     [InlineData("::1")]
     public void TryFind_ForALoopbackAddress_ReturnsTheLoopbackInterface(string text)
     {
-        if (text == "::1" && !System.Net.Sockets.Socket.OSSupportsIPv6)
+        if (text == "::1" && !LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return;
 
         bool found = RelayInterfaceLocator.TryFind(

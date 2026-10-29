@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
+using Ninlil.Dhcp.Server.Relay.Tests.Fakes;
 using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
@@ -273,7 +274,7 @@ public sealed class Dhcpv6RelayAgentTests
     /// <returns>The scoped address and its interface index, or a null address when there is none.</returns>
     private static (IPAddress Address, int InterfaceIndex) FindBindableLinkLocalAddress()
     {
-        if (!Socket.OSSupportsIPv6)
+        if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return (null, 0);
 
         IPAddress found = null;
@@ -318,7 +319,7 @@ public sealed class Dhcpv6RelayAgentTests
         bool expectRelayed
     )
     {
-        if (!Socket.OSSupportsIPv6)
+        if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return;
 
         using UdpClient clientSocket = new(new IPEndPoint(IPAddress.IPv6Loopback, 0));

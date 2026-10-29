@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
+using Ninlil.Dhcp.Server.Core.Tests.Fakes;
 // The alias is needed for the reason given in Dhcpv4UdpRoundTripTests.
 using MicrosoftOptions = Microsoft.Extensions.Options.Options;
 
@@ -28,6 +29,7 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
 
     private Dhcpv6EngineTestHost _host;
     private Dhcpv6UdpListener _listener;
+    private bool _ipv6LoopbackAvailable;
     private int _serverPort;
 
     /// <inheritdoc />
@@ -35,6 +37,12 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
     {
         _host = new Dhcpv6EngineTestHost();
         await _host.InitializeAsync();
+
+        // Without an IPv6 loopback there is no socket to open; the tests return early and
+        // DisposeAsync skips the listener.
+        _ipv6LoopbackAvailable = LocalAddresses.CanBind(IPAddress.IPv6Loopback);
+        if (!_ipv6LoopbackAvailable)
+            return;
 
         // The scope the relayed request should resolve to; its /64 contains RelayLinkAddress.
         await _host.SeedAddressScopeAsync(
@@ -65,13 +73,18 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
     /// <inheritdoc />
     public async Task DisposeAsync()
     {
-        await _listener.StopAsync(CancellationToken.None);
+        if (_listener is not null)
+            await _listener.StopAsync(CancellationToken.None);
+
         await _host.DisposeAsync();
     }
 
     [Fact]
     public async Task RelayForwardCarryingASolicit_ProducesACorrectlyScopedAndWrappedRelayReply()
     {
+        if (!_ipv6LoopbackAvailable)
+            return;
+
         byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
 
         Dhcpv6Message innerSolicit = new()
