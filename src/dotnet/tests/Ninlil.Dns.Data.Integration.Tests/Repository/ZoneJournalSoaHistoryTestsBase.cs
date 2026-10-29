@@ -1,7 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.Integration.Tests.Fixtures;
+using Ninlil.Dns.Server.Authoritative.Cache;
+using Ninlil.Dns.Server.Authoritative.Journal;
+using Ninlil.Dns.Server.Core.Events;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.Integration.Tests.Repository;
@@ -77,6 +83,111 @@ public abstract class ZoneJournalSoaHistoryTestsBase(EngineFixtureBase fixture)
         );
         Assert.Null(withoutHistory.OldSoaRecordJson);
         Assert.Null(withoutHistory.NewSoaRecordJson);
+    }
+
+    /// <summary>
+    ///     An edit of the SOA record itself, made through a real <see cref="ZoneUpdateService" />,
+    ///     stores the pre-edit SOA as the old one on every engine. The engines load the SOA
+    ///     differently (EF hands back the tracked object that the edit then changes, MongoDB a
+    ///     separate copy), so each is checked.
+    /// </summary>
+    [Fact]
+    public async Task ApplyRecordEditAsync_OnTheSoaItself_StoresThePreEditSoaAsTheOldOne()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        Guid zoneId = Guid.NewGuid();
+        Guid soaId = Guid.NewGuid();
+        SoaRecordData initial = new(
+            DnsName.Parse("ns1.example.com"),
+            DnsName.Parse("admin.example.com"),
+            100,
+            3600,
+            600,
+            604800,
+            300
+        );
+
+        await using (AsyncServiceScope seedScope = database.Services.CreateAsyncScope())
+        {
+            await seedScope
+                .ServiceProvider.GetRequiredService<IZoneRepository>()
+                .AddAsync(
+                    new ZoneEntity
+                    {
+                        Id = zoneId,
+                        Name = "example.com",
+                        Type = ZoneTypeEnum.Primary,
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+            await seedScope
+                .ServiceProvider.GetRequiredService<IRecordRepository>()
+                .AddAsync(
+                    new RecordEntity
+                    {
+                        Id = soaId,
+                        ZoneId = zoneId,
+                        Name = "example.com",
+                        Type = DnsResourceRecordTypeEnum.Soa,
+                        Class = DnsClassEnum.Internet,
+                        TimeToLiveSeconds = 3600,
+                        DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(initial),
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+            await seedScope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        await using (AsyncServiceScope editScope = database.Services.CreateAsyncScope())
+        {
+            IServiceProvider services = editScope.ServiceProvider;
+            ZoneUpdateService service = new(
+                services.GetRequiredService<IZoneRepository>(),
+                services.GetRequiredService<IRecordRepository>(),
+                services.GetRequiredService<IZoneChangeJournalRepository>(),
+                services.GetRequiredService<IUnitOfWork>(),
+                new DiscardingEventPublisher(),
+                new ZoneWriteSerializer()
+            );
+            await service.ApplyRecordEditAsync(
+                zoneId,
+                soaId,
+                record =>
+                    record.DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
+                        initial with
+                        {
+                            RefreshSeconds = 7200,
+                        }
+                    )
+            );
+        }
+
+        await using AsyncServiceScope readScope = database.Services.CreateAsyncScope();
+        ZoneChangeJournalEntryEntity entry = Assert.Single(
+            await readScope
+                .ServiceProvider.GetRequiredService<IZoneChangeJournalRepository>()
+                .ListSinceSerialAsync(zoneId, 0)
+        );
+        Assert.Equal(3600u, SoaOf(entry.OldSoaRecordJson).RefreshSeconds);
+        Assert.Equal(7200u, SoaOf(entry.NewSoaRecordJson).RefreshSeconds);
+        Assert.Equal(101u, SoaOf(entry.NewSoaRecordJson).Serial);
+    }
+
+    private static SoaRecordData SoaOf(string snapshotJson) =>
+        Assert.IsType<SoaRecordData>(
+            RecordEntityCodec.DecodeTypedData(
+                Ninlil.Common.Serializer.JsonSerializer.Deserialize<RecordEntity>(snapshotJson)
+            )
+        );
+
+    /// <summary>
+    ///     This class discards the zone change event: the test reads the journal and runs no
+    ///     dispatcher.
+    /// </summary>
+    private sealed class DiscardingEventPublisher : IDnsServerEventPublisher
+    {
+        /// <inheritdoc />
+        public void Publish(IDnsServerEvent domainEvent) { }
     }
 }
 

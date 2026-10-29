@@ -8,8 +8,9 @@ namespace Ninlil.Dns.Server.Authoritative.Journal;
 ///     This interface is the path every change to a zone's records should go through. In one
 ///     save it changes the records, advances the SOA serial and writes a journal entry to
 ///     <see cref="Data.Abstractions.Repository.IZoneChangeJournalRepository" /> (which IXFR
-///     reads), then publishes <see cref="Core.Events.DnsZoneChangedEvent" />. Callers such as the
-///     REST API, dynamic update and zone transfer pulls use it rather than writing to
+///     reads), then publishes <see cref="Core.Events.DnsZoneChangedEvent" />. Each journal entry
+///     also records the SOA the zone had before the change and the SOA it has after it. Callers
+///     such as the REST API, dynamic update and zone transfer pulls use it rather than writing to
 ///     <see cref="Data.Abstractions.Repository.IRecordRepository" /> and risking a missed step.
 /// </summary>
 public interface IZoneUpdateService

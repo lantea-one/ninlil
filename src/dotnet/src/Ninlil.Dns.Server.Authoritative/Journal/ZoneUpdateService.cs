@@ -47,10 +47,8 @@ public class ZoneUpdateService(
         // read the same serial and both would write the same increment.
         using IDisposable zoneLock = await zoneWriteSerializer.AcquireAsync(zoneId, stoppingToken);
 
-        (ZoneEntity zone, RecordEntity soaRecord, long oldSerial) = await LoadSoaAsync(
-            zoneId,
-            stoppingToken
-        );
+        (ZoneEntity zone, RecordEntity soaRecord, long oldSerial, RecordEntity oldSoaSnapshot) =
+            await LoadSoaAsync(zoneId, stoppingToken);
 
         long newSerial = explicitNewSerial ?? (uint)(oldSerial + 1);
 
@@ -64,6 +62,7 @@ public class ZoneUpdateService(
             zone,
             soaRecord,
             oldSerial,
+            oldSoaSnapshot,
             newSerial,
             recordsToAdd,
             recordsToRemove,
@@ -121,6 +120,11 @@ public class ZoneUpdateService(
                 NewSerial = soaData.Serial,
                 RemovedRecordsJson = "[]",
                 AddedRecordsJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(records),
+                // A new zone has no older SOA, so only the new side is recorded.
+                OldSoaRecordJson = null,
+                NewSoaRecordJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
+                    SnapshotSoa(soaRecord)
+                ),
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             },
             stoppingToken
@@ -142,10 +146,8 @@ public class ZoneUpdateService(
         // Hold the zone's lock for the same reason as ApplyChangesAsync.
         using IDisposable zoneLock = await zoneWriteSerializer.AcquireAsync(zoneId, stoppingToken);
 
-        (ZoneEntity zone, RecordEntity soaRecord, long oldSerial) = await LoadSoaAsync(
-            zoneId,
-            stoppingToken
-        );
+        (ZoneEntity zone, RecordEntity soaRecord, long oldSerial, RecordEntity oldSoaSnapshot) =
+            await LoadSoaAsync(zoneId, stoppingToken);
 
         RecordEntity record =
             await recordRepository.GetByIdAsync(recordId, stoppingToken)
@@ -204,10 +206,9 @@ public class ZoneUpdateService(
 
         long newSerial = (uint)(oldSerial + 1);
 
-        // An SOA edit is not journaled as added/removed content: IXFR
-        // (ZoneTransferService.BuildHistoricalSoaWireRecord) builds the SOA bookends from
-        // OldSerial/NewSerial, and SOA records in the diff body would add two more. IXFR
-        // therefore assumes other SOA fields never change.
+        // An SOA edit is a step whose change is carried by its two SOA bookends (the old and
+        // new SOA snapshots of the journal entry), so its added and removed lists stay empty:
+        // SOA records in the diff body would add two more SOAs to the difference sequence.
         IReadOnlyList<RecordEntity> added = editIsToTheSoaRecordItself ? [] : [record];
         IReadOnlyList<RecordEntity> removed = editIsToTheSoaRecordItself ? [] : [beforeSnapshot];
 
@@ -215,6 +216,7 @@ public class ZoneUpdateService(
             zone,
             soaRecordToFinalize,
             oldSerial,
+            oldSoaSnapshot,
             newSerial,
             added,
             removed,
@@ -237,24 +239,51 @@ public class ZoneUpdateService(
         // Hold the zone's lock for the same reason as ApplyChangesAsync.
         using IDisposable zoneLock = await zoneWriteSerializer.AcquireAsync(zoneId, stoppingToken);
 
-        (ZoneEntity zone, RecordEntity soaRecord, long oldSerial) = await LoadSoaAsync(
-            zoneId,
-            stoppingToken
-        );
+        (ZoneEntity zone, RecordEntity soaRecord, long oldSerial, RecordEntity oldSoaSnapshot) =
+            await LoadSoaAsync(zoneId, stoppingToken);
 
         long newSerial = (uint)(oldSerial + 1);
 
         // No records change, so journal empty lists.
-        await FinalizeChangeAsync(zone, soaRecord, oldSerial, newSerial, [], [], stoppingToken);
+        await FinalizeChangeAsync(
+            zone,
+            soaRecord,
+            oldSerial,
+            oldSoaSnapshot,
+            newSerial,
+            [],
+            [],
+            stoppingToken
+        );
     }
 
     /// <summary>
-    ///     This method loads a zone and its SOA record and decodes the current serial.
+    ///     This method copies the parts of an SOA record that make up the SOA RR a journal entry
+    ///     records: owner name, type, class, TTL and data. The copy is detached, so a later change
+    ///     to <paramref name="soaRecord" /> (EF tracks and mutates the loaded object) does not
+    ///     reach it.
     /// </summary>
-    private async Task<(ZoneEntity Zone, RecordEntity SoaRecord, long OldSerial)> LoadSoaAsync(
-        Guid zoneId,
-        CancellationToken stoppingToken
-    )
+    private static RecordEntity SnapshotSoa(RecordEntity soaRecord) =>
+        new()
+        {
+            Name = soaRecord.Name,
+            Type = soaRecord.Type,
+            Class = soaRecord.Class,
+            TimeToLiveSeconds = soaRecord.TimeToLiveSeconds,
+            DataJson = soaRecord.DataJson,
+        };
+
+    /// <summary>
+    ///     This method loads a zone and its SOA record and decodes the current serial. It also
+    ///     returns a snapshot of the SOA as loaded, taken before any caller mutates the record, for
+    ///     the journal entry's old SOA.
+    /// </summary>
+    private async Task<(
+        ZoneEntity Zone,
+        RecordEntity SoaRecord,
+        long OldSerial,
+        RecordEntity OldSoaSnapshot
+    )> LoadSoaAsync(Guid zoneId, CancellationToken stoppingToken)
     {
         ZoneEntity zone =
             await zoneRepository.GetByIdAsync(zoneId, stoppingToken)
@@ -278,19 +307,21 @@ public class ZoneUpdateService(
                 $"Zone '{zone.Name}' has an SOA record that could not be decoded."
             );
 
-        return (zone, soaRecord, soaData.Serial);
+        return (zone, soaRecord, soaData.Serial, SnapshotSoa(soaRecord));
     }
 
     /// <summary>
     ///     This method finishes a change: it writes the new serial into the SOA, adds the journal
     ///     entry, saves everything in one <see cref="IUnitOfWork.SaveChangesAsync" /> call and
-    ///     then publishes <see cref="DnsZoneChangedEvent" />. When <paramref name="replacementSoa" />
+    ///     then publishes <see cref="DnsZoneChangedEvent" />. The entry records
+    ///     <paramref name="oldSoaSnapshot" /> and a snapshot of the SOA as written here. When <paramref name="replacementSoa" />
     ///     is set, the SOA's other fields and its TTL are replaced by that record's too.
     /// </summary>
     private async Task FinalizeChangeAsync(
         ZoneEntity zone,
         RecordEntity soaRecord,
         long oldSerial,
+        RecordEntity oldSoaSnapshot,
         long newSerial,
         IReadOnlyList<RecordEntity> added,
         IReadOnlyList<RecordEntity> removed,
@@ -335,6 +366,12 @@ public class ZoneUpdateService(
                 NewSerial = newSerial,
                 RemovedRecordsJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(removed),
                 AddedRecordsJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(added),
+                OldSoaRecordJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
+                    oldSoaSnapshot
+                ),
+                NewSoaRecordJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
+                    SnapshotSoa(soaRecord)
+                ),
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             },
             stoppingToken
