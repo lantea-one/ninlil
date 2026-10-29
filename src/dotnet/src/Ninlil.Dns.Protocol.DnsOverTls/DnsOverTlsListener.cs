@@ -234,6 +234,11 @@ public sealed class DnsOverTlsListener(
     {
         IPEndPoint remoteEndpoint = (IPEndPoint)connection.RemoteEndPoint;
         IPAddress remoteAddress = remoteEndpoint.Address;
+        // Every write is a complete reply batch that a client is waiting for. With Nagle's
+        // algorithm on (it holds a small segment while earlier data is unacknowledged), the next
+        // batch of a pipelined connection waits for the client's delayed acknowledgement, which is
+        // tens of milliseconds.
+        connection.NoDelay = true;
         NetworkStream networkStream = new(connection, ownsSocket: true);
         SslStream sslStream = null;
 
