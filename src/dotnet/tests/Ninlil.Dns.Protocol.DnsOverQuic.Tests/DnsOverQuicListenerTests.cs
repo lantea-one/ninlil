@@ -489,10 +489,12 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
 
         try
         {
-            DnsMessage response = await TryQueryAsync(IPAddress.Loopback, port);
+            DnsMessage response = await QueryUntilAnsweredAsync(IPAddress.Loopback, port);
             Assert.NotNull(response);
             Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
 
+            // A negative check is one attempt: "nothing answers" has no signal to wait for, so
+            // it takes the attempt's full two-second budget, with the listener already bound.
             Assert.Null(await TryQueryAsync(other, port));
         }
         finally
@@ -520,8 +522,8 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         try
         {
             Assert.True(listener.IsListening);
-            Assert.NotNull(await TryQueryAsync(IPAddress.Loopback, port));
-            Assert.NotNull(await TryQueryAsync(other, port));
+            Assert.NotNull(await QueryUntilAnsweredAsync(IPAddress.Loopback, port));
+            Assert.NotNull(await QueryUntilAnsweredAsync(other, port));
 
             string failed = Assert.Single(listener.FailedListenAddresses);
             Assert.StartsWith("192.0.2.1 (", failed);
@@ -580,9 +582,43 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             logger
         );
         await listener.StartAsync(CancellationToken.None);
-        await Task.Delay(TimeSpan.FromMilliseconds(250));
+
+        // ExecuteAsync binds after StartAsync returns, and sets IsListening only once every
+        // address was tried and the failed ones recorded, so waiting for it is the bind signal.
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+
+        while (!listener.IsListening)
+            await Task.Delay(10, timeout.Token);
 
         return (pipeline, listener, port);
+    }
+
+    /// <summary>
+    ///     This method repeats <see cref="TryQueryAsync" /> until an answer arrives, for at most
+    ///     15 seconds. It is for addresses the listener must serve: each attempt has a fixed
+    ///     two-second budget that a loaded QUIC handshake can exceed, and a missed attempt there
+    ///     does not mean the listener is wrong.
+    /// </summary>
+    /// <returns>The answer, or <see langword="null" /> when none arrived in time.</returns>
+    private static async Task<DnsMessage> QueryUntilAnsweredAsync(IPAddress address, int port)
+    {
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(15));
+
+        while (!timeout.IsCancellationRequested)
+        {
+            DnsMessage response = await TryQueryAsync(address, port);
+
+            if (response is not null)
+                return response;
+
+            try
+            {
+                await Task.Delay(50, timeout.Token);
+            }
+            catch (OperationCanceledException) { }
+        }
+
+        return null;
     }
 
     /// <summary>
