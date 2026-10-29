@@ -198,7 +198,8 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
             await response.Content.ReadFromJsonAsync<DnsCryptSettingsDetail>();
 
         Assert.False(detail.Enable);
-        Assert.Equal(5443, detail.Port);
+        // The test host moves DNSCrypt to a free port too (see NinlilDnsWebApplicationFactory).
+        Assert.Equal(factory.DnsCryptPort, detail.Port);
         Assert.Equal(2, detail.EnabledEsVersions.Count);
     }
 

@@ -106,6 +106,17 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
             "NINLIL_DNS_SERVER_WEB_HTTPS_PORT",
             GetFreePort().ToString()
         );
+
+        // DNSCrypt is off at startup, but a test that enables it through the transport settings
+        // API starts its UDP and TCP listeners on the startup port, which is 5443 by default and
+        // can be taken by a service on the test machine or by another copy of this suite. A free
+        // port keeps that test off it. DNS-over-HTTPS shares the web ports above; the other
+        // transports are never started by a Web test.
+        DnsCryptPort = GetFreePort();
+        Environment.SetEnvironmentVariable(
+            "NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PORT",
+            DnsCryptPort.ToString()
+        );
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH",
             _runtimeConfigurationFilePath
@@ -168,6 +179,13 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     ///     so a test that sends a DNS query needs this port.
     /// </summary>
     public int PlainDnsPort { get; }
+
+    /// <summary>
+    ///     This property contains the UDP and TCP port the DNSCrypt listeners bind to when a test
+    ///     enables DNSCrypt. It is the startup value of <c>DnsServer:Protocol:DnsCrypt:Port</c>,
+    ///     which a settings GET reports.
+    /// </summary>
+    public int DnsCryptPort { get; }
 
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
