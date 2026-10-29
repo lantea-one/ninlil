@@ -30,6 +30,9 @@
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.ClientSchedule\Ninlil.Dns.Server.ClientSchedule.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.Plain\Ninlil.Dns.Protocol.Plain.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.DnsCrypt\Ninlil.Dns.Protocol.DnsCrypt.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.DnsOverTls\Ninlil.Dns.Protocol.DnsOverTls.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.DnsOverHttps\Ninlil.Dns.Protocol.DnsOverHttps.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.DnsOverQuic\Ninlil.Dns.Protocol.DnsOverQuic.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.DnsCrypt\Ninlil.Dns.Server.DnsCrypt.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.AccessControl\Ninlil.Dns.Server.AccessControl.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.RateLimiting\Ninlil.Dns.Server.RateLimiting.csproj" />
