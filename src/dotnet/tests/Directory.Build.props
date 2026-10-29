@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Shared settings for every project under src/dotnet/tests. MSBuild imports only the nearest
+    Directory.Build.props, so the first line imports the repository one.
+
+    TestSupport/TemporaryFiles.cs is compiled into every test project as an internal type (one
+    copy per assembly, no shared test-support assembly). The global using makes
+    Ninlil.TestSupport.TemporaryFiles available without a using directive in each test file.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)TestSupport/TemporaryFiles.cs" Link="TestSupport/TemporaryFiles.cs" />
+    <Using Include="Ninlil.TestSupport" />
+  </ItemGroup>
+</Project>
