@@ -85,8 +85,7 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
     {
         _host.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
 
         if (Directory.Exists(_keyRingDirectory))
             Directory.Delete(_keyRingDirectory, recursive: true);
