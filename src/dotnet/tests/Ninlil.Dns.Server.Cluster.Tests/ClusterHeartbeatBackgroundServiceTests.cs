@@ -70,8 +70,7 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
         _services.Dispose();
         _certificateProvider.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
         if (File.Exists(_certificateStatePath))
             File.Delete(_certificateStatePath);
     }
