@@ -542,9 +542,9 @@ public sealed class DnsOverQuicListener(
                     connection.RemoteEndPoint.Address,
                     (responseBytes, _) =>
                     {
-                        // Copied, so the pipeline may reuse its buffer; the stream task writes
-                        // it later.
-                        outcome.TrySetResult(new QueryOutcome(responseBytes.ToArray(), default));
+                        // The reply is framed here, which is its only copy: the stream task
+                        // writes the framed array after this callback has returned.
+                        outcome.TrySetResult(new QueryOutcome(Frame(responseBytes.Span), default));
                         return ValueTask.CompletedTask;
                     }
                 )
@@ -572,7 +572,7 @@ public sealed class DnsOverQuicListener(
 
             await WriteAsync(
                 stream,
-                Frame(result.Response),
+                result.Response,
                 completeWrites: true,
                 idleTimeout,
                 connectionToken
@@ -784,7 +784,8 @@ public sealed class DnsOverQuicListener(
 
     /// <summary>
     ///     This record carries how a pipeline query ended to the stream task waiting for it:
-    ///     with a reply, or (<paramref name="Response" /> null) dropped for the given reason.
+    ///     with a reply, already framed with its two-octet length prefix (RFC 9250 §4.2), or
+    ///     (<paramref name="Response" /> null) dropped for the given reason.
     /// </summary>
     private readonly record struct QueryOutcome(byte[] Response, DnsQueryDropReasonEnum DropReason);
 

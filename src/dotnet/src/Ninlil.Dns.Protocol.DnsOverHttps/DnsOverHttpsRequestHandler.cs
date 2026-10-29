@@ -1,5 +1,6 @@
 using System.Buffers.Text;
 using System.Net;
+using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Net.Http.Headers;
@@ -137,10 +138,54 @@ internal static class DnsOverHttpsRequestHandler
         context.Features.Get<IHttpMaxRequestBodySizeFeature>().MaxRequestBodySize =
             options.MaxMessageSizeBytes + 1024;
 
+        byte[] requestBytes = await ReadBodyAsync(context, options);
+
+        if (requestBytes is null)
+            return;
+
+        await ResolveAndRespondAsync(context, pipeline, options, requestBytes, clientId);
+    }
+
+    /// <summary>
+    ///     This method reads the POST body into a new array that nothing else references. The
+    ///     pipeline keeps the array for the life of the query (see
+    ///     <see cref="DnsInboundMessage.RequestBytes" />), so it must be private to this request.
+    ///     When the request declares a length that the size limit allows, the body is read straight
+    ///     into an array of exactly that length, which is the only copy; otherwise (no length, as
+    ///     with chunked bodies, or a length over the limit that the caller must still answer with
+    ///     <c>400</c>) it is buffered and copied out once.
+    /// </summary>
+    /// <returns>
+    ///     The body, or <see langword="null" /> after this method answered <c>400</c> because the
+    ///     body ended before the declared length.
+    /// </returns>
+    private static async Task<byte[]> ReadBodyAsync(
+        HttpContext context,
+        DnsOverHttpsOptions options
+    )
+    {
+        long? declaredLength = context.Request.ContentLength;
+
+        if (declaredLength is > 0 && declaredLength <= options.MaxMessageSizeBytes)
+        {
+            byte[] exact = new byte[declaredLength.Value];
+
+            try
+            {
+                await context.Request.Body.ReadExactlyAsync(exact, context.RequestAborted);
+            }
+            catch (EndOfStreamException)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return null;
+            }
+
+            return exact;
+        }
+
         using MemoryStream buffer = new();
         await context.Request.Body.CopyToAsync(buffer, context.RequestAborted);
-
-        await ResolveAndRespondAsync(context, pipeline, options, buffer.ToArray(), clientId);
+        return buffer.ToArray();
     }
 
     /// <summary>
@@ -174,7 +219,7 @@ internal static class DnsOverHttpsRequestHandler
                 ClientAddressOf(context),
                 (responseBytes, _) =>
                 {
-                    outcomeSource.TrySetResult((responseBytes.ToArray(), null));
+                    outcomeSource.TrySetResult((WholeArrayOrCopy(responseBytes), null));
                     return ValueTask.CompletedTask;
                 },
                 clientId
@@ -220,6 +265,20 @@ internal static class DnsOverHttpsRequestHandler
         context.Response.Headers[HeaderNames.CacheControl] = CacheControlFor(outcome.Response);
         await context.Response.Body.WriteAsync(outcome.Response, context.RequestAborted);
     }
+
+    /// <summary>
+    ///     This method returns the array behind an encoded reply when the memory covers all of it,
+    ///     and a copy otherwise. The pipeline hands each reply to the responder once and never
+    ///     touches it again, and the request task reads it only after the responder returned, so
+    ///     the array needs no copy of its own. A slice or memory without an array is copied,
+    ///     because the owner of that memory may reuse it.
+    /// </summary>
+    private static byte[] WholeArrayOrCopy(ReadOnlyMemory<byte> responseBytes) =>
+        MemoryMarshal.TryGetArray(responseBytes, out ArraySegment<byte> segment)
+        && segment.Offset == 0
+        && segment.Count == segment.Array.Length
+            ? segment.Array
+            : responseBytes.ToArray();
 
     /// <summary>
     ///     This method returns the address the pipeline sees as the client: the connection's
