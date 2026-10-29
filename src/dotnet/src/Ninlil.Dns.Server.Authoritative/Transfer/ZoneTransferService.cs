@@ -25,7 +25,10 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     8945 §5.3.1 describes. Every AXFR, and every IXFR answer longer than the single "current"
 ///     SOA, ends with the zone's SOA (RFC 5936 §2.2, RFC 1995 §4), so a pull client
 ///     (<see cref="ZoneTransferResponseAssembler" />) knows the transfer is complete without
-///     waiting for the connection to close.
+///     waiting for the connection to close. An incremental IXFR answer opens each difference
+///     sequence with the SOA the step replaced and the SOA it wrote, as the journal recorded them
+///     (<see cref="ZoneChangeJournalEntryEntity.OldSoaRecordJson" />); a window whose history is
+///     missing or inconsistent gets a full transfer.
 /// </summary>
 /// <param name="zoneCache">The cache this service transfers zones out of.</param>
 /// <param name="signedZoneCache">
@@ -266,41 +269,32 @@ public class ZoneTransferService(
 
         // The journal orders and filters by the raw serial, so a chain that crosses a serial wrap is
         // never found and the answer falls back to a full transfer, which RFC 1995 §4 allows.
+        // Signed zones always get a full transfer: every signing pass recomputes all RRSIGs, so no
+        // signed diff is journaled. Otherwise the journal must cover the client's serial to the
+        // current one without gaps, and every step must carry the SOA it replaced and the SOA it
+        // wrote, ending at the current SOA.
+        List<(DnsResourceRecord OldSoa, DnsResourceRecord NewSoa)> soaHistory = null;
         bool journalCoversRequestedRange =
-            // Signed zones always get a full transfer: every signing pass recomputes all RRSIGs, so no
-            // signed diff is journaled. RFC 1995 §4 allows answering IXFR with a full transfer.
-            // Otherwise the journal must cover the client's serial to the current one without gaps.
             signedData is null
             && journalEntries.Count > 0
             && journalEntries[0].OldSerial == clientSerial
             && journalEntries[^1].NewSerial == serverSerial
-            && IsContiguousChain(journalEntries);
+            && IsContiguousChain(journalEntries)
+            && TryBuildSoaHistory(journalEntries, zone.ApexName, currentSoaRecord, out soaHistory);
 
         List<DnsResourceRecord> recordSequence = [currentSoaWireRecord];
 
         if (journalCoversRequestedRange)
         {
-            foreach (ZoneChangeJournalEntryEntity entry in journalEntries)
+            for (int i = 0; i < journalEntries.Count; i++)
             {
-                // The other SOA fields are taken from the current SOA. ZoneUpdateService only changes the
-                // serial, and SOA edits are not journaled (see ZoneUpdateService.ApplyRecordEditAsync).
-                recordSequence.Add(
-                    BuildHistoricalSoaWireRecord(
-                        currentSoaData,
-                        zone.ApexName,
-                        currentSoaRecord.TimeToLiveSeconds,
-                        (uint)entry.OldSerial
-                    )
-                );
+                ZoneChangeJournalEntryEntity entry = journalEntries[i];
+
+                // RFC 1995 §4: each difference sequence opens with the SOA it replaces, then the
+                // deleted records, then the SOA it creates, then the added records.
+                recordSequence.Add(soaHistory[i].OldSoa);
                 recordSequence.AddRange(DecodeRecordSnapshot(entry.RemovedRecordsJson));
-                recordSequence.Add(
-                    BuildHistoricalSoaWireRecord(
-                        currentSoaData,
-                        zone.ApexName,
-                        currentSoaRecord.TimeToLiveSeconds,
-                        (uint)entry.NewSerial
-                    )
-                );
+                recordSequence.Add(soaHistory[i].NewSoa);
                 recordSequence.AddRange(DecodeRecordSnapshot(entry.AddedRecordsJson));
             }
         }
@@ -536,27 +530,108 @@ public class ZoneTransferService(
         };
 
     /// <summary>
-    ///     This method builds the SOA at an earlier serial for the bookends RFC 1995 §4 puts around
-    ///     each difference sequence, from the current SOA's other fields.
+    ///     This method reads the SOA history of journal entries for an incremental answer: the SOA
+    ///     each step replaced and the SOA it wrote, as wire records owned by the zone apex. It
+    ///     succeeds only when every entry holds both snapshots, each decodes as an SOA whose serial
+    ///     is the entry's serial, each entry's old SOA equals the previous entry's new SOA, and the
+    ///     last new SOA equals the current SOA (data and TTL). Any other history is incomplete or
+    ///     inconsistent, and the caller answers with a full transfer instead (RFC 1995 §4 allows
+    ///     that).
     /// </summary>
-    private static DnsResourceRecord BuildHistoricalSoaWireRecord(
-        SoaRecordData currentSoaData,
+    /// <param name="entries">The journal entries of the window, oldest first.</param>
+    /// <param name="apexName">The zone apex, the owner of every returned SOA.</param>
+    /// <param name="currentSoaRecord">The zone's stored SOA.</param>
+    /// <param name="history">On success, one pair per entry; otherwise <see langword="null" />.</param>
+    private static bool TryBuildSoaHistory(
+        IReadOnlyList<ZoneChangeJournalEntryEntity> entries,
         DnsName apexName,
-        uint timeToLiveSeconds,
-        uint serial
-    ) =>
-        new(
-            apexName,
-            DnsResourceRecordTypeEnum.Soa,
-            DnsClassEnum.Internet,
-            timeToLiveSeconds,
-            DnsRecordDataCodecRegistry.Encode(
-                DnsResourceRecordTypeEnum.Soa,
-                currentSoaData with
-                {
-                    Serial = serial,
-                }
+        RecordEntity currentSoaRecord,
+        out List<(DnsResourceRecord OldSoa, DnsResourceRecord NewSoa)> history
+    )
+    {
+        history = null;
+        List<(DnsResourceRecord OldSoa, DnsResourceRecord NewSoa)> result = [];
+        RecordEntity previousNew = null;
+
+        foreach (ZoneChangeJournalEntryEntity entry in entries)
+        {
+            if (
+                !TryReadSoaSnapshot(
+                    entry.OldSoaRecordJson,
+                    apexName,
+                    entry.OldSerial,
+                    out RecordEntity oldSoa
+                )
+                || !TryReadSoaSnapshot(
+                    entry.NewSoaRecordJson,
+                    apexName,
+                    entry.NewSerial,
+                    out RecordEntity newSoa
+                )
+                || (previousNew is not null && !IsSameSoa(previousNew, oldSoa))
             )
+                return false;
+
+            result.Add(
+                (
+                    RecordEntityCodec.ToWireRecord(oldSoa, apexName),
+                    RecordEntityCodec.ToWireRecord(newSoa, apexName)
+                )
+            );
+            previousNew = newSoa;
+        }
+
+        // A write that bypassed ZoneUpdateService leaves the last recorded SOA different from the
+        // stored one; the history cannot be trusted then.
+        if (previousNew is null || !IsSameSoa(previousNew, currentSoaRecord))
+            return false;
+
+        history = result;
+        return true;
+    }
+
+    /// <summary>
+    ///     This method decodes one stored SOA snapshot and checks it is an SOA at the apex with the
+    ///     expected serial.
+    /// </summary>
+    private static bool TryReadSoaSnapshot(
+        string json,
+        DnsName apexName,
+        long expectedSerial,
+        out RecordEntity snapshot
+    )
+    {
+        snapshot = null;
+
+        if (string.IsNullOrEmpty(json))
+            return false;
+
+        RecordEntity decoded = Ninlil.Common.Serializer.JsonSerializer.Deserialize<RecordEntity>(
+            json
+        );
+
+        if (
+            decoded is null
+            || decoded.Type != DnsResourceRecordTypeEnum.Soa
+            || DnsName.Parse(decoded.Name) != apexName
+            || RecordEntityCodec.DecodeTypedData(decoded) is not SoaRecordData data
+            || data.Serial != expectedSerial
+        )
+            return false;
+
+        snapshot = decoded;
+        return true;
+    }
+
+    /// <summary>
+    ///     This method tells whether two SOA records carry the same owner, TTL and data.
+    /// </summary>
+    private static bool IsSameSoa(RecordEntity first, RecordEntity second) =>
+        first.TimeToLiveSeconds == second.TimeToLiveSeconds
+        && DnsName.Parse(first.Name) == DnsName.Parse(second.Name)
+        && Equals(
+            RecordEntityCodec.DecodeTypedData(first),
+            RecordEntityCodec.DecodeTypedData(second)
         );
 
     /// <summary>

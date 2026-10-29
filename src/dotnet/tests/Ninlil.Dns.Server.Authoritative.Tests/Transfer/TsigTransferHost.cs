@@ -18,6 +18,7 @@ using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Dnssec.Extension;
 using Ninlil.Dns.Server.Tsig;
 using Ninlil.Dns.Server.Tsig.Extension;
+using Xunit;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
@@ -395,17 +396,63 @@ public sealed class TsigTransferHost : IAsyncDisposable
 
     /// <summary>
     ///     This method stores one journal entry for the hosted zone, with no added or removed
-    ///     records, so a test can build a serial chain for IXFR to find or miss.
+    ///     records, so a test can build a serial chain for IXFR to find or miss. By default the
+    ///     entry records the SOA history a real change writes: both snapshots are copies of the
+    ///     zone's current SOA with the entry's serials, so a chain that ends at the current serial
+    ///     is consistent and IXFR answers it incrementally.
     /// </summary>
-    public async Task AddJournalEntryAsync(long oldSerial, long newSerial)
+    /// <param name="oldSerial">The serial before the step.</param>
+    /// <param name="newSerial">The serial after the step.</param>
+    /// <param name="withSoaHistory">
+    ///     <see langword="false" /> stores no SOA snapshots, like a row written before SOA history
+    ///     existed.
+    /// </param>
+    /// <param name="soaRefreshSeconds">
+    ///     When set, both snapshots carry this refresh interval instead of the current SOA's, so a
+    ///     test can make a step's SOA differ from its neighbours or from the stored SOA.
+    /// </param>
+    public async Task AddJournalEntryAsync(
+        long oldSerial,
+        long newSerial,
+        bool withSoaHistory = true,
+        uint? soaRefreshSeconds = null
+    )
     {
         await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
         IZoneChangeJournalRepository journalRepository =
             scope.ServiceProvider.GetRequiredService<IZoneChangeJournalRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         ZoneEntity zone = await zoneRepository.FindByNameAsync(ZoneName);
+
+        string oldSoaJson = null;
+        string newSoaJson = null;
+
+        if (withSoaHistory)
+        {
+            RecordEntity currentSoa = (
+                await recordRepository.FindByNameAsync(
+                    zone.Id,
+                    ZoneName,
+                    DnsResourceRecordTypeEnum.Soa
+                )
+            ).Single();
+            SoaRecordData currentData = Assert.IsType<SoaRecordData>(
+                RecordEntityCodec.DecodeTypedData(currentSoa)
+            );
+            SoaRecordData baseData = soaRefreshSeconds is { } refresh
+                ? currentData with
+                {
+                    RefreshSeconds = refresh,
+                }
+                : currentData;
+
+            oldSoaJson = SoaSnapshotJson(currentSoa, baseData with { Serial = (uint)oldSerial });
+            newSoaJson = SoaSnapshotJson(currentSoa, baseData with { Serial = (uint)newSerial });
+        }
 
         await journalRepository.AddAsync(
             new ZoneChangeJournalEntryEntity
@@ -416,11 +463,29 @@ public sealed class TsigTransferHost : IAsyncDisposable
                 NewSerial = newSerial,
                 RemovedRecordsJson = "[]",
                 AddedRecordsJson = "[]",
+                OldSoaRecordJson = oldSoaJson,
+                NewSoaRecordJson = newSoaJson,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             }
         );
         await unitOfWork.SaveChangesAsync();
     }
+
+    /// <summary>
+    ///     This method serializes a journal SOA snapshot: the stored SOA's owner, class and TTL with
+    ///     <paramref name="data" /> as its data, in the format <c>ZoneUpdateService</c> writes.
+    /// </summary>
+    private static string SoaSnapshotJson(RecordEntity template, SoaRecordData data) =>
+        Ninlil.Common.Serializer.JsonSerializer.Serialize(
+            new RecordEntity
+            {
+                Name = template.Name,
+                Type = DnsResourceRecordTypeEnum.Soa,
+                Class = template.Class,
+                TimeToLiveSeconds = template.TimeToLiveSeconds,
+                DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(data),
+            }
+        );
 
     /// <summary>
     ///     This method runs <paramref name="action" /> with the TSIG service from a fresh scope.
