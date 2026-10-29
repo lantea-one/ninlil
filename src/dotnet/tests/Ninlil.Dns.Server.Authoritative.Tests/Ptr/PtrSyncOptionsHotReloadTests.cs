@@ -98,8 +98,7 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
     {
         _host.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
 
         if (Directory.Exists(_configurationDirectory))
             Directory.Delete(_configurationDirectory, recursive: true);

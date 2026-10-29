@@ -389,7 +389,6 @@ public sealed class AuthoritativeTestZoneHost : IAsyncDisposable
         await _host.StopAsync();
         _host.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 }

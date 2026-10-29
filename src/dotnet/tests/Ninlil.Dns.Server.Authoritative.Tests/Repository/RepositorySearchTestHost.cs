@@ -49,8 +49,7 @@ public sealed class RepositorySearchTestHost : IAsyncDisposable
     {
         Host?.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
 
         return ValueTask.CompletedTask;
     }

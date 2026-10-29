@@ -97,11 +97,8 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
             _primaryHost.Dispose();
         }
 
-        foreach (string path in new[] { _primaryDatabasePath, _secondaryDatabasePath })
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
+        TemporaryFiles.DeleteSqliteDatabase(_primaryDatabasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_secondaryDatabasePath);
     }
 
     [Fact]

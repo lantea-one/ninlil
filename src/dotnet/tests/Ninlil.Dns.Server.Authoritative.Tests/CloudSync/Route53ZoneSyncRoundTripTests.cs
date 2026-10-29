@@ -133,8 +133,7 @@ public sealed class Route53ZoneSyncRoundTripTests : IAsyncLifetime
         _host.Dispose();
         await _fake.DisposeAsync();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     /// <summary>

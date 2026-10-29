@@ -86,11 +86,9 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
 
         _secondaryHost.Dispose();
 
-        if (File.Exists(_primaryDatabasePath))
-            File.Delete(_primaryDatabasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_primaryDatabasePath);
 
-        if (File.Exists(_secondaryDatabasePath))
-            File.Delete(_secondaryDatabasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_secondaryDatabasePath);
     }
 
     private bool _secondaryHostStarted;

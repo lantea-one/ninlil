@@ -145,8 +145,7 @@ public sealed class ZoneSigningServiceCanonicalFormTests : IAsyncLifetime
         await _host.StopAsync();
         _host.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     [Fact]

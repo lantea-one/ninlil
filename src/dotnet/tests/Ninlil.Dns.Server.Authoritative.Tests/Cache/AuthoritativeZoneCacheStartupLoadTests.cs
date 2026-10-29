@@ -50,8 +50,7 @@ public sealed class AuthoritativeZoneCacheStartupLoadTests : IDisposable
     {
         _provider.Dispose();
 
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
     }
 
     /// <summary>
