@@ -101,15 +101,20 @@ public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
             );
             response.EnsureSuccessStatusCode();
 
+            // The raw body is read once: it must not echo the password in any field, and it
+            // must still parse as the write result.
+            string responseBody = await response.Content.ReadAsStringAsync();
+            Assert.DoesNotContain("a-real-smtp-password", responseBody);
             RuntimeSettingsWriteResult result =
-                await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+                JsonSerializer.Deserialize<RuntimeSettingsWriteResult>(
+                    responseBody,
+                    JsonSerializerOptions.Web
+                );
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // Only the file is checked; a GET would still show the old values (see
-            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). The hot reload is
-            // covered by SmtpEmailSenderHotReloadTests in Ninlil.Dns.Identity.Tests. Despite the
-            // test name, nothing checks that the password stays out of a response: the PATCH
-            // response is only a note, and the GET never sees the stored password.
+            // The file is checked for the stored values; a GET would still show the old values
+            // (see NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). The hot reload is
+            // covered by SmtpEmailSenderHotReloadTests in Ninlil.Dns.Identity.Tests.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["Email"];
