@@ -10,7 +10,10 @@ namespace Ninlil.Dns.Server.Acme.Tests;
 /// <summary>
 ///     This class tests <see cref="UdpAcmeChallengeProbe" /> against a fake name server on a
 ///     loopback UDP socket bound to port 0. The probe reaches it through its internal port and
-///     timeout overrides (200 ms), so a reply that never matches ends the test quickly.
+///     timeout overrides. A case whose reply the probe must reject uses a short timeout, so the
+///     test ends quickly; a case whose reply the probe must accept uses a long one, because the
+///     timeout also covers sending the query and a starved thread pool can spend 200 ms before
+///     the first datagram leaves.
 /// </summary>
 public sealed class UdpAcmeChallengeProbeTests
 {
@@ -38,18 +41,24 @@ public sealed class UdpAcmeChallengeProbeTests
     ///     This method answers the first query that reaches a fake server as <paramref name="reply" />
     ///     says and returns whether the probe confirmed <paramref name="asked" />.
     /// </summary>
-    private static async Task<bool> ProbeAsync(Reply reply, string asked)
+    private static async Task<bool> ProbeAsync(Reply reply, string asked, bool expectTrue)
     {
         using Socket server = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         server.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         int port = ((IPEndPoint)server.LocalEndPoint).Port;
+
+        // The fake server waits for one query. If the probe gives up before it sends (its timeout
+        // also covers the send), no query ever arrives, so the wait must end when the probe
+        // returns; an unbounded wait here would hang the test run.
+        using CancellationTokenSource probeDone = new();
 
         Task serve = Task.Run(async () =>
         {
             byte[] buffer = new byte[4096];
             SocketReceiveFromResult received = await server.ReceiveFromAsync(
                 buffer,
-                new IPEndPoint(IPAddress.Any, 0)
+                new IPEndPoint(IPAddress.Any, 0),
+                probeDone.Token
             );
             DnsMessage query = DnsMessageReader.Read(buffer.AsSpan(0, received.ReceivedBytes));
 
@@ -101,35 +110,48 @@ public sealed class UdpAcmeChallengeProbeTests
             }
         });
 
-        UdpAcmeChallengeProbe probe = new(port, TimeSpan.FromMilliseconds(200));
+        UdpAcmeChallengeProbe probe = new(
+            port,
+            expectTrue ? TimeSpan.FromSeconds(30) : TimeSpan.FromMilliseconds(200)
+        );
         bool result = await probe.ServesValueAsync(
             IPAddress.Loopback,
             Name,
             asked,
             CancellationToken.None
         );
-        await serve;
+
+        await probeDone.CancelAsync();
+
+        try
+        {
+            await serve.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        catch (OperationCanceledException)
+        {
+            // The probe returned without a query reaching the server; the result decides.
+        }
 
         return result;
     }
 
     [Fact]
     public async Task ServesValue_WhenTheServerAnswersTheValue_ReturnsTrue() =>
-        Assert.True(await ProbeAsync(Reply.ValueV1, "v1"));
+        Assert.True(await ProbeAsync(Reply.ValueV1, "v1", true));
 
     [Fact]
     public async Task ServesValue_WhenTheServerAnswersAnotherValue_ReturnsFalse() =>
-        Assert.False(await ProbeAsync(Reply.ValueV1, "v2"));
+        Assert.False(await ProbeAsync(Reply.ValueV1, "v2", false));
 
     [Fact]
     public async Task ServesValue_WhenOnlyAReplyWithAnotherIdArrives_IgnoresItUntilTheTimeout() =>
-        Assert.False(await ProbeAsync(Reply.WrongIdOnly, "v1"));
+        Assert.False(await ProbeAsync(Reply.WrongIdOnly, "v1", false));
 
     [Fact]
     public async Task ServesValue_WhenOnlyAReplyWithAnotherQuestionArrives_IgnoresItUntilTheTimeout() =>
-        Assert.False(await ProbeAsync(Reply.WrongQuestionOnly, "v1"));
+        Assert.False(await ProbeAsync(Reply.WrongQuestionOnly, "v1", false));
 
     [Fact]
     public async Task ServesValue_WhenAReplyWithAnotherIdPrecedesTheRealOne_ReturnsTrue() =>
-        Assert.True(await ProbeAsync(Reply.WrongIdThenValueV1, "v1"));
+        Assert.True(await ProbeAsync(Reply.WrongIdThenValueV1, "v1", true));
 }
