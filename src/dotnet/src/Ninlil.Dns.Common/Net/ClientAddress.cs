@@ -61,34 +61,12 @@ public static class ClientAddress
     ///     This method checks whether a network entry (a bare address, matched exactly, or a CIDR
     ///     network, matched by containment) covers an address. Both sides are normalized first, so
     ///     an IPv4-mapped address matches an IPv4 entry. An entry that does not parse matches
-    ///     nothing, so one bad value cannot break query handling.
+    ///     nothing, so one bad value cannot break query handling. This method parses the entry on
+    ///     every call; code that tests many addresses against the same entry parses it once with
+    ///     <see cref="NetworkEntry.TryParse" /> instead.
     /// </summary>
     /// <param name="entry">The configured address or CIDR network.</param>
     /// <param name="address">The client address to test.</param>
-    public static bool NetworkContains(string entry, IPAddress address)
-    {
-        if (string.IsNullOrWhiteSpace(entry) || address == null)
-            return false;
-
-        IPAddress normalizedAddress = Normalize(address);
-
-        if (entry.Contains('/'))
-        {
-            if (!IPNetwork.TryParse(entry, out IPNetwork network))
-                return false;
-
-            // An IPv4-mapped network (::ffff:192.0.2.0/120) is the same set as the IPv4 one, but
-            // IPNetwork compares families, so compare it against the mapped form of the address.
-            IPAddress candidate =
-                network.BaseAddress.IsIPv4MappedToIPv6
-                && normalizedAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                    ? normalizedAddress.MapToIPv6()
-                    : normalizedAddress;
-
-            return network.Contains(candidate);
-        }
-
-        return IPAddress.TryParse(entry.Trim(), out IPAddress parsed)
-            && Normalize(parsed).Equals(normalizedAddress);
-    }
+    public static bool NetworkContains(string entry, IPAddress address) =>
+        NetworkEntry.TryParse(entry, out NetworkEntry network) && network.Contains(address);
 }
