@@ -128,12 +128,22 @@ public class ClientsController(
         );
         int totalCount = await clientRepository.CountAsync(criteria, stoppingToken);
 
-        // Each client's addresses are loaded with one query per client on this page, one after
-        // another: the repositories share this request's scoped DbContext, which does not allow
-        // two operations at once.
+        // The addresses of every client on the page come from one query and are grouped here.
+        // The repositories share this request's scoped DbContext, which allows one operation
+        // at a time, so this runs after the page query. Grouping keeps the order the
+        // repository returned the rows in, which is the order of the per-client query.
+        IReadOnlyList<DnsClientAddressEntity> pageAddresses =
+            await clientAddressRepository.ListByClientIdsAsync(
+                [.. clients.Select(client => client.Id)],
+                stoppingToken
+            );
+        ILookup<Guid, DnsClientAddressEntity> addressesByClient = pageAddresses.ToLookup(address =>
+            address.ClientId
+        );
+
         List<ClientDetail> details = new(clients.Count);
         foreach (DnsClientEntity client in clients)
-            details.Add(await ToDetailAsync(client, stoppingToken));
+            details.Add(ToDetail(client, [.. addressesByClient[client.Id]]));
 
         return Ok(new PagedResult<ClientDetail>(details, skip, take, totalCount));
     }
@@ -547,12 +557,23 @@ public class ClientsController(
     private async Task<ClientDetail> ToDetailAsync(
         DnsClientEntity client,
         CancellationToken stoppingToken
+    ) =>
+        ToDetail(
+            client,
+            await clientAddressRepository.ListByClientIdAsync(client.Id, stoppingToken)
+        );
+
+    /// <summary>
+    ///     This method converts a client entity and its already loaded addresses to the API
+    ///     representation. <see cref="List" /> calls it with the addresses of a whole page loaded
+    ///     by one query, and <see cref="ToDetailAsync" /> with one client's addresses.
+    /// </summary>
+    private ClientDetail ToDetail(
+        DnsClientEntity client,
+        IReadOnlyList<DnsClientAddressEntity> addresses
     )
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
-
-        IReadOnlyList<DnsClientAddressEntity> addresses =
-            await clientAddressRepository.ListByClientIdAsync(client.Id, stoppingToken);
 
         // A device's last-seen time is that of its most recently seen address.
         DateTimeOffset? lastSeenUtc = addresses.Max(address => address.LastSeenUtc);

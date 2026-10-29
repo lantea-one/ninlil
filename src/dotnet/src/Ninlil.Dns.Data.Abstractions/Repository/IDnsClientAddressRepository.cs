@@ -41,6 +41,34 @@ public interface IDnsClientAddressRepository : IRepository<DnsClientAddressEntit
     );
 
     /// <summary>
+    ///     This method lists every address of several devices with one query, without paging. The
+    ///     admin client list uses it to load the addresses of a whole page of devices at once,
+    ///     where <see cref="ListByClientIdAsync" /> would run one query per device. The rows come
+    ///     back in no particular order across devices and, within one device, in the same order
+    ///     <see cref="ListByClientIdAsync" /> returns them, so a caller groups them by
+    ///     <see cref="DnsClientAddressEntity.ClientId" />. The rows are not tracked for changes.
+    ///     <para>
+    ///         The default implementation calls <see cref="ListByClientIdAsync" /> once per device, so
+    ///         a test fake that implements only the single-device method still works. The EF Core and
+    ///         MongoDB repositories override it with one query.
+    ///     </para>
+    /// </summary>
+    /// <param name="clientIds">The owning devices' identifiers. An empty collection returns an empty list without a query.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The addresses of exactly the given devices.</returns>
+    async Task<IReadOnlyList<DnsClientAddressEntity>> ListByClientIdsAsync(
+        IReadOnlyCollection<Guid> clientIds,
+        CancellationToken stoppingToken = default
+    )
+    {
+        List<DnsClientAddressEntity> addresses = [];
+        foreach (Guid clientId in clientIds)
+            addresses.AddRange(await ListByClientIdAsync(clientId, stoppingToken));
+
+        return addresses;
+    }
+
+    /// <summary>
     ///     This method lists one page of one device's addresses, ordered by creation time and paged
     ///     in the database.
     /// </summary>

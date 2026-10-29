@@ -38,6 +38,26 @@ public class DnsClientAddressMongoRepository(
     ) => await Collection.Find(address => address.ClientId == clientId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     This runs one <c>$in</c> filter on <c>ClientId</c>, which the <c>ClientId</c> index
+    ///     serves (<see cref="Maintenance.MongoIndexCatalog" />).
+    /// </remarks>
+    public async Task<IReadOnlyList<DnsClientAddressEntity>> ListByClientIdsAsync(
+        IReadOnlyCollection<Guid> clientIds,
+        CancellationToken stoppingToken = default
+    )
+    {
+        if (clientIds.Count == 0)
+            return [];
+
+        return await Collection
+            .Find(
+                Builders<DnsClientAddressEntity>.Filter.In(address => address.ClientId, clientIds)
+            )
+            .ToListAsync(stoppingToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<DnsClientAddressEntity>> SearchByClientIdAsync(
         Guid clientId,
         int skip,
