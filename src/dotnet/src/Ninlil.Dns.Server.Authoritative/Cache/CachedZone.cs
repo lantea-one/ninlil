@@ -97,11 +97,7 @@ public sealed class CachedZone
             // Add the owner and every ancestor down to the apex. Stop at the first name already
             // present: its ancestors were added with it.
             for (int depth = owner.Labels.Count; depth >= ApexName.Labels.Count; depth--)
-                if (
-                    !_existingNames.Add(
-                        new DnsName([.. owner.Labels.Skip(owner.Labels.Count - depth)])
-                    )
-                )
+                if (!_existingNames.Add(owner.Suffix(owner.Labels.Count - depth)))
                     break;
         }
 
@@ -147,7 +143,7 @@ public sealed class CachedZone
         // below it. The first hit is the topmost cut.
         for (int depth = ApexName.Labels.Count + 1; depth <= name.Labels.Count; depth++)
         {
-            DnsName ancestor = new([.. name.Labels.Skip(name.Labels.Count - depth)]);
+            DnsName ancestor = name.Suffix(name.Labels.Count - depth);
 
             if (_delegationPoints.TryGetValue(ancestor, out List<RecordEntity> nameServers))
                 return (ancestor, nameServers);
@@ -223,7 +219,7 @@ public sealed class CachedZone
     {
         for (int depth = name.Labels.Count - 1; depth > ApexName.Labels.Count; depth--)
         {
-            DnsName ancestor = new([.. name.Labels.Skip(name.Labels.Count - depth)]);
+            DnsName ancestor = name.Suffix(name.Labels.Count - depth);
 
             if (_existingNames.Contains(ancestor))
                 return ancestor;

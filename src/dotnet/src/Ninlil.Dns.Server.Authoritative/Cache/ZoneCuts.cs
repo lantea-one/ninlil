@@ -28,11 +28,7 @@ internal static class ZoneCuts
             .. candidates.Where(name =>
                 !Enumerable
                     .Range(apexName.Labels.Count + 1, name.Labels.Count - apexName.Labels.Count - 1)
-                    .Any(depth =>
-                        candidates.Contains(
-                            new DnsName([.. name.Labels.Skip(name.Labels.Count - depth)])
-                        )
-                    )
+                    .Any(depth => candidates.Contains(name.Suffix(name.Labels.Count - depth)))
             ),
         ];
     }
@@ -51,7 +47,5 @@ internal static class ZoneCuts
                 apexName.Labels.Count + 1,
                 Math.Max(0, name.Labels.Count - apexName.Labels.Count - 1)
             )
-            .Any(depth =>
-                cuts.Contains(new DnsName([.. name.Labels.Skip(name.Labels.Count - depth)]))
-            );
+            .Any(depth => cuts.Contains(name.Suffix(name.Labels.Count - depth)));
 }

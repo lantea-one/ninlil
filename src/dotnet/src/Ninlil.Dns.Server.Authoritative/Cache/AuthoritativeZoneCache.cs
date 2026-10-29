@@ -94,9 +94,12 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
     {
         CachedZone exactMatch = null;
 
+        // Suffix shares the label arrays of name instead of copying them, which is safe because a
+        // DnsName and its labels are never changed after construction. The name's hash is cached
+        // per instance, so each suffix is hashed once for its lookup.
         for (int start = 0; start <= name.Labels.Count; start++)
         {
-            DnsName candidate = new([.. name.Labels.Skip(start)]);
+            DnsName candidate = name.Suffix(start);
 
             if (!_zonesByName.TryGetValue(candidate, out CachedZone zone))
                 continue;
@@ -117,7 +120,7 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
         {
             for (int start = 1; start <= name.Labels.Count; start++)
             {
-                DnsName candidate = new([.. name.Labels.Skip(start)]);
+                DnsName candidate = name.Suffix(start);
 
                 if (
                     _zonesByName.TryGetValue(candidate, out CachedZone ancestorZone)
