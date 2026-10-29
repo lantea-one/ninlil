@@ -515,36 +515,88 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
     }
 
     /// <summary>
-    ///     This method joins the character-strings of TXT RDATA into one octet sequence (RFC 1035
-    ///     §3.3.14), the form Route 53 stores as one quoted value.
+    ///     This method splits TXT RDATA into its character-strings (RFC 1035 §3.3.14), so each one
+    ///     can be quoted on its own in Route 53's value.
     /// </summary>
-    private static byte[] ReadTxtOctets(byte[] rdata)
+    private static List<byte[]> ReadTxtStrings(byte[] rdata)
     {
-        List<byte> octets = [];
+        List<byte[]> strings = [];
 
         for (int offset = 0; offset < rdata.Length; )
         {
             int length = Math.Min(rdata[offset], rdata.Length - offset - 1);
-            octets.AddRange(rdata.AsSpan(offset + 1, length).ToArray());
+            strings.Add(rdata.AsSpan(offset + 1, length).ToArray());
             offset += 1 + length;
         }
 
-        return [.. octets];
+        return strings;
     }
 
     /// <summary>
-    ///     This method splits octets into TXT character-strings of at most 255 octets each (RFC 1035
-    ///     §3.3.14), one empty string for no octets.
+    ///     This method reads a Route 53 TXT value: quoted strings separated by white space, such as
+    ///     <c>"String 1" "String 2"</c>, each with the escapes of <see cref="DecodeRoute53Text" />. A
+    ///     value that does not start with a quote is taken as one unquoted string.
     /// </summary>
-    private static byte[] BuildTxtRdata(byte[] octets)
+    private static List<byte[]> ParseRoute53TxtStrings(string value)
+    {
+        List<byte[]> strings = [];
+        int i = 0;
+
+        while (i < value.Length)
+        {
+            if (char.IsWhiteSpace(value[i]))
+            {
+                i++;
+                continue;
+            }
+
+            if (value[i] != '"')
+            {
+                // Not a quoted string: keep the rest as one string, as Route 53 values written
+                // without quotes carry no separators.
+                strings.Add(DecodeRoute53Text(value[i..].TrimEnd()));
+                break;
+            }
+
+            int start = ++i;
+
+            // The closing quote is the first one not escaped by a backslash; an escaped
+            // backslash (two of them) does not escape the quote after it.
+            while (i < value.Length && value[i] != '"')
+                i += value[i] == '\\' ? 2 : 1;
+
+            int end = Math.Min(i, value.Length);
+            strings.Add(DecodeRoute53Text(value[start..end]));
+            i = end + 1;
+        }
+
+        return strings;
+    }
+
+    /// <summary>
+    ///     This method writes strings as TXT RDATA, one character-string each; a string over 255
+    ///     octets is split into several (RFC 1035 §3.3.14). With no strings, one empty
+    ///     character-string.
+    /// </summary>
+    private static byte[] BuildTxtRdata(List<byte[]> strings)
     {
         List<byte> rdata = [];
 
-        for (int offset = 0; offset == 0 || offset < octets.Length; offset += 255)
+        foreach (
+            byte[] octets in strings.Count == 0
+                ?
+                [
+                    [],
+                ]
+                : strings
+        )
         {
-            int length = Math.Min(255, octets.Length - offset);
-            rdata.Add((byte)length);
-            rdata.AddRange(octets.AsSpan(offset, length).ToArray());
+            for (int offset = 0; offset == 0 || offset < octets.Length; offset += 255)
+            {
+                int length = Math.Min(255, octets.Length - offset);
+                rdata.Add((byte)length);
+                rdata.AddRange(octets.AsSpan(offset, length).ToArray());
+            }
         }
 
         return [.. rdata];
@@ -601,10 +653,15 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
         if (record.Type == DnsResourceRecordTypeEnum.Caa)
             return BuildCaaValue(record);
 
-        // A TXT value is built from the raw character-string octets, because the string the mapper
-        // returns cannot hold an octet that is not valid UTF-8.
+        // A TXT value is built from the raw character-strings, because the string the mapper
+        // returns cannot hold an octet that is not valid UTF-8 and joins the strings. Route 53
+        // takes one quoted string per character-string, separated by spaces, and rejects a
+        // quoted string over 255 characters.
         if (record.Type == DnsResourceRecordTypeEnum.Txt)
-            return $"\"{EncodeRoute53Text(ReadTxtOctets(record.Data))}\"";
+            return string.Join(
+                " ",
+                ReadTxtStrings(record.Data).Select(octets => $"\"{EncodeRoute53Text(octets)}\"")
+            );
 
         (string content, ushort mxPreference) = CloudDnsRecordMapper.FromWireRecord(record);
 
@@ -722,17 +779,12 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
 
         if (type == DnsResourceRecordTypeEnum.Txt)
         {
-            string quoted =
-                rawValue.Length >= 2 && rawValue[0] == '"' && rawValue[^1] == '"'
-                    ? rawValue[1..^1]
-                    : rawValue;
-
             return new DnsResourceRecord(
                 DnsName.Parse(name),
                 type,
                 DnsClassEnum.Internet,
                 ttl,
-                BuildTxtRdata(DecodeRoute53Text(quoted))
+                BuildTxtRdata(ParseRoute53TxtStrings(rawValue))
             );
         }
 

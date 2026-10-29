@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Server.Authoritative.CloudSync;
 
 // Define our namespace.
@@ -932,5 +933,84 @@ public sealed class Route53DnsProviderTests : IAsyncLifetime
             ["1 2 3 \\052.srv.example."],
             Assert.Single(_fake.Sets(ZoneId), s => s.Name == "_o._tcp.example.com.").Values
         );
+    }
+
+    /// <summary>
+    ///     This test checks that a TXT value of two quoted strings becomes two character-strings, not
+    ///     one string holding the inner quotes.
+    /// </summary>
+    [Fact]
+    public async Task ListRecords_ForATxtValueWithTwoQuotedStrings_ImportsTwoCharacterStrings()
+    {
+        CloudDnsProviderRecord record = await ListSingleValueSetAsync(
+            "multi-txt.example.com.",
+            "TXT",
+            "\"String 1\" \"String 2\""
+        );
+
+        Assert.Equal(
+            ["String 1", "String 2"],
+            (
+                (TxtRecordData)
+                    DnsRecordDataCodecRegistry.Decode(record.Record.Type, record.Record.Data)
+            ).Values
+        );
+    }
+
+    /// <summary>
+    ///     This test checks that a 300-octet TXT record, held as strings of 255 and 45 octets, is
+    ///     sent as two quoted strings, since Route 53 rejects a quoted string over 255 characters.
+    /// </summary>
+    [Fact]
+    public async Task CreateRecord_ForATxtOfTwoCharacterStrings_SendsTwoQuotedStrings()
+    {
+        string first = new('a', 255);
+        string second = new('b', 45);
+        DnsResourceRecord record = new(
+            DnsName.Parse("long.example.com"),
+            DnsResourceRecordTypeEnum.Txt,
+            DnsClassEnum.Internet,
+            300,
+            [
+                255,
+                .. System.Text.Encoding.ASCII.GetBytes(first),
+                45,
+                .. System.Text.Encoding.ASCII.GetBytes(second),
+            ]
+        );
+
+        await CreateProvider().CreateRecordAsync(Credentials, ZoneId, record);
+
+        FakeRoute53Server.FakeRecordSet set = Assert.Single(
+            _fake.Sets(ZoneId),
+            s => s.Name == "long.example.com." && s.Type == "TXT"
+        );
+        Assert.Equal([$"\"{first}\" \"{second}\""], set.Values);
+    }
+
+    /// <summary>
+    ///     This test checks that a two-string TXT record keeps its string boundaries through a push
+    ///     and a listing.
+    /// </summary>
+    [Fact]
+    public async Task CreateRecord_ForATwoStringTxt_RoundTripsUnchanged()
+    {
+        DnsResourceRecord record = new(
+            DnsName.Parse("rt-txt.example.com"),
+            DnsResourceRecordTypeEnum.Txt,
+            DnsClassEnum.Internet,
+            300,
+            [.. "\u0003abc"u8, .. "\u0002de"u8]
+        );
+
+        await CreateProvider().CreateRecordAsync(Credentials, ZoneId, record);
+        IReadOnlyList<CloudDnsProviderRecord> records = await CreateProvider()
+            .ListRecordsAsync(Credentials, ZoneId);
+
+        CloudDnsProviderRecord listed = Assert.Single(
+            records,
+            r => r.ProviderRecordId == "rt-txt.example.com.|TXT"
+        );
+        Assert.Equal(record.Data.ToArray(), listed.Record.Data.ToArray());
     }
 }
