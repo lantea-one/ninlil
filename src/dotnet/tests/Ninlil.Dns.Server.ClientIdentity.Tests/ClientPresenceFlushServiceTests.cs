@@ -70,8 +70,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     public Task DisposeAsync()
     {
         _host.Dispose();
-        if (File.Exists(_databasePath))
-            File.Delete(_databasePath);
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
         return Task.CompletedTask;
     }
 
