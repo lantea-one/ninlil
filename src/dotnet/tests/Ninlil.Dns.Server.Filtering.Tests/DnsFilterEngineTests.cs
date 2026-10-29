@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -48,9 +49,14 @@ public partial class DnsFilterEngineTests
         ///     in the engine's service provider. <see langword="false" /> sets up a resolver
         ///     without the client repositories.
         /// </param>
+        /// <param name="engineLogger">
+        ///     The optional logger to build the engine with, so a test can see its warnings.
+        ///     <see langword="null" /> (the default) discards them.
+        /// </param>
         public Fixture(
             IClientIdentityResolver identityResolver = null,
-            bool registerClientRepositories = true
+            bool registerClientRepositories = true,
+            ILogger<DnsFilterEngine> engineLogger = null
         )
         {
             ServiceCollection services = new();
@@ -99,7 +105,7 @@ public partial class DnsFilterEngineTests
             Engine = new DnsFilterEngine(
                 Cache,
                 Options2(),
-                NullLogger<DnsFilterEngine>.Instance,
+                engineLogger ?? NullLogger<DnsFilterEngine>.Instance,
                 identityResolver,
                 registerClientRepositories ? Directory : null
             );

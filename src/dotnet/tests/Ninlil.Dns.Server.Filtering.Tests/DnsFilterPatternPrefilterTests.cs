@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -570,7 +571,10 @@ public class DnsFilterPatternPrefilterTests
 
     /// <summary>
     ///     This test runs every awkward entry through the real engine, one list per entry, and
-    ///     checks the decision against the plain regex on a set of names.
+    ///     checks the decision against the plain regex on a set of names. A regex match that
+    ///     times out is a wall-clock event (a stalled thread trips it, not the pattern), so
+    ///     the engine's timeout warning marks the evaluation as inconclusive and the name is
+    ///     evaluated again; the outcome then depends on the matching, not on the machine's load.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_ForEveryAwkwardEntry_DeniesExactlyWhenThePlainRegexMatches()
@@ -597,7 +601,8 @@ public class DnsFilterPatternPrefilterTests
                 .Where(entry => !string.IsNullOrWhiteSpace(entry.Item2))
         )
         {
-            DnsFilterEngineTests.Fixture fixture = new();
+            TimeoutCountingLogger engineLogger = new();
+            DnsFilterEngineTests.Fixture fixture = new(engineLogger: engineLogger);
             DnsClientGroupEntity defaultGroup = fixture.AddGroup("default", isDefault: true);
             DnsFilterListEntity list = fixture.AddListWithKindedEntry(
                 "block",
@@ -610,17 +615,141 @@ public class DnsFilterPatternPrefilterTests
 
             foreach (string name in names)
             {
-                DnsFilterDecision decision = await fixture.Engine.EvaluateDomainAsync(
-                    DnsName.Parse(name),
-                    IPAddress.Parse("10.0.0.5")
+                DnsFilterDecision decision = await EvaluateWithoutTimeoutAsync(
+                    fixture,
+                    engineLogger,
+                    name
                 );
 
                 Assert.True(
-                    PlainMatch(reference, DnsFilterListIndex.NormalizeDomain(name))
+                    ReferenceMatch(reference, DnsFilterListIndex.NormalizeDomain(name))
                         == decision.IsDenied,
                     $"{kind} entry '{pattern}' and name '{name}': engine denied {decision.IsDenied}"
                 );
             }
+        }
+    }
+
+    /// <summary>
+    ///     This test checks the documented timeout rule through the real engine: a regex that
+    ///     times out is no match and the engine logs a warning, so the name is allowed. The
+    ///     name makes <c>^(a+)+$</c> backtrack exponentially, which outlasts the 250 ms
+    ///     timeout on any machine.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateDomainAsync_ForARegexThatTimesOut_AllowsTheNameAndLogsAWarning()
+    {
+        TimeoutCountingLogger engineLogger = new();
+        DnsFilterEngineTests.Fixture fixture = new(engineLogger: engineLogger);
+        DnsClientGroupEntity defaultGroup = fixture.AddGroup("default", isDefault: true);
+        DnsFilterListEntity list = fixture.AddListWithKindedEntry(
+            "block",
+            DnsFilterListActionEnum.Block,
+            DnsFilterEntryKindEnum.Regex,
+            @"^(a+)+$"
+        );
+        fixture.AssignListToGroup(defaultGroup.Id, list.Id);
+
+        DnsFilterDecision decision = await fixture.Engine.EvaluateDomainAsync(
+            DnsName.Parse(new string('a', 40) + "b.test"),
+            IPAddress.Parse("10.0.0.5")
+        );
+
+        Assert.False(decision.IsDenied);
+        Assert.Equal(1, engineLogger.Timeouts);
+    }
+
+    /// <summary>
+    ///     This method evaluates a name through the engine and repeats it, up to a bound, while
+    ///     the engine reports that a regex match timed out, so a stall of the test thread cannot
+    ///     change the decision the caller compares.
+    /// </summary>
+    private static async Task<DnsFilterDecision> EvaluateWithoutTimeoutAsync(
+        DnsFilterEngineTests.Fixture fixture,
+        TimeoutCountingLogger engineLogger,
+        string name
+    )
+    {
+        DnsFilterDecision decision = null;
+
+        for (int attempt = 0; attempt < MaxTimeoutAttempts; attempt++)
+        {
+            int before = engineLogger.Timeouts;
+            decision = await fixture.Engine.EvaluateDomainAsync(
+                DnsName.Parse(name),
+                IPAddress.Parse("10.0.0.5")
+            );
+
+            if (engineLogger.Timeouts == before)
+                return decision;
+        }
+
+        return decision;
+    }
+
+    /// <summary>
+    ///     This method is the plain regex result for the engine comparison: it matches again when
+    ///     the match times out (a stalled thread, not the pattern) and gives up as no match, as
+    ///     the engine does, only when every attempt times out.
+    /// </summary>
+    private static bool ReferenceMatch(DnsFilterPatternEntry entry, string name)
+    {
+        if (entry.Compiled is null)
+            return false;
+
+        for (int attempt = 0; attempt < MaxTimeoutAttempts; attempt++)
+        {
+            try
+            {
+                return entry.Compiled.IsMatch(name);
+            }
+            catch (RegexMatchTimeoutException) { }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     This field is how often a timed-out match is tried again before it counts as a
+    ///     timeout. A pattern that always times out still ends as no match.
+    /// </summary>
+    private const int MaxTimeoutAttempts = 5;
+
+    /// <summary>
+    ///     This class is the logger the engine tests above give the engine. It counts the
+    ///     warnings the engine writes when a pattern times out
+    ///     (<c>DnsFilterEngine.MatchesPatternEntry</c>) and ignores everything else.
+    /// </summary>
+    private sealed class TimeoutCountingLogger : ILogger<DnsFilterEngine>
+    {
+        private int _timeouts;
+
+        /// <summary>
+        ///     This property is the number of timeout warnings seen so far.
+        /// </summary>
+        public int Timeouts => Volatile.Read(ref _timeouts);
+
+        /// <inheritdoc />
+        public IDisposable BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        /// <inheritdoc />
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        /// <inheritdoc />
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter
+        )
+        {
+            if (
+                logLevel == LogLevel.Warning
+                && formatter(state, exception).Contains("timed out", StringComparison.Ordinal)
+            )
+                Interlocked.Increment(ref _timeouts);
         }
     }
 }
