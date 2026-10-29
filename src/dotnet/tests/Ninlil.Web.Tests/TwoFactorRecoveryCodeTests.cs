@@ -172,9 +172,8 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task RegeneratingRecoveryCodesInvalidatesEveryCodeFromThePreviousBatch()
     {
-        (HttpClient client, _, _) = await CreateTwoFactorEnrolledUserAsync(
-            Guid.NewGuid().ToString("N")
-        );
+        (HttpClient client, string userName, string password) =
+            await CreateTwoFactorEnrolledUserAsync(Guid.NewGuid().ToString("N"));
 
         HttpResponseMessage firstGenerateResponse = await client.PostAsync(
             "/api/auth/two-factor/recovery-codes/generate",
@@ -192,14 +191,30 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         RecoveryCodesResult secondBatch =
             await secondGenerateResponse.Content.ReadFromJsonAsync<RecoveryCodesResult>();
 
-        // Only checks that the batches differ and ten codes remain; no code from the first
-        // batch is tried, so the test does not show that the old codes stop working.
         Assert.Empty(firstBatch.Codes.Intersect(secondBatch.Codes));
 
         HttpResponseMessage statusResponse = await client.GetAsync("/api/auth/two-factor/status");
         statusResponse.EnsureSuccessStatusCode();
         TwoFactorStatus status = await statusResponse.Content.ReadFromJsonAsync<TwoFactorStatus>();
         Assert.Equal(10, status.RecoveryCodesRemaining);
+
+        // A challenged sign-in must refuse a code from the first batch: the count alone does not
+        // show that the old codes stopped working.
+        HttpClient loginClient = CreateClient();
+        HttpResponseMessage challengedLoginResponse = await loginClient.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest(userName, password)
+        );
+        challengedLoginResponse.EnsureSuccessStatusCode();
+        LoginResponse challenged =
+            await challengedLoginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.True(challenged.RequiresTwoFactor);
+
+        HttpResponseMessage oldCodeResponse = await loginClient.PostAsJsonAsync(
+            "/api/auth/login/two-factor",
+            new TwoFactorLoginRequest(challenged.MfaToken, firstBatch.Codes[0], "RecoveryCode")
+        );
+        Assert.Equal(HttpStatusCode.Unauthorized, oldCodeResponse.StatusCode);
     }
 
     [Fact]
