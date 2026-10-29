@@ -78,6 +78,12 @@ public sealed class CloudDnsZoneSyncService(
     /// </summary>
     private readonly SemaphoreSlim _wake = new(0);
 
+    /// <summary>
+    ///     This field backs <see cref="CompletedPassCount" />; the loop increments it with
+    ///     <see cref="Interlocked" />.
+    /// </summary>
+    private long _completedPassCount;
+
     /// <inheritdoc />
     public async Task SyncZoneNowAsync(Guid zoneId, CancellationToken stoppingToken)
     {
@@ -105,6 +111,13 @@ public sealed class CloudDnsZoneSyncService(
             _syncLock.Release();
         }
     }
+
+    /// <summary>
+    ///     This property contains the number of loop passes that have ended, by finishing or by a
+    ///     failure the loop logged. A pass cut short by the service stopping is not counted. Tests
+    ///     wait on it to know a pass has ended instead of guessing how long it takes.
+    /// </summary>
+    internal long CompletedPassCount => Interlocked.Read(ref _completedPassCount);
 
     /// <inheritdoc />
     public void RequestSync(Guid zoneId)
@@ -140,6 +153,8 @@ public sealed class CloudDnsZoneSyncService(
                 // A failed tick must not stop the service; the next tick tries again.
                 logger.LogWarning(exception, "A cloud DNS sync tick failed unexpectedly.");
             }
+
+            Interlocked.Increment(ref _completedPassCount);
 
             try
             {

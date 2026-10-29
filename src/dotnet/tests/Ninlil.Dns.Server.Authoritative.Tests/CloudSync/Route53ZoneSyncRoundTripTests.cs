@@ -268,32 +268,27 @@ public sealed class Route53ZoneSyncRoundTripTests : IAsyncLifetime
 
     /// <summary>
     ///     This method runs one sync pass over both zones on a new service instance (a stopped
-    ///     <see cref="BackgroundService" /> cannot restart) and waits until both zones' sets have
-    ///     been listed again, then a moment for the changes of that pass to land.
+    ///     <see cref="BackgroundService" /> cannot restart) and waits until the service reports
+    ///     the pass ended. The service counts a pass after the last zone's sync, its changes and
+    ///     the cache reload included, so the stop never cuts a pass short. A fixed settle after
+    ///     the list counters moved cannot give that guarantee when the fake is slow.
     /// </summary>
     private async Task RunOneSyncPassAsync()
     {
-        int pushListings = _fake.ListRequestCount(PushZoneId);
-        int pullListings = _fake.ListRequestCount(PullZoneId);
-
         CloudDnsZoneSyncService syncService =
             ActivatorUtilities.CreateInstance<CloudDnsZoneSyncService>(_host.Services);
         await syncService.StartAsync(CancellationToken.None);
 
-        for (
-            int attempt = 0;
-            attempt < 300
-                && (
-                    _fake.ListRequestCount(PushZoneId) <= pushListings
-                    || _fake.ListRequestCount(PullZoneId) <= pullListings
-                );
-            attempt++
-        )
-            await Task.Delay(50);
+        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
 
-        // The changes follow the listing of the same zone; give the last zone's pull (its
-        // ApplyChangesAsync and the cache reload) time to land before the service is stopped.
-        await Task.Delay(1000);
+        while (syncService.CompletedPassCount < 1)
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("The sync pass did not end.");
+
+            await Task.Delay(20);
+        }
+
         await syncService.StopAsync(CancellationToken.None);
     }
 
