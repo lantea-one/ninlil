@@ -27,10 +27,11 @@ public class AcmeOptionsHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_IsVisibleOnIOptionsMonitorWithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-acme-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory.CreateTempSubdirectory("ninlil-dns-acme-hot-reload-").FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         try
         {
@@ -53,9 +54,6 @@ public class AcmeOptionsHotReloadTests
             Assert.False(monitor.CurrentValue.Enable);
             Assert.Empty(monitor.CurrentValue.Domains);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             const string domain = "acme-hot-reload-tests.invalid";
 
             // The same call AcmeSettingsController.Patch makes.
@@ -75,14 +73,24 @@ public class AcmeOptionsHotReloadTests
                 path
             );
 
-            // The JSON configuration provider debounces file-change notifications by a few
-            // hundred milliseconds. Waiting for the reload event avoids a fixed delay, which would
-            // be either flaky or needlessly slow.
-            Task completed = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
+            // The JSON configuration provider debounces file-change notifications by a few hundred
+            // milliseconds. Wait up to ten seconds for the written value itself, not for the first
+            // change notification: a notification can arrive for an earlier state of the file and
+            // reload before the final content is visible.
+            for (
+                int attempt = 0;
+                attempt < 200
+                    && !(
+                        monitor.CurrentValue.Enable && monitor.CurrentValue.Domains.Contains(domain)
+                    );
+                attempt++
+            )
+                await Task.Delay(50);
+
+            Assert.True(
+                monitor.CurrentValue.Enable && monitor.CurrentValue.Domains.Contains(domain),
+                "The configuration reload did not happen within the timeout."
             );
-            Assert.Same(reloaded.Task, completed);
 
             Assert.True(monitor.CurrentValue.Enable);
             Assert.Contains(domain, monitor.CurrentValue.Domains);
@@ -91,11 +99,11 @@ public class AcmeOptionsHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temporary file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

@@ -22,10 +22,13 @@ public class BrandingOptionsHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_IsVisibleOnIOptionsMonitorWithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-branding-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-branding-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         const string logoDataUri =
             "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -52,9 +55,6 @@ public class BrandingOptionsHotReloadTests
             Assert.Null(monitor.CurrentValue.SiteTitle);
             Assert.Null(monitor.CurrentValue.LogoDataUri);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             // The same call BrandingSettingsController.Patch makes.
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
@@ -72,13 +72,26 @@ public class BrandingOptionsHotReloadTests
                 path
             );
 
-            // The JSON configuration provider debounces file-change notifications by a few
-            // hundred milliseconds, so wait for the reload event rather than a fixed delay.
-            Task completed = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
+            // The JSON configuration provider debounces file-change notifications by a few hundred
+            // milliseconds. Wait up to ten seconds for the written value itself, not for the first
+            // change notification: a notification can arrive for an earlier state of the file and
+            // reload before the final content is visible.
+            for (
+                int attempt = 0;
+                attempt < 200
+                    && !(
+                        monitor.CurrentValue.SiteTitle == "Acme Corp DNS"
+                        && monitor.CurrentValue.LogoDataUri == logoDataUri
+                    );
+                attempt++
+            )
+                await Task.Delay(50);
+
+            Assert.True(
+                monitor.CurrentValue.SiteTitle == "Acme Corp DNS"
+                    && monitor.CurrentValue.LogoDataUri == logoDataUri,
+                "The configuration reload did not happen within the timeout."
             );
-            Assert.Same(reloaded.Task, completed);
 
             // The monitor created before the write now reports both new values.
             Assert.Equal("Acme Corp DNS", monitor.CurrentValue.SiteTitle);
@@ -88,11 +101,11 @@ public class BrandingOptionsHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temporary file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

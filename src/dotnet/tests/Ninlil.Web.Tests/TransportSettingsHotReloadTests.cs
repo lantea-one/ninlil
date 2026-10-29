@@ -96,14 +96,14 @@ public class TransportSettingsHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_MakesTheSameDnsCryptListenerInstanceGenuinelyStartAnsweringWithNoRestart()
     {
-        string configPath = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-dnscrypt-hot-reload-{Guid.NewGuid():N}.json"
-        );
-        string certificateStatePath = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-dnscrypt-hot-reload-certs-{Guid.NewGuid():N}.json"
-        );
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange reports every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue and drop the change we wait for.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-dnscrypt-hot-reload-")
+            .FullName;
+        string configPath = Path.Combine(directory, "appsettings.json");
+        string certificateStatePath = Path.Combine(directory, "certificates.json");
         int port = GetFreeUdpPort();
         const string providerName = "hot-reload-test.invalid.";
 
@@ -164,9 +164,6 @@ public class TransportSettingsHotReloadTests
             Assert.Null(await TrySendAndReceiveAsync(discoveryQuery, port));
             await listener.StopAsync(CancellationToken.None);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             // The same call TransportSettingsController.PatchDnsCrypt makes.
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
@@ -189,11 +186,22 @@ public class TransportSettingsHotReloadTests
                 configPath
             );
 
-            Task completed = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
-            );
-            Assert.Same(reloaded.Task, completed);
+            // The JSON configuration provider debounces file-change notifications by a few hundred
+            // milliseconds. Wait up to ten seconds for the written values themselves, not for the
+            // first change notification: a notification can arrive for an earlier state of the
+            // file and reload before the final content is visible.
+            for (
+                int attempt = 0;
+                attempt < 200
+                    && !(
+                        monitor.CurrentValue.Enable
+                        && monitor.CurrentValue.Port == port
+                        && monitor.CurrentValue.ProviderName == providerName
+                    );
+                attempt++
+            )
+                await Task.Delay(50);
+
             Assert.True(monitor.CurrentValue.Enable);
             Assert.Equal(port, monitor.CurrentValue.Port);
             Assert.Equal(providerName, monitor.CurrentValue.ProviderName);
@@ -230,16 +238,13 @@ public class TransportSettingsHotReloadTests
         }
         finally
         {
-            foreach (string path in new[] { configPath, certificateStatePath })
+            try
             {
-                try
-                {
-                    File.Delete(path);
-                }
-                catch (IOException)
-                {
-                    // Best-effort cleanup; a leftover temporary file is harmless.
-                }
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }

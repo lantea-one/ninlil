@@ -88,7 +88,7 @@ public class QueryLoggingOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup; a leftover temporary file is harmless.
+                // Best-effort cleanup; a leftover temporary directory is harmless.
             }
         }
     }
