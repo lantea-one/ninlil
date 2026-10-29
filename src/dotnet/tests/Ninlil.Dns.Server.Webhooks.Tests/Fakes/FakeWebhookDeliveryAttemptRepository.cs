@@ -43,17 +43,37 @@ public sealed class FakeWebhookDeliveryAttemptRepository : IWebhookDeliveryAttem
 
     public void Remove(WebhookDeliveryAttemptEntity entity) => Items.Remove(entity);
 
+    /// <summary>
+    ///     Gets the number of <see cref="ListDueForRetryAsync" /> calls, so a test can check how
+    ///     many reads a sweep made.
+    /// </summary>
+    public int DueReadCount { get; private set; }
+
+    /// <summary>
+    ///     Gets the size limit passed to each <see cref="ListDueForRetryAsync" /> call, in order.
+    /// </summary>
+    public List<int> DueReadLimits { get; } = [];
+
     public Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> ListDueForRetryAsync(
         DateTimeOffset asOfUtc,
+        int maxCount,
         CancellationToken stoppingToken = default
-    ) =>
-        Task.FromResult<IReadOnlyList<WebhookDeliveryAttemptEntity>>([
-            .. Items.Where(item =>
-                item.Status == Ninlil.Dns.Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending
-                && item.NextRetryDueUtc is not null
-                && item.NextRetryDueUtc <= asOfUtc
-            ),
+    )
+    {
+        DueReadCount++;
+        DueReadLimits.Add(maxCount);
+        return Task.FromResult<IReadOnlyList<WebhookDeliveryAttemptEntity>>([
+            .. Items
+                .Where(item =>
+                    item.Status == Ninlil.Dns.Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending
+                    && item.NextRetryDueUtc is not null
+                    && item.NextRetryDueUtc <= asOfUtc
+                )
+                .OrderBy(item => item.NextRetryDueUtc)
+                .ThenBy(item => item.Id)
+                .Take(maxCount),
         ]);
+    }
 
     public Task<int> DeleteCompletedOlderThanAsync(
         DateTimeOffset cutoffUtc,

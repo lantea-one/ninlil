@@ -13,20 +13,31 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 public interface IWebhookDeliveryAttemptRepository : IRepository<WebhookDeliveryAttemptEntity>
 {
     /// <summary>
-    ///     This method finds every delivery due for a retry: <see cref="WebhookDeliveryAttemptEntity.Status" />
-    ///     is <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" /> and
+    ///     This method finds up to <paramref name="maxCount" /> deliveries due for a retry:
+    ///     <see cref="WebhookDeliveryAttemptEntity.Status" /> is
+    ///     <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" /> and
     ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> is at or before
-    ///     <paramref name="asOfUtc" />. The periodic sweep in
+    ///     <paramref name="asOfUtc" />, the oldest due first (by
+    ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" />; rows due at the same moment
+    ///     come in no particular order). The periodic sweep in
     ///     <c>Server.Webhooks.WebhookDeliveryRetrySweepService</c> relies on it to survive restarts:
     ///     a row left by a process killed during a backoff (or an attempt; see the at-least-once
     ///     note on <see cref="WebhookDeliveryAttemptEntity" />) is already in this state when the
     ///     next process's sweep runs, so no "interrupted" bookkeeping is needed.
+    ///     <para>
+    ///         The limit keeps a backlog (after a long outage there can be tens of thousands of due
+    ///         rows) out of memory. A caller that wants every due row calls again after it has moved
+    ///         the rows it got out of the due state, as the sweep does; a row it leaves due is
+    ///         returned again, first, so the caller must not loop on rows it cannot move.
+    ///     </para>
     /// </summary>
     /// <param name="asOfUtc">The moment to compare each row's due time against.</param>
+    /// <param name="maxCount">The most rows to return; a value below one returns none.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>Every delivery due for a retry attempt, in no particular order.</returns>
+    /// <returns>Up to <paramref name="maxCount" /> deliveries due for a retry attempt, oldest due first.</returns>
     Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> ListDueForRetryAsync(
         DateTimeOffset asOfUtc,
+        int maxCount,
         CancellationToken stoppingToken = default
     );
 

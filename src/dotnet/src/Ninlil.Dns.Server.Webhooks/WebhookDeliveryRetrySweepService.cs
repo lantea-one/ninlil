@@ -13,8 +13,8 @@ namespace Ninlil.Dns.Server.Webhooks;
 ///     times are saved in <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> instead of
 ///     being kept in an in-memory timer. Every <see cref="WebhookDeliveryOptions.SweepInterval" />
 ///     it asks <see cref="IWebhookDeliveryAttemptRepository.ListDueForRetryAsync" /> for the
-///     deliveries that are due and resumes them through
-///     <see cref="WebhookDeliveryService.ResumeDueAsync" />.
+///     deliveries that are due, <see cref="RetryBatchSize" /> at a time, and resumes each batch
+///     through <see cref="WebhookDeliveryService.ResumeDueAsync" />.
 ///     <para>
 ///         <b>Restarts.</b> A delivery interrupted by a restart, while waiting out its backoff or
 ///         during a retry, stays saved as
@@ -55,6 +55,14 @@ public sealed class WebhookDeliveryRetrySweepService(
     ///     otherwise make the loop spin. It matches the option's default.
     /// </summary>
     private static readonly TimeSpan DefaultSweepInterval = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    ///     This constant contains how many due deliveries one read of a sweep asks for. A backlog
+    ///     (after a long outage) is resumed batch by batch, so no more than this many rows, and
+    ///     their change tracking, are in memory at once. The sweep still resumes every due
+    ///     delivery: it reads again until a batch comes back short.
+    /// </summary>
+    public const int RetryBatchSize = 500;
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -108,10 +116,27 @@ public sealed class WebhookDeliveryRetrySweepService(
     }
 
     /// <summary>
-    ///     This method runs one sweep in a new scope: it resumes every delivery due for a retry
-    ///     (the HTTP attempts run in parallel), then removes completed deliveries past the
-    ///     retention period. It is public so tests can run one sweep without waiting for
-    ///     <see cref="WebhookDeliveryOptions.SweepInterval" />.
+    ///     This method runs one sweep: it resumes every delivery due for a retry when the sweep
+    ///     starts (the HTTP attempts of a batch run in parallel), then removes completed
+    ///     deliveries past the retention period. It is public so tests can run one sweep without
+    ///     waiting for <see cref="WebhookDeliveryOptions.SweepInterval" />.
+    ///     <para>
+    ///         <b>Batches.</b> Each batch of up to <see cref="RetryBatchSize" /> rows, oldest due
+    ///         first, is read and resumed in a scope of its own, so the batch's rows are tracked
+    ///         by a context that is dropped before the next read. The sweep ends when a batch is
+    ///         shorter than <see cref="RetryBatchSize" />.
+    ///     </para>
+    ///     <para>
+    ///         <b>Termination.</b> A resumed row normally leaves the due state: it is delivered,
+    ///         dead-lettered, or rescheduled for a later time. The sweep does not rely on that. It
+    ///         compares every row against the moment the sweep started, so a row rescheduled
+    ///         during the sweep is not due again; it also remembers the id of every row it has
+    ///         passed to a resume and never passes one twice. A row that stays due (a retry time
+    ///         that is still in the past, or a save that did not stick) is read again, first,
+    ///         because the oldest come first; if a whole batch is made of such rows the sweep
+    ///         ends, and the rows behind them wait for the next sweep. An exception ends the
+    ///         sweep, as before, and the rows are read again by the next one.
+    ///     </para>
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>How many deliveries were resumed, and how many completed rows were removed.</returns>
@@ -119,36 +144,60 @@ public sealed class WebhookDeliveryRetrySweepService(
         CancellationToken stoppingToken = default
     )
     {
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        DateTimeOffset sweepStartUtc = DateTimeOffset.UtcNow;
+        HashSet<Guid> resumedIds = [];
+        int resumed = 0;
 
-        IWebhookDeliveryAttemptRepository attemptRepository =
-            scope.ServiceProvider.GetRequiredService<IWebhookDeliveryAttemptRepository>();
-        WebhookDeliveryService deliveryService =
-            scope.ServiceProvider.GetRequiredService<WebhookDeliveryService>();
-
-        IReadOnlyList<WebhookDeliveryAttemptEntity> due =
-            await attemptRepository.ListDueForRetryAsync(DateTimeOffset.UtcNow, stoppingToken);
-
-        if (due.Count > 0)
+        while (true)
         {
-            logger.LogDebug(
-                "Webhook delivery retry sweep resuming {Count} due deliveries.",
-                due.Count
-            );
+            int read;
+            int fresh;
 
-            await deliveryService.ResumeDueAsync(due, stoppingToken);
+            await using (AsyncServiceScope scope = scopeFactory.CreateAsyncScope())
+            {
+                IReadOnlyList<WebhookDeliveryAttemptEntity> batch = await scope
+                    .ServiceProvider.GetRequiredService<IWebhookDeliveryAttemptRepository>()
+                    .ListDueForRetryAsync(sweepStartUtc, RetryBatchSize, stoppingToken);
+                read = batch.Count;
+
+                // Add returns false for a row passed to a resume earlier in this sweep.
+                List<WebhookDeliveryAttemptEntity> due =
+                [
+                    .. batch.Where(attempt => resumedIds.Add(attempt.Id)),
+                ];
+                fresh = due.Count;
+
+                if (fresh > 0)
+                {
+                    logger.LogDebug(
+                        "Webhook delivery retry sweep resuming {Count} due deliveries.",
+                        fresh
+                    );
+
+                    await scope
+                        .ServiceProvider.GetRequiredService<WebhookDeliveryService>()
+                        .ResumeDueAsync(due, stoppingToken);
+                    resumed += fresh;
+                }
+            }
+
+            // A short batch means no more rows were due. A batch with nothing new in it holds
+            // only rows this sweep could not move, so reading again would return the same rows.
+            if (read < RetryBatchSize || fresh == 0)
+                break;
         }
 
         int removed = 0;
 
         if (options.CurrentValue.AttemptRetentionPeriod > TimeSpan.Zero)
         {
+            await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+
             DateTimeOffset cutoffUtc =
                 DateTimeOffset.UtcNow - options.CurrentValue.AttemptRetentionPeriod;
-            removed = await attemptRepository.DeleteCompletedOlderThanAsync(
-                cutoffUtc,
-                stoppingToken
-            );
+            removed = await scope
+                .ServiceProvider.GetRequiredService<IWebhookDeliveryAttemptRepository>()
+                .DeleteCompletedOlderThanAsync(cutoffUtc, stoppingToken);
 
             if (removed > 0)
                 logger.LogInformation(
@@ -157,6 +206,6 @@ public sealed class WebhookDeliveryRetrySweepService(
                 );
         }
 
-        return (due.Count, removed);
+        return (resumed, removed);
     }
 }

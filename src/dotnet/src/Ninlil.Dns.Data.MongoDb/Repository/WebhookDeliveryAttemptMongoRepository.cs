@@ -28,17 +28,32 @@ public class WebhookDeliveryAttemptMongoRepository
         : base(context.WebhookDeliveryAttempts, changeTracker) { }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     The filter and the sort are served by the <c>(Status, NextRetryDueUtc)</c> index, so
+    ///     the server reads only the first <paramref name="maxCount" /> index entries. The sort
+    ///     must stay on that one key: a second key (the id) is not in the index, and MongoDB would
+    ///     then fetch and sort every due document for each batch of a sweep. Rows due at the same
+    ///     moment come in no particular order.
+    /// </remarks>
     public async Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> ListDueForRetryAsync(
         DateTimeOffset asOfUtc,
+        int maxCount,
         CancellationToken stoppingToken = default
-    ) =>
-        await Collection
+    )
+    {
+        if (maxCount < 1)
+            return [];
+
+        return await Collection
             .Find(attempt =>
                 attempt.Status == WebhookDeliveryAttemptStatusEnum.Pending
                 && attempt.NextRetryDueUtc != null
                 && attempt.NextRetryDueUtc <= asOfUtc
             )
+            .SortBy(attempt => attempt.NextRetryDueUtc)
+            .Limit(maxCount)
             .ToListAsync(stoppingToken);
+    }
 
     /// <inheritdoc />
     public async Task<int> DeleteCompletedOlderThanAsync(

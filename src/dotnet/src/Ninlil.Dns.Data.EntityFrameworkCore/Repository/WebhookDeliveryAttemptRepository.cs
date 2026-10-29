@@ -18,16 +18,30 @@ public class WebhookDeliveryAttemptRepository(NinlilDnsContext context)
         IWebhookDeliveryAttemptRepository
 {
     /// <inheritdoc />
+    /// <remarks>
+    ///     The filter and the first sort key are served by the <c>(Status, NextRetryDueUtc)</c>
+    ///     index. The id breaks ties so that the same rows come back for the same data. The rows
+    ///     are tracked, because the sweep changes and saves them.
+    /// </remarks>
     public async Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> ListDueForRetryAsync(
         DateTimeOffset asOfUtc,
+        int maxCount,
         CancellationToken stoppingToken = default
-    ) =>
-        await Set.Where(attempt =>
+    )
+    {
+        if (maxCount < 1)
+            return [];
+
+        return await Set.Where(attempt =>
                 attempt.Status == WebhookDeliveryAttemptStatusEnum.Pending
                 && attempt.NextRetryDueUtc != null
                 && attempt.NextRetryDueUtc <= asOfUtc
             )
+            .OrderBy(attempt => attempt.NextRetryDueUtc)
+            .ThenBy(attempt => attempt.Id)
+            .Take(maxCount)
             .ToListAsync(stoppingToken);
+    }
 
     /// <inheritdoc />
     public async Task<int> DeleteCompletedOlderThanAsync(
