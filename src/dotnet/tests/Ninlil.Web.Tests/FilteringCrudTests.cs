@@ -354,7 +354,7 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task FilterListEntry_MalformedRegexOrWildcard_IsRejectedWithBadRequestAndNeverPersisted()
+    public async Task FilterListEntry_MalformedRegex_IsRejectedWithBadRequestAndNeverPersisted()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
@@ -370,8 +370,9 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         FilterListDetail list = await listResponse.Content.ReadFromJsonAsync<FilterListDetail>();
 
-        // "(" is not a valid .NET regular expression. Despite the test name, no malformed
-        // wildcard is tried.
+        // "(" is not a valid .NET regular expression. A malformed wildcard cannot be sent: the
+        // engine escapes every character of a wildcard except * and ?, so its pattern always
+        // compiles.
         HttpResponseMessage malformedRegexResponse = await client.PostAsJsonAsync(
             $"/api/filter-lists/{list.Id}/entries",
             new { value = "(", kind = "Regex" }
