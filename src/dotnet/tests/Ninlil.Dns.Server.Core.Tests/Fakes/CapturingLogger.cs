@@ -10,6 +10,7 @@ namespace Ninlil.Dns.Server.Core.Tests.Fakes;
 public sealed class CapturingLogger<T> : ILogger<T>
 {
     private readonly List<(LogLevel Level, string Message)> _entries = [];
+    private readonly List<Exception> _exceptions = [];
 
     /// <summary>Every entry logged so far, in order.</summary>
     public IReadOnlyList<(LogLevel Level, string Message)> Entries
@@ -24,6 +25,16 @@ public sealed class CapturingLogger<T> : ILogger<T>
     /// <summary>Every message logged at <see cref="LogLevel.Error" />.</summary>
     public IReadOnlyList<string> Errors =>
         [.. Entries.Where(entry => entry.Level == LogLevel.Error).Select(entry => entry.Message)];
+
+    /// <summary>Every exception object passed to the logger so far, in order.</summary>
+    public IReadOnlyList<Exception> Exceptions
+    {
+        get
+        {
+            lock (_entries)
+                return [.. _exceptions];
+        }
+    }
 
     /// <inheritdoc />
     public IDisposable BeginScope<TState>(TState state)
@@ -42,6 +53,11 @@ public sealed class CapturingLogger<T> : ILogger<T>
     )
     {
         lock (_entries)
+        {
             _entries.Add((logLevel, formatter(state, exception)));
+
+            if (exception is not null)
+                _exceptions.Add(exception);
+        }
     }
 }

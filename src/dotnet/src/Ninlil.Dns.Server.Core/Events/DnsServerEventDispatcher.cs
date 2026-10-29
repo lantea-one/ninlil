@@ -36,10 +36,27 @@ public sealed class DnsServerEventDispatcher(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This field caches the reflected <see cref="IDnsServerEventSubscriber{TEvent}.HandleAsync" />
-    ///     method per event type, so the lookup happens once per type rather than per event.
+    ///     This field caches, per event type, the closed subscriber interface and the typed call
+    ///     into it, so reflection runs once per type and never per event.
     /// </summary>
-    private static readonly ConcurrentDictionary<Type, MethodInfo> HandleMethodCache = new();
+    private static readonly ConcurrentDictionary<Type, EventInvoker> InvokerCache = new();
+
+    /// <summary>
+    ///     This delegate type calls <see cref="IDnsServerEventSubscriber{TEvent}.HandleAsync" /> on
+    ///     a subscriber whose event type is only known at run time.
+    /// </summary>
+    private delegate ValueTask HandleInvoker(
+        object subscriber,
+        IDnsServerEvent domainEvent,
+        CancellationToken stoppingToken
+    );
+
+    /// <summary>
+    ///     This record holds what dispatching one event type needs: the closed
+    ///     <see cref="IDnsServerEventSubscriber{TEvent}" /> interface to resolve from DI, and the
+    ///     delegate that calls its <c>HandleAsync</c>.
+    /// </summary>
+    private sealed record EventInvoker(Type SubscriberInterface, HandleInvoker Invoke);
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -102,6 +119,40 @@ public sealed class DnsServerEventDispatcher(
     }
 
     /// <summary>
+    ///     This method is the body of every <see cref="HandleInvoker" />, closed over the event
+    ///     type once per type. The casts are exact because the subscriber was resolved as
+    ///     <see cref="IDnsServerEventSubscriber{TEvent}" /> for the event's runtime type.
+    /// </summary>
+    private static ValueTask InvokeTyped<TEvent>(
+        object subscriber,
+        IDnsServerEvent domainEvent,
+        CancellationToken stoppingToken
+    )
+        where TEvent : IDnsServerEvent =>
+        ((IDnsServerEventSubscriber<TEvent>)subscriber).HandleAsync(
+            (TEvent)domainEvent,
+            stoppingToken
+        );
+
+    /// <summary>
+    ///     This method builds the cached invoker for one event type. The generic method is
+    ///     closed once with <c>MakeGenericMethod</c> and turned into a delegate, so a delivery
+    ///     is an ordinary delegate call with no <c>object[]</c> and no boxed token.
+    /// </summary>
+    private static EventInvoker CreateInvoker(Type eventType)
+    {
+        Type subscriberInterface = typeof(IDnsServerEventSubscriber<>).MakeGenericType(eventType);
+        MethodInfo typed = typeof(DnsServerEventDispatcher)
+            .GetMethod(nameof(InvokeTyped), BindingFlags.NonPublic | BindingFlags.Static)
+            .MakeGenericMethod(eventType);
+
+        return new EventInvoker(
+            subscriberInterface,
+            (HandleInvoker)typed.CreateDelegate(typeof(HandleInvoker))
+        );
+    }
+
+    /// <summary>
     ///     This method delivers one event to every subscriber registered for its exact runtime
     ///     type. Subscribers for a base type or interface are not called.
     /// </summary>
@@ -109,21 +160,13 @@ public sealed class DnsServerEventDispatcher(
     {
         IDnsServerEvent domainEvent = item.Event;
         Type eventType = domainEvent.GetType();
-        Type subscriberInterface = typeof(IDnsServerEventSubscriber<>).MakeGenericType(eventType);
-
-        // The subscriber interface is generic over the runtime type, so the call goes through
-        // reflection; the method lookup is cached per type.
-        MethodInfo handleMethod = HandleMethodCache.GetOrAdd(
-            eventType,
-            _ =>
-                subscriberInterface.GetMethod(
-                    nameof(IDnsServerEventSubscriber<IDnsServerEvent>.HandleAsync)
-                )
-        );
+        EventInvoker invoker = InvokerCache.GetOrAdd(eventType, CreateInvoker);
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
-        foreach (object subscriber in scope.ServiceProvider.GetServices(subscriberInterface))
+        foreach (
+            object subscriber in scope.ServiceProvider.GetServices(invoker.SubscriberInterface)
+        )
         {
             // Each node has its own database, so a foreign event reaches only the subscribers
             // that opted in; the rest would act on ids that mean nothing here.
@@ -132,26 +175,21 @@ public sealed class DnsServerEventDispatcher(
 
             try
             {
-                ValueTask handleTask = (ValueTask)
-                    handleMethod.Invoke(subscriber, [domainEvent, stoppingToken]);
-
-                await handleTask;
+                await invoker.Invoke(subscriber, domainEvent, stoppingToken);
             }
             catch (Exception exception)
             {
-                Exception reported = exception
-                    is TargetInvocationException { InnerException: not null } wrapped
-                    ? wrapped.InnerException
-                    : exception;
-
                 // Shutdown is not a subscriber failure: stop the loop instead of logging an error
                 // for every remaining subscriber. A subscriber's own cancellation stays a failure.
-                if (reported is OperationCanceledException && stoppingToken.IsCancellationRequested)
+                if (
+                    exception is OperationCanceledException
+                    && stoppingToken.IsCancellationRequested
+                )
                     throw new OperationCanceledException(stoppingToken);
 
                 // One failing subscriber must not skip the others or stop the bus.
                 logger.LogError(
-                    reported,
+                    exception,
                     "Subscriber {Subscriber} failed while handling a {EventType} event.",
                     subscriber.GetType().Name,
                     eventType.Name

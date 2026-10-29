@@ -197,6 +197,83 @@ public class DnsServerEventBusTests
         );
     }
 
+    /// <summary>
+    ///     The log carries the exception the subscriber threw, not a wrapper around it, whether
+    ///     the subscriber throws before returning a task or from the task it returns.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Publish_WhenASubscriberThrows_TheLoggedExceptionIsTheOriginalOne(
+        bool asyncFailure
+    )
+    {
+        await using Bus bus = await Bus.StartAsync(
+            broker: false,
+            first: new ThrowingZoneSubscriber(asyncFailure)
+        );
+
+        bus.Publisher.Publish(
+            new DnsZoneChangedEvent(DateTimeOffset.UtcNow, Guid.NewGuid(), "a.test")
+        );
+        await bus.DrainAsync();
+
+        Exception logged = Assert.Single(bus.DispatcherLogger.Exceptions);
+        Assert.IsType<InvalidOperationException>(logged);
+        Assert.Equal(asyncFailure ? "asynchronous failure" : "synchronous failure", logged.Message);
+    }
+
+    /// <summary>
+    ///     Events of three types, published interleaved, each reach the subscribers of their own
+    ///     type only and in publish order within the type.
+    /// </summary>
+    [Fact]
+    public async Task Publish_OfThousandsOfEventsOfThreeTypes_ReachesTheRightSubscribersInOrder()
+    {
+        const int PerType = 1_000;
+        await using Bus bus = await Bus.StartAsync(broker: false, capacity: 5_000, start: false);
+        Guid[] leaseIds = [.. Enumerable.Range(0, PerType).Select(_ => Guid.NewGuid())];
+
+        for (int index = 0; index < PerType; index++)
+        {
+            bus.Publisher.Publish(
+                new DnsZoneChangedEvent(DateTimeOffset.UtcNow, Guid.NewGuid(), $"z{index}.test")
+            );
+            bus.Publisher.Publish(
+                new DhcpLeaseChangedEvent(
+                    DateTimeOffset.UtcNow,
+                    leaseIds[index],
+                    DhcpLeaseChangeKindEnum.Granted
+                )
+            );
+            bus.Publisher.Publish(
+                new DnsQueryAnsweredEvent(
+                    DateTimeOffset.UtcNow,
+                    DnsTransportProtocolEnum.Udp,
+                    IPAddress.Loopback,
+                    $"q{index}.test",
+                    DnsResourceRecordTypeEnum.A,
+                    DnsResponseCodeEnum.NoError,
+                    0
+                )
+            );
+        }
+
+        await bus.StartDispatcherAsync();
+        await bus.DrainAsync();
+
+        Assert.Equal(
+            Enumerable.Range(0, PerType).Select(index => $"z{index}.test"),
+            bus.Local.Zones.Select(item => item.ZoneName)
+        );
+        Assert.Equal(leaseIds, bus.Local.Leases.Select(item => item.LeaseId));
+        Assert.Equal(
+            Enumerable.Range(0, PerType).Select(index => $"q{index}.test"),
+            bus.Local.Queries.Select(item => item.QueriedName)
+        );
+        Assert.Empty(bus.Local.Settings);
+    }
+
     [Fact]
     public async Task Publish_WhenTheQueryQueueOverflows_KeepsControlEventsAndWarnsOnceWithTheCount()
     {
