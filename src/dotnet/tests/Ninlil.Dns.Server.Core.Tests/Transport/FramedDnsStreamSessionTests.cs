@@ -23,6 +23,25 @@ public sealed class FramedDnsStreamSessionTests
     private static readonly TimeSpan SafetyTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan NegativeWindow = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    ///     This method polls <paramref name="condition" /> until it holds, for at most
+    ///     <see cref="SafetyTimeout" />. It is for state a background task changes after the
+    ///     event the test already saw, where no signal is exposed.
+    /// </summary>
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using CancellationTokenSource timeout = new(SafetyTimeout);
+
+        while (!condition() && !timeout.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(5), timeout.Token);
+            }
+            catch (OperationCanceledException) { }
+        }
+    }
+
     [Fact]
     public async Task APeerThatNeverReads_CannotHoldMoreThanSixteenQueriesInFlight()
     {
@@ -140,20 +159,29 @@ public sealed class FramedDnsStreamSessionTests
         Assert.Equal(Enumerable.Repeat((byte)3, 300).ToArray(), await harness.ReadFrameAsync());
         Assert.Equal(Enumerable.Repeat((byte)1, 5).ToArray(), await harness.ReadFrameAsync());
         Assert.Equal(Enumerable.Repeat((byte)2, 70_00).ToArray(), await harness.ReadFrameAsync());
+
+        // The writer releases a frame's slot after it has written and flushed, so the client can
+        // read the last frame before the slots are back. Waiting for the count is the signal.
+        await WaitUntilAsync(() => harness.Session.InFlightQueries == 0);
         Assert.Equal(0, harness.Session.InFlightQueries);
     }
 
     [Fact]
     public async Task AnIdleConnectionWithAQueryInFlight_StillDeliversTheAnswer_ThenCloses()
     {
-        await using Harness harness = await Harness.StartAsync(TimeSpan.FromMilliseconds(600));
+        // The idle timeout is also the drain bound, which starts when the read side goes idle.
+        // The test answers right after the idle signal, so the whole bound is its margin.
+        IdleReadWatcher watcher = new();
+        await using Harness harness = await Harness.StartAsync(
+            TimeSpan.FromSeconds(2),
+            wrapServerStream: inner => new IdleSignalStream(inner, watcher)
+        );
 
         await harness.SendFrameAsync(1, 8);
         ReceivedQuery query = await harness.ReceiveAsync();
 
-        // The read side goes idle after 600 ms, and the drain bound ends 600 ms after that; the
-        // answer arrives between the two, so the outstanding query keeps the connection open.
-        await Task.Delay(TimeSpan.FromMilliseconds(900));
+        // The read side has gone idle: the session now waits for the outstanding query.
+        await watcher.Idle.WaitAsync(SafetyTimeout);
         Assert.False(harness.RunTask.IsCompleted);
 
         await query.Respond([9, 9]);
@@ -337,6 +365,90 @@ public sealed class FramedDnsStreamSessionTests
     }
 
     /// <summary>
+    ///     This class is a one-shot signal that the session's read side went idle. A test passes
+    ///     it to an <see cref="IdleSignalStream" /> and awaits <see cref="Idle" />.
+    /// </summary>
+    private sealed class IdleReadWatcher
+    {
+        private readonly TaskCompletionSource _idle = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+
+        public Task Idle => _idle.Task;
+
+        public void SignalIdle() => _idle.TrySetResult();
+    }
+
+    /// <summary>
+    ///     This class wraps the server-side stream so a test can see the idle timeout fire. The
+    ///     session reads through <see cref="ReadAsync(Memory{byte}, CancellationToken)" />; when
+    ///     that read ends in <see cref="OperationCanceledException" /> the idle token was
+    ///     cancelled and the watcher is signalled before the exception goes on. Every other
+    ///     member passes straight through to the inner stream.
+    /// </summary>
+    private sealed class IdleSignalStream(Stream inner, IdleReadWatcher watcher) : Stream
+    {
+        public override bool CanRead => inner.CanRead;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => inner.CanWrite;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default
+        )
+        {
+            try
+            {
+                return await inner.ReadAsync(buffer, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                watcher.SignalIdle();
+                throw;
+            }
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            inner.Read(buffer, offset, count);
+
+        public override ValueTask WriteAsync(
+            ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default
+        ) => inner.WriteAsync(buffer, cancellationToken);
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            inner.Write(buffer, offset, count);
+
+        public override Task FlushAsync(CancellationToken cancellationToken) =>
+            inner.FlushAsync(cancellationToken);
+
+        public override void Flush() => inner.Flush();
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
     ///     This record is one message the harness handler received, with the callbacks the
     ///     session created for it.
     /// </summary>
@@ -370,6 +482,7 @@ public sealed class FramedDnsStreamSessionTests
             TimeSpan idleTimeout,
             bool shrinkBuffers = false,
             CancellationToken stopping = default,
+            Func<Stream, Stream> wrapServerStream = null,
             Func<
                 byte[],
                 FramedDnsStreamSession,
@@ -398,8 +511,13 @@ public sealed class FramedDnsStreamSessionTests
             if (shrinkBuffers)
                 harness._serverSocket.SendBufferSize = 4096;
 
+            Stream serverStream = new NetworkStream(harness._serverSocket, ownsSocket: false);
+
+            if (wrapServerStream != null)
+                serverStream = wrapServerStream(serverStream);
+
             harness.Session = new FramedDnsStreamSession(
-                new NetworkStream(harness._serverSocket, ownsSocket: false),
+                serverStream,
                 IPAddress.Loopback,
                 idleTimeout,
                 NullLogger.Instance,
