@@ -1,9 +1,10 @@
-// Karma configuration for Ninlil's Angular admin SPA. This project's own confirmed testing
-// convention (Jasmine/Karma, not the CLI's newer vitest-based default) -- see this workspace's
-// README.md for why. The one real environment wrinkle this file works around: Chrome must run
-// headless and unsandboxed in CI and container builds.
-// Use CHROME_BIN when it is set; otherwise the first browser found at the usual Linux paths
+// Karma configuration for the Ninlil admin console. The workspace tests with Jasmine and Karma
+// (see README.md for why), through the "@angular/build:karma" builder in angular.json.
+// Chrome runs headless and unsandboxed so the tests work in CI and container builds.
+// CHROME_BIN wins when set; otherwise the first browser at the usual Linux paths is used
 // (Chromium first, since that is what the CI runners install).
+// jasmine-core stays on 5.x in package.json: from 6.0 it warns on every run that Karma loads it
+// as an ES module, which the Angular karma builder does and karma-jasmine 5.1 cannot change.
 process.env.CHROME_BIN =
   process.env.CHROME_BIN ||
   ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome-stable'].find(
