@@ -4,12 +4,19 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Ninlil.Dhcp.Common.Enum;
+using Ninlil.Dhcp.Protocol.Dhcpv4;
+using Ninlil.Dhcp.Protocol.Dhcpv6;
+using Ninlil.Dhcp.Protocol.Ra;
+using Ninlil.Dhcp.Server.Core;
 using Ninlil.Dhcp.Server.Ra;
-using Ninlil.Dns.Server.Presets;
+using Ninlil.Dhcp.Server.Relay;
+using Ninlil.Dhcp.Server.Tftp;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
+using Ninlil.Web.Options;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -889,49 +896,86 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task GetRa_MapsEveryConfiguredRouteFieldOntoItsOwnRestRepresentation()
+    public void GetRa_MapsEveryConfiguredRouteFieldOntoItsOwnRestRepresentation()
     {
-        // Despite its name, this test does not call GetRa. It writes a route with
-        // PresetConfigurationFileApplier to a temporary file and binds RaOptions from that file,
-        // which checks that what the controller writes binds back correctly. The mapping from
-        // RaOptions.Routes to DhcpRaRouteDetail is not exercised.
-        string configPath = Path.Combine(
-            Directory.CreateTempSubdirectory("ninlil-ra-route-get-test-").FullName,
-            "appsettings.json"
-        );
-        await PresetConfigurationFileApplier.ApplyAsync(
+        // The shared host never reloads its settings file, so the controller is built directly
+        // with a monitor that holds the routes. Every field of the two routes differs, so a
+        // mapping that swaps two fields shows in the result.
+        RaOptions options = new()
+        {
+            Routes =
             [
-                new PresetConfigurationSetting(
-                    "DhcpServer:Ra",
-                    "Routes",
-                    new[]
-                    {
-                        new
-                        {
-                            Prefix = "2001:db8:5::",
-                            PrefixLength = 64,
-                            Preference = "High",
-                            RouteLifetime = "00:30:00",
-                        },
-                    }
-                ),
+                new RaAdvertisedRouteOptions
+                {
+                    Prefix = "2001:db8:5::",
+                    PrefixLength = 64,
+                    Preference = RaRoutePreferenceEnum.High,
+                    RouteLifetime = TimeSpan.FromMinutes(30),
+                },
+                new RaAdvertisedRouteOptions
+                {
+                    Prefix = "2001:db8:6::",
+                    PrefixLength = 48,
+                    Preference = RaRoutePreferenceEnum.Low,
+                    RouteLifetime = TimeSpan.FromMinutes(5),
+                },
             ],
-            configPath
+        };
+
+        DhcpRaSettingsDetail detail = GetRaFromController(options);
+
+        Assert.Equal(2, detail.Routes.Count);
+        Assert.Equal("2001:db8:5::", detail.Routes[0].Prefix);
+        Assert.Equal(64, detail.Routes[0].PrefixLength);
+        Assert.Equal(RaRoutePreferenceEnum.High, detail.Routes[0].Preference);
+        Assert.Equal(TimeSpan.FromMinutes(30), detail.Routes[0].RouteLifetime);
+        Assert.Equal("2001:db8:6::", detail.Routes[1].Prefix);
+        Assert.Equal(48, detail.Routes[1].PrefixLength);
+        Assert.Equal(RaRoutePreferenceEnum.Low, detail.Routes[1].Preference);
+        Assert.Equal(TimeSpan.FromMinutes(5), detail.Routes[1].RouteLifetime);
+    }
+
+    /// <summary>
+    ///     This method builds <see cref="DhcpSettingsController" /> over the given live
+    ///     Router Advertisement options, calls <see cref="DhcpSettingsController.GetRa" /> and
+    ///     returns the detail it answers. The other sections are never read by <c>GetRa</c>, so
+    ///     they hold defaults. The controller is built directly because the shared host does not
+    ///     reload its runtime settings file.
+    /// </summary>
+    private static DhcpRaSettingsDetail GetRaFromController(RaOptions live)
+    {
+        DhcpSettingsController controller = new(
+            Microsoft.Extensions.Options.Options.Create(new DhcpServerOptions()),
+            new FixedMonitor<DhcpServerOptions>(new DhcpServerOptions()),
+            Microsoft.Extensions.Options.Options.Create(new Dhcpv4ProtocolOptions()),
+            Microsoft.Extensions.Options.Options.Create(new Dhcpv4RelayOptions()),
+            Microsoft.Extensions.Options.Options.Create(new Dhcpv6ProtocolOptions()),
+            Microsoft.Extensions.Options.Options.Create(new Dhcpv6RelayOptions()),
+            Microsoft.Extensions.Options.Options.Create(new TftpServerOptions()),
+            Microsoft.Extensions.Options.Options.Create(new RaProtocolOptions()),
+            new FixedMonitor<RaOptions>(live),
+            new RuntimeConfigurationOptions()
         );
 
-        RaOptions options = new();
-        IConfigurationRoot configuration = new ConfigurationBuilder()
-            .AddJsonFile(configPath)
-            .Build();
-        configuration.GetSection(RaOptions.SectionName).Bind(options);
+        return Assert.IsType<DhcpRaSettingsDetail>(
+            Assert.IsType<OkObjectResult>(controller.GetRa().Result).Value
+        );
+    }
 
-        Assert.Single(options.Routes);
-        Assert.Equal("2001:db8:5::", options.Routes[0].Prefix);
-        Assert.Equal(64, options.Routes[0].PrefixLength);
-        Assert.Equal(RaRoutePreferenceEnum.High, options.Routes[0].Preference);
-        Assert.Equal(TimeSpan.FromMinutes(30), options.Routes[0].RouteLifetime);
+    /// <summary>
+    ///     This class is an <see cref="IOptionsMonitor{TOptions}" /> fake that always returns the
+    ///     same value, for the tests that build a controller directly.
+    /// </summary>
+    private sealed class FixedMonitor<T>(T value) : IOptionsMonitor<T>
+    {
+        /// <inheritdoc />
+        public T CurrentValue { get; } = value;
 
-        Directory.Delete(Path.GetDirectoryName(configPath)!, recursive: true);
+        /// <inheritdoc />
+        public T Get(string name) => CurrentValue;
+
+        /// <inheritdoc />
+        public IDisposable OnChange(Action<T, string> listener) => null;
     }
 
     [Fact]
@@ -1073,51 +1117,68 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task GetRa_MapsEveryConfiguredInterfaceOverrideFieldOntoItsOwnRestRepresentation()
+    public void GetRa_MapsEveryConfiguredInterfaceOverrideFieldOntoItsOwnRestRepresentation()
     {
-        // As in GetRa_MapsEveryConfiguredRouteFieldOntoItsOwnRestRepresentation, this binds
-        // RaOptions from a file written by PresetConfigurationFileApplier and does not call GetRa
-        // or the controller.
-        string configPath = Path.Combine(
-            Directory.CreateTempSubdirectory("ninlil-ra-interface-override-get-test-").FullName,
-            "appsettings.json"
-        );
-        await PresetConfigurationFileApplier.ApplyAsync(
+        // As in GetRa_MapsEveryConfiguredRouteFieldOntoItsOwnRestRepresentation, the controller is
+        // built directly. Each field of the first override has its own value, so a swapped pair
+        // shows; the second override sets nothing, so the unset fields must stay null (the global
+        // value applies).
+        RaOptions options = new()
+        {
+            InterfaceOverrides =
             [
-                new PresetConfigurationSetting(
-                    "DhcpServer:Ra",
-                    "InterfaceOverrides",
-                    new[]
-                    {
-                        new
-                        {
-                            InterfaceName = "eth0",
-                            Exclude = false,
-                            RouterLifetime = "00:05:00",
-                            CurrentHopLimit = (byte)32,
-                        },
-                    }
-                ),
+                new RaInterfaceOverrideOptions
+                {
+                    InterfaceName = "eth0",
+                    Exclude = true,
+                    ManagedAddressConfiguration = true,
+                    OtherConfiguration = false,
+                    RouterLifetime = TimeSpan.FromMinutes(5),
+                    CurrentHopLimit = 32,
+                    ReachableTime = TimeSpan.FromSeconds(11),
+                    RetransTimer = TimeSpan.FromSeconds(12),
+                    LinkMtu = 1400,
+                    RecursiveDnsServers = ["2001:db8::1"],
+                    RecursiveDnsServerLifetime = TimeSpan.FromSeconds(13),
+                    DnsSearchListDomains = ["eth0.internal"],
+                    DnsSearchListLifetime = TimeSpan.FromSeconds(14),
+                },
+                new RaInterfaceOverrideOptions { InterfaceName = "eth1" },
             ],
-            configPath
-        );
+        };
 
-        RaOptions options = new();
-        IConfigurationRoot configuration = new ConfigurationBuilder()
-            .AddJsonFile(configPath)
-            .Build();
-        configuration.GetSection(RaOptions.SectionName).Bind(options);
+        DhcpRaSettingsDetail detail = GetRaFromController(options);
 
-        Assert.Single(options.InterfaceOverrides);
-        Assert.Equal("eth0", options.InterfaceOverrides[0].InterfaceName);
-        Assert.False(options.InterfaceOverrides[0].Exclude);
-        Assert.Equal(TimeSpan.FromMinutes(5), options.InterfaceOverrides[0].RouterLifetime);
-        Assert.Equal((byte)32, options.InterfaceOverrides[0].CurrentHopLimit);
-        // Fields the override did not set stay null, so the global value applies.
-        Assert.Null(options.InterfaceOverrides[0].ManagedAddressConfiguration);
-        Assert.Null(options.InterfaceOverrides[0].RecursiveDnsServers);
+        Assert.Equal(2, detail.InterfaceOverrides.Count);
+        DhcpRaInterfaceOverrideDetail first = detail.InterfaceOverrides[0];
+        Assert.Equal("eth0", first.InterfaceName);
+        Assert.True(first.Exclude);
+        Assert.True(first.ManagedAddressConfiguration);
+        Assert.False(first.OtherConfiguration);
+        Assert.Equal(TimeSpan.FromMinutes(5), first.RouterLifetime);
+        Assert.Equal(32, first.CurrentHopLimit);
+        Assert.Equal(TimeSpan.FromSeconds(11), first.ReachableTime);
+        Assert.Equal(TimeSpan.FromSeconds(12), first.RetransTimer);
+        Assert.Equal(1400u, first.LinkMtu);
+        Assert.Equal(["2001:db8::1"], first.RecursiveDnsServers);
+        Assert.Equal(TimeSpan.FromSeconds(13), first.RecursiveDnsServerLifetime);
+        Assert.Equal(["eth0.internal"], first.DnsSearchListDomains);
+        Assert.Equal(TimeSpan.FromSeconds(14), first.DnsSearchListLifetime);
 
-        Directory.Delete(Path.GetDirectoryName(configPath)!, recursive: true);
+        DhcpRaInterfaceOverrideDetail second = detail.InterfaceOverrides[1];
+        Assert.Equal("eth1", second.InterfaceName);
+        Assert.False(second.Exclude);
+        Assert.Null(second.ManagedAddressConfiguration);
+        Assert.Null(second.OtherConfiguration);
+        Assert.Null(second.RouterLifetime);
+        Assert.Null(second.CurrentHopLimit);
+        Assert.Null(second.ReachableTime);
+        Assert.Null(second.RetransTimer);
+        Assert.Null(second.LinkMtu);
+        Assert.Null(second.RecursiveDnsServers);
+        Assert.Null(second.RecursiveDnsServerLifetime);
+        Assert.Null(second.DnsSearchListDomains);
+        Assert.Null(second.DnsSearchListLifetime);
     }
 
     [Fact]
