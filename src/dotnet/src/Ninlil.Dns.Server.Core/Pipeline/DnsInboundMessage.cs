@@ -10,7 +10,14 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///     Every transport (plain UDP/TCP, DNS-over-HTTPS, DNS-over-TLS, DNS-over-QUIC, DNSCrypt)
 ///     produces the same shape, which lets one pipeline serve them all.
 /// </summary>
-/// <param name="RequestBytes">The raw, not-yet-decoded query bytes.</param>
+/// <param name="RequestBytes">
+///     The raw, not-yet-decoded query bytes. The pipeline may keep a reference to them for the
+///     life of the query: when they are a whole array, <see cref="Resolution.DnsQueryContext.RawMessage" />
+///     is that array, not a copy, and TSIG verification and zone transfers read it later. A
+///     transport must therefore hand over memory it never reuses or changes afterwards (a new
+///     array per query, not a receive buffer it refills). A slice of a larger array is copied
+///     instead.
+/// </param>
 /// <param name="Protocol">The transport this query arrived over.</param>
 /// <param name="RemoteAddress">
 ///     The querying client's IP address. It is stored in its canonical form

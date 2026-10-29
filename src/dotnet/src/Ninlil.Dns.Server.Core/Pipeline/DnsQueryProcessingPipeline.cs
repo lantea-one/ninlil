@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -328,32 +329,19 @@ public sealed class DnsQueryProcessingPipeline(
     {
         try
         {
-            // Wrap the message so the pipeline knows whether a step already replied or
-            // reported a drop. The catch blocks below then report Failed only when nothing
-            // else has, which keeps the "exactly one" rule of the class summary.
-            bool settled = false;
-            DnsInboundMessage message = queued with
-            {
-                RespondAsync = (responseBytes, token) =>
-                {
-                    settled = true;
-                    return queued.RespondAsync(responseBytes, token);
-                },
-                OnDropped = reason =>
-                {
-                    settled = true;
-                    NotifyDropped(queued, reason);
-                },
-            };
+            // The state records whether a step already replied or reported a drop. The catch
+            // blocks below then report Failed only when nothing else has, which keeps the
+            // "exactly one" rule of the class summary.
+            QueryState state = new();
 
             try
             {
-                await ProcessSingleMessageAsync(message, stoppingToken);
+                await ProcessSingleMessageAsync(queued, state, stoppingToken);
             }
             catch (OperationCanceledException)
             {
                 // Shutdown in the middle of a query: tell the transport.
-                if (!settled)
+                if (!state.Settled)
                     NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
             }
             catch (Exception exception)
@@ -362,10 +350,10 @@ public sealed class DnsQueryProcessingPipeline(
                 logger.LogError(
                     exception,
                     "Unhandled exception while processing a DNS query from {RemoteAddress}.",
-                    message.RemoteAddress
+                    queued.RemoteAddress
                 );
 
-                if (!settled)
+                if (!state.Settled)
                     NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
             }
         }
@@ -437,6 +425,62 @@ public sealed class DnsQueryProcessingPipeline(
     }
 
     /// <summary>
+    ///     This class is the per-query record of whether the query has been settled, meaning its
+    ///     reply was handed to the transport or its drop was reported. <see cref="HandleMessageAsync" />
+    ///     reads it after an exception to decide whether <see cref="DnsQueryDropReasonEnum.Failed" />
+    ///     is still owed. It is a field read on another thread than the one that wrote it (a query
+    ///     resumes on the thread pool after each await), so the field is volatile.
+    /// </summary>
+    private sealed class QueryState
+    {
+        /// <summary>
+        ///     This field is <see langword="true" /> once <see cref="Drop" /> or
+        ///     <see cref="RespondAsync" /> has run for the query.
+        /// </summary>
+        public volatile bool Settled;
+    }
+
+    /// <summary>
+    ///     This method reports that the query ends without a reply and marks it settled. The mark
+    ///     is set first, so a notifier that throws still counts as the one report the query owes.
+    /// </summary>
+    private void Drop(DnsInboundMessage message, QueryState state, DnsQueryDropReasonEnum reason)
+    {
+        state.Settled = true;
+        NotifyDropped(message, reason);
+    }
+
+    /// <summary>
+    ///     This method hands the reply to the transport and marks the query settled. The mark is
+    ///     set first, so a sender that throws still counts as the one reply the query owes.
+    /// </summary>
+    private static ValueTask RespondAsync(
+        DnsInboundMessage message,
+        QueryState state,
+        byte[] responseBytes,
+        CancellationToken stoppingToken
+    )
+    {
+        state.Settled = true;
+        return message.RespondAsync(responseBytes, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method returns the bytes for <see cref="Resolution.DnsQueryContext.RawMessage" />. When the
+    ///     transport handed over a whole array, that array is used as it is: every transport
+    ///     allocates a private array per query (see <see cref="DnsInboundMessage.RequestBytes" />),
+    ///     and the readers of <c>RawMessage</c> (TSIG verification, zone transfers) only read it.
+    ///     A slice of a larger array, or memory with no array behind it, is copied, because the
+    ///     rest of that array is not the pipeline's to keep.
+    /// </summary>
+    private static byte[] RawMessageOf(DnsInboundMessage message) =>
+        MemoryMarshal.TryGetArray(message.RequestBytes, out ArraySegment<byte> segment)
+        && segment.Offset == 0
+        && segment.Count == segment.Array.Length
+            ? segment.Array
+            : message.RequestBytes.ToArray();
+
+    /// <summary>
     ///     This method calls the transport's drop notifier. A notifier that throws must not
     ///     fail the query task, so the exception is logged and swallowed.
     /// </summary>
@@ -458,10 +502,12 @@ public sealed class DnsQueryProcessingPipeline(
 
     /// <summary>
     ///     This method runs one query through the steps listed in the class summary. Every path
-    ///     out of it replies or reports a drop through <paramref name="message" />.
+    ///     out of it replies or reports a drop through <see cref="RespondAsync" /> or
+    ///     <see cref="Drop" />, which mark <paramref name="state" /> settled.
     /// </summary>
     private async Task ProcessSingleMessageAsync(
         DnsInboundMessage message,
+        QueryState state,
         CancellationToken stoppingToken
     )
     {
@@ -476,7 +522,7 @@ public sealed class DnsQueryProcessingPipeline(
                 "Rate-limiting a query from {RemoteAddress}: token budget exhausted.",
                 message.RemoteAddress
             );
-            message.OnDropped?.Invoke(DnsQueryDropReasonEnum.RateLimited);
+            Drop(message, state, DnsQueryDropReasonEnum.RateLimited);
             return;
         }
 
@@ -497,7 +543,7 @@ public sealed class DnsQueryProcessingPipeline(
                     "Rate-limiting a query from {RemoteAddress}: its own subnet's budget is exhausted.",
                     message.RemoteAddress
                 );
-                message.OnDropped?.Invoke(DnsQueryDropReasonEnum.SubnetRateLimited);
+                Drop(message, state, DnsQueryDropReasonEnum.SubnetRateLimited);
                 return;
             }
 
@@ -518,7 +564,9 @@ public sealed class DnsQueryProcessingPipeline(
                     IsResponse = true,
                     IsTruncated = true,
                 };
-                await message.RespondAsync(
+                await RespondAsync(
+                    message,
+                    state,
                     DnsMessageWriter.Write(truncatedResponse),
                     stoppingToken
                 );
@@ -543,7 +591,7 @@ public sealed class DnsQueryProcessingPipeline(
                     message.RemoteAddress,
                     clientDecision.Reason
                 );
-                message.OnDropped?.Invoke(DnsQueryDropReasonEnum.ClientDenied);
+                Drop(message, state, DnsQueryDropReasonEnum.ClientDenied);
                 return;
             }
         }
@@ -565,7 +613,7 @@ public sealed class DnsQueryProcessingPipeline(
                 "Discarding a malformed DNS message from {RemoteAddress}.",
                 message.RemoteAddress
             );
-            message.OnDropped?.Invoke(DnsQueryDropReasonEnum.Malformed);
+            Drop(message, state, DnsQueryDropReasonEnum.Malformed);
             return;
         }
 
@@ -574,7 +622,7 @@ public sealed class DnsQueryProcessingPipeline(
             message.Protocol,
             message.RemoteAddress,
             DateTimeOffset.UtcNow,
-            message.RequestBytes.ToArray(),
+            RawMessageOf(message),
             tsigRecordStartOffset,
             message.ClientId
         );
@@ -884,11 +932,11 @@ public sealed class DnsQueryProcessingPipeline(
                 message.RemoteAddress,
                 maxResponseOctets
             );
-            message.OnDropped?.Invoke(DnsQueryDropReasonEnum.ResponseTooLarge);
+            Drop(message, state, DnsQueryDropReasonEnum.ResponseTooLarge);
             return;
         }
 
-        await message.RespondAsync(responseBytes, stoppingToken);
+        await RespondAsync(message, state, responseBytes, stoppingToken);
     }
 
     /// <summary>
