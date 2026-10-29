@@ -33,6 +33,18 @@ namespace Ninlil.Dns.Data.Integration.Tests.Replication;
 public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
 {
     /// <summary>
+    ///     This field contains the longest <see cref="BuildServicesAsync" /> waits for the
+    ///     replica to pass a health check.
+    /// </summary>
+    private static readonly TimeSpan EligibilityTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    ///     This field contains the pause between two health checks while the replica is not
+    ///     eligible yet.
+    /// </summary>
+    private static readonly TimeSpan EligibilityPollInterval = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
     ///     This method creates a database with the Ninlil schema on the primary and waits until
     ///     the replica has it.
     /// </summary>
@@ -52,8 +64,8 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
 
     /// <summary>
     ///     This method builds the storage services for <paramref name="databaseName" />, enables
-    ///     the router and runs one replica health check, so the replica is eligible like it is in
-    ///     a running host.
+    ///     the router and runs replica health checks until the replica is eligible (at most
+    ///     <see cref="EligibilityTimeout" />), like it is in a running host.
     /// </summary>
     private async Task<ServiceProvider> BuildServicesAsync(
         string databaseName,
@@ -82,11 +94,21 @@ public abstract class ReplicaRoutingTestsBase(ReplicatedEngineHost host)
         {
             provider.GetRequiredService<IStorageReadRouter>().Enable();
 
-            // The replica serves reads only after a passing health check; run one now instead of
-            // waiting for the hosted service.
-            ReplicaHealthStatus health = await provider
-                .GetRequiredService<ReplicaHealthMonitor>()
-                .CheckOnceAsync(CancellationToken.None);
+            // The replica serves reads only after a passing health check; run checks now instead
+            // of waiting for the hosted service. One sample is not enough: on MongoDB the probe
+            // measures lag from the primary's view of each secondary's optime, and right after
+            // the database was written that view can still hold an older entry (up to the 10 s
+            // idle no-op interval behind). The production monitor repeats the check every
+            // interval, and so does this loop, until the replica is eligible.
+            ReplicaHealthMonitor monitor = provider.GetRequiredService<ReplicaHealthMonitor>();
+            DateTime deadline = DateTime.UtcNow + EligibilityTimeout;
+            ReplicaHealthStatus health = await monitor.CheckOnceAsync(CancellationToken.None);
+            while (!health.IsEligible && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(EligibilityPollInterval);
+                health = await monitor.CheckOnceAsync(CancellationToken.None);
+            }
+
             Assert.True(health.IsEligible, health.Reason);
         }
 
