@@ -262,7 +262,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action replaces a custom option\&#39;s fields, keeping its id and scope. Validation is as for M:Ninlil.Web.Controllers.DhcpScopeCustomOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another scope. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action replaces a custom option\&#39;s fields, keeping its id and scope. Validation is as for M:Ninlil.Web.Controllers.DhcpScopeCustomOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another scope, and 409 when another option of the scope has the new tag. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint put /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -338,7 +338,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action adds a custom option to a scope. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over 255 bytes, for a DHCPv6 scope code 0, a code the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37, 39), a value over 65 535 bytes or a Domain Search List (code 24) that is not wire-format names, and 404 for an unknown scope. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action adds a custom option to a scope. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over 255 bytes, for a DHCPv6 scope code 0, a code the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37, 39), a value over 65 535 bytes or a Domain Search List (code 24) that is not wire-format names, 404 for an unknown scope, and 409 when the scope already has an option with the same tag. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint post /api/dhcp-scopes/{scopeId}/custom-options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

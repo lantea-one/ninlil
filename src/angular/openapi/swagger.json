@@ -9841,7 +9841,7 @@
         "tags": [
           "DhcpScopeCustomOptions"
         ],
-        "summary": "This action adds a custom option to a scope. The value is stored as uppercase hex.\nReturns 400 for a value that is not even-length hex, or a missing value when the source\nis `Custom`, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over\n255 bytes, for a DHCPv6 scope code 0, a code the server writes itself (1, 2, 3, 4, 5,\n6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37, 39), a value over 65 535 bytes or a\nDomain Search List (code 24) that is not wire-format names, and 404 for an unknown scope. Requires `dhcpscopes:write`.",
+        "summary": "This action adds a custom option to a scope. The value is stored as uppercase hex.\nReturns 400 for a value that is not even-length hex, or a missing value when the source\nis `Custom`, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over\n255 bytes, for a DHCPv6 scope code 0, a code the server writes itself (1, 2, 3, 4, 5,\n6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37, 39), a value over 65 535 bytes or a\nDomain Search List (code 24) that is not wire-format names, 404 for an unknown scope, and\n409 when the scope already has an option with the same tag. Requires\n`dhcpscopes:write`.",
         "parameters": [
           {
             "name": "scopeId",
@@ -10036,7 +10036,7 @@
         "tags": [
           "DhcpScopeCustomOptions"
         ],
-        "summary": "This action replaces a custom option's fields, keeping its id and scope. Validation is\nas for M:Ninlil.Web.Controllers.DhcpScopeCustomOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to\nanother scope. Requires `dhcpscopes:write`.",
+        "summary": "This action replaces a custom option's fields, keeping its id and scope. Validation is\nas for M:Ninlil.Web.Controllers.DhcpScopeCustomOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to\nanother scope, and 409 when another option of the scope has the new tag. Requires\n`dhcpscopes:write`.",
         "parameters": [
           {
             "name": "scopeId",
@@ -12210,7 +12210,7 @@
         "tags": [
           "DhcpTagRuleOptions"
         ],
-        "summary": "This action adds an option to a tag rule. The value is stored as uppercase hex. Returns\n400 for a value that is not even-length hex, or a missing value when the source is\n`Custom`, for a global or DHCPv4-scope rule a reserved tag (0, 52, 53, 82, 255) or\na value over 255 bytes, for a DHCPv6-scope rule tag 0 or a value over 65 535 bytes, and\n404 for an unknown rule. Requires `dhcptagrules:write`.",
+        "summary": "This action adds an option to a tag rule. The value is stored as uppercase hex. Returns\n400 for a value that is not even-length hex, or a missing value when the source is\n`Custom`, for a global or DHCPv4-scope rule a reserved tag (0, 52, 53, 82, 255) or\na value over 255 bytes, for a DHCPv6-scope rule tag 0 or a value over 65 535 bytes,\n404 for an unknown rule, and 409 when the rule already has an option with the same tag.\nRequires `dhcptagrules:write`.",
         "parameters": [
           {
             "name": "tagRuleId",
@@ -12381,7 +12381,7 @@
         "tags": [
           "DhcpTagRuleOptions"
         ],
-        "summary": "This action replaces an option's fields, keeping its id and rule. Validation is as for\nM:Ninlil.Web.Controllers.DhcpTagRuleOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpTagRuleOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another\nrule. Requires `dhcptagrules:write`.",
+        "summary": "This action replaces an option's fields, keeping its id and rule. Validation is as for\nM:Ninlil.Web.Controllers.DhcpTagRuleOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpTagRuleOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another\nrule, and 409 when another option of the rule has the new tag. Requires\n`dhcptagrules:write`.",
         "parameters": [
           {
             "name": "tagRuleId",
