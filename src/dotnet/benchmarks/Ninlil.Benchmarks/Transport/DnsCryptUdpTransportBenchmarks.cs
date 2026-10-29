@@ -59,6 +59,24 @@ public class DnsCryptUdpTransportBenchmarks
     [GlobalSetup]
     public async Task SetupAsync()
     {
+        try
+        {
+            await StartAsync();
+        }
+        catch
+        {
+            // A failed setup never reaches the cleanup method, so the state directory goes here.
+            DeleteStateDirectory();
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     This method does the work of <see cref="SetupAsync" />; the caller removes the state
+    ///     directory if it throws.
+    /// </summary>
+    private async Task StartAsync()
+    {
         _host = await PipelineBenchmarkHost.StartAsync(
             PipelineBenchmarkHost.FeatureSetEnum.Full,
             BenchmarkEnvironment.Scale
@@ -151,12 +169,25 @@ public class DnsCryptUdpTransportBenchmarks
     [GlobalCleanup]
     public async Task CleanupAsync()
     {
-        await _listener.StopAsync(CancellationToken.None);
-        _listener.Dispose();
-        await _rotation.StopAsync(CancellationToken.None);
-        await _host.DisposeAsync();
+        try
+        {
+            await _listener.StopAsync(CancellationToken.None);
+            _listener.Dispose();
+            await _rotation.StopAsync(CancellationToken.None);
+            await _host.DisposeAsync();
+        }
+        finally
+        {
+            DeleteStateDirectory();
+        }
+    }
 
-        if (Directory.Exists(_stateDirectory))
+    /// <summary>
+    ///     This method removes the state directory with the certificate files the run wrote.
+    /// </summary>
+    private void DeleteStateDirectory()
+    {
+        if (_stateDirectory != null && Directory.Exists(_stateDirectory))
             Directory.Delete(_stateDirectory, recursive: true);
     }
 

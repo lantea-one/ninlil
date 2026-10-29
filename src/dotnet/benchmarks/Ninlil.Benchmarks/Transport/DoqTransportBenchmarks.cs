@@ -57,6 +57,24 @@ public class DoqTransportBenchmarks
     [GlobalSetup]
     public async Task SetupAsync()
     {
+        try
+        {
+            await StartAsync();
+        }
+        catch
+        {
+            // A failed setup never reaches the cleanup method, so the state directory goes here.
+            DeleteStateDirectory();
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     This method does the work of <see cref="SetupAsync" />; the caller removes the state
+    ///     directory if it throws.
+    /// </summary>
+    private async Task StartAsync()
+    {
         _supported = QuicListener.IsSupported && QuicConnection.IsSupported;
 
         if (!_supported)
@@ -133,15 +151,28 @@ public class DoqTransportBenchmarks
     [GlobalCleanup]
     public async Task CleanupAsync()
     {
-        if (!_supported)
-            return;
+        try
+        {
+            if (!_supported)
+                return;
 
-        await _connection.DisposeAsync();
-        await _listener.StopAsync(CancellationToken.None);
-        _listener.Dispose();
-        await _host.DisposeAsync();
+            await _connection.DisposeAsync();
+            await _listener.StopAsync(CancellationToken.None);
+            _listener.Dispose();
+            await _host.DisposeAsync();
+        }
+        finally
+        {
+            DeleteStateDirectory();
+        }
+    }
 
-        if (Directory.Exists(_stateDirectory))
+    /// <summary>
+    ///     This method removes the state directory with the certificate files the run wrote.
+    /// </summary>
+    private void DeleteStateDirectory()
+    {
+        if (_stateDirectory != null && Directory.Exists(_stateDirectory))
             Directory.Delete(_stateDirectory, recursive: true);
     }
 
