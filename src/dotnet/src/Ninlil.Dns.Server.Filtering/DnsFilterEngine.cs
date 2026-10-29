@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -162,7 +163,9 @@ public sealed class DnsFilterEngine(
     /// <summary>
     ///     This method checks whether any ordinary entry (or, with <paramref name="isException" />,
     ///     any exception entry) of a list covers a name: first the hashed plain entries, then the
-    ///     wildcard and regex ones one by one.
+    ///     wildcard and regex ones one by one. A pattern whose necessary literal the name lacks is
+    ///     skipped without running its regex (<see cref="DnsFilterPatternEntry.CanMatch" />); the
+    ///     regex still decides every other pattern, so the answer is the one a full scan gives.
     /// </summary>
     private bool MatchesAnyDomainEntry(
         string queriedPresentation,
@@ -173,10 +176,15 @@ public sealed class DnsFilterEngine(
         if (entries.ContainsDomain(queriedPresentation, isException))
             return true;
 
+        // The prefilter's literal test is only exact for ASCII names (see CanMatch), so the
+        // check is made once here and not once per pattern.
+        bool nameIsAscii = entries.Patterns.Count > 0 && Ascii.IsValid(queriedPresentation);
+
         foreach (DnsFilterPatternEntry pattern in entries.Patterns)
         {
             if (
                 pattern.IsException == isException
+                && pattern.CanMatch(queriedPresentation, nameIsAscii)
                 && MatchesPatternEntry(queriedPresentation, pattern)
             )
                 return true;

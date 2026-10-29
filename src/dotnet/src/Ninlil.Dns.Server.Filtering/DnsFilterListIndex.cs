@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Net;
@@ -224,6 +225,8 @@ public sealed class DnsFilterListIndex
 
 /// <summary>
 ///     This record is one wildcard or regex entry of a domain list, as the engine matches it.
+///     Alongside the regex it carries <see cref="RequiredLiteral" />, a cheap necessary
+///     condition the engine tests before running the regex.
 /// </summary>
 /// <param name="Kind">Either <see cref="DnsFilterEntryKindEnum.Wildcard" /> or <see cref="DnsFilterEntryKindEnum.Regex" />.</param>
 /// <param name="Value">The pattern text as stored.</param>
@@ -238,4 +241,321 @@ public sealed record DnsFilterPatternEntry(
     string Value,
     bool IsException,
     Regex Compiled
-);
+)
+{
+    /// <summary>
+    ///     This property is a lowercase ASCII text that every name the pattern matches must
+    ///     contain, or <see langword="null" /> when none can be read off the pattern safely. It
+    ///     is derived from <see cref="Kind" /> and <see cref="Value" /> by
+    ///     <see cref="DnsFilterPatternPrefilter" />.
+    /// </summary>
+    public string RequiredLiteral { get; } = DnsFilterPatternPrefilter.Derive(Kind, Value);
+
+    /// <summary>
+    ///     This method says whether the pattern can possibly match a name, without running the
+    ///     regex. <see langword="false" /> proves the regex would not match; <see langword="true" />
+    ///     proves nothing, so the regex still decides.
+    /// </summary>
+    /// <param name="normalizedName">The queried name, normalized with <see cref="DnsFilterListIndex.NormalizeDomain" />.</param>
+    /// <param name="nameIsAscii">
+    ///     Whether <paramref name="normalizedName" /> is pure ASCII. The check only applies then:
+    ///     a regex ignoring case also equates some non-ASCII characters with ASCII letters (the
+    ///     Kelvin sign with <c>k</c>), which an ordinal search does not.
+    /// </param>
+    public bool CanMatch(string normalizedName, bool nameIsAscii) =>
+        RequiredLiteral is null
+        || !nameIsAscii
+        || normalizedName.Contains(RequiredLiteral, StringComparison.Ordinal);
+}
+
+/// <summary>
+///     This class derives the necessary literal of a wildcard or regex filter entry, so
+///     <see cref="DnsFilterEngine" /> can skip a pattern whose name cannot contain it.
+///     <para>
+///         The literal is only a precondition: a name that lacks it cannot match, and a name that
+///         has it still goes through the regex, which alone decides. So the result of a query is
+///         the same as without the prefilter. The derivation is therefore deliberately cautious:
+///         wherever the pattern text is not understood with certainty (alternation, groups,
+///         non-ASCII text, a numeric or named escape, a nested character class) it returns
+///         <see langword="null" /> and the regex runs as before. A literal is always ASCII and
+///         lowercase, because the engine compares it with an already lowercased name that is pure
+///         ASCII.
+///     </para>
+/// </summary>
+internal static class DnsFilterPatternPrefilter
+{
+    /// <summary>
+    ///     This method derives the necessary literal of one entry, or returns
+    ///     <see langword="null" /> for a blank pattern, an unknown kind or a pattern that has none.
+    /// </summary>
+    /// <param name="kind">The entry kind; only wildcard and regex entries have a literal.</param>
+    /// <param name="value">The pattern text as stored.</param>
+    public static string Derive(DnsFilterEntryKindEnum kind, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return kind switch
+        {
+            DnsFilterEntryKindEnum.Wildcard => LongestWildcardRun(value),
+            DnsFilterEntryKindEnum.Regex => LongestRegexRun(value),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    ///     This method returns the longest run of a glob without a wildcard character
+    ///     (<c>*</c> or <c>?</c>). Those are the only two characters
+    ///     <see cref="DnsFilterEngine.BuildWildcardRegexPattern" /> treats as syntax, so every
+    ///     other character matches itself and a run of them must appear in a matching name. A
+    ///     non-ASCII character ends a run too, because the regex may match it against an ASCII
+    ///     letter.
+    /// </summary>
+    private static string LongestWildcardRun(string glob)
+    {
+        RunCollector runs = new();
+
+        foreach (char c in glob)
+        {
+            if (c is '*' or '?' || c >= 128)
+                runs.End();
+            else
+                runs.Add(c);
+        }
+
+        return runs.Finish();
+    }
+
+    /// <summary>
+    ///     This method returns the longest run of characters a regex must match literally and in
+    ///     order, reading the pattern text left to right. Anything it cannot place with
+    ///     certainty either ends the current run (a class, a wildcard dot, an anchor, a letter
+    ///     escape such as <c>\d</c>) or, for syntax that changes what is required, makes the
+    ///     whole pattern give up: alternation, groups, a nested character class, a numeric,
+    ///     hexadecimal, Unicode, control, property or named escape.
+    ///     A literal followed by <c>?</c>, <c>*</c> or <c>{...}</c> is not required, so it is
+    ///     dropped; one followed by <c>+</c> is required but ends the run, because it may repeat.
+    /// </summary>
+    private static string LongestRegexRun(string pattern)
+    {
+        RunCollector runs = new();
+        bool lastWasLiteral = false;
+
+        for (int i = 0; i < pattern.Length; i++)
+        {
+            char c = pattern[i];
+
+            switch (c)
+            {
+                case '|':
+                case '(':
+                case ')':
+                    return null;
+
+                case '[':
+                    i = SkipCharacterClass(pattern, i);
+
+                    if (i < 0)
+                        return null;
+
+                    runs.End();
+                    lastWasLiteral = false;
+                    break;
+
+                case '\\':
+                    if (i + 1 >= pattern.Length)
+                        return null;
+
+                    char escaped = pattern[++i];
+
+                    if (escaped is 'p' or 'P' or 'x' or 'u' or 'c' or 'k' or (>= '0' and <= '9'))
+                        return null;
+
+                    if (char.IsAsciiLetter(escaped) || escaped == '_' || escaped >= 128)
+                    {
+                        runs.End();
+                        lastWasLiteral = false;
+                    }
+                    else
+                    {
+                        runs.Add(escaped);
+                        lastWasLiteral = true;
+                    }
+
+                    break;
+
+                case '*':
+                case '?':
+                    runs.DropLast(lastWasLiteral);
+                    runs.End();
+                    lastWasLiteral = false;
+
+                    if (i + 1 < pattern.Length && pattern[i + 1] == '?')
+                        i++;
+
+                    break;
+
+                case '+':
+                    runs.End();
+                    lastWasLiteral = false;
+
+                    if (i + 1 < pattern.Length && pattern[i + 1] == '?')
+                        i++;
+
+                    break;
+
+                case '{':
+                    int close = pattern.IndexOf('}', i + 1);
+
+                    // Text between braces that is not a count is literal to the regex engine,
+                    // and an unescaped | inside it would still be alternation, so only a
+                    // real quantifier is skipped.
+                    if (close < 0 || !IsQuantifierBody(pattern.AsSpan(i + 1, close - i - 1)))
+                        return null;
+
+                    runs.DropLast(lastWasLiteral);
+                    runs.End();
+                    lastWasLiteral = false;
+                    i = close;
+
+                    if (i + 1 < pattern.Length && pattern[i + 1] == '?')
+                        i++;
+
+                    break;
+
+                case '^':
+                case '$':
+                case '.':
+                    runs.End();
+                    lastWasLiteral = false;
+                    break;
+
+                default:
+                    if (c >= 128)
+                    {
+                        runs.End();
+                        lastWasLiteral = false;
+                    }
+                    else
+                    {
+                        runs.Add(c);
+                        lastWasLiteral = true;
+                    }
+
+                    break;
+            }
+        }
+
+        return runs.Finish();
+    }
+
+    /// <summary>
+    ///     This method says whether the text between the braces of a quantifier is a count:
+    ///     digits, then optionally a comma and more digits (<c>2</c>, <c>2,</c>, <c>2,5</c>).
+    /// </summary>
+    private static bool IsQuantifierBody(ReadOnlySpan<char> body)
+    {
+        int comma = body.IndexOf(',');
+        ReadOnlySpan<char> low = comma < 0 ? body : body[..comma];
+        ReadOnlySpan<char> high = comma < 0 ? [] : body[(comma + 1)..];
+
+        return low.Length > 0 && IsAllDigits(low) && IsAllDigits(high);
+    }
+
+    /// <summary>
+    ///     This method says whether a span holds only ASCII digits (an empty span does).
+    /// </summary>
+    private static bool IsAllDigits(ReadOnlySpan<char> text)
+    {
+        foreach (char c in text)
+        {
+            if (!char.IsAsciiDigit(c))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     This method returns the index of the <c>]</c> that closes the character class opening
+    ///     at <paramref name="open" />, or -1 when the class is one it will not read: a leading
+    ///     <c>]</c>, a nested <c>[</c> (subtraction) or no closing bracket.
+    /// </summary>
+    private static int SkipCharacterClass(string pattern, int open)
+    {
+        int i = open + 1;
+
+        if (i < pattern.Length && pattern[i] == '^')
+            i++;
+
+        if (i < pattern.Length && pattern[i] == ']')
+            return -1;
+
+        for (; i < pattern.Length; i++)
+        {
+            if (pattern[i] == '\\')
+                i++;
+            else if (pattern[i] == '[')
+                return -1;
+            else if (pattern[i] == ']')
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    ///     This helper collects runs of required characters and keeps the longest
+    ///     (the first on a tie), lowercased. Lowercasing is exact because the literal is ASCII
+    ///     and the regex ignores case.
+    /// </summary>
+    private sealed class RunCollector
+    {
+        /// <summary>
+        ///     This field is the run being built.
+        /// </summary>
+        private readonly StringBuilder _current = new();
+
+        /// <summary>
+        ///     This field is the longest finished run so far.
+        /// </summary>
+        private string _best = "";
+
+        /// <summary>
+        ///     This method appends one ASCII character to the current run, lowercased.
+        /// </summary>
+        public void Add(char c) => _current.Append(char.ToLowerInvariant(c));
+
+        /// <summary>
+        ///     This method removes the last character of the current run when the token just read
+        ///     was that character, because a quantifier that follows makes it optional.
+        /// </summary>
+        public void DropLast(bool lastWasLiteral)
+        {
+            if (lastWasLiteral && _current.Length > 0)
+                _current.Length--;
+        }
+
+        /// <summary>
+        ///     This method finishes the current run and keeps it when it is the longest.
+        /// </summary>
+        public void End()
+        {
+            if (_current.Length > _best.Length)
+                _best = _current.ToString();
+
+            _current.Clear();
+        }
+
+        /// <summary>
+        ///     This method finishes the last run and returns the longest, or
+        ///     <see langword="null" /> when no run has a character.
+        /// </summary>
+        public string Finish()
+        {
+            End();
+
+            return _best.Length == 0 ? null : _best;
+        }
+    }
+}
