@@ -19,8 +19,8 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     from the queried name up to the root is a series of dictionary lookups.
 ///     <para>
 ///         <strong>Names.</strong> A zone name is stored as the operator typed it, with or without
-///         a trailing dot and in any case. The snapshot keys zones by the name in lowercase without
-///         the trailing dot and the lookup does the same to the queried name, so
+///         a trailing dot and in any case. The snapshot keys zones by the parsed
+///         <see cref="DnsName" />, which ignores case and has no trailing dot, so
 ///         <c>Corp.Example.</c> and <c>corp.example</c> are the same zone on every storage engine.
 ///     </para>
 ///     <para>
@@ -153,7 +153,7 @@ public sealed class ForwarderSetCache : IDisposable
             .GetRequiredService<IDnsForwarderRepository>()
             .ListEnabledOrderedAsync(stoppingToken);
 
-        Dictionary<string, ForwarderSet> byName = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<DnsName, ForwarderSet> byName = [];
 
         // The earliest-created zone wins when two names differ only in case or trailing dot.
         foreach (ZoneEntity zone in zones.OrderBy(zone => zone.CreatedAtUtc))
@@ -161,8 +161,13 @@ public sealed class ForwarderSetCache : IDisposable
             if (zone.Name is null || zone.ForwarderAddresses is not { Count: > 0 })
                 continue;
 
+            // A stored name that is not a valid DNS name can never equal a queried name, so it
+            // is left out.
+            if (!DnsName.TryParse(zone.Name.Trim(), out DnsName zoneName))
+                continue;
+
             byName.TryAdd(
-                NormalizeName(zone.Name),
+                zoneName,
                 new ForwarderSet([.. zone.ForwarderAddresses], zone.ValidateDnssec)
             );
         }
@@ -172,13 +177,6 @@ public sealed class ForwarderSetCache : IDisposable
             new ForwarderSet([.. globalForwarders.Select(item => item.DefinitionString)], true)
         );
     }
-
-    /// <summary>
-    ///     This method turns a zone name into the form the dictionary is keyed by: without the
-    ///     trailing dot (the root zone becomes the empty string). Case is handled by the
-    ///     dictionary's comparer.
-    /// </summary>
-    internal static string NormalizeName(string name) => name.Trim().TrimEnd('.');
 }
 
 /// <summary>
@@ -196,10 +194,15 @@ public sealed record ForwarderSet(IReadOnlyList<string> Definitions, bool Valida
 ///     This class is one immutable copy of every forwarder set: the forwarder zones by name and
 ///     the global set.
 /// </summary>
-/// <param name="Zones">The enabled forwarder zones that have addresses, by normalized name.</param>
+/// <param name="Zones">
+///     The enabled forwarder zones that have addresses, by parsed name. <see cref="DnsName" />
+///     equality ignores ASCII case and a trailing dot is not part of a parsed name, so
+///     <c>Corp.Example.</c> and <c>corp.example</c> are one key. The root zone is
+///     <see cref="DnsName.Root" />.
+/// </param>
 /// <param name="Global">The enabled global forwarders in order.</param>
 public sealed record ForwarderSetSnapshot(
-    IReadOnlyDictionary<string, ForwarderSet> Zones,
+    IReadOnlyDictionary<DnsName, ForwarderSet> Zones,
     ForwarderSet Global
 )
 {
@@ -207,7 +210,7 @@ public sealed record ForwarderSetSnapshot(
     ///     This field is the snapshot used before the first load succeeds: no forwarders.
     /// </summary>
     public static readonly ForwarderSetSnapshot Empty = new(
-        new Dictionary<string, ForwarderSet>(),
+        new Dictionary<DnsName, ForwarderSet>(),
         new ForwarderSet([], true)
     );
 
@@ -238,14 +241,9 @@ public sealed record ForwarderSetSnapshot(
 
         for (int start = 0; start <= queriedName.Labels.Count; start++)
         {
-            DnsName candidate = new([.. queriedName.Labels.Skip(start)]);
-
-            if (
-                Zones.TryGetValue(
-                    ForwarderSetCache.NormalizeName(candidate.ToString()),
-                    out ForwarderSet set
-                )
-            )
+            // Suffix shares the label arrays of queriedName instead of copying them, which is
+            // safe because a DnsName and its labels are never changed after construction.
+            if (Zones.TryGetValue(queriedName.Suffix(start), out ForwarderSet set))
                 return set;
         }
 

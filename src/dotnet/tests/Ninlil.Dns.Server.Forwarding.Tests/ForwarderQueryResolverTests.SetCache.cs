@@ -172,6 +172,75 @@ public sealed partial class ForwarderQueryResolverTests
         Assert.Equal(0, globalUpstream.QueryCount);
     }
 
+    /// <summary>
+    ///     This test is the parity table for how a stored zone name and a queried name meet: the
+    ///     zone's forwarder is used exactly when the name-text rule the cache used to apply says
+    ///     so (<see cref="TextRuleMatches" />, asserted first so the table cannot drift from it).
+    ///     It covers a trailing dot, capitals, surrounding spaces, an escaped dot inside a label,
+    ///     the root zone, a name deeper than the zone and one shallower than it.
+    /// </summary>
+    [Theory]
+    [InlineData("corp.example", "www.corp.example.", true)]
+    [InlineData("corp.example.", "WWW.CORP.EXAMPLE.", true)]
+    [InlineData("Corp.Example", "corp.example.", true)]
+    [InlineData("  corp.example  ", "a.b.c.corp.example.", true)]
+    [InlineData("a\\.b.corp.example", "www.a\\.b.corp.example.", true)]
+    [InlineData("a\\.b.corp.example", "www.b.corp.example.", false)]
+    [InlineData(".", "www.anything.test.", true)]
+    [InlineData("", "www.anything.test.", true)]
+    [InlineData("deep.corp.example", "corp.example.", false)]
+    [InlineData("corp.example", "other.example.", false)]
+    public async Task SetCache_AStoredZoneNameAndAQueriedName_MatchLikeTheNameTextRule(
+        string storedName,
+        string queriedName,
+        bool zoneMatches
+    )
+    {
+        Assert.Equal(zoneMatches, TextRuleMatches(storedName, queriedName));
+
+        using FakeUdpUpstream globalUpstream = FakeUdpUpstream.Start(
+            BuildPositiveResponse(IPAddress.Parse("192.0.2.1"))
+        );
+        using FakeUdpUpstream zoneUpstream = FakeUdpUpstream.Start(
+            BuildPositiveResponse(IPAddress.Parse("203.0.113.99"))
+        );
+        await SeedForwarderAsync($"127.0.0.1:{globalUpstream.Port}");
+        await SeedForwarderZoneAsync(storedName, $"127.0.0.1:{zoneUpstream.Port}");
+        ForwarderQueryResolver resolver = CreateResolver();
+
+        Assert.True(await IsHandledAsync(resolver, queriedName));
+
+        Assert.Equal(zoneMatches ? 1 : 0, zoneUpstream.QueryCount);
+        Assert.Equal(zoneMatches ? 0 : 1, globalUpstream.QueryCount);
+    }
+
+    /// <summary>
+    ///     This method applies the rule the cache used before it keyed zones by <see cref="DnsName" />:
+    ///     the stored name without spaces and trailing dot against the presentation text of each
+    ///     suffix of the queried name, ignoring case.
+    /// </summary>
+    private static bool TextRuleMatches(string storedName, string queriedName)
+    {
+        string key = storedName.Trim().TrimEnd('.');
+        DnsName queried = DnsName.Parse(queriedName);
+
+        for (int start = 0; start <= queried.Labels.Count; start++)
+        {
+            DnsName candidate = new([.. queried.Labels.Skip(start)]);
+
+            if (
+                string.Equals(
+                    candidate.ToString().Trim().TrimEnd('.'),
+                    key,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+                return true;
+        }
+
+        return false;
+    }
+
     [Fact]
     public async Task SetCache_AForwardedResponseCacheHit_RunsNoDatabaseCommand()
     {
