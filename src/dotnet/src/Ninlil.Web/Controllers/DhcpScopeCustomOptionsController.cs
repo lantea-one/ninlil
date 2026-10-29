@@ -102,7 +102,9 @@ public class DhcpScopeCustomOptionsController(
     ///     is <c>Custom</c>, for a DHCPv4 scope a reserved tag (0, 52, 53, 82, 255) or a value over
     ///     255 bytes, for a DHCPv6 scope code 0, a code the server writes itself (1, 2, 3, 4, 5,
     ///     6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37, 39), a value over 65 535 bytes or a
-    ///     Domain Search List (code 24) that is not wire-format names, and 404 for an unknown scope. Requires <c>dhcpscopes:write</c>.
+    ///     Domain Search List (code 24) that is not wire-format names, 404 for an unknown scope, and
+    ///     409 when the scope already has an option with the same tag. Requires
+    ///     <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -126,6 +128,8 @@ public class DhcpScopeCustomOptionsController(
 
         if (!TryValidate(request, scope, out string normalizedValueHex, out string error))
             throw new ValidationException(error);
+
+        await EnsureTagIsFreeAsync(scopeId, request.OptionTag, null, stoppingToken);
 
         DhcpScopeCustomOptionEntity customOption = new()
         {
@@ -152,7 +156,8 @@ public class DhcpScopeCustomOptionsController(
     /// <summary>
     ///     This action replaces a custom option's fields, keeping its id and scope. Validation is
     ///     as for <see cref="Create" />; returns 404 when the option does not exist or belongs to
-    ///     another scope. Requires <c>dhcpscopes:write</c>.
+    ///     another scope, and 409 when another option of the scope has the new tag. Requires
+    ///     <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -181,6 +186,8 @@ public class DhcpScopeCustomOptionsController(
         if (!TryValidate(request, scope, out string normalizedValueHex, out string error))
             throw new ValidationException(error);
 
+        await EnsureTagIsFreeAsync(scopeId, request.OptionTag, customOption.Id, stoppingToken);
+
         customOption.OptionTag = request.OptionTag;
         customOption.ValueHex = normalizedValueHex;
         customOption.IsDisabled = request.IsDisabled;
@@ -192,6 +199,33 @@ public class DhcpScopeCustomOptionsController(
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
+    }
+
+    /// <summary>
+    ///     This method throws <see cref="ConflictException" /> (409) when the scope already has
+    ///     an option with <paramref name="optionTag" />. The check runs before the save because
+    ///     the relational unique index on (scope, tag) would otherwise surface as a 500, and the
+    ///     MongoDB index is not unique. Two concurrent writes can still both pass the check.
+    /// </summary>
+    /// <param name="scopeId">The scope the option belongs to.</param>
+    /// <param name="optionTag">The tag (or DHCPv6 option code) being written.</param>
+    /// <param name="ownId">The option being replaced, which does not conflict with itself; null on create.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    private async Task EnsureTagIsFreeAsync(
+        Guid scopeId,
+        byte optionTag,
+        Guid? ownId,
+        CancellationToken stoppingToken
+    )
+    {
+        IReadOnlyList<DhcpScopeCustomOptionEntity> sameTag = await customOptionRepository.ListAsync(
+            o => o.ScopeId == scopeId && o.OptionTag == optionTag,
+            stoppingToken
+        );
+        if (sameTag.Any(o => o.Id != ownId))
+            throw new ConflictException(
+                $"The scope already has a custom option with tag {optionTag}."
+            );
     }
 
     /// <summary>

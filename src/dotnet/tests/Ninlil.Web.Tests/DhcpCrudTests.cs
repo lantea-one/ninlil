@@ -1039,6 +1039,158 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, patchClear.StatusCode);
     }
 
+    /// <summary>
+    ///     This test posts the same option tag twice to one scope. The second post must answer 409
+    ///     Conflict (the rule is checked before the save, so the database index never throws) and
+    ///     the scope must keep one option with that tag.
+    /// </summary>
+    [Fact]
+    public async Task ScopeCustomOptionCreate_WithATagTheScopeAlreadyHas_ReturnsConflict()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpScopeDetail scope = await CreateScopeAsync(client, $"dup-create-{Guid.NewGuid():N}");
+        string url = $"/api/dhcp-scopes/{scope.Id}/custom-options";
+
+        HttpResponseMessage first = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 200, valueHex = "0A" }
+        );
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        HttpResponseMessage second = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 200, valueHex = "0B" }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+
+        PagedResult<DhcpScopeCustomOptionDetail> page = await client.GetFromJsonAsync<
+            PagedResult<DhcpScopeCustomOptionDetail>
+        >(url);
+        Assert.Single(page.Items);
+
+        await client.DeleteAsync($"/api/dhcp-scopes/{scope.Id}");
+    }
+
+    /// <summary>
+    ///     This test moves a scope's option onto the tag of another option of the same scope with
+    ///     PUT (409), then replaces it with its own tag and a new value (204), because the row
+    ///     being replaced does not conflict with itself.
+    /// </summary>
+    [Fact]
+    public async Task ScopeCustomOptionReplace_OntoAnotherOptionsTag_ReturnsConflictButItsOwnTagIsAllowed()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpScopeDetail scope = await CreateScopeAsync(client, $"dup-replace-{Guid.NewGuid():N}");
+        string url = $"/api/dhcp-scopes/{scope.Id}/custom-options";
+
+        HttpResponseMessage firstResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 200, valueHex = "0A" }
+        );
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+        HttpResponseMessage secondResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 201, valueHex = "0B" }
+        );
+        DhcpScopeCustomOptionDetail second =
+            await secondResponse.Content.ReadFromJsonAsync<DhcpScopeCustomOptionDetail>();
+
+        HttpResponseMessage ontoTheFirstTag = await client.PutAsJsonAsync(
+            $"{url}/{second.Id}",
+            new { optionTag = 200, valueHex = "0B" }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, ontoTheFirstTag.StatusCode);
+
+        HttpResponseMessage ownTag = await client.PutAsJsonAsync(
+            $"{url}/{second.Id}",
+            new { optionTag = 201, valueHex = "0C" }
+        );
+        Assert.Equal(HttpStatusCode.NoContent, ownTag.StatusCode);
+
+        await client.DeleteAsync($"/api/dhcp-scopes/{scope.Id}");
+    }
+
+    /// <summary>
+    ///     This test posts the same option tag twice to one tag rule. The second post must answer
+    ///     409 Conflict and the rule must keep one option with that tag.
+    /// </summary>
+    [Fact]
+    public async Task TagRuleOptionCreate_WithATagTheRuleAlreadyHas_ReturnsConflict()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpTagRuleDetail rule = await CreateGlobalTagRuleAsync(client);
+        string url = $"/api/dhcp-tag-rules/{rule.Id}/options";
+
+        HttpResponseMessage first = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 201, valueHex = "0A" }
+        );
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        HttpResponseMessage second = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 201, valueHex = "0B" }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+
+        PagedResult<DhcpTagRuleOptionDetail> page = await client.GetFromJsonAsync<
+            PagedResult<DhcpTagRuleOptionDetail>
+        >(url);
+        Assert.Single(page.Items);
+
+        await client.DeleteAsync($"/api/dhcp-tag-rules/{rule.Id}");
+    }
+
+    /// <summary>
+    ///     This test moves a tag rule's option onto the tag of another option of the same rule
+    ///     with PUT (409), then replaces it with its own tag and a new value (204), because the
+    ///     row being replaced does not conflict with itself.
+    /// </summary>
+    [Fact]
+    public async Task TagRuleOptionReplace_OntoAnotherOptionsTag_ReturnsConflictButItsOwnTagIsAllowed()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        DhcpTagRuleDetail rule = await CreateGlobalTagRuleAsync(client);
+        string url = $"/api/dhcp-tag-rules/{rule.Id}/options";
+
+        HttpResponseMessage firstResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 200, valueHex = "0A" }
+        );
+        Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
+        HttpResponseMessage secondResponse = await client.PostAsJsonAsync(
+            url,
+            new { optionTag = 201, valueHex = "0B" }
+        );
+        DhcpTagRuleOptionDetail second =
+            await secondResponse.Content.ReadFromJsonAsync<DhcpTagRuleOptionDetail>();
+
+        HttpResponseMessage ontoTheFirstTag = await client.PutAsJsonAsync(
+            $"{url}/{second.Id}",
+            new { optionTag = 200, valueHex = "0B" }
+        );
+        Assert.Equal(HttpStatusCode.Conflict, ontoTheFirstTag.StatusCode);
+
+        HttpResponseMessage ownTag = await client.PutAsJsonAsync(
+            $"{url}/{second.Id}",
+            new { optionTag = 201, valueHex = "0C" }
+        );
+        Assert.Equal(HttpStatusCode.NoContent, ownTag.StatusCode);
+
+        await client.DeleteAsync($"/api/dhcp-tag-rules/{rule.Id}");
+    }
+
+    /// <summary>This method creates a global (DHCPv4) tag rule with a unique name.</summary>
+    private static async Task<DhcpTagRuleDetail> CreateGlobalTagRuleAsync(HttpClient client)
+    {
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/dhcp-tag-rules",
+            new { name = $"dup-rule-{Guid.NewGuid():N}" }
+        );
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<DhcpTagRuleDetail>();
+    }
+
     [Fact]
     public async Task DhcpEndpoints_WithoutAToken_ReturnUnauthorized()
     {

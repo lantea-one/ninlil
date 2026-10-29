@@ -105,8 +105,9 @@ public class DhcpTagRuleOptionsController(
     ///     This action adds an option to a tag rule. The value is stored as uppercase hex. Returns
     ///     400 for a value that is not even-length hex, or a missing value when the source is
     ///     <c>Custom</c>, for a global or DHCPv4-scope rule a reserved tag (0, 52, 53, 82, 255) or
-    ///     a value over 255 bytes, for a DHCPv6-scope rule tag 0 or a value over 65 535 bytes, and
-    ///     404 for an unknown rule. Requires <c>dhcptagrules:write</c>.
+    ///     a value over 255 bytes, for a DHCPv6-scope rule tag 0 or a value over 65 535 bytes,
+    ///     404 for an unknown rule, and 409 when the rule already has an option with the same tag.
+    ///     Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcptagrules:write")]
@@ -129,6 +130,8 @@ public class DhcpTagRuleOptionsController(
         if (!TryValidate(request, isDhcpv6, out string normalizedValueHex, out string error))
             throw new ValidationException(error);
 
+        await EnsureTagIsFreeAsync(tagRuleId, request.OptionTag, null, stoppingToken);
+
         DhcpTagRuleOptionEntity option = new()
         {
             Id = Guid.NewGuid(),
@@ -148,7 +151,8 @@ public class DhcpTagRuleOptionsController(
     /// <summary>
     ///     This action replaces an option's fields, keeping its id and rule. Validation is as for
     ///     <see cref="Create" />; returns 404 when the option does not exist or belongs to another
-    ///     rule. Requires <c>dhcptagrules:write</c>.
+    ///     rule, and 409 when another option of the rule has the new tag. Requires
+    ///     <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcptagrules:write")]
@@ -178,6 +182,8 @@ public class DhcpTagRuleOptionsController(
         if (!TryValidate(request, isDhcpv6, out string normalizedValueHex, out string error))
             throw new ValidationException(error);
 
+        await EnsureTagIsFreeAsync(tagRuleId, request.OptionTag, option.Id, stoppingToken);
+
         option.OptionTag = request.OptionTag;
         option.ValueHex = normalizedValueHex;
         option.ValueSource = request.ValueSource;
@@ -186,6 +192,31 @@ public class DhcpTagRuleOptionsController(
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
+    }
+
+    /// <summary>
+    ///     This method throws <see cref="ConflictException" /> (409) when the rule already has
+    ///     an option with <paramref name="optionTag" />. The check runs before the save because
+    ///     the relational unique index on (rule, tag) would otherwise surface as a 500, and the
+    ///     MongoDB index is not unique. Two concurrent writes can still both pass the check.
+    /// </summary>
+    /// <param name="tagRuleId">The rule the option belongs to.</param>
+    /// <param name="optionTag">The tag (or DHCPv6 option code) being written.</param>
+    /// <param name="ownId">The option being replaced, which does not conflict with itself; null on create.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    private async Task EnsureTagIsFreeAsync(
+        Guid tagRuleId,
+        byte optionTag,
+        Guid? ownId,
+        CancellationToken stoppingToken
+    )
+    {
+        IReadOnlyList<DhcpTagRuleOptionEntity> sameTag = await tagRuleOptionRepository.ListAsync(
+            o => o.TagRuleId == tagRuleId && o.OptionTag == optionTag,
+            stoppingToken
+        );
+        if (sameTag.Any(o => o.Id != ownId))
+            throw new ConflictException($"The rule already has an option with tag {optionTag}.");
     }
 
     /// <summary>
