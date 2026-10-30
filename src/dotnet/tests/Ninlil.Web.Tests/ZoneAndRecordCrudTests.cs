@@ -694,6 +694,136 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
+    ///     This method creates a Primary zone with its SOA record over HTTP.
+    /// </summary>
+    /// <returns>The new zone's name and identifier.</returns>
+    private static async Task<(string Name, Guid Id)> CreateZoneWithSoaAsync(
+        HttpClient client,
+        string prefix
+    )
+    {
+        string zoneName = $"{prefix}-{Guid.NewGuid():N}.example.com";
+        HttpResponseMessage createZoneResponse = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = zoneName, type = "Primary" }
+        );
+        Assert.Equal(HttpStatusCode.Created, createZoneResponse.StatusCode);
+        ZoneDetail zone = await createZoneResponse.Content.ReadFromJsonAsync<ZoneDetail>();
+        HttpResponseMessage soaResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/records",
+            new
+            {
+                name = zoneName,
+                type = "SOA",
+                timeToLiveSeconds = 3600,
+                data = new
+                {
+                    primaryNameServer = $"ns1.{zoneName}",
+                    responsiblePersonMailbox = $"admin.{zoneName}",
+                    serial = 1,
+                    refreshSeconds = 3600,
+                    retrySeconds = 600,
+                    expireSeconds = 604800,
+                    minimumTtlSeconds = 300,
+                },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, soaResponse.StatusCode);
+        return (zoneName, zone.Id);
+    }
+
+    /// <summary>
+    ///     Record data that does not parse for its type (an address that is not an IP address, a
+    ///     TXT record whose text field has the wrong name, a missing required field) is refused
+    ///     with 400 that names the field, and nothing is stored.
+    /// </summary>
+    [Theory]
+    [InlineData("A", """{"address":"not-an-ip"}""", "address")]
+    [InlineData("A", """{"address":"2001:db8::1"}""", "IPv4")]
+    [InlineData("TXT", """{"text":"hello"}""", "values")]
+    [InlineData("MX", """{"preference":10}""", "exchange")]
+    public async Task CreateRecord_WithDataThatDoesNotParseForItsType_ReturnsBadRequestNamingTheFieldAndStoresNothing(
+        string type,
+        string dataJson,
+        string expectedInMessage
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        (string zoneName, Guid zoneId) = await CreateZoneWithSoaAsync(client, "baddata");
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/zones/{zoneId}/records",
+            new
+            {
+                name = $"host.{zoneName}",
+                type,
+                timeToLiveSeconds = 300,
+                data = JsonDocument.Parse(dataJson).RootElement,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            expectedInMessage,
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal
+        );
+        PagedResult<RecordDetail> page = await (
+            await client.GetAsync($"/api/zones/{zoneId}/records")
+        ).Content.ReadFromJsonAsync<PagedResult<RecordDetail>>();
+        // Only the SOA exists.
+        Assert.Equal(1, page.TotalCount);
+    }
+
+    /// <summary>
+    ///     Replacing or patching a stored record with data that does not parse for its type is
+    ///     refused with 400 and leaves the stored data as it was.
+    /// </summary>
+    [Fact]
+    public async Task ReplaceAndPatchRecord_WithDataThatDoesNotParse_ReturnBadRequestAndKeepTheStoredData()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        (string zoneName, Guid zoneId) = await CreateZoneWithSoaAsync(client, "baddataedit");
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zoneId}/records",
+            new
+            {
+                name = $"host.{zoneName}",
+                type = "A",
+                timeToLiveSeconds = 300,
+                data = new { address = "203.0.113.5" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        RecordDetail record = await createResponse.Content.ReadFromJsonAsync<RecordDetail>();
+
+        HttpResponseMessage putResponse = await client.PutAsJsonAsync(
+            $"/api/zones/{zoneId}/records/{record.Id}",
+            new
+            {
+                name = $"host.{zoneName}",
+                type = "A",
+                timeToLiveSeconds = 300,
+                data = new { address = "not-an-ip" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, putResponse.StatusCode);
+
+        HttpResponseMessage patchResponse = await client.SendAsync(
+            PatchRequest(
+                $"/api/zones/{zoneId}/records/{record.Id}",
+                new { data = new { address = "not-an-ip" } }
+            )
+        );
+        Assert.Equal(HttpStatusCode.BadRequest, patchResponse.StatusCode);
+
+        RecordDetail after = await (
+            await client.GetAsync($"/api/zones/{zoneId}/records/{record.Id}")
+        ).Content.ReadFromJsonAsync<RecordDetail>();
+        Assert.Contains("203.0.113.5", after.Data.GetRawText(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     ///     A zone type that names no member is refused with 400 that names the <c>type</c> field,
     ///     and nothing is stored. It must not be read as the first member (a Primary zone).
     /// </summary>

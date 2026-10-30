@@ -25,6 +25,31 @@ public sealed class RecordDataValidatorTests
         Assert.Contains("203.0.113.5", dataJson, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(DnsResourceRecordTypeEnum.A, """{"address":"not-an-ip"}""", "address")]
+    [InlineData(DnsResourceRecordTypeEnum.A, """{"addr":"203.0.113.5"}""", "address")]
+    [InlineData(DnsResourceRecordTypeEnum.Aaaa, """{"address":"203.0.113.5x"}""", "address")]
+    [InlineData(DnsResourceRecordTypeEnum.Txt, """{"text":"hello"}""", "values")]
+    [InlineData(DnsResourceRecordTypeEnum.Txt, """{"values":null}""", "values")]
+    [InlineData(DnsResourceRecordTypeEnum.Cname, "{}", "target")]
+    [InlineData(DnsResourceRecordTypeEnum.MX, """{"preference":10}""", "exchange")]
+    [InlineData(DnsResourceRecordTypeEnum.Srv, """{"priority":1,"weight":1,"port":80}""", "target")]
+    [InlineData(DnsResourceRecordTypeEnum.Caa, """{"isCritical":false,"tag":"issue"}""", "value")]
+    public void EncodeDataOrThrow_WithARequiredFieldMissingOrUnparsable_ThrowsAndNamesTheField(
+        DnsResourceRecordTypeEnum type,
+        string json,
+        string field
+    )
+    {
+        JsonElement data = JsonDocument.Parse(json).RootElement;
+
+        ValidationException exception = Assert.Throws<ValidationException>(() =>
+            RecordDataValidator.EncodeDataOrThrow(type, data)
+        );
+
+        Assert.Contains($"'{field}'", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void EncodeDataOrThrow_WithNoDataAtAll_ThrowsValidationException()
     {

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
@@ -9,8 +10,9 @@ namespace Ninlil.Dns.Server.Authoritative.Journal;
 /// <summary>
 ///     This class validates record data supplied as JSON through the REST API against its type's
 ///     <see cref="IDnsRecordDataCodec.DataType" />, and returns it in the same canonical JSON form
-///     <see cref="Cache.RecordEntityCodec" /> stores. It works on JSON only and never touches the
-///     RDATA wire codecs. For an APL record it also enforces the canonical form RFC 3123 §4 asks
+///     <see cref="Cache.RecordEntityCodec" /> stores. It reads the JSON into the typed model, refuses a
+///     model with an unset field and one its codec cannot write as RDATA, and returns the JSON of
+///     the model. For an APL record it also enforces the canonical form RFC 3123 §4 asks
 ///     senders for (see <see cref="ValidateAplItems" />); the wire codec stays byte-exact, so a
 ///     transferred, synced or restored record is never judged. Only REST write paths
 ///     (<c>RecordsController</c> and similar) call it, so it throws
@@ -76,10 +78,84 @@ public static class RecordDataValidator
                 $"'data' does not match the shape a '{type}' record expects."
             );
 
+        ThrowIfAFieldIsMissing(type, typedData);
+        ThrowIfNotWritable(type, codec, typedData);
+
         if (typedData is AplRecordData apl)
             ValidateAplItems(apl);
 
         return Ninlil.Common.Serializer.JsonSerializer.Serialize(codec.DataType, typedData);
+    }
+
+    /// <summary>
+    ///     This method refuses data with a field that is still unset after reading. The JSON reader
+    ///     leaves a field null when the property is absent, is spelled differently, or holds a value
+    ///     that does not parse (an address that is not an IP address, a name that is not a DNS
+    ///     name). A stored record with such a field cannot be written as RDATA, so it would break
+    ///     zone signing, transfers and answers. The gateway fields of an IPSECKEY record are the
+    ///     only optional reference fields (RFC 4025 §2.3 leaves them out for some gateway types);
+    ///     <see cref="ThrowIfNotWritable" /> checks them against the gateway type.
+    /// </summary>
+    /// <param name="type">The record type, for the message.</param>
+    /// <param name="typedData">The data as read.</param>
+    /// <exception cref="ValidationException">
+    ///     Thrown for the first field that is null; the message names it as it appears in the JSON.
+    /// </exception>
+    private static void ThrowIfAFieldIsMissing(DnsResourceRecordTypeEnum type, object typedData)
+    {
+        foreach (
+            PropertyInfo property in typedData
+                .GetType()
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        )
+        {
+            if (
+                (
+                    typedData is IpSecKeyRecordData
+                    && property.Name
+                        is nameof(IpSecKeyRecordData.GatewayAddress)
+                            or nameof(IpSecKeyRecordData.GatewayName)
+                )
+                || property.GetIndexParameters().Length > 0
+                || property.PropertyType.IsValueType
+                || !property.CanRead
+                || property.GetValue(typedData) is not null
+            )
+                continue;
+
+            string field = char.ToLowerInvariant(property.Name[0]) + property.Name[1..];
+            throw new ValidationException(
+                $"'data' for a '{type}' record needs a valid '{field}' value; it is missing, misspelled or not in the right format."
+            );
+        }
+    }
+
+    /// <summary>
+    ///     This method writes the data as RDATA once and refuses it when the codec rejects it (for
+    ///     example an IPv6 address in an A record, or an IPSECKEY gateway that does not match its
+    ///     gateway type). The stored data is read back through the same codec when the record is
+    ///     served, signed or transferred, so data it cannot write must not be stored.
+    /// </summary>
+    /// <param name="type">The record type, for the message.</param>
+    /// <param name="codec">The codec registered for <paramref name="type" />.</param>
+    /// <param name="typedData">The data as read.</param>
+    /// <exception cref="ValidationException">Thrown when the codec cannot write the data.</exception>
+    private static void ThrowIfNotWritable(
+        DnsResourceRecordTypeEnum type,
+        IDnsRecordDataCodec codec,
+        object typedData
+    )
+    {
+        try
+        {
+            codec.Write((IDnsRecordData)typedData);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw new ValidationException(
+                $"'data' is not valid for a '{type}' record: {exception.Message}"
+            );
+        }
     }
 
     /// <summary>
