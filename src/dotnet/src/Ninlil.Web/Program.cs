@@ -747,6 +747,10 @@ builder.Services.AddSwaggerGen(options =>
     // Query and form names to camel case and JSON-only media types; see ClientShapeOperationFilter.
     options.OperationFilter<ClientShapeOperationFilter>();
 
+    // Replaces the XML documentation IDs and dotted names that cref references leave in summaries
+    // and descriptions with endpoint and type names; see XmlCrefText.
+    options.DocumentFilter<XmlCrefTextDocumentFilter>();
+
     options.AddSecurityDefinition(
         "Bearer",
         new OpenApiSecurityScheme
