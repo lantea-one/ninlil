@@ -125,17 +125,20 @@ public sealed class DnsOverQuicListener(
     private const string TransportName = "DNS-over-QUIC";
 
     /// <summary>
-    ///     This constant contains the DoQ application error code for a protocol violation, here a
-    ///     message that does not decode (RFC 9250 §4.3.3, <c>DOQ_PROTOCOL_ERROR</c>).
+    ///     This constant contains the DoQ application error code for a protocol violation: a
+    ///     message that does not decode, or one whose ID is not 0 (RFC 9250 §4.3.3,
+    ///     <c>DOQ_PROTOCOL_ERROR</c>). Both close the whole connection with it.
     /// </summary>
     private const long DoqProtocolError = 0x2;
 
     /// <summary>
     ///     This constant contains the DoQ application error code for a stream the server gives
-    ///     up on: a missed deadline or a dropped query (RFC 9250 §4.3,
-    ///     <c>DOQ_REQUEST_CANCELLED</c>).
+    ///     up on: a missed deadline, a dropped query or an abnormal end. RFC 9250 §4.3.2 says a
+    ///     server that cannot send a response resets the stream with
+    ///     <c>DOQ_INTERNAL_ERROR</c> (0x1); <c>DOQ_REQUEST_CANCELLED</c> (0x3) is the client's
+    ///     signal that it no longer wants an answer (RFC 9250 §4.3), so the server never sends it.
     /// </summary>
-    private const long DoqRequestCancelled = 0x3;
+    private const long DoqInternalError = 0x1;
 
     /// <summary>
     ///     This constant contains the DoQ application error code for refusing work because the
@@ -455,11 +458,11 @@ public sealed class DnsOverQuicListener(
     ///     worker never writes to the stream: the stream's own task waits for the reply, then
     ///     writes it framed the same way and closes the stream's write side (RFC 9250 §4.2),
     ///     within <paramref name="idleTimeout" />. A stream that misses a deadline, or whose
-    ///     query the pipeline drops, is reset with a DoQ error code (RFC 9250 §4.3) instead of
-    ///     being left open. A message that does not decode is logged at Debug and the stream
-    ///     reset. A message whose ID is not 0 (RFC 9250 §4.2.1) is a protocol error: the whole
+    ///     query the pipeline drops, is reset with <c>DOQ_INTERNAL_ERROR</c> (RFC 9250 §4.3.2), or
+    ///     <c>DOQ_EXCESSIVE_LOAD</c> for a rate-limited query, instead of being left open. A
+    ///     message that does not decode is logged at Debug and is a protocol error: the whole
     ///     connection is closed with <c>DOQ_PROTOCOL_ERROR</c> and nothing is answered (RFC 9250
-    ///     §4.3.3). The source address is the QUIC connection's remote address.
+    ///     §4.3.3). So is a message whose ID is not 0 (RFC 9250 §4.2.1). The source address is the QUIC connection's remote address.
     /// </summary>
     private async Task HandleStreamAsync(
         QuicConnection connection,
@@ -496,7 +499,11 @@ public sealed class DnsOverQuicListener(
                     "Discarding a malformed DNS-over-QUIC message from {RemoteAddress}.",
                     connection.RemoteEndPoint.Address
                 );
-                AbortQuietly(stream, DoqProtocolError);
+
+                // RFC 9250 §4.3.3 lists a malformed message as a protocol error: "it is
+                // considered a fatal error" and the peer "SHOULD forcibly abort the connection
+                // using QUIC's CONNECTION_CLOSE mechanism".
+                await CloseConnectionQuietlyAsync(connection, DoqProtocolError);
                 return;
             }
 
@@ -565,7 +572,7 @@ public sealed class DnsOverQuicListener(
                         is DnsQueryDropReasonEnum.RateLimited
                             or DnsQueryDropReasonEnum.SubnetRateLimited
                         ? DoqExcessiveLoad
-                        : DoqRequestCancelled
+                        : DoqInternalError
                 );
                 return;
             }
@@ -585,7 +592,7 @@ public sealed class DnsOverQuicListener(
                 "DNS-over-QUIC stream from {Endpoint} was reset: a deadline passed or the connection closed.",
                 connection.RemoteEndPoint
             );
-            AbortQuietly(stream, DoqRequestCancelled);
+            AbortQuietly(stream, DoqInternalError);
         }
         catch (Exception exception)
         {
@@ -594,7 +601,7 @@ public sealed class DnsOverQuicListener(
                 "DNS-over-QUIC stream from {Endpoint} ended abnormally.",
                 connection.RemoteEndPoint
             );
-            AbortQuietly(stream, DoqRequestCancelled);
+            AbortQuietly(stream, DoqInternalError);
         }
         finally
         {

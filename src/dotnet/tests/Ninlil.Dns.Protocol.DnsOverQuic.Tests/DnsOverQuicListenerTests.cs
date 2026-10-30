@@ -192,6 +192,31 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AMessageThatDoesNotDecode_ClosesTheConnectionWithProtocolError()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        await using QuicConnection connection = await ConnectAsync();
+        await using QuicStream stream = await connection.OpenOutboundStreamAsync(
+            QuicStreamType.Bidirectional
+        );
+
+        // A well-framed message of 3 octets: shorter than a DNS header, so it cannot decode.
+        await stream.WriteAsync(new byte[] { 0, 3, 0, 0, 0 }, completeWrites: true);
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+        QuicException aborted = await Assert.ThrowsAsync<QuicException>(async () =>
+            await stream.ReadExactlyAsync(new byte[2], timeout.Token)
+        );
+
+        // RFC 9250 §4.3.3: a malformed message is a protocol error; the connection ends with
+        // CONNECTION_CLOSE and DOQ_PROTOCOL_ERROR (0x2), not just a reset stream.
+        Assert.Equal(QuicError.ConnectionAborted, aborted.QuicError);
+        Assert.Equal(2, aborted.ApplicationErrorCode);
+    }
+
+    [Fact]
     public async Task AZoneTransferQueryWithANonZeroMessageId_AbortsTheConnectionAndIsNotTransferred()
     {
         if (!IsQuicAvailable())
@@ -439,8 +464,10 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
                 await stream.ReadExactlyAsync(new byte[1], timeout.Token)
             );
 
+            // RFC 9250 §4.3.2: a server that gives up on a stream resets it with
+            // DOQ_INTERNAL_ERROR (0x1), not the client-only DOQ_REQUEST_CANCELLED (0x3).
             Assert.Equal(QuicError.StreamAborted, reset.QuicError);
-            Assert.Equal(3, reset.ApplicationErrorCode);
+            Assert.Equal(1, reset.ApplicationErrorCode);
         }
         finally
         {
@@ -450,7 +477,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AQueryThePipelineDrops_ResetsItsStreamWithRequestCancelled()
+    public async Task AQueryThePipelineDrops_ResetsItsStreamWithInternalError()
     {
         if (!IsQuicAvailable())
             return;
@@ -466,8 +493,9 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             await stream.ReadExactlyAsync(new byte[1], timeout.Token)
         );
 
+        // RFC 9250 §4.3.2: DOQ_INTERNAL_ERROR (0x1).
         Assert.Equal(QuicError.StreamAborted, reset.QuicError);
-        Assert.Equal(3, reset.ApplicationErrorCode);
+        Assert.Equal(1, reset.ApplicationErrorCode);
 
         // The connection is unaffected: a following query on a new stream is answered.
         await using QuicStream next = await OpenAnsweredStreamAsync(connection);
