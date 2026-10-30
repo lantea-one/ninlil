@@ -536,7 +536,7 @@ appearance/branding.
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NINLIL_DNS_SERVER_WEB_HTTP_PORT` | The HTTP port serving the REST API/admin console (also redirects to HTTPS). | `80` |
+| `NINLIL_DNS_SERVER_WEB_HTTP_PORT` | The plain-HTTP port that serves the REST API and the admin console. Requests on it are answered over HTTP; Ninlil does not redirect them to HTTPS. | `80` |
 | `NINLIL_DNS_SERVER_WEB_HTTPS_PORT` | The HTTPS port serving the REST API, SignalR hub, admin console, and DNS-over-HTTPS. | `443` |
 | `NINLIL_DNS_SERVER_WEB_LISTEN_ADDRESSES` | Comma-separated IP addresses the HTTP and HTTPS ports listen on, and so the admin console, REST API and DNS-over-HTTPS (for example `192.168.1.10`); empty listens on every address. An address this host doesn't have is skipped; if none can be used, the listener falls back to loopback so the console can't be locked out. Applies on restart. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for the web listener. | *(empty)* |
