@@ -539,6 +539,164 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         );
     }
 
+    // RFC 8415 Section 16.7: a server discards a Rebind that includes a Server Identifier option.
+    [Fact]
+    public async Task Rebind_WithAServerIdentifier_GetsNoReply()
+    {
+        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
+            "rebind-with-server-id",
+            "2001:db8:8::20",
+            "2001:db8:8::22"
+        );
+        byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x99, 0x99, 0x99, 0x99, 0x00, 0x02];
+        LeaseEntity original = await ConfirmAddressForNewClientAsync(scope, clientDuid);
+
+        Dhcpv6Message rebind = NewMessage(Dhcpv6MessageTypeEnum.Rebind, clientDuid, 0x8002);
+        rebind.SetServerIdentifier(await GetServerDuidAsync());
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses rebindNa = NewNaRequest(1);
+        rebindNa.Addresses.Add(
+            new Dhcpv6IdentityAssociationAddress { Address = IPAddress.Parse(original.IpAddress) }
+        );
+        rebind.AddIdentityAssociationForNonTemporaryAddresses(rebindNa);
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            rebind,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Null(reply);
+    }
+
+    // RFC 8415 Section 16.2: a server discards a Solicit that includes a Server Identifier option.
+    [Fact]
+    public async Task Solicit_WithAServerIdentifier_GetsNoReply()
+    {
+        await _host.SeedAddressScopeAsync(
+            "solicit-with-server-id",
+            "2001:db8:1::40",
+            "2001:db8:1::42"
+        );
+
+        Dhcpv6Message solicit = NewSolicit(
+            [0x00, 0x01, 0x00, 0x01, 0x11, 0x11, 0x11, 0x11, 0x00, 0x05],
+            0x1005
+        );
+        solicit.SetServerIdentifier(await GetServerDuidAsync());
+        solicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            solicit,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Null(reply);
+    }
+
+    // RFC 8415 Section 16.5: a server discards a Confirm that includes a Server Identifier option.
+    [Fact]
+    public async Task Confirm_WithAServerIdentifier_GetsNoReply()
+    {
+        await _host.SeedAddressScopeAsync(
+            "confirm-with-server-id",
+            "2001:db8:c::40",
+            "2001:db8:c::42"
+        );
+
+        Dhcpv6Message confirm = NewMessage(
+            Dhcpv6MessageTypeEnum.Confirm,
+            [0x00, 0x01, 0x00, 0x01, 0xee, 0xee, 0xee, 0xee, 0x00, 0x03],
+            0xC003
+        );
+        confirm.SetServerIdentifier(await GetServerDuidAsync());
+        Dhcpv6IdentityAssociationForNonTemporaryAddresses na = NewNaRequest(1);
+        na.Addresses.Add(
+            new Dhcpv6IdentityAssociationAddress { Address = IPAddress.Parse("2001:db8:c::41") }
+        );
+        confirm.AddIdentityAssociationForNonTemporaryAddresses(na);
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            confirm,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Null(reply);
+    }
+
+    // RFC 8415 Section 16.12: an Information-request naming another server is discarded; one
+    // naming this server, or none, is answered.
+    [Fact]
+    public async Task InformationRequest_WithAnotherServersIdentifier_GetsNoReply()
+    {
+        Dhcpv6Message informationRequest = NewMessage(
+            Dhcpv6MessageTypeEnum.InformationRequest,
+            [0x00, 0x01, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x00, 0x02],
+            0xD001
+        );
+        informationRequest.SetServerIdentifier([
+            0x00,
+            0x01,
+            0x00,
+            0x01,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0x00,
+            0x99,
+        ]);
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            informationRequest,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Null(reply);
+    }
+
+    [Fact]
+    public async Task InformationRequest_WithThisServersIdentifier_IsAnswered()
+    {
+        Dhcpv6Message informationRequest = NewMessage(
+            Dhcpv6MessageTypeEnum.InformationRequest,
+            [0x00, 0x01, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x00, 0x03],
+            0xD002
+        );
+        informationRequest.SetServerIdentifier(await GetServerDuidAsync());
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            informationRequest,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.NotNull(reply);
+        Assert.Equal(Dhcpv6MessageTypeEnum.Reply, reply.MessageType);
+    }
+
+    // RFC 8415 Section 16.12: an Information-request that includes an IA option is discarded.
+    [Fact]
+    public async Task InformationRequest_WithAnIdentityAssociation_GetsNoReply()
+    {
+        Dhcpv6Message informationRequest = NewMessage(
+            Dhcpv6MessageTypeEnum.InformationRequest,
+            [0x00, 0x01, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x00, 0x04],
+            0xD003
+        );
+        informationRequest.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
+
+        Dhcpv6Message reply = await _host.Handler.HandleRequestAsync(
+            informationRequest,
+            RemoteEndPoint,
+            CancellationToken.None
+        );
+
+        Assert.Null(reply);
+    }
+
     [Fact]
     public async Task Release_FreesTheAddressImmediatelyAndAlwaysReplies()
     {

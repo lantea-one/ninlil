@@ -27,8 +27,9 @@ namespace Ninlil.Dhcp.Server.Core;
 ///         DECLINE, CONFIRM and INFORMATION-REQUEST are handled. REQUEST, RENEW and REBIND share
 ///         <see cref="HandleConfirmingExchangeAsync" />, since each commits an address or prefix
 ///         the client names; REQUEST and RENEW must name this server (RFC 8415 Sections 16.4 and
-///         16.6); REBIND carries no Server Identifier, and the handler does not check one
-///         (Section 16.7). Server message types get no answer. RELAY-FORW arrives through
+///         16.6); SOLICIT, CONFIRM and REBIND that carry a Server Identifier are discarded (Sections
+///         16.2, 16.5 and 16.7), as is an INFORMATION-REQUEST that names another server or
+///         includes an IA (Section 16.12; see <c>MustBeDiscarded</c>). Server message types get no answer. RELAY-FORW arrives through
 ///         <see cref="HandleRelayMessageAsync" />.
 ///     </para>
 ///     <para>
@@ -229,7 +230,8 @@ public sealed class Dhcpv6RequestHandler(
     ///     This method handles one client message for both <see cref="HandleRequestAsync" /> and
     ///     <see cref="HandleRelayMessageAsync" />; the only difference is whether the relay fields
     ///     (<see cref="Dhcpv6Message.RelayLinkAddress" /> and others) are set. A message without a
-    ///     Client Identifier is ignored.
+    ///     Client Identifier is ignored, and so is one that RFC 8415 Section 16 has a server
+    ///     discard (see <see cref="MustBeDiscarded" />).
     /// </summary>
     private async Task<Dhcpv6Message> ProcessMessageAsync(
         Dhcpv6Message request,
@@ -255,6 +257,16 @@ public sealed class Dhcpv6RequestHandler(
         {
             logger.LogDebug(
                 "Ignoring a DHCPv6 message from {RemoteEndPoint} with no Client Identifier option.",
+                remoteEndPoint
+            );
+            return null;
+        }
+
+        if (MustBeDiscarded(request))
+        {
+            logger.LogDebug(
+                "Discarding a DHCPv6 {MessageType} from {RemoteEndPoint} that RFC 8415 Section 16 tells a server to discard.",
+                request.MessageType,
                 remoteEndPoint
             );
             return null;
@@ -600,6 +612,44 @@ public sealed class Dhcpv6RequestHandler(
             cancellationToken
         );
         return reply;
+    }
+
+    /// <summary>
+    ///     This method tells whether RFC 8415 Section 16 has a server discard a message before
+    ///     any other processing. REQUEST, RENEW, RELEASE and DECLINE check their Server Identifier
+    ///     in their own handlers. SOLICIT (Section 16.2), CONFIRM (16.5) and REBIND (16.7) are
+    ///     discarded when they include a Server Identifier option, since a client sends them to
+    ///     all servers. An INFORMATION-REQUEST (16.12) is discarded when it names another server
+    ///     or includes an IA_NA, IA_TA or IA_PD option. The missing Client Identifier rule
+    ///     (Sections 16.2 and 16.4 to 16.9) is applied by the caller.
+    /// </summary>
+    private bool MustBeDiscarded(Dhcpv6Message request)
+    {
+        bool hasServerIdentifier = request.TryGetRawOption(
+            (ushort)Dhcpv6OptionCodeEnum.ServerIdentifier,
+            out _
+        );
+
+        switch (request.MessageType)
+        {
+            case Dhcpv6MessageTypeEnum.Solicit:
+            case Dhcpv6MessageTypeEnum.Confirm:
+            case Dhcpv6MessageTypeEnum.Rebind:
+                return hasServerIdentifier;
+
+            case Dhcpv6MessageTypeEnum.InformationRequest:
+                if (hasServerIdentifier && !HasOurServerIdentifier(request))
+                    return true;
+
+                return request.Options.Any(o =>
+                    o.Code == (ushort)Dhcpv6OptionCodeEnum.IaNa
+                    || o.Code == (ushort)Dhcpv6OptionCodeEnum.IaTa
+                    || o.Code == (ushort)Dhcpv6OptionCodeEnum.IaPd
+                );
+
+            default:
+                return false;
+        }
     }
 
     /// <summary>
