@@ -778,7 +778,7 @@ function buildAdminPages(ids, api, options) {
   const needs = (route, ...keys) => (keys.every((key) => ids[key]) ? route : null);
 
   add('dashboard', '/dashboard');
-  add('dashboard-narrow-sidebar', '/dashboard', { onlyWidth: (width) => width >= 768, prepare: (page) => page.click('button.shell-collapse-toggle') });
+  add('dashboard-narrow-sidebar', '/dashboard', { onlyWidth: (width) => width >= 992, prepare: (page) => page.click('button.shell-collapse-toggle') });
   add('dashboard-mobile-drawer', '/dashboard', { onlyWidth: (width) => width < 992, prepare: (page) => page.click('button[aria-label="Toggle sidebar"]') });
   add('forbidden', '/forbidden');
   add('login', '/login', { fresh: true, expect: ['401 /api/'] });
