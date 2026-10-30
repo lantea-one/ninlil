@@ -34,7 +34,9 @@ const DEFAULT_PAGE_SIZE = 25;
  * and edit form (`ZoneFormComponent`). Reading needs `zones:read`. With `zones:write` the operator
  * can also create, enable or disable a zone (a one-field `PATCH /api/zones/{id}`) and delete one
  * (`DELETE /api/zones/{id}`). The delete confirmation warns that the backend also removes the
- * zone's records and DNSSEC keys.
+ * zone's records and DNSSEC keys. The DNSSEC column shows a lock for the signed state and a warning
+ * icon for a zone marked signed that the server currently serves unsigned (the zone's
+ * `dnssecServedUnsigned` flag, which describes the node that answered).
  */
 @Component({
   selector: 'app-zone-list',

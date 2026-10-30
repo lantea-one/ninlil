@@ -9,7 +9,6 @@ import {
   awaitingParentDsConfirmation,
   canStartRollover,
   dnssecAlgorithmNumber,
-  hasNoSigningKey,
   isRsaAlgorithm,
   isSigningProhibited,
   SIGNING_DNSSEC_ALGORITHMS,
@@ -168,39 +167,5 @@ describe('rsaKeySizeValidator', () => {
     for (const size of [512, 1024, 2047, 2056, 4160, 8192, -64, 2048.5, null]) {
       expect(error(size)).toEqual({ rsaKeySize: true });
     }
-  });
-});
-
-describe('hasNoSigningKey', () => {
-  it('is false for a zone without keys', () => {
-    expect(hasNoSigningKey([])).toBeFalse();
-  });
-
-  it('is true when the only Active and DoubleSignature keys use a prohibited algorithm', () => {
-    expect(
-      hasNoSigningKey([
-        key({ algorithm: DnssecAlgorithmEnum.Rsasha1 }),
-        key({
-          algorithm: DnssecAlgorithmEnum.Rsasha1Nsec3Sha1,
-          lifecycleState: DnssecKeyLifecycleStateEnum.DoubleSignature,
-        }),
-      ]),
-    ).toBeTrue();
-  });
-
-  it('is true when the only permitted keys are Published or Retired', () => {
-    expect(
-      hasNoSigningKey([
-        key({ lifecycleState: DnssecKeyLifecycleStateEnum.Published }),
-        key({ lifecycleState: DnssecKeyLifecycleStateEnum.Retired }),
-      ]),
-    ).toBeTrue();
-  });
-
-  it('is false when one Active or DoubleSignature key has a permitted algorithm', () => {
-    expect(hasNoSigningKey([key({ algorithm: DnssecAlgorithmEnum.Rsasha1 }), key({})])).toBeFalse();
-    expect(
-      hasNoSigningKey([key({ lifecycleState: DnssecKeyLifecycleStateEnum.DoubleSignature })]),
-    ).toBeFalse();
   });
 });

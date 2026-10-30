@@ -328,6 +328,10 @@ describe('StorageSettingsComponent', () => {
       engine: StorageEngineEnum.PostgreSql,
       switchSupportedEngines: allEngines,
       primary: { hosts: ['db1:5432', 'db2:5432'] },
+      topologyVariables: [
+        'NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING',
+        'NINLIL_STORAGE_MONGODB_READ_PREFERENCE',
+      ],
     };
 
     function text(fixture: { nativeElement: HTMLElement }, selector: string): string {
@@ -343,12 +347,26 @@ describe('StorageSettingsComponent', () => {
       expect(fixture.nativeElement.querySelector('.replica-blocks-switch')).toBeNull();
     });
 
-    it('lists the topology setting variables read-only', async () => {
-      const fixture = await createComponent({ status: baseStatus });
-      const list = text(fixture, '.replica-variables');
+    it('lists the topology setting variables the status carries, read-only', async () => {
+      const fixture = await createComponent({
+        status: {
+          ...baseStatus,
+          topologyVariables: ['NINLIL_STORAGE_TEST_ONE', 'NINLIL_STORAGE_TEST_TWO'],
+        },
+      });
+      const items = Array.from<HTMLElement>(
+        fixture.nativeElement.querySelectorAll('.replica-variables li'),
+      ).map((item) => item.textContent?.trim());
 
-      expect(list).toContain('NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING');
-      expect(list).toContain('NINLIL_STORAGE_MONGODB_READ_PREFERENCE');
+      expect(items).toEqual(['NINLIL_STORAGE_TEST_ONE', 'NINLIL_STORAGE_TEST_TWO']);
+    });
+
+    it('lists no variables when the status carries none', async () => {
+      const fixture = await createComponent({
+        status: { ...baseStatus, topologyVariables: undefined },
+      });
+
+      expect(fixture.nativeElement.querySelectorAll('.replica-variables li').length).toBe(0);
     });
 
     it('an eligible replica shows the Eligible badge, lag and counters', async () => {
@@ -377,7 +395,7 @@ describe('StorageSettingsComponent', () => {
       expect(fixture.nativeElement.querySelector('.replica-reason')).toBeNull();
     });
 
-    it('a replica that is not eligible shows Degraded and the reason, and disables scheduling', async () => {
+    it('a replica that is not eligible shows Degraded and the reason, and hides the switch form', async () => {
       const fixture = await createComponent({
         status: {
           ...baseStatus,
@@ -399,8 +417,37 @@ describe('StorageSettingsComponent', () => {
       expect(text(fixture, '.replica-reason')).toContain('The replica is 30 s behind.');
       expect(text(fixture, '.replica-details')).toContain('unknown');
       expect(fixture.nativeElement.querySelector('.replica-blocks-switch')).not.toBeNull();
-      const button: HTMLButtonElement = fixture.nativeElement.querySelector('c-card-footer button');
-      expect(button.disabled).toBeTrue();
+      expect(fixture.nativeElement.querySelector('form')).toBeNull();
+      expect(fixture.nativeElement.querySelector('c-card-footer button')).toBeNull();
+    });
+
+    it('an eligible replica hides the switch form too, since the server refuses the switch', async () => {
+      const fixture = await createComponent({
+        status: {
+          ...baseStatus,
+          readReplica: {
+            configured: true,
+            eligible: true,
+            lagSeconds: 0.5,
+            schemaCurrent: true,
+            lastCheckedAtUtc: '2026-10-09T10:00:00Z',
+            reason: '',
+            readsToReplica: 1,
+            readsToPrimary: 1,
+            hosts: ['standby:5432'],
+          },
+        },
+      });
+
+      expect(fixture.nativeElement.querySelector('.replica-blocks-switch')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('form')).toBeNull();
+    });
+
+    it('without a replica the switch form and its button are offered', async () => {
+      const fixture = await createComponent({ status: baseStatus });
+
+      expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('c-card-footer button')).not.toBeNull();
     });
   });
 

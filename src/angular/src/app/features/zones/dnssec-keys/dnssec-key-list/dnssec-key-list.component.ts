@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CdkTableModule } from '@angular/cdk/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
@@ -26,7 +26,6 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import {
   awaitingParentDsConfirmation,
   canStartRollover,
-  hasNoSigningKey,
   lifecycleStateBadgeColor,
 } from '../dnssec-key.model';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
@@ -44,9 +43,11 @@ const DEFAULT_PAGE_SIZE = 25;
  * shown: `DnssecKeyDetail` does not carry it, since a DNSSEC private key never has to leave the
  * server (unlike a TSIG secret or a cloud credential).
  *
- * Every user with `zones:read` can open {@link DnssecKeyRecordsDialogComponent} to copy the DNSKEY
+ * The page warns when the zone is marked signed but the server currently serves it unsigned (the
+ * zone's `dnssecServedUnsigned` flag), also when the zone has no key at all. Every user with
+ * `zones:read` can open {@link DnssecKeyRecordsDialogComponent} to copy the DNSKEY
  * and DS records for the parent zone. With `zones:write` the operator can also generate a key
- * (`DnssecKeyFormComponent`), retire or reactivate one (a one-field `isRetired` merge patch), start
+ * (`DnssecKeyFormComponent`), edit a key's comments (the form's edit route), retire or reactivate one (a one-field `isRetired` merge patch), start
  * a rollover on an active key ({@link canStartRollover}, through
  * {@link DnssecKeyRolloverDialogComponent}), confirm that a KSK rollover's new DS is live at the
  * parent ({@link awaitingParentDsConfirmation}) and delete a key. All writes go to
@@ -122,11 +123,13 @@ export class DnssecKeyListComponent {
   readonly keys = signal<DnssecKeyDetail[]>([]);
 
   /**
-   * Whether the zone has keys but none can sign (see {@link hasNoSigningKey}); the page then shows
-   * a warning. It looks at the loaded page only, so a zone with more keys than one page can show
-   * it while a permitted key sits on another page; the zone's keys are few in practice.
+   * Whether the server currently serves this zone unsigned although it is marked signed
+   * (`ZoneDetail.dnssecServedUnsigned`): no key can sign it, or it has no key at all. The server
+   * answers for the node that handled the request and from its in-memory signing state, so the
+   * value can trail a key change by moments (the signing cache reloads on an event) and a cluster
+   * node can differ from its peers. The page reloads it with every key list load.
    */
-  readonly noSigningKey = computed(() => hasNoSigningKey(this.keys()));
+  readonly servedUnsigned = signal(false);
 
   readonly totalCount = signal(0);
   readonly pageSize = signal(DEFAULT_PAGE_SIZE);
@@ -135,7 +138,6 @@ export class DnssecKeyListComponent {
   readonly errorMessage = signal<string | null>(null);
 
   constructor() {
-    void this.loadZoneName();
     void this.loadPage();
   }
 
@@ -267,16 +269,20 @@ export class DnssecKeyListComponent {
     this.confirmResolve = null;
   }
 
-  private async loadZoneName(): Promise<void> {
+  /** Loads the zone for the heading and the served-unsigned warning. */
+  private async loadZone(): Promise<void> {
     try {
       const zone = await firstValueFrom(this.zonesApi.apiZonesIdGet({ id: this.zoneId }));
       this.zoneName.set(zone.name ?? null);
+      this.servedUnsigned.set(zone.dnssecServedUnsigned === true);
     } catch {
-      // The zone name only feeds the heading; the key list load reports a missing zone.
+      // The zone only feeds the heading and the warning; the key list load reports a missing zone.
     }
   }
 
+  /** Loads the current page of keys and refreshes the zone, so the warning follows key changes. */
   private async loadPage(): Promise<void> {
+    void this.loadZone();
     this.loading.set(true);
     this.errorMessage.set(null);
 

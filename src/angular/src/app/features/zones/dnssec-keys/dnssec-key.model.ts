@@ -154,22 +154,3 @@ export function awaitingParentDsConfirmation(key: DnssecKeyDetail): boolean {
     !key.parentDsConfirmedAtUtc
   );
 }
-
-/**
- * This function reports whether a zone has keys but none of them can sign: no key is `Active` or
- * `DoubleSignature` with an algorithm outside {@link SIGNING_PROHIBITED_DNSSEC_ALGORITHMS}. The
- * server serves such a zone unsigned (and publishes no prohibited key) until a permitted key is
- * added, so the key list warns about it. A zone with no key at all is not reported: it is simply
- * not signed yet.
- */
-export function hasNoSigningKey(keys: readonly DnssecKeyDetail[]): boolean {
-  return (
-    keys.length > 0 &&
-    !keys.some(
-      (key) =>
-        (key.lifecycleState === DnssecKeyLifecycleStateEnum.Active ||
-          key.lifecycleState === DnssecKeyLifecycleStateEnum.DoubleSignature) &&
-        !isSigningProhibited(key.algorithm),
-    )
-  );
-}

@@ -55,6 +55,7 @@ describe('DnssecKeyListComponent', () => {
         lifecycleState: DnssecKeyLifecycleStateEnum.Active,
       },
     ],
+    zoneOverrides: Record<string, unknown> = {},
   ) {
     dnssecKeysApiSpy = jasmine.createSpyObj('DnssecKeysService', [
       'apiZonesZoneIdDnssecKeysGet',
@@ -66,7 +67,9 @@ describe('DnssecKeyListComponent', () => {
     zonesApiSpy = jasmine.createSpyObj('ZonesService', ['apiZonesIdGet']);
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
 
-    zonesApiSpy.apiZonesIdGet.and.returnValue(of({ id: 'zone-1', name: 'example.com' }));
+    zonesApiSpy.apiZonesIdGet.and.returnValue(
+      of({ id: 'zone-1', name: 'example.com', ...zoneOverrides }),
+    );
     dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysGet.and.returnValue(of(pageOf(items)));
 
     await TestBed.configureTestingModule({
@@ -105,36 +108,69 @@ describe('DnssecKeyListComponent', () => {
     expect(fixture.componentInstance.keys().length).toBe(1);
   });
 
-  it('warns that the zone is served unsigned when its only Active keys use a prohibited algorithm', async () => {
-    const fixture = await createComponent([
-      {
-        id: 'key-1',
-        zoneId: 'zone-1',
-        role: DnssecKeyRoleEnum.Zsk,
-        algorithm: DnssecAlgorithmEnum.Rsasha1,
-        isRetired: false,
-        lifecycleState: DnssecKeyLifecycleStateEnum.Active,
-      },
-    ]);
+  it('warns from the zone flag when the zone is served unsigned, with the remedy', async () => {
+    const fixture = await createComponent(undefined, { dnssecServedUnsigned: true });
 
     const warning = (fixture.nativeElement as HTMLElement).querySelector('.no-signing-key-warning');
     expect(warning).not.toBeNull();
-    expect(warning?.textContent).toContain('served unsigned');
+    expect(warning?.textContent).toContain('currently served unsigned');
+    expect(warning?.textContent).toContain('replace or remove it');
   });
 
-  it('shows no unsigned warning for a zone with an Active ECDSA key', async () => {
-    const fixture = await createComponent();
+  it('warns for a zone served unsigned even when its key list is empty', async () => {
+    const fixture = await createComponent([], { dnssecServedUnsigned: true });
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.no-signing-key-warning'),
+    ).not.toBeNull();
+  });
+
+  it('shows no warning when the zone is not served unsigned, whatever its keys look like', async () => {
+    const fixture = await createComponent(
+      [
+        {
+          id: 'key-1',
+          zoneId: 'zone-1',
+          role: DnssecKeyRoleEnum.Zsk,
+          algorithm: DnssecAlgorithmEnum.Rsasha1,
+          isRetired: false,
+          lifecycleState: DnssecKeyLifecycleStateEnum.Active,
+        },
+      ],
+      { dnssecServedUnsigned: false },
+    );
 
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('.no-signing-key-warning'),
     ).toBeNull();
   });
 
-  it('shows no unsigned warning for a zone without any key', async () => {
-    const fixture = await createComponent([]);
+  it('shows no warning for a zone without any key that is not served unsigned', async () => {
+    const fixture = await createComponent([], { dnssecServedUnsigned: false });
 
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('.no-signing-key-warning'),
+    ).toBeNull();
+  });
+
+  it('offers an edit link per key to a user with zones:write', async () => {
+    const fixture = await createComponent();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'a[href="/zones/zone-1/dnssec-keys/key-1/edit"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it('hides the edit link without zones:write', async () => {
+    deniedPermissions = ['zones:write'];
+    const fixture = await createComponent();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'a[href="/zones/zone-1/dnssec-keys/key-1/edit"]',
+      ),
     ).toBeNull();
   });
 

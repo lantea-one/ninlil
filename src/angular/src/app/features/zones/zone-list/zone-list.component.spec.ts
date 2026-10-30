@@ -31,7 +31,8 @@ describe('ZoneListComponent', () => {
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  async function createComponent() {
+  /** This helper creates the list with one zone, whose fields the caller can override. */
+  async function createComponent(zoneOverrides: Record<string, unknown> = {}) {
     zonesApiSpy = jasmine.createSpyObj('ZonesService', [
       'apiZonesGet',
       'apiZonesIdPatch',
@@ -48,6 +49,7 @@ describe('ZoneListComponent', () => {
             type: ZoneTypeEnum.Primary,
             isDnssecSigned: false,
             isDisabled: false,
+            ...zoneOverrides,
           },
         ],
         skip: 0,
@@ -84,6 +86,35 @@ describe('ZoneListComponent', () => {
     expect(element.querySelector('a[href="/zones/zone-1/edit"]')).not.toBeNull();
     expect(element.querySelector('[aria-label="Delete zone"]')).not.toBeNull();
     expect(element.querySelector<HTMLButtonElement>('td button')?.disabled).toBeFalse();
+  });
+
+  it('shows the signed lock for a signed zone that is served signed', async () => {
+    const fixture = await createComponent({ isDnssecSigned: true, dnssecServedUnsigned: false });
+
+    // The icon registry is empty in tests, so the lock variants are told apart by class.
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.dnssec-cell .dnssec-signed'),
+    ).not.toBeNull();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.dnssec-unsigned-warning'),
+    ).toBeNull();
+  });
+
+  it('shows a warning icon for a zone marked signed but currently served unsigned', async () => {
+    const fixture = await createComponent({ isDnssecSigned: true, dnssecServedUnsigned: true });
+    const element: HTMLElement = fixture.nativeElement;
+
+    const icon = element.querySelector('.dnssec-unsigned-warning');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('name')).toBe('cilWarning');
+  });
+
+  it('shows the unlocked icon, not a warning, for a zone that is not signed', async () => {
+    const fixture = await createComponent({ isDnssecSigned: false, dnssecServedUnsigned: false });
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('.dnssec-cell .dnssec-not-signed')).not.toBeNull();
+    expect(element.querySelector('.dnssec-unsigned-warning')).toBeNull();
   });
 
   it('hides new, edit and delete, and disables the status toggle, without zones:write', async () => {

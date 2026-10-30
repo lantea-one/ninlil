@@ -40,12 +40,24 @@
 
       <ng-container cdkColumnDef="dnssec">
         <th cdk-header-cell *cdkHeaderCellDef>DNSSEC</th>
-        <td cdk-cell *cdkCellDef="let zone">
-          <svg
-            cIcon
-            [name]="zone.isDnssecSigned ? 'cilLockLocked' : 'cilLockUnlocked'"
-            [cTooltip]="zone.isDnssecSigned ? 'Signed' : 'Not signed'"
-          ></svg>
+        <td cdk-cell *cdkCellDef="let zone" class="dnssec-cell">
+          @if (zone.dnssecServedUnsigned) {
+            <svg
+              cIcon
+              name="cilWarning"
+              class="dnssec-unsigned-warning text-warning"
+              cTooltip="Marked signed, served unsigned"
+              aria-label="Marked signed, served unsigned"
+            ></svg>
+          } @else {
+            <svg
+              cIcon
+              [name]="zone.isDnssecSigned ? 'cilLockLocked' : 'cilLockUnlocked'"
+              [class.dnssec-signed]="zone.isDnssecSigned"
+              [class.dnssec-not-signed]="!zone.isDnssecSigned"
+              [cTooltip]="zone.isDnssecSigned ? 'Signed' : 'Not signed'"
+            ></svg>
+          }
         </td>
       </ng-container>
 

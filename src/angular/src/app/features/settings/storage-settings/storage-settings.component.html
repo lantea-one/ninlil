@@ -118,234 +118,242 @@
 
       @if (currentReplica()) {
         <c-alert color="info" [dismissible]="false" class="replica-blocks-switch" role="status">
-          A read replica is configured, so a switch is refused. Remove the replica settings, switch,
-          then configure the replica again.
+          A read replica is configured, so a switch is refused and the switch form is not offered.
+          Remove the replica settings, switch, then configure the replica again.
         </c-alert>
       }
 
-      <form cForm [formGroup]="form" class="settings-form">
-        <c-row class="mb-3">
-          <label cCol="sm-3" cLabel for="storage-target-engine">Target engine</label>
-          <c-col sm="9">
-            <select cSelect id="storage-target-engine" formControlName="targetEngine">
-              @for (engine of status()?.switchSupportedEngines ?? []; track engine) {
-                <option [value]="engine">{{ engine }}</option>
-              }
-            </select>
-          </c-col>
-        </c-row>
-
-        @if (form.controls.targetEngine.value === 'Sqlite') {
+      @if (!currentReplica()) {
+        <form cForm [formGroup]="form" class="settings-form">
           <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-sqlite-file-path">File path</label>
+            <label cCol="sm-3" cLabel for="storage-target-engine">Target engine</label>
             <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-sqlite-file-path"
-                formControlName="sqliteFilePath"
-                placeholder="/path/to/new.sqlite3"
-              />
-              <p class="hint">
-                A path that doesn't exist yet is created automatically, empty, ready to receive this
-                server's data -- an existing file at this path is treated as a real target and, per
-                the warning above, wiped and overwritten.
-              </p>
-            </c-col>
-          </c-row>
-        }
-
-        @if (form.controls.targetEngine.value === 'PostgreSql') {
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-pg-host">Host</label>
-            <c-col sm="9">
-              <input cFormControl id="storage-pg-host" formControlName="postgreSqlHost" />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-pg-port">Port</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-pg-port"
-                type="number"
-                formControlName="postgreSqlPort"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-pg-database">Database name</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-pg-database"
-                formControlName="postgreSqlDatabaseName"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-pg-user">Username</label>
-            <c-col sm="9">
-              <input cFormControl id="storage-pg-user" formControlName="postgreSqlUserName" />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-pg-password">Password</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-pg-password"
-                type="password"
-                formControlName="postgreSqlPassword"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-pg-ssl-mode">SSL mode</label>
-            <c-col sm="9">
-              <select cSelect id="storage-pg-ssl-mode" formControlName="postgreSqlEncryptionMode">
-                @for (mode of encryptionModeOptions.postgreSql; track mode) {
-                  <option [value]="mode">{{ mode }}</option>
+              <select cSelect id="storage-target-engine" formControlName="targetEngine">
+                @for (engine of status()?.switchSupportedEngines ?? []; track engine) {
+                  <option [value]="engine">{{ engine }}</option>
                 }
               </select>
             </c-col>
           </c-row>
-        }
 
-        @if (form.controls.targetEngine.value === 'MySql') {
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mysql-host">Host</label>
-            <c-col sm="9">
-              <input cFormControl id="storage-mysql-host" formControlName="mySqlHost" />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mysql-port">Port</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-mysql-port"
-                type="number"
-                formControlName="mySqlPort"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mysql-database">Database name</label>
-            <c-col sm="9">
-              <input cFormControl id="storage-mysql-database" formControlName="mySqlDatabaseName" />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mysql-user">Username</label>
-            <c-col sm="9">
-              <input cFormControl id="storage-mysql-user" formControlName="mySqlUserName" />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mysql-password">Password</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-mysql-password"
-                type="password"
-                formControlName="mySqlPassword"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mysql-ssl-mode">SSL mode</label>
-            <c-col sm="9">
-              <select cSelect id="storage-mysql-ssl-mode" formControlName="mySqlEncryptionMode">
-                @for (mode of encryptionModeOptions.mySql; track mode) {
-                  <option [value]="mode">{{ mode }}</option>
-                }
-              </select>
-            </c-col>
-          </c-row>
-        }
+          @if (form.controls.targetEngine.value === 'Sqlite') {
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-sqlite-file-path">File path</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-sqlite-file-path"
+                  formControlName="sqliteFilePath"
+                  placeholder="/path/to/new.sqlite3"
+                />
+                <p class="hint">
+                  A path that doesn't exist yet is created automatically, empty, ready to receive
+                  this server's data -- an existing file at this path is treated as a real target
+                  and, per the warning above, wiped and overwritten.
+                </p>
+              </c-col>
+            </c-row>
+          }
 
-        @if (form.controls.targetEngine.value === 'SqlServer') {
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mssql-host">Host</label>
-            <c-col sm="9">
-              <input cFormControl id="storage-mssql-host" formControlName="sqlServerHost" />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mssql-port">Port</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-mssql-port"
-                type="number"
-                formControlName="sqlServerPort"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mssql-database">Database name</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-mssql-database"
-                formControlName="sqlServerDatabaseName"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mssql-user">Username</label>
-            <c-col sm="9">
-              <input cFormControl id="storage-mssql-user" formControlName="sqlServerUserName" />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mssql-password">Password</label>
-            <c-col sm="9">
-              <input
-                cFormControl
-                id="storage-mssql-password"
-                type="password"
-                formControlName="sqlServerPassword"
-              />
-            </c-col>
-          </c-row>
-          <c-row class="mb-3">
-            <label cCol="sm-3" cLabel for="storage-mssql-encrypt-mode">Encryption mode</label>
-            <c-col sm="9">
-              <select
-                cSelect
-                id="storage-mssql-encrypt-mode"
-                formControlName="sqlServerEncryptionMode"
-              >
-                @for (mode of encryptionModeOptions.sqlServer; track mode) {
-                  <option [value]="mode">{{ mode }}</option>
-                }
-              </select>
-            </c-col>
-          </c-row>
-        }
-      </form>
+          @if (form.controls.targetEngine.value === 'PostgreSql') {
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-pg-host">Host</label>
+              <c-col sm="9">
+                <input cFormControl id="storage-pg-host" formControlName="postgreSqlHost" />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-pg-port">Port</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-pg-port"
+                  type="number"
+                  formControlName="postgreSqlPort"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-pg-database">Database name</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-pg-database"
+                  formControlName="postgreSqlDatabaseName"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-pg-user">Username</label>
+              <c-col sm="9">
+                <input cFormControl id="storage-pg-user" formControlName="postgreSqlUserName" />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-pg-password">Password</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-pg-password"
+                  type="password"
+                  formControlName="postgreSqlPassword"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-pg-ssl-mode">SSL mode</label>
+              <c-col sm="9">
+                <select cSelect id="storage-pg-ssl-mode" formControlName="postgreSqlEncryptionMode">
+                  @for (mode of encryptionModeOptions.postgreSql; track mode) {
+                    <option [value]="mode">{{ mode }}</option>
+                  }
+                </select>
+              </c-col>
+            </c-row>
+          }
+
+          @if (form.controls.targetEngine.value === 'MySql') {
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mysql-host">Host</label>
+              <c-col sm="9">
+                <input cFormControl id="storage-mysql-host" formControlName="mySqlHost" />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mysql-port">Port</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-mysql-port"
+                  type="number"
+                  formControlName="mySqlPort"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mysql-database">Database name</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-mysql-database"
+                  formControlName="mySqlDatabaseName"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mysql-user">Username</label>
+              <c-col sm="9">
+                <input cFormControl id="storage-mysql-user" formControlName="mySqlUserName" />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mysql-password">Password</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-mysql-password"
+                  type="password"
+                  formControlName="mySqlPassword"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mysql-ssl-mode">SSL mode</label>
+              <c-col sm="9">
+                <select cSelect id="storage-mysql-ssl-mode" formControlName="mySqlEncryptionMode">
+                  @for (mode of encryptionModeOptions.mySql; track mode) {
+                    <option [value]="mode">{{ mode }}</option>
+                  }
+                </select>
+              </c-col>
+            </c-row>
+          }
+
+          @if (form.controls.targetEngine.value === 'SqlServer') {
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mssql-host">Host</label>
+              <c-col sm="9">
+                <input cFormControl id="storage-mssql-host" formControlName="sqlServerHost" />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mssql-port">Port</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-mssql-port"
+                  type="number"
+                  formControlName="sqlServerPort"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mssql-database">Database name</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-mssql-database"
+                  formControlName="sqlServerDatabaseName"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mssql-user">Username</label>
+              <c-col sm="9">
+                <input cFormControl id="storage-mssql-user" formControlName="sqlServerUserName" />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mssql-password">Password</label>
+              <c-col sm="9">
+                <input
+                  cFormControl
+                  id="storage-mssql-password"
+                  type="password"
+                  formControlName="sqlServerPassword"
+                />
+              </c-col>
+            </c-row>
+            <c-row class="mb-3">
+              <label cCol="sm-3" cLabel for="storage-mssql-encrypt-mode">Encryption mode</label>
+              <c-col sm="9">
+                <select
+                  cSelect
+                  id="storage-mssql-encrypt-mode"
+                  formControlName="sqlServerEncryptionMode"
+                >
+                  @for (mode of encryptionModeOptions.sqlServer; track mode) {
+                    <option [value]="mode">{{ mode }}</option>
+                  }
+                </select>
+              </c-col>
+            </c-row>
+          }
+        </form>
+      }
     </c-card-body>
 
-    <c-card-footer class="d-flex justify-content-end">
-      @if (!canManage()) {
-        <span class="text-body-secondary me-auto align-self-center"
-          >You do not have permission to switch the storage engine.</span
-        >
-      }
-      <button
-        cButton
-        color="primary"
-        [disabled]="form.invalid || switching() || !canManage() || !!currentReplica()"
-        (click)="switchEngine()"
-      >
-        @if (switching()) {
-          <c-spinner size="sm" />
-        } @else {
-          Schedule switch
+    @if (!currentReplica()) {
+      <c-card-footer class="d-flex justify-content-end">
+        @if (!canManage()) {
+          <span class="text-body-secondary me-auto align-self-center"
+            >You do not have permission to switch the storage engine.</span
+          >
         }
-      </button>
-    </c-card-footer>
+        <button
+          cButton
+          color="primary"
+          [disabled]="form.invalid || switching() || !canManage()"
+          (click)="switchEngine()"
+        >
+          @if (switching()) {
+            <c-spinner size="sm" />
+          } @else {
+            Schedule switch
+          }
+        </button>
+      </c-card-footer>
+    }
   </c-card>
 
   @if (status(); as currentStatus) {
@@ -358,7 +366,7 @@
         <p>
           Primary:
           @if (currentStatus.primary?.hosts?.length) {
-            <code class="primary-hosts">{{ currentStatus.primary?.hosts?.join(', ') }}</code>
+            <code class="primary-hosts">{{ currentStatus.primary.hosts.join(', ') }}</code>
           } @else {
             <span class="text-body-secondary primary-hosts">no server host (a file, or none)</span>
           }
@@ -383,7 +391,7 @@
             <dt>Hosts</dt>
             <dd>
               @if (replica.hosts?.length) {
-                {{ replica.hosts?.join(', ') }}
+                {{ replica.hosts.join(', ') }}
               } @else {
                 the replica set members above
               }
@@ -422,7 +430,7 @@
           runtime configuration file, then restart:
         </p>
         <ul class="hint replica-variables">
-          @for (variable of replicaVariables; track variable) {
+          @for (variable of replicaVariables(); track variable) {
             <li>
               <code>{{ variable }}</code>
             </li>

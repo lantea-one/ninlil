@@ -21,11 +21,11 @@
   <p class="error-message">{{ errorMessage() }}</p>
 }
 
-@if (!loading() && noSigningKey()) {
+@if (servedUnsigned()) {
   <c-alert color="warning" [dismissible]="false" class="no-signing-key-warning" role="alert">
-    None of this zone's keys can sign: no key is Active or in DoubleSignature with an algorithm the
-    server may sign with. The zone is served unsigned until a key with a permitted algorithm is
-    added.
+    This zone is marked signed but is currently served unsigned: no key can sign it. Generate a key
+    with a permitted algorithm, or turn signing off. If the parent zone publishes a DS record for
+    this zone, replace or remove it.
   </c-alert>
 }
 
@@ -109,6 +109,18 @@
           >
             <svg cIcon name="cilListRich" size="sm"></svg>
           </button>
+          <a
+            *appIfPermission="'zones:write'"
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/zones', zoneId, 'dnssec-keys', key.id, 'edit']"
+            cTooltip="Edit key comments"
+            aria-label="Edit key"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
           @if (canStartRollover(key)) {
             <button
               *appIfPermission="'zones:write'"
