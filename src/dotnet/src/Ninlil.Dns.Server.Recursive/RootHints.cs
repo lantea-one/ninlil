@@ -15,8 +15,9 @@ public sealed record RootHintServer(string Name, IReadOnlyList<IPAddress> Addres
 ///     This class holds the built-in root server list that
 ///     <see cref="Resolution.RootHintsPrimingService" /> seeds the cache with at startup, before
 ///     its RFC 8109 priming query replaces it with the root's answer (the list stays in use
-///     if priming fails). It is the IANA root server set; stale addresses could stop the
-///     resolver bootstrapping, so check any change against IANA.
+///     if priming fails). <see cref="Resolution.IterativeResolutionEngine" /> seeds it again
+///     whenever the cache holds no root entry. It is the IANA root server set; stale addresses
+///     could stop the resolver bootstrapping, so check any change against IANA.
 /// </summary>
 public static class RootHints
 {

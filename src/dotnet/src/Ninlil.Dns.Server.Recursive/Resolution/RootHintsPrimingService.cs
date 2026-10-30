@@ -20,8 +20,9 @@ namespace Ninlil.Dns.Server.Recursive.Resolution;
 ///     families in random order until one server answers authoritatively with an NS RRset for the
 ///     root. The loop primes again when 90 percent of that NS TTL has elapsed, so the entries never
 ///     lapse on an idle resolver. After a failed attempt it retries after one minute, doubling up
-///     to one hour; the seeded list stays in the cache meanwhile. The options are read on every
-///     attempt.
+///     to one hour; the seeded list stays in the cache meanwhile. The options come from
+///     <see cref="IOptions{TOptions}" />, which is not reloaded, so every attempt uses the root
+///     hints override as it was at startup.
 /// </summary>
 /// <param name="cache">The cache this service seeds.</param>
 /// <param name="upstreamClient">The client used to send the priming query.</param>

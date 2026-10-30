@@ -42,7 +42,7 @@ public interface IBackupService
     ///     replaces the shared TLS certificate and the runtime configuration file. Every entity
     ///     file is parsed before anything is wiped, the wipe and import run in one database
     ///     transaction where the storage engine supports it (a failure rolls it back; MongoDB
-    ///     does not yet, and a failure there can leave a partly restored database), and the files
+    ///     does not, and a failure there can leave a partly restored database), and the files
     ///     are staged first and put in place only after that transaction commits. The archive's Data
     ///     Protection keys are added to the key ring; keys already there are kept, so a secret the
     ///     running process protects before the restart stays readable. The running process keeps
@@ -64,8 +64,8 @@ public interface IBackupService
     /// <returns>A summary of what was imported.</returns>
     /// <exception cref="ArgumentException">
     ///     Thrown when <paramref name="archiveStream" /> is an encrypted archive and
-    ///     <paramref name="passphrase" /> is null or blank. Nothing is written when this is
-    ///     thrown.
+    ///     <paramref name="passphrase" /> is null, empty or only whitespace. Nothing is written
+    ///     when this is thrown.
     /// </exception>
     /// <exception cref="BackupDecryptionFailedException">
     ///     Thrown when an encrypted <paramref name="archiveStream" /> cannot be decrypted with

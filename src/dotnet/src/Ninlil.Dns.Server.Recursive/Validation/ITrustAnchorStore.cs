@@ -12,9 +12,8 @@ public interface ITrustAnchorStore
     /// <summary>
     ///     This method returns every <see cref="TrustAnchorStateEnum.Valid" /> and
     ///     <see cref="TrustAnchorStateEnum.Missing" /> anchor, in the smaller shape validation
-    ///     needs. A Missing key stays a trust point (RFC 5011 §4), so a check that fails to find
+    ///     needs. A Missing key stays a trust point (RFC 5011 §4.2), so a check that fails to find
     ///     the only root KSK does not switch validation off.
-    ///     was included.
     /// </summary>
     IReadOnlyList<TrustAnchor> GetValidAnchors();
 

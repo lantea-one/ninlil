@@ -15,12 +15,12 @@
   </PropertyGroup>
 
   <!--
-      Phase 9-6d's own UserClusterConfigSyncApplier/UserClusterSyncEventSubscriber need
-      Microsoft.AspNetCore.DataProtection's IDataProtectionProvider/IDataProtector to
-      decrypt-at-sender/re-encrypt-at-receiver a user's TOTP secret/recovery codes during a
-      cluster sync; it ships inside the ASP.NET Core shared framework rather than as an ordinary
-      NuGet package, the same reasoning Ninlil.Dns.Server.Tsig's own csproj already documents for
-      TsigSecretProtector.
+      UserClusterConfigSyncApplier and UserClusterSyncEventSubscriber need
+      Microsoft.AspNetCore.DataProtection's IDataProtectionProvider and IDataProtector to
+      decrypt a user's TOTP secret and recovery codes at the sender and re-encrypt them at the
+      receiver during a cluster sync. It ships inside the ASP.NET Core shared framework rather
+      than as an ordinary NuGet package, for the same reason as in Ninlil.Dns.Server.Tsig's
+      csproj, which documents it for TsigSecretProtector.
   -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -54,13 +54,13 @@
   <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
 
   <!--
-      Phase 9-6d's own identity/RBAC federation (UserClusterConfigSyncApplier/
-      UserClusterSyncEventSubscriber) needs the exact same IDataProtector purpose strings
-      Ninlil.Dns.Identity's own NinlilDnsUserStore uses for a TOTP authenticator key/recovery-code
-      set, so a decrypt-at-sender/re-encrypt-at-receiver round trip actually lands on the same
-      protected value a real sign-in later reads back. Referencing Identity directly (rather than
-      duplicating those two magic purpose strings here) is safe; Identity has no dependency on
-      clustering or this project at all, so there is no reference cycle.
+      The user sync (UserClusterConfigSyncApplier and UserClusterSyncEventSubscriber) needs the
+      same IDataProtector purpose strings that NinlilDnsUserStore in Ninlil.Dns.Identity uses for
+      a TOTP authenticator key and recovery-code set, so the decrypt-at-sender and
+      re-encrypt-at-receiver round trip lands on the protected value that a later sign-in reads
+      back. Referencing Identity directly avoids duplicating those two purpose strings. It is
+      safe because Identity depends on neither clustering nor this project, so there is no
+      reference cycle.
   -->
   <!-- ConditionalPackageProject:Ninlil.Dns.Identity -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj')">

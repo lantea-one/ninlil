@@ -21,8 +21,11 @@ namespace Ninlil.Web.Controllers;
 ///     avoid. Reading needs <c>outboundquerysettings:read</c> and writing needs
 ///     <c>outboundquerysettings:write</c>.
 ///     <para>
-///         Every field takes effect without a restart: <c>OutboundUdpSocketPool</c> reads
-///         <see cref="OutboundQueryOptions" /> through <see cref="IOptionsMonitor{TOptions}" />.
+///         <c>enableSourcePortPool</c> and <c>excludedSourcePorts</c> take effect without a
+///         restart: <c>OutboundUdpSocketPool</c> reads them through
+///         <see cref="IOptionsMonitor{TOptions}" /> on each use. <c>poolSizePerAddressFamily</c>
+///         needs a restart: the pool reads it once per address family, when it creates that
+///         family's gate.
 ///     </para>
 /// </summary>
 /// <param name="outboundQueryOptions">The current outbound-query settings.</param>

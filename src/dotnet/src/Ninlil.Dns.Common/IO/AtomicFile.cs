@@ -32,8 +32,9 @@ public enum AtomicFilePermissions
 ///     <para>
 ///         On Unix the temporary file is created with the final mode and the mode is set again on
 ///         the open handle, so a restrictive umask cannot strip bits and the content is never
-///         readable by other users. On Windows no ACL is set: the file inherits the ACL of its
-///         directory, and an existing target keeps its own. Windows is not a shipped platform.
+///         readable by other users. On Windows no ACL is set: a new file inherits the ACL of its
+///         directory, and an existing target keeps its own, so the ACL of the directory is what
+///         protects the file.
 ///     </para>
 ///     <para>
 ///         Limits: the directory is not fsynced after the rename, because .NET cannot do that

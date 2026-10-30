@@ -196,8 +196,8 @@ if (string.IsNullOrWhiteSpace(signingKey))
 {
     string signingKeyFilePath = Path.Combine(dataDirectory, "jwt-signing-key.txt");
 
-    // A blank existing file (an interrupted write by an older version) would give an empty
-    // signing key, so it is regenerated like a missing one.
+    // A blank existing file (emptied or truncated outside Ninlil) would give an empty signing
+    // key, so it is regenerated like a missing one.
     signingKey = File.Exists(signingKeyFilePath) ? File.ReadAllText(signingKeyFilePath).Trim() : "";
 
     if (signingKey.Length == 0)

@@ -12,22 +12,14 @@
   </PropertyGroup>
 
   <!--
-      DNSCrypt's currently-normative cipher (es-version 0x0002, "Box-XChaChaPoly") needs
-      XChaCha20-Poly1305 in the exact NaCl secretbox-style combined-mode layout the DNSCrypt spec
-      itself is defined against, confirmed, by direct reflection over the shipped assembly,
-      that BouncyCastle.Cryptography (this project's usual audited-crypto source) has no
-      XChaCha20/HChaCha20 type at all. Sodium.Core is a binding to the real, heavily-audited
-      libsodium C library, which does implement exactly this (its own transitive `libsodium`
-      NuGet dependency ships native binaries for every RID this project already targets).
-      Sodium.Core's own C# wrapper does not happen to expose the specific
-      `crypto_box_curve25519xchacha20poly1305_*` functions DNSCrypt needs, though, see
-      NativeLibsodium.cs, which supplements it with a handful of thin LibraryImport
-      declarations targeting the exact same already-bundled, already-audited native library
-      (not new, unaudited crypto math, the same approach Sodium.Core's own wrapper classes
-      use internally, just for a few more of the functions the real libsodium.so already
-      exports). Legacy es-version 0x0001 (XSalsa20-Poly1305) is fully covered by Sodium.Core's
-      own PublicKeyBox class directly, no supplementing needed.
-    -->
+      DNSCrypt es-version 0x0002 (X25519-XChaCha20Poly1305) needs the libsodium function family
+      crypto_box_curve25519xchacha20poly1305_*. Sodium.Core binds the libsodium C library, and
+      its libsodium NuGet dependency ships the native binary for each runtime identifier this
+      project targets. Sodium.Core's C# wrapper does not expose those functions, so
+      NativeLibsodium.cs declares them with LibraryImport against the same native library. This
+      project implements no cryptography of its own. Es-version 0x0001 (XSalsa20-Poly1305) goes
+      through Sodium.Core's PublicKeyBox class directly.
+        -->
   <ItemGroup>
     <PackageReference Include="Sodium.Core" Version="1.4.1" />
   </ItemGroup>

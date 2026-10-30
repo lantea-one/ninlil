@@ -21,8 +21,11 @@ namespace Ninlil.Dns.Identity.Options;
 ///     </para>
 ///     <para>
 ///         Clients are limited per connecting IP address (an IPv6 client per its /64 network),
-///         never per submitted username, so an attacker cannot lock out an administrator signing
-///         in from another address by submitting that administrator's username.
+///         never per submitted username, so an attacker cannot block an administrator signing
+///         in from another address by submitting that administrator's username. A wrong password
+///         does not count toward ASP.NET Core Identity account lockout either
+///         (<c>AuthController.Login</c> passes <c>lockoutOnFailure: false</c>), so this limiter
+///         is what bounds password guessing.
 ///     </para>
 /// </summary>
 public sealed class AdminLoginRateLimitOptions
@@ -52,7 +55,7 @@ public sealed class AdminLoginRateLimitOptions
     /// <summary>
     ///     This property contains the fixed window <see cref="PermitLimit" /> is counted over. Once a
     ///     client reaches the limit, further attempts are rejected until the window ends, so it is
-    ///     also the lockout length. Defaults to five minutes.
+    ///     also how long that client is blocked. Defaults to five minutes.
     /// </summary>
     public TimeSpan Window { get; set; } = TimeSpan.FromMinutes(5);
 }

@@ -35,9 +35,12 @@ namespace Ninlil.Web.Controllers;
 ///         the re-validation path of <c>ForwarderQueryResolver</c>) read
 ///         <see cref="IOptionsMonitor{TOptions}" /> (see <c>RecursiveQueryResolver</c> for why a
 ///         singleton needs it). <b>Two fields are exceptions:</b>
-///         <see cref="RecursiveServerOptions.RootHintServersOverride" /> is read once by
-///         <c>RootHintsPrimingService</c> at startup, and
-///         <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> only when
+///         <see cref="RecursiveServerOptions.RootHintServersOverride" /> reaches
+///         <c>RootHintsPrimingService</c> as the value at startup, and that service seeds and
+///         re-primes the cache from that list for as long as the process runs (only
+///         <c>IterativeResolutionEngine</c> reads the saved list live, and only when the cache
+///         holds no root entry); and
+///         <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> is read only when
 ///         <c>FileTrustAnchorStore</c> first seeds its state file and never after.
 ///         <see cref="Patch" /> returns the note that fits what was changed.
 ///     </para>

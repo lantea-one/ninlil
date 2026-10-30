@@ -19,12 +19,10 @@
       (Directory.Build.props's own GenerateDocumentationFile).
 
       Swashbuckle.AspNetCore.Filters (a separate, third-party MIT-licensed package by a different
-      author, not part of the core Swashbuckle project) adds the actual request/response EXAMPLE
-      mechanism the core package has no equivalent of at all, namely IExamplesProvider{T} and
+      author, not part of the core Swashbuckle project) adds the request/response EXAMPLE
+      mechanism the core package has no equivalent of, namely IExamplesProvider{T} and
       IMultipleExamplesProvider{T}, plus the SwaggerRequestExample/SwaggerResponseExample action
-      attributes this project's own new Examples/ folder implements. Its own minimum declared
-      dependency is Swashbuckle.AspNetCore.SwaggerGen 10.0.0, comfortably satisfied by the
-      10.2.3 already referenced above.
+      attributes that the classes in this project's Examples/ folder use.
     -->
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
@@ -452,21 +450,15 @@
   <!-- EndConditionalPackageProject:Ninlil.Dns.Protocol.DnsCrypt -->
 
   <!--
-      These properties/items back NinlilBuildAngularAdminSpa's own Inputs/Outputs below, and
-      must live here, at the top level of the project (evaluated once, statically, before any
-      target ever runs), not inside that target's own body. A first, working version of this
-      defined NinlilAngularSourceFiles dynamically inside the target instead, and a real test
-      build found the target's own Inputs/Outputs attributes had already been resolved against
-      that item list back when the *project itself* was first evaluated, before the target that
-      would have populated it ever ran, permanently seeing zero items no matter what the target
-      body later added to that same item name. Target Inputs/Outputs are always resolved
-      statically like this; only a project-level ItemGroup such as this one is visible to them.
+      These properties and items back NinlilBuildAngularAdminSpa's Inputs and Outputs below.
+      They must stay here, at the top level of the project, and not inside the target's body:
+      MSBuild expands a target's Inputs and Outputs before the target's tasks run, so an item
+      list that the target body creates is still empty at that point and the target would see
+      zero inputs. A project-level ItemGroup is visible to them.
     -->
   <PropertyGroup>
-    <!-- Resolved to a clean, absolute, ".."-free path via GetFullPath, since an unresolved
-         "../../../angular/" relative segment combined with a "**" recursive wildcard below was
-         separately found, by that same real test build, to silently enumerate zero files
-         instead of throwing or warning either. -->
+    <!-- GetFullPath resolves the workspace path to an absolute one without ".." segments, so
+         every item path built from it, and the RecursiveDir the Copy below uses, stays clean. -->
     <NinlilAngularWorkspaceDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../angular/'))</NinlilAngularWorkspaceDir>
     <NinlilAngularBuildOutputDir>$(NinlilAngularWorkspaceDir)dist/angular/browser/</NinlilAngularBuildOutputDir>
     <NinlilWebWwwrootDir>$(MSBuildThisFileDirectory)wwwroot/</NinlilWebWwwrootDir>
@@ -500,53 +492,36 @@
   </ItemGroup>
 
   <!--
-      This target builds Ninlil's Angular admin SPA (src/angular/, Phase 5) and copies its
-      production build output into this project's own wwwroot/ directory, so a plain
-      `dotnet build`/`dotnet publish` of this one project alone is enough to produce a working
-      combined host, no separate "remember to run npm run build first" step an operator or CI
-      job could forget. This is the same "single combined host, dotnet run and it just works"
-      philosophy Phase 4d already established for the DNS engine itself, applied here to the
-      admin SPA's own build step instead of a second runtime process.
+      This target builds the Angular admin console (src/angular/) and copies its production build
+      output into this project's wwwroot/ directory, so a plain `dotnet build` or `dotnet publish`
+      of this one project produces a working combined host, without a separate
+      `npm run build` step that a contributor could forget.
 
-      Runs BeforeTargets="Build" (and "Publish", so a plain `dotnet publish` alone, without a
-      prior `dotnet build` in the same invocation, still produces a populated wwwroot/ too),
-      not AfterTargets, because the SDK's own implicit `wwwroot/**` Content-item glob
-      (Microsoft.NET.Sdk.Web's default item behavior) is evaluated once, statically, before any
-      target ever runs, an AfterTargets="Build" hook would populate wwwroot/ too late for that
-      same build's own Content-item list to ever notice. The explicit `<Content Include=...>`
-      re-declaration inside this target's own body (below) exists specifically to patch that one
-      gap for a *first* build, where wwwroot/ does not yet exist at evaluation time; every later
-      build already has wwwroot/'s own prior output on disk before evaluation even starts, so the
-      SDK's own implicit glob already picks it up correctly on its own from that point on.
+      It runs BeforeTargets="Build;Publish", so a `dotnet publish` alone still produces a
+      populated wwwroot/. It must run before the build and not after it: the SDK's implicit
+      `wwwroot/**` Content glob is evaluated once, when the project is evaluated and before any
+      target runs, so an AfterTargets="Build" hook would fill wwwroot/ too late for that build's
+      Content list. The explicit `<Content Include=...>` re-declaration in the target body covers
+      the one case where that matters: the first build, when wwwroot/ does not exist at evaluation
+      time. Later builds find wwwroot/ on disk and the implicit glob picks it up.
 
-      Kept fast on a routine, nothing-changed rebuild via this Target element's own native
-      Inputs/Outputs incremental-build support (MSBuild's standard mechanism for this, not a
-      hand-rolled timestamp comparison): NinlilAngularSourceFiles above is this target's
-      Inputs; wwwroot/index.html is its Outputs sentinel. `npm install && npm run build` only
-      actually runs when at least one input is newer than that sentinel (or the sentinel does
-      not exist yet at all); MSBuild logs "skipping target ... because all output files are
-      up-to-date" and does nothing further on every other rebuild. A missing npm also means the
-      sentinel is never created, so this target (cheaply: just the version-check below) keeps
-      retrying, and re-warning, on every single build until npm becomes available, rather than
-      warning once and then silently staying skipped forever after.
+      The target's Inputs and Outputs keep a routine rebuild fast. NinlilAngularSourceFiles above is
+      the Inputs; wwwroot/index.html is the Outputs sentinel. `npm install` and `npm run build`
+      run only when an input is newer than the sentinel or the sentinel does not exist. MSBuild
+      logs "skipping target ... because all output files are up-to-date" on every other rebuild.
+      A missing npm never creates the sentinel, so the target runs again on every build, with only
+      the cheap version check, and warns each time until npm is available.
 
-      Gracefully degrades, rather than failing the whole dotnet build, when npm is not found on
-      PATH at all: a contributor without Node.js installed, and this solution's own existing
-      backend-only CI job (which has no Node step, and is not gaining one this pass, Phase 5's
-      own CI-wiring decision was explicitly deferred to a later pass), must both still be able to
-      build this project successfully. The trivial npm version-check invocation below's own exit
-      code is what decides this, not a missing-executable exception a plain <Exec> would
-      otherwise throw, since the shell <Exec> itself launches ("/bin/sh -c ..." on Linux/macOS,
-      "cmd.exe /c ..." on Windows) already returns a well-defined, ordinary nonzero exit code
-      (127, or 9009 respectively) when the command it was asked to run cannot be found at all,
-      with IgnoreExitCode="true" simply letting this target read that code back instead of
-      treating it as a hard failure. A missing npm only ever produces an MSBuild *warning* and an
-      empty/stale wwwroot/ (this host still builds and runs, the SPA itself just is not served
-      until npm becomes available and this project is rebuilt); it is deliberately NOT the same
-      graceful handling extended to a real Angular build failure (a TypeScript error, a failing
-      lint step if one is ever wired into `npm run build`): once npm is confirmed present,
-      `npm install`/`npm run build`'s own exit code is allowed to fail the dotnet build normally,
-      the same way a real compile error in any other project in this solution would.
+      A missing npm on PATH produces a warning and an empty or stale wwwroot/, not a build
+      failure. A contributor without Node.js can still build the backend, and CI builds the console
+      in its own step (.forgejo/scripts/build-admin-console.sh) and passes
+      -p:NinlilSkipAngularBuild=true. The exit code of the version check below decides this, not
+      an exception: the shell that <Exec> launches ("/bin/sh -c" on Linux and macOS, "cmd.exe /c"
+      on Windows) returns a nonzero exit code when it cannot find the command, and
+      IgnoreExitCode="true" lets the target read that code instead of failing. The host still builds
+      and runs without the console; it serves none until npm is available and the project is
+      rebuilt. Once npm is present, a failing `npm install` or `npm run build` fails the dotnet
+      build, like a compile error in any other project.
     -->
   <Target
     Name="NinlilBuildAngularAdminSpa"
@@ -555,8 +530,8 @@
     Inputs="@(NinlilAngularSourceFiles)"
     Outputs="$(NinlilWebWwwrootDir)index.html"
   >
-    <!-- Probe for npm on PATH ourselves, see this target's own doc comment above for why its
-         exit code, not an exception, is what this graceful-skip decision is based on. -->
+    <!-- Probe for npm on PATH. The comment above this target explains why the exit code, not an
+         exception, decides the skip. -->
     <Exec
       Command="npm --version"
       IgnoreExitCode="true"
@@ -600,9 +575,8 @@
       DestinationFolder="$(NinlilWebWwwrootDir)%(RecursiveDir)"
     />
 
-    <!-- Explicitly re-declares the just-copied files as Content items for *this* build, see
-         this file's own doc comment above for exactly why this is needed only the first time
-         wwwroot/ is populated, not on every later build. -->
+    <!-- Re-declares the just-copied files as Content items for this build. The comment above this
+         target explains why this matters only the first time wwwroot/ is populated. -->
     <ItemGroup Condition="'$(NinlilNpmProbeExitCode)' == '0'">
       <Content
         Include="$(NinlilWebWwwrootDir)**"

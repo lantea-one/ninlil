@@ -25,11 +25,11 @@
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Presets\Ninlil.Dns.Server.Presets.csproj" />
-    <!-- Referenced only for Server.Recursive's own real DNSSEC validation primitives
-         (RrsetSignatureVerifier and DenialOfExistenceValidator), used by this project's own
-         Phase 13c tests to prove a real rollover never serves a bogus signature, and that a real
-         validator genuinely accepts this zone's own NSEC3 Opt-Out chain, not merely that the bit
-         looks right. No src project depends on Server.Recursive this way; this is test-only. -->
+    <!-- Referenced only for Server.Recursive's DNSSEC validation primitives
+         (RrsetSignatureVerifier and DenialOfExistenceValidator). The rollover tests use them to
+         prove a rollover never serves a bogus signature, and the NSEC3 Opt-Out tests use them to
+         prove that a validator accepts this zone's Opt-Out chain, not merely that the bit is set.
+         No src project depends on Server.Recursive this way; this is test-only. -->
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj" />
     <!-- Referenced only so SecondaryForwarderZoneTransferTests can run a real TcpDnsListener on
          its own primary-side test host: a real two-process-shaped AXFR/IXFR pull, over a real
