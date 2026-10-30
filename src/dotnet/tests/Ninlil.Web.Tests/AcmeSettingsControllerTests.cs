@@ -190,7 +190,7 @@ public class AcmeSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Equal(RuntimeSettingsWriteResult.MixedReloadNote, result.Note);
+        Assert.Equal(RuntimeSettingsWriteResult.ReadOnceMixedReloadNote, result.Note);
     }
 
     [Fact]

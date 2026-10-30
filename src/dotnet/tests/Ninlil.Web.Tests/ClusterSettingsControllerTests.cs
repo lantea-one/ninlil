@@ -101,7 +101,7 @@ public class ClusterSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         // restart (addressReconcileInterval, which CatalogClusterAddressSyncService reads into its
         // PeriodicTimer at startup, as with ClusterOptions.HeartbeatInterval), so the mixed note
         // is expected.
-        Assert.Equal(RuntimeSettingsWriteResult.MixedReloadNote, result.Note);
+        Assert.Equal(RuntimeSettingsWriteResult.ReadOnceMixedReloadNote, result.Note);
 
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));

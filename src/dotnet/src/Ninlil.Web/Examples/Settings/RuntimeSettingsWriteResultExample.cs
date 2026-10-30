@@ -38,8 +38,13 @@ public class RuntimeSettingsWriteResultExample
             ),
             Example(
                 "Mixed: root hints or trust anchors",
-                "The recursive settings when one write changes rootHintServersOverride or trustAnchorsOverride (read once) and a field that applies at once. The ACME and cluster settings return the same text for a write that mixes a field read once with one that applies at once.",
+                "The recursive settings when one write changes rootHintServersOverride or trustAnchorsOverride (read once) and a field that applies at once.",
                 RuntimeSettingsWriteResult.MixedReloadNote
+            ),
+            Example(
+                "Mixed: ACME or cluster settings",
+                "The ACME and cluster settings when one write mixes a field read once at startup with one that applies at once.",
+                RuntimeSettingsWriteResult.ReadOnceMixedReloadNote
             ),
             Example(
                 "Mixed: query log privacy level",

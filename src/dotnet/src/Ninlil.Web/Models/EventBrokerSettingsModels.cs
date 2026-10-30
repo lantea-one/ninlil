@@ -108,6 +108,18 @@ public record RuntimeSettingsWriteResult(string Note)
         + "take effect.";
 
     /// <summary>
+    ///     This constant contains the note <see cref="Controllers.AcmeSettingsController" /> and
+    ///     <see cref="Controllers.ClusterSettingsController" /> return when one write changes a
+    ///     field that takes effect at once together with one that is read once at startup. Unlike
+    ///     <see cref="MixedReloadNote" /> it names no field, because each of those pages has
+    ///     several fields of each kind; the page's own help says which field needs the restart.
+    /// </summary>
+    public const string ReadOnceMixedReloadNote =
+        "Written to the configuration file. Some of these settings take effect immediately; the "
+        + "others are read once, at startup, so a change to them requires a restart to take "
+        + "effect.";
+
+    /// <summary>
     ///     This constant contains the note <see cref="Controllers.QueryLoggingSettingsController.Patch" />
     ///     returns when one write changes <c>privacyLevel</c>, which takes effect at once, together
     ///     with any of <c>enable</c>, <c>retentionPeriod</c>, <c>maxRetainedEntries</c> or

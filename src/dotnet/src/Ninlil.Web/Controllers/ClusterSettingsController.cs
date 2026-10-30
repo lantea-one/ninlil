@@ -241,7 +241,7 @@ public class ClusterSettingsController(
 
         string note = (touchedHotReloadingField, touchedRestartRequiringField) switch
         {
-            (true, true) => RuntimeSettingsWriteResult.MixedReloadNote,
+            (true, true) => RuntimeSettingsWriteResult.ReadOnceMixedReloadNote,
             (false, true) => RuntimeSettingsWriteResult.RestartRequiredNote,
             _ => RuntimeSettingsWriteResult.HotReloadedNote,
         };
