@@ -18,7 +18,7 @@ export interface AuthenticationResult {
      */
     accessToken?: string | null;
     /**
-     * The UTC date and time Ninlil.Web.Models.AuthenticationResult.AccessToken expires.
+     * The UTC date and time `AuthenticationResult.AccessToken` expires.
      */
     expiresAtUtc?: string;
     /**

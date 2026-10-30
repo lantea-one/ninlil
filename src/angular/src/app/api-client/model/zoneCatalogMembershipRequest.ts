@@ -14,7 +14,7 @@
  */
 export interface ZoneCatalogMembershipRequest { 
     /**
-     * The identifier of the Ninlil.Dns.Common.Enum.ZoneTypeEnum.Catalog zone to join.
+     * The identifier of the `ZoneTypeEnum.Catalog` zone to join.
      */
     catalogZoneId?: string;
 }

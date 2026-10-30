@@ -109,7 +109,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverHttps&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; takes effect at once; &#x60;path&#x60; and &#x60;maxMessageSizeBytes&#x60; need a full process restart (see Ninlil.Web.Models.DnsOverHttpsSettingsDetail for why). Returns 400 for a field of the wrong JSON type, a path that does not start with &#x60;/&#x60;, or a &#x60;maxMessageSizeBytes&#x60; outside 1-65535. Requires &#x60;transportsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverHttps&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; takes effect at once; &#x60;path&#x60; and &#x60;maxMessageSizeBytes&#x60; need a full process restart (see &#x60;DnsOverHttpsSettingsDetail&#x60; for why). Returns 400 for a field of the wrong JSON type, a path that does not start with &#x60;/&#x60;, or a &#x60;maxMessageSizeBytes&#x60; outside 1-65535. Requires &#x60;transportsettings:write&#x60;.
      * @endpoint patch /api/transport-settings/dns-over-https
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

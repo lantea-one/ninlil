@@ -97,7 +97,7 @@ export class AdminLoginRateLimitSettingsService extends BaseService implements A
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:AdminLoginRateLimit&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Returns 400 when &#x60;permitLimit&#x60; is below 1 or &#x60;window&#x60; is not a positive TimeSpan. The change needs a restart. Requires &#x60;adminloginratelimit:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:AdminLoginRateLimit&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value. Returns 400 when &#x60;permitLimit&#x60; is below 1 or &#x60;window&#x60; is not a positive TimeSpan. The change needs a restart. Requires &#x60;adminloginratelimit:write&#x60;.
      * @endpoint patch /api/admin-login-rate-limit-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

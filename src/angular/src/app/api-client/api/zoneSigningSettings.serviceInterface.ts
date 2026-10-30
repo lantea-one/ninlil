@@ -35,7 +35,7 @@ export interface ZoneSigningSettingsServiceInterface {
     apiZoneSigningSettingsGet(extraHttpRequestParams?: any): Observable<ZoneSigningSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneSigning&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for a malformed duration, a negative inception offset, or a non-positive validity period, refresh margin or poll interval. Requires &#x60;zonesigningsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneSigning&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect at once. Returns 400 for a malformed duration, a negative inception offset, or a non-positive validity period, refresh margin or poll interval. Requires &#x60;zonesigningsettings:write&#x60;.
      * 
      * @endpoint patch /api/zone-signing-settings
 * @param requestParameters

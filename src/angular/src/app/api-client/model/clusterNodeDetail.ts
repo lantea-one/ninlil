@@ -11,7 +11,7 @@ import { ClusterNodeStatusEnum } from './clusterNodeStatusEnum';
 
 
 /**
- * This class carries a peer node in this node\'s cluster registry, as returned by `GET /api/cluster/nodes` and `GET /api/cluster/nodes/{id}`. The shared secret of the peer\'s TSIG key is never included; Ninlil.Web.Models.ClusterNodeDetail.TsigKeyName only names the key, as `TsigKeyDetail` omits its secret.
+ * This class carries a peer node in this node\'s cluster registry, as returned by `GET /api/cluster/nodes` and `GET /api/cluster/nodes/{id}`. The shared secret of the peer\'s TSIG key is never included; `ClusterNodeDetail.TsigKeyName` only names the key, as `TsigKeyDetail` omits its secret.
  */
 export interface ClusterNodeDetail { 
     id?: string;

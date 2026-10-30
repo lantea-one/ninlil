@@ -16,7 +16,7 @@ import { AdminPasswordResetMode } from './adminPasswordResetMode';
 export interface AdminResetPasswordResult { 
     mode?: AdminPasswordResetMode;
     /**
-     * The generated password, shown only here. Set only when Mode is Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate; null for Ninlil.Web.Models.AdminPasswordResetMode.EmailLink, where the server never learns the new password.
+     * The generated password, shown only here. Set only when Mode is `AdminPasswordResetMode.AutoGenerate`; null for `AdminPasswordResetMode.EmailLink`, where the server never learns the new password.
      */
     generatedPassword?: string | null;
 }

@@ -76,7 +76,7 @@ export interface DhcpTagRuleOptionsServiceInterface {
     apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpTagRuleOptionDetail>;
 
     /**
-     * This action replaces an option\&#39;s fields, keeping its id and rule. Validation is as for M:Ninlil.Web.Controllers.DhcpTagRuleOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpTagRuleOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another rule, and 409 when another option of the rule has the new tag. Requires &#x60;dhcptagrules:write&#x60;.
+     * This action replaces an option\&#39;s fields, keeping its id and rule. Validation is as for &#x60;POST /api/dhcp-tag-rules/{tagRuleId}/options&#x60;; returns 404 when the option does not exist or belongs to another rule, and 409 when another option of the rule has the new tag. Requires &#x60;dhcptagrules:write&#x60;.
      * 
      * @endpoint put /api/dhcp-tag-rules/{tagRuleId}/options/{id}
 * @param requestParameters

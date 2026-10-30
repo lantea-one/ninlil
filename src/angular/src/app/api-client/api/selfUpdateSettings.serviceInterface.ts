@@ -35,7 +35,7 @@ export interface SelfUpdateSettingsServiceInterface {
     apiSelfUpdateSettingsGet(extraHttpRequestParams?: any): Observable<SelfUpdateSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:SelfUpdate&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. &#x60;releaseFeedUrl&#x60; must be blank (no feed) or an absolute http(s) URL; it is only checked for shape, not fetched, so a typo is caught here rather than as a failing background check. Returns 400 for a bad URL or a non-positive &#x60;checkInterval&#x60;. Requires &#x60;selfupdatesettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:SelfUpdate&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value. &#x60;releaseFeedUrl&#x60; must be blank (no feed) or an absolute http(s) URL; it is only checked for shape, not fetched, so a typo is caught here rather than as a failing background check. Returns 400 for a bad URL or a non-positive &#x60;checkInterval&#x60;. Requires &#x60;selfupdatesettings:write&#x60;.
      * 
      * @endpoint patch /api/self-update-settings
 * @param requestParameters

@@ -22,7 +22,7 @@ export interface DnsAccessControlRuleWriteRequest {
      */
     cidr?: string | null;
     /**
-     * The capabilities the rule grants a client whose source address is in Ninlil.Web.Models.DnsAccessControlRuleWriteRequest.Cidr, as an array of Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum member names (for example `[\"RecursionAccess\", \"RateLimitBypass\"]`), not the stored System.FlagsAttribute bitmask. Names are case-sensitive. An empty array is accepted (a rule that grants nothing); an unknown name is rejected with a 400.
+     * The capabilities the rule grants a client whose source address is in `DnsAccessControlRuleWriteRequest.Cidr`, as an array of `DnsAccessControlCapabilityEnum` member names (for example `[\"RecursionAccess\", \"RateLimitBypass\"]`), not the stored System.FlagsAttribute bitmask. Names are case-sensitive. An empty array is accepted (a rule that grants nothing); an unknown name is rejected with a 400.
      */
     capabilities?: Array<string> | null;
     /**

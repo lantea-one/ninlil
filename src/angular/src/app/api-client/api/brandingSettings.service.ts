@@ -44,7 +44,7 @@ export class BrandingSettingsService extends BaseService implements BrandingSett
     }
 
     /**
-     * This action returns only the site title and logo, which every signed-in session needs to render the admin console. Requires only a signed-in caller (see Ninlil.Web.Models.BrandingEffectiveDetail).
+     * This action returns only the site title and logo, which every signed-in session needs to render the admin console. Requires only a signed-in caller (see &#x60;BrandingEffectiveDetail&#x60;).
      * @endpoint get /api/branding-settings/effective
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class BrandingSettingsService extends BaseService implements BrandingSett
     }
 
     /**
-     * This action returns the branding and CHAOS query settings, including any change M:Ninlil.Web.Controllers.BrandingSettingsController.Patch(System.Text.Json.JsonElement) has made. Requires &#x60;branding:read&#x60;.
+     * This action returns the branding and CHAOS query settings, including any change &#x60;PATCH /api/branding-settings&#x60; has made. Requires &#x60;branding:read&#x60;.
      * @endpoint get /api/branding-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -154,7 +154,7 @@ export class BrandingSettingsService extends BaseService implements BrandingSett
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Branding&#x60; (&#x60;siteTitle&#x60;, &#x60;logoDataUri&#x60;) and &#x60;DnsServer:Authoritative&#x60; (&#x60;hostnameString&#x60;, &#x60;versionString&#x60;, &#x60;enableChaosVersionQueries&#x60;) as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. One write may touch either section or both. An absent field keeps its value; a JSON &#x60;null&#x60; clears &#x60;siteTitle&#x60; or &#x60;logoDataUri&#x60;. Every field takes effect at once. Returns 400 for a blank hostname or version string or an invalid logo. Requires &#x60;branding:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Branding&#x60; (&#x60;siteTitle&#x60;, &#x60;logoDataUri&#x60;) and &#x60;DnsServer:Authoritative&#x60; (&#x60;hostnameString&#x60;, &#x60;versionString&#x60;, &#x60;enableChaosVersionQueries&#x60;) as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. One write may touch either section or both. An absent field keeps its value; a JSON &#x60;null&#x60; clears &#x60;siteTitle&#x60; or &#x60;logoDataUri&#x60;. Every field takes effect at once. Returns 400 for a blank hostname or version string or an invalid logo. Requires &#x60;branding:write&#x60;.
      * @endpoint patch /api/branding-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -132,7 +132,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action deletes a client group with its networks, filter-list assignments, schedules and the rewrites scoped to it (its Safe Search overrides). Member clients are kept and released: their group is cleared, so network matching applies to them again. Dependants are removed explicitly rather than by a relational cascade delete, which MongoDB lacks, as M:Ninlil.Web.Controllers.ZonesController.Delete(System.Guid,System.Threading.CancellationToken) does. Scoped rewrites are deleted, never widened to global, and are not cluster-synced. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
+     * This action deletes a client group with its networks, filter-list assignments, schedules and the rewrites scoped to it (its Safe Search overrides). Member clients are kept and released: their group is cleared, so network matching applies to them again. Dependants are removed explicitly rather than by a relational cascade delete, which MongoDB lacks, as &#x60;DELETE /api/zones/{id}&#x60; does. Scoped rewrites are deleted, never widened to global, and are not cluster-synced. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint delete /api/client-groups/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -251,7 +251,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action updates a client group as an RFC 7396 merge patch: an absent field is unchanged and a present one replaces it. Errors are as for M:Ninlil.Web.Controllers.ClientGroupsController.Replace(System.Guid,Ninlil.Web.Models.ClientGroupWriteRequest,System.Threading.CancellationToken). Requires &#x60;clientgroups:write&#x60;.
+     * This action updates a client group as an RFC 7396 merge patch: an absent field is unchanged and a present one replaces it. Errors are as for &#x60;PUT /api/client-groups/{id}&#x60;. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint patch /api/client-groups/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -321,7 +321,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action pauses a client group now: the DNS queries of every known client whose &#x60;ClientGroupId&#x60; is this group are blocked, whatever schedules, filter lists or rewrites would apply, for Ninlil.Web.Models.InstantPauseRequest.DurationMinutes minutes, as M:Ninlil.Web.Controllers.ClientsController.Pause(System.Guid,Ninlil.Web.Models.InstantPauseRequest,System.Threading.CancellationToken) does for one client. Calling it during a pause replaces the pause. Returns 400 for a duration that is not positive and 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
+     * This action pauses a client group now: the DNS queries of every known client whose &#x60;ClientGroupId&#x60; is this group are blocked, whatever schedules, filter lists or rewrites would apply, for &#x60;InstantPauseRequest.DurationMinutes&#x60; minutes, as &#x60;POST /api/clients/{id}/pause&#x60; does for one client. Calling it during a pause replaces the pause. Returns 400 for a duration that is not positive and 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint post /api/client-groups/{id}/pause
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -462,7 +462,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action ends a client group\&#39;s pause now by clearing Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity.PausedUntilUtc. Resuming a group that is not paused is not an error. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
+     * This action ends a client group\&#39;s pause now by clearing &#x60;DnsClientGroupEntity.PausedUntilUtc&#x60;. Resuming a group that is not paused is not an error. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint post /api/client-groups/{id}/resume
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -522,7 +522,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action creates a client group. When Ninlil.Web.Models.ClientGroupWriteRequest.IsDefault is true, the group that currently holds Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity.IsDefault loses it (see M:Ninlil.Web.Controllers.ClientGroupsController.DemoteExistingDefaultAsync(System.Guid,System.Threading.CancellationToken)). Returns 400 for a missing name and 409 when the name is taken. Requires &#x60;clientgroups:write&#x60;.
+     * This action creates a client group. When &#x60;ClientGroupWriteRequest.IsDefault&#x60; is true, the group that currently holds &#x60;DnsClientGroupEntity.IsDefault&#x60; loses it (see &#x60;ClientGroupsController.DemoteExistingDefaultAsync&#x60;). Returns 400 for a missing name and 409 when the name is taken. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint post /api/client-groups
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

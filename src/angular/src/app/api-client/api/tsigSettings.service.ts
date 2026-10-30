@@ -97,7 +97,7 @@ export class TsigSettingsService extends BaseService implements TsigSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Tsig&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change takes effect at once. Returns 400 when &#x60;defaultFudgeSeconds&#x60; is outside 0-65535. Requires &#x60;tsigsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Tsig&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The change takes effect at once. Returns 400 when &#x60;defaultFudgeSeconds&#x60; is outside 0-65535. Requires &#x60;tsigsettings:write&#x60;.
      * @endpoint patch /api/tsig-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

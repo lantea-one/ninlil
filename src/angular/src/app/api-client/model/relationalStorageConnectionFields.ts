@@ -10,7 +10,7 @@
 
 
 /**
- * This record carries the connection fields `POST /api/storage/switch` accepts for a PostgreSQL, MySQL or SQL Server target; the three server engines share this shape. The accepted Ninlil.Web.Models.RelationalStorageConnectionFields.EncryptionMode values differ by engine: each is checked against that engine\'s driver enum by Ninlil.Web.Services.Storage.StorageConnectionStringAssembler, which lists them.
+ * This record carries the connection fields `POST /api/storage/switch` accepts for a PostgreSQL, MySQL or SQL Server target; the three server engines share this shape. The accepted `RelationalStorageConnectionFields.EncryptionMode` values differ by engine: each is checked against that engine\'s driver enum by `StorageConnectionStringAssembler`, which lists them.
  */
 export interface RelationalStorageConnectionFields { 
     /**
@@ -34,7 +34,7 @@ export interface RelationalStorageConnectionFields {
      */
     password?: string | null;
     /**
-     * The engine\'s connection encryption mode, as the name of one of its driver\'s values (see Ninlil.Web.Services.Storage.StorageConnectionStringAssembler).
+     * The engine\'s connection encryption mode, as the name of one of its driver\'s values (see `StorageConnectionStringAssembler`).
      */
     encryptionMode?: string | null;
 }

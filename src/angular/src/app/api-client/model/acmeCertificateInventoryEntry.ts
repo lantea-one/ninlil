@@ -10,7 +10,7 @@
 
 
 /**
- * This record is one row of the certificate inventory that `AcmeSettingsController.Certificates` returns: one per domain in `AcmeOptions.Domains`, with what `IAcmeAccountStore` knows about it. Ninlil.Web.Models.AcmeCertificateInventoryEntry.HasCertificate separates a domain that has never been issued a certificate from one that simply is not due for renewal yet, whatever Ninlil.Web.Models.AcmeCertificateInventoryEntry.IsDueForRenewal says.
+ * This record is one row of the certificate inventory that `AcmeSettingsController.Certificates` returns: one per domain in `AcmeOptions.Domains`, with what `IAcmeAccountStore` knows about it. `AcmeCertificateInventoryEntry.HasCertificate` separates a domain that has never been issued a certificate from one that simply is not due for renewal yet, whatever `AcmeCertificateInventoryEntry.IsDueForRenewal` says.
  */
 export interface AcmeCertificateInventoryEntry { 
     /**
@@ -22,11 +22,11 @@ export interface AcmeCertificateInventoryEntry {
      */
     hasCertificate?: boolean;
     /**
-     * When the current certificate was issued, or null if Ninlil.Web.Models.AcmeCertificateInventoryEntry.HasCertificate is false.
+     * When the current certificate was issued, or null if `AcmeCertificateInventoryEntry.HasCertificate` is false.
      */
     issuedAtUtc?: string | null;
     /**
-     * When the current certificate expires, or null if Ninlil.Web.Models.AcmeCertificateInventoryEntry.HasCertificate is false.
+     * When the current certificate expires, or null if `AcmeCertificateInventoryEntry.HasCertificate` is false.
      */
     expiresAtUtc?: string | null;
     /**
@@ -38,7 +38,7 @@ export interface AcmeCertificateInventoryEntry {
      */
     lastFailureAtUtc?: string | null;
     /**
-     * A short description of why the most recent attempt failed, or null together with Ninlil.Web.Models.AcmeCertificateInventoryEntry.LastFailureAtUtc.
+     * A short description of why the most recent attempt failed, or null together with `AcmeCertificateInventoryEntry.LastFailureAtUtc`.
      */
     lastFailureMessage?: string | null;
 }

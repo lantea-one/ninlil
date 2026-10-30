@@ -48,7 +48,7 @@ export interface BlockedServicesServiceInterface {
     apiBlockedServicesGet(requestParameters: ApiBlockedServicesGetRequestParams, extraHttpRequestParams?: any): Observable<Array<BlockedServiceDetail>>;
 
     /**
-     * This action disables one catalog entry. Without a target it deletes the entry\&#39;s managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity, its entries and every client and client-group assignment that refers to it (as M:Ninlil.Web.Controllers.FilterListsController.Delete(System.Guid,System.Threading.CancellationToken) does), and tells the cluster peers to delete the list too. With a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; it removes only that target\&#39;s assignment, which stays on this node, and leaves the list and every other target alone, so unblocking a service for one device does not unblock it for everyone. Having nothing to remove is not an error. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
+     * This action disables one catalog entry. Without a target it deletes the entry\&#39;s managed &#x60;DnsFilterListEntity&#x60;, its entries and every client and client-group assignment that refers to it (as &#x60;DELETE /api/filter-lists/{id}&#x60; does), and tells the cluster peers to delete the list too. With a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; it removes only that target\&#39;s assignment, which stays on this node, and leaves the list and every other target alone, so unblocking a service for one device does not unblock it for everyone. Having nothing to remove is not an error. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint delete /api/blocked-services/{key}
 * @param requestParameters
@@ -56,7 +56,7 @@ export interface BlockedServicesServiceInterface {
     apiBlockedServicesKeyDelete(requestParameters: ApiBlockedServicesKeyDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action enables one catalog entry: it creates the entry\&#39;s managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity if none exists or re-enables a disabled one, and, with a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60;, also assigns the list to that target if it is not already. Enabling an enabled entry just returns its state. Returns 400 when both targets are given or the target does not exist, and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
+     * This action enables one catalog entry: it creates the entry\&#39;s managed &#x60;DnsFilterListEntity&#x60; if none exists or re-enables a disabled one, and, with a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60;, also assigns the list to that target if it is not already. Enabling an enabled entry just returns its state. Returns 400 when both targets are given or the target does not exist, and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint post /api/blocked-services/{key}
 * @param requestParameters

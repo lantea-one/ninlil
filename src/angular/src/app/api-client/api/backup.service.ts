@@ -43,7 +43,7 @@ export class BackupService extends BaseService implements BackupServiceInterface
     }
 
     /**
-     * This action builds a complete backup archive and returns it as a file download (&#x60;application/octet-stream&#x60;, &#x60;ninlil-backup-*.ltbk&#x60;), not JSON. With Ninlil.Web.Models.BackupCreateRequest.Passphrase the archive is encrypted with AES-256-GCM; without one it is unencrypted and marked as such in its header. Returns 400 when the passphrase is only whitespace or too short. Requires &#x60;backup:read&#x60;.
+     * This action builds a complete backup archive and returns it as a file download (&#x60;application/octet-stream&#x60;, &#x60;ninlil-backup-*.ltbk&#x60;), not JSON. With &#x60;BackupCreateRequest.Passphrase&#x60; the archive is encrypted with AES-256-GCM; without one it is unencrypted and marked as such in its header. Returns 400 when the passphrase is only whitespace or too short. Requires &#x60;backup:read&#x60;.
      * @endpoint post /api/backup
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

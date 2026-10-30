@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a TSIG key without its secret, as returned by the list and get endpoints and nested in Ninlil.Web.Models.TsigKeyCreateResponse, the one response that includes the secret.
+ * This class carries a TSIG key without its secret, as returned by the list and get endpoints and nested in `TsigKeyCreateResponse`, the one response that includes the secret.
  */
 export interface TsigKeyDetail { 
     /**

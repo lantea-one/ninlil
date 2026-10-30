@@ -15,11 +15,11 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
  */
 export interface DnsClientStaticAddressMappingWriteRequest { 
     /**
-     * The source address or network mapped to ClientIdentifier: a bare IP address (exact match) or a CIDR network with a `/` (matches every address in it). A value with a `/` must parse with M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@) and one without with M:System.Net.IPAddress.TryParse(System.String,System.Net.IPAddress@), the same two forms `Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver` matches at query time.
+     * The source address or network mapped to ClientIdentifier: a bare IP address (exact match) or a CIDR network with a `/` (matches every address in it). A value with a `/` must parse with M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@) and one without with M:System.Net.IPAddress.TryParse(System.String,System.Net.IPAddress@), the same two forms `StaticAddressMappingClientIdentityResolver` matches at query time.
      */
     cidr?: string | null;
     /**
-     * The persistent client identifier a query from Cidr resolves to: a MAC address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping, or a DHCP Unique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6 one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.
+     * The persistent client identifier a query from Cidr resolves to: a MAC address for an `InternetProtocolVersionEnum.IPv4` mapping, or a DHCP Unique Identifier (DUID) for an `InternetProtocolVersionEnum.IPv6` one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.
      */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;

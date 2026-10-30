@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries this node\'s cluster settings (`GET /api/cluster-settings`), from `ClusterOptions`. Ninlil.Web.Models.ClusterSettingsDetail.NodeId is read-only and shown for diagnostics; `ClusterSettingsController.Patch` cannot change it. Ninlil.Web.Models.ClusterSettingsDetail.AddressReconcileInterval comes from `CatalogSyncOptions` instead. It shares this page because it only exists to keep the NOTIFY and primary address lists of catalog-managed zones in step with cluster membership (see `CatalogClusterAddressSyncService`).
+ * This class carries this node\'s cluster settings (`GET /api/cluster-settings`), from `ClusterOptions`. `ClusterSettingsDetail.NodeId` is read-only and shown for diagnostics; `ClusterSettingsController.Patch` cannot change it. `ClusterSettingsDetail.AddressReconcileInterval` comes from `CatalogSyncOptions` instead. It shares this page because it only exists to keep the NOTIFY and primary address lists of catalog-managed zones in step with cluster membership (see `CatalogClusterAddressSyncService`).
  */
 export interface ClusterSettingsDetail { 
     /**

@@ -193,7 +193,7 @@ export class DhcpLeasesService extends BaseService implements DhcpLeasesServiceI
     }
 
     /**
-     * This action force-releases a lease so an operator can reclaim a stuck or stale address without waiting for the client\&#39;s RELEASE or the expiry sweep. It calls M:Ninlil.Dhcp.Server.Core.Administration.IDhcpLeaseAdministrationService.ForceReleaseAsync(System.Guid,System.Threading.CancellationToken), which makes the same change and raises the same &#x60;DhcpLeaseChangedEvent&#x60; as a client release, so the address can be handed out again at once and any DNS record the lease registered is removed. Releasing a lease that is already released succeeds and changes nothing. Returns 404 for an unknown id. Requires &#x60;dhcpleases:manage&#x60;.
+     * This action force-releases a lease so an operator can reclaim a stuck or stale address without waiting for the client\&#39;s RELEASE or the expiry sweep. It calls &#x60;IDhcpLeaseAdministrationService.ForceReleaseAsync&#x60;, which makes the same change and raises the same &#x60;DhcpLeaseChangedEvent&#x60; as a client release, so the address can be handed out again at once and any DNS record the lease registered is removed. Releasing a lease that is already released succeeds and changes nothing. Returns 404 for an unknown id. Requires &#x60;dhcpleases:manage&#x60;.
      * @endpoint post /api/dhcp-leases/{id}/release
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

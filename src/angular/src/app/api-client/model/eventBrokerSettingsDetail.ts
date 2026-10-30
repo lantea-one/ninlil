@@ -13,12 +13,12 @@ import { RabbitMqBrokerSettingsDetail } from './rabbitMqBrokerSettingsDetail';
 
 
 /**
- * This record is the event transport configuration that `GET /api/event-broker-settings` returns. Only the section matching Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is filled in; the other is null. A broker that was not selected never had its options configured, so reading them through Microsoft.Extensions.Options.IOptions`1 would return compiled-in defaults that look like live configuration.
+ * This record is the event transport configuration that `GET /api/event-broker-settings` returns. Only the section matching `EventBrokerSettingsDetail.Transport` is filled in; the other is null. A broker that was not selected never had its options configured, so reading them through Microsoft.Extensions.Options.IOptions`1 would return compiled-in defaults that look like live configuration.
  */
 export interface EventBrokerSettingsDetail { 
     transport?: EventTransportEnum;
     /**
-     * Whether the active broker transport reports itself connected, or null when Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is Ninlil.Dns.Common.Enum.EventTransportEnum.InMemory, where \"connected\" has no meaning.
+     * Whether the active broker transport reports itself connected, or null when `EventBrokerSettingsDetail.Transport` is `EventTransportEnum.InMemory`, where \"connected\" has no meaning.
      */
     isConnected?: boolean | null;
     rabbitMq?: RabbitMqBrokerSettingsDetail;
@@ -28,7 +28,7 @@ export interface EventBrokerSettingsDetail {
      */
     lastModifiedUtc?: string | null;
     /**
-     * The cluster node the settings were last written on, or null together with Ninlil.Web.Models.EventBrokerSettingsDetail.LastModifiedUtc.
+     * The cluster node the settings were last written on, or null together with `EventBrokerSettingsDetail.LastModifiedUtc`.
      */
     originatingNodeId?: string | null;
 }

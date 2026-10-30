@@ -11,7 +11,7 @@ import { StatusComponent } from './statusComponent';
 
 
 /**
- * This class carries the response of `GET /status`. A caller without the `status:read` permission, including an anonymous one, gets only Ninlil.Web.Models.StatusResponse.Status, with Ninlil.Web.Models.StatusResponse.Componentsnull. A caller with it gets both. Ninlil.Web.Models.StatusResponse.Status is aggregated from the same health checks the components report.
+ * This class carries the response of `GET /status`. A caller without the `status:read` permission, including an anonymous one, gets only `StatusResponse.Status`, with `StatusResponse.Componentsnull`. A caller with it gets both. `StatusResponse.Status` is aggregated from the same health checks the components report.
  */
 export interface StatusResponse { 
     /**

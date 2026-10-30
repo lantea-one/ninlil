@@ -76,7 +76,7 @@ export interface ForwardersServiceInterface {
     apiForwardersIdGet(requestParameters: ApiForwardersIdGetRequestParams, extraHttpRequestParams?: any): Observable<ForwarderDetail>;
 
     /**
-     * This action updates a forwarder as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. Validation and errors are as for M:Ninlil.Web.Controllers.ForwardersController.Replace(System.Guid,Ninlil.Web.Models.ForwarderWriteRequest,System.Threading.CancellationToken). Requires &#x60;forwarders:write&#x60;.
+     * This action updates a forwarder as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. Validation and errors are as for &#x60;PUT /api/forwarders/{id}&#x60;. Requires &#x60;forwarders:write&#x60;.
      * 
      * @endpoint patch /api/forwarders/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface ForwardersServiceInterface {
     apiForwardersIdPatch(requestParameters: ApiForwardersIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action replaces a forwarder\&#39;s fields. Validation and errors are as for M:Ninlil.Web.Controllers.ForwardersController.Create(Ninlil.Web.Models.ForwarderWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;forwarders:write&#x60;.
+     * This action replaces a forwarder\&#39;s fields. Validation and errors are as for &#x60;POST /api/forwarders&#x60;, plus 404 for an unknown id. Requires &#x60;forwarders:write&#x60;.
      * 
      * @endpoint put /api/forwarders/{id}
 * @param requestParameters

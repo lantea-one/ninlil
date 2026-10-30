@@ -14,7 +14,7 @@
  */
 export interface RuntimeSettingsWriteResult { 
     /**
-     * When the change takes effect: at once, after a listener or service restart, or after a process restart (see Ninlil.Web.Options.RuntimeConfigurationOptions).
+     * When the change takes effect: at once, after a listener or service restart, or after a process restart (see `RuntimeConfigurationOptions`).
      */
     note?: string | null;
 }

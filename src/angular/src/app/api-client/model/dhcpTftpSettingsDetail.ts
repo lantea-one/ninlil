@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Ninlil.Dhcp.Server.Tftp.TftpServerOptions`, the bundled read-only RFC 1350 TFTP server (`GET /api/dhcp-settings/tftp`).
+ * This record is the REST shape of `TftpServerOptions`, the bundled read-only RFC 1350 TFTP server (`GET /api/dhcp-settings/tftp`).
  */
 export interface DhcpTftpSettingsDetail { 
     /**

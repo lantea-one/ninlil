@@ -39,7 +39,7 @@ export interface DhcpServiceControlServiceInterface {
     apiDhcpServicesGet(extraHttpRequestParams?: any): Observable<Array<DhcpServiceStatus>>;
 
     /**
-     * This action starts one DHCP-family service now, binding its socket, whatever its &#x60;Enable&#x60; flag says. Starting a running service changes nothing (see M:Ninlil.Dhcp.Common.Control.IDhcpProtocolService.StartAsync(System.Threading.CancellationToken)). Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
+     * This action starts one DHCP-family service now, binding its socket, whatever its &#x60;Enable&#x60; flag says. Starting a running service changes nothing (see &#x60;IDhcpProtocolService.StartAsync&#x60;). Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
      * 
      * @endpoint post /api/dhcp-services/{kind}/start
 * @param requestParameters
@@ -47,7 +47,7 @@ export interface DhcpServiceControlServiceInterface {
     apiDhcpServicesKindStartPost(requestParameters: ApiDhcpServicesKindStartPostRequestParams, extraHttpRequestParams?: any): Observable<DhcpServiceStatus>;
 
     /**
-     * This action stops one DHCP-family service now, releasing its socket and leaving every other service running. Stopping a stopped service changes nothing (see M:Ninlil.Dhcp.Common.Control.IDhcpProtocolService.StopAsync(System.Threading.CancellationToken)). Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
+     * This action stops one DHCP-family service now, releasing its socket and leaving every other service running. Stopping a stopped service changes nothing (see &#x60;IDhcpProtocolService.StopAsync&#x60;). Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
      * 
      * @endpoint post /api/dhcp-services/{kind}/stop
 * @param requestParameters

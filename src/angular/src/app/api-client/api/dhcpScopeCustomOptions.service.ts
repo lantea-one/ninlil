@@ -258,7 +258,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action replaces a custom option\&#39;s fields, keeping its id and scope. Validation is as for M:Ninlil.Web.Controllers.DhcpScopeCustomOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another scope, and 409 when another option of the scope has the new tag. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action replaces a custom option\&#39;s fields, keeping its id and scope. Validation is as for &#x60;POST /api/dhcp-scopes/{scopeId}/custom-options&#x60;; returns 404 when the option does not exist or belongs to another scope, and 409 when another option of the scope has the new tag. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint put /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

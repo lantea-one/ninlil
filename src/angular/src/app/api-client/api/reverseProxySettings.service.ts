@@ -42,7 +42,7 @@ export class ReverseProxySettingsService extends BaseService implements ReverseP
     }
 
     /**
-     * This action returns the reverse-proxy trust settings for the HTTP listener and DNS-over-TLS as loaded at startup, plus which node last changed them. The shared secret is never returned, only whether one is set (Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured). Requires &#x60;reverseproxy:read&#x60;.
+     * This action returns the reverse-proxy trust settings for the HTTP listener and DNS-over-TLS as loaded at startup, plus which node last changed them. The shared secret is never returned, only whether one is set (&#x60;ReverseProxySettingsDetail.SharedSecretConfigured&#x60;). Requires &#x60;reverseproxy:read&#x60;.
      * @endpoint get /api/reverse-proxy-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -97,7 +97,7 @@ export class ReverseProxySettingsService extends BaseService implements ReverseP
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:ReverseProxy&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value, including &#x60;sharedSecret&#x60;, which is always operator-supplied and so can be replaced in place. The secret is stored encrypted with this node\&#39;s key ring (&#x60;sharedSecretEncrypted&#x60; in the file) and is sent as entered to the other cluster nodes, which encrypt it with their own key ring. &#x60;knownProxies&#x60; and &#x60;knownNetworks&#x60; are each replaced as a whole array when present. An optional &#x60;dnsOverTls&#x60; sub-object is merged the same way into &#x60;DnsServer:Protocol:DnsOverTls:ProxyProtocol&#x60;; it has no shared secret (see &#x60;DnsOverTlsProxyProtocolSettingsDetail&#x60;). Returns 400 for an invalid IP address or CIDR network. Requires &#x60;reverseproxy:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:ReverseProxy&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value, including &#x60;sharedSecret&#x60;, which is always operator-supplied and so can be replaced in place. The secret is stored encrypted with this node\&#39;s key ring (&#x60;sharedSecretEncrypted&#x60; in the file) and is sent as entered to the other cluster nodes, which encrypt it with their own key ring. &#x60;knownProxies&#x60; and &#x60;knownNetworks&#x60; are each replaced as a whole array when present. An optional &#x60;dnsOverTls&#x60; sub-object is merged the same way into &#x60;DnsServer:Protocol:DnsOverTls:ProxyProtocol&#x60;; it has no shared secret (see &#x60;DnsOverTlsProxyProtocolSettingsDetail&#x60;). Returns 400 for an invalid IP address or CIDR network. Requires &#x60;reverseproxy:write&#x60;.
      * @endpoint patch /api/reverse-proxy-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

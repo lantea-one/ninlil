@@ -317,7 +317,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
-     * This action replaces a tag rule\&#39;s fields. Validation is as for M:Ninlil.Web.Controllers.DhcpTagRulesController.Create(Ninlil.Web.Models.DhcpTagRuleWriteRequest,System.Threading.CancellationToken); returns 404 for an unknown id. Requires &#x60;dhcptagrules:write&#x60;.
+     * This action replaces a tag rule\&#39;s fields. Validation is as for &#x60;POST /api/dhcp-tag-rules&#x60;; returns 404 for an unknown id. Requires &#x60;dhcptagrules:write&#x60;.
      * @endpoint put /api/dhcp-tag-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

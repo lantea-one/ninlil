@@ -11,7 +11,7 @@ import { TsigKeyDetail } from './tsigKeyDetail';
 
 
 /**
- * This class carries a newly created TSIG key with its plaintext shared secret. It is the only response that includes Ninlil.Web.Models.TsigKeyCreateResponse.Secret: like every secret-bearing entity, a secret is revealed once at creation and omitted afterwards.
+ * This class carries a newly created TSIG key with its plaintext shared secret. It is the only response that includes `TsigKeyCreateResponse.Secret`: like every secret-bearing entity, a secret is revealed once at creation and omitted afterwards.
  */
 export interface TsigKeyCreateResponse { 
     key?: TsigKeyDetail;

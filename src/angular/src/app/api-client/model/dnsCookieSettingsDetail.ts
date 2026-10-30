@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the RFC 7873 DNS Cookie settings (`DnsCookieOptions`) that `GET /api/dns-cookie-settings` returns. A `PATCH` to the same endpoint accepts Ninlil.Web.Models.DnsCookieSettingsDetail.Enable, Ninlil.Web.Models.DnsCookieSettingsDetail.Require and Ninlil.Web.Models.DnsCookieSettingsDetail.SecretRotationInterval; the last two fields are read-only cluster sync bookkeeping.
+ * This record is the REST shape of the RFC 7873 DNS Cookie settings (`DnsCookieOptions`) that `GET /api/dns-cookie-settings` returns. A `PATCH` to the same endpoint accepts `DnsCookieSettingsDetail.Enable`, `DnsCookieSettingsDetail.Require` and `DnsCookieSettingsDetail.SecretRotationInterval`; the last two fields are read-only cluster sync bookkeeping.
  */
 export interface DnsCookieSettingsDetail { 
     /**

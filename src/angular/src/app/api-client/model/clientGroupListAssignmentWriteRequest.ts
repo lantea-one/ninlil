@@ -14,7 +14,7 @@
  */
 export interface ClientGroupListAssignmentWriteRequest { 
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity to assign to this group.
+     * The `DnsFilterListEntity` to assign to this group.
      */
     listId?: string;
 }

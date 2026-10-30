@@ -97,7 +97,7 @@ export class DnsPipelineSettingsService extends BaseService implements DnsPipeli
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Pipeline&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The response note depends on whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns 400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor that is not above 0. Requires &#x60;dnspipelinesettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Pipeline&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The response note depends on whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns 400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor that is not above 0. Requires &#x60;dnspipelinesettings:write&#x60;.
      * @endpoint patch /api/dns-pipeline-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -15,7 +15,7 @@ import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
  */
 export interface DnsOverQuicSettingsDetail { 
     /**
-     * Whether the transport listens. A change applies at once: it starts or stops the `dns-over-quic` listener through Ninlil.Web.Services.IManagedServiceRegistry.
+     * Whether the transport listens. A change applies at once: it starts or stops the `dns-over-quic` listener through `IManagedServiceRegistry`.
      */
     enable?: boolean;
     /**

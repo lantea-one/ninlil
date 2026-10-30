@@ -11,7 +11,7 @@ import { CloudDnsProviderTypeEnum } from './cloudDnsProviderTypeEnum';
 
 
 /**
- * This class carries the fields used to fully replace an existing cloud DNS provider credential set (`PUT /api/cloud-provider-credentials/{id}`). Unlike the shared secret of a TSIG key (see Ninlil.Web.Models.TsigKeyWriteRequest), these secrets come from the operator, who rotates them at the provider, so a `PUT` replaces Ninlil.Web.Models.CloudProviderCredentialWriteRequest.Credentials along with every other field. Nothing new is revealed, since the caller supplies the values. To change only the name, comments or disabled flag, use `PATCH` and leave out `credentials`.
+ * This class carries the fields used to fully replace an existing cloud DNS provider credential set (`PUT /api/cloud-provider-credentials/{id}`). Unlike the shared secret of a TSIG key (see `TsigKeyWriteRequest`), these secrets come from the operator, who rotates them at the provider, so a `PUT` replaces `CloudProviderCredentialWriteRequest.Credentials` along with every other field. Nothing new is revealed, since the caller supplies the values. To change only the name, comments or disabled flag, use `PATCH` and leave out `credentials`.
  */
 export interface CloudProviderCredentialWriteRequest { 
     /**

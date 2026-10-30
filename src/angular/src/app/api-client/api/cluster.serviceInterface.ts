@@ -74,7 +74,7 @@ export interface ClusterServiceInterface {
     apiClusterNodesIdGet(requestParameters: ApiClusterNodesIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClusterNodeDetail>;
 
     /**
-     * This action updates a peer\&#39;s display name and notes as an RFC 7396 merge patch; a field that is absent or null is left unchanged. The other fields are fixed once a peer exists (see Ninlil.Web.Models.ClusterNodeWriteRequest). Returns 404 for an unknown id. Requires &#x60;clusternodes:write&#x60;.
+     * This action updates a peer\&#39;s display name and notes as an RFC 7396 merge patch; a field that is absent or null is left unchanged. The other fields are fixed once a peer exists (see &#x60;ClusterNodeWriteRequest&#x60;). Returns 404 for an unknown id. Requires &#x60;clusternodes:write&#x60;.
      * 
      * @endpoint patch /api/cluster/nodes/{id}
 * @param requestParameters
@@ -82,14 +82,14 @@ export interface ClusterServiceInterface {
     apiClusterNodesIdPatch(requestParameters: ApiClusterNodesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a cluster invite and returns its code and expiry time (see Ninlil.Dns.Server.Cluster.Invite.ClusterInviteService). Requires &#x60;clusternodes:write&#x60;.
+     * This action creates a cluster invite and returns its code and expiry time (see &#x60;ClusterInviteService&#x60;). Requires &#x60;clusternodes:write&#x60;.
      * 
      * @endpoint post /api/cluster/nodes/invite
 */
     apiClusterNodesInvitePost(extraHttpRequestParams?: any): Observable<ClusterInviteCreateResponse>;
 
     /**
-     * This action uses an invite code from another node to complete the join handshake with that node, and returns the new peer (see Ninlil.Dns.Server.Cluster.Join.ClusterJoinService). Requires &#x60;clusternodes:write&#x60;.
+     * This action uses an invite code from another node to complete the join handshake with that node, and returns the new peer (see &#x60;ClusterJoinService&#x60;). Requires &#x60;clusternodes:write&#x60;.
      * 
      * @endpoint post /api/cluster/nodes/join
 * @param requestParameters
@@ -97,7 +97,7 @@ export interface ClusterServiceInterface {
     apiClusterNodesJoinPost(requestParameters: ApiClusterNodesJoinPostRequestParams, extraHttpRequestParams?: any): Observable<ClusterNodeDetail>;
 
     /**
-     * This action serves the cluster dashboard: a row with this node\&#39;s query counts (last hour, last 24 hours, all retained), then one row per known peer, collected live over the TSIG-authenticated, TLS-encrypted cluster channel by Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator. A peer that cannot be reached is still listed, marked unreachable with null counts, so \&quot;no traffic\&quot; and \&quot;unreachable\&quot; look different. With clustering disabled or no known peers, only this node\&#39;s row is returned. Requires &#x60;clusternodes:read&#x60;.
+     * This action serves the cluster dashboard: a row with this node\&#39;s query counts (last hour, last 24 hours, all retained), then one row per known peer, collected live over the TSIG-authenticated, TLS-encrypted cluster channel by &#x60;IClusterQueryStatsAggregator&#x60;. A peer that cannot be reached is still listed, marked unreachable with null counts, so \&quot;no traffic\&quot; and \&quot;unreachable\&quot; look different. With clustering disabled or no known peers, only this node\&#39;s row is returned. Requires &#x60;clusternodes:read&#x60;.
      * 
      * @endpoint get /api/cluster/nodes/stats
 */

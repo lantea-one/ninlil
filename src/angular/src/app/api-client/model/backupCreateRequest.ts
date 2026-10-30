@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the request body for M:Ninlil.Web.Controllers.BackupController.Create(Ninlil.Web.Models.BackupCreateRequest,System.Threading.CancellationToken).
+ * This record is the request body for `POST /api/backup`.
  */
 export interface BackupCreateRequest { 
     /**

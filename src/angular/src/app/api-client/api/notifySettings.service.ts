@@ -97,7 +97,7 @@ export class NotifySettingsService extends BaseService implements NotifySettings
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:Notify&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 when &#x60;maxAttempts&#x60; is below 1, the port is outside 1-65535, or a timeout or delay is not a positive TimeSpan. Requires &#x60;notifysettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:Notify&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect at once. Returns 400 when &#x60;maxAttempts&#x60; is below 1, the port is outside 1-65535, or a timeout or delay is not a positive TimeSpan. Requires &#x60;notifysettings:write&#x60;.
      * @endpoint patch /api/notify-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

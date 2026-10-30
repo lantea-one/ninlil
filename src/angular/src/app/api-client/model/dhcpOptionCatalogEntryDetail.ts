@@ -11,11 +11,11 @@ import { DhcpOptionValueTypeEnum } from './dhcpOptionValueTypeEnum';
 
 
 /**
- * This record is the REST shape of one Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry, as returned by `GET /api/dhcp-option-catalog`. It copies the catalog record field by field so the API does not change when the record does (see Ninlil.Web.Controllers.DhcpOptionCatalogController).
+ * This record is the REST shape of one `DhcpOptionCatalogEntry`, as returned by `GET /api/dhcp-option-catalog`. It copies the catalog record field by field so the API does not change when the record does (see `DhcpOptionCatalogController`).
  */
 export interface DhcpOptionCatalogEntryDetail { 
     /**
-     * The option\'s numeric code (see Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry.Code).
+     * The option\'s numeric code (see `DhcpOptionCatalogEntry.Code`).
      */
     code?: number;
     /**

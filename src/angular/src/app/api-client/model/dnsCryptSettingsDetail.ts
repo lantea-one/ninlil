@@ -14,7 +14,7 @@
  */
 export interface DnsCryptSettingsDetail { 
     /**
-     * Whether the transport listens. A change applies at once: it starts or stops the `dnscrypt-udp` and `dnscrypt-tcp` listeners and the `dnscrypt-certificate-rotation` loop through Ninlil.Web.Services.IManagedServiceRegistry. The loop issues the resolver\'s certificates; without one, a listener could accept connections but not answer an encrypted query.
+     * Whether the transport listens. A change applies at once: it starts or stops the `dnscrypt-udp` and `dnscrypt-tcp` listeners and the `dnscrypt-certificate-rotation` loop through `IManagedServiceRegistry`. The loop issues the resolver\'s certificates; without one, a listener could accept connections but not answer an encrypted query.
      */
     enable?: boolean;
     /**

@@ -12,7 +12,7 @@ import { LeaseStateEnum } from './leaseStateEnum';
 
 
 /**
- * This class carries one DHCP lease, as returned by the list and get endpoints of `/api/dhcp-leases`. There is no write request: the allocation engine creates and updates leases as clients come and go, and an operator can only release one (`POST /api/dhcp-leases/{id}/release`). Ninlil.Web.Models.DhcpLeaseDetail.PrefixLength is set only for a DHCPv6 Prefix Delegation lease and is null for an address lease (see `LeaseEntity.PrefixLength`).
+ * This class carries one DHCP lease, as returned by the list and get endpoints of `/api/dhcp-leases`. There is no write request: the allocation engine creates and updates leases as clients come and go, and an operator can only release one (`POST /api/dhcp-leases/{id}/release`). `DhcpLeaseDetail.PrefixLength` is set only for a DHCPv6 Prefix Delegation lease and is null for an address lease (see `LeaseEntity.PrefixLength`).  <b>Declined addresses.</b> When a client declines an address (RFC 2131 Section 4.3.3),     the lease row becomes a quarantine row: `ClientIdentifier` is     `declined:<address>` (for example `declined:192.0.2.55`), `State` is     `Expired` and `LeaseExpiresAtUtc` is the end of the quarantine, which is     `DeclinedAddressQuarantineDuration` after the decline (see     `DhcpCoreSettingsDetail`). No client owns the row, and the address is not     offered to any client until that time. `POST /api/dhcp-leases/{id}/release`     on a quarantine row sets `State` to `Released` and ends the quarantine at     once.
  */
 export interface DhcpLeaseDetail { 
     id?: string;

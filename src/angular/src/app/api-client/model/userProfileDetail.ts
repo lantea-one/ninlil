@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the caller\'s self-service profile, read through M:Ninlil.Web.Controllers.UsersController.GetMine and changed through M:Ninlil.Web.Controllers.UsersController.PatchMine(System.Text.Json.JsonElement), which accepts only the display name and phone number. Ninlil.Web.Models.UserProfileDetail.Email is shown, and lets the Profile page compute the Gravatar hash, but cannot be changed here: changing an e-mail address would need a re-verification flow that does not exist. An administrator can change it through `UpdateUserRequest`.
+ * This class carries the caller\'s self-service profile, read through `GET /api/users/me` and changed through `PATCH /api/users/me`, which accepts only the display name and phone number. `UserProfileDetail.Email` is shown, and lets the Profile page compute the Gravatar hash, but cannot be changed here: changing an e-mail address would need a re-verification flow that does not exist. An administrator can change it through `UpdateUserRequest`.
  */
 export interface UserProfileDetail { 
     /**

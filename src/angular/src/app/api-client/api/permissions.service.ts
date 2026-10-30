@@ -37,7 +37,7 @@ export class PermissionsService extends BaseService implements PermissionsServic
     }
 
     /**
-     * This action returns the sorted, distinct permission strings named by every Ninlil.Dns.Identity.Authorization.RequirePermissionAttribute on a controller class or action. Requires only a signed-in caller.
+     * This action returns the sorted, distinct permission strings named by every &#x60;RequirePermissionAttribute&#x60; on a controller class or action. Requires only a signed-in caller.
      * @endpoint get /api/permissions
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

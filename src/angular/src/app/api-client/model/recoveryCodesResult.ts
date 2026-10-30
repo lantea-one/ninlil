@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries a new batch of single-use recovery codes (`POST /api/auth/two-factor/recovery-codes/generate`, which requires two-factor authentication to be enabled). They are a fallback when the authenticator app or e-mail is unavailable. Like every generated secret (a TSIG key\'s secret, a webhook\'s signing secret), they are shown once, in this response; afterwards only Ninlil.Web.Models.TwoFactorStatus.RecoveryCodesRemaining reports on them.
+ * This class carries a new batch of single-use recovery codes (`POST /api/auth/two-factor/recovery-codes/generate`, which requires two-factor authentication to be enabled). They are a fallback when the authenticator app or e-mail is unavailable. Like every generated secret (a TSIG key\'s secret, a webhook\'s signing secret), they are shown once, in this response; afterwards only `TwoFactorStatus.RecoveryCodesRemaining` reports on them.
  */
 export interface RecoveryCodesResult { 
     /**
-     * The 10 new codes, each usable once at `POST /api/auth/login/two-factor` with `\"RecoveryCode\"` as the Ninlil.Web.Models.TwoFactorLoginRequest.Provider. Generating a batch invalidates every code from earlier batches.
+     * The 10 new codes, each usable once at `POST /api/auth/login/two-factor` with `\"RecoveryCode\"` as the `TwoFactorLoginRequest.Provider`. Generating a batch invalidates every code from earlier batches.
      */
     codes?: Array<string> | null;
 }

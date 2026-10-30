@@ -60,7 +60,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsGet(requestParameters: ApiFilterListsGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListDetailPagedResult>;
 
     /**
-     * This action deletes a list together with its entries and every assignment that refers to it: client-group assignments (see Ninlil.Web.Controllers.ClientGroupListAssignmentsController) and direct client assignments (see Ninlil.Web.Controllers.ClientListAssignmentsController). Nothing is left behind. The removal runs in one transaction on the relational engines. Returns 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
+     * This action deletes a list together with its entries and every assignment that refers to it: client-group assignments (see &#x60;ClientGroupListAssignmentsController&#x60;) and direct client assignments (see &#x60;ClientListAssignmentsController&#x60;). Nothing is left behind. The removal runs in one transaction on the relational engines. Returns 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint delete /api/filter-lists/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListDetail>;
 
     /**
-     * This action updates a list\&#39;s settings as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Replace(System.Guid,Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken): a &#x60;refreshInterval&#x60; under one hour is rejected with 400, and &#x60;null&#x60; restores the 24-hour default. Requires &#x60;filterlists:write&#x60;.
+     * This action updates a list\&#39;s settings as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Validation and errors are as for &#x60;PUT /api/filter-lists/{id}&#x60;: a &#x60;refreshInterval&#x60; under one hour is rejected with 400, and &#x60;null&#x60; restores the 24-hour default. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint patch /api/filter-lists/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdPatch(requestParameters: ApiFilterListsIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action replaces a list\&#39;s settings. Changing Ninlil.Web.Models.FilterListWriteRequest.Source from Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local to Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed leaves the existing entries alone until the next refresh replaces them all. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Create(Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
+     * This action replaces a list\&#39;s settings. Changing &#x60;FilterListWriteRequest.Source&#x60; from &#x60;DnsFilterListSourceEnum.Local&#x60; to &#x60;DnsFilterListSourceEnum.Subscribed&#x60; leaves the existing entries alone until the next refresh replaces them all. Validation and errors are as for &#x60;POST /api/filter-lists&#x60;, plus 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint put /api/filter-lists/{id}
 * @param requestParameters

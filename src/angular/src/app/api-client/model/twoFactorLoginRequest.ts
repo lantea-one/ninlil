@@ -11,11 +11,11 @@ import { RefreshTokenDeliveryEnum } from './refreshTokenDeliveryEnum';
 
 
 /**
- * This class carries the second-factor code a caller submits to finish a sign-in that Ninlil.Web.Models.LoginResponse.RequiresTwoFactor flagged as still pending.
+ * This class carries the second-factor code a caller submits to finish a sign-in that `LoginResponse.RequiresTwoFactor` flagged as still pending.
  */
 export interface TwoFactorLoginRequest { 
     /**
-     * The opaque token Ninlil.Web.Models.LoginResponse.MfaToken returned.
+     * The opaque token `LoginResponse.MfaToken` returned.
      */
     mfaToken?: string | null;
     /**
@@ -27,7 +27,7 @@ export interface TwoFactorLoginRequest {
      */
     provider?: string | null;
     /**
-     * The same choice Ninlil.Web.Models.LoginRequest.RememberMe describes, repeated for this final step.
+     * The same choice `LoginRequest.RememberMe` describes, repeated for this final step.
      */
     rememberMe?: boolean;
     refreshTokenDelivery?: RefreshTokenDeliveryEnum;

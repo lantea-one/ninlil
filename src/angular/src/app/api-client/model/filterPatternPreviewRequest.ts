@@ -20,7 +20,7 @@ export interface FilterPatternPreviewRequest {
      */
     value?: string | null;
     /**
-     * The domains to test Ninlil.Web.Models.FilterPatternPreviewRequest.Value against. When omitted or empty, the small built-in set `FilterPatternPreviewController.DefaultSampleDomains` is used. At most 20 domains are accepted, each non-blank and at most 253 characters; anything else is rejected with 400.
+     * The domains to test `FilterPatternPreviewRequest.Value` against. When omitted or empty, the small built-in set `FilterPatternPreviewController.DefaultSampleDomains` is used. At most 20 domains are accepted, each non-blank and at most 253 characters; anything else is rejected with 400.
      */
     sampleDomains?: Array<string> | null;
 }

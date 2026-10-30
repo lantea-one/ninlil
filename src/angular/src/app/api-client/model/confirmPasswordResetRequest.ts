@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a token-based password reset, submitted from the \"set new password\" landing page to M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest,System.Threading.CancellationToken). The page serves both the reset e-mail an administrator sends (`UsersController.ResetPassword` in `EmailLink` mode) and the self-service M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) request. Nobody is signed in at this point, so the action is `[AllowAnonymous]` and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token with Ninlil.Web.Models.ConfirmPasswordResetRequest.UserId is its only proof of authorization.
+ * This class carries a token-based password reset, submitted from the \"set new password\" landing page to `POST /api/auth/reset-password`. The page serves both the reset e-mail an administrator sends (`UsersController.ResetPassword` in `EmailLink` mode) and the self-service `POST /api/auth/forgot-password` request. Nobody is signed in at this point, so the action is `[AllowAnonymous]` and `ConfirmPasswordResetRequest.Token` with `ConfirmPasswordResetRequest.UserId` is its only proof of authorization.
  */
 export interface ConfirmPasswordResetRequest { 
     /**
@@ -22,7 +22,7 @@ export interface ConfirmPasswordResetRequest {
      */
     token?: string | null;
     /**
-     * The new password to set, once Ninlil.Web.Models.ConfirmPasswordResetRequest.Token checks out.
+     * The new password to set, once `ConfirmPasswordResetRequest.Token` checks out.
      */
     newPassword?: string | null;
 }

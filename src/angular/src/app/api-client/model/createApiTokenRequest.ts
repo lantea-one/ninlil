@@ -18,7 +18,7 @@ export interface CreateApiTokenRequest {
      */
     name?: string | null;
     /**
-     * Whether the token is consumed the first time it is used (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.OneTime) rather than working until it is revoked or expires (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.Static).
+     * Whether the token is consumed the first time it is used (`ApiTokenTypeEnum.OneTime`) rather than working until it is revoked or expires (`ApiTokenTypeEnum.Static`).
      */
     oneTime?: boolean;
     /**

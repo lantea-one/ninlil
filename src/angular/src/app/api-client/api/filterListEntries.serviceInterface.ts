@@ -76,7 +76,7 @@ export interface FilterListEntriesServiceInterface {
     apiFilterListsListIdEntriesIdGet(requestParameters: ApiFilterListsListIdEntriesIdGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListEntryDetail>;
 
     /**
-     * This action replaces an entry\&#39;s value, comment and kind, keeping its id. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListEntriesController.Create(System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown entry. Requires &#x60;filterlists:write&#x60;.
+     * This action replaces an entry\&#39;s value, comment and kind, keeping its id. Validation and errors are as for &#x60;POST /api/filter-lists/{listId}/entries&#x60;, plus 404 for an unknown entry. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint put /api/filter-lists/{listId}/entries/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface FilterListEntriesServiceInterface {
     apiFilterListsListIdEntriesIdPut(requestParameters: ApiFilterListsListIdEntriesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds an entry to a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list. Returns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a pattern that does not compile; 404 for an unknown list; and 409 for a subscribed list. Requires &#x60;filterlists:write&#x60;.
+     * This action adds an entry to a &#x60;DnsFilterListSourceEnum.Local&#x60; list. Returns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a pattern that does not compile; 404 for an unknown list; and 409 for a subscribed list. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint post /api/filter-lists/{listId}/entries
 * @param requestParameters

@@ -18,7 +18,7 @@ export interface ClientGroupWriteRequest {
      */
     name?: string | null;
     /**
-     * Whether this is the fallback group for a client that matches no other group\'s networks. Setting it true takes the flag from whichever group holds it, since only one group may (see Ninlil.Web.Controllers.ClientGroupsController).
+     * Whether this is the fallback group for a client that matches no other group\'s networks. Setting it true takes the flag from whichever group holds it, since only one group may (see `ClientGroupsController`).
      */
     isDefault?: boolean;
     /**

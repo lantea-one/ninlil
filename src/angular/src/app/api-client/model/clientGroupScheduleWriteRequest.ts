@@ -11,7 +11,7 @@ import { DnsScheduleDayOfWeekEnum } from './dnsScheduleDayOfWeekEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a time-of-day parental-control schedule assigned to a client group (`POST` and `PUT` under `/api/client-groups/{groupId}/schedules`). The fields mean what they mean in Ninlil.Web.Models.ClientScheduleWriteRequest.
+ * This class carries the fields used to create or fully replace a time-of-day parental-control schedule assigned to a client group (`POST` and `PUT` under `/api/client-groups/{groupId}/schedules`). The fields mean what they mean in `ClientScheduleWriteRequest`.
  */
 export interface ClientGroupScheduleWriteRequest { 
     daysOfWeek?: DnsScheduleDayOfWeekEnum;

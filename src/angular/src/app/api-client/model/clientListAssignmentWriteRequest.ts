@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries the fields used to create a new filter-list assignment for a known client (`POST /api/clients/{clientId}/list-assignments`), the client counterpart of Ninlil.Web.Models.ClientGroupListAssignmentWriteRequest. There is no `PUT` or `PATCH`: an assignment only joins a client to a list, so assigning a different list means deleting one assignment and creating another.
+ * This class carries the fields used to create a new filter-list assignment for a known client (`POST /api/clients/{clientId}/list-assignments`), the client counterpart of `ClientGroupListAssignmentWriteRequest`. There is no `PUT` or `PATCH`: an assignment only joins a client to a list, so assigning a different list means deleting one assignment and creating another.
  */
 export interface ClientListAssignmentWriteRequest { 
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity to assign to the client.
+     * The `DnsFilterListEntity` to assign to the client.
      */
     listId?: string;
 }

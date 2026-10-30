@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries one health check\'s result, as listed in Ninlil.Web.Models.StatusResponse.Components.
+ * This class carries one health check\'s result, as listed in `StatusResponse.Components`.
  */
 export interface StatusComponent { 
     /**

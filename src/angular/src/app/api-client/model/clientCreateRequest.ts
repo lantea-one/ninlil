@@ -11,7 +11,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries the fields used to register a known client device (`POST /api/clients`) with its first address. Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier and Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion become that address\'s identity, which cannot change later (see Ninlil.Web.Controllers.ClientsController). Further addresses are added through M:Ninlil.Web.Controllers.ClientAddressesController.Create(System.Guid,Ninlil.Web.Models.ClientAddressWriteRequest,System.Threading.CancellationToken). The device fields that stay editable are in Ninlil.Web.Models.ClientWriteRequest, used by `PUT` and `PATCH`.
+ * This class carries the fields used to register a known client device (`POST /api/clients`) with its first address. `ClientCreateRequest.ClientIdentifier` and `ClientCreateRequest.ProtocolVersion` become that address\'s identity, which cannot change later (see `ClientsController`). Further addresses are added through `POST /api/clients/{clientId}/addresses`. The device fields that stay editable are in `ClientWriteRequest`, used by `PUT` and `PATCH`.
  */
 export interface ClientCreateRequest { 
     /**
@@ -24,7 +24,7 @@ export interface ClientCreateRequest {
      */
     displayName?: string | null;
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity the client is explicitly assigned to, or null for none.
+     * The `DnsClientGroupEntity` the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**
@@ -36,7 +36,7 @@ export interface ClientCreateRequest {
      */
     comments?: string | null;
     /**
-     * An optional device icon, named by its Ninlil.Dns.Common.Enum.DnsClientDeviceIconEnum value (for example `Laptop`); any other value is rejected with a `400`. Omitted or null leaves the choice unset, so the vendor-based suggestion applies.
+     * An optional device icon, named by its `DnsClientDeviceIconEnum` value (for example `Laptop`); any other value is rejected with a `400`. Omitted or null leaves the choice unset, so the vendor-based suggestion applies.
      */
     deviceIconKey?: string | null;
     /**

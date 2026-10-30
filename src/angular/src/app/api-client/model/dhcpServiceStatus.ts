@@ -11,7 +11,7 @@ import { DhcpServiceKindEnum } from './dhcpServiceKindEnum';
 
 
 /**
- * This record is one DHCP-family service\'s state, as returned by `/api/dhcp-services`: its configured Ninlil.Web.Models.DhcpServiceStatus.Enabled flag (whether it starts at boot) and whether it Ninlil.Web.Models.DhcpServiceStatus.IsRunning. The two can differ either way. A service configured off can be running because it was started through this controller, and one configured on can be stopped, either through this controller or, for Ninlil.Web.Models.DhcpServiceKindEnum.Tftp only, because it declined to bind (for example when its root directory is missing; see `TftpServer`). `Ninlil.Dhcp.Common.Control.IDhcpProtocolService` explains the distinction.
+ * This record is one DHCP-family service\'s state, as returned by `/api/dhcp-services`: its configured `DhcpServiceStatus.Enabled` flag (whether it starts at boot) and whether it `DhcpServiceStatus.IsRunning`. The two can differ either way. A service configured off can be running because it was started through this controller, and one configured on can be stopped, either through this controller or, for `DhcpServiceKindEnum.Tftp` only, because it declined to bind (for example when its root directory is missing; see `TftpServer`). `IDhcpProtocolService` explains the distinction.
  */
 export interface DhcpServiceStatus { 
     kind?: DhcpServiceKindEnum;

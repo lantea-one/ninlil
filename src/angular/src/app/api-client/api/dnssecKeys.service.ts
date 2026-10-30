@@ -138,7 +138,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
     }
 
     /**
-     * This action records that the operator has published a Key-Signing Key rollover\&#39;s new DS record at an externally hosted parent zone, so the rollover can continue (see M:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync(System.Guid,System.Threading.CancellationToken)). Returns 400 when the key is not a KSK in the middle of a rollover and 404 when it does not exist in this zone. Requires &#x60;zones:write&#x60;.
+     * This action records that the operator has published a Key-Signing Key rollover\&#39;s new DS record at an externally hosted parent zone, so the rollover can continue (see &#x60;IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync&#x60;). Returns 400 when the key is not a KSK in the middle of a rollover and 404 when it does not exist in this zone. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{zoneId}/dnssec-keys/{id}/confirm-parent-ds-updated
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -201,7 +201,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
     }
 
     /**
-     * This action deletes a DNSSEC key. Prefer retiring a key (M:Ninlil.Web.Controllers.DnssecKeysController.Patch(System.Guid,System.Guid,System.Text.Json.JsonElement,System.Threading.CancellationToken) or M:Ninlil.Web.Controllers.DnssecKeysController.Replace(System.Guid,System.Guid,Ninlil.Web.Models.DnssecKeyWriteRequest,System.Threading.CancellationToken) with &#x60;isRetired: true&#x60;) unless it is already retired and no longer needed to keep signatures validating. Returns 404 when the zone or key does not exist. Requires &#x60;zones:write&#x60;.
+     * This action deletes a DNSSEC key. Prefer retiring a key (&#x60;PATCH /api/zones/{zoneId}/dnssec-keys/{id}&#x60; or &#x60;PUT /api/zones/{zoneId}/dnssec-keys/{id}&#x60; with &#x60;isRetired: true&#x60;) unless it is already retired and no longer needed to keep signatures validating. Returns 404 when the zone or key does not exist. Requires &#x60;zones:write&#x60;.
      * @endpoint delete /api/zones/{zoneId}/dnssec-keys/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -402,7 +402,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
     }
 
     /**
-     * This action replaces a key\&#39;s editable state, its retirement flag and comments (see Ninlil.Web.Models.DnssecKeyWriteRequest for why nothing else can be written). Returns 404 when the zone or key does not exist. Requires &#x60;zones:write&#x60;.
+     * This action replaces a key\&#39;s editable state, its retirement flag and comments (see &#x60;DnssecKeyWriteRequest&#x60; for why nothing else can be written). Returns 404 when the zone or key does not exist. Requires &#x60;zones:write&#x60;.
      * @endpoint put /api/zones/{zoneId}/dnssec-keys/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -476,7 +476,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
     }
 
     /**
-     * This action starts an automated RFC 6781 rollover of an active key and returns the new key. The scheme (Pre-Publish or Double-Signature) follows from the key\&#39;s role; see M:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.StartRolloverAsync(System.Guid,System.Guid,System.Nullable{Ninlil.Dns.Common.Enum.DnssecAlgorithmEnum},System.Int32,System.Threading.CancellationToken) for the steps. Returns 400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits. Requires &#x60;zones:write&#x60;.
+     * This action starts an automated RFC 6781 rollover of an active key and returns the new key. The scheme (Pre-Publish or Double-Signature) follows from the key\&#39;s role; see &#x60;IDnssecKeyManagementService.StartRolloverAsync&#x60; for the steps. Returns 400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{zoneId}/dnssec-keys/{id}/roll
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

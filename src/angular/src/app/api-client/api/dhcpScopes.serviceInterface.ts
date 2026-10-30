@@ -65,7 +65,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesGet(requestParameters: ApiDhcpScopesGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeDetailPagedResult>;
 
     /**
-     * This action deletes a DHCP scope with its reservations and custom options, removed explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases recorded for the scope (which refer to it by &#x60;ScopeName&#x60;, not id) are left alone as operational data, as &#x60;Server.Backup.BackupEntityCatalog&#x60; treats them. A tag rule that names the scope (&#x60;DhcpTagRuleEntity.ScopeId&#x60;) is also left alone and simply never matches again. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action deletes a DHCP scope with its reservations and custom options, removed explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases recorded for the scope (which refer to it by &#x60;ScopeName&#x60;, not id) are left alone as operational data, as &#x60;BackupEntityCatalog&#x60; treats them. A tag rule that names the scope (&#x60;DhcpTagRuleEntity.ScopeId&#x60;) is also left alone and simply never matches again. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:write&#x60;.
      * 
      * @endpoint delete /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -81,7 +81,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdGet(requestParameters: ApiDhcpScopesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeDetail>;
 
     /**
-     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken) (patched gateway and DNS entries must match the scope\&#39;s protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive duration (400 otherwise), and the range start must not be after the range end. Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for &#x60;POST /api/dhcp-scopes&#x60; (patched gateway and DNS entries must match the scope\&#39;s protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive duration (400 otherwise), and the range start must not be after the range end. Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -89,7 +89,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdPatch(requestParameters: ApiDhcpScopesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action replaces a DHCP scope\&#39;s fields. Validation and errors are as for M:Ninlil.Web.Controllers.DhcpScopesController.Create(Ninlil.Web.Models.DhcpScopeWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id and 400 when the protocol version differs from the scope\&#39;s (create a new scope instead). Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action replaces a DHCP scope\&#39;s fields. Validation and errors are as for &#x60;POST /api/dhcp-scopes&#x60;, plus 404 for an unknown id and 400 when the protocol version differs from the scope\&#39;s (create a new scope instead). Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
      * 
      * @endpoint put /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -97,7 +97,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdPut(requestParameters: ApiDhcpScopesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action reports a scope\&#39;s current utilization: the total addresses or prefixes in its range, how many are leased or offered, how many its reservations account for, and how many remain available. It is computed from the scope\&#39;s settings and its recorded leases and reservations on every call (see Ninlil.Dhcp.Server.Core.Statistics.IDhcpScopeStatisticsService). The two slot counts are strings because an IPv6 range can exceed a 64-bit integer. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:read&#x60;.
+     * This action reports a scope\&#39;s current utilization: the total addresses or prefixes in its range, how many are leased or offered, how many its reservations account for, and how many remain available. It is computed from the scope\&#39;s settings and its recorded leases and reservations on every call (see &#x60;IDhcpScopeStatisticsService&#x60;). The two slot counts are strings because an IPv6 range can exceed a 64-bit integer. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:read&#x60;.
      * 
      * @endpoint get /api/dhcp-scopes/{id}/statistics
 * @param requestParameters

@@ -258,7 +258,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
     }
 
     /**
-     * This action replaces a schedule\&#39;s fields, keeping its id and group. Validation is as for M:Ninlil.Web.Controllers.ClientGroupSchedulesController.Create(System.Guid,Ninlil.Web.Models.ClientGroupScheduleWriteRequest,System.Threading.CancellationToken); returns 404 when the schedule does not exist or belongs to another group. Requires &#x60;clientgroups:write&#x60;.
+     * This action replaces a schedule\&#39;s fields, keeping its id and group. Validation is as for &#x60;POST /api/client-groups/{groupId}/schedules&#x60;; returns 404 when the schedule does not exist or belongs to another group. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint put /api/client-groups/{groupId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

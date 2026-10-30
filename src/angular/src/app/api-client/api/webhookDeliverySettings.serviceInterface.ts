@@ -35,7 +35,7 @@ export interface WebhookDeliverySettingsServiceInterface {
     apiWebhookDeliverySettingsGet(extraHttpRequestParams?: any): Observable<WebhookDeliverySettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Webhooks:Delivery&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The response note depends on whether &#x60;requestTimeout&#x60; was changed alone, with another field, or not at all. Returns 400 for a value that is not a positive TimeSpan. Requires &#x60;webhookdeliverysettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Webhooks:Delivery&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The response note depends on whether &#x60;requestTimeout&#x60; was changed alone, with another field, or not at all. Returns 400 for a value that is not a positive TimeSpan. Requires &#x60;webhookdeliverysettings:write&#x60;.
      * 
      * @endpoint patch /api/webhook-delivery-settings
 * @param requestParameters

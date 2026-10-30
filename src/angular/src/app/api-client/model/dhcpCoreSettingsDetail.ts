@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of part of `Ninlil.Dhcp.Server.Core.DhcpServerOptions`, the settings shared by the local DHCP engines (`GET /api/dhcp-settings/core`).
+ * This record is the REST shape of part of `DhcpServerOptions`, the settings shared by the local DHCP engines (`GET /api/dhcp-settings/core`).
  */
 export interface DhcpCoreSettingsDetail { 
     /**

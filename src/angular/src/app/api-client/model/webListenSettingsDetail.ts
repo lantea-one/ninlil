@@ -11,7 +11,7 @@ import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
 /**
- * This record is the web listener settings (`WebListenOptions`) that `GET /api/web-listen-settings` returns: the ports and certificate shared by the REST API, the SignalR hub and DNS-over-HTTPS. A `PATCH` accepts the same fields, with the certificate password in place of `PfxPasswordConfigured`. Every change needs a process restart (see Ninlil.Web.Models.RuntimeSettingsWriteResult.WebListenRestartRequiredNote).
+ * This record is the web listener settings (`WebListenOptions`) that `GET /api/web-listen-settings` returns: the ports and certificate shared by the REST API, the SignalR hub and DNS-over-HTTPS. A `PATCH` accepts the same fields, with the certificate password in place of `PfxPasswordConfigured`. Every change needs a process restart (see `RuntimeSettingsWriteResult.WebListenRestartRequiredNote`).
  */
 export interface WebListenSettingsDetail { 
     /**

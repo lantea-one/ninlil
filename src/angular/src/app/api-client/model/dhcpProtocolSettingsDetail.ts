@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4ProtocolOptions`, the DHCPv4 UDP listener\'s settings (`GET /api/dhcp-settings/protocol`).
+ * This record is the REST shape of `Dhcpv4ProtocolOptions`, the DHCPv4 UDP listener\'s settings (`GET /api/dhcp-settings/protocol`).
  */
 export interface DhcpProtocolSettingsDetail { 
     /**

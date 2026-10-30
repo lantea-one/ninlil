@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the OpenID Connect single sign-on settings (`OidcSsoOptions`) that `GET /api/sso-settings` returns. The client secret is never returned, as with every other secret; Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured says whether one is set. A `PATCH` accepts these fields with `clientSecret` in place of Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured.
+ * This record is the OpenID Connect single sign-on settings (`OidcSsoOptions`) that `GET /api/sso-settings` returns. The client secret is never returned, as with every other secret; `OidcSsoSettingsDetail.ClientSecretConfigured` says whether one is set. A `PATCH` accepts these fields with `clientSecret` in place of `OidcSsoSettingsDetail.ClientSecretConfigured`.
  */
 export interface OidcSsoSettingsDetail { 
     /**

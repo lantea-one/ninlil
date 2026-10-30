@@ -26,11 +26,11 @@ export interface DnsAccessControlRuleDetail {
      */
     cidr?: string | null;
     /**
-     * The capabilities the rule grants, as an array of Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum member names (see Ninlil.Web.Models.DnsAccessControlRuleWriteRequest.Capabilities).
+     * The capabilities the rule grants, as an array of `DnsAccessControlCapabilityEnum` member names (see `DnsAccessControlRuleWriteRequest.Capabilities`).
      */
     capabilities?: Array<string> | null;
     /**
-     * Whether the rule is disabled. The enforcement engine ignores a disabled rule (see Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity.IsDisabled).
+     * Whether the rule is disabled. The enforcement engine ignores a disabled rule (see `DnsAccessControlRuleEntity.IsDisabled`).
      */
     isDisabled?: boolean;
     /**

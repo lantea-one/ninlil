@@ -42,7 +42,7 @@ export class OidcSsoSettingsService extends BaseService implements OidcSsoSettin
     }
 
     /**
-     * This action returns the current SSO settings. The client secret is never returned, only whether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured), whether the plaintext variable overrides it and whether the stored one is unreadable. Requires &#x60;ssosettings:read&#x60;.
+     * This action returns the current SSO settings. The client secret is never returned, only whether one is set (see &#x60;OidcSsoSettingsDetail.ClientSecretConfigured&#x60;), whether the plaintext variable overrides it and whether the stored one is unreadable. Requires &#x60;ssosettings:read&#x60;.
      * @endpoint get /api/sso-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -97,7 +97,7 @@ export class OidcSsoSettingsService extends BaseService implements OidcSsoSettin
     }
 
     /**
-     * This action merges a partial update into &#x60;Identity:Sso&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value, including &#x60;clientSecret&#x60;, so an operator can change only &#x60;displayName&#x60; without resupplying a secret M:Ninlil.Web.Controllers.OidcSsoSettingsController.Get never shows. A blank &#x60;clientSecret&#x60; clears it. Returns 400 for a blank display name or client id, an authority that is not an absolute http(s) URL, or scopes without &#x60;openid&#x60;. Requires &#x60;ssosettings:write&#x60;.
+     * This action merges a partial update into &#x60;Identity:Sso&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value, including &#x60;clientSecret&#x60;, so an operator can change only &#x60;displayName&#x60; without resupplying a secret &#x60;GET /api/sso-settings&#x60; never shows. A blank &#x60;clientSecret&#x60; clears it. Returns 400 for a blank display name or client id, an authority that is not an absolute http(s) URL, or scopes without &#x60;openid&#x60;. Requires &#x60;ssosettings:write&#x60;.
      * @endpoint patch /api/sso-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

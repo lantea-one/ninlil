@@ -97,7 +97,7 @@ export class DnssecPolicySettingsService extends BaseService implements DnssecPo
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Dnssec&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change takes effect at once. Returns 400 for an unknown algorithm name. Requires &#x60;dnssecpolicysettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Dnssec&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The change takes effect at once. Returns 400 for an unknown algorithm name. Requires &#x60;dnssecpolicysettings:write&#x60;.
      * @endpoint patch /api/dnssec-policy-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -42,11 +42,11 @@ export interface UserSummary {
      */
     roles?: Array<string> | null;
     /**
-     * The permissions granted to the account directly, not through a role (the counterpart of Ninlil.Web.Models.RoleSummary.Permissions).
+     * The permissions granted to the account directly, not through a role (the counterpart of `RoleSummary.Permissions`).
      */
     directPermissions?: Array<string> | null;
     /**
-     * The cluster node the account was last created or modified on, or null if it was never written with clustering enabled. The admin console shows it with Ninlil.Web.Models.UserSummary.LastModifiedUtc in `ClusterSyncInfoComponent`, as for other synced entities.
+     * The cluster node the account was last created or modified on, or null if it was never written with clustering enabled. The admin console shows it with `UserSummary.LastModifiedUtc` in `ClusterSyncInfoComponent`, as for other synced entities.
      */
     originatingNodeId?: string | null;
     /**

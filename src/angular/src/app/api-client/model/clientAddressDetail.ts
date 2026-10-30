@@ -11,7 +11,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries one persistent identifier a known client device answers to. It appears in Ninlil.Web.Models.ClientDetail.Addresses and in the responses of Ninlil.Web.Controllers.ClientAddressesController.
+ * This class carries one persistent identifier a known client device answers to. It appears in `ClientDetail.Addresses` and in the responses of `ClientAddressesController`.
  */
 export interface ClientAddressDetail { 
     /**

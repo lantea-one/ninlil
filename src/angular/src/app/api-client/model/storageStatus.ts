@@ -22,7 +22,7 @@ export interface StorageStatus {
     pendingSwitch?: PendingStorageSwitchInfo;
     lastSwitchOutcome?: StorageSwitchOutcome;
     /**
-     * The engines `POST /api/storage/switch` accepts as a target: the four relational engines Entity Framework Core serves with one model. Ninlil.Dns.Common.Enum.StorageEngineEnum.MongoDb is not among them. It uses a separate repository implementation chosen at startup.
+     * The engines `POST /api/storage/switch` accepts as a target: the four relational engines Entity Framework Core serves with one model. `StorageEngineEnum.MongoDb` is not among them. It uses a separate repository implementation chosen at startup.
      */
     switchSupportedEngines?: Array<StorageEngineEnum> | null;
     primary?: StoragePrimaryStatus;

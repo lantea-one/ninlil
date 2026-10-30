@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries one node\'s query statistics for the cluster dashboard (`GET /api/cluster/nodes/stats`). A row is either the answering node (Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.IsSelf is true and it is always Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.Reachable) or a known peer. A peer whose snapshot could not be collected is reported unreachable rather than left out (see Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator).
+ * This class carries one node\'s query statistics for the cluster dashboard (`GET /api/cluster/nodes/stats`). A row is either the answering node (`ClusterAggregateQueryStatsDetail.IsSelf` is true and it is always `ClusterAggregateQueryStatsDetail.Reachable`) or a known peer. A peer whose snapshot could not be collected is reported unreachable rather than left out (see `IClusterQueryStatsAggregator`).
  */
 export interface ClusterAggregateQueryStatsDetail { 
     /**

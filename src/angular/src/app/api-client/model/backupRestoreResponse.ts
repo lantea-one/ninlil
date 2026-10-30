@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the success response body for M:Ninlil.Web.Controllers.BackupController.Restore(Ninlil.Web.Models.BackupRestoreRequest,System.Threading.CancellationToken). M:Ninlil.Web.Controllers.BackupController.Create(Ninlil.Web.Models.BackupCreateRequest,System.Threading.CancellationToken) has no JSON response: it returns the archive itself as a file download.
+ * This record is the success response body for `POST /api/backup/restore`. `POST /api/backup` has no JSON response: it returns the archive itself as a file download.
  */
 export interface BackupRestoreResponse { 
     /**
@@ -22,7 +22,7 @@ export interface BackupRestoreResponse {
      */
     entityCounts?: { [key: string]: number; } | null;
     /**
-     * Always Ninlil.Web.Models.BackupRestoreResponse.RestartRequiredNote: the restored database connection, Data Protection key ring and TLS certificate take effect only after a restart.
+     * Always `BackupRestoreResponse.RestartRequiredNote`: the restored database connection, Data Protection key ring and TLS certificate take effect only after a restart.
      */
     note?: string | null;
 }

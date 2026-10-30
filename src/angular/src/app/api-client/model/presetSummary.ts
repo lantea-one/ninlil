@@ -10,7 +10,7 @@
 
 
 /**
- * This record summarizes one built-in Ninlil.Dns.Server.Presets.PresetDefinition for `GET /api/presets`. It leaves out the individual settings, since a preset is applied as a whole, not inspected field by field.
+ * This record summarizes one built-in `PresetDefinition` for `GET /api/presets`. It leaves out the individual settings, since a preset is applied as a whole, not inspected field by field.
  */
 export interface PresetSummary { 
     /**

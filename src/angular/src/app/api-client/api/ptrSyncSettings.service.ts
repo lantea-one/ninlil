@@ -97,7 +97,7 @@ export class PtrSyncSettingsService extends BaseService implements PtrSyncSettin
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:PtrSync&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for an IPv4 prefix outside 24-30 or an IPv6 prefix that is not a multiple of 4 from 16 to 124 (see &#x60;ZonesController&#x60; for why). Requires &#x60;ptrsyncsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:PtrSync&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect at once. Returns 400 for an IPv4 prefix outside 24-30 or an IPv6 prefix that is not a multiple of 4 from 16 to 124 (see &#x60;ZonesController&#x60; for why). Requires &#x60;ptrsyncsettings:write&#x60;.
      * @endpoint patch /api/ptr-sync-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6ProtocolOptions`, the DHCPv6 UDP listener\'s settings (`GET /api/dhcp-settings/dhcpv6-protocol`); the DHCPv6 counterpart of Ninlil.Web.Models.DhcpProtocolSettingsDetail.
+ * This record is the REST shape of `Dhcpv6ProtocolOptions`, the DHCPv6 UDP listener\'s settings (`GET /api/dhcp-settings/dhcpv6-protocol`); the DHCPv6 counterpart of `DhcpProtocolSettingsDetail`.
  */
 export interface Dhcpv6ProtocolSettingsDetail { 
     /**

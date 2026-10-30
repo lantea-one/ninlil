@@ -35,7 +35,7 @@ export interface QueryLoggingSettingsServiceInterface {
     apiQueryLoggingSettingsGet(extraHttpRequestParams?: any): Observable<QueryLoggingSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:QueryLogging&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The response note says whether a restart is needed. Returns 400 for a field of the wrong JSON type, a negative &#x60;retentionPeriod&#x60; or &#x60;maxRetainedEntries&#x60; (zero turns the bound off), a &#x60;cleanupInterval&#x60; that is not positive or exceeds the timer limit, or an unknown privacy level. Requires &#x60;querylog:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:QueryLogging&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value. The response note says whether a restart is needed. Returns 400 for a field of the wrong JSON type, a negative &#x60;retentionPeriod&#x60; or &#x60;maxRetainedEntries&#x60; (zero turns the bound off), a &#x60;cleanupInterval&#x60; that is not positive or exceeds the timer limit, or an unknown privacy level. Requires &#x60;querylog:write&#x60;.
      * 
      * @endpoint patch /api/query-logging-settings
 * @param requestParameters

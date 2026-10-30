@@ -40,7 +40,7 @@ export class SsoService extends BaseService implements SsoServiceInterface {
     }
 
     /**
-     * This action is a browser navigation target, not an API call for &#x60;fetch()&#x60;. It returns 404 when the OpenID Connect scheme is not registered (as M:Ninlil.Web.Controllers.SsoController.Get reports with &#x60;enabled: false&#x60;), and otherwise redirects (302) to the identity provider\&#39;s authorization endpoint. The browser ends up, several redirects later, wherever &#x60;OnTokenValidated&#x60; or &#x60;OnRemoteFailure&#x60; sends it. Allows anonymous callers.  It is named M:Ninlil.Web.Controllers.SsoController.StartChallenge(System.Boolean) rather than &#x60;Challenge&#x60; so it does     not hide the protected &#x60;ControllerBase.Challenge(...)&#x60; helper it calls.
+     * This action is a browser navigation target, not an API call for &#x60;fetch()&#x60;. It returns 404 when the OpenID Connect scheme is not registered (as &#x60;GET /api/auth/sso&#x60; reports with &#x60;enabled: false&#x60;), and otherwise redirects (302) to the identity provider\&#39;s authorization endpoint. The browser ends up, several redirects later, wherever &#x60;OnTokenValidated&#x60; or &#x60;OnRemoteFailure&#x60; sends it. Allows anonymous callers.  It is named &#x60;GET /api/auth/sso/challenge&#x60; rather than &#x60;Challenge&#x60; so it does     not hide the protected &#x60;ControllerBase.Challenge(...)&#x60; helper it calls.
      * @endpoint get /api/auth/sso/challenge
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -108,7 +108,7 @@ export class SsoService extends BaseService implements SsoServiceInterface {
     }
 
     /**
-     * This action reports whether this server can start an SSO sign-in and, if so, the label for the button that starts one. Allows anonymous callers.  &lt;b&gt;It checks whether the OpenID Connect scheme is registered, not     Ninlil.Dns.Identity.Options.OidcSsoOptions.Enable.&lt;/b&gt;&#x60;OidcSsoSettingsController.Patch&#x60; can     change that setting without a restart, but the scheme is registered once at startup     (see     M:Ninlil.Dns.Identity.Extension.ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)),     so checking the setting could show a button that returns 404 when clicked.
+     * This action reports whether this server can start an SSO sign-in and, if so, the label for the button that starts one. Allows anonymous callers.  &lt;b&gt;It checks whether the OpenID Connect scheme is registered, not     &#x60;OidcSsoOptions.Enable&#x60;.&lt;/b&gt;&#x60;OidcSsoSettingsController.Patch&#x60; can     change that setting without a restart, but the scheme is registered once at startup     (see     &#x60;ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication&#x60;),     so checking the setting could show a button that returns 404 when clicked.
      * @endpoint get /api/auth/sso
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

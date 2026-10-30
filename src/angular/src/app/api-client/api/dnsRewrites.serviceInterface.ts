@@ -76,7 +76,7 @@ export interface DnsRewritesServiceInterface {
     apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DnsRewriteDetail>;
 
     /**
-     * This action updates a DNS rewrite as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. Changing the domain or target is checked as for M:Ninlil.Web.Controllers.DnsRewritesController.Create(Ninlil.Web.Models.DnsRewriteWriteRequest,System.Threading.CancellationToken). Requires &#x60;dnsrewrites:write&#x60;.
+     * This action updates a DNS rewrite as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. Changing the domain or target is checked as for &#x60;POST /api/dns-rewrites&#x60;. Requires &#x60;dnsrewrites:write&#x60;.
      * 
      * @endpoint patch /api/dns-rewrites/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface DnsRewritesServiceInterface {
     apiDnsRewritesIdPatch(requestParameters: ApiDnsRewritesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action replaces a DNS rewrite\&#39;s fields. Validation and errors are as for M:Ninlil.Web.Controllers.DnsRewritesController.Create(Ninlil.Web.Models.DnsRewriteWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;dnsrewrites:write&#x60;.
+     * This action replaces a DNS rewrite\&#39;s fields. Validation and errors are as for &#x60;POST /api/dns-rewrites&#x60;, plus 404 for an unknown id. Requires &#x60;dnsrewrites:write&#x60;.
      * 
      * @endpoint put /api/dns-rewrites/{id}
 * @param requestParameters

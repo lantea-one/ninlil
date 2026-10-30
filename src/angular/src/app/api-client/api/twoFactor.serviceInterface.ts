@@ -46,7 +46,7 @@ export interface TwoFactorServiceInterface {
     apiAuthTwoFactorAuthenticatorEnablePost(requestParameters: ApiAuthTwoFactorAuthenticatorEnablePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action generates a new TOTP shared secret for the caller and returns it with an &#x60;otpauth://&#x60; URI for an authenticator app. M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must confirm it before two-factor sign-in becomes required.  While two-factor sign-in is on with an authenticator secret, the request must carry     a valid current authenticator code or an unused recovery code (which this call     uses up) in the body; otherwise this returns 400 and the secret is unchanged. After     5 wrong codes in 15 minutes (shared with the other code checks of this controller     and the sign-in) it returns 429 with a &#x60;Retry-After&#x60; header, without checking     the code. A     stolen access token alone then cannot swap in an attacker\&#39;s secret. First-time     setup, or setup while two-factor sign-in is off, needs no body.
+     * This action generates a new TOTP shared secret for the caller and returns it with an &#x60;otpauth://&#x60; URI for an authenticator app. &#x60;POST /api/auth/two-factor/authenticator/enable&#x60; must confirm it before two-factor sign-in becomes required.  While two-factor sign-in is on with an authenticator secret, the request must carry     a valid current authenticator code or an unused recovery code (which this call     uses up) in the body; otherwise this returns 400 and the secret is unchanged. After     5 wrong codes in 15 minutes (shared with the other code checks of this controller     and the sign-in) it returns 429 with a &#x60;Retry-After&#x60; header, without checking     the code. A     stolen access token alone then cannot swap in an attacker\&#39;s secret. First-time     setup, or setup while two-factor sign-in is off, needs no body.
      * 
      * @endpoint post /api/auth/two-factor/authenticator/setup
 * @param requestParameters
@@ -62,7 +62,7 @@ export interface TwoFactorServiceInterface {
     apiAuthTwoFactorDisablePost(requestParameters: ApiAuthTwoFactorDisablePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action e-mails the caller a short-lived verification code from the e-mail token provider and returns 202. The account must have a confirmed e-mail address, otherwise this returns 400. Returns 429 with a &#x60;Retry-After&#x60; header when a code was sent to the account in the last 60 seconds, by this action or by the sign-in step. Because it needs a signed-in caller, it cannot be called during the two-factor step of a sign-in; M:Ninlil.Web.Controllers.AuthController.SendTwoFactorEmailCode(Ninlil.Web.Models.TwoFactorEmailCodeRequest,System.Threading.CancellationToken) does that.
+     * This action e-mails the caller a short-lived verification code from the e-mail token provider and returns 202. The account must have a confirmed e-mail address, otherwise this returns 400. Returns 429 with a &#x60;Retry-After&#x60; header when a code was sent to the account in the last 60 seconds, by this action or by the sign-in step. Because it needs a signed-in caller, it cannot be called during the two-factor step of a sign-in; &#x60;POST /api/auth/login/two-factor/email-code&#x60; does that.
      * 
      * @endpoint post /api/auth/two-factor/email/send
 */

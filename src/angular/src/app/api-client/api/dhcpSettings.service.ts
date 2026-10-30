@@ -118,7 +118,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Core&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. A change to &#x60;leaseExpirySweepInterval&#x60; applies at the next sweep; every other field needs a restart, and the returned note says which applies (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Core&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value. A change to &#x60;leaseExpirySweepInterval&#x60; applies at the next sweep; every other field needs a restart, and the returned note says which applies (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/core
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -240,7 +240,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv6&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv6&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/dhcpv6-protocol
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -362,7 +362,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv6&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Turning the relay on replaces the local DHCPv6 engine only after a restart (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv6&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Turning the relay on replaces the local DHCPv6 engine only after a restart (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/dhcpv6-relay
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -484,7 +484,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv4&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv4&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/protocol
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -551,7 +551,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action returns the Router Advertisement content settings, with routes and interface overrides but without Ninlil.Dhcp.Server.Ra.RaOptions.Prefixes (see the class summary). Requires &#x60;dhcpsettings:read&#x60;.
+     * This action returns the Router Advertisement content settings, with routes and interface overrides but without &#x60;RaOptions.Prefixes&#x60; (see the class summary). Requires &#x60;dhcpsettings:read&#x60;.
      * @endpoint get /api/dhcp-settings/ra
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -606,7 +606,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Ra&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier; &#x60;routes&#x60; and &#x60;interfaceOverrides&#x60; each replace the whole list. The change applies at the next advertisement, with no restart. Returns 400 for an invalid value, including more than Ninlil.Dhcp.Server.Ra.RaContentRules.MaxRecursiveDnsServers RDNSS addresses or a search list that encodes to more than Ninlil.Dhcp.Server.Ra.RaContentRules.MaxDnsSearchListOctets octets, the sizes that fit one advertisement. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Ra&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;; &#x60;routes&#x60; and &#x60;interfaceOverrides&#x60; each replace the whole list. The change applies at the next advertisement, with no restart. Returns 400 for an invalid value, including more than &#x60;RaContentRules.MaxRecursiveDnsServers&#x60; RDNSS addresses or a search list that encodes to more than &#x60;RaContentRules.MaxDnsSearchListOctets&#x60; octets, the sizes that fit one advertisement. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/ra
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -728,7 +728,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Protocol:Ra&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Ra&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/ra-protocol
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -850,7 +850,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv4&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Turning the relay on replaces the local DHCPv4 engine only after a restart (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv4&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Turning the relay on replaces the local DHCPv4 engine only after a restart (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/relay
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -972,7 +972,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Tftp&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DhcpServer:Tftp&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * @endpoint patch /api/dhcp-settings/tftp
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

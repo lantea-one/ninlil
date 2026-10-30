@@ -127,7 +127,7 @@ export interface UsersServiceInterface {
     apiUsersIdPermissionsPost(requestParameters: ApiUsersIdPermissionsPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action updates an account\&#39;s display name, e-mail address and disabled flag. A disabled account cannot sign in or refresh its session. Passwords are changed through M:Ninlil.Web.Controllers.UsersController.ResetPassword(System.Guid,Ninlil.Web.Models.AdminResetPasswordRequest,System.Threading.CancellationToken) or M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest,System.Threading.CancellationToken). Requires &#x60;users:write&#x60;.
+     * This action updates an account\&#39;s display name, e-mail address and disabled flag. A disabled account cannot sign in or refresh its session. Passwords are changed through &#x60;POST /api/users/{id}/reset-password&#x60; or &#x60;POST /api/users/me/change-password&#x60;. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint put /api/users/{id}
 * @param requestParameters
@@ -135,7 +135,7 @@ export interface UsersServiceInterface {
     apiUsersIdPut(requestParameters: ApiUsersIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action resets an account\&#39;s password for an administrator, for an account that cannot supply its current password as M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest,System.Threading.CancellationToken) requires. Ninlil.Web.Models.AdminResetPasswordRequest.Mode picks one of two modes (see Ninlil.Web.Models.AdminPasswordResetMode). Requires &#x60;users:write&#x60;. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate sets a generated strong         password at once, through a reset token and         M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) so Identity\&#39;s usual         validation and hashing apply, and returns it in this response only. It also revokes         every refresh token of the account.     &lt;/item&gt;&lt;item&gt;Ninlil.Web.Models.AdminPasswordResetMode.EmailLink e-mails the account a link to         the admin console\&#39;s \&quot;set new password\&quot; page, which submits to         M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest,System.Threading.CancellationToken). The link carries an         Identity reset token, Base64Url-encoded for the query string (see         Ninlil.Web.Models.ConfirmPasswordResetRequest). The account must have an e-mail         address, and SMTP and the public base URL the link points at must be         configured (see &#x60;SmtpSettingsController&#x60;); otherwise this returns 400         with a clear message.     &lt;/item&gt;&lt;/list&gt;
+     * This action resets an account\&#39;s password for an administrator, for an account that cannot supply its current password as &#x60;POST /api/users/me/change-password&#x60; requires. &#x60;AdminResetPasswordRequest.Mode&#x60; picks one of two modes (see &#x60;AdminPasswordResetMode&#x60;). Requires &#x60;users:write&#x60;. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.AutoGenerate&#x60; sets a generated strong         password at once, through a reset token and         M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) so Identity\&#39;s usual         validation and hashing apply, and returns it in this response only. It also revokes         every refresh token of the account.     &lt;/item&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.EmailLink&#x60; e-mails the account a link to         the admin console\&#39;s \&quot;set new password\&quot; page, which submits to         &#x60;POST /api/auth/reset-password&#x60;. The link carries an         Identity reset token, Base64Url-encoded for the query string (see         &#x60;ConfirmPasswordResetRequest&#x60;). The account must have an e-mail         address, and SMTP and the public base URL the link points at must be         configured (see &#x60;SmtpSettingsController&#x60;); otherwise this returns 400         with a clear message.     &lt;/item&gt;&lt;/list&gt;
      * 
      * @endpoint post /api/users/{id}/reset-password
 * @param requestParameters
@@ -174,7 +174,7 @@ export interface UsersServiceInterface {
     apiUsersMeGet(extraHttpRequestParams?: any): Observable<UserProfileDetail>;
 
     /**
-     * This action updates the caller\&#39;s display name and phone number as an RFC 7396 merge patch (see Ninlil.Web.Extension.JsonElementMergePatchExtension): an absent field is unchanged, a JSON &#x60;null&#x60; clears it, and a string sets it. The e-mail address cannot be changed here (see Ninlil.Web.Models.UserProfileDetail). Requires only a signed-in caller.
+     * This action updates the caller\&#39;s display name and phone number as an RFC 7396 merge patch (see &#x60;JsonElementMergePatchExtension&#x60;): an absent field is unchanged, a JSON &#x60;null&#x60; clears it, and a string sets it. The e-mail address cannot be changed here (see &#x60;UserProfileDetail&#x60;). Requires only a signed-in caller.
      * 
      * @endpoint patch /api/users/me
 * @param requestParameters

@@ -48,11 +48,11 @@ export interface DnsRewriteDetail {
      */
     originatingNodeId?: string | null;
     /**
-     * The one known client (`Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity`) the rewrite applies to, or null if it is global or scoped to a client group. It is read-only here: this controller never sets it; only `SafeSearchController.Enable` with a target does. It is shown so the Rewrites page can tell a targeted Safe Search row from a global one that would otherwise look like a duplicate.
+     * The one known client (`DnsClientEntity`) the rewrite applies to, or null if it is global or scoped to a client group. It is read-only here: this controller never sets it; only `SafeSearchController.Enable` with a target does. It is shown so the Rewrites page can tell a targeted Safe Search row from a global one that would otherwise look like a duplicate.
      */
     clientId?: string | null;
     /**
-     * The one client group the rewrite applies to, or null if it is global or scoped to a client. Read-only, like Ninlil.Web.Models.DnsRewriteDetail.ClientId.
+     * The one client group the rewrite applies to, or null if it is global or scoped to a client. Read-only, like `DnsRewriteDetail.ClientId`.
      */
     clientGroupId?: string | null;
 }

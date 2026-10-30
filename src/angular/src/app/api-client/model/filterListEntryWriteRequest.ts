@@ -11,11 +11,11 @@ import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
 /**
- * This class carries the fields used to create or replace an entry in a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list (`POST` and `PUT` under `/api/filter-lists/{listId}/entries`). Every write to the entries of a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is rejected with 409 (see Ninlil.Web.Controllers.FilterListEntriesController).
+ * This class carries the fields used to create or replace an entry in a `DnsFilterListSourceEnum.Local` list (`POST` and `PUT` under `/api/filter-lists/{listId}/entries`). Every write to the entries of a `DnsFilterListSourceEnum.Subscribed` list is rejected with 409 (see `FilterListEntriesController`).
  */
 export interface FilterListEntryWriteRequest { 
     /**
-     * The entry\'s value: a domain name, wildcard or regular expression (by Ninlil.Web.Models.FilterListEntryWriteRequest.Kind) in a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.Domain list, or an IP address or CIDR network in a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ResponseIp or Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ClientSource list, where Ninlil.Web.Models.FilterListEntryWriteRequest.Kind must be Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain (the default).
+     * The entry\'s value: a domain name, wildcard or regular expression (by `FilterListEntryWriteRequest.Kind`) in a `DnsFilterListKindEnum.Domain` list, or an IP address or CIDR network in a `DnsFilterListKindEnum.ResponseIp` or `DnsFilterListKindEnum.ClientSource` list, where `FilterListEntryWriteRequest.Kind` must be `DnsFilterEntryKindEnum.Domain` (the default).
      */
     value?: string | null;
     /**

@@ -15,11 +15,11 @@ import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
  */
 export interface DhcpScopeCustomOptionWriteRequest { 
     /**
-     * The option\'s numeric tag (on a DHCPv6 scope, its option code). On a DHCPv6 scope use 1 to 255 except the codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39), with a value of at most 65 535 bytes; code 24 (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type) and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and 255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name) and 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in tag 150.
+     * The option\'s numeric tag (on a DHCPv6 scope, its option code). On a DHCPv6 scope use 1 to 255 except the codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39), with a value of at most 65 535 bytes; code 24 (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4, which points to RFC 8415 Section 10). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type) and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and 255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name) and 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in tag 150.
      */
     optionTag?: number;
     /**
-     * The option\'s raw value bytes as a hexadecimal string with an even number of digits; it is stored in uppercase. It is not used, and may be blank, when ValueSource is Ninlil.Dhcp.Common.Enum.DhcpOptionValueSourceEnum.ServerAddress.
+     * The option\'s raw value bytes as a hexadecimal string with an even number of digits; it is stored in uppercase. It is not used, and may be blank, when ValueSource is `DhcpOptionValueSourceEnum.ServerAddress`.
      */
     valueHex?: string | null;
     /**

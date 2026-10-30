@@ -71,7 +71,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesIdGet(requestParameters: ApiAccessControlRulesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DnsAccessControlRuleDetail>;
 
     /**
-     * This action replaces an access-control rule\&#39;s fields; the change applies without a restart. Validation and errors are as for M:Ninlil.Web.Controllers.DnsAccessControlRulesController.Create(Ninlil.Web.Models.DnsAccessControlRuleWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;accesscontrol:write&#x60;.
+     * This action replaces an access-control rule\&#39;s fields; the change applies without a restart. Validation and errors are as for &#x60;POST /api/access-control-rules&#x60;, plus 404 for an unknown id. Requires &#x60;accesscontrol:write&#x60;.
      * 
      * @endpoint put /api/access-control-rules/{id}
 * @param requestParameters

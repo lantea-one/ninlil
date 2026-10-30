@@ -28,14 +28,14 @@ export interface SmtpSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action returns the current SMTP settings. The password is never returned, only whether one is set (see Ninlil.Web.Models.SmtpSettingsDetail.PasswordConfigured), whether &#x60;NINLIL_EMAIL_PASSWORD&#x60; overrides it and whether the stored one is unreadable. Requires &#x60;smtpsettings:read&#x60;.
+     * This action returns the current SMTP settings. The password is never returned, only whether one is set (see &#x60;SmtpSettingsDetail.PasswordConfigured&#x60;), whether &#x60;NINLIL_EMAIL_PASSWORD&#x60; overrides it and whether the stored one is unreadable. Requires &#x60;smtpsettings:read&#x60;.
      * 
      * @endpoint get /api/smtp-settings
 */
     apiSmtpSettingsGet(extraHttpRequestParams?: any): Observable<SmtpSettingsDetail>;
 
     /**
-     * This action merges a partial update into the &#x60;Email&#x60; section as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value, including &#x60;password&#x60;, so an operator can change only &#x60;smtpHost&#x60; without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never shows. A password is encrypted before it is written to the configuration file, and a blank one clears it. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a &#x60;username&#x60; left with no password from any source, a malformed from-address or a &#x60;publicBaseUrl&#x60; that is not an absolute http or https URL. Requires &#x60;smtpsettings:write&#x60;.
+     * This action merges a partial update into the &#x60;Email&#x60; section as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value, including &#x60;password&#x60;, so an operator can change only &#x60;smtpHost&#x60; without resupplying a password &#x60;GET /api/smtp-settings&#x60; never shows. A password is encrypted before it is written to the configuration file, and a blank one clears it. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a &#x60;username&#x60; left with no password from any source, a malformed from-address or a &#x60;publicBaseUrl&#x60; that is not an absolute http or https URL. Requires &#x60;smtpsettings:write&#x60;.
      * 
      * @endpoint patch /api/smtp-settings
 * @param requestParameters

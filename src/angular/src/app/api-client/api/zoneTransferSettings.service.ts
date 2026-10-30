@@ -97,7 +97,7 @@ export class ZoneTransferSettingsService extends BaseService implements ZoneTran
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransfer&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change takes effect at once. Returns 400 when &#x60;recordsPerMessage&#x60; is below 1. Requires &#x60;zonetransfersettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransfer&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. The change takes effect at once. Returns 400 when &#x60;recordsPerMessage&#x60; is below 1. Requires &#x60;zonetransfersettings:write&#x60;.
      * @endpoint patch /api/zone-transfer-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

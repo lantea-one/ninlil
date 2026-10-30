@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol.ProxyProtocolOptions`: whether `DnsOverTlsListener` accepts an HAProxy PROXY protocol header (v1 text or v2 binary) before the TLS handshake, and which addresses and networks may send one. Unlike the HTTP settings above it has no shared secret; `ProxyProtocolOptions` explains why.
+ * This record is the REST shape of `ProxyProtocolOptions`: whether `DnsOverTlsListener` accepts an HAProxy PROXY protocol header (v1 text or v2 binary) before the TLS handshake, and which addresses and networks may send one. Unlike the HTTP settings above it has no shared secret; `ProxyProtocolOptions` explains why.
  */
 export interface DnsOverTlsProxyProtocolSettingsDetail { 
     /**

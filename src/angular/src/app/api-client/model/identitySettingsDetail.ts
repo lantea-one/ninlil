@@ -38,7 +38,7 @@ export interface IdentitySettingsDetail {
      */
     requireNonAlphanumeric?: boolean;
     /**
-     * How long an account is locked out once Ninlil.Web.Models.IdentitySettingsDetail.MaxFailedAccessAttempts is reached.
+     * How long an account is locked out once `IdentitySettingsDetail.MaxFailedAccessAttempts` is reached.
      */
     defaultLockoutTimeSpan?: string;
     /**

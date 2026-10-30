@@ -15,11 +15,11 @@ import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
  */
 export interface DhcpTagRuleOptionWriteRequest { 
     /**
-     * The option\'s numeric tag, as in Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest.OptionTag. Those limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6 scope rejects tag 0, values over 65 535 bytes and the option codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24 (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4).
+     * The option\'s numeric tag, as in `DhcpScopeCustomOptionWriteRequest.OptionTag`. Those limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6 scope rejects tag 0, values over 65 535 bytes and the option codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24 (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4, which points to RFC 8415 Section 10).
      */
     optionTag?: number;
     /**
-     * The option\'s raw value bytes as hexadecimal, as in Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest.ValueHex. It is not used, and may be blank, when ValueSource is Ninlil.Dhcp.Common.Enum.DhcpOptionValueSourceEnum.ServerAddress.
+     * The option\'s raw value bytes as hexadecimal, as in `DhcpScopeCustomOptionWriteRequest.ValueHex`. It is not used, and may be blank, when ValueSource is `DhcpOptionValueSourceEnum.ServerAddress`.
      */
     valueHex?: string | null;
     valueSource?: DhcpOptionValueSourceEnum;

@@ -10,7 +10,7 @@
 
 
 /**
- * This enumeration names the four DHCP-family services that Ninlil.Web.Controllers.DhcpServiceControlController reports on and controls, one per registered `Ninlil.Dhcp.Common.Control.IDhcpProtocolService` implementation. The `{kind}` route segment of M:Ninlil.Web.Controllers.DhcpServiceControlController.Start(Ninlil.Web.Models.DhcpServiceKindEnum,System.Threading.CancellationToken) and M:Ninlil.Web.Controllers.DhcpServiceControlController.Stop(Ninlil.Web.Models.DhcpServiceKindEnum,System.Threading.CancellationToken) binds to it case-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model binding before the action runs.
+ * This enumeration names the four DHCP-family services that `DhcpServiceControlController` reports on and controls, one per registered `IDhcpProtocolService` implementation. The `{kind}` route segment of `POST /api/dhcp-services/{kind}/start` and `POST /api/dhcp-services/{kind}/stop` binds to it case-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model binding before the action runs.
  */
 export const DhcpServiceKindEnum = {
     Dhcpv4: 'Dhcpv4',

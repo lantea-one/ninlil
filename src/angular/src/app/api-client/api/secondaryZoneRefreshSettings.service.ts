@@ -97,7 +97,7 @@ export class SecondaryZoneRefreshSettingsService extends BaseService implements 
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:SecondaryZoneRefresh&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect without a restart. Returns 400 for a value that is not a positive TimeSpan. Requires &#x60;secondaryzonerefreshsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:SecondaryZoneRefresh&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect without a restart. Returns 400 for a value that is not a positive TimeSpan. Requires &#x60;secondaryzonerefreshsettings:write&#x60;.
      * @endpoint patch /api/secondary-zone-refresh-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

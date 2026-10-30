@@ -14,7 +14,7 @@ import { DnssecDenialOfExistenceModeEnum } from './dnssecDenialOfExistenceModeEn
 
 
 /**
- * This class carries a zone, as returned by the list, get and write endpoints of `/api/zones`. The fields mean what they mean in Ninlil.Web.Models.ZoneWriteRequest.
+ * This class carries a zone, as returned by the list, get and write endpoints of `/api/zones`. The fields mean what they mean in `ZoneWriteRequest`.
  */
 export interface ZoneDetail { 
     /**

@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the server certificate configuration of a TLS-based transport (Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions), used by DNS-over-TLS and DNS-over-QUIC. DNS-over-HTTPS runs on the shared Kestrel listener and uses its certificate, so it has no such field (see Ninlil.Web.Models.DnsOverHttpsSettingsDetail). The shape is the one Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions uses: a PFX file path, or a self-signed certificate the server manages. Key material cannot be uploaded through the API.
+ * This record is the server certificate configuration of a TLS-based transport (`TlsCertificateOptions`), used by DNS-over-TLS and DNS-over-QUIC. DNS-over-HTTPS runs on the shared Kestrel listener and uses its certificate, so it has no such field (see `DnsOverHttpsSettingsDetail`). The shape is the one `TlsCertificateOptions` uses: a PFX file path, or a self-signed certificate the server manages. Key material cannot be uploaded through the API.
  */
 export interface TlsCertificateSettingsDetail { 
     /**
@@ -18,19 +18,19 @@ export interface TlsCertificateSettingsDetail {
      */
     pfxPath?: string | null;
     /**
-     * Whether Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions.PfxPassword has a value. The password itself is never returned, as with every other secret.
+     * Whether `TlsCertificateOptions.PfxPassword` has a value. The password itself is never returned, as with every other secret.
      */
     pfxPasswordConfigured?: boolean;
     /**
-     * The subject alternative names of the self-signed certificate, which is generated only when Ninlil.Web.Models.TlsCertificateSettingsDetail.PfxPath is empty.
+     * The subject alternative names of the self-signed certificate, which is generated only when `TlsCertificateSettingsDetail.PfxPath` is empty.
      */
     selfSignedSubjectAlternativeNames?: Array<string> | null;
     /**
-     * How often the transport\'s Ninlil.Dns.Server.Core.Certificates.ReloadableTlsCertificateProvider checks whether the certificate file has been replaced on disk.
+     * How often the transport\'s `ReloadableTlsCertificateProvider` checks whether the certificate file has been replaced on disk.
      */
     certificateReloadPollInterval?: string;
     /**
-     * The TLS protocol versions the handshake accepts, by name (for example `[\"Tls12\", \"Tls13\"]`). An empty list means System.Security.Authentication.SslProtocols.None: the operating system picks its default (see Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions.AllowedProtocols).
+     * The TLS protocol versions the handshake accepts, by name (for example `[\"Tls12\", \"Tls13\"]`). An empty list means System.Security.Authentication.SslProtocols.None: the operating system picks its default (see `TlsCertificateOptions.AllowedProtocols`).
      */
     allowedProtocols?: Array<string> | null;
 }

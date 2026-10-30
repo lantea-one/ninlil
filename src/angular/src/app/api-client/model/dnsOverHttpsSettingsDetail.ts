@@ -10,11 +10,11 @@
 
 
 /**
- * This record is the DNS-over-HTTPS settings (`DnsOverHttpsOptions`) that `GET /api/transport-settings/dns-over-https` returns, limited to the fields the server uses. M:Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder) maps the RFC 8484 GET and POST forms onto the shared Kestrel listener, so the shared web listener\'s port, certificate and addresses (`DnsServer:Web`) apply. `Port` and `Certificate` belong to the self-hosted `DnsOverHttpsHostedService`, which this server never starts, so they are left out rather than shown as if they had an effect; for the same reason there is no `ListenAddresses`.
+ * This record is the DNS-over-HTTPS settings (`DnsOverHttpsOptions`) that `GET /api/transport-settings/dns-over-https` returns, limited to the fields the server uses. `EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps` maps the RFC 8484 GET and POST forms onto the shared Kestrel listener, so the shared web listener\'s port, certificate and addresses (`DnsServer:Web`) apply. `Port` and `Certificate` belong to the self-hosted `DnsOverHttpsHostedService`, which this server never starts, so they are left out rather than shown as if they had an effect; for the same reason there is no `ListenAddresses`.
  */
 export interface DnsOverHttpsSettingsDetail { 
     /**
-     * Whether a request on the DNS-over-HTTPS route is answered. A change applies at once: it opens or closes the `dns-over-https` transport gate through Ninlil.Web.Services.IManagedServiceRegistry. The route is mapped whatever this flag was at startup (see the extension method above).
+     * Whether a request on the DNS-over-HTTPS route is answered. A change applies at once: it opens or closes the `dns-over-https` transport gate through `IManagedServiceRegistry`. The route is mapped whatever this flag was at startup (see the extension method above).
      */
     enable?: boolean;
     /**
@@ -22,7 +22,7 @@ export interface DnsOverHttpsSettingsDetail {
      */
     path?: string | null;
     /**
-     * The largest DNS message the transport accepts. Like Ninlil.Web.Models.DnsOverHttpsSettingsDetail.Path, it is captured when the route is mapped at startup, so a change needs a process restart.
+     * The largest DNS message the transport accepts. Like `DnsOverHttpsSettingsDetail.Path`, it is captured when the route is mapped at startup, so a change needs a process restart.
      */
     maxMessageSizeBytes?: number;
 }

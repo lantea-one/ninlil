@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the outcome of a sign-in attempt. One of two shapes applies: either Ninlil.Web.Models.LoginResponse.RequiresTwoFactor is true and Ninlil.Web.Models.LoginResponse.MfaToken is set (the caller must next call `POST /api/auth/login/two-factor`), or a full Ninlil.Web.Models.LoginResponse.AccessToken/ Ninlil.Web.Models.LoginResponse.RefreshToken pair is set because sign-in is already complete.
+ * This class carries the outcome of a sign-in attempt. One of two shapes applies: either `LoginResponse.RequiresTwoFactor` is true and `LoginResponse.MfaToken` is set (the caller must next call `POST /api/auth/login/two-factor`), or a full `LoginResponse.AccessToken`/ `LoginResponse.RefreshToken` pair is set because sign-in is already complete.
  */
 export interface LoginResponse { 
     /**
@@ -18,7 +18,7 @@ export interface LoginResponse {
      */
     requiresTwoFactor?: boolean;
     /**
-     * An opaque, short-lived token identifying this pending sign-in, to be echoed back to `POST /api/auth/login/two-factor`. Only set when Ninlil.Web.Models.LoginResponse.RequiresTwoFactor is true.
+     * An opaque, short-lived token identifying this pending sign-in, to be echoed back to `POST /api/auth/login/two-factor`. Only set when `LoginResponse.RequiresTwoFactor` is true.
      */
     mfaToken?: string | null;
     /**
@@ -26,7 +26,7 @@ export interface LoginResponse {
      */
     accessToken?: string | null;
     /**
-     * The UTC date and time Ninlil.Web.Models.LoginResponse.AccessToken expires.
+     * The UTC date and time `LoginResponse.AccessToken` expires.
      */
     expiresAtUtc?: string | null;
     /**

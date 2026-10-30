@@ -132,7 +132,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
     }
 
     /**
-     * This action deletes a credential set. Zones that still refer to it by &#x60;CloudProviderCredentialId&#x60; are not checked or blocked; they simply can no longer sync, as with a deleted TSIG key (see M:Ninlil.Web.Controllers.TsigKeysController.Delete(System.Guid,System.Threading.CancellationToken)). Requires &#x60;cloudprovidercredentials:write&#x60;.
+     * This action deletes a credential set. Zones that still refer to it by &#x60;CloudProviderCredentialId&#x60; are not checked or blocked; they simply can no longer sync, as with a deleted TSIG key (see &#x60;DELETE /api/tsig-keys/{id}&#x60;). Requires &#x60;cloudprovidercredentials:write&#x60;.
      * @endpoint delete /api/cloud-provider-credentials/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -321,7 +321,7 @@ export class CloudProviderCredentialsService extends BaseService implements Clou
     }
 
     /**
-     * This action replaces a credential set, secrets included (see Ninlil.Web.Models.CloudProviderCredentialWriteRequest for how this differs from M:Ninlil.Web.Controllers.TsigKeysController.Replace(System.Guid,Ninlil.Web.Models.TsigKeyWriteRequest,System.Threading.CancellationToken)). Validation and errors are as for M:Ninlil.Web.Controllers.CloudProviderCredentialsController.Create(Ninlil.Web.Models.CloudProviderCredentialCreateRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;cloudprovidercredentials:write&#x60;.
+     * This action replaces a credential set, secrets included (see &#x60;CloudProviderCredentialWriteRequest&#x60; for how this differs from &#x60;PUT /api/tsig-keys/{id}&#x60;). Validation and errors are as for &#x60;POST /api/cloud-provider-credentials&#x60;, plus 404 for an unknown id. Requires &#x60;cloudprovidercredentials:write&#x60;.
      * @endpoint put /api/cloud-provider-credentials/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

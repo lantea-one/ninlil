@@ -97,7 +97,7 @@ export class ZoneTransferClientSettingsService extends BaseService implements Zo
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransferClient&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for a port outside 1-65535 or a timeout that is not a positive TimeSpan. Requires &#x60;zonetransferclientsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransferClient&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect at once. Returns 400 for a port outside 1-65535 or a timeout that is not a positive TimeSpan. Requires &#x60;zonetransferclientsettings:write&#x60;.
      * @endpoint patch /api/zone-transfer-client-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

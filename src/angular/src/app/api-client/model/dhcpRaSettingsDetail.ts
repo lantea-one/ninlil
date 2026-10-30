@@ -12,7 +12,7 @@ import { DhcpRaRouteDetail } from './dhcpRaRouteDetail';
 
 
 /**
- * This record is the REST shape of `Ninlil.Dhcp.Server.Ra.RaOptions` (`GET /api/dhcp-settings/ra`): what the server\'s Router Advertisements contain. The transport and timing settings are in Ninlil.Web.Models.DhcpRaProtocolSettingsDetail.  <b>`RaOptions.Prefixes` is not included.</b> Each advertised prefix has its own     on-link and autonomous flags and two lifetimes, which suits a separate sub-resource     (as `DhcpReservationsController` gives reservations) better than a field here.     Prefixes are configured in the configuration file only. <b>Ninlil.Web.Models.DhcpRaSettingsDetail.Routes is included.</b> An RFC 4191 route is a simple triple (prefix     and length, preference, lifetime), so a `PATCH` replaces the whole list, as it     does Ninlil.Web.Models.DhcpRaSettingsDetail.RecursiveDnsServers and Ninlil.Web.Models.DhcpRaSettingsDetail.DnsSearchListDomains.     `RaOptions` lives in the JSON configuration file, not the database, so its list     entries have no stable identifiers to build a sub-resource on. Every change needs a     restart.
+ * This record is the REST shape of `RaOptions` (`GET /api/dhcp-settings/ra`): what the server\'s Router Advertisements contain. The transport and timing settings are in `DhcpRaProtocolSettingsDetail`.  <b>`RaOptions.Prefixes` is not included.</b> Each advertised prefix has its own     on-link and autonomous flags and two lifetimes, which suits a separate sub-resource     (as `DhcpReservationsController` gives reservations) better than a field here.     Prefixes are configured in the configuration file only. <b>`DhcpRaSettingsDetail.Routes` is included.</b> An RFC 4191 route is a simple triple (prefix     and length, preference, lifetime), so a `PATCH` replaces the whole list, as it     does `DhcpRaSettingsDetail.RecursiveDnsServers` and `DhcpRaSettingsDetail.DnsSearchListDomains`.     `RaOptions` lives in the JSON configuration file, not the database, so its list     entries have no stable identifiers to build a sub-resource on. Every change needs a     restart.
  */
 export interface DhcpRaSettingsDetail { 
     /**
@@ -64,7 +64,7 @@ export interface DhcpRaSettingsDetail {
      */
     routes?: Array<DhcpRaRouteDetail> | null;
     /**
-     * Per-interface content overrides. Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail explains how a null field inherits the value above, and why its prefix and route lists are not exposed here.
+     * Per-interface content overrides. `DhcpRaInterfaceOverrideDetail` explains how a null field inherits the value above, and why its prefix and route lists are not exposed here.
      */
     interfaceOverrides?: Array<DhcpRaInterfaceOverrideDetail> | null;
 }

@@ -258,7 +258,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
     }
 
     /**
-     * This action replaces a reservation\&#39;s fields, keeping its id and scope. Validation and errors are as for M:Ninlil.Web.Controllers.DhcpReservationsController.Create(System.Guid,Ninlil.Web.Models.DhcpReservationWriteRequest,System.Threading.CancellationToken). Requires &#x60;dhcpscopes:write&#x60;.
+     * This action replaces a reservation\&#39;s fields, keeping its id and scope. Validation and errors are as for &#x60;POST /api/dhcp-scopes/{scopeId}/reservations&#x60;. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint put /api/dhcp-scopes/{scopeId}/reservations/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -332,7 +332,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
     }
 
     /**
-     * This action adds a static reservation to a scope. Returns 400 for a prefix-delegation scope, a missing or malformed client identifier or an invalid IP address; 404 for an unknown scope; and 409 when the client identifier or the address is already reserved in this scope (both are unique per scope, as for leases; see Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity). The identifier is accepted as &#x60;aa:bb:cc:dd:ee:ff&#x60;, &#x60;aa-bb-cc-dd-ee-ff&#x60;, &#x60;aabb.ccdd.eeff&#x60; or &#x60;aabbccddeeff&#x60; (up to 85 bytes) and is stored and returned as &#x60;aa:bb:cc:dd:ee:ff&#x60;; the address is stored and returned in canonical form, so duplicates are found whatever the spelling. The address is not checked against the scope\&#39;s range or protocol. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action adds a static reservation to a scope. Returns 400 for a prefix-delegation scope, a missing or malformed client identifier or an invalid IP address; 404 for an unknown scope; and 409 when the client identifier or the address is already reserved in this scope (both are unique per scope, as for leases; see &#x60;DhcpReservationEntity&#x60;). The identifier is accepted as &#x60;aa:bb:cc:dd:ee:ff&#x60;, &#x60;aa-bb-cc-dd-ee-ff&#x60;, &#x60;aabb.ccdd.eeff&#x60; or &#x60;aabbccddeeff&#x60; (up to 85 bytes) and is stored and returned as &#x60;aa:bb:cc:dd:ee:ff&#x60;; the address is stored and returned in canonical form, so duplicates are found whatever the spelling. The address is not checked against the scope\&#39;s range or protocol. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint post /api/dhcp-scopes/{scopeId}/reservations
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

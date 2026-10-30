@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the response of M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest). Ninlil.Web.Models.ForgotPasswordResult.Message is the same whether or not a reset link was sent, so a caller cannot tell the two apart.
+ * This class carries the response of `POST /api/auth/forgot-password`. `ForgotPasswordResult.Message` is the same whether or not a reset link was sent, so a caller cannot tell the two apart.
  */
 export interface ForgotPasswordResult { 
     /**

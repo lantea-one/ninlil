@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the SMTP settings (`EmailSenderOptions`) that `GET /api/smtp-settings` returns: the server e-mail is sent through, for two-factor codes and password reset links. A `PATCH` accepts these fields with `password` in place of Ninlil.Web.Models.SmtpSettingsDetail.PasswordConfigured.
+ * This record is the SMTP settings (`EmailSenderOptions`) that `GET /api/smtp-settings` returns: the server e-mail is sent through, for two-factor codes and password reset links. A `PATCH` accepts these fields with `password` in place of `SmtpSettingsDetail.PasswordConfigured`.
  */
 export interface SmtpSettingsDetail { 
     /**

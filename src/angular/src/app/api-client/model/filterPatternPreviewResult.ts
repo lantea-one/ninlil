@@ -15,15 +15,15 @@ import { FilterPatternPreviewMatch } from './filterPatternPreviewMatch';
  */
 export interface FilterPatternPreviewResult { 
     /**
-     * Whether Ninlil.Web.Models.FilterPatternPreviewRequest.Value compiles as the requested Ninlil.Web.Models.FilterPatternPreviewRequest.Kind, using the same check `FilterListEntriesController` applies before saving a Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Wildcard or Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Regex entry.
+     * Whether `FilterPatternPreviewRequest.Value` compiles as the requested `FilterPatternPreviewRequest.Kind`, using the same check `FilterListEntriesController` applies before saving a `DnsFilterEntryKindEnum.Wildcard` or `DnsFilterEntryKindEnum.Regex` entry.
      */
     isValid?: boolean;
     /**
-     * A human-readable reason Ninlil.Web.Models.FilterPatternPreviewResult.IsValid is false, or null when it is true.
+     * A human-readable reason `FilterPatternPreviewResult.IsValid` is false, or null when it is true.
      */
     error?: string | null;
     /**
-     * Each sample domain tested and whether the pattern matched it. Empty when Ninlil.Web.Models.FilterPatternPreviewResult.IsValid is false, since a pattern that does not compile is not tested.
+     * Each sample domain tested and whether the pattern matched it. Empty when `FilterPatternPreviewResult.IsValid` is false, since a pattern that does not compile is not tested.
      */
     matches?: Array<FilterPatternPreviewMatch> | null;
 }

@@ -97,7 +97,7 @@ export class ForwardingSettingsService extends BaseService implements Forwarding
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Forwarding&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Every field takes effect at once. Returns 400 for a field of the wrong JSON type, an unknown failover strategy, a &#x60;healthCheckInterval&#x60; outside 1 second to 1 day, a &#x60;perForwarderTimeout&#x60; outside 100 milliseconds to 1 minute, or a &#x60;maxCacheEntries&#x60; below 1. Requires &#x60;forwardingsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Forwarding&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value. Every field takes effect at once. Returns 400 for a field of the wrong JSON type, an unknown failover strategy, a &#x60;healthCheckInterval&#x60; outside 1 second to 1 day, a &#x60;perForwarderTimeout&#x60; outside 100 milliseconds to 1 minute, or a &#x60;maxCacheEntries&#x60; below 1. Requires &#x60;forwardingsettings:write&#x60;.
      * @endpoint patch /api/forwarding-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

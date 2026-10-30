@@ -56,7 +56,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
     }
 
     /**
-     * This action receives one config-sync envelope from a peer and passes it to the Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier whose Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier.EntityType matches Ninlil.Dns.Server.Core.ClusterSync.ClusterConfigSyncEnvelope.EntityType. Every synced kind of data (filter lists and entries, access-control rules, rewrites, forwarders, users, roles, settings sections) comes through this one endpoint.  It always returns 200, even for an entity type this node does not know (logged and     ignored), so a newer peer sending a kind an older node cannot handle does not look     like a channel failure. Accepting, rejecting and last-write-wins are decided by the     applier (see Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier).
+     * This action receives one config-sync envelope from a peer and passes it to the &#x60;IClusterConfigSyncApplier&#x60; whose &#x60;IClusterConfigSyncApplier.EntityType&#x60; matches &#x60;ClusterConfigSyncEnvelope.EntityType&#x60;. Every synced kind of data (filter lists and entries, access-control rules, rewrites, forwarders, users, roles, settings sections) comes through this one endpoint.  It always returns 200, even for an entity type this node does not know (logged and     ignored), so a newer peer sending a kind an older node cannot handle does not look     like a channel failure. Accepting, rejecting and last-write-wins are decided by the     applier (see &#x60;IClusterConfigSyncApplier&#x60;).
      * @endpoint post /api/cluster/channel/config-sync
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -122,7 +122,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
     }
 
     /**
-     * This action answers a peer\&#39;s heartbeat with 200, after checking that the body names the peer the key belongs to and storing a newly announced certificate thumbprint (see Ninlil.Dns.Server.Cluster.Heartbeat.ClusterHeartbeatReceiver). Each node\&#39;s &#x60;ClusterHeartbeatBackgroundService&#x60; sets a peer\&#39;s Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity.Status from whether its own probe of that peer succeeded, so each node trusts its own view of a peer\&#39;s health rather than anything the peer reports. An invite key cannot reach this action.
+     * This action answers a peer\&#39;s heartbeat with 200, after checking that the body names the peer the key belongs to and storing a newly announced certificate thumbprint (see &#x60;ClusterHeartbeatReceiver&#x60;). Each node\&#39;s &#x60;ClusterHeartbeatBackgroundService&#x60; sets a peer\&#39;s &#x60;ClusterNodeEntity.Status&#x60; from whether its own probe of that peer succeeded, so each node trusts its own view of a peer\&#39;s health rather than anything the peer reports. An invite key cannot reach this action.
      * @endpoint post /api/cluster/channel/heartbeat
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -188,7 +188,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
     }
 
     /**
-     * This action receives the joining node\&#39;s callback, the second half of the join handshake (see M:Ninlil.Dns.Server.Cluster.Join.ClusterJoinService.HandleJoinCompleteAsync(System.String,Ninlil.Dns.Server.Cluster.Channel.ClusterJoinCompleteRequest,System.Threading.CancellationToken)). The TSIG key name comes from the identity Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationHandler authenticated, never from the request body. It is the one action an unused, unexpired invite key may sign; the route must stay Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationDefaults.JoinCompletePath.
+     * This action receives the joining node\&#39;s callback, the second half of the join handshake (see &#x60;ClusterJoinService.HandleJoinCompleteAsync&#x60;). The TSIG key name comes from the identity &#x60;ClusterTsigAuthenticationHandler&#x60; authenticated, never from the request body. It is the one action an unused, unexpired invite key may sign; the route must stay &#x60;ClusterTsigAuthenticationDefaults.JoinCompletePath&#x60;.
      * @endpoint post /api/cluster/channel/join-complete
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -321,7 +321,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
     }
 
     /**
-     * This action tells a peer whether a username exists on this node. A peer\&#39;s &#x60;ClusterUsernameUniquenessChecker&#x60; calls it when creating a user. It is a plain lookup with no lock or reservation, so two nodes creating the same name within moments of each other can both succeed; Ninlil.Dns.Server.Core.ClusterSync.ClusterSyncConflictResolver, applied by &#x60;UserClusterConfigSyncApplier&#x60;, resolves and flags that collision once the nodes sync.
+     * This action tells a peer whether a username exists on this node. A peer\&#39;s &#x60;ClusterUsernameUniquenessChecker&#x60; calls it when creating a user. It is a plain lookup with no lock or reservation, so two nodes creating the same name within moments of each other can both succeed; &#x60;ClusterSyncConflictResolver&#x60;, applied by &#x60;UserClusterConfigSyncApplier&#x60;, resolves and flags that collision once the nodes sync.
      * @endpoint post /api/cluster/channel/username-check
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

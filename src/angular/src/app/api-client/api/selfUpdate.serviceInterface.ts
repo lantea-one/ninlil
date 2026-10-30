@@ -23,14 +23,14 @@ export interface SelfUpdateServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action checks the configured release feed now, waits for the result and returns it. It runs the same check as the periodic loop in Ninlil.Dns.Server.SelfUpdate.SelfUpdateCheckService. Requires &#x60;selfupdate:manage&#x60;.
+     * This action checks the configured release feed now, waits for the result and returns it. It runs the same check as the periodic loop in &#x60;SelfUpdateCheckService&#x60;. Requires &#x60;selfupdate:manage&#x60;.
      * 
      * @endpoint post /api/self-update/check
 */
     apiSelfUpdateCheckPost(extraHttpRequestParams?: any): Observable<SelfUpdateStatusDetail>;
 
     /**
-     * This action returns the result of the latest check, automatic or manual, without checking again; M:Ninlil.Web.Controllers.SelfUpdateController.Check(System.Threading.CancellationToken) runs a new one. Requires &#x60;selfupdate:read&#x60;.  &lt;b&gt;Why there is no \&quot;apply now\&quot; action.&lt;/b&gt; The server does not replace its own     running binary: it is installed from a package, container or install script, and a     failed in-place update could leave a home DNS server broken with nobody watching.     Instead, Ninlil.Web.Models.SelfUpdateStatusDetail.UpdateInstructions tells the operator     what to do by hand.
+     * This action returns the result of the latest check, automatic or manual, without checking again; &#x60;POST /api/self-update/check&#x60; runs a new one. Requires &#x60;selfupdate:read&#x60;.  &lt;b&gt;Why there is no \&quot;apply now\&quot; action.&lt;/b&gt; The server does not replace its own     running binary: it is installed from a package, container or install script, and a     failed in-place update could leave a home DNS server broken with nobody watching.     Instead, &#x60;SelfUpdateStatusDetail.UpdateInstructions&#x60; tells the operator     what to do by hand.
      * 
      * @endpoint get /api/self-update
 */

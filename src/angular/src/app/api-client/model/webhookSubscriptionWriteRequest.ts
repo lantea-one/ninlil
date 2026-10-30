@@ -11,7 +11,7 @@ import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
 /**
- * This class carries the fields used to fully replace an existing webhook subscription\'s settings and credentials (`PUT /api/webhooks/{id}`). Unlike a TSIG key\'s generated secret, Ninlil.Web.Models.WebhookSubscriptionWriteRequest.AuthCredentials comes from the operator, who already knows the value, so a `PUT` replaces it too, as with Ninlil.Web.Models.CloudProviderCredentialWriteRequest. The HMAC signing secret (see Ninlil.Web.Models.WebhookSubscriptionCreateRequest.HmacSigningSecret) cannot be changed this way; delete and recreate the subscription instead.
+ * This class carries the fields used to fully replace an existing webhook subscription\'s settings and credentials (`PUT /api/webhooks/{id}`). Unlike a TSIG key\'s generated secret, `WebhookSubscriptionWriteRequest.AuthCredentials` comes from the operator, who already knows the value, so a `PUT` replaces it too, as with `CloudProviderCredentialWriteRequest`. The HMAC signing secret (see `WebhookSubscriptionCreateRequest.HmacSigningSecret`) cannot be changed this way; delete and recreate the subscription instead.
  */
 export interface WebhookSubscriptionWriteRequest { 
     /**

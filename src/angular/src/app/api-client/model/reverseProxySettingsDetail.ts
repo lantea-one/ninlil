@@ -11,7 +11,7 @@ import { DnsOverTlsProxyProtocolSettingsDetail } from './dnsOverTlsProxyProtocol
 
 
 /**
- * This record is the reverse proxy trust configuration that `GET /api/reverse-proxy-settings` returns. The shared secret is never returned; Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured says whether one is set, as `TwoFactorStatus.HasAuthenticator` does for an authenticator. A `PATCH` accepts these fields with `sharedSecret` in place of Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured; the last two fields are read-only.
+ * This record is the reverse proxy trust configuration that `GET /api/reverse-proxy-settings` returns. The shared secret is never returned; `ReverseProxySettingsDetail.SharedSecretConfigured` says whether one is set, as `TwoFactorStatus.HasAuthenticator` does for an authenticator. A `PATCH` accepts these fields with `sharedSecret` in place of `ReverseProxySettingsDetail.SharedSecretConfigured`; the last two fields are read-only.
  */
 export interface ReverseProxySettingsDetail { 
     /**
@@ -40,7 +40,7 @@ export interface ReverseProxySettingsDetail {
      */
     lastModifiedUtc?: string | null;
     /**
-     * The cluster node the settings were last written on, or null together with Ninlil.Web.Models.ReverseProxySettingsDetail.LastModifiedUtc.
+     * The cluster node the settings were last written on, or null together with `ReverseProxySettingsDetail.LastModifiedUtc`.
      */
     originatingNodeId?: string | null;
 }

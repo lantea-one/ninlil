@@ -14,7 +14,7 @@
  */
 export interface TwoFactorEmailCodeRequest { 
     /**
-     * The opaque token Ninlil.Web.Models.LoginResponse.MfaToken returned.
+     * The opaque token `LoginResponse.MfaToken` returned.
      */
     mfaToken?: string | null;
 }

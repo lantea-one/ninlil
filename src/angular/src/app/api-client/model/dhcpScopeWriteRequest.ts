@@ -70,7 +70,7 @@ export interface DhcpScopeWriteRequest {
     nextServerAddress?: string | null;
     kind?: DhcpScopeKindEnum;
     /**
-     * The length, in bits, of each prefix the scope delegates. Required when Kind is Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.PrefixDelegation, and must be null otherwise (see `DhcpScopeEntity.DelegatedPrefixLength`).
+     * The length, in bits, of each prefix the scope delegates. Required when Kind is `DhcpScopeKindEnum.PrefixDelegation`, and must be null otherwise (see `DhcpScopeEntity.DelegatedPrefixLength`).
      */
     delegatedPrefixLength?: number | null;
 }

@@ -76,7 +76,7 @@ export interface ClientSchedulesServiceInterface {
     apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClientScheduleDetail>;
 
     /**
-     * This action replaces a schedule\&#39;s fields, keeping its id and client. Validation is as for M:Ninlil.Web.Controllers.ClientSchedulesController.Create(System.Guid,Ninlil.Web.Models.ClientScheduleWriteRequest,System.Threading.CancellationToken); returns 404 when the schedule does not exist or belongs to another client. Requires &#x60;clients:write&#x60;.
+     * This action replaces a schedule\&#39;s fields, keeping its id and client. Validation is as for &#x60;POST /api/clients/{clientId}/schedules&#x60;; returns 404 when the schedule does not exist or belongs to another client. Requires &#x60;clients:write&#x60;.
      * 
      * @endpoint put /api/clients/{clientId}/schedules/{id}
 * @param requestParameters

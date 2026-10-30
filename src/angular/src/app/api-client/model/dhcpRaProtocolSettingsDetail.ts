@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Ninlil.Dhcp.Protocol.Ra.RaProtocolOptions` (`GET /api/dhcp-settings/ra-protocol`): whether the Router Advertisement listener runs and how often it sends unsolicited advertisements. What an advertisement contains is in Ninlil.Web.Models.DhcpRaSettingsDetail, following the same split in the options classes.
+ * This record is the REST shape of `RaProtocolOptions` (`GET /api/dhcp-settings/ra-protocol`): whether the Router Advertisement listener runs and how often it sends unsolicited advertisements. What an advertisement contains is in `DhcpRaSettingsDetail`, following the same split in the options classes.
  */
 export interface DhcpRaProtocolSettingsDetail { 
     /**

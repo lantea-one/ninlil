@@ -141,7 +141,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action lists the member zone names of an RFC 9432 catalog zone (a Ninlil.Dns.Common.Enum.ZoneTypeEnum.Catalog zone or a Ninlil.Dns.Common.Enum.ZoneTypeEnum.SecondaryCatalog copy), read from its stored PTR records. Requires &#x60;zones:read&#x60;.
+     * This action lists the member zone names of an RFC 9432 catalog zone (a &#x60;ZoneTypeEnum.Catalog&#x60; zone or a &#x60;ZoneTypeEnum.SecondaryCatalog&#x60; copy), read from its stored PTR records. Requires &#x60;zones:read&#x60;.
      * @endpoint get /api/zones/{id}/catalog-members
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -260,7 +260,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action makes a Ninlil.Dns.Common.Enum.ZoneTypeEnum.Primary or Ninlil.Dns.Common.Enum.ZoneTypeEnum.CloudPrimary zone that this server originates a member of a Ninlil.Dns.Common.Enum.ZoneTypeEnum.Catalog zone it also originates. It writes the member\&#39;s RFC 9432 PTR record into the catalog zone and adds every healthy cluster peer\&#39;s address to both zones\&#39; &#x60;NotifyAddresses&#x60;, so the change reaches the cluster without manual configuration (see M:Ninlil.Dns.Server.Authoritative.CatalogSync.CatalogZoneMembershipService.JoinAsync(System.Guid,System.Guid,System.Threading.CancellationToken)). Requires &#x60;zones:write&#x60;.
+     * This action makes a &#x60;ZoneTypeEnum.Primary&#x60; or &#x60;ZoneTypeEnum.CloudPrimary&#x60; zone that this server originates a member of a &#x60;ZoneTypeEnum.Catalog&#x60; zone it also originates. It writes the member\&#39;s RFC 9432 PTR record into the catalog zone and adds every healthy cluster peer\&#39;s address to both zones\&#39; &#x60;NotifyAddresses&#x60;, so the change reaches the cluster without manual configuration (see &#x60;CatalogZoneMembershipService.JoinAsync&#x60;). Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/catalog-membership
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -519,7 +519,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action replaces a zone\&#39;s settings. Validation and errors are as for M:Ninlil.Web.Controllers.ZonesController.Create(Ninlil.Web.Models.ZoneWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;zones:write&#x60;.
+     * This action replaces a zone\&#39;s settings. Validation and errors are as for &#x60;POST /api/zones&#x60;, plus 404 for an unknown id. Requires &#x60;zones:write&#x60;.
      * @endpoint put /api/zones/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -589,7 +589,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action runs one CAA reconciliation pass for the zone now and returns how many records were added or removed, or why the pass was skipped. The same pass runs automatically on each &#x60;DnsZoneChangedEvent&#x60;; running it by hand is useful after changing the server-wide CAA default. It calls M:Ninlil.Dns.Server.Acme.Caa.CaaRecordReconciliationService.ReconcileZoneAsync(System.Guid,System.Threading.CancellationToken), like the automatic path. Returns 404 for an unknown id. Requires &#x60;zones:write&#x60;.
+     * This action runs one CAA reconciliation pass for the zone now and returns how many records were added or removed, or why the pass was skipped. The same pass runs automatically on each &#x60;DnsZoneChangedEvent&#x60;; running it by hand is useful after changing the server-wide CAA default. It calls &#x60;CaaRecordReconciliationService.ReconcileZoneAsync&#x60;, like the automatic path. Returns 404 for an unknown id. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/reconcile-caa
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -649,7 +649,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action runs one PTR (reverse-zone) sync pass for the zone now, through M:Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncService.ReconcileZoneAsync(System.Guid,System.Threading.CancellationToken), the same logic the automatic &#x60;DnsZoneChangedEvent&#x60; path uses, including RFC 2317 classless-delegation records when the zone\&#39;s &#x60;PtrIpv4PrefixLength&#x60; (or the server-wide default) calls for them. Returns the records added and removed and the reverse zones touched, or why the pass was skipped, and 404 for an unknown id. Requires &#x60;zones:write&#x60;.
+     * This action runs one PTR (reverse-zone) sync pass for the zone now, through &#x60;PtrSyncService.ReconcileZoneAsync&#x60;, the same logic the automatic &#x60;DnsZoneChangedEvent&#x60; path uses, including RFC 2317 classless-delegation records when the zone\&#39;s &#x60;PtrIpv4PrefixLength&#x60; (or the server-wide default) calls for them. Returns the records added and removed and the reverse zones touched, or why the pass was skipped, and 404 for an unknown id. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/reconcile-ptr
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -709,7 +709,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action creates a zone with no records, not even an SOA; add them through Ninlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name, a PTR prefix length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
+     * This action creates a zone with no records, not even an SOA; add them through &#x60;RecordsController&#x60;. Returns 400 for an invalid zone name, a PTR prefix length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

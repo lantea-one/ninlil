@@ -35,7 +35,7 @@ export interface DnssecKeyDetail {
      */
     keyTag?: number;
     /**
-     * Whether the key has been withdrawn from the zone\'s DNSKEY RRset: true when Ninlil.Web.Models.DnssecKeyDetail.LifecycleState is `Removed`. It is the field Ninlil.Web.Models.DnssecKeyWriteRequest.IsRetired writes.
+     * Whether the key has been withdrawn from the zone\'s DNSKEY RRset: true when `DnssecKeyDetail.LifecycleState` is `Removed`. It is the field `DnssecKeyWriteRequest.IsRetired` writes.
      */
     isRetired?: boolean;
     /**

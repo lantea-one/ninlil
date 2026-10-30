@@ -78,7 +78,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, extraHttpRequestParams?: any): Observable<TsigKeyDetail>;
 
     /**
-     * This action updates a TSIG key as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. The secret cannot be changed. Errors are as for M:Ninlil.Web.Controllers.TsigKeysController.Replace(System.Guid,Ninlil.Web.Models.TsigKeyWriteRequest,System.Threading.CancellationToken). Requires &#x60;tsigkeys:write&#x60;.
+     * This action updates a TSIG key as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. The secret cannot be changed. Errors are as for &#x60;PUT /api/tsig-keys/{id}&#x60;. Requires &#x60;tsigkeys:write&#x60;.
      * 
      * @endpoint patch /api/tsig-keys/{id}
 * @param requestParameters
@@ -86,7 +86,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdPatch(requestParameters: ApiTsigKeysIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action replaces a TSIG key\&#39;s name, algorithm, disabled flag and comments. The secret is left unchanged (see Ninlil.Web.Models.TsigKeyWriteRequest). Returns 400 for an invalid name or algorithm, 404 for an unknown id, and 409 when the name is taken or when a cluster key would be renamed or change algorithm. Requires &#x60;tsigkeys:write&#x60;.
+     * This action replaces a TSIG key\&#39;s name, algorithm, disabled flag and comments. The secret is left unchanged (see &#x60;TsigKeyWriteRequest&#x60;). Returns 400 for an invalid name or algorithm, 404 for an unknown id, and 409 when the name is taken or when a cluster key would be renamed or change algorithm. Requires &#x60;tsigkeys:write&#x60;.
      * 
      * @endpoint put /api/tsig-keys/{id}
 * @param requestParameters
@@ -94,7 +94,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdPut(requestParameters: ApiTsigKeysIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a TSIG key. Without Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a random secret as long as the algorithm\&#39;s MAC (32 bytes for the default) is generated; without an algorithm, &#x60;hmac-sha256&#x60; is used. The name is stored in lowercase. The base64 secret is returned in this response only. Returns 400 for an invalid name, an unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
+     * This action creates a TSIG key. Without &#x60;TsigKeyCreateRequest.Secret&#x60;, a random secret as long as the algorithm\&#39;s MAC (32 bytes for the default) is generated; without an algorithm, &#x60;hmac-sha256&#x60; is used. The name is stored in lowercase. The base64 secret is returned in this response only. Returns 400 for an invalid name, an unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
      * 
      * @endpoint post /api/tsig-keys
 * @param requestParameters

@@ -40,7 +40,7 @@ export interface WebhookDeliveryAttemptDetail {
      */
     attemptCount?: number;
     /**
-     * The most attempts the delivery may make: the subscription\'s Ninlil.Web.Models.WebhookSubscriptionDetail.MaxDeliveryAttempts when the delivery was created.
+     * The most attempts the delivery may make: the subscription\'s `WebhookSubscriptionDetail.MaxDeliveryAttempts` when the delivery was created.
      */
     maxAttempts?: number;
     /**
@@ -48,7 +48,7 @@ export interface WebhookDeliveryAttemptDetail {
      */
     lastAttemptedAtUtc?: string | null;
     /**
-     * When the next retry is due, or null once Ninlil.Web.Models.WebhookDeliveryAttemptDetail.Status is final.
+     * When the next retry is due, or null once `WebhookDeliveryAttemptDetail.Status` is final.
      */
     nextRetryDueUtc?: string | null;
     /**

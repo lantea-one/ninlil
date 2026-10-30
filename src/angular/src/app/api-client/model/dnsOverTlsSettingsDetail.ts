@@ -11,11 +11,11 @@ import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
 /**
- * This record is the DNS-over-TLS settings (`DnsOverTlsOptions`) that `GET /api/transport-settings/dns-over-tls` returns. `ProxyProtocol` is left out: it is exposed once, as the `dnsOverTls` field of Ninlil.Web.Controllers.ReverseProxySettingsController, next to the HTTP reverse proxy trust settings it belongs with.
+ * This record is the DNS-over-TLS settings (`DnsOverTlsOptions`) that `GET /api/transport-settings/dns-over-tls` returns. `ProxyProtocol` is left out: it is exposed once, as the `dnsOverTls` field of `ReverseProxySettingsController`, next to the HTTP reverse proxy trust settings it belongs with.
  */
 export interface DnsOverTlsSettingsDetail { 
     /**
-     * Whether the transport listens. A change applies at once: M:Ninlil.Web.Controllers.TransportSettingsController.PatchDnsOverTls(System.Text.Json.JsonElement,System.Threading.CancellationToken) starts or stops the `dns-over-tls` listener through Ninlil.Web.Services.IManagedServiceRegistry.
+     * Whether the transport listens. A change applies at once: `PATCH /api/transport-settings/dns-over-tls` starts or stops the `dns-over-tls` listener through `IManagedServiceRegistry`.
      */
     enable?: boolean;
     /**

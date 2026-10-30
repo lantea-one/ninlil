@@ -35,7 +35,7 @@ export interface ZoneTransferClientSettingsServiceInterface {
     apiZoneTransferClientSettingsGet(extraHttpRequestParams?: any): Observable<ZoneTransferClientSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransferClient&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for a port outside 1-65535 or a timeout that is not a positive TimeSpan. Requires &#x60;zonetransferclientsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransferClient&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect at once. Returns 400 for a port outside 1-65535 or a timeout that is not a positive TimeSpan. Requires &#x60;zonetransferclientsettings:write&#x60;.
      * 
      * @endpoint patch /api/zone-transfer-client-settings
 * @param requestParameters

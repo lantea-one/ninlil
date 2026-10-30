@@ -407,7 +407,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action replaces a webhook subscription\&#39;s settings and authentication credentials. The HMAC signing secret is left unchanged (see Ninlil.Web.Models.WebhookSubscriptionWriteRequest). Validation and errors are as for M:Ninlil.Web.Controllers.WebhooksController.Create(Ninlil.Web.Models.WebhookSubscriptionCreateRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;webhooks:write&#x60;.
+     * This action replaces a webhook subscription\&#39;s settings and authentication credentials. The HMAC signing secret is left unchanged (see &#x60;WebhookSubscriptionWriteRequest&#x60;). Validation and errors are as for &#x60;POST /api/webhooks&#x60;, plus 404 for an unknown id. Requires &#x60;webhooks:write&#x60;.
      * @endpoint put /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -97,7 +97,7 @@ export class FilteringSettingsService extends BaseService implements FilteringSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Filtering&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Every field takes effect at once. Returns 400 for an unknown block response mode or precedence, or a sinkhole address of the wrong family. Requires &#x60;filteringsettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Filtering&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value. Every field takes effect at once. Returns 400 for an unknown block response mode or precedence, or a sinkhole address of the wrong family. Requires &#x60;filteringsettings:write&#x60;.
      * @endpoint patch /api/filtering-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

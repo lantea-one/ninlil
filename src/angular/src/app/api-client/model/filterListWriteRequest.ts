@@ -24,11 +24,11 @@ export interface FilterListWriteRequest {
     action?: DnsFilterListActionEnum;
     source?: DnsFilterListSourceEnum;
     /**
-     * The URL a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list\'s entries are fetched from. Required for a subscribed list, otherwise ignored.
+     * The URL a `DnsFilterListSourceEnum.Subscribed` list\'s entries are fetched from. Required for a subscribed list, otherwise ignored.
      */
     subscriptionUrl?: string | null;
     /**
-     * How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is fetched again. `null` means every 24 hours. The minimum is one hour (`01:00:00`); a smaller value is rejected with 400. Ignored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.
+     * How often a `DnsFilterListSourceEnum.Subscribed` list is fetched again. `null` means every 24 hours. The minimum is one hour (`01:00:00`); a smaller value is rejected with 400. Ignored for a `DnsFilterListSourceEnum.Local` list.
      */
     refreshInterval?: string | null;
     /**

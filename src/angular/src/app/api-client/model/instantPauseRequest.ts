@@ -14,7 +14,7 @@
  */
 export interface InstantPauseRequest { 
     /**
-     * How many minutes from now to pause for. Zero or a negative number is rejected with a `400` (Ninlil.Dns.Common.Exceptions.ValidationException).
+     * How many minutes from now to pause for. Zero or a negative number is rejected with a `400` (`ValidationException`).
      */
     durationMinutes?: number;
 }

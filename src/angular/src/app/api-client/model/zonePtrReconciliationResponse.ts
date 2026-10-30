@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the response of `POST /api/zones/{id}/reconcile-ptr`: what one on-demand PTR sync did, or why it did nothing. It copies `Server.Authoritative.Ptr.PtrReconciliationResult`, as Ninlil.Web.Models.ZoneCaaReconciliationResponse does for CAA.
+ * This record is the response of `POST /api/zones/{id}/reconcile-ptr`: what one on-demand PTR sync did, or why it did nothing. It copies `Server.Authoritative.Ptr.PtrReconciliationResult`, as `ZoneCaaReconciliationResponse` does for CAA.
  */
 export interface ZonePtrReconciliationResponse { 
     /**

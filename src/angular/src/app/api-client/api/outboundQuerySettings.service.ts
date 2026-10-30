@@ -97,7 +97,7 @@ export class OutboundQuerySettingsService extends BaseService implements Outboun
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:OutboundQuery&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; &#x60;excludedSourcePorts&#x60; replaces the whole list. No range checks are applied. Requires &#x60;outboundquerysettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:OutboundQuery&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value; &#x60;excludedSourcePorts&#x60; replaces the whole list. No range checks are applied. Requires &#x60;outboundquerysettings:write&#x60;.
      * @endpoint patch /api/outbound-query-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

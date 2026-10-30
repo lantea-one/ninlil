@@ -257,7 +257,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
     }
 
     /**
-     * This action assigns a block or allow list to the client. Returns 400 when the list does not exist (an invalid value in the request, not a missing resource), 404 for an unknown client, and 409 when the list is already assigned (refused to keep rows meaningful, as in M:Ninlil.Web.Controllers.ClientGroupListAssignmentsController.Create(System.Guid,Ninlil.Web.Models.ClientGroupListAssignmentWriteRequest,System.Threading.CancellationToken)). Requires &#x60;clients:write&#x60;.
+     * This action assigns a block or allow list to the client. Returns 400 when the list does not exist (an invalid value in the request, not a missing resource), 404 for an unknown client, and 409 when the list is already assigned (refused to keep rows meaningful, as in &#x60;POST /api/client-groups/{groupId}/list-assignments&#x60;). Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/clients/{clientId}/list-assignments
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

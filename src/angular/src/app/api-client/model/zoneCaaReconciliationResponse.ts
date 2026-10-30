@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the response of `POST /api/zones/{id}/reconcile-caa`: what one on-demand CAA reconciliation did, or why it did nothing. It copies `Server.Acme.Caa.CaaReconciliationResult` so the internal service type is not exposed over REST, as Ninlil.Web.Models.ZoneCatalogMembersResponse does for the catalog service.
+ * This record is the response of `POST /api/zones/{id}/reconcile-caa`: what one on-demand CAA reconciliation did, or why it did nothing. It copies `Server.Acme.Caa.CaaReconciliationResult` so the internal service type is not exposed over REST, as `ZoneCatalogMembersResponse` does for the catalog service.
  */
 export interface ZoneCaaReconciliationResponse { 
     /**

@@ -97,7 +97,7 @@ export class DnssecKeyRolloverSettingsService extends BaseService implements Dns
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:DnssecKeyRollover&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for a malformed duration, a negative propagation delay, or a non-positive parent DS TTL or poll interval. Requires &#x60;dnsseckeyrolloversettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:DnssecKeyRollover&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect at once. Returns 400 for a malformed duration, a negative propagation delay, or a non-positive parent DS TTL or poll interval. Requires &#x60;dnsseckeyrolloversettings:write&#x60;.
      * @endpoint patch /api/dnssec-key-rollover-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

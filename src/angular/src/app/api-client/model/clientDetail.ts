@@ -13,7 +13,7 @@ import { DnsClientDeviceIconEnum } from './dnsClientDeviceIconEnum';
 
 
 /**
- * This class carries a known client device, as returned by the list, get and create endpoints of `/api/clients`. Ninlil.Web.Models.ClientDetail.Addresses lists every identifier the device answers to, since one device can have several (a dual-stack device\'s IPv4 MAC address and IPv6 DUID, for instance).
+ * This class carries a known client device, as returned by the list, get and create endpoints of `/api/clients`. `ClientDetail.Addresses` lists every identifier the device answers to, since one device can have several (a dual-stack device\'s IPv4 MAC address and IPv6 DUID, for instance).
  */
 export interface ClientDetail { 
     /**
@@ -21,7 +21,7 @@ export interface ClientDetail {
      */
     id?: string;
     /**
-     * Every persistent identifier the device answers to (see Ninlil.Web.Models.ClientAddressDetail).
+     * Every persistent identifier the device answers to (see `ClientAddressDetail`).
      */
     addresses?: Array<ClientAddressDetail> | null;
     /**
@@ -29,7 +29,7 @@ export interface ClientDetail {
      */
     displayName?: string | null;
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity the client is explicitly assigned to, or null for none.
+     * The `DnsClientGroupEntity` the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**
@@ -50,7 +50,7 @@ export interface ClientDetail {
      */
     updatedAtUtc?: string | null;
     /**
-     * The UTC instant until which the client\'s pause blocks all of its DNS resolution (see Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.PausedUntilUtc), or null when no pause has been set.
+     * The UTC instant until which the client\'s pause blocks all of its DNS resolution (see `DnsClientEntity.PausedUntilUtc`), or null when no pause has been set.
      */
     pausedUntilUtc?: string | null;
     /**

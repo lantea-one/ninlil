@@ -97,7 +97,7 @@ export class RewriteSettingsService extends BaseService implements RewriteSettin
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Rewrites&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Every field takes effect at once, and the change is also replicated to the other cluster nodes, which apply it live as well. Requires &#x60;rewritesettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Rewrites&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value. Every field takes effect at once, and the change is also replicated to the other cluster nodes, which apply it live as well. Requires &#x60;rewritesettings:write&#x60;.
      * @endpoint patch /api/rewrite-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

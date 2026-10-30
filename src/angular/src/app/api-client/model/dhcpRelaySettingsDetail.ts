@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Ninlil.Dhcp.Server.Relay.Dhcpv4RelayOptions` (`GET /api/dhcp-settings/relay`): whether the server relays DHCPv4 requests to upstream servers instead of answering them from its own scopes.
+ * This record is the REST shape of `Dhcpv4RelayOptions` (`GET /api/dhcp-settings/relay`): whether the server relays DHCPv4 requests to upstream servers instead of answering them from its own scopes.
  */
 export interface DhcpRelaySettingsDetail { 
     /**
@@ -30,11 +30,11 @@ export interface DhcpRelaySettingsDetail {
      */
     relayAgentAddress?: string | null;
     /**
-     * The Agent Circuit ID text added to every forwarded request, or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Remote ID.
+     * The Agent Circuit ID text added to each client request the relay receives directly (one whose `giaddr` is zero), or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Remote ID.
      */
     relayAgentCircuitId?: string | null;
     /**
-     * The Agent Remote ID text added to every forwarded request, or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Circuit ID.
+     * The Agent Remote ID text added to each client request the relay receives directly (one whose `giaddr` is zero), or null for none. Printable ASCII, at most 253 characters, and at most 251 together with the Circuit ID.
      */
     relayAgentRemoteId?: string | null;
 }

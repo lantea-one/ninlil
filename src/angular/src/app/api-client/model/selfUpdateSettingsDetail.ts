@@ -14,7 +14,7 @@
  */
 export interface SelfUpdateSettingsDetail { 
     /**
-     * Whether the server checks Ninlil.Web.Models.SelfUpdateSettingsDetail.ReleaseFeedUrl periodically. Defaults to true.
+     * Whether the server checks `SelfUpdateSettingsDetail.ReleaseFeedUrl` periodically. Defaults to true.
      */
     enableAutomaticCheck?: boolean;
     /**

@@ -11,7 +11,7 @@ import { CloudDnsProviderTypeEnum } from './cloudDnsProviderTypeEnum';
 
 
 /**
- * This class carries a cloud DNS provider credential set without its secrets, as returned by the list and get endpoints and nested in Ninlil.Web.Models.CloudProviderCredentialCreateResponse, the one response that includes the secrets.
+ * This class carries a cloud DNS provider credential set without its secrets, as returned by the list and get endpoints and nested in `CloudProviderCredentialCreateResponse`, the one response that includes the secrets.
  */
 export interface CloudProviderCredentialDetail { 
     id?: string;

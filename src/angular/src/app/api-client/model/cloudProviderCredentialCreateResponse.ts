@@ -11,7 +11,7 @@ import { CloudProviderCredentialDetail } from './cloudProviderCredentialDetail';
 
 
 /**
- * This class carries a newly created cloud DNS provider credential set with its plaintext secrets. It is the only response that includes Ninlil.Web.Models.CloudProviderCredentialCreateResponse.Secrets: like every secret-bearing entity, a secret is revealed once at creation and omitted afterwards.
+ * This class carries a newly created cloud DNS provider credential set with its plaintext secrets. It is the only response that includes `CloudProviderCredentialCreateResponse.Secrets`: like every secret-bearing entity, a secret is revealed once at creation and omitted afterwards.
  */
 export interface CloudProviderCredentialCreateResponse { 
     credential?: CloudProviderCredentialDetail;

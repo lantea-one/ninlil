@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the editable fields of a known client, replaced in full by `PUT /api/clients/{id}`. It has no Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier or Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion, because Ninlil.Web.Controllers.ClientsController never lets an address\'s identity change. To change one, add a new address and delete the old one, as with the shared secret of a Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity.
+ * This class carries the editable fields of a known client, replaced in full by `PUT /api/clients/{id}`. It has no `ClientCreateRequest.ClientIdentifier` or `ClientCreateRequest.ProtocolVersion`, because `ClientsController` never lets an address\'s identity change. To change one, add a new address and delete the old one, as with the shared secret of a `TsigKeyEntity`.
  */
 export interface ClientWriteRequest { 
     /**
@@ -18,7 +18,7 @@ export interface ClientWriteRequest {
      */
     displayName?: string | null;
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity the client is explicitly assigned to, or null for none.
+     * The `DnsClientGroupEntity` the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**
@@ -30,7 +30,7 @@ export interface ClientWriteRequest {
      */
     comments?: string | null;
     /**
-     * The device icon, named by its Ninlil.Dns.Common.Enum.DnsClientDeviceIconEnum value, or null to clear an explicit choice; any other value is rejected with a `400`.
+     * The device icon, named by its `DnsClientDeviceIconEnum` value, or null to clear an explicit choice; any other value is rejected with a `400`.
      */
     deviceIconKey?: string | null;
     /**

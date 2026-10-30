@@ -12,7 +12,7 @@ import { DnsClassEnum } from './dnsClassEnum';
 
 
 /**
- * This class carries a record, as returned by the list, get and write endpoints under `/api/zones/{zoneId}/records`. The fields mean what they mean in Ninlil.Web.Models.RecordWriteRequest.
+ * This class carries a record, as returned by the list, get and write endpoints under `/api/zones/{zoneId}/records`. The fields mean what they mean in `RecordWriteRequest`.
  */
 export interface RecordDetail { 
     id?: string;

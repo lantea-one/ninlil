@@ -11,7 +11,7 @@ import { CaaAutoManagementSettingsDetail } from './caaAutoManagementSettingsDeta
 
 
 /**
- * This record is the REST shape of the ACME certificate settings (`AcmeOptions`) that `GET /api/acme-settings` returns. The server-wide CAA defaults (`CaaAutoManagementOptions`) are nested under Ninlil.Web.Models.AcmeSettingsDetail.CaaAutoManagement; the per-zone override lives on the zone itself (`ZonesController`). The ACME account\'s private key is never exposed over REST, so a `PATCH` to the same endpoint accepts the same fields this record has.
+ * This record is the REST shape of the ACME certificate settings (`AcmeOptions`) that `GET /api/acme-settings` returns. The server-wide CAA defaults (`CaaAutoManagementOptions`) are nested under `AcmeSettingsDetail.CaaAutoManagement`; the per-zone override lives on the zone itself (`ZonesController`). The ACME account\'s private key is never exposed over REST, so a `PATCH` to the same endpoint accepts the same fields this record has.
  */
 export interface AcmeSettingsDetail { 
     enable?: boolean;
