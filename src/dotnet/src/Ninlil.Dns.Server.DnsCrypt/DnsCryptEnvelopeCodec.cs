@@ -47,6 +47,26 @@ public static class DnsCryptEnvelopeCodec
         ClientMagicLength + PublicKeyLength + HalfNonceLength + MacLength + 1;
 
     /// <summary>
+    ///     This constant contains the length a padded client query has at least over UDP, the
+    ///     initial <c>&lt;min-query-len&gt;</c> of DNSCrypt v2 section 3. A resolver may truncate
+    ///     the answer to a shorter query (section 9), so a client pads to this length.
+    /// </summary>
+    public const int MinimumUdpPaddedQueryLength = 256;
+
+    /// <summary>
+    ///     This constant contains the block size the padded query and response lengths are a
+    ///     multiple of (DNSCrypt v2 sections 3, 5 and 8).
+    /// </summary>
+    public const int PaddingBlockSize = 64;
+
+    /// <summary>
+    ///     This constant contains how many blocks beyond the shortest padding a TCP client query
+    ///     may add. The shortest padding is 1 to 64 bytes, so up to three more blocks keep the pad
+    ///     within the 256 bytes section 5 allows.
+    /// </summary>
+    public const int MaximumTcpExtraPaddingBlocks = 3;
+
+    /// <summary>
     ///     This field contains the resolver-magic bytes every response starts with, so a client
     ///     can tell a DNSCrypt response from a plain DNS one: <c>"r6fnvWj8"</c> in ASCII.
     /// </summary>
@@ -164,8 +184,10 @@ public static class DnsCryptEnvelopeCodec
 
     /// <summary>
     ///     This method builds a complete client query packet, the client-side counterpart of
-    ///     <see cref="DecryptQuery" />. Only the forwarder client uses it. The query is padded to
-    ///     a multiple of 64 bytes, with no larger minimum size.
+    ///     <see cref="DecryptQuery" />. Only the forwarder client uses it. Over UDP the padded
+    ///     query is at least <see cref="MinimumUdpPaddedQueryLength" /> bytes (DNSCrypt v2
+    ///     section 3). Over TCP the pad is 1 to 256 bytes, chosen at random so the length does not
+    ///     identify the query (section 5). Either way the padded length is a multiple of 64 bytes.
     /// </summary>
     /// <param name="esVersion">The cipher the target certificate specifies.</param>
     /// <param name="clientMagic">The target certificate's client-magic tag.</param>
@@ -174,6 +196,7 @@ public static class DnsCryptEnvelopeCodec
     /// <param name="resolverPublicKey">The target certificate's resolver public key.</param>
     /// <param name="clientNonceHalf">A newly generated client half-nonce.</param>
     /// <param name="queryMessage">The plaintext, encoded DNS query message.</param>
+    /// <param name="overTcp">Whether the packet is sent over TCP instead of UDP.</param>
     public static byte[] EncryptQuery(
         DnsCryptEsVersion esVersion,
         byte[] clientMagic,
@@ -181,7 +204,8 @@ public static class DnsCryptEnvelopeCodec
         byte[] clientSecretKey,
         byte[] resolverPublicKey,
         byte[] clientNonceHalf,
-        byte[] queryMessage
+        byte[] queryMessage,
+        bool overTcp
     )
     {
         // A query's nonce is the client's half followed by 12 zero bytes; the resolver fills the
@@ -189,7 +213,17 @@ public static class DnsCryptEnvelopeCodec
         byte[] nonce = new byte[HalfNonceLength * 2];
         clientNonceHalf.CopyTo(nonce, 0);
 
-        byte[] paddedQuery = DnsCryptPadding.PadToBlockSize(queryMessage, 64);
+        byte[] paddedQuery = overTcp
+            ? DnsCryptPadding.PadWithExtraBlocks(
+                queryMessage,
+                PaddingBlockSize,
+                RandomNumberGenerator.GetInt32(MaximumTcpExtraPaddingBlocks + 1)
+            )
+            : DnsCryptPadding.PadToMinimumLength(
+                queryMessage,
+                PaddingBlockSize,
+                MinimumUdpPaddedQueryLength
+            );
 
         byte[] encryptedQuery = DnsCryptCryptoBox.Encrypt(
             esVersion,

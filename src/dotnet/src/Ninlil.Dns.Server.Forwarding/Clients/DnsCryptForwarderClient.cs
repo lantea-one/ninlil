@@ -15,12 +15,16 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 ///     This class forwards a query to an upstream DNSCrypt resolver, addressed via an
 ///     <c>sdns://</c> stamp (<see cref="Definition.DnsCryptStampParser" />). Before it can
 ///     encrypt, it discovers the resolver's certificate: a plaintext TXT query, whose answers are
-///     checked against the stamp's Ed25519 public key. That is the client side of what the
+///     checked against the stamp's Ed25519 public key. The query goes over UDP first and over
+///     TCP when the UDP attempt fails, times out or is truncated, or returns no usable
+///     certificate (DNSCrypt v2 section 12). That is the client side of what the
 ///     listener in <c>Ninlil.Dns.Protocol.DnsCrypt</c> answers. The crypto and wire-format code
 ///     from <c>Server.DnsCrypt</c> (<see cref="DnsCryptCryptoBox" />,
 ///     <see cref="DnsCryptCertificateCodec" />, <see cref="DnsCryptEnvelopeCodec" />) is shared
-///     with the server role. The encrypted query goes over UDP; a reply that has
-///     the TC flag set (or fills the receive buffer) is asked again over TCP.
+///     with the server role. The encrypted query goes over UDP, padded to at least 256 bytes
+///     (section 3); a reply that has the TC flag set (or fills the receive buffer) is asked
+///     again over TCP with a random 1 to 256 byte pad (section 5), on a connection that carries
+///     that one query (section 6).
 ///     <para>
 ///         A discovered certificate is not cached: there is no background service tracking the
 ///         upstream's certificate rotation, so every forwarded query discovers it again, at the
@@ -40,6 +44,13 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
 {
     private readonly Func<ushort> newMessageId;
+    private readonly TimeSpan discoveryUdpTimeout;
+
+    /// <summary>
+    ///     This constant contains how long the UDP certificate query waits for a reply before the
+    ///     client asks over TCP.
+    /// </summary>
+    private static readonly TimeSpan DefaultDiscoveryUdpTimeout = TimeSpan.FromSeconds(2);
 
     /// <summary>
     ///     This constructor builds a client that draws its message IDs from the cryptographic
@@ -49,15 +60,24 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
         : this(null) { }
 
     /// <summary>
-    ///     This constructor lets tests fix the message ID of the forwarded query.
+    ///     This constructor lets tests fix the message ID of the forwarded query and the time the
+    ///     UDP certificate query waits.
     /// </summary>
     /// <param name="newMessageId">
     ///     Returns the ID of each forwarded query; <see langword="null" /> uses
     ///     <see cref="ForwarderQueryMessage.NewRandomId" />.
     /// </param>
-    internal DnsCryptForwarderClient(Func<ushort> newMessageId)
+    /// <param name="discoveryUdpTimeout">
+    ///     How long the UDP certificate query waits for a reply before the TCP query;
+    ///     <see langword="null" /> uses two seconds.
+    /// </param>
+    internal DnsCryptForwarderClient(
+        Func<ushort> newMessageId,
+        TimeSpan? discoveryUdpTimeout = null
+    )
     {
         this.newMessageId = newMessageId ?? ForwarderQueryMessage.NewRandomId;
+        this.discoveryUdpTimeout = discoveryUdpTimeout ?? DefaultDiscoveryUdpTimeout;
     }
 
     /// <summary>
@@ -152,7 +172,8 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
             clientSecretKey,
             certificate.ResolverPublicKey,
             clientNonceHalf,
-            DnsMessageWriter.Write(sent)
+            DnsMessageWriter.Write(sent),
+            overTcp
         );
 
         // Decrypts a packet and checks it answers "sent". Throws CryptographicException or
@@ -238,12 +259,17 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
     ///     This method sends the plaintext <c>2.dnscrypt-cert.&lt;providerName&gt;</c> TXT query
     ///     to the upstream (the provider name includes that prefix), checks each returned
     ///     certificate's Ed25519 signature against the stamp's public key, and returns the valid
-    ///     one with the highest serial.
+    ///     one with the highest serial. The query goes over UDP first. DNSCrypt v2 section 12 has
+    ///     the client ask over TCP "in case of failure, timeout or truncation", because a
+    ///     resolver need not serve certificates on both transports. This method does so for a
+    ///     socket error, a reply that cannot be read, no reply within
+    ///     <c>discoveryUdpTimeout</c>, a truncated reply, and a reply without a usable
+    ///     certificate.
     /// </summary>
     /// <exception cref="CryptographicException">
     ///     Thrown when no returned certificate both verifies and is currently valid.
     /// </exception>
-    private static async Task<DnsCryptCertificate> DiscoverCertificateAsync(
+    private async Task<DnsCryptCertificate> DiscoverCertificateAsync(
         UpstreamForwarderDefinition definition,
         IPEndPoint endpoint,
         CancellationToken stoppingToken
@@ -273,12 +299,72 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
             )
         );
 
-        DnsMessage discoveryResponse = await SendPlainUdpAsync(
-            DnsMessageWriter.Write(discoveryQuery),
-            endpoint,
-            stoppingToken
-        );
+        byte[] discoveryBytes = DnsMessageWriter.Write(discoveryQuery);
+        DnsCryptCertificate best = null;
 
+        try
+        {
+            DnsMessage udpResponse = await SendPlainUdpAsync(
+                discoveryBytes,
+                endpoint,
+                discoveryUdpTimeout,
+                stoppingToken
+            );
+
+            if (!udpResponse.IsTruncated)
+                best = SelectCertificate(udpResponse, definition, algorithm);
+        }
+        catch (Exception exception)
+            when (exception is SocketException or FormatException
+                || (
+                    exception is OperationCanceledException
+                    && !stoppingToken.IsCancellationRequested
+                )
+            )
+        {
+            // The UDP attempt failed or timed out: the TCP attempt below is the one section 12
+            // prescribes. The caller's own cancellation is not caught.
+        }
+
+        if (best is null)
+        {
+            DnsMessage tcpResponse;
+
+            try
+            {
+                tcpResponse = DnsMessageReader.Read(
+                    await SendTcpAsync(discoveryBytes, endpoint, stoppingToken)
+                );
+            }
+            catch (FormatException exception)
+            {
+                throw new CryptographicException(
+                    $"The DNSCrypt certificate reply for provider '{definition.DnsCryptProviderName}' could not be read.",
+                    exception
+                );
+            }
+
+            best = SelectCertificate(tcpResponse, definition, algorithm);
+        }
+
+        return best
+            ?? throw new CryptographicException(
+                $"No currently valid, correctly signed DNSCrypt certificate was discovered for provider '{definition.DnsCryptProviderName}'."
+            );
+    }
+
+    /// <summary>
+    ///     This method picks, from the TXT answers of a certificate reply, the certificate that
+    ///     decodes, is valid now, carries a correct Ed25519 signature of the provider key and has
+    ///     the highest serial.
+    /// </summary>
+    /// <returns>The certificate, or <see langword="null" /> when no answer qualifies.</returns>
+    private static DnsCryptCertificate SelectCertificate(
+        DnsMessage discoveryResponse,
+        UpstreamForwarderDefinition definition,
+        IDnssecSigningAlgorithm algorithm
+    )
+    {
         DnsCryptCertificate best = null;
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
@@ -326,10 +412,7 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
                 best = candidate;
         }
 
-        return best
-            ?? throw new CryptographicException(
-                $"No currently valid, correctly signed DNSCrypt certificate was discovered for provider '{definition.DnsCryptProviderName}'."
-            );
+        return best;
     }
 
     /// <summary>
@@ -337,20 +420,33 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
     ///     certificate discovery. The source and message ID are not checked; the certificate
     ///     signature check protects the result.
     /// </summary>
+    /// <param name="queryBytes">The encoded query.</param>
+    /// <param name="endpoint">The upstream's address and port.</param>
+    /// <param name="timeout">How long to wait for the datagram.</param>
+    /// <param name="stoppingToken">Ends the wait for the caller.</param>
+    /// <exception cref="OperationCanceledException">
+    ///     Thrown when no datagram arrives within <paramref name="timeout" />, or the caller
+    ///     cancels.
+    /// </exception>
     private static async Task<DnsMessage> SendPlainUdpAsync(
         byte[] queryBytes,
         IPEndPoint endpoint,
+        TimeSpan timeout,
         CancellationToken stoppingToken
     )
     {
+        using CancellationTokenSource timeoutSource =
+            CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        timeoutSource.CancelAfter(timeout);
+
         using Socket socket = new(endpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-        await socket.SendToAsync(queryBytes, endpoint, stoppingToken);
+        await socket.SendToAsync(queryBytes, endpoint, timeoutSource.Token);
 
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
         SocketReceiveFromResult result = await socket.ReceiveFromAsync(
             receiveBuffer,
             endpoint,
-            stoppingToken
+            timeoutSource.Token
         );
 
         return DnsMessageReader.Read(receiveBuffer.AsSpan(0, result.ReceivedBytes));

@@ -258,12 +258,31 @@ public class DnsCryptForwarderClientTests
     }
 
     /// <summary>
+    ///     This enum is what a <see cref="LoopbackRelay" /> does to the first datagram a client
+    ///     sends, which is the plaintext certificate discovery query.
+    /// </summary>
+    private enum RelayFaultEnum
+    {
+        /// <summary>The relay forwards every datagram.</summary>
+        None,
+
+        /// <summary>The relay drops the datagram, so the client gets no reply.</summary>
+        DropFirstUdpDatagram,
+
+        /// <summary>The relay answers with the query itself, QR and TC set and no answers.</summary>
+        TruncateFirstUdpReply,
+    }
+
+    /// <summary>
     ///     This class sits between the client and the real DNSCrypt listeners on one loopback port,
     ///     for UDP and TCP. It counts accepted TCP connections (the production TCP listener has no
     ///     counter) and, when asked, sends 50 random bytes to the client before each real UDP reply
     ///     of every client socket after the first (the first is certificate discovery, which takes
     ///     the first datagram by design). It is a relay, so garbage arrives from the same source
-    ///     address the client expects.
+    ///     address the client expects. It also records the length of every datagram and of every
+    ///     TCP frame the client sends, so a test can check the padding the client chose, and it can
+    ///     fail the first datagram of the first client socket (<see cref="RelayFaultEnum" />), which
+    ///     is certificate discovery.
     /// </summary>
     private sealed class LoopbackRelay : IAsyncDisposable
     {
@@ -274,8 +293,12 @@ public class DnsCryptForwarderClientTests
         private readonly CancellationTokenSource stop = new();
         private readonly ConcurrentDictionary<EndPoint, Socket> sessions = new();
         private readonly List<Task> tasks = [];
+        private readonly RelayFaultEnum fault;
+        private readonly ConcurrentQueue<int> udpPacketLengths = new();
+        private readonly ConcurrentQueue<int> tcpFrameLengths = new();
         private int acceptedTcpConnections;
         private int sessionCount;
+        private int datagramCount;
 
         /// <summary>
         ///     This constructor binds the relay's UDP and TCP sockets to one free loopback port and
@@ -285,10 +308,16 @@ public class DnsCryptForwarderClientTests
         /// <param name="garbageBeforeUdpReplies">
         ///     Whether to send garbage ahead of each real UDP reply to the forwarded query.
         /// </param>
-        public LoopbackRelay(IPEndPoint upstream, bool garbageBeforeUdpReplies)
+        /// <param name="fault">What to do to the first datagram the client sends.</param>
+        public LoopbackRelay(
+            IPEndPoint upstream,
+            bool garbageBeforeUdpReplies,
+            RelayFaultEnum fault = RelayFaultEnum.None
+        )
         {
             this.upstream = upstream;
             this.garbageBeforeUdpReplies = garbageBeforeUdpReplies;
+            this.fault = fault;
 
             // UDP and TCP share the stamp's one port: bind UDP to 0, then TCP to that port, and try
             // again when another process took the TCP side in between.
@@ -333,6 +362,17 @@ public class DnsCryptForwarderClientTests
         public int AcceptedTcpConnections => Volatile.Read(ref acceptedTcpConnections);
 
         /// <summary>
+        ///     This property contains the length of every datagram the client sent, in order.
+        /// </summary>
+        public int[] UdpPacketLengths => udpPacketLengths.ToArray();
+
+        /// <summary>
+        ///     This property contains the length of every frame (without its 2-byte prefix) the
+        ///     client sent over TCP, in order.
+        /// </summary>
+        public int[] TcpFrameLengths => tcpFrameLengths.ToArray();
+
+        /// <summary>
         ///     This method forwards each client datagram to the real listener, one upstream socket per
         ///     client socket.
         /// </summary>
@@ -350,6 +390,25 @@ public class DnsCryptForwarderClientTests
                         stoppingToken
                     );
                     EndPoint client = received.RemoteEndPoint;
+                    udpPacketLengths.Enqueue(received.ReceivedBytes);
+
+                    if (
+                        fault != RelayFaultEnum.None
+                        && Interlocked.Increment(ref datagramCount) == 1
+                    )
+                    {
+                        // The first datagram is certificate discovery. A dropped one never gets a
+                        // reply; a truncated one gets its own query back with QR and TC set and
+                        // no answers.
+                        if (fault == RelayFaultEnum.TruncateFirstUdpReply)
+                        {
+                            byte[] truncated = buffer.AsSpan(0, received.ReceivedBytes).ToArray();
+                            truncated[2] |= 0x82;
+                            await udp.SendToAsync(truncated, client, stoppingToken);
+                        }
+
+                        continue;
+                    }
 
                     if (!sessions.TryGetValue(client, out Socket toUpstream))
                     {
@@ -449,7 +508,11 @@ public class DnsCryptForwarderClientTests
             {
                 using TcpClient toUpstream = new();
                 await toUpstream.ConnectAsync(upstream, stoppingToken);
-                Task one = client.GetStream().CopyToAsync(toUpstream.GetStream(), stoppingToken);
+                Task one = ForwardFramesAsync(
+                    client.GetStream(),
+                    toUpstream.GetStream(),
+                    stoppingToken
+                );
                 Task two = toUpstream.GetStream().CopyToAsync(client.GetStream(), stoppingToken);
                 await Task.WhenAny(one, two);
             }
@@ -458,6 +521,30 @@ public class DnsCryptForwarderClientTests
             finally
             {
                 client.Dispose();
+            }
+        }
+
+        /// <summary>
+        ///     This method copies the client's length-prefixed frames to the real listener and
+        ///     records each frame's length.
+        /// </summary>
+        private async Task ForwardFramesAsync(
+            Stream from,
+            Stream to,
+            CancellationToken stoppingToken
+        )
+        {
+            byte[] prefix = new byte[2];
+
+            while (true)
+            {
+                await from.ReadExactlyAsync(prefix, stoppingToken);
+                int length = (prefix[0] << 8) | prefix[1];
+                byte[] frame = new byte[length];
+                await from.ReadExactlyAsync(frame, stoppingToken);
+                tcpFrameLengths.Enqueue(length);
+                await to.WriteAsync(prefix, stoppingToken);
+                await to.WriteAsync(frame, stoppingToken);
             }
         }
 
@@ -512,13 +599,15 @@ public class DnsCryptForwarderClientTests
         /// </summary>
         /// <param name="answerCount">How many A records every answer carries.</param>
         /// <param name="garbageBeforeUdpReplies">Passed to the relay.</param>
+        /// <param name="fault">Passed to the relay.</param>
         public static async Task<DnsCryptHarness> StartAsync(
             int answerCount,
-            bool garbageBeforeUdpReplies
+            bool garbageBeforeUdpReplies,
+            RelayFaultEnum fault = RelayFaultEnum.None
         )
         {
             DnsCryptHarness harness = new();
-            await harness.InitializeAsync(answerCount, garbageBeforeUdpReplies);
+            await harness.InitializeAsync(answerCount, garbageBeforeUdpReplies, fault);
             return harness;
         }
 
@@ -526,7 +615,11 @@ public class DnsCryptForwarderClientTests
         ///     This method binds the listeners on one shared port, then starts the relay and builds the
         ///     definition.
         /// </summary>
-        private async Task InitializeAsync(int answerCount, bool garbageBeforeUdpReplies)
+        private async Task InitializeAsync(
+            int answerCount,
+            bool garbageBeforeUdpReplies,
+            RelayFaultEnum fault
+        )
         {
             Dispatcher = new RecordingDispatcher(answerCount);
             DnsCryptOptions options = null;
@@ -613,7 +706,8 @@ public class DnsCryptForwarderClientTests
 
             Relay = new LoopbackRelay(
                 new IPEndPoint(IPAddress.Loopback, options.Port),
-                garbageBeforeUdpReplies
+                garbageBeforeUdpReplies,
+                fault
             );
             Definition = DnsCryptStampParser.Parse(
                 BuildStamp(
@@ -724,6 +818,101 @@ public class DnsCryptForwarderClientTests
         Assert.Single(response.Answers);
         Assert.Equal(0, harness.Relay.AcceptedTcpConnections);
         Assert.Single(harness.Dispatcher.QueryIds);
+    }
+
+    [Fact]
+    public async Task ForwardAsync_PadsTheUdpQueryToAtLeast256Bytes()
+    {
+        await using DnsCryptHarness harness = await DnsCryptHarness.StartAsync(1, false);
+        DnsCryptForwarderClient client = new();
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+
+        await client.ForwardAsync(harness.Definition, BuildQuery(5), timeout.Token);
+
+        // DNSCrypt v2 section 3: the padded query must be at least min-query-len, initially 256
+        // bytes. The first datagram is certificate discovery; the second is the encrypted query,
+        // which adds 68 bytes of envelope (8 magic, 32 key, 12 nonce, 16 MAC) to the padding.
+        int[] lengths = harness.Relay.UdpPacketLengths;
+
+        Assert.Equal(2, lengths.Length);
+        Assert.True(lengths[1] >= 256 + 68, $"The encrypted query was {lengths[1]} bytes.");
+        Assert.Equal(0, (lengths[1] - 68) % 64);
+    }
+
+    [Fact]
+    public async Task ForwardAsync_PadsTheTcpQueryWithARandomOneToTwoHundredFiftySixBytePad()
+    {
+        await using DnsCryptHarness harness = await DnsCryptHarness.StartAsync(40, false);
+        DnsCryptForwarderClient client = new();
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
+
+        // A 40-answer reply is truncated over UDP, so every call also sends one query over TCP.
+        const int calls = 12;
+
+        for (ushort id = 1; id <= calls; id++)
+            await client.ForwardAsync(harness.Definition, BuildQuery(id), timeout.Token);
+
+        int[] frames = harness.Relay.TcpFrameLengths;
+        int plainLength = DnsMessageWriter.Write(BuildQuery(1)).Length;
+
+        Assert.Equal(calls, frames.Length);
+
+        foreach (int frame in frames)
+        {
+            // Section 5: the padded query is a multiple of 64 bytes and the pad, its 0x80
+            // marker included, is 1 to 256 bytes. 68 bytes are envelope and MAC.
+            int padded = frame - 68;
+            Assert.Equal(0, padded % 64);
+            Assert.InRange(padded - plainLength, 1, 256);
+        }
+
+        // With four equally likely pad lengths, twelve identical pads have a chance of 1 in
+        // 4^11.
+        Assert.True(frames.Distinct().Count() > 1, "Every TCP query used the same padded length.");
+    }
+
+    [Fact]
+    public async Task ForwardAsync_WhenTheUdpCertificateReplyIsTruncated_FetchesTheCertificateOverTcp()
+    {
+        await using DnsCryptHarness harness = await DnsCryptHarness.StartAsync(
+            1,
+            false,
+            RelayFaultEnum.TruncateFirstUdpReply
+        );
+        DnsCryptForwarderClient client = new();
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+
+        DnsMessage response = await client.ForwardAsync(
+            harness.Definition,
+            BuildQuery(8),
+            timeout.Token
+        );
+
+        // Section 12: the client asks over UDP "then, in case of failure, timeout or truncation,
+        // over TCP". The TCP connection is the discovery; the encrypted query is answered over UDP.
+        Assert.Single(response.Answers);
+        Assert.Equal(1, harness.Relay.AcceptedTcpConnections);
+    }
+
+    [Fact]
+    public async Task ForwardAsync_WhenTheUdpCertificateQueryGetsNoReply_FetchesTheCertificateOverTcp()
+    {
+        await using DnsCryptHarness harness = await DnsCryptHarness.StartAsync(
+            1,
+            false,
+            RelayFaultEnum.DropFirstUdpDatagram
+        );
+        DnsCryptForwarderClient client = new(null, TimeSpan.FromMilliseconds(300));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+
+        DnsMessage response = await client.ForwardAsync(
+            harness.Definition,
+            BuildQuery(9),
+            timeout.Token
+        );
+
+        Assert.Single(response.Answers);
+        Assert.Equal(1, harness.Relay.AcceptedTcpConnections);
     }
 
     [Fact]

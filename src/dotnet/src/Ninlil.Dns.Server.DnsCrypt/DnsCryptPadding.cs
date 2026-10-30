@@ -35,6 +35,45 @@ public static class DnsCryptPadding
     }
 
     /// <summary>
+    ///     This method pads <paramref name="data" /> like <see cref="PadToBlockSize" /> and then
+    ///     adds zero bytes until the result is at least <paramref name="minimumLength" /> long.
+    ///     The extra zero bytes after the marker are still valid ISO/IEC 7816-4 padding. A UDP
+    ///     client query uses it for its minimum query length (DNSCrypt v2 section 3).
+    /// </summary>
+    /// <param name="data">The data to pad.</param>
+    /// <param name="blockSize">The block size the result is a multiple of.</param>
+    /// <param name="minimumLength">
+    ///     The least length of the result; a multiple of <paramref name="blockSize" /> keeps the
+    ///     result a multiple of it.
+    /// </param>
+    public static byte[] PadToMinimumLength(byte[] data, int blockSize, int minimumLength)
+    {
+        byte[] result = PadToBlockSize(data, blockSize);
+
+        if (result.Length < minimumLength)
+            Array.Resize(ref result, minimumLength);
+
+        return result;
+    }
+
+    /// <summary>
+    ///     This method pads <paramref name="data" /> like <see cref="PadToBlockSize" /> and then
+    ///     adds <paramref name="extraBlocks" /> more blocks of zero bytes. A TCP client query
+    ///     uses it to choose a random pad length of 1 to 256 bytes (DNSCrypt v2 section 5).
+    /// </summary>
+    /// <param name="data">The data to pad.</param>
+    /// <param name="blockSize">The block size the result is a multiple of.</param>
+    /// <param name="extraBlocks">How many whole blocks to add beyond the shortest padding.</param>
+    public static byte[] PadWithExtraBlocks(byte[] data, int blockSize, int extraBlocks)
+    {
+        byte[] result = PadToBlockSize(data, blockSize);
+
+        Array.Resize(ref result, result.Length + extraBlocks * blockSize);
+
+        return result;
+    }
+
+    /// <summary>
     ///     This method removes ISO/IEC 7816-4 padding by scanning back from the end for the
     ///     marker byte. It does not check that the padded length is a block multiple.
     /// </summary>
