@@ -3,6 +3,7 @@ import { CdkTableModule } from '@angular/cdk/table';
 import { DatePipe } from '@angular/common';
 import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import {
+  BadgeComponent,
   ButtonDirective,
   CardBodyComponent,
   CardComponent,
@@ -38,6 +39,18 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
+ * The text every quarantine row's client identifier starts with. A declined address (RFC 2131
+ * section 4.3.3) is kept as a lease row keyed `declined:<address>` so no client can be offered it
+ * until the quarantine ends (`DhcpDeclinedAddress.KeyPrefix` on the server).
+ */
+export const DECLINED_KEY_PREFIX = 'declined:';
+
+/** This function reports whether a lease row is the quarantine of a declined address. */
+export function isDeclinedLease(lease: DhcpLeaseDetail): boolean {
+  return lease.clientIdentifier?.startsWith(DECLINED_KEY_PREFIX) ?? false;
+}
+
+/**
  * This component is the DHCP Leases page (`/dhcp-leases`, `dhcpleases:read`). It lists leases a
  * page at a time from `GET /api/dhcp-leases`, optionally filtered by scope; the server applies
  * both the paging and the filter. The DHCP server creates leases, so there is no create or edit.
@@ -46,6 +59,10 @@ const DEFAULT_PAGE_SIZE = 25;
  * (`POST /api/dhcp-leases/{id}/release`). Its button shows only with `dhcpleases:manage`, and it
  * asks for confirmation first: the address can be handed to another client at once and any DNS
  * record the lease registered is removed.
+ *
+ * <p>A declined address shows as a "Declined address" row instead of its raw `declined:` key.
+ * The release action does not refuse such a row: it marks it released, so the quarantine ends
+ * early and the address can be offered again. The confirmation says so.
  */
 @Component({
   selector: 'app-dhcp-lease-list',
@@ -53,6 +70,7 @@ const DEFAULT_PAGE_SIZE = 25;
     DatePipe,
     ReactiveFormsModule,
     CdkTableModule,
+    BadgeComponent,
     ButtonDirective,
     CardBodyComponent,
     CardComponent,
@@ -78,6 +96,9 @@ export class DhcpLeaseListComponent {
   private readonly notification = inject(NotificationService);
 
   readonly leaseStates = LeaseStateEnum;
+
+  /** Exposes {@link isDeclinedLease} to the template. */
+  readonly isDeclined = isDeclinedLease;
 
   readonly displayedColumns = [
     'scopeName',
@@ -150,15 +171,27 @@ export class DhcpLeaseListComponent {
     if (!lease.id) return;
     const leaseId = lease.id;
 
-    const confirmed = await this.confirm({
-      title: 'Force-release this lease?',
-      message:
-        `This immediately disconnects ${lease.clientIdentifier} from ${lease.ipAddress} in ` +
-        `scope "${lease.scopeName}" -- the address becomes available for a different client to ` +
-        'claim right away, and any DNS record this lease auto-registered is removed. This ' +
-        'cannot be undone.',
-      confirmLabel: 'Release',
-    });
+    const declined = isDeclinedLease(lease);
+    const confirmed = await this.confirm(
+      declined
+        ? {
+            title: 'End this quarantine early?',
+            message:
+              `This frees ${lease.ipAddress} in scope "${lease.scopeName}", which a client ` +
+              'declined as already in use. The address can be offered to a client right away. ' +
+              'This cannot be undone.',
+            confirmLabel: 'End quarantine',
+          }
+        : {
+            title: 'Force-release this lease?',
+            message:
+              `This immediately disconnects ${lease.clientIdentifier} from ${lease.ipAddress} in ` +
+              `scope "${lease.scopeName}" -- the address becomes available for a different client to ` +
+              'claim right away, and any DNS record this lease auto-registered is removed. This ' +
+              'cannot be undone.',
+            confirmLabel: 'Release',
+          },
+    );
     if (!confirmed) return;
 
     this.releasingLeaseId.set(leaseId);

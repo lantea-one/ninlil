@@ -99,7 +99,8 @@ export class ClientGroupNetworkListComponent {
 
     const confirmed = await this.confirm({
       title: 'Delete this network?',
-      message: `This permanently removes '${network.cidr}' from the group. This cannot be undone.`,
+      // Names the row as the table does: a ClientID row has no CIDR.
+      message: `This permanently removes '${network.clientId ? `ClientID ${network.clientId}` : network.cidr}' from the group. This cannot be undone.`,
     });
 
     if (!confirmed) return;

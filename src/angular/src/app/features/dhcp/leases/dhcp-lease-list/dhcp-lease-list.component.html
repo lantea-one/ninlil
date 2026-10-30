@@ -49,7 +49,20 @@
 
       <ng-container cdkColumnDef="clientIdentifier">
         <th cdk-header-cell *cdkHeaderCellDef>Client identifier</th>
-        <td cdk-cell *cdkCellDef="let lease">{{ lease.clientIdentifier }}</td>
+        <td cdk-cell *cdkCellDef="let lease">
+          @if (isDeclined(lease)) {
+            <c-badge color="warning" class="declined-badge">Declined address</c-badge>
+            <span class="declined-detail">
+              @if (lease.leaseExpiresAtUtc) {
+                Quarantine ends {{ lease.leaseExpiresAtUtc | date: 'medium' }}
+              } @else {
+                Quarantined
+              }
+            </span>
+          } @else {
+            {{ lease.clientIdentifier }}
+          }
+        </td>
       </ng-container>
 
       <ng-container cdkColumnDef="ipAddress">
@@ -97,8 +110,13 @@
               variant="ghost"
               color="danger"
               [disabled]="lease.state === leaseStates.Released || releasingLeaseId() === lease.id"
-              cTooltip="Force-release this lease"
-              [attr.aria-label]="'Release lease for ' + lease.clientIdentifier"
+              [cTooltip]="
+                isDeclined(lease) ? 'End the quarantine early' : 'Force-release this lease'
+              "
+              [attr.aria-label]="
+                'Release lease for ' +
+                (isDeclined(lease) ? lease.ipAddress : lease.clientIdentifier)
+              "
               (click)="release(lease)"
             >
               <svg cIcon name="cilXCircle" size="sm"></svg>

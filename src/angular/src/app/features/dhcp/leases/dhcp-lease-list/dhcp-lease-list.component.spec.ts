@@ -218,4 +218,51 @@ describe('DhcpLeaseListComponent', () => {
 
     expect(notificationSpy.error).toHaveBeenCalled();
   });
+
+  describe('a declined address', () => {
+    const declinedLease = {
+      id: 'lease-2',
+      protocolVersion: 'IPv4',
+      scopeName: 'lan',
+      clientIdentifier: 'declined:192.168.1.77',
+      ipAddress: '192.168.1.77',
+      state: 'Expired',
+      leaseExpiresAtUtc: '2030-01-02T03:04:05Z',
+    };
+
+    it('shows a "Declined address" badge and the quarantine end instead of the raw key', async () => {
+      const fixture = await createComponent();
+      fixture.componentInstance.leases.set([declinedLease as never]);
+      fixture.detectChanges();
+
+      const text = (fixture.nativeElement as HTMLElement).textContent;
+      expect(text).toContain('Declined address');
+      expect(text).toContain('Quarantine ends');
+      expect(text).not.toContain('declined:192.168.1.77');
+    });
+
+    it('release() words the confirmation as ending the quarantine early', async () => {
+      const fixture = await createComponent();
+
+      const pending = fixture.componentInstance.release(declinedLease as never);
+      const data = fixture.componentInstance.confirmDialogData();
+      fixture.componentInstance.onConfirmDialogResolved(false);
+      await pending;
+
+      expect(data?.title).toBe('End this quarantine early?');
+      expect(data?.message).toContain('192.168.1.77');
+      expect(data?.message).not.toContain('declined:');
+    });
+
+    it('release() keeps the disconnect wording for an ordinary lease', async () => {
+      const fixture = await createComponent();
+
+      const pending = fixture.componentInstance.release(fixture.componentInstance.leases()[0]);
+      const data = fixture.componentInstance.confirmDialogData();
+      fixture.componentInstance.onConfirmDialogResolved(false);
+      await pending;
+
+      expect(data?.title).toBe('Force-release this lease?');
+    });
+  });
 });

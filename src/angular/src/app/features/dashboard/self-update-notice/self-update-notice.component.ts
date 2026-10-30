@@ -8,8 +8,9 @@ import { AuthService } from '../../../core/auth/auth.service';
 /**
  * This component shows a banner on the Dashboard when the self-update checker
  * (`GET /api/self-update`, `selfupdate:read`) knows of a newer release than the one running, so
- * an operator sees it without reading logs. It only links to the Self-Update settings page and
- * offers no update action itself.
+ * an operator sees it without reading logs. It links to the Self-Update settings page only when
+ * the user holds `selfupdatesettings:read`, the permission that route needs; otherwise the text
+ * tells the user to ask an administrator. It offers no update action itself.
  *
  * <p>Unlike the other dashboard pieces, it loads its own data, since nothing else on the page
  * needs it. Without `selfupdate:read` it makes no request and shows nothing.
@@ -26,6 +27,9 @@ export class SelfUpdateNoticeComponent implements OnInit {
 
   /** Whether a newer release is known; the banner shows only then. */
   readonly updateAvailable = signal(false);
+
+  /** Whether the user may open the Self-Update settings page (`selfupdatesettings:read`). */
+  readonly canOpenSettings = this.auth.hasPermission('selfupdatesettings:read');
 
   /** The newest known version, shown in the banner text. */
   readonly latestKnownVersion = signal<string | null>(null);

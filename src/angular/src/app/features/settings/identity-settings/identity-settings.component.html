@@ -104,45 +104,21 @@
 
         <h6 class="section-heading">Account lockout</h6>
 
-        <div class="field-row">
-          <div class="field">
-            <label cLabel for="identity-lockout-timespan">Lockout duration</label>
-            <input
-              cFormControl
-              id="identity-lockout-timespan"
-              formControlName="defaultLockoutTimeSpan"
-              placeholder="00:15:00"
-            />
-          </div>
-
-          <div class="field">
-            <label cLabel for="identity-max-failed-attempts">Failed attempts before lockout</label>
-            <input
-              cFormControl
-              id="identity-max-failed-attempts"
-              type="number"
-              min="1"
-              formControlName="maxFailedAccessAttempts"
-            />
-          </div>
+        <div cFormText class="lockout-note">
+          Sign-in does not lock accounts after failed passwords, so there are no lockout settings
+          here. Password guessing is limited per client address by the
+          @if (canOpenRateLimitPage) {
+            <a routerLink="/settings/admin-login-rate-limit">admin login rate limit</a>
+          } @else {
+            admin login rate limit
+          }
+          settings.
         </div>
 
-        <c-form-check class="mb-2">
-          <input
-            cFormCheckInput
-            type="checkbox"
-            id="identity-allowed-for-new-users"
-            formControlName="allowedForNewUsers"
-          />
-          <label cFormCheckLabel for="identity-allowed-for-new-users"
-            >Apply lockout to brand-new accounts too</label
-          >
-        </c-form-check>
-
         <div cFormText>
-          Every field takes effect on the very next sign-in, registration, or password-change
-          attempt -- not the request already in flight when this is saved -- with no restart
-          required.
+          Every password rule takes effect on the very next sign-in, registration, or
+          password-change attempt -- not the request already in flight when this is saved -- with no
+          restart required.
         </div>
       </form>
     </c-card-body>

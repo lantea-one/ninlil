@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { IdentitySettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IdentitySettingsComponent } from './identity-settings.component';
 
@@ -10,7 +12,8 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the Identity page: loading, saving with the backend note and a save error.
+ * These tests cover the Identity page: loading, saving with the backend note and a save error, and the absence of the lockout fields
+ * (inputs and PATCH body) with the note that links the admin login rate limit page.
  * TestBed with a spy-backed settings service and `NotificationService`.
  */
 describe('IdentitySettingsComponent', () => {
@@ -20,7 +23,7 @@ describe('IdentitySettingsComponent', () => {
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  async function createComponent(configureApi?: () => void) {
+  async function createComponent(configureApi?: () => void, canOpenRateLimitPage = true) {
     apiSpy = jasmine.createSpyObj('IdentitySettingsService', [
       'apiIdentitySettingsGet',
       'apiIdentitySettingsPatch',
@@ -37,7 +40,7 @@ describe('IdentitySettingsComponent', () => {
         requireNonAlphanumeric: true,
         defaultLockoutTimeSpan: '00:15:00',
         maxFailedAccessAttempts: 5,
-        allowedForNewUsers: true,
+        allowedForNewUsers: true, // the API still sends them; the page ignores them
       }),
     );
     configureApi?.();
@@ -45,6 +48,11 @@ describe('IdentitySettingsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [IdentitySettingsComponent],
       providers: [
+        provideRouter([]),
+        {
+          provide: AuthService,
+          useValue: { hasPermission: () => canOpenRateLimitPage },
+        },
         { provide: IdentitySettingsService, useValue: apiSpy },
         { provide: NotificationService, useValue: notificationSpy },
       ],
@@ -83,6 +91,39 @@ describe('IdentitySettingsComponent', () => {
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('no restart required'),
     );
+  });
+
+  it('save() leaves the lockout fields out of the PATCH body', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiIdentitySettingsPatch.and.returnValue(of({ note: 'saved' }));
+    });
+
+    await fixture.componentInstance.save();
+
+    const body = apiSpy.apiIdentitySettingsPatch.calls.mostRecent().args[0].body;
+    expect(Object.keys(body)).not.toContain('defaultLockoutTimeSpan');
+    expect(Object.keys(body)).not.toContain('maxFailedAccessAttempts');
+    expect(Object.keys(body)).not.toContain('allowedForNewUsers');
+    expect(body.requiredLength).toBe(12);
+  });
+
+  it('offers no lockout inputs and links the admin login rate limit page', async () => {
+    const fixture = await createComponent();
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('#identity-lockout-timespan')).toBeNull();
+    expect(root.querySelector('#identity-max-failed-attempts')).toBeNull();
+    expect(root.querySelector('#identity-allowed-for-new-users')).toBeNull();
+    expect(root.textContent).toContain('Sign-in does not lock accounts');
+    expect(root.querySelector('a[href="/settings/admin-login-rate-limit"]')).not.toBeNull();
+  });
+
+  it('names the admin login rate limit page without a link when the user may not open it', async () => {
+    const fixture = await createComponent(undefined, false);
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.textContent).toContain('admin login rate limit');
+    expect(root.querySelector('a[href="/settings/admin-login-rate-limit"]')).toBeNull();
   });
 
   it('shows an error message when saving fails', async () => {

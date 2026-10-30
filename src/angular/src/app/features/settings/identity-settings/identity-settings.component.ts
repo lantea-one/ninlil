@@ -22,8 +22,10 @@ import {
   FormTextDirective,
   SpinnerComponent,
 } from '@coreui/angular';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { IdentitySettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
@@ -54,12 +56,19 @@ export function uniqueCharsWithinLength(group: AbstractControl): ValidationError
  * This component is the "Identity" settings page (`/settings/identity`). It edits the ASP.NET Core
  * Identity password and account lockout policy through `GET` and `PATCH /api/identity-settings`
  * (`identitysettings:read`, `identitysettings:write`).
+ * <p>The page edits the password rules only. The API also carries the lockout fields
+ * (`defaultLockoutTimeSpan`, `maxFailedAccessAttempts`, `allowedForNewUsers`), but sign-in does
+ * not count failed passwords (`AuthController` signs in with `lockoutOnFailure: false`), so the
+ * form does not offer them and the PATCH omits them. A note points to the admin login rate limit
+ * page (`/settings/admin-login-rate-limit`), which bounds password guessing; it links there only
+ * with `adminloginratelimit:read`, the permission that route needs.
  * <p>A change applies from the next sign-in, registration or password change, not to requests
  * already running (see `IdentitySettingsController`). The backend's note is shown on save.
  */
 @Component({
   selector: 'app-identity-settings',
   imports: [
+    RouterLink,
     IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
@@ -84,6 +93,10 @@ export class IdentitySettingsComponent implements OnInit {
   private readonly identityApi = inject(IdentitySettingsService);
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly auth = inject(AuthService);
+
+  /** Whether the user may open the admin login rate limit page (`adminloginratelimit:read`). */
+  readonly canOpenRateLimitPage = this.auth.hasPermission('adminloginratelimit:read');
 
   readonly loading = signal(true);
   readonly submitting = signal(false);
@@ -103,9 +116,6 @@ export class IdentitySettingsComponent implements OnInit {
       requireLowercase: [true],
       requireUppercase: [true],
       requireNonAlphanumeric: [true],
-      defaultLockoutTimeSpan: ['00:15:00', [Validators.required]],
-      maxFailedAccessAttempts: [5, [Validators.required, Validators.min(1)]],
-      allowedForNewUsers: [true],
     },
     { validators: uniqueCharsWithinLength },
   );
@@ -114,7 +124,7 @@ export class IdentitySettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field, then shows the backend's note. */
+  /** This method PATCHes every password field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -146,9 +156,6 @@ export class IdentitySettingsComponent implements OnInit {
         requireLowercase: settings.requireLowercase ?? true,
         requireUppercase: settings.requireUppercase ?? true,
         requireNonAlphanumeric: settings.requireNonAlphanumeric ?? true,
-        defaultLockoutTimeSpan: settings.defaultLockoutTimeSpan ?? '00:15:00',
-        maxFailedAccessAttempts: settings.maxFailedAccessAttempts ?? 5,
-        allowedForNewUsers: settings.allowedForNewUsers ?? true,
       });
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load identity settings.'));

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { SelfUpdateService, SelfUpdateSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { SelfUpdateSettingsComponent } from './self-update-settings.component';
 
@@ -25,7 +26,7 @@ describe('SelfUpdateSettingsComponent', () => {
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  async function createComponent(configureApi?: () => void) {
+  async function createComponent(configureApi?: () => void, canReadStatus = true) {
     settingsApiSpy = jasmine.createSpyObj('SelfUpdateSettingsService', [
       'apiSelfUpdateSettingsGet',
       'apiSelfUpdateSettingsPatch',
@@ -61,6 +62,13 @@ describe('SelfUpdateSettingsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [SelfUpdateSettingsComponent],
       providers: [
+        {
+          provide: AuthService,
+          useValue: {
+            hasPermission: (permission: string) =>
+              canReadStatus || permission !== 'selfupdate:read',
+          },
+        },
         { provide: SelfUpdateSettingsService, useValue: settingsApiSpy },
         { provide: SelfUpdateService, useValue: statusApiSpy },
         { provide: NotificationService, useValue: notificationSpy },
@@ -84,6 +92,28 @@ describe('SelfUpdateSettingsComponent', () => {
     expect(fixture.componentInstance.currentVersion()).toBe('1.0.0.0');
     expect(fixture.componentInstance.updateAvailable()).toBeFalse();
     expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  it('without selfupdate:read makes no status request and names the permission', async () => {
+    const fixture = await createComponent(undefined, false);
+
+    expect(statusApiSpy.apiSelfUpdateGet).not.toHaveBeenCalled();
+    expect(settingsApiSpy.apiSelfUpdateSettingsGet).toHaveBeenCalled();
+    const text = (fixture.nativeElement as HTMLElement).textContent;
+    expect(text).toContain('selfupdate:read');
+    expect(text).not.toContain('Running version');
+  });
+
+  it('shows the message of a failed status read in the status card', async () => {
+    const fixture = await createComponent(() => {
+      statusApiSpy.apiSelfUpdateGet.and.returnValue(
+        throwError(() => new HttpErrorResponse({ status: 500, error: 'status store down' })),
+      );
+    });
+
+    const card = (fixture.nativeElement as HTMLElement).querySelector('.status-card');
+    expect(card?.textContent).toContain('status store down');
+    expect(card?.textContent).not.toContain('Running version');
   });
 
   it('save() PATCHes the form', async () => {

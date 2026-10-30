@@ -24,6 +24,7 @@ import {
   SelfUpdateSettingsService,
   SelfUpdateStatusDetail,
 } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
@@ -37,6 +38,10 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  * (`POST /api/self-update/check`, `selfupdate:manage`). There is no "update now": the server cannot
  * replace its own running binary, so the status card shows the backend's `updateInstructions`
  * instead (see `SelfUpdateController.Get`).
+ * <p>
+ * The status card needs `selfupdate:read`, which the page's own permission
+ * (`selfupdatesettings:read`) does not imply. Without it the page makes no status request and the
+ * card says which permission is missing; any other status failure shows its message in the card.
  * <p>
  * Checking is on by default but does nothing until a release feed URL is set here, since there is
  * no built-in release location.
@@ -71,11 +76,18 @@ export class SelfUpdateSettingsComponent implements OnInit {
   private readonly selfUpdateApi = inject(SelfUpdateService);
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly auth = inject(AuthService);
 
   readonly loading = signal(true);
   readonly submitting = signal(false);
   readonly checking = signal(false);
   readonly errorMessage = signal<string | null>(null);
+
+  /** Whether the user holds `selfupdate:read`, which `GET /api/self-update` requires. */
+  readonly canReadStatus = this.auth.hasPermission('selfupdate:read');
+
+  /** The message of a failed status read, shown in the status card; `null` when none failed. */
+  readonly statusError = signal<string | null>(null);
 
   /** The running version, from the update status; `null` until the first read completes. */
   readonly currentVersion = signal<string | null>(null);
@@ -160,11 +172,14 @@ export class SelfUpdateSettingsComponent implements OnInit {
   }
 
   private async loadStatus(): Promise<void> {
+    // The request would answer 403; the card names the missing permission instead.
+    if (!this.canReadStatus) return;
+
     try {
       const status = await firstValueFrom(this.selfUpdateApi.apiSelfUpdateGet());
       this.applyStatus(status);
-    } catch {
-      // A failed status read is not reported; the status card stays empty.
+    } catch (error) {
+      this.statusError.set(extractErrorMessage(error, 'Could not load the update status.'));
     }
   }
 

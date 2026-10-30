@@ -1,6 +1,10 @@
 @if (updateAvailable()) {
   <c-alert color="info" [dismissible]="false" role="alert" class="self-update-notice">
     A newer version ({{ latestKnownVersion() }}) of this server is available.
-    <a routerLink="/settings/self-update">Review it in Self-Update settings</a>.
+    @if (canOpenSettings) {
+      <a routerLink="/settings/self-update">Review it in Self-Update settings</a>.
+    } @else {
+      Ask an administrator to update.
+    }
   </c-alert>
 }

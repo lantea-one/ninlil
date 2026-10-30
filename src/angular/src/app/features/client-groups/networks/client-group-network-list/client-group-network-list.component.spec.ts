@@ -100,4 +100,35 @@ describe('ClientGroupNetworkListComponent', () => {
 
     expect(networksApiSpy.apiClientGroupsGroupIdNetworksIdDelete).not.toHaveBeenCalled();
   });
+
+  it('deleteNetwork() names a ClientID row by its client id, not by a missing CIDR', async () => {
+    const fixture = await createComponent();
+
+    const deletePromise = fixture.componentInstance.deleteNetwork({
+      id: 'network-2',
+      cidr: null,
+      clientId: 'phone-1',
+    });
+    const message = fixture.componentInstance.confirmDialogData()?.message;
+    fixture.componentInstance.onConfirmDialogResolved(false);
+    await deletePromise;
+
+    expect(message).toContain("'ClientID phone-1'");
+    expect(message).not.toContain('null');
+  });
+
+  it('deleteNetwork() names a CIDR row by its CIDR', async () => {
+    const fixture = await createComponent();
+
+    const deletePromise = fixture.componentInstance.deleteNetwork({
+      id: 'network-3',
+      cidr: '10.0.0.0/8',
+      clientId: null,
+    });
+    const message = fixture.componentInstance.confirmDialogData()?.message;
+    fixture.componentInstance.onConfirmDialogResolved(false);
+    await deletePromise;
+
+    expect(message).toContain("'10.0.0.0/8'");
+  });
 });
