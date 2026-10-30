@@ -29,14 +29,14 @@ public class Dhcpv6RelayMessage
     public Dhcpv6MessageTypeEnum MessageType { get; set; }
 
     /// <summary>
-    ///     This property contains RFC 8415 Section 7.1's "hop-count" field: the number of relay
+    ///     This property contains RFC 8415 Section 9.1's "hop-count" field: the number of relay
     ///     agents that have already relayed this message. In a chain each relay increments it;
     ///     Ninlil's relay agent supports one hop only and always sends <c>0</c>.
     /// </summary>
     public byte HopCount { get; set; }
 
     /// <summary>
-    ///     This property contains RFC 8415 Section 7.1's "link-address" field: an address the
+    ///     This property contains RFC 8415 Section 9.1's "link-address" field: an address the
     ///     relay agent sets to identify the link the client is on, the DHCPv6 counterpart of
     ///     <c>giaddr</c>. It is copied onto the unwrapped message as
     ///     <see cref="Dhcpv6Message.RelayLinkAddress" />, where <c>Dhcpv6ScopeResolver</c> uses it
@@ -46,7 +46,7 @@ public class Dhcpv6RelayMessage
     public IPAddress LinkAddress { get; set; }
 
     /// <summary>
-    ///     This property contains RFC 8415 Section 7.1's "peer-address" field: the address of the
+    ///     This property contains RFC 8415 Section 9.1's "peer-address" field: the address of the
     ///     client (in a chain, the previous relay agent) the message was received from. The relay
     ///     agent delivers the unwrapped reply of a RELAY-REPL to this address.
     /// </summary>

@@ -387,7 +387,7 @@ public static class Dhcpv4MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method attempts to read the User Class option (tag 77, RFC 3004 Section 3): one or
+    ///     This method attempts to read the User Class option (tag 77, RFC 3004 Section 4): one or
     ///     more "User Class Data" instances back to back, each a one-byte length followed by that
     ///     many bytes, read as ASCII. Unlike the RFC 3046 sub-options below, there is no type
     ///     octet.
@@ -434,7 +434,7 @@ public static class Dhcpv4MessageOptionExtensions
 
     /// <summary>
     ///     This method sets the User Class option (tag 77) from one or more User Class Data
-    ///     instances, per RFC 3004 Section 3.
+    ///     instances, per RFC 3004 Section 4.
     /// </summary>
     public static void SetUserClasses(this Dhcpv4Message message, IReadOnlyList<string> userClasses)
     {
@@ -464,19 +464,19 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This constant contains RFC 3046 Section 2.1's Agent Circuit ID sub-option tag, nested
+    ///     This constant contains RFC 3046 Section 3.1's Agent Circuit ID sub-option tag, nested
     ///     inside the Relay Agent Information option.
     /// </summary>
     private const byte RelayAgentCircuitIdSubOption = 1;
 
     /// <summary>
-    ///     This constant contains RFC 3046 Section 2.2's Agent Remote ID sub-option tag, nested
+    ///     This constant contains RFC 3046 Section 3.2's Agent Remote ID sub-option tag, nested
     ///     inside the Relay Agent Information option.
     /// </summary>
     private const byte RelayAgentRemoteIdSubOption = 2;
 
     /// <summary>
-    ///     This method attempts to read the Agent Circuit ID sub-option (RFC 3046 Section 2.1)
+    ///     This method attempts to read the Agent Circuit ID sub-option (RFC 3046 Section 3.1)
     ///     nested inside the Relay Agent Information option (tag 82). The server engine reads it
     ///     from relayed requests for tag rules (see
     ///     <see cref="Dhcpv4OptionTagEnum.RelayAgentInformation" />).
@@ -487,7 +487,7 @@ public static class Dhcpv4MessageOptionExtensions
     ) => TryFindRelayAgentSubOption(message, RelayAgentCircuitIdSubOption, out circuitId);
 
     /// <summary>
-    ///     This method attempts to read the Agent Remote ID sub-option (RFC 3046 Section 2.2)
+    ///     This method attempts to read the Agent Remote ID sub-option (RFC 3046 Section 3.2)
     ///     nested inside the Relay Agent Information option (tag 82).
     /// </summary>
     public static bool TryGetRelayAgentRemoteId(this Dhcpv4Message message, out byte[] remoteId) =>

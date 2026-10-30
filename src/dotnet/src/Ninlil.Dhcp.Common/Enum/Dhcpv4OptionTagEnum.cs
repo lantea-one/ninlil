@@ -110,8 +110,8 @@ public enum Dhcpv4OptionTagEnum : byte
     /// <summary>
     ///     RFC 3046's Relay Agent Information option, added by a relay agent forwarding a client's
     ///     message, never by the client. Its value is a nested list of sub-options; only
-    ///     Sub-option 1 (Agent Circuit ID, RFC 3046 Section 2.1) and Sub-option 2 (Agent Remote ID,
-    ///     RFC 3046 Section 2.2) are decoded, and tag rules can match on them. The server engine
+    ///     Sub-option 1 (Agent Circuit ID, RFC 3046 Section 3.1) and Sub-option 2 (Agent Remote ID,
+    ///     RFC 3046 Section 3.2) are decoded, and tag rules can match on them. The server engine
     ///     (<c>Ninlil.Dhcp.Server.Core</c>) reads it from relayed packets, and the relay agent
     ///     (<c>Ninlil.Dhcp.Server.Relay</c>) writes it on forwarded requests when a Circuit ID or
     ///     Remote ID is configured.

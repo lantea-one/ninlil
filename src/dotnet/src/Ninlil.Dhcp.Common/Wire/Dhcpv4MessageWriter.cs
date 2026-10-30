@@ -89,7 +89,7 @@ public static class Dhcpv4MessageWriter
         buffer.GetSpan(1)[0] = (byte)Dhcpv4OptionTagEnum.End;
         buffer.Advance(1);
 
-        // RFC 1542 Section 2: pad to the BOOTP minimum size so a relay agent or client that
+        // RFC 1542 Section 2.1: pad to the BOOTP minimum size so a relay agent or client that
         // enforces it does not discard a short message.
         int paddingNeeded = Dhcpv4Constants.MinimumMessageLength - buffer.WrittenCount;
 

@@ -260,8 +260,8 @@ public static class Dhcpv4OptionCatalog
             IsServerAddressEligible: false
         ),
         // RFC 5859 §3: the binary counterpart of option 66. IANA lists tag 150 for RFC 5859
-        // ("TFTP server address"; the same number is also used informally by Etherboot and GRUB,
-        // which the registry notes). Server-address eligible for the same reason as option 66,
+        // ("TFTP server address"; the registry also lists Etherboot and GRUB configuration path
+        // name under 150). Server-address eligible for the same reason as option 66,
         // here as one 4-octet address.
         new DhcpOptionCatalogEntry(
             150,

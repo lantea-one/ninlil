@@ -138,8 +138,9 @@ public static class Dhcpv6MessageOptionExtensions
 
     /// <summary>
     ///     This method sets the Elapsed Time option (code 8). A value too large for the 16-bit
-    ///     field is clamped to 0xFFFF rather than rejected, since RFC 8415 Section 21.9 gives that
-    ///     value the meaning "655.35 seconds or more". A negative value throws.
+    ///     field is clamped to 0xFFFF rather than rejected, since RFC 8415 Section 21.9 has a client use
+    ///     that value for any elapsed time above the largest the field holds. A negative value
+    ///     throws.
     /// </summary>
     public static void SetElapsedTime(this Dhcpv6Message message, TimeSpan elapsed)
     {

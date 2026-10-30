@@ -5,7 +5,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class decodes a RELAY-FORW or RELAY-REPL message (the RFC 8415 Section 7.1/7.2
+///     This class decodes a RELAY-FORW or RELAY-REPL message (the RFC 8415 Section 9.1/9.2
 ///     header and the Section 21 options) into a <see cref="Dhcpv6RelayMessage" />. It decodes
 ///     the options with <see cref="Dhcpv6MessageReader.TryReadOptions" />.
 ///     <para>

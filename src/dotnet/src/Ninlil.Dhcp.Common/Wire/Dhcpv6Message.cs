@@ -39,7 +39,7 @@ public class Dhcpv6Message
     public List<Dhcpv6Option> Options { get; } = [];
 
     /// <summary>
-    ///     This property carries the RFC 8415 Section 7.1 "link-address" of the RELAY-FORW this
+    ///     This property carries the RFC 8415 Section 9.1 "link-address" of the RELAY-FORW this
     ///     message was unwrapped from, or <see langword="null" /> when it came directly from a
     ///     client. <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c> copies it from
     ///     <see cref="Dhcpv6RelayMessage.LinkAddress" />, and <c>Dhcpv6ScopeResolver</c> uses it to
