@@ -1,13 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's outbound subscribable webhooks feature (Phase 4a-2),
-            mirroring Server.Tsig/Server.Acme/Server.Filtering's own "dedicated Server.* project
-            for a Data.Abstractions-backed feature, consumed by Ninlil.Web" shape rather
-            than living directly inside the web host itself. This sub-phase (4a-2-1) builds only
-            WebhookCredentialProtector, the encrypt/decrypt helper for a subscription's own
-            outbound auth credentials and optional HMAC signing secret; 4a-2-2 adds the actual
-            HTTP delivery engine into this same project.
+            This library is Ninlil's outbound webhook engine: it POSTs a JSON payload for each server
+            event to every matching subscription (bearer or basic authorization, optional HMAC
+            signature), makes the retries from saved state, and encrypts a subscription's
+            credentials and signing secret with ASP.NET Core Data Protection.
         </Description>
     <PackageId>Ninlil.Dns.Server.Webhooks</PackageId>
   </PropertyGroup>

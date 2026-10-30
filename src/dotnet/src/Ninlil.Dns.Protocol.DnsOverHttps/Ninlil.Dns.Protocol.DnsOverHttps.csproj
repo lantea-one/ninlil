@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's DNS-over-HTTPS (DoH, RFC 8484) transport: a DNS message
-            carried as the body of an ordinary HTTP request (GET, base64url-encoded in a query
-            string, or POST, as the raw wire-format body), self-hosting its own Kestrel server
-            since Phase 4's own REST API host does not exist yet.
+            This library is Ninlil's DNS-over-HTTPS (DoH, RFC 8484) transport: a DNS message carried as
+            the body of an ordinary HTTP request (GET, base64url-encoded in a query string, or POST,
+            as the raw wire-format body). It serves requests on a Kestrel server of its own, and it
+            can map the same routes onto the Kestrel server of a web host.
         </Description>
     <PackageId>Ninlil.Dns.Protocol.DnsOverHttps</PackageId>
   </PropertyGroup>

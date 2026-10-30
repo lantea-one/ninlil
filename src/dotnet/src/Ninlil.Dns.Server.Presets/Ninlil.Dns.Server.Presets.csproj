@@ -1,11 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 3j-2 configuration-preset engine: a JSON-config-
-            rewriting helper plus block/allow-list subscription seeding, bulk-applying a named,
-            coherent settings bundle (Open/Baseline/Protective/Family/FIPS) across every relevant
-            configuration section at once, without requiring the REST API or dynamic-configuration
-            store neither of which exist yet.
+            This library is Ninlil's configuration preset engine: named settings bundles
+            (Open, Baseline, Protective, Family and FIPS), each a set of values merged into the JSON
+            configuration file plus filter list subscriptions that it creates. It works on the
+            configuration file and the repositories, without the REST API.
         </Description>
     <PackageId>Ninlil.Dns.Server.Presets</PackageId>
   </PropertyGroup>

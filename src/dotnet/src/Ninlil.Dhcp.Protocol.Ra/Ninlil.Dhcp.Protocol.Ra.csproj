@@ -2,14 +2,13 @@
   <PropertyGroup>
     <Description>
             This library is Ninlil's Router Advertisement transport: a raw ICMPv6 listener (RFC
-            4861 Sections 4.1/4.2/6.2) that binds a real SOCK_RAW/IPPROTO_ICMPV6 socket on every
-            usable network interface, joins the RFC 4861 Section 6.2.6 all-routers multicast
-            group to receive Router Solicitations, periodically sends an unsolicited Router
-            Advertisement per Section 6.2.4's own randomized-interval timing rule, replies to a
-            genuine solicitation after Section 6.2.6's own randomized response delay, and encodes/
-            decodes every message via Ninlil.Dhcp.Common. It knows nothing about what a Router
-            Advertisement should actually contain -- that belongs to whichever
-            IRaAdvertisementProvider dependency injection resolves.
+            4861 Sections 4.1, 4.2 and 6.2) that binds a SOCK_RAW/IPPROTO_ICMPV6 socket on every
+            usable network interface, joins the all-routers multicast group (RFC 4861 Section 6.2.2)
+            to receive Router Solicitations, sends an unsolicited Router Advertisement at the
+            randomized interval of Section 6.2.4, answers a solicitation after the random delay of
+            Section 6.2.6, and encodes and decodes every message through Ninlil.Dhcp.Common. It
+            does not decide what a Router Advertisement contains: the IRaAdvertisementProvider
+            that dependency injection resolves does.
         </Description>
     <PackageId>Ninlil.Dhcp.Protocol.Ra</PackageId>
   </PropertyGroup>

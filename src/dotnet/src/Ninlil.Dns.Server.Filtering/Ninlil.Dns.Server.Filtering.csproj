@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 3h block/allow-list engine: domain, response-IP,
-            and client-source filtering, resolved through per-client groups, implementing
-            Ninlil.Dns.Server.Core's Data.Abstractions-free IDnsFilterEngine contract so
-            DnsQueryProcessingPipeline can consult it without Server.Core itself depending on
-            storage.
+            This library is Ninlil's block and allow list engine: it checks the client address, the
+            queried name and the answer (CNAME targets and addresses) against the filter lists that
+            apply to the client through its client groups, and it downloads and parses subscribed
+            lists. It implements the storage-free IDnsFilterEngine contract of
+            Ninlil.Dns.Server.Core, so that Server.Core does not depend on storage.
         </Description>
     <PackageId>Ninlil.Dns.Server.Filtering</PackageId>
   </PropertyGroup>

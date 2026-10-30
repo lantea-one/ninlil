@@ -1,18 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 5h-3 DNS rewrite engine: a lightweight
-            "domain -> target" override consulted early in DnsQueryProcessingPipeline, before
-            zone/forwarder/recursive resolution, implementing Ninlil.Dns.Server.Core's
-            Data.Abstractions-free IDnsRewriteEngine contract so DnsQueryProcessingPipeline can
-            consult it without Server.Core itself depending on storage. A dedicated project,
-            not folded into Server.Filtering (a different feature, "block" not "answer
-            differently") or Server.Authoritative (no zone concept is involved at all), mirroring
-            Server.Tsig/Server.Filtering/Server.Forwarding/Server.Webhooks's own uniform
-            "dedicated Server.* project per Data.Abstractions-backed feature" precedent -- no
-            circular-reference constraint (the kind that forced Phase 4f-2's own
-            CaaRecordReconciliationService into Server.Acme) forces this feature out of any
-            particular project, so this precedent, not a placement constraint, decided it.
+            This library is Ninlil's DNS rewrite engine: a rewrite maps a domain (an exact name or a
+            wildcard) to an address or a CNAME target, and the query pipeline consults the engine
+            before any resolver. It implements the storage-free IDnsRewriteEngine contract of
+            Ninlil.Dns.Server.Core, so that Server.Core does not depend on storage. It is its own
+            project because a rewrite is neither a block (Ninlil.Dns.Server.Filtering) nor a zone
+            record (Ninlil.Dns.Server.Authoritative).
         </Description>
     <PackageId>Ninlil.Dns.Server.Rewrites</PackageId>
   </PropertyGroup>

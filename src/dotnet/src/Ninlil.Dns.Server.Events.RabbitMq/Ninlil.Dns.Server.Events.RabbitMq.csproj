@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 3k RabbitMQ event-transport implementation: a
-            RabbitMq-backed IDnsServerEventBrokerTransport so Server.Core's own internal event
-            bus can fully swap from its default in-memory delivery to a shared, fanout-broadcast
-            RabbitMQ exchange across multiple Ninlil instances.
+            This library is Ninlil's RabbitMQ event transport: an IDnsServerEventBrokerTransport
+            that carries server events between Ninlil instances over one shared, fanout-broadcast
+            RabbitMQ exchange.
         </Description>
     <PackageId>Ninlil.Dns.Server.Events.RabbitMq</PackageId>
   </PropertyGroup>

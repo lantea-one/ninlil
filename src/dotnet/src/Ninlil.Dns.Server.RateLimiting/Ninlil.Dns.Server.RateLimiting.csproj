@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 3j per-client-IP rate limiter: an in-memory
-            token-bucket implementation of Ninlil.Dns.Server.Core's Data.Abstractions-free
-            IDnsRateLimiter contract so DnsQueryProcessingPipeline can consult it without
-            Server.Core itself depending on any storage.
+            This library is Ninlil's per-client query rate limiter: an in-memory token bucket per
+            client address plus a counter per subnet. It implements the storage-free IDnsRateLimiter
+            contract of Ninlil.Dns.Server.Core, so that Server.Core does not depend on storage.
         </Description>
     <PackageId>Ninlil.Dns.Server.RateLimiting</PackageId>
   </PropertyGroup>

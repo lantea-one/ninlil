@@ -1,11 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 3k ActiveMQ event-transport implementation: an
-            ActiveMq-backed IDnsServerEventBrokerTransport so Server.Core's own internal event
-            bus can fully swap from its default in-memory delivery to a shared, fanout-broadcast
-            ActiveMQ topic across multiple Ninlil instances, the same capability
-            Server.Events.RabbitMq already offers over RabbitMQ.
+            This library is Ninlil's ActiveMQ event transport: an IDnsServerEventBrokerTransport
+            that carries server events between Ninlil instances over one shared, fanout-broadcast
+            ActiveMQ topic. Ninlil.Dns.Server.Events.RabbitMq offers the same over RabbitMQ.
         </Description>
     <PackageId>Ninlil.Dns.Server.Events.ActiveMq</PackageId>
   </PropertyGroup>

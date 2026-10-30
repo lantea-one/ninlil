@@ -1,12 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <Description>
-            This project is Ninlil's REST API host: Kestrel, OpenAPI/Swagger/ReDoc, the full
-            Identity/Auth REST surface (login, refresh, 2FA, API tokens, user/role management), a
-            SignalR hub bridging Server.Core's own internal event bus to authenticated real-time
-            clients, and (since Phase 4d) the single combined host for the actual DNS engine
-            itself: every resolver, every transport, and every already-built feature
-            (filtering, rate limiting, TSIG, DNSSEC, ACME, cloud zone sync).
+            This project is the Ninlil server host. One process runs the DNS engine with every resolver
+            and transport, the DHCP engine, the REST API (Kestrel, OpenAPI, Swagger and ReDoc) with
+            sign-in, two-factor authentication, API tokens and user and role management, a SignalR hub
+            that sends server events to signed-in clients, and the admin console.
         </Description>
     <PackageId>Ninlil.Web</PackageId>
     <UserSecretsId>ninlil-dns-web</UserSecretsId>

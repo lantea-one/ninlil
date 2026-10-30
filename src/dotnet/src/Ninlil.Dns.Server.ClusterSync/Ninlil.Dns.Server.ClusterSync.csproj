@@ -1,15 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Phase 9-6c's operational config sync: the receiving-side appliers
-            (IClusterConfigSyncApplier, one per synced category: filter lists, filter list
-            entries, access-control rules, rewrites, forwarders) and the event subscribers that
-            forward a local write to every cluster peer via Ninlil.Dns.Server.Core's own
-            IClusterConfigSyncBroadcaster abstraction. Deliberately its own project, separate
-            from each entity's own owning engine project (Server.Filtering/Server.AccessControl/
-            Server.Rewrites/Server.Forwarding), since none of those engine projects otherwise has
-            any reason to know clustering exists at all; their own query-time engines read
-            straight from a repository on every call and have nothing to invalidate.
+            This library is Ninlil's cluster configuration sync: appliers that apply a change from a
+            peer to the local node, and event subscribers that send a local change to every peer
+            through the IClusterConfigSyncBroadcaster abstraction of Ninlil.Dns.Server.Core. It
+            covers filter lists and their entries, access-control rules, rewrites, forwarders,
+            settings sections, users and roles. It is a separate project so that the engine
+            projects do not need to know that clustering exists.
         </Description>
     <PackageId>Ninlil.Dns.Server.ClusterSync</PackageId>
   </PropertyGroup>

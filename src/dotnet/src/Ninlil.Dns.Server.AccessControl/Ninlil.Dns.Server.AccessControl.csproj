@@ -1,13 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 5o-10 real per-client/network access-control
-            engine: an in-memory, event-invalidated cache of DnsAccessControlRuleEntity rows
-            (mirroring Ninlil.Dns.Server.Authoritative's own AuthoritativeZoneCache shape, not
-            DnsFilterEngine's per-call repository reads), implementing
-            Ninlil.Dns.Server.Core's Data.Abstractions-free IDnsAccessControlEngine contract
-            so RecursiveQueryResolver and TokenBucketDnsRateLimiter can consult it without
-            Server.Core itself depending on storage.
+            This library is Ninlil's per-client and per-network access control engine: an in-memory
+            cache of the access-control rules that a saved change refreshes, and the answer to
+            "does this client address hold this capability?" (recursion access, rate-limit bypass).
+            It implements the storage-free IDnsAccessControlEngine contract of
+            Ninlil.Dns.Server.Core, so that Server.Core does not depend on storage.
         </Description>
     <PackageId>Ninlil.Dns.Server.AccessControl</PackageId>
   </PropertyGroup>

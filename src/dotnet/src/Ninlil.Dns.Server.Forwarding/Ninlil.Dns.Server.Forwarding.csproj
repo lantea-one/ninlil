@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's Phase 3i upstream-forwarder engine: definition-string
-            parsing (plain, DoT, DoH, DoQ, and sdns:// DNSCrypt stamps), one client per protocol,
-            active health-checking with round-robin failover, and the dispatcher-level
-            IDnsQueryResolver that sits between Server.Authoritative and Server.Recursive.
+            This library is Ninlil's upstream forwarder engine: forwarder definition-string parsing
+            (plain, DoT, DoH, DoQ, and sdns:// DNSCrypt stamps), one client per protocol, health
+            checking with failover, and the IDnsQueryResolver that sits between
+            Ninlil.Dns.Server.Authoritative and Ninlil.Dns.Server.Recursive in the query path.
         </Description>
     <PackageId>Ninlil.Dns.Server.Forwarding</PackageId>
   </PropertyGroup>

@@ -1,14 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's cluster membership foundation (Phase 9-6a): a peer-node
-            registry (ClusterOptions/ClusterNodeEntity), the dedicated TSIG-authenticated +
-            TLS-encrypted node-to-node channel two nodes use to join and probe each other, the
-            invite-code join handshake, and the background heartbeat engine that keeps each
-            node's own view of every peer's reachability current. Later 9-6 sub-phases (Catalog
-            Zones, operational config sync, identity federation) layer their own real
-            synchronization on top of the channel this project establishes; this project itself
-            propagates nothing beyond membership and health.
+            This library is Ninlil's cluster membership and node-to-node channel: a peer registry, a
+            TSIG-authenticated channel between nodes over TLS with certificate pinning, the
+            invite-code join handshake, and a heartbeat that tracks each peer's reachability. The
+            same channel carries the configuration sync broadcasts, the cluster-wide username check
+            and the query statistics requests.
         </Description>
     <PackageId>Ninlil.Dns.Server.Cluster</PackageId>
   </PropertyGroup>
