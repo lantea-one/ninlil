@@ -37,7 +37,7 @@ internal static class DnsCryptQueryHandler
     /// <summary>
     ///     This method routes one received packet. A certificate discovery query is rate limited
     ///     and answered at once. Anything else is treated as an encrypted client query: it is
-    ///     decrypted with the tracked certificate its client-magic names and, if that succeeds,
+    ///     decrypted with the valid certificate its client-magic names and, if that succeeds,
     ///     enqueued onto <paramref name="pipeline" /> with a response delegate that encrypts the
     ///     answer before passing it to <paramref name="sendAsync" />. A packet that is neither is
     ///     dropped without a reply: a malformed plaintext query or a query that cannot be
@@ -118,7 +118,7 @@ internal static class DnsCryptQueryHandler
         if (certificateEntry is null)
         {
             logger.LogDebug(
-                "Dropping a DNSCrypt packet from {RemoteAddress} whose client-magic tag does not match any currently tracked certificate.",
+                "Dropping a DNSCrypt packet from {RemoteAddress} whose client-magic tag does not match any certificate that is valid now.",
                 remoteAddress
             );
             return false;
@@ -346,16 +346,24 @@ internal static class DnsCryptQueryHandler
     }
 
     /// <summary>
-    ///     This method finds the tracked certificate a client-magic tag names, if any. It does not
-    ///     check the certificate's validity period.
+    ///     This method finds the tracked certificate a client-magic tag names, if any, and only
+    ///     while that certificate is valid. The rotation service drops an expired certificate at
+    ///     its next wake-up, which can be later than <c>ts-end</c>. Until then the store still
+    ///     holds the secret key, and DNSCrypt v2 section 13 says a resolver must throw away the
+    ///     previous secret key, so an expired certificate must not decrypt a query.
     /// </summary>
     private static DnsCryptCertificateEntry FindCertificateByClientMagic(
         IDnsCryptCertificateStore store,
         byte[] clientMagic
     )
     {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
         foreach (DnsCryptCertificateEntry entry in store.Entries)
-            if (entry.Certificate.ClientMagic.AsSpan().SequenceEqual(clientMagic))
+            if (
+                entry.Certificate.IsValidAt(now)
+                && entry.Certificate.ClientMagic.AsSpan().SequenceEqual(clientMagic)
+            )
                 return entry;
 
         return null;
