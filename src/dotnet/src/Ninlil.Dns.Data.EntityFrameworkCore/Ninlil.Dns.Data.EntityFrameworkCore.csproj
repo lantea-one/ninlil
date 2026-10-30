@@ -10,14 +10,12 @@
   </PropertyGroup>
 
   <!--
-      Package version note: Ninlil targets net10.0 and would otherwise track the matching
-      Microsoft.EntityFrameworkCore.* 10.x line, but Pomelo.EntityFrameworkCore.MySql, the
-      de-facto standard MySQL/MariaDB provider for EF Core, has not yet published a release
-      built against EF Core 10 as of this writing. Every EF Core package below is therefore
-      pinned to the latest 9.x release so that the MySQL, PostgreSQL, SQL Server, and SQLite
-      providers all resolve against a single, mutually-compatible EF Core version. EF Core 9
-      runs perfectly well on the net10.0 runtime; only the package's own build target lags
-      behind. This pin should be revisited once Pomelo ships an EF Core 10 build.
+      Package version rule: Ninlil targets net10.0, but every EF Core package below stays on the
+      9.x line. Pomelo.EntityFrameworkCore.MySql, the MySQL/MariaDB provider, has no release
+      built for EF Core 10: its newest release (9.0.0) depends on
+      Microsoft.EntityFrameworkCore.Relational [9.0.0, 9.0.999], and the SQLite, PostgreSQL and
+      SQL Server providers must resolve to the same EF Core version. EF Core 9 runs on the
+      net10.0 runtime. Moving to EF Core 10 needs a Pomelo release that allows it.
     -->
   <!-- LikePatternEscaper is internal; its unit test lives in the query-log test project. -->
   <ItemGroup>

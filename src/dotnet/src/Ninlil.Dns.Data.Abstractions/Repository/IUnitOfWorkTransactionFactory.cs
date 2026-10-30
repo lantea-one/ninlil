@@ -5,7 +5,7 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 ///     This interface is an optional companion of <see cref="IUnitOfWork" />. It lets a caller
 ///     that changes a lot of data (a backup restore) run several
 ///     <see cref="IUnitOfWork.SaveChangesAsync" /> calls as one all-or-nothing operation. The
-///     relational engines register an implementation; MongoDB does not yet, so callers must
+///     relational engines register an implementation; MongoDB registers none, so callers must
 ///     resolve it as an optional service and handle its absence.
 /// </summary>
 public interface IUnitOfWorkTransactionFactory

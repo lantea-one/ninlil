@@ -43,7 +43,7 @@ namespace Ninlil.Dns.Server.Backup;
 ///         that transaction commits are the staged files renamed into place, so a failure rolls
 ///         the database back and leaves every file as it was. The Data Protection key ring is
 ///         merged: the archive's keys are added and no existing key is deleted. On a storage
-///         engine without a transaction factory (MongoDB for now) the restore logs a warning and
+///         engine that registers no transaction factory (MongoDB) the restore logs a warning and
 ///         is not atomic: a database error after the wipe leaves a partly restored database,
 ///         though no file has been replaced.
 ///         Only one restore runs at a time; a second one is refused with
