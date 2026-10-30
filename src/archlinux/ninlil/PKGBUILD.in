@@ -14,7 +14,7 @@ arch=('x86_64' 'aarch64')
 url='https://git.lantea.one/Lantea.One/ninlil'
 license=('MIT')
 depends=('glibc' 'gcc-libs' 'icu' 'openssl')
-optdepends=('msquic: DNS-over-QUIC transport')
+optdepends=('msquic>=2.4.20: DNS-over-QUIC transport (older releases abort on some peers)')
 backup=('etc/ninlil/ninlil.env')
 # A .NET single-file executable carries its payload after the ELF image; stripping it corrupts it.
 options=('!strip' '!debug')

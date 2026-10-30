@@ -15,7 +15,7 @@ pkgbase = ninlil-git-next
 	depends = gcc-libs
 	depends = icu
 	depends = openssl
-	optdepends = msquic: DNS-over-QUIC transport
+	optdepends = msquic>=2.4.20: DNS-over-QUIC transport (older releases abort on some peers)
 	provides = ninlil
 	conflicts = ninlil
 	options = !strip

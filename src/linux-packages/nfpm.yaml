@@ -48,8 +48,11 @@ depends:
   - libstdc++6
   - libssl3 | libssl3t64
   - libicu76 | libicu74 | libicu72 | libicu70
+# DNS-over-QUIC needs libmsquic 2.4.20 or later: older releases abort the whole process when a
+# QUIC peer advertises the minimum UDP payload size (1200 bytes) over IPv4. Deb and RPM write the
+# version constraint differently, so the RPM override repeats it in RPM syntax.
 suggests:
-  - libmsquic
+  - libmsquic (>= 2.4.20)
 overrides:
   rpm:
     depends:
@@ -57,6 +60,8 @@ overrides:
       - libstdc++
       - openssl-libs
       - libicu
+    suggests:
+      - libmsquic >= 2.4.20
 
 contents:
   - src: ${NINLIL_BINARY}
