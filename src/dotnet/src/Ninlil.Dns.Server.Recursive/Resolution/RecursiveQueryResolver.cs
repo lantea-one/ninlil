@@ -199,7 +199,10 @@ public class RecursiveQueryResolver(
                 dns64SourceBogus = aValidation.State == DnssecValidationStateEnum.Bogus;
 
                 if (!dns64SourceBogus)
-                    synthesizedAaaa = dns64Service.SynthesizeAaaaRecords(aResult.Answer);
+                    synthesizedAaaa = dns64Service.SynthesizeAaaaRecords(
+                        aResult.Answer,
+                        result.Soa
+                    );
             }
         }
 

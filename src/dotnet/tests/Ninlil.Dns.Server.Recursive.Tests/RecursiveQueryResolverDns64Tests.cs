@@ -46,14 +46,41 @@ public sealed class RecursiveQueryResolverDns64Tests
     private static async Task<DnsMessage> AskAsync(
         DnssecValidationResult aValidation,
         bool checkingDisabled = false,
-        bool dnssecOk = false
+        bool dnssecOk = false,
+        uint aTimeToLive = 300,
+        uint? negativeSoaTimeToLive = null
     )
     {
         FakeIterativeResolutionEngine engine = new();
         engine.AddResult(
             QueriedName,
             DnsResourceRecordTypeEnum.Aaaa,
-            new IterativeResolutionResult(RecursiveResolutionStatusEnum.NoData, [], [], null, [])
+            new IterativeResolutionResult(
+                RecursiveResolutionStatusEnum.NoData,
+                [],
+                [],
+                negativeSoaTimeToLive is { } soaTtl
+                    ? new DnsResourceRecord(
+                        QueriedName,
+                        DnsResourceRecordTypeEnum.Soa,
+                        DnsClassEnum.Internet,
+                        soaTtl,
+                        DnsRecordDataCodecRegistry.Encode(
+                            DnsResourceRecordTypeEnum.Soa,
+                            new SoaRecordData(
+                                DnsName.Parse("ns.example.com"),
+                                DnsName.Parse("hostmaster.example.com"),
+                                1,
+                                3600,
+                                600,
+                                86400,
+                                300
+                            )
+                        )
+                    )
+                    : null,
+                []
+            )
         );
         engine.AddResult(
             QueriedName,
@@ -65,7 +92,7 @@ public sealed class RecursiveQueryResolverDns64Tests
                         QueriedName,
                         DnsResourceRecordTypeEnum.A,
                         DnsClassEnum.Internet,
-                        300,
+                        aTimeToLive,
                         DnsRecordDataCodecRegistry.Encode(
                             DnsResourceRecordTypeEnum.A,
                             new ARecordData(IPAddress.Parse("198.41.0.4"))
@@ -158,6 +185,28 @@ public sealed class RecursiveQueryResolverDns64Tests
         DnsResourceRecord answer = Assert.Single(response.Answers);
         Assert.Equal(DnsResourceRecordTypeEnum.Aaaa, answer.Type);
         Assert.False(response.AuthenticData);
+    }
+
+    [Theory]
+    // RFC 6147 §5.1.7: the smaller of the A record's TTL and the SOA TTL of the negative answer.
+    [InlineData(300u, 60u, 60u)]
+    [InlineData(300u, 900u, 300u)]
+    // Without a SOA: the smaller of the A record's TTL and 600 seconds.
+    [InlineData(3600u, null, 600u)]
+    [InlineData(120u, null, 120u)]
+    public async Task TryResolveAsync_ASynthesizedAnswer_HasTheRfc6147Section5_1_7Ttl(
+        uint aTimeToLive,
+        uint? soaTimeToLive,
+        uint expected
+    )
+    {
+        DnsMessage response = await AskAsync(
+            DnssecValidationResult.Insecure(),
+            aTimeToLive: aTimeToLive,
+            negativeSoaTimeToLive: soaTimeToLive
+        );
+
+        Assert.Equal(expected, Assert.Single(response.Answers).TimeToLive);
     }
 
     [Fact]

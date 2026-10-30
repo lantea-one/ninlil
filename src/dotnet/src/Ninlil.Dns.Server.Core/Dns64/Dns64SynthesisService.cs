@@ -89,6 +89,13 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
     ];
 
     /// <summary>
+    ///     This constant contains the TTL ceiling, in seconds, when the negative AAAA answer
+    ///     carried no SOA record (RFC 6147 §5.1.7: "the TTL of the original A RR or 600 seconds,
+    ///     whichever is shorter").
+    /// </summary>
+    private const uint NoSoaTimeToLiveSeconds = 600;
+
+    /// <summary>
     ///     This property reports whether DNS64 synthesis is enabled.
     /// </summary>
     public bool IsEnabled => options.CurrentValue.Enable;
@@ -102,9 +109,21 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
     ///     <see cref="Dns64Options.SynthesisPrefix" /> is not a valid RFC 6052 prefix. Under the
     ///     Well-Known Prefix an A record whose address is not globally reachable
     ///     (<see cref="IsGloballyReachableIPv4" />) is skipped, as RFC 6052 §3.1 requires.
+    ///     <para>
+    ///         The TTL of each synthesized record is the smaller of the A record's TTL and the TTL
+    ///         of <paramref name="negativeAnswerSoa" />, the SOA record of the negative AAAA answer
+    ///         (RFC 6147 §5.1.7). Without that SOA the smaller of the A record's TTL and 600
+    ///         seconds is used, as the same section says to.
+    ///     </para>
     /// </summary>
+    /// <param name="aAnswer">The A answer, with any CNAME records followed on the way.</param>
+    /// <param name="negativeAnswerSoa">
+    ///     The SOA record from the NoData answer to the AAAA query, or <see langword="null" />
+    ///     when that answer carried none.
+    /// </param>
     public IReadOnlyList<DnsResourceRecord> SynthesizeAaaaRecords(
-        IReadOnlyList<DnsResourceRecord> aAnswer
+        IReadOnlyList<DnsResourceRecord> aAnswer,
+        DnsResourceRecord negativeAnswerSoa = null
     )
     {
         if (!IsEnabled || aAnswer.Count == 0)
@@ -122,6 +141,7 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
         bool wellKnownPrefix =
             prefixLength == 96 && prefixBytes.AsSpan().SequenceEqual(WellKnownPrefixBytes);
         List<DnsResourceRecord> synthesized = [];
+        uint ttlCeiling = negativeAnswerSoa?.TimeToLive ?? NoSoaTimeToLiveSeconds;
 
         foreach (DnsResourceRecord record in aAnswer)
         {
@@ -152,10 +172,10 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
                     record.Name,
                     DnsResourceRecordTypeEnum.Aaaa,
                     record.Class,
-                    // RFC 6147 §5.1.7 sets the TTL to the smaller of the A record's TTL and the SOA TTL of
-                    // the negative AAAA answer. This service never sees that SOA, so the A record's TTL
-                    // stands.
-                    record.TimeToLive,
+                    // RFC 6147 §5.1.7: the smaller of the A record's TTL and the SOA TTL (or
+                    // 600 seconds when the negative answer had no SOA), in keeping with negative
+                    // caching, so the AAAA record does not outlive the NoData answer.
+                    Math.Min(record.TimeToLive, ttlCeiling),
                     DnsRecordDataCodecRegistry.Encode(DnsResourceRecordTypeEnum.Aaaa, aaaaData)
                 )
             );

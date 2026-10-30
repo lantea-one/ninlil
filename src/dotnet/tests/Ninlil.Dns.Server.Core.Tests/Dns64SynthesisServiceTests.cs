@@ -160,7 +160,7 @@ public class Dns64SynthesisServiceTests
         Assert.Equal(DnsResourceRecordTypeEnum.Aaaa, record.Type);
         Assert.Equal(Name, record.Name);
         Assert.Equal(DnsClassEnum.Internet, record.Class);
-        // RFC 6147 §5.1.7: the synthesized TTL should not exceed the A record's TTL.
+        // RFC 6147 §5.1.7: the synthesized TTL is at most the A record's TTL.
         Assert.Equal((uint)120, record.TimeToLive);
 
         Assert.True(
@@ -170,6 +170,50 @@ public class Dns64SynthesisServiceTests
         AaaaRecordData data = (AaaaRecordData)
             DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Aaaa, record.Data);
         Assert.Equal(IPAddress.Parse("64:ff9b::c629:4"), data.Address);
+    }
+
+    [Theory]
+    // RFC 6147 §5.1.7: the smaller of the A record's TTL and the SOA TTL of the negative answer.
+    [InlineData(300u, 60u, 60u)]
+    [InlineData(300u, 900u, 300u)]
+    // Without a SOA: the smaller of the A record's TTL and 600 seconds.
+    [InlineData(3600u, null, 600u)]
+    [InlineData(120u, null, 120u)]
+    public void SynthesizeAaaaRecordsTakesTheSmallerOfTheATtlAndTheSoaTtl(
+        uint aTimeToLive,
+        uint? soaTimeToLive,
+        uint expected
+    )
+    {
+        Dns64SynthesisService service = CreateService(
+            new Dns64Options { Enable = true, SynthesisPrefix = "64:ff9b::/96" }
+        );
+        DnsResourceRecord soa = soaTimeToLive is { } ttl
+            ? new DnsResourceRecord(
+                Name,
+                DnsResourceRecordTypeEnum.Soa,
+                DnsClassEnum.Internet,
+                ttl,
+                DnsRecordDataCodecRegistry.Encode(
+                    DnsResourceRecordTypeEnum.Soa,
+                    new SoaRecordData(
+                        DnsName.Parse("ns.example.com."),
+                        DnsName.Parse("hostmaster.example.com."),
+                        1,
+                        3600,
+                        600,
+                        86400,
+                        300
+                    )
+                )
+            )
+            : null;
+
+        DnsResourceRecord record = Assert.Single(
+            service.SynthesizeAaaaRecords([ARecord("198.41.0.4", aTimeToLive)], soa)
+        );
+
+        Assert.Equal(expected, record.TimeToLive);
     }
 
     [Fact]
