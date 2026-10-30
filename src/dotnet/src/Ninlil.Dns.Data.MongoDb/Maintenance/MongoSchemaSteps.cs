@@ -34,8 +34,21 @@ public static class MongoSchemaSteps
     public const string ZoneJournalSoaHistory = nameof(ZoneJournalSoaHistory);
 
     /// <summary>
+    ///     This constant names the step that marks filter list documents carrying
+    ///     <c>AppliesToAllClients</c>. It has no backfill: a document without the field reads as
+    ///     false. Recording it makes an older build refuse a database this version has used, since
+    ///     an older build would ignore the field and block nothing for a globally blocked service.
+    /// </summary>
+    public const string FilterListAppliesToAllClients = nameof(FilterListAppliesToAllClients);
+
+    /// <summary>
     ///     This property contains every step this build knows, in the order they run.
     /// </summary>
     public static IReadOnlyList<string> Known { get; } =
-    [DnsClientAddressLegacyBackfill, ClusterKeyLinkLegacyBackfill, ZoneJournalSoaHistory];
+    [
+        DnsClientAddressLegacyBackfill,
+        ClusterKeyLinkLegacyBackfill,
+        ZoneJournalSoaHistory,
+        FilterListAppliesToAllClients,
+    ];
 }

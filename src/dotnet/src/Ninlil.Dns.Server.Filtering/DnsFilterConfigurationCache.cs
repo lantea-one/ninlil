@@ -207,6 +207,7 @@ public sealed class DnsFilterConfigurationCache : IDisposable
         IEnumerable<Guid> listIds = configuration
             .EnabledGroups.Values.SelectMany(group => group.ListIds)
             .Concat(configuration.ClientListIds.Values.SelectMany(ids => ids))
+            .Concat(configuration.AllClientListIds)
             .Distinct();
         int loaded = 0;
 
@@ -367,7 +368,8 @@ public sealed class DnsFilterConfigurationCache : IDisposable
             defaultGroup,
             enabledGroups,
             clientListIds,
-            enabledLists
+            enabledLists,
+            [.. lists.Where(list => list.AppliesToAllClients).Select(list => list.Id)]
         );
     }
 

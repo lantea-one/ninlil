@@ -13,8 +13,9 @@ namespace Ninlil.Web.Tests;
 /// <summary>
 ///     This class covers what deleting a filter list removes, over HTTP on the shared in-process
 ///     host signed in as the bootstrap administrator: <see cref="FilterListsController.Delete" />
-///     and the untargeted <see cref="BlockedServicesController.Disable" /> must leave no entries
-///     and no client assignment of the list behind. Entries of a subscribed (Blocked Services)
+///     must leave no entries and no client assignment of the list behind, and the untargeted
+///     <see cref="BlockedServicesController.Disable" /> must keep a list a client still uses and
+///     leave no entries behind when it deletes one. Entries of a subscribed (Blocked Services)
 ///     list are seeded through the repository, since the host must not fetch the real URL. Every
 ///     test finds its own rows by id because the database is shared with other test classes.
 /// </summary>
@@ -162,7 +163,7 @@ public class FilterListDeleteCascadeTests(NinlilDnsWebApplicationFactory factory
     }
 
     [Fact]
-    public async Task Disable_WithoutATarget_RemovesTheManagedListsEntriesAndAssignments()
+    public async Task Disable_WithoutATarget_KeepsAClientsListAndEntries_UntilNoAssignmentIsLeft()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
         Guid clientId = await CreateClientAsync(client, "100002");
@@ -178,20 +179,34 @@ public class FilterListDeleteCascadeTests(NinlilDnsWebApplicationFactory factory
                 .FilterListId
                 .Value;
             await SeedEntriesAsync(listId, 25);
+            Assert.Equal(1, await CountAssignmentsAsync(listId));
+
+            // The global toggle goes off, but the client still blocks the service, so the list,
+            // its entries and the assignment stay.
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                (await client.DeleteAsync("/api/blocked-services/twitter")).StatusCode
+            );
+            Assert.Equal(
+                HttpStatusCode.OK,
+                (await client.GetAsync($"/api/filter-lists/{listId}")).StatusCode
+            );
             Assert.Equal(25, await CountEntriesAsync(listId));
             Assert.Equal(1, await CountAssignmentsAsync(listId));
 
-            HttpResponseMessage disableResponse = await client.DeleteAsync(
-                "/api/blocked-services/twitter"
+            // Once the client's own toggle is off too, the next global disable removes the list
+            // and its entries.
+            await client.DeleteAsync($"/api/blocked-services/twitter?clientId={clientId}");
+            Assert.Equal(0, await CountAssignmentsAsync(listId));
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                (await client.DeleteAsync("/api/blocked-services/twitter")).StatusCode
             );
-            Assert.Equal(HttpStatusCode.NoContent, disableResponse.StatusCode);
-
             Assert.Equal(
                 HttpStatusCode.NotFound,
                 (await client.GetAsync($"/api/filter-lists/{listId}")).StatusCode
             );
             Assert.Equal(0, await CountEntriesAsync(listId));
-            Assert.Equal(0, await CountAssignmentsAsync(listId));
         }
         finally
         {

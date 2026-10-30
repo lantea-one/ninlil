@@ -6,7 +6,9 @@ namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 /// <summary>
 ///     This record is the JSON payload of a <c>DnsFilterListEntity</c> config-sync envelope:
 ///     every editable field except <c>LastFetchedAtUtc</c>, which records when this node last
-///     fetched a subscribed list and so stays local.
+///     fetched a subscribed list and so stays local. <c>AppliesToAllClients</c> defaults to
+///     <see langword="false" />, so an envelope from a node without the field reads as a list
+///     that applies only through assignments.
 /// </summary>
 public sealed record FilterListSyncPayload(
     string Name,
@@ -16,5 +18,6 @@ public sealed record FilterListSyncPayload(
     string SubscriptionUrl,
     TimeSpan? RefreshInterval,
     bool IsDisabled,
-    string Comments
+    string Comments,
+    bool AppliesToAllClients = false
 );

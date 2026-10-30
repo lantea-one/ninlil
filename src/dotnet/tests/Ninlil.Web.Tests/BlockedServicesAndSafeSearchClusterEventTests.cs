@@ -202,6 +202,48 @@ public sealed class BlockedServicesAndSafeSearchClusterEventTests : IDisposable
     }
 
     [Fact]
+    public async Task BlockedServicesEnable_WithoutATarget_SetsTheFlagThatReplicatesWithTheList()
+    {
+        BlockedServicesController controller = CreateBlockedServices();
+
+        await controller.Enable("tiktok", null, null, default);
+
+        DnsFilterListEntity list = Assert.Single(await _lists.ListAsync());
+        Assert.True(list.AppliesToAllClients);
+        Assert.True(
+            new Ninlil.Dns.Server.ClusterSync.Filtering.FilterListSyncPayload(
+                list.Name,
+                list.Kind,
+                list.Action,
+                list.Source,
+                list.SubscriptionUrl,
+                list.RefreshInterval,
+                list.IsDisabled,
+                list.Comments,
+                list.AppliesToAllClients
+            ).AppliesToAllClients
+        );
+    }
+
+    [Fact]
+    public async Task BlockedServicesDisable_WithoutATargetWhileAClientUsesTheList_PublishesAChangeNotADelete()
+    {
+        Guid clientId = await AddClientAsync();
+        BlockedServicesController controller = CreateBlockedServices();
+        await controller.Enable("tiktok", null, null, default);
+        await controller.Enable("tiktok", clientId, null, default);
+        _publisher.Events.Clear();
+
+        await controller.Disable("tiktok", null, null, default);
+
+        DnsFilterListChangedEvent published = Assert.IsType<DnsFilterListChangedEvent>(
+            Assert.Single(_publisher.Events)
+        );
+        Assert.False(published.IsDeleted);
+        Assert.False(Assert.Single(await _lists.ListAsync()).AppliesToAllClients);
+    }
+
+    [Fact]
     public async Task BlockedServicesDisable_ForAClient_PublishesNothing()
     {
         Guid clientId = await AddClientAsync();

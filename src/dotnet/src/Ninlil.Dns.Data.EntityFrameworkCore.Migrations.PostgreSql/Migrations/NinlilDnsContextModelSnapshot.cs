@@ -994,6 +994,9 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(32)
                     .HasColumnType("character varying(32)");
 
+                b.Property<bool>("AppliesToAllClients")
+                    .HasColumnType("boolean");
+
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
                     .HasColumnType("character varying(4096)");

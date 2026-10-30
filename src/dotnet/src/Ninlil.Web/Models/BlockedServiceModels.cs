@@ -13,8 +13,9 @@ namespace Ninlil.Web.Models;
 ///     <c>BlockedServiceCatalog</c> documents its source and license.
 /// </param>
 /// <param name="IsEnabled">
-///     Whether the entry's managed filter list exists and is enabled. When the request names a
-///     client or client group, it also requires that target to have an assignment of the list.
+///     Whether the service is blocked for every client: the entry's managed filter list is
+///     enabled and applies to all clients. When the request names a client or client group, it is
+///     whether that target has an assignment of the enabled list instead.
 /// </param>
 /// <param name="FilterListId">
 ///     The identifier of the entry's managed <c>DnsFilterListEntity</c> when one exists, so the UI

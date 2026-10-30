@@ -35,9 +35,10 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         <see cref="DnsClientDirectory" />, and an enabled <see cref="DnsClientEntity" />
 ///         adds its enabled <see cref="DnsClientEntity.ClientGroupId" /> group. That client's
 ///         direct <see cref="DnsClientListAssignmentEntity" /> rows are added as well, whether or
-///         not it contributed a group (see <see cref="ResolveApplicableListsAsync" />). The
-///         resolver and the directory are optional; without them only CIDR and ClientID
-///         matching apply.
+///         not it contributed a group (see <see cref="ResolveApplicableListsAsync" />). Every list
+///         marked <see cref="DnsFilterListEntity.AppliesToAllClients" /> applies to all clients
+///         on top of that. The resolver and the directory are optional; without them only CIDR
+///         and ClientID matching apply.
 ///     </para>
 ///     <para>
 ///         <strong>Domain entries.</strong> A <see cref="DnsFilterEntryKindEnum.Domain" /> entry
@@ -440,7 +441,8 @@ public sealed class DnsFilterEngine(
     ///     whose <see cref="DnsClientGroupNetworkEntity.ClientId" /> label matches
     ///     <paramref name="clientId" />, or that the resolved <see cref="DnsClientEntity" /> belongs
     ///     to. When no group matches, the default group's lists apply. The resolved client's direct
-    ///     <see cref="DnsClientListAssignmentEntity" /> rows are always added.
+    ///     <see cref="DnsClientListAssignmentEntity" /> rows are always added, and so is every
+    ///     list marked <see cref="DnsFilterListEntity.AppliesToAllClients" />.
     /// </summary>
     private async ValueTask<IReadOnlyList<DnsFilterList>> ResolveApplicableListsAsync(
         IPAddress remoteAddress,
@@ -491,6 +493,10 @@ public sealed class DnsFilterEngine(
 
         foreach (DnsFilterGroup group in matchedGroups)
             listIds.UnionWith(group.ListIds);
+
+        // A list marked for every client applies to everyone, whether or not a group or client
+        // matched, and no assignment can take it away.
+        listIds.UnionWith(configuration.AllClientListIds);
 
         // The resolved client's direct list assignments apply whether or not it matched a group.
         if (

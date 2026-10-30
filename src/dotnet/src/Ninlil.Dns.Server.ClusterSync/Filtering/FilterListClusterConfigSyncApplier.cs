@@ -87,6 +87,7 @@ public class FilterListClusterConfigSyncApplier(
             RefreshInterval = payload.RefreshInterval,
             IsDisabled = payload.IsDisabled,
             Comments = payload.Comments,
+            AppliesToAllClients = payload.AppliesToAllClients,
         };
     }
 
@@ -109,5 +110,6 @@ public class FilterListClusterConfigSyncApplier(
         local.RefreshInterval = payload.RefreshInterval;
         local.IsDisabled = payload.IsDisabled;
         local.Comments = payload.Comments;
+        local.AppliesToAllClients = payload.AppliesToAllClients;
     }
 }

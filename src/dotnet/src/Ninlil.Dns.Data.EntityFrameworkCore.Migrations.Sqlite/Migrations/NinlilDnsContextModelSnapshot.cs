@@ -989,6 +989,9 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(32)
                     .HasColumnType("TEXT");
 
+                b.Property<bool>("AppliesToAllClients")
+                    .HasColumnType("INTEGER");
+
                 b.Property<string>("Comments")
                     .HasMaxLength(4096)
                     .HasColumnType("TEXT");

@@ -8,7 +8,8 @@ namespace Ninlil.Dns.Data.Abstractions.Entity;
 ///     <see cref="Action" />, either entered by an operator or replaced on a schedule from a
 ///     subscribed URL. The entries are <see cref="DnsFilterListEntryEntity" /> rows. Lists apply to
 ///     clients through <see cref="DnsClientGroupListAssignmentEntity" /> and
-///     <see cref="DnsClientListAssignmentEntity" />.
+///     <see cref="DnsClientListAssignmentEntity" />, or to every client when
+///     <see cref="AppliesToAllClients" /> is set.
 /// </summary>
 public class DnsFilterListEntity : AuditableEntityBase
 {
@@ -59,6 +60,15 @@ public class DnsFilterListEntity : AuditableEntityBase
     ///     subscribed one is still refreshed) but is not used when matching queries.
     /// </summary>
     public bool IsDisabled { get; set; }
+
+    /// <summary>
+    ///     This property indicates whether this list applies to every client, whatever groups
+    ///     and clients match it. The list still needs <see cref="IsDisabled" /> to be
+    ///     <see langword="false" />. The Blocked Services toggle without a client or group sets
+    ///     it; assignments to groups and clients add to it and never remove it. It replicates
+    ///     with the list.
+    /// </summary>
+    public bool AppliesToAllClients { get; set; }
 
     /// <summary>
     ///     This property contains free-form operator notes about this list.

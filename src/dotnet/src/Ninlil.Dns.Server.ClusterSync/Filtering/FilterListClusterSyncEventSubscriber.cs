@@ -70,7 +70,8 @@ public class FilterListClusterSyncEventSubscriber(
                 entity.SubscriptionUrl,
                 entity.RefreshInterval,
                 entity.IsDisabled,
-                entity.Comments
+                entity.Comments,
+                entity.AppliesToAllClients
             )
         );
 }

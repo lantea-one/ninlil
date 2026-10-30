@@ -7,7 +7,8 @@ namespace Ninlil.Dns.Server.Filtering;
 /// <summary>
 ///     This class is one immutable copy of the filter configuration that decides which lists
 ///     apply to a client: the enabled groups with their networks and list assignments, the
-///     clients' direct list assignments and the enabled lists. <see cref="DnsFilterConfigurationCache" />
+///     clients' direct list assignments, the enabled lists and the ones that apply to every client.
+///     <see cref="DnsFilterConfigurationCache" />
 ///     builds it from the database and <see cref="DnsFilterEngine" /> reads it on every query.
 ///     It holds no list entries; those are cached per list as <see cref="DnsFilterListIndex" />.
 /// </summary>
@@ -21,7 +22,8 @@ public sealed class DnsFilterConfiguration
         null,
         new Dictionary<Guid, DnsFilterGroup>(),
         new Dictionary<Guid, Guid[]>(),
-        new Dictionary<Guid, DnsFilterList>()
+        new Dictionary<Guid, DnsFilterList>(),
+        []
     );
 
     /// <summary>
@@ -32,7 +34,8 @@ public sealed class DnsFilterConfiguration
         DnsFilterGroup defaultGroup,
         IReadOnlyDictionary<Guid, DnsFilterGroup> enabledGroups,
         IReadOnlyDictionary<Guid, Guid[]> clientListIds,
-        IReadOnlyDictionary<Guid, DnsFilterList> lists
+        IReadOnlyDictionary<Guid, DnsFilterList> lists,
+        IReadOnlyList<Guid> allClientListIds = null
     )
     {
         MatchableGroups = matchableGroups;
@@ -40,6 +43,7 @@ public sealed class DnsFilterConfiguration
         EnabledGroups = enabledGroups;
         ClientListIds = clientListIds;
         Lists = lists;
+        AllClientListIds = allClientListIds ?? [];
     }
 
     /// <summary>
@@ -70,6 +74,12 @@ public sealed class DnsFilterConfiguration
     ///     This property is every enabled list by identifier.
     /// </summary>
     public IReadOnlyDictionary<Guid, DnsFilterList> Lists { get; }
+
+    /// <summary>
+    ///     This property is the identifiers of the enabled lists that apply to every client
+    ///     (<c>DnsFilterListEntity.AppliesToAllClients</c>), whichever groups and clients match.
+    /// </summary>
+    public IReadOnlyList<Guid> AllClientListIds { get; }
 }
 
 /// <summary>

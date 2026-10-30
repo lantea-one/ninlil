@@ -7,6 +7,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.Core.Events;
+using Ninlil.Dns.Server.Filtering;
 using Ninlil.Dns.Server.Filtering.BlockedServices;
 using Ninlil.Web.Examples.BlockedServices;
 using Ninlil.Web.Models;
@@ -33,17 +34,24 @@ namespace Ninlil.Web.Controllers;
 ///         which matching by <c>Name</c> would not.
 ///     </para>
 ///     <para>
-///         <b>Targeting a client or client group.</b> Every action takes optional, mutually
-///         exclusive <c>clientId</c> and <c>clientGroupId</c> query parameters. The shared list is
-///         created, re-enabled or found as above either way. With a target, <c>Enable</c> also
-///         creates a
+///         <b>Targeting a client or client group, or everyone.</b> Every action takes optional,
+///         mutually exclusive <c>clientId</c> and <c>clientGroupId</c> query parameters. The shared
+///         list is created, re-enabled or found as above either way. With a target, <c>Enable</c>
+///         also creates a
 ///         <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientListAssignmentEntity" /> or
 ///         <see cref="DnsClientGroupListAssignmentEntity" /> linking the list to that target,
 ///         through the repositories behind <see cref="ClientListAssignmentsController" /> and
 ///         <see cref="ClientGroupListAssignmentsController" />, saving a second call. With a
 ///         target, <c>Disable</c> removes only that target's assignment and leaves the list and
-///         other targets alone. Without one, <c>Disable</c> deletes the list, its entries and
-///         every client and client-group assignment that refers to it.
+///         other targets alone. Without a target the toggle is global: <c>Enable</c> sets
+///         <see cref="DnsFilterListEntity.AppliesToAllClients" />, which blocks the service for
+///         every client, including one that no group or client record matches. Client and group
+///         toggles add to it, so a client or group cannot unblock a service that is blocked
+///         globally; the only per-client override is an allow list, which
+///         <see cref="DnsFilterOptions.Precedence" /> weighs against the block as for any other
+///         list. Without a target, <c>Disable</c> clears the flag and keeps the list and the
+///         client and group assignments that still use it, so they block as before. When no
+///         assignment is left it deletes the list and its entries as well.
 ///     </para>
 ///     <para>
 ///         <b>Cluster replication.</b> The managed list is an ordinary filter list, so creating or
@@ -94,8 +102,9 @@ public class BlockedServicesController(
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromHours(24);
 
     /// <summary>
-    ///     This action lists every catalog entry with whether it is enabled: globally by default,
-    ///     or for the given <c>clientId</c> or <c>clientGroupId</c> (not both, which returns 400).
+    ///     This action lists every catalog entry with whether it is enabled: for every client by
+    ///     default, or for the given <c>clientId</c> or <c>clientGroupId</c> (not both, which
+    ///     returns 400).
     ///     Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpGet]
@@ -131,7 +140,8 @@ public class BlockedServicesController(
     ///     This action enables one catalog entry: it creates the entry's managed
     ///     <see cref="DnsFilterListEntity" /> if none exists or re-enables a disabled one, and,
     ///     with a <c>clientId</c> or <c>clientGroupId</c>, also assigns the list to that target if
-    ///     it is not already. Enabling an enabled entry just returns its state. Returns 400 when
+    ///     it is not already. Without a target it marks the list as applying to every client.
+    ///     Enabling an enabled entry just returns its state. Returns 400 when
     ///     both targets are given or the target does not exist, and 404 for an unknown key.
     ///     Requires <c>filterlists:write</c>.
     /// </summary>
@@ -195,10 +205,22 @@ public class BlockedServicesController(
                     + "it off from the Blocked Services page instead of deleting it here.",
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 OriginatingNodeId = clusterOptions.CurrentValue.NodeId,
+                AppliesToAllClients = clientId is null && clientGroupId is null,
             };
 
             await filterListRepository.AddAsync(list, stoppingToken);
             listChanged = true;
+        }
+
+        // The flag is what makes a toggle without a target block every client; it replicates with
+        // the list, so a change publishes like a new or re-enabled list does.
+        if (clientId is null && clientGroupId is null && !list.AppliesToAllClients)
+        {
+            list.AppliesToAllClients = true;
+            list.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            list.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+            listChanged = true;
+            filterListRepository.Update(list);
         }
 
         await EnsureAssignmentAsync(list.Id, clientId, clientGroupId, stoppingToken);
@@ -211,10 +233,13 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This action disables one catalog entry. Without a target it deletes the entry's managed
-    ///     <see cref="DnsFilterListEntity" />, its entries and every client and client-group
-    ///     assignment that refers to it (as <see cref="FilterListsController.Delete" /> does), and
-    ///     tells the cluster peers to delete the list too. With a <c>clientId</c> or
+    ///     This action disables one catalog entry. Without a target it clears
+    ///     <see cref="DnsFilterListEntity.AppliesToAllClients" />, so the service is no longer
+    ///     blocked for every client, and tells the cluster peers. The managed
+    ///     <see cref="DnsFilterListEntity" /> stays while a client or client group is still
+    ///     assigned to it; when none is, the action deletes the list and its entries (as
+    ///     <see cref="FilterListsController.Delete" /> does) and tells the peers to delete it. With
+    ///     a <c>clientId</c> or
     ///     <c>clientGroupId</c> it removes only that target's assignment, which stays on this node,
     ///     and leaves the list and every other target alone, so unblocking a service for one
     ///     device does not unblock it for everyone. Having nothing to remove is not
@@ -262,13 +287,56 @@ public class BlockedServicesController(
         }
         else
         {
-            await DeleteManagedListAsync(existing, stoppingToken);
+            await ClearGlobalToggleAsync(existing, stoppingToken);
             return NoContent();
         }
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
+    }
+
+    /// <summary>
+    ///     This method turns the global toggle off: it clears the flag, then deletes the list when
+    ///     no client or client group still uses it, and otherwise saves and publishes the changed
+    ///     list. A list that never had the flag (a global toggle that predates it, assigned to
+    ///     nobody) has nothing to clear and is deleted when unused, as before.
+    /// </summary>
+    private async Task ClearGlobalToggleAsync(
+        DnsFilterListEntity list,
+        CancellationToken stoppingToken
+    )
+    {
+        bool isUsed =
+            (
+                await listAssignmentRepository.ListAsync(
+                    assignment => assignment.ListId == list.Id,
+                    stoppingToken
+                )
+            ).Count > 0
+            || (
+                await clientListAssignmentRepository.ListAsync(
+                    assignment => assignment.ListId == list.Id,
+                    stoppingToken
+                )
+            ).Count > 0;
+
+        if (!isUsed)
+        {
+            await DeleteManagedListAsync(list, stoppingToken);
+            return;
+        }
+
+        if (!list.AppliesToAllClients)
+            return;
+
+        list.AppliesToAllClients = false;
+        list.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        list.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+        filterListRepository.Update(list);
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        eventPublisher.Publish(new DnsFilterListChangedEvent(DateTimeOffset.UtcNow, list.Id));
     }
 
     /// <summary>
@@ -340,7 +408,8 @@ public class BlockedServicesController(
 
     /// <summary>
     ///     This method assigns the managed list to the target unless it already is. Without a
-    ///     target it does nothing; the list is created or re-enabled but not assigned to anyone.
+    ///     target it does nothing; <see cref="Enable" /> marks the list as applying to every client
+    ///     instead.
     /// </summary>
     private async Task EnsureAssignmentAsync(
         Guid listId,
@@ -419,8 +488,8 @@ public class BlockedServicesController(
     /// <summary>
     ///     This method builds <see cref="BlockedServiceDetail" /> for an entry and its managed list
     ///     (or <see langword="null" />). Without a target,
-    ///     <see cref="BlockedServiceDetail.IsEnabled" /> is whether the list exists and is enabled;
-    ///     with one, whether that target also has an assignment of it.
+    ///     <see cref="BlockedServiceDetail.IsEnabled" /> is whether the list is enabled and
+    ///     applies to every client; with one, whether that target has an assignment of it.
     /// </summary>
     private async Task<BlockedServiceDetail> ToDetailAsync(
         BlockedServiceCatalogEntry entry,
@@ -450,7 +519,7 @@ public class BlockedServicesController(
         }
         else
         {
-            isEnabled = true;
+            isEnabled = managedList.AppliesToAllClients;
         }
 
         return new BlockedServiceDetail(
