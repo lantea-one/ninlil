@@ -19,7 +19,7 @@ namespace Ninlil.Dhcp.Server.Relay;
 ///     <para>
 ///         <b>It sends everything itself.</b> Other handlers return a reply for the listener to
 ///         send back to the sender, but a relay sends a modified request (hops incremented,
-///         <c>giaddr</c> set, Relay Agent Information possibly added) to the upstream servers, and
+///         <c>giaddr</c> set and Relay Agent Information added when the request came from a client) to the upstream servers, and
 ///         later sends the server's reply to the client subnet by a different rule.
 ///         <see cref="HandleRequestAsync" /> therefore always returns <see langword="null" /> and
 ///         sends through separate sockets.
@@ -197,7 +197,10 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
     /// <summary>
     ///     This method forwards a request, from a client or from another relay, by unicast to
     ///     every configured upstream server (RFC 1542 Section 4.1.1). It drops the request when no
-    ///     upstream is configured or the hop count has reached <see cref="MaxHops" />.
+    ///     upstream is configured, the hop count has reached <see cref="MaxHops" />, a client sent
+    ///     Relay Agent Information, or a relay configured to add the option sees its own address
+    ///     as <c>giaddr</c> (RFC 3046 Section 2.1.1). A request that already has a <c>giaddr</c>
+    ///     is forwarded with that <c>giaddr</c> and its relay agent options unchanged.
     /// </summary>
     private async Task RelayRequestUpstreamAsync(
         Dhcpv4Message request,
@@ -240,6 +243,28 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
             return;
         }
 
+        // Whether this relay adds Relay Agent Information, and the IDs it would add.
+        bool addsRelayAgentInformation = GetRelayAgentIds(
+            out byte[] circuitId,
+            out byte[] remoteId
+        );
+        bool hasGiaddr = !request.RelayAgentIpAddress.Equals(IPAddress.Any);
+
+        // RFC 3046 Section 2.1.1: a relay configured to add the option discards a packet whose
+        // giaddr spoofs the relay's own address, since only this relay may set that value.
+        if (
+            hasGiaddr
+            && addsRelayAgentInformation
+            && request.RelayAgentIpAddress.Equals(_addressProvider.Value)
+        )
+        {
+            _logger.LogWarning(
+                "Dropping a DHCPv4 request whose giaddr ({Giaddr}) is this relay's own address (RFC 3046 Section 2.1.1).",
+                request.RelayAgentIpAddress
+            );
+            return;
+        }
+
         // Every relay on the path increments "hops" (RFC 1542 Section 4.1.1).
         request.Hops = (byte)(request.Hops + 1);
 
@@ -249,14 +274,15 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
             request.RelayAgentIpAddress = _addressProvider.Value;
 
         // RFC 3046 Section 2.1: the relay agent adds the Relay Agent Information option to a
-        // request it forwards. With a Circuit ID or Remote ID configured, set the option,
-        // replacing any value already present. A request that carries the option and has no
-        // giaddr came straight from a client, which must not send one, was dropped above.
+        // request it receives from a client. With a Circuit ID or Remote ID configured, set the
+        // option. Section 2.1.1: a request that already has a giaddr was forwarded by a relay
+        // closer to the client, and is forwarded WITHOUT adding or replacing any relay agent
+        // option. (A client request that carries the option has no giaddr and was dropped above.)
         byte[] wireBytes;
 
         try
         {
-            if (GetRelayAgentIds(out byte[] circuitId, out byte[] remoteId))
+            if (addsRelayAgentInformation && !hasGiaddr)
                 request.SetRelayAgentInformation(circuitId, remoteId);
 
             wireBytes = Dhcpv4MessageWriter.Write(request);

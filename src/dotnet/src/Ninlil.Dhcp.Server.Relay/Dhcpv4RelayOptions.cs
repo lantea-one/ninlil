@@ -62,9 +62,12 @@ public sealed class Dhcpv4RelayOptions
     ///     This property optionally contains the RFC 3046 Section 3.1 Agent Circuit ID, as ASCII
     ///     text, which tells the upstream server which relay interface or circuit the client is
     ///     on. With it or <see cref="RelayAgentRemoteId" /> set, the relay puts a Relay Agent
-    ///     Information option (tag 82) on every request it forwards, replacing any already there
-    ///     (see <see cref="Common.Wire.Dhcpv4MessageOptionExtensions.SetRelayAgentInformation" />);
-    ///     with neither set, the option is left as received. The value must be printable ASCII
+    ///     Information option (tag 82) on every client request it forwards (see
+    ///     <see cref="Common.Wire.Dhcpv4MessageOptionExtensions.SetRelayAgentInformation" />). A
+    ///     request that already has a <c>giaddr</c> comes from another relay and is forwarded
+    ///     without adding or replacing the option (RFC 3046 Section 2.1.1), and one whose
+    ///     <c>giaddr</c> is this relay's own address is dropped. With neither ID set, the option is
+    ///     left as received. The value must be printable ASCII
     ///     and at most 253 bytes, and the two IDs together at most 251 bytes
     ///     (see <see cref="TryValidateRelayAgentIds" />). With an invalid value the relay logs an
     ///     error once and forwards requests without the option.

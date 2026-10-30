@@ -325,6 +325,122 @@ public sealed class Dhcpv4RelayAgentTests
         Assert.Equal("upstream-relay", System.Text.Encoding.ASCII.GetString(circuitId));
     }
 
+    // RFC 3046 Section 2.1.1: a request with a valid non-zero giaddr is forwarded WITHOUT adding
+    // or replacing relay agent options, even when this relay is configured to add them.
+    [Fact]
+    public async Task ChainedRequestWithOption82_WhenTheRelayAddsIds_KeepsTheOptionAndGiaddrUnchanged()
+    {
+        int upstreamPort = GetFreeUdpPort();
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            IPAddress.Parse("127.0.0.20"),
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamPort,
+            circuitId: "this-relay",
+            remoteId: "this-remote"
+        );
+
+        await agent.HandleRequestAsync(
+            CreateDiscover(giaddr: IPAddress.Parse("127.0.0.21"), withOption82: true),
+            new IPEndPoint(IPAddress.Loopback, 0),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        UdpReceiveResult received = await upstreamSocket.ReceiveAsync(timeout.Token);
+        Assert.True(
+            Dhcpv4MessageReader.TryRead(received.Buffer, out Dhcpv4Message forwarded, out _)
+        );
+        Assert.Equal(IPAddress.Parse("127.0.0.21"), forwarded.RelayAgentIpAddress);
+        Assert.True(forwarded.TryGetRelayAgentCircuitId(out byte[] circuitId));
+        Assert.Equal("upstream-relay", System.Text.Encoding.ASCII.GetString(circuitId));
+        Assert.False(forwarded.TryGetRelayAgentRemoteId(out _));
+    }
+
+    [Fact]
+    public async Task ChainedRequestWithoutOption82_WhenTheRelayAddsIds_IsForwardedWithoutOne()
+    {
+        int upstreamPort = GetFreeUdpPort();
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            IPAddress.Parse("127.0.0.22"),
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamPort,
+            circuitId: "this-relay",
+            remoteId: "this-remote"
+        );
+
+        await agent.HandleRequestAsync(
+            CreateDiscover(giaddr: IPAddress.Parse("127.0.0.23"), withOption82: false),
+            new IPEndPoint(IPAddress.Loopback, 0),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        UdpReceiveResult received = await upstreamSocket.ReceiveAsync(timeout.Token);
+        Assert.True(
+            Dhcpv4MessageReader.TryRead(received.Buffer, out Dhcpv4Message forwarded, out _)
+        );
+        Assert.Equal(IPAddress.Parse("127.0.0.23"), forwarded.RelayAgentIpAddress);
+        Assert.False(forwarded.TryGetRelayAgentCircuitId(out _));
+        Assert.False(forwarded.TryGetRelayAgentRemoteId(out _));
+    }
+
+    // RFC 3046 Section 2.1.1: a relay configured to add the option discards a packet whose giaddr
+    // spoofs the relay's own address.
+    [Fact]
+    public async Task RequestWhoseGiaddrIsTheRelaysOwnAddress_WhenTheRelayAddsIds_IsNotForwarded()
+    {
+        int upstreamPort = GetFreeUdpPort();
+        IPAddress relayAddress = IPAddress.Parse("127.0.0.24");
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            relayAddress,
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamPort,
+            circuitId: "this-relay"
+        );
+
+        await agent.HandleRequestAsync(
+            CreateDiscover(giaddr: relayAddress, withOption82: false),
+            new IPEndPoint(IPAddress.Loopback, 0),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(300));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await upstreamSocket.ReceiveAsync(timeout.Token)
+        );
+    }
+
+    // The spoof rule applies only to a relay configured to add the option (RFC 3046 Section
+    // 2.1.1), so a relay without IDs keeps forwarding such a request.
+    [Fact]
+    public async Task RequestWhoseGiaddrIsTheRelaysOwnAddress_WhenTheRelayAddsNoIds_IsForwarded()
+    {
+        int upstreamPort = GetFreeUdpPort();
+        IPAddress relayAddress = IPAddress.Parse("127.0.0.25");
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            relayAddress,
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamPort
+        );
+
+        await agent.HandleRequestAsync(
+            CreateDiscover(giaddr: relayAddress, withOption82: false),
+            new IPEndPoint(IPAddress.Loopback, 0),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        UdpReceiveResult received = await upstreamSocket.ReceiveAsync(timeout.Token);
+        Assert.True(
+            Dhcpv4MessageReader.TryRead(received.Buffer, out Dhcpv4Message forwarded, out _)
+        );
+        Assert.Equal(relayAddress, forwarded.RelayAgentIpAddress);
+    }
+
     [Fact]
     public async Task Reply_ForAGiaddrOnALocalLink_LeavesFromTheGiaddr()
     {
