@@ -123,14 +123,16 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   **RFC 7873 DNS Cookies** for abuse hardening.
 - **A persistent, searchable query log** with configurable privacy levels and a per-client activity
   view.
-- **Outbound subscribable webhooks** for zone changes, DNSSEC re-signing, ACME renewal outcomes,
-  cloud sync failures, and trust-anchor rollovers, with persisted delivery retry that survives a
-  restart.
+- **Outbound subscribable webhooks** for zone changes, cache evictions, DNSSEC re-signing, ACME
+  renewal outcomes, cloud sync failures, and trust-anchor rollovers, with persisted delivery retry
+  that survives a restart. See [Clustering, events and webhooks](#clustering-events-and-webhooks).
 - **Multi-node clustering**: membership, heartbeat, catalog-zone auto-sync, operational config
-  sync, and identity/RBAC federation across nodes, with an aggregate cluster dashboard.
+  sync, and identity/RBAC federation across nodes, with an aggregate cluster dashboard. See
+  [Clustering, events and webhooks](#clustering-events-and-webhooks).
 - **Configuration presets** (`Open` / `Baseline` / `Protective` / `Family` / `FIPS`) that apply a
   curated bundle of hardening settings and blocklist subscriptions in one call.
-- **Full-system, passphrase-encrypted backup and restore**, and a check-only self-update notifier.
+- **Full-system, passphrase-encrypted backup and restore** (see [Backup and restore](#backup-and-restore)),
+  and a self-update notifier that only checks a release feed you host (see [Self-update](#self-update)).
 
 ### DHCP, DHCPv6 & Router Advertisement
 
@@ -3146,28 +3148,654 @@ port 69. A scope's boot file name and next-server address drive what clients rec
 
 ### Clustering, events and webhooks
 
-Nodes can form a cluster that shares membership and operational settings. Events reach the console
-through SignalR and can go to a RabbitMQ or ActiveMQ broker; webhooks send them to URLs you
-subscribe. The settings are in
-[Webhooks, backup, self-update & clustering](./ENVIRONMENT.md#webhooks-backup-self-update--clustering)
-and [Event broker (message queue) transports](./ENVIRONMENT.md#event-broker-message-queue-transports).
+#### What it does
+
+This guide covers three ways Ninlil moves information to other servers and systems.
+
+- **A cluster** joins two or more Ninlil servers, called **nodes**. Every node keeps a separate
+  database, separate caches and separate DNS answers, and serves queries by itself. The nodes
+  exchange heartbeats, push configuration changes to each other and answer each other's dashboard
+  queries. Clustering is off by default.
+- **Events** are the messages Ninlil publishes inside the process when something happens (a zone
+  changes, a certificate renews, a lease is granted). Every event reaches the subscribers in the
+  same process directly. The admin console's live feed receives four of them over SignalR, at
+  `/hubs/events`. An optional **event broker** (RabbitMQ or ActiveMQ) carries events to other Ninlil
+  instances and to programs outside Ninlil.
+- **Webhooks** send seven kinds of event to a URL you choose, as an HTTP `POST` with a JSON body.
+  Failed deliveries are retried and recorded.
+
+The cluster channel is a set of REST endpoints under `/api/cluster/channel/` on the web HTTPS port.
+Each request is signed with a TSIG key that the invite creates, and TLS encrypts the connection.
+
+**What a cluster copies between nodes.** A change is pushed once, when you save it, to every known
+peer:
+
+| Copied | Details |
+|---|---|
+| Users and roles | Including password hashes and two-factor secrets. See [Security](#security). |
+| Filter lists and their entries | Includes the setting that makes a [blocked service apply to every client](#filtering-rewrites-and-parental-controls). The assignment of a list to a client or group stays on its node. |
+| Access control rules and forwarders | |
+| Global rewrites | A rewrite scoped to a client or group stays on its node. |
+| Five settings sections | Event broker, Rate limiting, DNS Cookies, Reverse proxy and the DNS Rewrites settings page. Turning on a Safe Search rewrite also turns the rewrite engine on for every node. |
+
+**What a cluster does not copy:** zones and records (use zone transfers or catalog zones, see
+[Secondary zones and transfers](#secondary-zones-and-transfers)), refresh tokens and API tokens,
+webhook subscriptions, DHCP data, clients and client groups, TLS certificates and the JWT signing
+key.
+
+#### Before you start
+
+1. Two or more Ninlil servers, each able to reach the web HTTPS port of the others. Run one Ninlil
+   version on all of them: a peer on older code can send a change the other node cannot read, and
+   that node logs a warning and drops it. Check from one node (`<node-b>` is the other node's name
+   or address; `-k` accepts the self-signed certificate):
+
+   ```bash
+   curl -k -s -o /dev/null -w '%{http_code}\n' https://<node-b>/status
+   ```
+
+   ```text
+   200
+   ```
+
+2. An account on each node with the `clustersettings:write` and `clusternodes:write`
+   permissions (the bootstrap administrator has them) and its access token. Get the token as in
+   [REST API](#rest-api). The commands below call it `<token-a>` for node A and `<token-b>` for
+   node B.
+3. One random value for the JWT signing key, used on every node. This command prints one:
+
+   ```bash
+   openssl rand -base64 48
+   ```
+
+   ```text
+   PBWhpKyqXHi+kJVU8e4noRrUgf6lEz65U5c3591BlKXGCB1BzbfD/XuskIqB5Uj4
+   ```
+
+   (your value differs). The commands below call it `<jwt-key>`.
+4. To use an event broker: a RabbitMQ or ActiveMQ Classic server that every node reaches. Ninlil
+   was run against RabbitMQ 4.1 and ActiveMQ Classic 6.1.7.
+5. To use webhooks: a web address that accepts `POST` requests with a JSON body.
+
+#### Steps
+
+**Form a cluster.** Node A invites, node B joins.
+
+1. On every node, set the same JWT signing key and restart the node. The key is read at startup;
+   see [`NINLIL_JWT_SIGNING_KEY`](./ENVIRONMENT.md#identity-authentication--sso). For a container
+   add `-e NINLIL_JWT_SIGNING_KEY=<jwt-key>` to the `docker run` command, for a Linux package put
+   `NINLIL_JWT_SIGNING_KEY=<jwt-key>` in `/etc/ninlil/ninlil.env`.
+
+   Why: Ninlil checks an access token's signature with this key, and its issuer, audience and
+   expiry. It looks nothing up in a database, and the token itself carries the permissions. A token
+   that node A signed is therefore accepted by node B only when both use the same key. Without it,
+   every client that moves from one node to the other gets `401`. Use a value of at least 32 bytes:
+   a key shorter than 16 bytes makes every sign-in fail with HTTP 500.
+2. On every node, switch clustering on and tell the node which address its peers use. Run this on
+   node A and again on node B with that node's name (`<node-a>` is the name or IP address peers
+   use to reach this node, without `https://`):
+
+   ```bash
+   curl -k -X PATCH https://<node-a>/api/cluster-settings -H 'Authorization: Bearer <token-a>' -H 'Content-Type: application/json' -d '{"enable":true,"advertisedHost":"<node-a>"}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   ```
+
+   If the HTTPS port is not 443, add `"advertisedPort":<port>`. The default `0` means the
+   web HTTPS port.
+3. On node A, create an invite:
+
+   ```bash
+   curl -k -X POST https://<node-a>/api/cluster/nodes/invite -H 'Authorization: Bearer <token-a>'
+   ```
+
+   ```text
+   {"inviteCode":"ninlil-cluster-invite-1.eyJWZXJzaW9uIjoxLC...","expiresAtUtc":"2026-10-30T22:23:38.6298395+00:00"}
+   ```
+
+   Copy the `inviteCode` value. The code holds the secret of a TSIG key that only the join can
+   use, so treat it like a password and send it over a private channel. It works for 15 minutes.
+4. On node B, join with that code. The display name is optional and names the peer on both nodes:
+
+   ```bash
+   curl -k -X POST https://<node-b>/api/cluster/nodes/join -H 'Authorization: Bearer <token-b>' -H 'Content-Type: application/json' -d '{"inviteCode":"<invite-code>","displayName":"office"}'
+   ```
+
+   ```text
+   {"id":"3e098494-...","name":"office","remoteNodeId":"98925e78-...","host":"<node-a>","port":443,"status":"Joining", ...
+   ```
+
+   The console does the same on the **Cluster** page (**Invite a peer** and **Join a cluster**).
+
+**Switch on an event broker** (optional). Do this on every node that should share events.
+
+1. Set the transport and the connection in the environment of every node's Ninlil process, then
+   restart it. The transport is chosen before the program starts, so the console cannot switch it
+   live. For a Linux package, put these lines in `/etc/ninlil/ninlil.env`; for a container, give
+   each as `-e <line>`. For RabbitMQ:
+
+   ```text
+   NINLIL_DNS_SERVER_EVENTS_TRANSPORT=RabbitMq
+   NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_HOST_NAME=<broker-host>
+   NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_USER_NAME=<user>
+   NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PASSWORD=<password>
+   ```
+
+   For ActiveMQ use `ActiveMq` and the `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_*` variables. Every
+   variable is listed in [Event broker (message queue) transports](./ENVIRONMENT.md#event-broker-message-queue-transports).
+2. Look for the connection line in the log:
+
+   ```text
+   info: Ninlil.Dns.Server.Events.RabbitMq.RabbitMqDnsServerEventBrokerTransport[0]
+         Connected to the RabbitMQ event broker at <broker-host>:5672.
+   ```
+
+**Create a webhook.**
+
+1. Start a receiver. For a first test, save this program as `receiver.py` and run
+   `python3 receiver.py` in a second terminal. It prints each request and answers `204`:
+
+   ```python
+   import http.server
+
+
+   class Receiver(http.server.BaseHTTPRequestHandler):
+       def do_POST(self):
+           body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+           print(self.headers.get("Authorization"), self.headers.get("X-Ninlil-Signature"))
+           print(body.decode(), flush=True)
+           self.send_response(204)
+           self.send_header("Content-Length", "0")
+           self.end_headers()
+
+       def log_message(self, *args):
+           return
+
+
+   http.server.HTTPServer(("127.0.0.1", 8099), Receiver).serve_forever()
+   ```
+
+2. Create the subscription on one node. Webhook subscriptions are not copied to other nodes, so
+   repeat this on each node that should send. `BearerToken` is the secret your receiver checks in
+   the `Authorization` header. `enableHmacSigning` adds a signature header (see below):
+
+   ```bash
+   curl -k -X POST https://<node-a>/api/webhooks -H 'Authorization: Bearer <token-a>' -H 'Content-Type: application/json' -d '{"name":"zone-changes","targetUrl":"http://127.0.0.1:8099/hook","eventTypeNames":["DnsZoneChanged"],"authMode":"Bearer","authCredentials":{"BearerToken":"demo-token"},"enableHmacSigning":true,"maxDeliveryAttempts":3}'
+   ```
+
+   ```text
+   {"subscription":{"id":"<webhook-id>","name":"zone-changes", ...},"authCredentials":{"BearerToken":"demo-token"},"hmacSigningSecret":"1hp++cErLc4L..."}
+   ```
+
+   Copy the `id` and the `hmacSigningSecret`. This response is the only time Ninlil shows the
+   secret. The console's **Webhooks** page does the same and shows the secret once in a dialog.
+3. Trigger an event by creating a zone (a zone change fires `DnsZoneChanged`):
+
+   ```bash
+   curl -k -X POST https://<node-a>/api/zones -H 'Authorization: Bearer <token-a>' -H 'Content-Type: application/json' -d '{"name":"hook.test","type":"Primary"}'
+   ```
+
+4. Read the receiver's terminal. The first line holds the `Authorization` header and the
+   `X-Ninlil-Signature` header, the second line the body:
+
+   ```text
+   Bearer demo-token 58d60900e3f76305954b0bc2fab282e367720351b486c8685d35802e0e0fc538
+   {"eventType":"DnsZoneChanged","deliveredAtUtc":"2026-10-30T22:45:58.1965544+00:00","data":{"occurredAtUtc":"2026-10-30T22:45:58.1904269\u002B00:00","zoneId":"548100cf-...","zoneName":"hook.test"}}
+   ```
+
+5. Check the signature. The header holds the lowercase hexadecimal HMAC-SHA256 of the request
+   body, keyed with the secret text from step 2. Paste the body line between the quotes:
+
+   ```bash
+   printf '%s' '<body>' | openssl dgst -sha256 -hmac '<hmac-signing-secret>'
+   ```
+
+   ```text
+   SHA2-256(stdin)= 58d60900e3f76305954b0bc2fab282e367720351b486c8685d35802e0e0fc538
+   ```
+
+   The value equals the `X-Ninlil-Signature` header from step 4.
+
+#### Check that it worked
+
+Each command below runs on node A unless it says otherwise.
+
+1. The cluster lists the peer, `Healthy` within one heartbeat (30 seconds by default):
+
+   ```bash
+   curl -k https://<node-a>/api/cluster/nodes -H 'Authorization: Bearer <token-a>'
+   ```
+
+   ```text
+   {"items":[{"id":"71b5848a-...","name":"office","remoteNodeId":"d90596e8-...","host":"<node-b>","port":443,"status":"Healthy","lastHeartbeatAtUtc":"2026-10-30T22:08:43.407613+00:00","missedHeartbeatCount":0, ...}],"skip":0,"take":50,"totalCount":1}
+   ```
+
+2. A setting that the cluster copies reaches the other node. Switch the rewrite engine on at node A,
+   wait a second, then read it at node B:
+
+   ```bash
+   curl -k -X PATCH https://<node-a>/api/rewrite-settings -H 'Authorization: Bearer <token-a>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   curl -k https://<node-b>/api/rewrite-settings -H 'Authorization: Bearer <token-b>'
+   ```
+
+   ```text
+   {"enable":true,"timeToLiveSeconds":300,"lastModifiedUtc":"2026-10-30T22:09:02.5367468+00:00","originatingNodeId":"98925e78-..."}
+   ```
+
+   `originatingNodeId` names the node where the change was made.
+3. A token from node A works on node B when both use the same key. Sign in at node A, then call
+   node B with that access token (`<token-a>`). The result is `200`. With different keys it is
+   `401`:
+
+   ```bash
+   curl -k -s -o /dev/null -w '%{http_code}\n' https://<node-b>/api/zones -H 'Authorization: Bearer <token-a>'
+   ```
+
+   ```text
+   200
+   ```
+
+4. The webhook delivery shows as `Succeeded`:
+
+   ```bash
+   curl -k https://<node-a>/api/webhooks/<webhook-id>/delivery-attempts -H 'Authorization: Bearer <token-a>'
+   ```
+
+   ```text
+   {"items":[{"id":"...","subscriptionName":"zone-changes","eventTypeName":"DnsZoneChanged", ... "status":"Succeeded","attemptCount":1,"maxAttempts":3,"lastHttpStatusCode":204, ...}],"skip":0,"take":50,"totalCount":1}
+   ```
+
+5. With a broker, the log has the line from the broker step. `GET /status` (signed in) shows the
+   `eventBroker` component as `Connected to the RabbitMq event broker.`
 
 #### Behaviour worth knowing
 
-- **In a Ninlil cluster, a change made on one node reaches the others' DNS answers after a delay.**
-  Each node keeps its own database and caches. On the node where you make a change, the answer
-  changes at once. On the other nodes, filter and client settings, rewrites, client schedules and
-  forwarder zones show up after at most 60 seconds, and the entries of a filter list after at most
-  5 minutes. With a [read replica](#read-replicas-and-database-clusters), add the replica's lag
-  limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by default).
+- **A cluster pushes a change once, when you save it.** Ninlil keeps no backlog. A node that was
+  down, or had not joined yet, during a change does not receive it later. To bring such a node up
+  to date, save each of the five synced settings pages once on any node (**Event broker**,
+  **Rate limiting**, **DNS Cookies**, **Reverse proxy** and **DNS Rewrites** under **Settings**),
+  and save the other copied items again; every save is sent. The newest write wins on every node.
+  When two writes carry the same time, every node settles it the same way.
+- **A synced setting follows the same restart rule on each node.** The save on node A may say
+  "restart required". The same value reaches node B at once, but node B also needs the restart
+  before the setting works. The settings page on B shows the updated `lastModifiedUtc` while it still
+  runs the old value.
+- **An environment variable pins a synced value on its node.** The cluster still writes the
+  received value into that node's configuration file, but the variable wins when the node reads
+  its settings. Remove the variable and restart the node to follow the cluster again.
+- **After a restore on another machine, the old access tokens stop working.** The backup does not
+  hold the JWT key. Refresh tokens and API tokens come back, because they are database rows. See
+  [Backup and restore](#backup-and-restore).
+- **Refresh tokens and API tokens belong to the node that issued them.** Behind a load balancer,
+  send each client to the same node, or the client signs in again when a refresh request reaches
+  another node. Access tokens work on every node that shares the JWT key.
+- **A user name is checked on the peers.** Creating a user asks every healthy peer whether the name
+  exists and returns `409` if one has it. A peer that cannot be reached is skipped.
+- **A change on another node reaches DNS answers after a delay.** On the node where you make a
+  change, the answer changes at once. On the other nodes, filter and client settings, rewrites,
+  client schedules and forwarder zones show up after at most 60 seconds, and the entries of a
+  filter list after at most 5 minutes. With a [read replica](#read-replicas-and-database-clusters),
+  add the replica's lag limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by
+  default).
+- **Static address mappings and DHCP leases refresh every 30 seconds.** Ninlil keeps them in memory
+  for client identification. A change another process makes in the same database (a second
+  instance, a direct edit) reaches the in-memory copy within 30 seconds. A change made in this
+  process reaches it at once.
+- **An unreachable peer is marked after three missed heartbeats.** The default heartbeat is
+  every 30 seconds, so the mark appears after about a minute and a half, and `GET /status` shows the
+  `cluster` component as `Degraded` while a peer is `Unreachable`. A peer that answers again turns
+  `Healthy` at the next heartbeat.
+- **Every event reaches the process that made it directly.** The broker adds the other
+  instances. Each event carries the id of the instance that made it, and an instance drops the
+  events the broker sends back to it. An instance acts only on events it made, with one
+  exception: the console's live feed also shows events from every instance that shares the
+  broker. A `DnsZoneChanged` from another instance, for example, does not trigger this
+  instance's webhooks, NOTIFY or cache reloads.
+- **The broker carries every event except settings sync.** The settings-sync event holds settings
+  values, secrets included, so it never leaves the process. Cluster sync uses the cluster channel.
+- **Under load, per-query events are dropped first.** Per-query events (`DnsQueryReceived`,
+  `DnsQueryAnswered`) wait in a bounded queue
+  ([`NINLIL_DNS_SERVER_EVENTS_CAPACITY`](./ENVIRONMENT.md#query-pipeline--cross-cutting-dns-behavior),
+  10000 by default). When it is full the oldest are dropped, and one warning a minute reports how
+  many. Every other event stays in an unbounded queue and is never dropped there. The queue that
+  feeds the broker is bounded for every event type: when it is full, the oldest event is dropped.
+- **Upgrade every instance that shares a broker together.** An instance that receives an event
+  name it does not know logs one warning per name, `Ignored an event of type '<name>' from the
+  message broker; it is unknown here or may not cross the broker. Upgrade every instance that
+  shares a broker together.`, and drops the event.
+- **ActiveMQ gives up on a failure the client cannot retry.** A network outage is retried with a
+  growing delay. A failure such as wrong credentials is not retried: the log says `Failed to
+  connect to the ActiveMQ event broker at <host>:<port>; this transport instance will remain
+  unavailable until restarted.` Fix the credentials and restart the node.
+- **Delivery retries double the wait.** After a failed delivery Ninlil waits one second, then two,
+  then four, up to 30 seconds ([`NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_INITIAL_RETRY_DELAY`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering)
+  and `..._MAX_RETRY_DELAY`). A subscription tries a delivery up to `maxDeliveryAttempts` times
+  (5 when you give none). The delivery is then `DeadLettered`, and `GET /status` shows the
+  `webhookDelivery` component as `Degraded` for the next hour. A retry waits in the database, so it
+  survives a restart. If Ninlil stops during the first attempt, before it saves the attempt, that
+  delivery is lost.
+- **A webhook can reach any address the server can.** Ninlil does not limit target addresses: a
+  `POST` to `http://127.0.0.1:8099/hook` works. Give `webhooks:write` only to people you trust
+  with that.
+- **The seven events a webhook can deliver:**
+
+  | Event name | When it fires | `data` fields |
+  |---|---|---|
+  | `DnsZoneChanged` | A zone's records or settings change: a record edit through the API, a dynamic update, a completed zone transfer. | `occurredAtUtc`, `zoneId`, `zoneName` |
+  | `DnsCacheEvicted` | A forwarder or recursive cache removes entries (expired, over the size limit, flushed or removed by name). | `occurredAtUtc`, `reason`, `entryCount` |
+  | `DnssecZoneResigningCompleted` | A signed zone finishes signing (after a change, before signatures expire, or at startup). | `occurredAtUtc`, `zoneId`, `zoneName`, `signatureExpiresAtUtc` |
+  | `AcmeCertificateRenewalSucceeded` | A certificate is issued or renewed. | `occurredAtUtc`, `domain`, `expiresAtUtc` |
+  | `AcmeCertificateRenewalFailed` | A certificate issue or renewal fails. The service retries at its next poll. | `occurredAtUtc`, `domain`, `errorMessage` |
+  | `CloudDnsZoneSyncFailed` | A cloud-synced zone cannot be reconciled with its provider. | `occurredAtUtc`, `zoneId`, `zoneName`, `errorMessage` |
+  | `TrustAnchorRollover` | A root trust anchor becomes `Valid` or is revoked (RFC 5011). | `occurredAtUtc`, `keyTag`, `newState` |
+
+  Any other name in `eventTypeNames` is refused with `400`, and the message lists the seven.
+- **What a delivery looks like.** Ninlil sends a `POST` with `Content-Type: application/json`. With
+  `authMode` `Bearer` it adds `Authorization: Bearer <token>`, with `Basic` an HTTP Basic header
+  (`{"Username":"...","Password":"..."}` in `authCredentials`), with `None` no header. With
+  `enableHmacSigning` it adds `X-Ninlil-Signature`. The body is
+  `{"eventType":"...","deliveredAtUtc":"...","data":{...}}`, and `deliveredAtUtc` is the time of the
+  first attempt, also on a retry.
+- **The signing secret cannot be changed.** `PUT` and `PATCH` leave it alone. To rotate it, delete
+  the subscription and create it again.
+
+#### Settings
+
+| Setting | Variable and row |
+|---|---|
+| Clustering on or off, this node's address and the heartbeat | [`NINLIL_CLUSTER_ENABLE`, `NINLIL_CLUSTER_ADVERTISED_HOST`, `NINLIL_CLUSTER_ADVERTISED_PORT`, `NINLIL_CLUSTER_HEARTBEAT_INTERVAL`, `NINLIL_CLUSTER_HEARTBEAT_TIMEOUT`, `NINLIL_CLUSTER_MISSED_HEARTBEAT_THRESHOLD`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering). The node id is generated and kept in `data/cluster-node-id.txt`. Console page: **Settings**, **Cluster**. |
+| The key that signs access tokens | [`NINLIL_JWT_SIGNING_KEY`](./ENVIRONMENT.md#identity-authentication--sso) |
+| Which event transport runs | [`NINLIL_DNS_SERVER_EVENTS_TRANSPORT`](./ENVIRONMENT.md#query-pipeline--cross-cutting-dns-behavior) |
+| Broker connection | [Event broker (message queue) transports](./ENVIRONMENT.md#event-broker-message-queue-transports). Console page: **Settings**, **Event broker**. |
+| Webhook delivery timing | [`NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_*`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering). Console page: **Settings**, **Webhook Delivery**. |
+
+#### When something goes wrong
+
+- *Creating an invite answers `Clustering is not enabled on this node -- set 'Cluster:Enable' before inviting a peer.`* Run step 2 of "Form a cluster" on that node.
+- *It answers `This node's own 'Cluster:AdvertisedHost' has not been configured -- a peer would have no way to reach it.`* Set `advertisedHost` (step 2).
+- *Joining answers `This does not look like a Ninlil cluster invite code.`* The code was cut or changed on the way. Copy the whole value of `inviteCode`.
+- *Joining answers `409` with `This node is already a member of that peer's cluster.`* The two nodes are joined. List them with `GET /api/cluster/nodes`.
+- *Joining fails because the inviter cannot be reached, or because the code has expired.* Check that node B reaches node A's address and port, then create another invite on node A (an invite works for 15 minutes) and join again. A failed join leaves nothing behind, so you can repeat it.
+- *A peer stays `Unreachable`.* Check that the peer is running and that the address in its row (`host` and `port`) reaches its HTTPS port from this node. The peer turns `Healthy` at the next heartbeat after it answers.
+- *A token from one node gets `401` on another.* The nodes use different `NINLIL_JWT_SIGNING_KEY` values, or one of them runs another `NINLIL_JWT_ISSUER` or `NINLIL_JWT_AUDIENCE`. Set the same values on every node and restart.
+- *A webhook delivery is `DeadLettered`.* Read `lastErrorMessage` and `lastHttpStatusCode` in the delivery attempt (`GET /api/webhooks/<webhook-id>/delivery-attempts`). The receiver must answer with a status from 200 to 299.
+- *A webhook never fires.* A subscription fires only for events this instance produced. Check that `isDisabled` is `false` and that the event name is in `eventTypeNames`.
+- *The log says `Failed to connect to the ActiveMQ event broker ...`.* See the ActiveMQ item above.
 
 ### Security
 
-Sign in with the bootstrap administrator once, then create accounts with the permissions each person
-needs (see [Using the admin console](#using-the-admin-console)).
+#### What it does
 
-On Windows, the Data Protection key ring and the JWT signing key are stored as plain files in
-`data\` (they are not tied to a Windows account). Protect the folder with its permissions.
+This guide lists what protects a Ninlil installation, what it leaves to you, and the steps that
+harden a fresh installation. It covers accounts and permissions, sign-in limits, tokens, and the
+files Ninlil keeps secret. Every setting it names links to its row in
+[`ENVIRONMENT.md`](./ENVIRONMENT.md).
+
+Ninlil checks every REST request against a permission string of the form `resource:action`, such as
+`zones:write`. A role is a named set of permissions, and an account gets permissions from its roles
+and from direct grants. The permission `*` allows everything.
+
+#### Before you start
+
+1. A running Ninlil and shell access to the host it runs on.
+2. An account that holds `*` (the bootstrap administrator does) and its access token. Get it as in
+   [REST API](#rest-api). The commands below call it `<token>`.
+3. The location of the [data directory](#the-data-directory).
+
+#### Steps
+
+**Protect the data directory.** It holds the database, the key ring, the JWT signing key and the
+TLS certificate with its private key.
+
+1. On Linux and macOS, Ninlil sets the folder to mode 0700 (owner only) when it starts. Check it,
+   with the path from [The data directory](#the-data-directory):
+
+   ```bash
+   stat -c '%a %n' <data-directory>
+   ```
+
+   ```text
+   700 /var/lib/ninlil
+   ```
+
+   The key files inside are created with mode 600.
+2. On Windows, a folder has an access list instead of a mode. List it:
+
+   ```powershell
+   icacls C:\Ninlil\data
+   ```
+
+   Only the service account (see [Windows](#windows)), `BUILTIN\Administrators` and
+   `NT AUTHORITY\SYSTEM` should appear. A line for `BUILTIN\Users` or `NT AUTHORITY\Authenticated Users` means other
+   accounts can read the keys. To remove them, switch off inheritance, which copies the inherited
+   entries, then remove the two groups:
+
+   ```powershell
+   icacls C:\Ninlil\data /inheritance:d
+   icacls C:\Ninlil\data /remove "BUILTIN\Users" "NT AUTHORITY\Authenticated Users"
+   ```
+
+3. In a container, the data directory is the volume you mount at `/app/data` (see
+   [Running with Docker](#running-with-docker)). The container runs as user `1654` and sets the
+   folder to mode 0700 itself. Keep the volume's folder on the host readable only by the people
+   who administer the host.
+
+**Replace the bootstrap administrator.** The bootstrap account `admin` holds `*`. Ninlil creates it
+only while no account exists, and never deletes it.
+
+1. Create an account for yourself. The password needs at least 12 characters with an upper-case
+   letter, a lower-case letter, a digit and a symbol, and the e-mail address must be unique:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/users -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"userName":"alice","password":"Correct-Horse-9!","email":"alice@example.com","displayName":"Alice"}'
+   ```
+
+   ```text
+   {"id":"<user-id>","userName":"alice","email":"alice@example.com","displayName":"Alice","isDisabled":false,"twoFactorEnabled":false,"roles":[],"directPermissions":[], ...}
+   ```
+
+   Copy the `id`. The commands below call it `<user-id>`.
+2. Put the account in the `Administrators` role, which holds `*`. Only a holder of `*` can do this:
+
+   ```bash
+   curl -k -X POST https://127.0.0.1:18443/api/users/<user-id>/roles -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"roleName":"Administrators"}'
+   ```
+
+   The answer is an empty `204`.
+3. Sign in as that account (see [REST API](#rest-api)) and use its token from here on. The next
+   command calls it `<alice-token>`.
+4. Disable the bootstrap account. `PUT` replaces the display name, the e-mail address and the
+   disabled flag, so send all three; `<admin-id>` is the `id` of `admin` in `GET /api/users`:
+
+   ```bash
+   curl -k -X PUT https://127.0.0.1:18443/api/users/<admin-id> -H "Authorization: Bearer <alice-token>" -H 'Content-Type: application/json' -d '{"displayName":"Administrator","email":"admin@localhost.local","isDisabled":true}'
+   ```
+
+   Ninlil answers `204`. Sign-in and API tokens of a disabled account are refused. The account stays
+   in the list, so you can switch it back on with `"isDisabled":false`.
+
+**Give each person the permissions they need.**
+
+1. List the permission strings the server knows:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/permissions -H "Authorization: Bearer <token>"
+   ```
+
+2. Create a role and grant it permissions. Records use the zone permissions:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/roles -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"name":"zone-editor","description":"Edits zones and records"}'
+   curl -k https://127.0.0.1:18443/api/roles/<role-id>/permissions -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"permission":"zones:write"}'
+   curl -k https://127.0.0.1:18443/api/roles/<role-id>/permissions -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"permission":"zones:read"}'
+   ```
+
+   `<role-id>` is the `id` in the answer to the first command. You can grant only permissions you
+   hold yourself. The console does the same on **Roles** and **Users**.
+
+**Switch on two-factor sign-in** for every administrator. Open the account menu in the top-right
+corner of the console, choose **Security**, and follow the steps for an authenticator app or for
+e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes need
+[SMTP](./ENVIRONMENT.md#identity-authentication--sso) settings.
+
+**Limit who reaches the console.**
+
+1. The REST API and the console answer on both web ports. The plain-HTTP port has no TLS, so it
+   carries passwords and tokens in the clear. Check it:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/zones
+   ```
+
+   ```text
+   401
+   ```
+
+   The `401` shows that the API answers on the HTTP port. Close that port in your firewall, or
+   limit both web ports to one address with
+   [`NINLIL_DNS_SERVER_WEB_LISTEN_ADDRESSES`](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding).
+2. Behind a reverse proxy, tell Ninlil the proxy's address, so it takes the client's address
+   from the proxy's `X-Forwarded-For` header. Without that, the sign-in limit sees only the proxy's
+   address and counts every user together. Ninlil reads this setting at startup, so restart it
+   afterwards (`<proxy-address>` is the address the proxy connects from):
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/reverse-proxy-settings -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"enable":true,"knownProxies":["<proxy-address>"]}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   ```
+
+   The console page is **Settings**, **Reverse proxy**. A shared secret header and network ranges
+   are optional; see the [Web host rows](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding).
+3. Replace the self-signed certificate with one from [Certificates (ACME)](#certificates-acme) or
+   a PFX file, set with `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PATH` (see the
+   [Web host](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding) rows).
+
+#### Check that it worked
+
+1. The data directory is private (step 1 above printed `700`).
+2. A weak password is refused:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/users -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"userName":"bob","password":"short1!","email":"bob@example.com","displayName":"Bob"}'
+   ```
+
+   ```text
+   {"type":"https://httpstatuses.io/400","title":"One or more validation errors occurred.","status":400,"detail":"One or more validation errors occurred.","errors":{"PasswordTooShort":["Passwords must be at least 12 characters."],"PasswordRequiresUpper":["Passwords must have at least one uppercase ('A'-'Z')."]},"traceId":"..."}
+   ```
+
+3. The sign-in limit works. Seven wrong passwords from one address give `401` five times and then
+   `429`, and the right password is refused until the window ends:
+
+   ```bash
+   for i in 1 2 3 4 5 6 7; do curl -k -s -o /dev/null -w "attempt $i: HTTP %{http_code}\n" https://127.0.0.1:18443/api/auth/login -H 'Content-Type: application/json' -d '{"userName":"admin","password":"wrong-password-1A!"}'; done
+   ```
+
+   ```text
+   attempt 1: HTTP 401
+   attempt 2: HTTP 401
+   attempt 3: HTTP 401
+   attempt 4: HTTP 401
+   attempt 5: HTTP 401
+   attempt 6: HTTP 429
+   attempt 7: HTTP 429
+   ```
+
+   Run this against a test installation, because it blocks the address you run it from for five minutes.
+
+#### Behaviour worth knowing
+
+- **Passwords.** The minimum is 12 characters, with an upper-case letter, a lower-case letter, a
+  digit and a symbol, and every account needs a unique e-mail address. Ninlil sets these at startup;
+  the `NINLIL_IDENTITY_PASSWORD_*` and `NINLIL_IDENTITY_USER_REQUIRE_UNIQUE_EMAIL` rows in
+  [`ENVIRONMENT.md`](./ENVIRONMENT.md#identity-authentication--sso) show the values. The bootstrap
+  password you set must meet the same rules.
+- **There is no account lockout.** A wrong password never locks an account, so nobody can lock an
+  administrator out by guessing. The `lockout` fields of `/api/identity-settings` have no effect,
+  and the console's Identity page does not show them. Password guessing is limited by the sign-in
+  limit instead.
+- **The sign-in limit counts per client address.** It allows 5 attempts in 5 minutes for the
+  password sign-in and the second-factor sign-in together, and returns `429 Too Many Requests` after
+  that. An IPv6 client counts by its /64 network, so an attacker cannot rotate through addresses of
+  one subscriber. A Forgot password request has a separate count of 5 in 5 minutes. The window is
+  fixed: a client that reaches the limit waits until the window ends. The settings are read at
+  startup, so a change needs a restart
+  ([`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso)).
+- **Two-factor codes have separate limits, kept per node in memory.** Five wrong codes in 15
+  minutes block that account's second-factor checks (`429`), whichever address they come from. An
+  e-mailed code can be requested once a minute, and a pending sign-in may ask for three. A pending
+  sign-in lasts 5 minutes and its token works once. A restart, or a second node, starts these
+  counts again.
+- **Access tokens live 15 minutes, and Ninlil does not cancel one early.** Disabling an account or
+  changing its permissions does not affect a token that exists; the change applies to the
+  next sign-in or refresh. A refresh token lasts 30 days (12 hours of inactivity for a browser
+  session without "Remember me"), changes at every refresh, and cannot be used twice. API tokens
+  (`Authorization: ApiToken <token>`) use the owner's current permissions at each request, and
+  stop working when revoked or when the owner is disabled. The lifetimes are
+  [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) settings.
+- **A token is checked with the JWT signing key alone.** Whoever holds
+  `data/jwt-signing-key.txt` can make a token with any permission, including `*`. Treat the file
+  like a root password.
+- **The key ring and the JWT signing key are not encrypted on disk.** Ninlil stores the Data
+  Protection key ring in the data directory, and ASP.NET Core Data Protection warns about it in the log:
+  `No XML encryptor configured. Key {...} may be persisted to storage in unencrypted form.` The
+  database holds the TSIG secrets, DNSSEC private keys, cloud credentials, TOTP keys and the ACME
+  account key encrypted with that key ring, so a reader of the whole data directory can decrypt
+  them. This is an accepted risk. The controls are the folder permissions above and the
+  encrypted backups in [Backup and restore](#backup-and-restore). On Windows the files are
+  also plain files and not tied to a Windows account.
+- **A cluster sends some secrets in the clear on the cluster channel.** User two-factor secrets and
+  settings that hold a secret travel inside the TLS connection that is also signed with a TSIG key.
+  The receiving node encrypts them with the node's key ring. They never go through the event broker. An
+  invite code contains a TSIG secret, so share it only over a private channel.
+- **A backup holds the key ring and the TLS certificate with its private key.** Always set a
+  passphrase. See [Backup and restore](#backup-and-restore).
+- **Single sign-on accounts start with no permissions.** The first sign-in of an OpenID Connect
+  user creates an account without any permission; an administrator grants roles. A verified
+  e-mail address (`email_verified`) is stored on the account. An unverified or missing address is
+  not stored; the account gets the placeholder `<sub>@sso.invalid` instead, where `<sub>` is
+  the user's identifier at the provider. Mail to that address cannot be delivered, and the account has
+  no password, so Forgot password cannot reach it. A verified address that belongs
+  to another account refuses the sign-in. A disabled account is refused at the provider sign-in,
+  too.
+- **Some settings point Ninlil at an address, and Ninlil does not limit the address.** Webhook
+  targets, forwarders, filter-list subscriptions and the self-update feed URL can name any host the
+  server can reach, including a loopback address. Give the matching `*:write` permissions to
+  people you trust with that.
+- **The OpenAPI document and Swagger UI need no sign-in.** `/swagger/v1/swagger.json` and `/swagger`
+  describe the API, not your data. `GET /status` shows only the overall state to a caller
+  without the `status:read` permission.
+
+#### Settings
+
+| Setting | Variable and row |
+|---|---|
+| Password rules, unique e-mail | [`NINLIL_IDENTITY_PASSWORD_*`, `NINLIL_IDENTITY_USER_REQUIRE_UNIQUE_EMAIL`](./ENVIRONMENT.md#identity-authentication--sso). Console page: **Settings**, **Identity**. |
+| Lockout (no effect) | `NINLIL_IDENTITY_LOCKOUT_*` |
+| Sign-in limit | [`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso). Console page: **Settings**, **Admin Login Rate Limit**. |
+| Token lifetimes, issuer, audience, signing key | [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) |
+| Bootstrap administrator | [Bootstrap administrator credentials](./ENVIRONMENT.md#bootstrap-administrator-credentials) |
+| Web addresses and reverse proxy | [Web host](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding) |
+
+#### When something goes wrong
+
+- *An account is refused with `PasswordTooShort` or `DuplicateEmail`.* Choose a password that
+  meets the rules above, or another e-mail address.
+- *Every sign-in answers `429`.* The address reached the sign-in limit. Wait for the window to end
+  (5 minutes by default) or restart Ninlil. Behind a reverse proxy without the
+  Reverse proxy settings, all users share one address, so one user's mistakes block the others.
+- *Every sign-in answers HTTP 500 after you set a JWT key.* The key is shorter than 16 bytes. Use
+  at least 32 bytes (`openssl rand -base64 48`) and restart.
+- *You are signed out when you move between cluster nodes.* See
+  [Clustering, events and webhooks](#clustering-events-and-webhooks).
+- *The bootstrap password is lost.* Ninlil prints a generated password once in the log, and never
+  again. With another administrator account, reset the password with
+  `POST /api/users/<admin-id>/reset-password` (the request body is described in Swagger UI). Without
+  another administrator, restore a backup or start with an empty data directory.
 
 #### Single sign-on and e-mail secrets
 
@@ -3358,7 +3986,7 @@ A snapshot id is the UTC time it was taken, as `yyyyMMddHHmmss` (for example `20
 
 | Engine | Where the snapshot is | How to list them |
 |---|---|---|
-| SQLite | A file `migration-snapshots/<database file name>-<id>.sqlite3` and a `.json` manifest next to it, in the folder that holds the database file (by default `<data directory>/migration-snapshots/ninlil-dns-<id>.sqlite3`). Both files are readable by the owner only. | `ls <data directory>/migration-snapshots` |
+| SQLite | A file `migration-snapshots/<database file name>-<id>.sqlite3` and a `.json` manifest next to it, in the folder that holds the database file (by default `<data directory>/migration-snapshots/ninlil-dns-<id>.sqlite3`). The files are readable by the owner only, and while Ninlil runs the snapshot file also has `-wal` and `-shm` files next to it. | `ls <data directory>/migration-snapshots` |
 | PostgreSQL | A schema `ninlil_snapshot_<id>` inside the Ninlil database, with a copy of every table and a manifest table `__NinlilSnapshot` | `psql -d ninlil -c '\dn ninlil_snapshot_*'` |
 | SQL Server | A schema `ninlil_snapshot_<id>` inside the Ninlil database, with a copy of every table and a manifest table `__NinlilSnapshot` | `SELECT name FROM sys.schemas WHERE name LIKE 'ninlil_snapshot_%'` |
 | MySQL | Tables named `nsnap_<id>__<table>` next to the real tables, and a manifest table `nsnap_<id>__manifest` | `SHOW TABLES LIKE 'nsnap\_%\_\_manifest'` |
@@ -3711,45 +4339,598 @@ zone, signed-zone and access-rule caches have no timer and always read the prima
   sets `synchronous = NORMAL`, which keeps the database consistent after a crash; a power cut can
   lose the last second of writes. It also runs `PRAGMA optimize` at every start and after the
   query log cleanup deleted rows, so queries on large logs choose good indexes.
+- **The MySQL account accepts connections from any host.** `src/script/database/mysql/init.sql`
+  creates `'ninlil'@'%'`, which lets the account log in from every address. Once Ninlil
+  runs, narrow it to the address Ninlil connects from. The steps are in
+  [Narrow the MySQL account to the application host](./src/script/database/README.md#narrow-the-mysql-account-to-the-application-host).
+- **MongoDB does not enforce one lease or one reservation per address.** The relational engines
+  carry unique indexes on a lease's scope with its client identifier and with its IP address, and
+  on a reservation's scope with its client identifier and with its IP address. The MongoDB
+  indexes for the same fields are ordinary indexes, so two writers that run at the same moment
+  could store two rows for one address. Inside one Ninlil process each DHCP protocol has one
+  writer, so this does not happen there. Do not point the DHCP engines of two Ninlil instances at
+  one MongoDB database.
 
 ### Backup and restore
 
-**Backup & Restore** in the admin console writes a full-system, passphrase-encrypted backup file and
-restores one. The backup leaves out the query log and other history. The settings are in
-[Webhooks, backup, self-update & clustering](./ENVIRONMENT.md#webhooks-backup-self-update--clustering).
+#### What it does
+
+**Backup & Restore** writes one file, with the extension `.ltbk`, that holds what Ninlil needs to
+run again, and restores such a file. A backup holds:
+
+- the database tables for configuration and identity: zones and records, keys and credentials,
+  users, roles, sessions, API tokens, filtering, clients, forwarders, rewrites, webhooks, cluster
+  peers and every DHCP table (scopes, reservations, options, tag rules and leases);
+- the Data Protection key ring (`key-*.xml`), because every secret in the database opens only with
+  it;
+- the shared TLS certificate, including its private key;
+- the runtime configuration file (`appsettings.json`), which holds the settings you saved in the
+  console.
+
+A backup leaves out history and state that belongs to one node: the query log, the operational log
+and metrics, the zone change journal, webhook delivery attempts, secondary-zone refresh state and
+cluster sync tombstones. It also leaves out the JWT signing key, the cluster node id, the root trust
+anchor file and the ACME certificate files. A restore replaces all stored data with the content
+of the file. There is no partial or merged restore. Ninlil takes no backups by itself; run the
+backup when you want one.
+
+#### Before you start
+
+1. An account with `backup:read` to create a backup and `backup:write` to restore one (the
+   bootstrap administrator has both), and its access token (see [REST API](#rest-api)). The
+   commands below call it `<token>`.
+2. A passphrase of at least 12 characters
+   ([`NINLIL_DNS_SERVER_BACKUP_MINIMUM_PASSPHRASE_LENGTH`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering)).
+   Ninlil keeps no copy of it. A lost passphrase makes the file unreadable. Keep the passphrase
+   apart from the file, in a password manager for example. The commands below call it
+   `<passphrase>`.
+3. Memory for the whole archive: Ninlil holds it in memory while it builds or restores it, and
+   refuses a request body above 2 GiB.
+4. To restore: a running Ninlil you can sign in to, and the `.ltbk` file. A restore replaces
+   the accounts too, so sign-in afterwards uses the accounts from the backup.
+
+#### Steps
+
+**Create a backup.**
+
+1. In the console, open **Backup & Restore**, enter the passphrase twice, and choose **Download
+   backup**. Or call the API:
+
+   ```bash
+   curl -k -o ninlil-backup.ltbk https://127.0.0.1:18443/api/backup -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"passphrase":"<passphrase>"}'
+   ```
+
+   The file `ninlil-backup.ltbk` appears in the current folder. Without a `passphrase`, Ninlil
+   writes the file unencrypted.
+2. Copy the file to a place that is not on the same machine, and keep the passphrase elsewhere.
+
+**Restore a backup** on the same machine or on another one.
+
+1. On another machine, install Ninlil first (see [Installation](#installation)) and start it once,
+   so you can sign in with its bootstrap administrator.
+2. Sign in. Open **Backup & Restore**, choose the file under **Restore from a backup**, type the
+   passphrase and confirm the warning. Or call the API:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/backup/restore -H "Authorization: Bearer <token>" -F archive=@ninlil-backup.ltbk -F passphrase='<passphrase>'
+   ```
+
+   ```text
+   {"totalEntitiesImported":19,"entityCounts":{"Roles":1,"Users":2,"Sessions":8,"ApiTokens":1,"Zones":4,"Records":2, ...},"note":"Restore succeeded. Restart this process ..."}
+   ```
+
+   Leave out `-F passphrase=...` for an unencrypted file.
+3. Restart Ninlil (`sudo systemctl restart ninlil`, `docker restart ninlil`, or
+   `Restart-Service Ninlil`). The restored key ring, certificate and settings take effect at the
+   restart.
+4. To keep access tokens from the old machine valid, set
+   [`NINLIL_JWT_SIGNING_KEY`](./ENVIRONMENT.md#identity-authentication--sso) on the other machine to
+   the content of the old machine's `data/jwt-signing-key.txt` before the restart. Without it,
+   clients get a fresh access token from their refresh token; see "Tokens after a restore" below.
+
+#### Check that it worked
+
+1. A file made with a passphrase starts with the five characters `LTBK1`; an unencrypted file starts
+   with `LTBK0`:
+
+   ```bash
+   head -c 5 ninlil-backup.ltbk; echo
+   ```
+
+   ```text
+   LTBK1
+   ```
+
+2. After a restore and a restart, Ninlil is healthy and holds the restored data:
+
+   ```bash
+   curl http://127.0.0.1:18080/status
+   curl -k https://127.0.0.1:18443/api/zones -H "Authorization: Bearer <token>"
+   ```
+
+   ```text
+   {"status":"Healthy","components":null}
+   {"items":[{"id":"...","name":"example.test", ...}],"skip":0,"take":50,"totalCount":4}
+   ```
+
+   (sign in again first if the token is refused, as described below).
+
+#### Behaviour worth knowing
+
+- **A restore checks the whole file before it writes anything.** Ninlil decrypts the archive, reads
+  every entry and checks it in memory. A wrong passphrase, a damaged or changed file or an
+  unknown format returns `400` and leaves your data as it is.
+- **On a relational database the restore is all or nothing.** The wipe and the import run in one
+  transaction, so a database error keeps the old data. The key ring, certificate and settings file
+  are replaced only after that transaction commits. On MongoDB the restore is not atomic (Ninlil
+  logs a warning): an error after the wipe can leave a partly restored database.
+- **The key ring is merged.** The keys from the file are added, and no key on the machine
+  is deleted.
+- **Only one restore runs at a time.** A second request returns `409` and changes nothing.
+- **Tokens after a restore.** Refresh tokens and API tokens are database rows, so they come back.
+  Access tokens are signed with the JWT key, which a backup does not hold. On a machine with
+  another key, an access token from before is refused with `401` until the client uses its refresh
+  token (`POST /api/auth/refresh`) or signs in again. The console does that for you. API
+  tokens keep working.
+- **An unencrypted backup is readable by anyone who gets the file.** It holds the key ring and
+  the certificate's private key in plain text. The console warns while the passphrase is empty.
+- **The query log and other history stay as they are.** A backup never captures them, and a
+  restore never touches them.
+- **SQLite files.** To copy the database file itself instead, stop Ninlil first, or copy all
+  three files (`ninlil-dns.sqlite3`, `-wal`, `-shm`); see [Storage](#storage).
+
+#### Settings
+
+| Setting | Variable and row |
+|---|---|
+| Minimum passphrase length (12) | [`NINLIL_DNS_SERVER_BACKUP_MINIMUM_PASSPHRASE_LENGTH`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering) |
+| Largest amount of data a restore reads (4 GiB) | [`NINLIL_DNS_SERVER_BACKUP_MAXIMUM_RESTORED_PAYLOAD_BYTES`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering) |
+
+The key-ring folder and the settings-file path of a backup are set at startup, and a value you
+configure is replaced; their rows say so.
+
+#### When something goes wrong
+
+- *The restore answers `400` with `Failed to decrypt this backup archive. The passphrase may be incorrect, or the archive may be corrupted or have been tampered with.`* Check the passphrase for typing errors and the file for damage (compare its size with the original).
+- *Creating a backup answers `400` with `A backup passphrase must be at least 12 characters long.`* Use a longer passphrase, or none.
+- *The restore answers `400` with `An archive file is required.`* The `archive` form field is missing or empty. Use `-F archive=@<file>`.
+- *The restore answers `409`.* Another restore is still running. Wait for it to finish.
+- *Sign-in fails after the restore.* The accounts and passwords are those of the backup. Use an account that existed when the backup was made.
+- *Requests fail with `401` after you restore on another machine.* The access token is signed by the old JWT key. Sign in again, or refresh the token.
 
 ### Self-update
 
-Ninlil can check for a newer release but never installs one. The check does nothing until you set
-`NINLIL_DNS_SERVER_SELF_UPDATE_RELEASE_FEED_URL`, and Ninlil publishes no feed. The settings are in
-[Webhooks, backup, self-update & clustering](./ENVIRONMENT.md#webhooks-backup-self-update--clustering).
+#### What it does
+
+Ninlil can check whether a newer release exists and show a notice on the console's dashboard and
+in `GET /api/self-update`. It never installs anything: you replace the program yourself, the way you
+installed it. The check reads a small JSON document, the **release feed**, from an address you set.
+Ninlil publishes no feed and has no built-in address, so the check does nothing until you set
+[`NINLIL_DNS_SERVER_SELF_UPDATE_RELEASE_FEED_URL`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering).
+Host a feed yourself, on any web server, when you want the notice.
+
+#### Before you start
+
+1. A web server that serves a JSON file over HTTP or HTTPS and that the Ninlil host reaches.
+2. An account with `selfupdatesettings:write` to set the address, `selfupdate:manage` to start a check
+   and `selfupdate:read` to read the result (the bootstrap administrator has them), and its access
+   token (see [REST API](#rest-api)). The commands below call it `<token>`.
+3. The version your Ninlil runs. A release build reports a date-based version such as
+   `2026.9.24.1`; a build from source reports `0.0.0.0`. Read it:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/self-update -H "Authorization: Bearer <token>"
+   ```
+
+   ```text
+   {"configured":false,"currentVersion":"0.0.0.0","latestKnownVersion":null,"updateAvailable":false, ...,"updateInstructions":"No release feed is configured yet -- set one in Self-Update Settings to enable checking for a newer release."}
+   ```
+
+#### Steps
+
+1. Write the feed file. Only `version` is required. Write the version in the same numeric form as
+   `currentVersion` (`yyyy.m.d.increment`), not the release's `v...R...` name:
+
+   ```json
+   {
+     "version": "2026.9.24.1",
+     "releaseUrl": "https://example.com/releases/2026.9.24.1",
+     "publishedAtUtc": "2026-09-24T00:00:00Z",
+     "notes": "Free text shown with the notice."
+   }
+   ```
+
+   Serve it at an address such as `https://example.com/ninlil-feed.json`. For a test, save it as
+   `feed.json` and run `python3 -m http.server 8098 --bind 127.0.0.1` in that folder, then
+   use `http://127.0.0.1:8098/feed.json` as the address.
+2. Set the address (`<feed-url>`). Ninlil checks that it is an absolute HTTP or HTTPS address and
+   does not fetch it yet. The change reaches the running server within about a second, so wait a
+   moment before step 3:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/self-update-settings -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"releaseFeedUrl":"<feed-url>"}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   ```
+
+   The console page is **Settings**, **Self-Update**.
+3. Run a check at once instead of waiting for the next one:
+
+   ```bash
+   curl -k -X POST https://127.0.0.1:18443/api/self-update/check -H "Authorization: Bearer <token>"
+   ```
+
+4. When the notice says a newer version is available, install it the way you installed Ninlil (see
+   [Installation](#installation)). Ninlil has no action that applies an update.
+
+#### Check that it worked
+
+The check call returns the result. With a feed that names a version above the running one:
+
+```text
+{"configured":true,"currentVersion":"0.0.0.0","latestKnownVersion":"2026.9.24.1","updateAvailable":true,"releaseUrl":"https://example.com/releases/2026.9.24.1","releaseNotes":"Free text shown with the notice.","lastCheckedAtUtc":"2026-10-30T22:05:00.2806011+00:00","lastCheckError":null,"updateInstructions":"..."}
+```
+
+The dashboard shows the same notice.
+
+#### Behaviour worth knowing
+
+- **When checks run.** One check runs at startup, then one every
+  [`NINLIL_DNS_SERVER_SELF_UPDATE_CHECK_INTERVAL`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering)
+  (24 hours by default). The checker wakes every 15 minutes, so the wait rounds up to the next
+  15-minute tick. With the automatic check switched off, only a manual check runs.
+- **A failed check is retried after 15 minutes.** It does not wait for the full interval. A failure
+  keeps the last good result visible and sets `lastCheckError`; an `updateAvailable` that
+  a check found stays `true` through an outage.
+- **The result is held in memory.** After a restart the status is empty until the startup check
+  finishes.
+- **Only `version` decides.** The check compares it with the running version and reports an update
+  when it is strictly newer. Ninlil never opens `releaseUrl`. A feed without a `version`, or a
+  version that is not a dotted number, makes the check fail with a message that says so.
+- **No feed address, no request.** The status then reads `configured: false` and no failure is
+  logged.
+
+#### Settings
+
+| Setting | Variable and row |
+|---|---|
+| Automatic check on or off | [`NINLIL_DNS_SERVER_SELF_UPDATE_ENABLE_AUTOMATIC_CHECK`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering) |
+| Interval | [`NINLIL_DNS_SERVER_SELF_UPDATE_CHECK_INTERVAL`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering) |
+| Feed address | [`NINLIL_DNS_SERVER_SELF_UPDATE_RELEASE_FEED_URL`](./ENVIRONMENT.md#webhooks-backup-self-update--clustering) |
+
+#### When something goes wrong
+
+- *The settings call answers `400` with `'<feed-url>' is not a valid absolute HTTP or HTTPS URL.`* Write the address with `http://` or `https://`.
+- *`lastCheckError` reads `Response status code does not indicate success: 404 (File not found).`* The address is wrong or the file is missing. Open the address in a browser from the Ninlil host.
+- *`lastCheckError` reads `The release feed document is missing a 'version' field.`* Add the field to the feed.
+- *`lastCheckError` reads `'<version>' is not a valid dotted version string.`* Write the version as numbers separated by dots, for example `2026.9.24.1`.
+- *The status stays `configured: false`.* The address is empty. Run step 2.
 
 ## Using the admin console
 
-Sign in at the host's HTTPS port with the bootstrap administrator credentials from first-run
-setup, then use the **Users**/**Roles** pages to create real, appropriately-scoped accounts (and
-consider disabling the bootstrap account once you have) — it holds a wildcard permission claim
-so it can always self-recover access, and is never automatically removed.
+#### What it does
 
-From there, the console covers zone and record management (every registered record type has its
-own form), TSIG/DNSSEC key and cloud provider credential management (secrets are shown to you
-exactly once, at creation — copy them down immediately), filtering and client/parental-control
-management, DHCP scopes/reservations/leases, forwarders, outbound webhooks, server settings
-(presets, rate limiting, the event broker, DNS Cookies, clustering), and your own account's
-two-factor authentication setup (via the account menu in the top-right corner).
+The admin console is a web application that Ninlil serves on its web ports. It is built into the
+program, so there is nothing to install. It calls the same [REST API](#rest-api) as any other
+client, so everything it shows or changes is checked against the signed-in account's permissions.
+Entries the account cannot read are missing from the sidebar, and the **Presets & Settings** page
+lists only the settings pages it may read.
+
+The sidebar holds one entry per area: Dashboard, Zones, DNS Rewrites, TSIG Keys, Cluster, Cloud
+Credentials, Filter Lists, Clients, Static Address Mappings, Client Groups, the DHCP pages,
+Forwarders, Access Control Rules, Query Log, Webhooks, Presets & Settings, Users, Roles, API Tokens,
+Backup & Restore and Services. The settings pages are grouped by subsystem: DNS Resolution & Protocol,
+Filtering & Privacy, Zone Management, Identity & Access, Integrations & Delivery, System and DHCP.
+The account menu in the top-right corner holds **Profile**, **Security** (your two-factor
+sign-in) and **Log out**.
+
+#### Before you start
+
+1. A running Ninlil and a browser. The console answers on the web HTTPS port (443 by default; the
+   [Quick start](#quick-start) uses 18443) and on the plain-HTTP port. Check that it answers:
+
+   ```bash
+   curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/
+   ```
+
+   ```text
+   200
+   ```
+
+2. A sign-in name and password. On a fresh installation use the bootstrap administrator (see
+   [First run](#first-run)).
+
+#### Steps
+
+**Sign in.**
+
+1. Open `https://<host>:<port>/` in the browser. The self-signed certificate Ninlil makes at the
+   first start triggers a browser warning; accept it for a first look, or install a trusted
+   certificate (see [Security](#security)).
+2. Enter the sign-in name and password. If the account has two-factor sign-in, the console asks for
+   the code next. If single sign-on is configured, the page also offers the identity provider.
+3. The console opens the Dashboard. A page address you open before you sign in, such as `/zones`,
+   comes back after the sign-in.
+
+**Change a setting.**
+
+1. Open **Presets & Settings** and choose the group and the page in the list on the left.
+2. Edit the fields and choose **Save** at the bottom of the card.
+3. Read the note that appears. The server writes it, and it says whether the change applies at
+   once ("takes effect immediately -- no restart required") or needs a restart ("a restart is
+   required before this change takes effect"). A change that takes effect at once reaches the
+   running server within about a second.
+4. If the note asks for a restart, restart Ninlil (see the guide of the feature) when it suits you.
+   The value is saved in `appsettings.json` and survives the restart.
+
+**Replace the bootstrap account and add two-factor sign-in.** Follow the steps in
+[Security](#security).
+
+#### Check that it worked
+
+Sign in as an account with fewer permissions: its sidebar shows fewer entries. A direct address to
+a page it may not read, such as `/users`, shows a page that says it lacks the permission, and the server answers the
+API call behind it with `403`. Check one case without a browser:
+
+```bash
+curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/users -H 'Authorization: Bearer <token-without-users-read>'
+```
+
+```text
+403
+```
+
+#### Behaviour worth knowing
+
+- **Pages send only what you changed, and Save waits for a change.** Eight settings pages compare
+  their form with what they loaded and send only the fields that differ: **ACME / Certificates**,
+  **Cluster**, **DHCP** (the core card only), **Pipeline**, **Query logging**, **Recursive
+  Resolver**, **Single Sign-On**, and the **Transports** cards for DNS-over-TLS, DNS-over-HTTPS,
+  DNS-over-QUIC and DNSCrypt. Their **Save** button stays disabled until something changes, and its
+  tooltip says "No changes to save". The reason: the server picks its note from the fields in
+  the request. Saving only a setting that applies at once says so, but a request that also holds
+  a field that needs a restart says a restart is still needed. A list or table field is sent
+  whole when any entry changes, because a JSON merge patch replaces a list as one value.
+- **The other settings pages send the whole section.** This includes the pages whose settings a
+  cluster copies (**Event broker**, **Rate limiting**, **DNS Cookies**, **Reverse proxy**,
+  **DNS Rewrites**) and the cards whose note is fixed (the DHCP protocol, relay, TFTP and Router
+  Advertisement cards, and the Plain DNS transport card). Their **Save** button is always on. A
+  secret field you leave blank (the reverse-proxy shared secret, for example) is left out of the
+  request, so the stored secret stays.
+- **The Storage page shows what the server reports.** It lists the environment variables for a
+  read replica and the engine-specific cluster settings, as the server returns them, so the page
+  cannot name a variable the server ignores. While a read replica is configured, the page hides the
+  switch form and shows that Ninlil refuses a switch.
+- **The Identity page has no lockout fields.** Ninlil does not lock accounts after wrong passwords;
+  see [Security](#security). The API still returns the lockout values, but they have no effect.
+- **A secret is shown once.** Creating a TSIG key, a cloud credential, a webhook or an API token,
+  creating a cluster invite, resetting a password and generating recovery codes open a dialog with
+  the secret. Copy it before you close the dialog; Ninlil cannot show it again.
+- **The console renews its session without you.** When a request gets `401`, it asks for a fresh
+  access token once and repeats the request. If that fails it goes to the sign-in page.
+- **The live feed.** The dashboard receives events through SignalR at `/hubs/events`. An account
+  sees an event type only when it holds the permission that reads the same data in the REST API
+  (`querylog:read` for queries). The permission is read when the connection opens, so a change
+  applies at the next reconnect, which happens when the access token expires.
+- **The console is a client of the API.** Anything it does, you can do with `curl`. The
+  [REST API](#rest-api) section shows how.
+
+#### Settings
+
+| Setting | Variable and row |
+|---|---|
+| Web ports and addresses | [Web host](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding) |
+| Default theme, palette, site title and logo | The `NINLIL_DNS_SERVER_APPEARANCE_*` and `NINLIL_DNS_SERVER_BRANDING_*` rows in [Web host](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding). Console pages: **Settings**, **Appearance** and **Branding**. |
+| Where saved settings are written | [`NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH`](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding) |
+
+#### When something goes wrong
+
+- *`/` answers `404`.* The program has no console. A build from source without the Angular build
+  has none; use the published binary, the packages or the container image, or build the console as
+  in [Build and run from source](#build-and-run-from-source).
+- *The browser warns about the certificate.* The self-signed certificate is the cause. Accept it, or
+  install a trusted certificate (see [Security](#security)).
+- *Save is disabled.* Nothing changed after the page loaded or saved. Edit a field.
+- *A save answers with a restart note and the setting seems unchanged.* The page shows the saved
+  value, and the running program uses it after the restart. A setting set by an environment variable
+  stays at the variable's value; remove the variable to use the saved one.
+- *A page is missing from the sidebar.* The account lacks the read permission for it. Ask an
+  administrator for the role (see [Security](#security)).
+- *Every sign-in answers `429`.* The address reached the sign-in limit; see [Security](#security).
 
 ## REST API
 
-- **Swagger UI**: `/swagger`
-- **Raw OpenAPI document**: `/swagger/v1/swagger.json`
-- **ReDoc reference**: `/documentation`
-- **Health/status**: `GET /status` — an unauthenticated caller gets a high-level summary only; an
-  authenticated caller holding the `status:read` permission gets a full per-subsystem breakdown.
+#### What it does
 
-Authentication is JWT bearer (`POST /api/auth/login`, with refresh-token rotation and optional
-TOTP/e-mail two-factor), checked per-endpoint against a `resource:action`-shaped permission claim
-(e.g. `zones:write`). There is no API versioning and no CORS support — the API and the admin
-console are meant to be served from the same origin, as they are by default.
+Everything the console does, and more, is a REST call. The API speaks JSON over HTTPS and covers
+every DNS and DHCP resource, every settings page, and account and role management. The commands in
+this section use the Quick start ports (`18443`); the default HTTPS port is `443`. They use `-k`
+because the self-signed certificate that Ninlil makes is not trusted by `curl`.
+
+| What | Where |
+|---|---|
+| Swagger UI, to read and try every call | `/swagger` |
+| The OpenAPI document (JSON) | `/swagger/v1/swagger.json` |
+| ReDoc reference | `/documentation` (the page loads its viewer script from `cdn.jsdelivr.net`, so the browser needs internet access) |
+| Health | `GET /status` |
+| Sign in | `POST /api/auth/login` |
+
+Two credentials work. An **access token** (a JSON Web Token, JWT) comes from signing in and lasts
+15 minutes. An **API token** is a long-lived secret you create for a program. Both carry the
+permissions of the account behind them, and each call needs the permission its route names, such as
+`zones:write`.
+
+#### Before you start
+
+1. A running Ninlil, the account name and the password (see [Quick start](#quick-start)).
+2. `curl`. Check it with `curl --version`; it prints a version line.
+
+#### Steps
+
+1. Sign in. The answer holds an access token and a refresh token. The commands below keep them in
+   the shell variables `TOKEN` and `REFRESH`; the `sed` commands cut the values out of the answer.
+   If you prefer, copy the values by hand and use them in place of `$TOKEN` and `$REFRESH`:
+
+   ```bash
+   LOGIN=$(curl -k -s https://127.0.0.1:18443/api/auth/login -H 'Content-Type: application/json' -d '{"userName":"admin","password":"Change-Me-Now1!"}')
+   echo "$LOGIN"
+   TOKEN=$(echo "$LOGIN" | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
+   REFRESH=$(echo "$LOGIN" | sed -n 's/.*"refreshToken":"\([^"]*\)".*/\1/p')
+   ```
+
+   ```text
+   {"requiresTwoFactor":false,"mfaToken":null,"accessToken":"eyJhbGciOi...","expiresAtUtc":"2026-10-30T22:54:51.3364873+00:00","refreshToken":"a0iJqn-Vzk..."}
+   ```
+
+   If the answer says `"requiresTwoFactor":true`, the account uses two-factor sign-in. Send the
+   `mfaToken` from the answer with the code to `POST /api/auth/login/two-factor`:
+   `{"mfaToken":"<mfa-token>","code":"123456","provider":"Authenticator"}` (`provider` is
+   `Authenticator`, `Email` or `RecoveryCode`). That answer holds the access token.
+2. Call the API with the token in an `Authorization: Bearer` header. List the zones:
+
+   ```bash
+   curl -k -s https://127.0.0.1:18443/api/zones -H "Authorization: Bearer $TOKEN"
+   ```
+
+   ```text
+   {"items":[],"skip":0,"take":50,"totalCount":0}
+   ```
+
+3. Create something with `POST` and a JSON body. Send the header `Content-Type: application/json`.
+   A success answers `201` and the created object:
+
+   ```bash
+   curl -k -s -w '\n[HTTP %{http_code}]\n' https://127.0.0.1:18443/api/zones -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"name":"one.test","type":"Primary"}'
+   ```
+
+   ```text
+   {"id":"c20edd76-612e-4ac4-ab46-27637a65d666","name":"one.test","type":"Primary","isDnssecSigned":false, ...}
+   [HTTP 201]
+   ```
+
+   Copy the `id`. The commands below call it `<zone-id>`.
+4. Change part of an object with `PATCH`. A `PATCH` body is an RFC 7396 JSON merge patch: a field you
+   leave out stays as it is, a field you set replaces the old value, and `null` clears a field that
+   may be empty. Change one field and clear another:
+
+   ```bash
+   curl -k -s -w '[HTTP %{http_code}]\n' -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"isDisabled":true,"comments":null}'
+   ```
+
+   ```text
+   [HTTP 204]
+   ```
+
+   `204` has no body. Read the zone again to see the result.
+5. Page through a long list with `skip` (how many items to leave out) and `take` (how many to
+   return). The answer repeats both and adds `totalCount`:
+
+   ```bash
+   curl -k -s "https://127.0.0.1:18443/api/zones?skip=1&take=1" -H "Authorization: Bearer $TOKEN"
+   ```
+
+   ```text
+   {"items":[{"id":"4256d20d-...","name":"three.test", ...}],"skip":1,"take":1,"totalCount":3}
+   ```
+
+6. Renew the access token before it expires, with the refresh token from step 1. Each refresh token
+   works once, and the answer holds the next one (put it in `REFRESH` for the next renewal):
+
+   ```bash
+   curl -k -s https://127.0.0.1:18443/api/auth/refresh -H 'Content-Type: application/json' -d "{\"refreshToken\":\"$REFRESH\"}"
+   ```
+
+   ```text
+   {"accessToken":"eyJhbGciOi...","expiresAtUtc":"2026-10-30T22:54:51.8835126+00:00","refreshToken":"Trqd_-lmMt..."}
+   ```
+
+7. For a program that runs unattended, create an API token. The answer shows its `rawToken` once:
+
+   ```bash
+   curl -k -s https://127.0.0.1:18443/api/api-tokens -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"name":"backup script","oneTime":false}'
+   ```
+
+   ```text
+   {"rawToken":"<api-token>","token":{"id":"b5375356-...","name":"backup script","type":"Static","expiresAtUtc":null, ...}}
+   ```
+
+   Use it with the header `Authorization: ApiToken <api-token>`. `"oneTime":true` makes a token
+   that works for one call. Add `"expiresAtUtc":"2027-08-31T00:00:00+00:00"` to give it an end date.
+   Revoke a token with `DELETE /api/api-tokens/<id>`.
+8. Sign out by revoking the refresh token:
+
+   ```bash
+   curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/auth/logout -H 'Content-Type: application/json' -d "{\"refreshToken\":\"$REFRESH\"}"
+   ```
+
+   ```text
+   204
+   ```
+
+#### Check that it worked
+
+Step 2 returned a JSON object with `items`, and step 3 returned `[HTTP 201]`. A call without a
+token is refused:
+
+```bash
+curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/zones
+```
+
+```text
+401
+```
+
+Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize**, paste the access token
+(without the word `Bearer`) and try a call.
+
+#### Behaviour worth knowing
+
+- **Errors are JSON with a status.** `400` means the request is wrong, and the body names the
+  field:
+
+  ```text
+  {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"$.type":["'Bogus' is not a valid value for ZoneTypeEnum."]},"traceId":"..."}
+  ```
+
+  `401` means no valid credential, `403` means the account lacks the permission, `404` an unknown
+  id, `409` a name that is taken, `415` a missing `Content-Type: application/json` header,
+  and `429` too many sign-in attempts (see [Security](#security)).
+- **Enum values are names, as text.** A zone `type` of `Primary` works; the names are not case
+  sensitive, so `primary` also works. A name Ninlil does not know gives `400`, and so does a JSON
+  number: `"type":1` answers `Expected a string value for ZoneTypeEnum but found Number.` The
+  Swagger UI lists the valid names for every field.
+- **`PATCH` ignores a field it does not know.** A misspelled name in a `PATCH` body is skipped and
+  the answer is still `204`. Check the result with a `GET`.
+- **A settings `PATCH` answers with a note.** The note says whether the change is live or needs a
+  restart, as on the console. A live change reaches the running server within about a second.
+- **Lists page by offset.** `take` defaults to 50, and a value above 500 is cut to 500. A
+  negative `skip` counts as 0, and a `take` of 0 or less counts as 50.
+- **`GET /status` has two views.** Without a credential, or without the `status:read` permission, it
+  returns only the overall state. With the permission it adds one entry per subsystem.
+- **There is no API version in the address and no CORS.** A browser page from another origin cannot
+  call the API; the console and the API share one origin. A `curl` call is not affected.
+- **The API answers on both web ports.** Use the HTTPS port, because the plain-HTTP port sends the
+  token in the clear.
+
+#### Settings
+
+| Setting | Variable and row |
+|---|---|
+| Access token lifetime (15 minutes) | [`NINLIL_JWT_ACCESS_TOKEN_LIFETIME`](./ENVIRONMENT.md#identity-authentication--sso) |
+| Refresh token lifetime (30 days; 12 hours without activity for a browser session) | [`NINLIL_JWT_REFRESH_TOKEN_LIFETIME`, `NINLIL_JWT_BROWSER_SESSION_REFRESH_TOKEN_LIFETIME`](./ENVIRONMENT.md#identity-authentication--sso) |
+| Sign-in limit | [`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso) |
+| Ports and addresses | [Web host](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding) |
+
+#### When something goes wrong
+
+- *`curl` prints `SSL certificate problem: self-signed certificate`.* Add `-k`, or install a trusted certificate (see [Security](#security)).
+- *Every call answers `401`.* The token expired (15 minutes) or is missing. Sign in again (step 1) or refresh it (step 6). With an API token, check that the header starts with `ApiToken ` and not `Bearer `.
+- *A call answers `403`.* The account lacks the permission the route needs. Swagger UI shows it in the call's description.
+- *A call answers `415`.* Add `-H 'Content-Type: application/json'`.
+- *A call answers `400` with `is not a valid value for ...`.* Use one of the names the Swagger UI lists.
+- *`429` on sign-in.* See [Security](#security).
 
 ## Running with Docker
 

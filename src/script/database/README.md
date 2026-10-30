@@ -31,7 +31,7 @@ The accounts these scripts create hold exactly the rights Ninlil needs, and no m
 | Engine | Rights of the `ninlil` account |
 | --- | --- |
 | PostgreSQL | Owner of the `ninlil` database; no right to create databases or roles |
-| MySQL / MariaDB | `ALL PRIVILEGES` on `ninlil.*` only |
+| MySQL / MariaDB | `ALL PRIVILEGES` on `ninlil.*` only, from any host until you [narrow it](#narrow-the-mysql-account-to-the-application-host) |
 | Microsoft SQL Server | The `db_owner` role in the `ninlil` database only |
 | MongoDB | The `readWrite` role on the `ninlil` database |
 
@@ -53,9 +53,70 @@ Ninlil never reads from the replica.
 | Engine | Where to run it | Command |
 | --- | --- | --- |
 | PostgreSQL | nowhere | Nothing to grant. |
-| MySQL / MariaDB | `mysql` on the primary (account changes replicate; if yours do not, run it on each replica) | `GRANT REPLICATION CLIENT ON *.* TO 'ninlil'@'%';` |
+| MySQL / MariaDB | `mysql` on the primary (account changes replicate; if yours do not, run it on each replica) | `GRANT REPLICATION CLIENT ON *.* TO 'ninlil'@'%';` (use the account's host if you narrowed it) |
 | Microsoft SQL Server | `sqlcmd` on every instance that can become the primary | `GRANT VIEW SERVER STATE TO [ninlil];` |
 | MongoDB | `mongosh` connected to the primary, when authentication is on | `db.getSiblingDB("ninlil").grantRolesToUser("ninlil", [{ role: "clusterMonitor", db: "admin" }])` |
 
 For SQL Server, also create the `ninlil` login on every replica instance with the same SID as on
 the primary, because a login belongs to the server and not to the replicated database.
+
+## Narrow the MySQL account to the application host
+
+### What it does
+
+`mysql/init.sql` creates the login as `'ninlil'@'%'`. In MySQL an account is a name plus the host it
+may connect from, and `%` means any host. Anyone who can reach the server's port and knows the
+password can then log in as `ninlil` from anywhere. This section limits the account to the machine
+that runs Ninlil. The rights stay as they are: `ALL PRIVILEGES` on `ninlil.*` only.
+
+### Before you start
+
+1. The MySQL (or MariaDB) server holds the `ninlil` database and login (you ran `mysql/init.sql`),
+   and Ninlil has connected to it at least once.
+2. A MySQL account that may rename users, for example `root`.
+3. The machine on which Ninlil runs. Find the address the server sees it from while Ninlil is running,
+   with this query (the `host` column holds `address:port`):
+
+   ```sql
+   SELECT DISTINCT SUBSTRING_INDEX(host, ':', 1) AS application_host FROM information_schema.processlist WHERE user = 'ninlil';
+   ```
+
+   The commands below call the result `<application-host>`. With Ninlil in a container, the server
+   usually sees the container network's gateway address, not the container's address.
+
+### Steps
+
+1. Rename the account. The rights move with it:
+
+   ```sql
+   RENAME USER 'ninlil'@'%' TO 'ninlil'@'<application-host>';
+   ```
+
+2. If you set up a read replica, repeat the lag-monitoring grant for the renamed account
+   (see [Extra grants for a read replica](#extra-grants-for-a-read-replica)): the command there
+   names `'ninlil'@'%'`, so write `'ninlil'@'<application-host>'` instead.
+
+### Check that it worked
+
+```sql
+SELECT user, host FROM mysql.user WHERE user = 'ninlil';
+SHOW GRANTS FOR 'ninlil'@'<application-host>';
+```
+
+```text
+user	host
+ninlil	<application-host>
+Grants for ninlil@<application-host>
+GRANT USAGE ON *.* TO `ninlil`@`<application-host>`
+GRANT ALL PRIVILEGES ON `ninlil`.* TO `ninlil`@`<application-host>`
+```
+
+Restart Ninlil and open `/status`; the answer says `Healthy`.
+
+### When something goes wrong
+
+- *Ninlil stops at start with `Access denied for user 'ninlil'@'<address>'`.* The address in the
+  message is the one the server sees. Rename the account to that address:
+  `RENAME USER 'ninlil'@'<application-host>' TO 'ninlil'@'<address>';`.
+- *Ninlil runs on several machines.* Use a host pattern that covers them, such as
+  `'ninlil'@'172.2.2.%'` for a subnet: `RENAME USER 'ninlil'@'<application-host>' TO 'ninlil'@'172.2.2.%';`.
