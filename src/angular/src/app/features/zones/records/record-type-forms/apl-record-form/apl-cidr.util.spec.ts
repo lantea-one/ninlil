@@ -1,4 +1,4 @@
-import { formatCidr, parseCidr } from './apl-cidr.util';
+import { base64ToHex, formatCidr, parseCidr } from './apl-cidr.util';
 
 /** These tests cover CIDR parsing and formatting for APL items, IPv4 and IPv6. Plain unit tests. */
 describe('apl-cidr.util', () => {
@@ -59,5 +59,10 @@ describe('apl-cidr.util', () => {
   it('throws for a prefix length out of range', () => {
     expect(() => parseCidr('192.0.2.0/33')).toThrow();
     expect(() => parseCidr('2001:db8::/129')).toThrow();
+  });
+
+  it('renders base64 bytes as lowercase hex', () => {
+    expect(base64ToHex(btoa(String.fromCharCode(0x0a, 0x01, 0xf0)))).toBe('0a01f0');
+    expect(base64ToHex('')).toBe('');
   });
 });

@@ -205,14 +205,18 @@
                     />
                   </div>
                   <div class="field">
-                    <label cLabel for="zone-cloud-sync-interval">Sync interval (hh:mm:ss)</label>
+                    <label cLabel for="zone-cloud-sync-interval"
+                      >Sync interval (hh:mm:ss or d.hh:mm:ss)</label
+                    >
                     <input
                       cFormControl
                       id="zone-cloud-sync-interval"
                       formControlName="cloudSyncIntervalText"
                     />
                     @if (form.controls.cloudSyncIntervalText.hasError('pattern')) {
-                      <div class="field-error">Use hh:mm:ss, e.g. 00:05:00.</div>
+                      <div class="field-error">
+                        Use hh:mm:ss or d.hh:mm:ss, e.g. 00:05:00, or 1.00:00:00 for one day.
+                      </div>
                     }
                   </div>
                 </section>

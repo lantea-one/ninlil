@@ -124,6 +124,16 @@ function base64ToBytes(base64: string): number[] {
 }
 
 /**
+ * This function renders base64 bytes as lowercase hex without separators (`0A01` gives `0a01`);
+ * the APL form shows the address bytes of an item with an unknown address family this way.
+ */
+export function base64ToHex(base64: string): string {
+  return base64ToBytes(base64)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
  * This function parses a CIDR string (`192.0.2.0/24` or `2001:db8::/32`) into an address family,
  * prefix length and the canonical address bytes: every bit after the prefix is cleared, then
  * trailing zero octets are dropped. `0.0.0.0/0` gives no bytes, `10.0.0.0/24` gives `0A` and
@@ -167,7 +177,8 @@ export function parseCidr(cidr: string): AplCidrParts {
 
 /**
  * This function formats an {@link AplCidrParts} as a CIDR string, padding the stored bytes with
- * zeros to the full address length. IPv6 is written uncompressed.
+ * zeros to the full address length. IPv6 is written uncompressed. It is for address families 1 and
+ * 2 only; any other family is formatted as IPv4, so the APL form never calls it for one.
  */
 export function formatCidr(parts: AplCidrParts): string {
   const fullLength = parts.addressFamily === 2 ? 16 : 4;

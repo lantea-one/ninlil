@@ -74,4 +74,35 @@ describe('AplRecordFormComponent', () => {
       negated: true,
     });
   });
+
+  it('shows an item with an unknown address family read-only and sends it back unchanged', () => {
+    const unknown = {
+      addressFamily: 3,
+      prefixLength: 16,
+      negated: true,
+      addressFamilyDependentPart: btoa(String.fromCharCode(0x0a, 0x01)),
+    };
+    const known = parseCidr('192.0.2.0/24');
+    fixture.componentRef.setInput('initialData', {
+      items: [
+        unknown,
+        {
+          addressFamily: known.addressFamily,
+          prefixLength: known.prefixLength,
+          negated: false,
+          addressFamilyDependentPart: known.addressFamilyDependentPart,
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '#apl-cidr-0',
+    );
+    expect(input?.value).toBe('family 3, prefix 16, 0a01');
+    expect(input?.disabled).toBeTrue();
+    expect(component.form.valid).toBeTrue();
+    expect(component.getData().items[0]).toEqual(unknown);
+    expect(component.getData().items[1].addressFamily).toBe(1);
+  });
 });

@@ -19,7 +19,7 @@ import {
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
 import { RecordDataFormComponent } from '../record-type-form.model';
-import { formatCidr, parseCidr } from './apl-cidr.util';
+import { base64ToHex, formatCidr, parseCidr } from './apl-cidr.util';
 
 /** This function validates that a control's value is a well-formed CIDR prefix. */
 function cidrValidator(control: AbstractControl<string>): ValidationErrors | null {
@@ -61,7 +61,9 @@ type AplItemGroup = FormGroup<{
  * This component is the `APL` record data form (RFC 3123, experimental and rarely deployed): a list
  * of address prefixes for the owner name. Each item is edited as CIDR text (`192.0.2.0/24`,
  * `2001:db8::/32`) and converted with {@link parseCidr} and {@link formatCidr}. The "negated" flag,
- * written as a leading `!` in zone files, is a separate checkbox. `RecordFormComponent` hosts it
+ * written as a leading `!` in zone files, is a separate checkbox. An item with an address family
+ * other than 1 (IPv4) or 2 (IPv6) has no CIDR form: its row is read-only, shows
+ * `family <n>, prefix <p>, <hex>`, and {@link getData} sends the item back unchanged. `RecordFormComponent` hosts it
  * through `RECORD_TYPE_FORM_REGISTRY`.
  */
 @Component({
@@ -83,7 +85,11 @@ type AplItemGroup = FormGroup<{
         @for (item of items.controls; track $index) {
           <div [formGroupName]="$index" class="item-row">
             <div class="field full-width">
-              <label cLabel [attr.for]="'apl-cidr-' + $index">Prefix (CIDR notation)</label>
+              <label cLabel [attr.for]="'apl-cidr-' + $index">{{
+                isUnknownFamily(item)
+                  ? 'Prefix (unknown address family, read-only)'
+                  : 'Prefix (CIDR notation)'
+              }}</label>
               <input
                 cFormControl
                 [id]="'apl-cidr-' + $index"
@@ -167,6 +173,9 @@ export class AplRecordFormComponent implements RecordDataFormComponent<AplRecord
     items: this.formBuilder.array<AplItemGroup>([]),
   });
 
+  /** The rows holding an unknown-family item, mapped to the item they send back unchanged. */
+  private readonly unknownFamilyItems = new WeakMap<AbstractControl, AplItemFormData>();
+
   get items() {
     return this.form.controls.items;
   }
@@ -177,7 +186,11 @@ export class AplRecordFormComponent implements RecordDataFormComponent<AplRecord
       if (data) {
         this.items.clear();
         for (const item of data.items) {
-          this.items.push(this.buildItemGroup(formatCidr(item), item.negated));
+          this.items.push(
+            item.addressFamily === 1 || item.addressFamily === 2
+              ? this.buildItemGroup(formatCidr(item), item.negated)
+              : this.buildUnknownFamilyGroup(item),
+          );
         }
       }
     });
@@ -193,6 +206,28 @@ export class AplRecordFormComponent implements RecordDataFormComponent<AplRecord
     this.items.removeAt(index);
   }
 
+  /** This method reports whether a row holds an item of an address family the form cannot edit. */
+  isUnknownFamily(row: AbstractControl): boolean {
+    return this.unknownFamilyItems.has(row);
+  }
+
+  /**
+   * This method builds a read-only row for an item whose address family is neither 1 nor 2. The
+   * row shows the family, prefix length and bytes as text; the item itself is kept aside and sent
+   * back as it was, so saving the record does not change or drop it.
+   */
+  private buildUnknownFamilyGroup(item: AplItemFormData) {
+    const hex = base64ToHex(item.addressFamilyDependentPart);
+    const group = this.buildItemGroup(
+      `family ${item.addressFamily}, prefix ${item.prefixLength}, ${hex.length > 0 ? hex : 'no address bytes'}`,
+      item.negated,
+    );
+    // A disabled control is excluded from validation, so the text is not parsed as a CIDR.
+    group.disable();
+    this.unknownFamilyItems.set(group, { ...item });
+    return group;
+  }
+
   private buildItemGroup(cidr: string, negated: boolean) {
     return this.formBuilder.group({
       cidr: [cidr, [Validators.required, cidrValidator]],
@@ -203,7 +238,11 @@ export class AplRecordFormComponent implements RecordDataFormComponent<AplRecord
   getData(): AplRecordFormData {
     const value = this.form.getRawValue();
     return {
-      items: value.items.map((item) => {
+      items: value.items.map((item, index) => {
+        const unknownItem = this.unknownFamilyItems.get(this.items.at(index));
+        if (unknownItem) {
+          return { ...unknownItem };
+        }
         const parts = parseCidr(item.cidr);
         return {
           addressFamily: parts.addressFamily,

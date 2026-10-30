@@ -67,10 +67,7 @@
               max="124"
               step="4"
             />
-            @if (
-              form.controls.defaultIpv6ReverseZonePrefixBits.hasError('min') ||
-              form.controls.defaultIpv6ReverseZonePrefixBits.hasError('max')
-            ) {
+            @if (form.controls.defaultIpv6ReverseZonePrefixBits.hasError('ptrIpv6PrefixLength')) {
               <div class="field-error">Must be a multiple of 4 between 16 and 124 inclusive.</div>
             }
             <div cFormText>
@@ -82,7 +79,7 @@
     </c-card-body>
 
     <c-card-footer *appIfPermission="'ptrsyncsettings:write'" class="d-flex justify-content-end">
-      <button cButton color="primary" [disabled]="submitting()" (click)="save()">
+      <button cButton color="primary" [disabled]="submitting() || form.invalid" (click)="save()">
         @if (submitting()) {
           <c-spinner size="sm" />
         } @else {

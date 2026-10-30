@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { PtrSyncSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { PtrSyncSettingsComponent } from './ptr-sync-settings.component';
 
@@ -44,6 +45,8 @@ describe('PtrSyncSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // An administrator's view: the write permission is held, so the Save button renders.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(PtrSyncSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -102,8 +105,46 @@ describe('PtrSyncSettingsComponent', () => {
     fixture.componentInstance.form.controls.defaultIpv6ReverseZonePrefixBits.setValue(8);
 
     expect(
-      fixture.componentInstance.form.controls.defaultIpv6ReverseZonePrefixBits.hasError('min'),
+      fixture.componentInstance.form.controls.defaultIpv6ReverseZonePrefixBits.hasError(
+        'ptrIpv6PrefixLength',
+      ),
     ).toBeTrue();
+  });
+
+  it('rejects an IPv6 prefix length that is not a multiple of 4', async () => {
+    const fixture = await createComponent();
+
+    fixture.componentInstance.form.controls.defaultIpv6ReverseZonePrefixBits.setValue(62);
+
+    expect(
+      fixture.componentInstance.form.controls.defaultIpv6ReverseZonePrefixBits.hasError(
+        'ptrIpv6PrefixLength',
+      ),
+    ).toBeTrue();
+  });
+
+  it('save() sends nothing while the form is invalid', async () => {
+    const fixture = await createComponent();
+
+    fixture.componentInstance.form.controls.defaultIpv6ReverseZonePrefixBits.setValue(62);
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiPtrSyncSettingsPatch).not.toHaveBeenCalled();
+  });
+
+  it('disables the Save button while the form is invalid and shows the multiple-of-4 error', async () => {
+    const fixture = await createComponent();
+    const element: HTMLElement = fixture.nativeElement;
+    const saveButton = (): HTMLButtonElement | null =>
+      element.querySelector('c-card-footer button');
+
+    expect(saveButton()?.disabled).toBeFalse();
+
+    fixture.componentInstance.form.controls.defaultIpv6ReverseZonePrefixBits.setValue(62);
+    fixture.detectChanges();
+
+    expect(element.textContent).toContain('multiple of 4');
+    expect(saveButton()?.disabled).toBeTrue();
   });
 
   it('shows an error message when saving fails', async () => {

@@ -17,6 +17,7 @@ import {
 } from '@coreui/angular';
 import { firstValueFrom } from 'rxjs';
 import { PtrSyncSettingsService } from '../../../api-client';
+import { ptrIpv6PrefixLengthValidator } from '../../zones/zone.model';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
@@ -27,8 +28,9 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  * (`ptrsyncsettings:read`, `ptrsyncsettings:write`): whether a Primary or CloudPrimary zone's A and
  * AAAA records are mirrored as PTR records into the reverse zone, and the IPv4 and IPv6
  * reverse-zone prefix lengths. A zone's own overrides on the zone form take precedence. The
- * prefix fields use the zone form's ranges (IPv4 24 to 30, IPv6 16 to 124); the backend also
- * requires the IPv6 length to be a multiple of 4. Changes are hot-reloaded.
+ * prefix fields use the zone form's ranges (IPv4 24 to 30, IPv6 16 to 124, a multiple of 4, the same
+ * `ptrIpv6PrefixLengthValidator`); Save stays disabled and `save()` sends nothing while the form is
+ * invalid. Changes are hot-reloaded.
  */
 @Component({
   selector: 'app-ptr-sync-settings',
@@ -64,7 +66,7 @@ export class PtrSyncSettingsComponent implements OnInit {
   readonly form = this.formBuilder.group({
     defaultEnabled: [false],
     defaultIpv4ReverseZonePrefixBits: [24, [Validators.min(24), Validators.max(30)]],
-    defaultIpv6ReverseZonePrefixBits: [64, [Validators.min(16), Validators.max(124)]],
+    defaultIpv6ReverseZonePrefixBits: [64, [ptrIpv6PrefixLengthValidator]],
   });
 
   ngOnInit(): void {
@@ -73,7 +75,7 @@ export class PtrSyncSettingsComponent implements OnInit {
 
   /** This method PATCHes the defaults, then shows the backend's note. */
   async save(): Promise<void> {
-    if (this.submitting()) return;
+    if (this.submitting() || this.form.invalid) return;
 
     this.submitting.set(true);
     this.errorMessage.set(null);

@@ -1,4 +1,4 @@
-import { Component, effect, inject, input } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   FormCheckComponent,
@@ -19,9 +19,27 @@ export interface CaaRecordFormData {
 }
 
 /**
- * This component is the `CAA` record data form (RFC 8659). `tag` is a select of the three RFC 8659
- * tags (`issue`, `issuewild`, `iodef`), since a mistyped tag is silently ignored by every
- * certificate authority. With automatic CAA management on (see `ZoneFormComponent`),
+ * This constant lists the property tags of the IANA "Certification Authority Restriction
+ * Properties" registry that are in use, in registry order: `issue`, `issuewild` and `iodef`
+ * (RFC 8659 §4), `issuemail` (RFC 9495), `issuevmc` (Verified Mark Certificates), `contactemail`
+ * and `contactphone` (CA/Browser Forum). The registry's reserved tags (`auth`, `path`, `policy`)
+ * are left out. {@link CaaRecordFormComponent} offers these in its tag select.
+ */
+export const CAA_PROPERTY_TAGS: readonly string[] = [
+  'issue',
+  'issuewild',
+  'iodef',
+  'issuemail',
+  'issuevmc',
+  'contactemail',
+  'contactphone',
+];
+
+/**
+ * This component is the `CAA` record data form (RFC 8659). `tag` is a select of the registered
+ * tags in {@link CAA_PROPERTY_TAGS}, since a mistyped tag is silently ignored by every
+ * certificate authority. A stored record whose tag is not in that list (an unregistered or reserved
+ * one) adds its tag as an extra option, so it loads and saves unchanged. With automatic CAA management on (see `ZoneFormComponent`),
  * `CaaRecordReconciliationService` maintains its own `issue` records; a hand edit to one of those
  * is reverted on the next reconciliation, while records added here are left alone.
  */
@@ -42,9 +60,9 @@ export interface CaaRecordFormData {
       <div class="field">
         <label cLabel for="caa-tag">Tag</label>
         <select cSelect id="caa-tag" formControlName="tag">
-          <option value="issue">issue</option>
-          <option value="issuewild">issuewild</option>
-          <option value="iodef">iodef</option>
+          @for (tag of tagOptions(); track tag) {
+            <option [value]="tag">{{ tag }}</option>
+          }
         </select>
       </div>
       <div class="field">
@@ -92,10 +110,22 @@ export class CaaRecordFormComponent implements RecordDataFormComponent<CaaRecord
     isCritical: [false],
   });
 
+  /** The loaded record's tag when the registry list lacks it, else null. */
+  private readonly extraTag = signal<string | null>(null);
+
+  /** The tags the select offers: the registered ones, plus a loaded tag the list lacks. */
+  readonly tagOptions = computed(() => {
+    const extra = this.extraTag();
+    return extra === null ? CAA_PROPERTY_TAGS : [...CAA_PROPERTY_TAGS, extra];
+  });
+
   constructor() {
     effect(() => {
       const data = this.initialData();
-      if (data) this.form.patchValue(data);
+      if (data) {
+        this.extraTag.set(CAA_PROPERTY_TAGS.includes(data.tag) ? null : data.tag);
+        this.form.patchValue(data);
+      }
     });
   }
 

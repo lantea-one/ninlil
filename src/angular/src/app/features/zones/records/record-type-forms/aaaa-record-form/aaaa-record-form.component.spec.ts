@@ -38,4 +38,15 @@ describe('AaaaRecordFormComponent', () => {
     fixture.detectChanges();
     expect(component.form.controls.address.value).toBe('fe80::1');
   });
+
+  it('accepts an address with an embedded IPv4 tail', () => {
+    component.form.controls.address.setValue('::ffff:192.0.2.1');
+    expect(component.form.valid).toBeTrue();
+    expect(component.getData()).toEqual({ address: '::ffff:192.0.2.1' });
+  });
+
+  it('rejects a well-shaped but invalid address with the invalidIpv6 error', () => {
+    component.form.controls.address.setValue('1::2::3');
+    expect(component.form.controls.address.hasError('invalidIpv6')).toBeTrue();
+  });
 });

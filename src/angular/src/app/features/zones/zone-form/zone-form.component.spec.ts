@@ -158,6 +158,23 @@ describe('ZoneFormComponent', () => {
     ).toBeFalse();
   });
 
+  it('names both interval forms in the sync interval label and in its error', async () => {
+    const fixture = await createComponent(null);
+    const element: HTMLElement = fixture.nativeElement;
+
+    fixture.componentInstance.form.patchValue({ type: ZoneTypeEnum.CloudPrimary });
+    fixture.detectChanges();
+
+    expect(element.querySelector('label[for="zone-cloud-sync-interval"]')?.textContent).toContain(
+      'hh:mm:ss or d.hh:mm:ss',
+    );
+
+    fixture.componentInstance.form.controls.cloudSyncIntervalText.setValue('5 minutes');
+    fixture.componentInstance.form.controls.cloudSyncIntervalText.markAsTouched();
+    fixture.detectChanges();
+    expect(element.textContent).toContain('1.00:00:00 for one day');
+  });
+
   it('offers none of the algorithms the server refuses to sign with', async () => {
     const fixture = await createComponent(null);
 

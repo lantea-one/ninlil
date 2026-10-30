@@ -1,6 +1,7 @@
 import { Component, effect, inject, input } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FormControlDirective, FormDirective, FormLabelDirective } from '@coreui/angular';
+import { ipv6AddressValidator } from '../../../../../shared/ip-address/ip-address.util';
 import { RecordDataFormComponent } from '../record-type-form.model';
 
 /** This interface mirrors `Ninlil.Dns.Common.Wire.Records.AaaaRecordData` field-for-field. */
@@ -20,7 +21,7 @@ export interface AaaaRecordFormData {
         @if (form.controls.address.hasError('required')) {
           <div class="field-error">An address is required.</div>
         }
-        @if (form.controls.address.hasError('pattern')) {
+        @if (form.controls.address.hasError('invalidIpv6')) {
           <div class="field-error">Enter a valid IPv6 address.</div>
         }
       </div>
@@ -46,9 +47,8 @@ export class AaaaRecordFormComponent implements RecordDataFormComponent<AaaaReco
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
   readonly form = this.formBuilder.group({
-    // A loose check (hex digits and colons only); the backend's parser does the full RFC 4291
-    // validation. It also rejects an embedded IPv4 tail such as "::ffff:192.0.2.1".
-    address: ['', [Validators.required, Validators.pattern(/^[0-9a-fA-F:]+$/)]],
+    // The three RFC 4291 §2.2 text forms, including an IPv4 tail such as "::ffff:192.0.2.1".
+    address: ['', [Validators.required, ipv6AddressValidator]],
   });
 
   constructor() {
