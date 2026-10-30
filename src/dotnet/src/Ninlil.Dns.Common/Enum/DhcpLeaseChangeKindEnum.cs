@@ -26,7 +26,7 @@ public enum DhcpLeaseChangeKindEnum
 
     /// <summary>
     ///     The client gave the address back before its lease expired (a DHCPv4 RELEASE, RFC 2131
-    ///     Section 4.3.6). The lease is now <see cref="LeaseStateEnum.Released" />.
+    ///     Section 4.3.4). The lease is now <see cref="LeaseStateEnum.Released" />.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Released")]
     Released = 1,

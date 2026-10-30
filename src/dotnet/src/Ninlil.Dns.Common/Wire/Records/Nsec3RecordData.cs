@@ -35,7 +35,7 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     one snapshot of the zone useless against a later one.
 /// </param>
 /// <param name="nextHashedOwnerName">
-///     The hashed next owner name in hash order, as raw binary (RFC 5155 §3.3), not the base32hex
+///     The hashed next owner name in hash order, as raw binary (RFC 5155 §3.2), not the base32hex
 ///     text form used in owner names.
 /// </param>
 /// <param name="types">Every record type present at the original, unhashed owner name.</param>
@@ -143,7 +143,7 @@ public class Nsec3RecordDataCodec : IDnsRecordDataCodec
         ushort iterations = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(2, 2));
 
         // The salt and the hashed next name are each a one-octet length prefix followed by
-        // that many raw octets, per RFC 5155 §3.3 -- neither field has a fixed size.
+        // that many raw octets, per RFC 5155 §3.2 -- neither field has a fixed size.
         byte saltLength = rdata[4];
         int offset = 5;
         byte[] salt = rdata.Slice(offset, saltLength).ToArray();

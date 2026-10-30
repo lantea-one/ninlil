@@ -39,7 +39,7 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     Whether the key announces its revocation: bit 8 of the Flags field (RFC 5011 §3). A key
 ///     revokes itself by being republished with this bit set and signed by itself. A validator
 ///     that verifies that signature stops trusting the key at once, without the hold-down delay
-///     of RFC 5011 §2.3. Keys Ninlil signs never set it (Ninlil retires a key by no longer
+///     of RFC 5011 §2.2. Keys Ninlil signs never set it (Ninlil retires a key by no longer
 ///     publishing it), so it defaults to <see langword="false" />.
 ///     <c>TrustAnchorRolloverService</c> reads it from upstream keys.
 /// </param>

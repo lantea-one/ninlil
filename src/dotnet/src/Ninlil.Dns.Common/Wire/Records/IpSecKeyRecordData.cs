@@ -20,11 +20,11 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     Among multiple IPSECKEY records for the same owner name, a lower value is preferred.
 /// </param>
 /// <param name="gatewayType">
-///     What form <see cref="GatewayAddress" />/<see cref="GatewayName" /> takes (RFC 4025 §2.5):
+///     What form <see cref="GatewayAddress" />/<see cref="GatewayName" /> takes (RFC 4025 §2.3):
 ///     0 means no gateway, 1 an IPv4 address, 2 an IPv6 address and 3 a domain name.
 /// </param>
 /// <param name="algorithm">
-///     The format of <see cref="PublicKey" /> (RFC 4025 §2.6): 0 means no key, 1 is a DSA key and
+///     The format of <see cref="PublicKey" /> (RFC 4025 §2.4): 0 means no key, 1 is a DSA key and
 ///     2 is an RSA key.
 /// </param>
 /// <param name="gatewayAddress">

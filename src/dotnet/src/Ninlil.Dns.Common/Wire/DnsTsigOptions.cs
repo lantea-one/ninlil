@@ -36,8 +36,8 @@ namespace Ninlil.Dns.Common.Wire;
 ///     header (see <see cref="TsigCodec.ExtractSignedMessageBytes" />).
 /// </param>
 /// <param name="error">
-///     The TSIG outcome (RFC 8945 §5.3): <see cref="DnsResponseCodeEnum.NoError" /> for a verified
-///     request, or <see cref="DnsResponseCodeEnum.BadVersionOrBadSignature" /> (BADSIG, which shares
+///     The TSIG outcome (the RCODEs of RFC 8945 §3): <see cref="DnsResponseCodeEnum.NoError" />
+///     for a verified request, or <see cref="DnsResponseCodeEnum.BadVersionOrBadSignature" /> (BADSIG, which shares
 ///     its value with the EDNS BADVERS code), <see cref="DnsResponseCodeEnum.BadKey" />,
 ///     <see cref="DnsResponseCodeEnum.BadTruncation" /> or <see cref="DnsResponseCodeEnum.BadTime" />
 ///     when a server rejects a signed request.

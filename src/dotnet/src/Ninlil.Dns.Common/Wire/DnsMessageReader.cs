@@ -32,7 +32,7 @@ public static class DnsMessageReader
 
     /// <summary>
     ///     This method decodes a complete DNS message and also reports where a TSIG pseudo-record
-    ///     started, if there was one. TSIG verification needs this: RFC 8945 §4.3.3 authenticates
+    ///     started, if there was one. TSIG verification needs this: RFC 8945 §4.3.2 authenticates
     ///     the original wire bytes before the TSIG record (with the additional-record count
     ///     reduced by one), not a re-serialized message, which could differ in bytes (a different
     ///     compression choice, for example) from what was signed.

@@ -20,7 +20,8 @@ public static class TsigCodec
     ///     authenticated, leaving out the MAC itself (<see cref="DnsTsigOptions.Mac" />) and the
     ///     original ID (<see cref="DnsTsigOptions.OriginalId" />), which goes into the message bytes
     ///     instead (see <see cref="ExtractSignedMessageBytes" />). The key and algorithm names are
-    ///     written in canonical form (RFC 4034 §6.2: lowercase, uncompressed), so a key named
+    ///     written in canonical wire form (RFC 8945 §4.3.3, which RFC 4034 §6.2 defines as
+    ///     lowercase and uncompressed), so a key named
     ///     <c>Ops.Key</c> produces the same MAC as <c>ops.key</c>.
     /// </summary>
     /// <param name="tsig">The TSIG fields to build the variables from.</param>
@@ -64,8 +65,8 @@ public static class TsigCodec
     }
 
     /// <summary>
-    ///     This method rebuilds the "message" part of what a TSIG MAC covers (RFC 8945 §4.3.3,
-    ///     "Msg'"): the bytes as received, up to but not including the TSIG record, with the
+    ///     This method rebuilds the "message" part of what a TSIG MAC covers (RFC 8945
+    ///     §4.3.2): the bytes as received, up to but not including the TSIG record, with the
     ///     header's additional-record count reduced by one and the header ID replaced by the TSIG
     ///     Original ID. It works on the received bytes rather than re-serializing the parsed
     ///     <see cref="DnsMessage" />, because a different compression choice could produce bytes
@@ -169,7 +170,8 @@ public static class TsigCodec
     /// <summary>
     ///     This method returns how many octets a TSIG record occupies on the wire, so a sender can
     ///     reserve room for it before the MAC exists (a UDP answer is truncated to leave space for
-    ///     its signature). Both names are written uncompressed, as RFC 8945 §4.2 requires.
+    ///     its signature). Both names are written uncompressed (RFC 8945 §4.2 forbids compressing
+    ///     the algorithm name).
     /// </summary>
     /// <param name="keyName">The record owner, the key name.</param>
     /// <param name="algorithmName">The algorithm name in the RDATA.</param>

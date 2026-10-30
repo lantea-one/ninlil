@@ -27,7 +27,7 @@ public record CaaRecordData(bool IsCritical, string Tag, string Value) : IDnsRec
 public class CaaRecordDataCodec : IDnsRecordDataCodec
 {
     /// <summary>
-    ///     This constant contains the single bit RFC 8659 §4 assigns inside the flags octet,
+    ///     This constant contains the single bit RFC 8659 §4.1 assigns inside the flags octet,
     ///     marking a tag as critical.
     /// </summary>
     private const byte CriticalFlagBit = 0x80;
@@ -44,7 +44,7 @@ public class CaaRecordDataCodec : IDnsRecordDataCodec
         bool isCritical = (rdata[0] & CriticalFlagBit) != 0;
         int offset = 1;
 
-        // The tag is a length-prefixed character-string, but the value is not: RFC 8659 §4
+        // The tag is a length-prefixed character-string, but the value is not: RFC 8659 §4.1
         // has it run to the end of the RDATA, so it is decoded here rather than through
         // CharacterStringCodec.
         string tag = CharacterStringCodec.Read(rdata, ref offset);

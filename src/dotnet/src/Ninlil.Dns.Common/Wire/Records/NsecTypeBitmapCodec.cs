@@ -6,7 +6,7 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class reads and writes the "Type Bit Maps" field of <see cref="NsecRecordData" /> and
-///     <see cref="Nsec3RecordData" />. RFC 4034 §4.1.2 and RFC 5155 §3.2 define the same windowed
+///     <see cref="Nsec3RecordData" />. RFC 4034 §4.1.2 and RFC 5155 §3.2.1 define the same windowed
 ///     bitmap for both. It lists every record type present at a name, so a resolver can trust that
 ///     any type not listed is absent.
 /// </summary>

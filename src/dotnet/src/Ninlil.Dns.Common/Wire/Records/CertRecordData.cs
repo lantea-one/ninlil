@@ -29,7 +29,7 @@ namespace Ninlil.Dns.Common.Wire.Records;
 /// <param name="algorithm">
 ///     The certificate's public key algorithm, drawn from the same "DNSSEC Algorithm Numbers"
 ///     registry <see cref="DnssecAlgorithmEnum" /> models, or <see langword="null" /> when
-///     RFC 4398 §2.1's zero value ("no algorithm used with the certificate") applies.
+///     RFC 4398 §2's zero value (the algorithm is unknown to a secure DNS) applies.
 /// </param>
 /// <param name="certificate">The certificate or certificate revocation list itself.</param>
 public class CertRecordData(

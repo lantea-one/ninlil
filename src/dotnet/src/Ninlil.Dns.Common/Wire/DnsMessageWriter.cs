@@ -259,8 +259,8 @@ public static class DnsMessageWriter
     /// <summary>
     ///     This method encodes a TSIG pseudo-record from a <see cref="DnsTsigOptions" />, the
     ///     reverse of the extraction <see cref="DnsMessageReader" /> performs when reading a
-    ///     message. Per RFC 8945 §4.2, neither the owner name (the key name) nor the algorithm name
-    ///     in the RDATA is compressed.
+    ///     message. RFC 8945 §4.2 forbids compressing the algorithm name in the RDATA, and the owner
+    ///     name (the key name) is written uncompressed too.
     /// </summary>
     private static void WriteTsigRecord(ArrayBufferWriter<byte> buffer, DnsTsigOptions tsig)
     {

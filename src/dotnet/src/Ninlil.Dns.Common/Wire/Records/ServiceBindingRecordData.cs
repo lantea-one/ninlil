@@ -98,7 +98,7 @@ internal static class ServiceBindingCodec
 
         List<SvcbParameter> parameters = [];
 
-        // The rest of the RDATA is a run of parameters (RFC 9460 §2.1): a 2-octet key, a
+        // The rest of the RDATA is a run of parameters (RFC 9460 §2.2): a 2-octet key, a
         // 2-octet value length, then that many octets of value, until the RDATA ends.
         while (offset < rdata.Length)
         {
@@ -129,7 +129,7 @@ internal static class ServiceBindingCodec
 
         List<SvcbParameter> parameters = [];
 
-        // The rest of the RDATA is a run of parameters (RFC 9460 §2.1): a 2-octet key, a
+        // The rest of the RDATA is a run of parameters (RFC 9460 §2.2): a 2-octet key, a
         // 2-octet value length, then that many octets of value, until the RDATA ends.
         while (offset < rdata.Length)
         {
