@@ -567,6 +567,57 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task NoListenAddresses_WhenThePortIsTaken_LogsAnErrorReportsNotListeningAndKeepsRunning()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        // Another program holds the wildcard UDP port that QUIC needs.
+        using Socket occupant = new(
+            AddressFamily.InterNetworkV6,
+            SocketType.Dgram,
+            ProtocolType.Udp
+        );
+        occupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+        occupant.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+        int port = ((IPEndPoint)occupant.LocalEndPoint).Port;
+
+        CapturingLogger<DnsOverQuicListener> logger = new();
+        DnsOverQuicListener listener = new(
+            null,
+            BuildScopeFactory(),
+            new StaticOptionsMonitor<DnsOverQuicOptions>(
+                new DnsOverQuicOptions
+                {
+                    Enable = true,
+                    Port = port,
+                    ListenAddresses = "",
+                    Certificate = _options.Certificate,
+                }
+            ),
+            logger
+        );
+
+        try
+        {
+            await listener.StartAsync(CancellationToken.None);
+            await Task.WhenAny(listener.ExecuteTask, Task.Delay(TimeSpan.FromSeconds(10)));
+
+            Assert.False(listener.ExecuteTask.IsFaulted);
+            Assert.False(listener.IsListening);
+            Assert.Single(listener.FailedListenAddresses);
+            Assert.Contains(
+                logger.Errors,
+                message => message.Contains("DNS-over-QUIC") && message.Contains($"port {port}")
+            );
+        }
+        finally
+        {
+            await listener.StopAsync(CancellationToken.None);
+        }
+    }
+
     /// <summary>
     ///     This method starts a separate pipeline and listener bound to the given listen addresses
     ///     on a free port, apart from the shared one in <see cref="InitializeAsync" /> (which

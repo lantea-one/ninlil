@@ -84,6 +84,23 @@ public sealed class ListenSocketSet
                 if (protocolType == ProtocolType.Tcp)
                     dualStack.Listen();
             }
+            catch (SocketException exception)
+            {
+                // A listener that throws out of ExecuteAsync stops the whole host, taking the
+                // other transports, DHCP and the REST API with it, and the operator could not
+                // reach the settings to fix the port. Report it instead: the listener ends
+                // without sockets, so the transports health check shows it as not listening.
+                dualStack.Dispose();
+                logger.LogError(
+                    exception,
+                    "{Transport} could not listen on {Address} port {Port}: {Reason}. This transport is not running; the rest of the server is unaffected. Fix the port or the listen addresses and restart Ninlil.",
+                    transportName,
+                    IPAddress.IPv6Any,
+                    port,
+                    exception.Message
+                );
+                return new ListenSocketSet([], [$"{IPAddress.IPv6Any} ({exception.Message})"]);
+            }
             catch
             {
                 dualStack.Dispose();

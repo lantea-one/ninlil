@@ -239,11 +239,10 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method starts a QUIC listener on one endpoint. With no listen addresses configured
-    ///     (<paramref name="explicitAddress" /> false) a failure throws. For a configured address,
-    ///     a failure is logged, recorded in
-    ///     <paramref name="failedAddresses" />, and <see langword="null" /> is returned so the
-    ///     other addresses keep serving. An address this host doesn't have is refused up front:
+    ///     This method starts a QUIC listener on one endpoint. A failure is logged, recorded in
+    ///     <paramref name="failedAddresses" />, and <see langword="null" /> is returned, so a
+    ///     taken port never throws out of the hosted service (which would stop the host). With
+    ///     configured addresses the other addresses keep serving. An address this host doesn't have is refused up front:
     ///     MsQuic binds a wildcard socket underneath and filters by address itself, so it would
     ///     otherwise "listen" there successfully and never answer anything.
     /// </summary>
@@ -256,9 +255,8 @@ public sealed class DnsOverQuicListener(
     {
         QuicListenerOptions listenerOptions = BuildListenerOptions(endpoint);
 
-        if (!explicitAddress)
-            return await QuicListener.ListenAsync(listenerOptions, stoppingToken);
-
+        // The wildcard endpoint of an unconfigured list is always assigned, so only a configured
+        // address can fail this check.
         if (!ListenSocketSet.IsAssignedToThisHost(endpoint.Address))
         {
             failedAddresses.Add($"{endpoint.Address} (not assigned to any network interface)");
@@ -279,14 +277,25 @@ public sealed class DnsOverQuicListener(
             when (exception is QuicException or SocketException or ArgumentException)
         {
             failedAddresses.Add($"{endpoint.Address} ({exception.Message})");
-            logger.LogError(
-                exception,
-                "{Transport} could not listen on {Address} port {Port}: {Reason}. Its other listen addresses keep serving.",
-                TransportName,
-                endpoint.Address,
-                endpoint.Port,
-                exception.Message
-            );
+            if (explicitAddress)
+                logger.LogError(
+                    exception,
+                    "{Transport} could not listen on {Address} port {Port}: {Reason}. Its other listen addresses keep serving.",
+                    TransportName,
+                    endpoint.Address,
+                    endpoint.Port,
+                    exception.Message
+                );
+            else
+                logger.LogError(
+                    exception,
+                    "{Transport} could not listen on {Address} port {Port}: {Reason}. This transport is not running; the rest of the server is unaffected. Fix the port or the listen addresses and restart Ninlil.",
+                    TransportName,
+                    endpoint.Address,
+                    endpoint.Port,
+                    exception.Message
+                );
+
             return null;
         }
     }

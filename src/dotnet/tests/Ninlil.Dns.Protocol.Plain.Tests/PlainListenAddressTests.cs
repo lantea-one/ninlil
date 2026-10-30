@@ -44,6 +44,47 @@ public sealed class PlainListenAddressTests
     }
 
     [Fact]
+    public async Task NoListenAddresses_WhenThePortIsTaken_LogsAnErrorReportsNotListeningAndKeepsRunning()
+    {
+        // Another program holds the wildcard UDP and TCP port. Neither listener may fault: a
+        // faulted hosted service stops the whole host.
+        using Socket tcpOccupant = new(
+            AddressFamily.InterNetworkV6,
+            SocketType.Stream,
+            ProtocolType.Tcp
+        );
+        tcpOccupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+        tcpOccupant.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+        tcpOccupant.Listen();
+        int port = ((IPEndPoint)tcpOccupant.LocalEndPoint).Port;
+
+        using Socket udpOccupant = new(
+            AddressFamily.InterNetworkV6,
+            SocketType.Dgram,
+            ProtocolType.Udp
+        );
+        udpOccupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+        udpOccupant.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+
+        await using RunningListeners listeners = await RunningListeners.StartAsync("", port);
+
+        Assert.False(listeners.Udp.ExecuteTask.IsFaulted);
+        Assert.False(listeners.Tcp.ExecuteTask.IsFaulted);
+        Assert.False(listeners.Udp.IsListening);
+        Assert.False(listeners.Tcp.IsListening);
+        Assert.Single(listeners.Udp.FailedListenAddresses);
+        Assert.Single(listeners.Tcp.FailedListenAddresses);
+        Assert.Contains(
+            listeners.UdpLogger.Errors,
+            message => message.Contains("Plain DNS (UDP)") && message.Contains($"port {port}")
+        );
+        Assert.Contains(
+            listeners.TcpLogger.Errors,
+            message => message.Contains("Plain DNS (TCP)") && message.Contains($"port {port}")
+        );
+    }
+
+    [Fact]
     public async Task LoopbackOnly_AnswersThereButNotOnAnotherLocalAddress()
     {
         IPAddress other = LocalAddresses.OtherLoopback();
@@ -232,9 +273,12 @@ public sealed class PlainListenAddressTests
 
         public CapturingLogger<TcpDnsListener> TcpLogger { get; } = new();
 
-        public static async Task<RunningListeners> StartAsync(string listenAddresses)
+        public static async Task<RunningListeners> StartAsync(
+            string listenAddresses,
+            int? port = null
+        )
         {
-            RunningListeners running = new() { Port = LocalAddresses.GetFreePort() };
+            RunningListeners running = new() { Port = port ?? LocalAddresses.GetFreePort() };
 
             running._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher(

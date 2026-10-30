@@ -287,8 +287,9 @@ over, delete the `data` folder next to the executable.
 - *Step 7 or 6 answers `A zone's very first record must be its own SOA record.`* Run step 6 first.
 - *The `dig` answer has status `NXDOMAIN`.* The record is missing or has another name: list the
   zone's records with `GET /api/zones/<zone-id>/records` and compare.
-- *Ninlil does not start.* Read the log lines in the first terminal. A port that is already in
-  use is the usual cause: choose other port numbers.
+- *Ninlil does not start.* Read the log lines in the first terminal. The web port being in use
+  is the usual cause: choose another port number. A DNS port that is in use does not stop Ninlil;
+  see "Encrypted transports and DNS64" for what the log and `GET /status` show.
 
 To go on from here, read [Installation](#installation) for a permanent setup and the
 [Guides](#guides) for each feature.
@@ -3084,11 +3085,23 @@ translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway.
   made again when the names change. Or use a certificate for your name.
 - *The switch answers `200` but nothing listens.* The log has the reason. For DoQ it names
   `libmsquic`. For DNSCrypt it names the missing provider name.
-- *Ninlil stops at start and the log says `BackgroundService failed` with `SocketException`.* An
-  enabled transport could not bind its port when Ninlil started: `Permission denied` for a port
-  below 1024 without the right to use it, or `Address already in use`. Ninlil stops instead of
-  running without the transport. Change the port, or switch the transport off in
-  `appsettings.json`, and start again.
+- *Ninlil runs but a transport does not answer, and the log has an Error such as
+  `DNS-over-TLS could not listen on :: port 853: Permission denied`.* An enabled transport could not
+  bind its port when Ninlil started: `Permission denied` for a port below 1024 without the right to
+  use it, or `Address already in use`. Ninlil logs one Error naming the transport, the address, the
+  port and the reason, reports the `transports` check of `GET /status` as `Unhealthy`, and keeps
+  running: the other transports, DHCP, the REST API and the admin console are not affected. Only the
+  web listener failing to bind stops Ninlil, because nothing could fix it from inside. Fix the
+  transport like this:
+  1. Read the reason in the log: the Error line names the transport, address, port and reason. With
+     a token that holds the `status:read` permission, `curl http://127.0.0.1:18080/status -H 'Authorization: Bearer <token>'`
+     (use your web port) lists the same in the `transports` component. Without a token it shows
+     only `"status":"Unhealthy"`.
+  2. Change the port or the listen addresses (`PATCH /api/transport-settings/<transport>` or the setting in
+     `appsettings.json`), or free the port: `ss -lntup | grep ':<port>'` shows the program that holds
+     it.
+  3. Restart Ninlil. A transport that failed to bind is not retried while Ninlil runs.
+  4. Check that it worked: `GET /status` reports `transports` as `Healthy`.
 - *DoQ clients are cut off.* A query with a message ID other than 0 closes the connection.
   Check the client.
 - *A DNSCrypt client cannot find the server.* Check that the stamp's provider name has the

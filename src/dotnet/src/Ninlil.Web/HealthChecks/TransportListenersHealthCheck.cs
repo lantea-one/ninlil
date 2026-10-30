@@ -74,7 +74,13 @@ public sealed class TransportListenersHealthCheck(
 
             if (!isListening)
             {
-                notListening.Add(name);
+                // A listener that could not bind records why (address in use, permission
+                // denied, ...); the reason is what the operator needs to fix the setting.
+                notListening.Add(
+                    failedListenAddresses is { Count: > 0 }
+                        ? $"{name} ({string.Join("; ", failedListenAddresses)})"
+                        : name
+                );
                 return;
             }
 

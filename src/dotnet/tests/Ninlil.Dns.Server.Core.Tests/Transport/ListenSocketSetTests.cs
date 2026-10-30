@@ -185,6 +185,57 @@ public class ListenSocketSetTests
         }
     }
 
+    [Theory]
+    [InlineData(ProtocolType.Udp)]
+    [InlineData(ProtocolType.Tcp)]
+    public void NoAddressesConfigured_WhenThePortIsTaken_BindsNothingReportsItAndDoesNotThrow(
+        ProtocolType protocolType
+    )
+    {
+        // The occupant holds the same wildcard address and port without address reuse, which is
+        // what another program (or a second Ninlil) listening there looks like to the bind.
+        CapturingLogger<ListenSocketSetTests> logger = new();
+        Socket occupant = new(
+            AddressFamily.InterNetworkV6,
+            protocolType == ProtocolType.Tcp ? SocketType.Stream : SocketType.Dgram,
+            protocolType
+        );
+        occupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+        occupant.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+        int port = ((IPEndPoint)occupant.LocalEndPoint).Port;
+
+        // A bound but not listening TCP socket does not block a second bind on Unix.
+        if (protocolType == ProtocolType.Tcp)
+            occupant.Listen();
+
+        try
+        {
+            ListenSocketSet set = ListenSocketSet.Bind(
+                "Plain DNS (test)",
+                "",
+                port,
+                protocolType,
+                logger
+            );
+
+            Assert.Empty(set.Sockets);
+            string failed = Assert.Single(set.FailedAddresses);
+            Assert.StartsWith("::", failed);
+            Assert.Contains(
+                logger.Errors,
+                message =>
+                    message.Contains("Plain DNS (test)")
+                    && message.Contains("::")
+                    && message.Contains($"port {port}")
+                    && message.Contains("in use")
+            );
+        }
+        finally
+        {
+            occupant.Dispose();
+        }
+    }
+
     [Fact]
     public void NoUsableAddress_BindsNothingAndSaysSo()
     {
