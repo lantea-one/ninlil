@@ -15,7 +15,7 @@ public interface IUpstreamDnsClient
     /// <summary>
     ///     This method sends one non-recursive query with EDNS and returns the response, trying UDP
     ///     first and retrying over TCP if the UDP response is truncated (RFC 1035 §4.2.1 and
-    ///     §4.2.2).
+    ///     §4.2.2 for the TC bit and the TCP framing, RFC 1123 §6.1.3.2 for the retry).
     /// </summary>
     /// <param name="serverAddress">The upstream name server's address.</param>
     /// <param name="name">The name being queried for.</param>

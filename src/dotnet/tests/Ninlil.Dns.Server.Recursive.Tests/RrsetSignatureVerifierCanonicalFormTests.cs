@@ -13,10 +13,11 @@ namespace Ninlil.Dns.Server.Recursive.Tests;
 /// <summary>
 ///     This class tests that <see cref="RrsetSignatureVerifier.TryVerify" /> follows the canonical
 ///     form rules that decide whether a signature made elsewhere verifies: NSEC Next Domain Names
-///     keep their case (RFC 6840 §5.1), the RRSIG Signer's Name is lower-cased (RFC 4034 §3.1.8.1)
-///     and a wildcard expansion is verified against the wildcard owner (RFC 4035 §5.3.2). The
-///     signing input is assembled byte by byte in the test with an Ed25519 key, so it does not
-///     depend on <see cref="DnssecCanonicalization.BuildSigningInput" />. A second group replays
+///     keep their case and the RRSIG Signer's Name is lower-cased (RFC 6840 §5.1, which
+///     corrects RFC 4034 §6.2), and a wildcard expansion is verified against the wildcard owner
+///     (RFC 4035 §5.3.2). The signing input is assembled byte by byte in the test with an
+///     Ed25519 key, so it does not depend on
+///     <see cref="DnssecCanonicalization.BuildSigningInput" />. A second group replays
 ///     dnspython 2.8.0 vectors from <c>Vectors/dnssec-canonical-vectors.json</c>.
 /// </summary>
 public class RrsetSignatureVerifierCanonicalFormTests

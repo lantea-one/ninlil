@@ -13,7 +13,7 @@ namespace Ninlil.Dns.Server.Recursive.Tests;
 /// <summary>
 ///     This class tests <see cref="UpstreamDnsClient" /> over real loopback sockets: a test server
 ///     on an unprivileged port answers each query with stray datagrams before the real reply, and
-///     the client, using a pooled unconnected socket, must skip the strays (RFC 5452 §4.1).
+///     the client, using a pooled unconnected socket, must skip the strays (RFC 5452 §9.1).
 /// </summary>
 public class UpstreamDnsClientTests
 {

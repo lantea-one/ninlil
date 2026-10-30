@@ -46,10 +46,12 @@ public class RecursiveServerOptions
     ///     non-existence from the root or <c>arpa</c> is not an attack:
     ///     <c>home.arpa</c> (RFC 8375), <c>internal</c> (reserved by ICANN for private use), and
     ///     the zones of the IANA "Locally-Served DNS Zones" registry: the IPv4 zones of RFC 6303
-    ///     §4.1 (RFC 1918 and link-local space, loopback, "this network", the documentation
-    ///     ranges, the broadcast address), the IPv6 zones of RFC 6303 §4.2 (unspecified address,
-    ///     loopback, unique local <c>fd00::/8</c>, link local <c>fe80::/10</c>, documentation
-    ///     <c>2001:db8::/32</c>) and the shared address space <c>100.64.0.0/10</c> (RFC 7793).
+    ///     §4.1 (RFC 1918 space) and §4.2 (loopback, "this network", link-local space, the
+    ///     documentation ranges, the broadcast address), the IPv6 zones of RFC 6303 §4.3 to §4.6
+    ///     (unspecified address, loopback, unique local <c>fd00::/8</c>, link local
+    ///     <c>fe80::/10</c>, documentation <c>2001:db8::/32</c>) and the shared address space
+    ///     <c>100.64.0.0/10</c> (RFC 7793). The registry also lists <c>resolver.arpa</c>
+    ///     (RFC 9462) and <c>service.arpa</c> (RFC 9665), which this list does not include.
     /// </summary>
     public static IReadOnlyList<string> BuiltInInsecureDomains { get; } =
         BuildBuiltInInsecureDomains();
@@ -87,7 +89,7 @@ public class RecursiveServerOptions
     {
         List<string> domains = ["home.arpa", "internal", "10.in-addr.arpa"];
 
-        // RFC 1918 172.16.0.0/12.
+        // RFC 6303 §4.1: RFC 1918 172.16.0.0/12.
         domains.AddRange(Enumerable.Range(16, 16).Select(octet => $"{octet}.172.in-addr.arpa"));
         domains.AddRange([
             "168.192.in-addr.arpa",
@@ -103,7 +105,7 @@ public class RecursiveServerOptions
         // RFC 7793: 100.64.0.0/10 is 64.100.in-addr.arpa through 127.100.in-addr.arpa.
         domains.AddRange(Enumerable.Range(64, 64).Select(octet => $"{octet}.100.in-addr.arpa"));
 
-        // RFC 6303 §4.2. The first two are the 32-nibble reverse names of :: and ::1.
+        // RFC 6303 §4.3 to §4.6. The first two are the 32-nibble reverse names of :: and ::1.
         domains.AddRange([
             string.Concat(Enumerable.Repeat("0.", 32)) + "ip6.arpa",
             "1." + string.Concat(Enumerable.Repeat("0.", 31)) + "ip6.arpa",
@@ -245,8 +247,9 @@ public class RecursiveServerOptions
     ///     This property contains how long past expiry a cache entry may still be served stale
     ///     (see <see cref="EnableServeStale" />) before
     ///     <c>Ninlil.Dns.Server.Core.Caching.DnsCacheEvictionService</c> discards it. The default
-    ///     is 24 hours, at the short end of the one-to-seven-day range RFC 8767 §4 suggests: long
-    ///     enough to ride out a typical outage without keeping stale data for long.
+    ///     is 24 hours, at the low end of the one to three days RFC 8767 §5 suggests for the
+    ///     maximum stale timer: long enough to ride out a typical outage without keeping stale
+    ///     data for long.
     /// </summary>
     public TimeSpan MaxStaleServeAge { get; set; } = TimeSpan.FromHours(24);
 

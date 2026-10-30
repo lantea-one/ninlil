@@ -15,7 +15,7 @@ namespace Ninlil.Dns.Server.Recursive.Transport;
 ///     This class implements <see cref="IUpstreamDnsClient" /> over UDP and TCP. UDP
 ///     goes through the shared <see cref="IOutboundUdpSocketPool" /> when one is registered. A
 ///     response is accepted only from the queried address and with the query's message ID and
-///     question (RFC 5452 §4.1).
+///     question (RFC 5452 §9.1).
 /// </summary>
 /// <param name="options">
 ///     The per-query timeout (<see cref="RecursiveServerOptions.UpstreamQueryTimeout" />), read
@@ -103,7 +103,7 @@ public sealed class UpstreamDnsClient(
 
     /// <summary>
     ///     This method checks that a response answers a request: the same message ID and the
-    ///     same question (RFC 5452 §4.1). The question check stops a reply to an earlier query
+    ///     same question (RFC 5452 §9.1). The question check stops a reply to an earlier query
     ///     with a colliding ID from being taken for this one.
     /// </summary>
     private static bool IsResponseTo(DnsMessage response, DnsMessage request) =>

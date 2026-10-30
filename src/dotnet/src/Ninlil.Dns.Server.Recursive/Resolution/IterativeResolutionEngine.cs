@@ -281,7 +281,8 @@ public sealed class IterativeResolutionEngine(
             if (isMinimizedProbe && response.ResponseCode == DnsResponseCodeEnum.ServerFailure)
             {
                 // SERVFAIL to a minimized probe is treated like FORMERR/NOTIMP/REFUSED below:
-                // stop minimizing and retry this hop with the full query (RFC 9156 §4.3).
+                // stop minimizing and retry this hop with the full query. RFC 9156 §3 step (6e) leaves
+                // other response codes to the implementation.
                 minimizationDisabled = true;
                 continue;
             }
@@ -335,8 +336,9 @@ public sealed class IterativeResolutionEngine(
                         or DnsResponseCodeEnum.Refused
                 )
                 {
-                    // The server does not handle minimized queries. RFC 9156 §4.3: stop minimizing
-                    // for this resolution and retry this hop with the full name and type.
+                    // The server does not handle minimized queries. RFC 9156 §3 step (6e) leaves other
+                    // response codes to the implementation; this engine stops minimizing for this
+                    // resolution and retries this hop with the full name and type.
                     minimizationDisabled = true;
                     continue;
                 }

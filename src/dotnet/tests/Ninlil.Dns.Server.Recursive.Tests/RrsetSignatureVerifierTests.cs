@@ -11,7 +11,8 @@ namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
 ///     This class tests the RFC 4035 §5.3.1 checks of <see cref="RrsetSignatureVerifier.Verify" />
-///     (signer name, Labels, Zone Key and REVOKE bits, work budget) and the DS handling of
+///     (signer name, Labels, Zone Key bit; RFC 5011 §2.1 for the REVOKE bit), the work budget
+///     and the DS handling of
 ///     <see cref="RrsetSignatureVerifier.FindKeysMatchingDs" /> and
 ///     <see cref="RrsetSignatureVerifier.HasSupportedDs" /> (unsupported digests and algorithms,
 ///     RFC 4509 §3). It uses real Ed25519 keys from <see cref="DnssecTestFixture" />, so every

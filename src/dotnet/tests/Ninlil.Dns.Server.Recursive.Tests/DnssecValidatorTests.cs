@@ -377,7 +377,8 @@ public class DnssecValidatorTests
         DnsName exampleCom = DnsName.Parse("example.com");
         DnssecTestFixture.ZoneKey childKey = _fixture.GenerateZoneKey(exampleCom);
 
-        // A DS with digest type 3 (GOST), which this validator cannot compute (RFC 4035 §5.2).
+        // A DS with digest type 3 (GOST), which this validator cannot compute and so
+        // disregards like an unsupported algorithm (RFC 6840 §5.2, RFC 4035 §5.2).
         DnsResourceRecord ds = new(
             exampleCom,
             DnsResourceRecordTypeEnum.DS,

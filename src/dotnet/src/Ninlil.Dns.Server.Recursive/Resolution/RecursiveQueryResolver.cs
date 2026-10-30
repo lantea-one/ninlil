@@ -45,7 +45,8 @@ namespace Ninlil.Dns.Server.Recursive.Resolution;
 ///     <see cref="RecursiveResolutionStatusEnum.NoData" />, the resolver looks up A for the same
 ///     name and synthesizes AAAA records from it; no other query pays for the extra lookup. With
 ///     validation on, the A answer is validated first (RFC 6147 §5.5): a Bogus one is not used
-///     (SERVFAIL, or NODATA when the client set CD), and a query with both DO and CD set is never
+///     (SERVFAIL as the RFC requires, or NODATA when the client set CD, which the RFC does not
+///     cover), and a query with both DO and CD set is never
 ///     synthesized for, because that client wants the DNSSEC data and a synthesized answer has
 ///     none. <see langword="null" /> (the default) disables DNS64, the same as
 ///     <see cref="Dns64Options.Enable" /> being off.
@@ -113,8 +114,9 @@ public class RecursiveQueryResolver(
             stoppingToken
         );
 
-        // RFC 4035 §3.2.2 and §4.6: validate whether or not the client set CD. CD only decides
-        // whether a Bogus result becomes SERVFAIL or is returned to the client.
+        // RFC 4035 §3.2.2 lets a server skip validation when the client set CD (§4.6 covers the
+        // CD and AD bits). This resolver validates either way, so CD only decides whether a
+        // Bogus result becomes SERVFAIL or is returned to the client.
         DnssecValidationResult validation =
             currentOptions.EnableDnssecValidation
             && result.Status
@@ -134,8 +136,9 @@ public class RecursiveQueryResolver(
         bool isBogus = validation.State == DnssecValidationStateEnum.Bogus;
         bool enforceBogus = isBogus && !request.CheckingDisabled;
 
-        // RFC 6147 §5.5: a client that set DO and CD wants the DNSSEC data itself, so it gets
-        // the answer as it came, with nothing excluded or synthesized.
+        // RFC 6147 §5.5 item 3: a client that set DO and CD wants the DNSSEC data itself, so the
+        // resolver does not synthesize and returns the data as a regular resolver would. The
+        // §5.1.4 exclusion is skipped too, so the answer stays unedited.
         bool dns64Applies =
             !enforceBogus
             && dns64Service is { IsEnabled: true }
@@ -256,7 +259,7 @@ public class RecursiveQueryResolver(
                 // Each CNAME hop's RRSIGs, in chain order, then the final answer's, so a
                 // validating client can check the whole chain itself. The NSEC and NSEC3
                 // records that prove a wildcard expansion belong to the authority section
-                // (RFC 4035 §3.1.3.3), with their RRSIGs.
+                // (RFC 4035 §3.1.3.3, RFC 5155 §7.2.6), with their RRSIGs.
                 foreach (CnameChainHop hop in result.CnameChain)
                     AddPositiveDnssecRecords(response, hop.DnssecRecords);
 

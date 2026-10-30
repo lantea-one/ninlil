@@ -246,8 +246,9 @@ public sealed class DnssecValidatorChainTests
         (IterativeResolutionResult result, DnssecValidationResult validation) =
             await environment.QueryAsync("alias.gost.com", A);
 
-        // The hop is signed by a zone whose only DS cannot be used (RFC 4035 §5.2), so it is
-        // insecure, and the secure final answer cannot lift the result back to Secure.
+        // The hop is signed by a zone whose only DS cannot be used (RFC 6840 §5.2,
+        // RFC 4035 §5.2), so it is insecure, and the secure final answer cannot lift the
+        // result back to Secure.
         Assert.Single(result.CnameChain);
         AssertState(DnssecValidationStateEnum.Insecure, validation);
     }
