@@ -512,9 +512,85 @@ public class RaMessageCodecTests
         );
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
-        // Byte 18 is the Prefix Length. Changing 64 (8 prefix octets) to 0 leaves 8 prefix
-        // octets for a length the decoder accepts only with none, so the option is skipped.
-        bytes[18] = 0;
+        // Byte 18 is the Prefix Length. Changing 64 to 100 leaves 8 prefix octets (Length 2) for a
+        // prefix length above 64, which RFC 4191 Section 2.3 says needs Length 3, so the option is
+        // skipped.
+        bytes[18] = 100;
+
+        Assert.True(
+            RaMessageReader.TryReadRouterAdvertisement(
+                bytes,
+                out RouterAdvertisementMessage decoded,
+                out string failureReason
+            ),
+            failureReason
+        );
+        Assert.False(decoded.TryGetRouteInformationOptions(out _));
+    }
+
+    // RFC 4191 Section 2.3: Length is 1, 2 or 3 (0, 8 or 16 prefix octets). Prefix Length above 64
+    // needs Length 3, above 0 needs Length 2 or 3, and 0 allows Length 1, 2 or 3. A longer prefix
+    // field than needed is therefore valid.
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(8, 0)]
+    [InlineData(16, 0)]
+    [InlineData(8, 1)]
+    [InlineData(8, 64)]
+    [InlineData(16, 1)]
+    [InlineData(16, 64)]
+    [InlineData(16, 65)]
+    [InlineData(16, 128)]
+    public void RouterAdvertisement_WithARouteInformationOptionOfAnyLengthRfc4191Allows_DecodesIt(
+        int prefixOctets,
+        int prefixLength
+    )
+    {
+        byte[] value = new byte[6 + prefixOctets];
+        value[0] = (byte)prefixLength;
+        value[5] = 60; // Route Lifetime of 60 seconds (the preference bits stay 00, Medium).
+        for (int i = 0; i < prefixOctets; i++)
+            value[6 + i] = 0x20; // Octets past the prefix length are reserved and ignored.
+
+        RouterAdvertisementMessage advertisement = new();
+        advertisement.Options.Add(new RaOption((byte)RaOptionCodeEnum.RouteInformation, value));
+        byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
+
+        Assert.True(
+            RaMessageReader.TryReadRouterAdvertisement(
+                bytes,
+                out RouterAdvertisementMessage decoded,
+                out string failureReason
+            ),
+            failureReason
+        );
+        Assert.True(
+            decoded.TryGetRouteInformationOptions(
+                out IReadOnlyList<RaRouteInformationOption> routes
+            )
+        );
+        RaRouteInformationOption route = Assert.Single(routes);
+        Assert.Equal(prefixLength, route.PrefixLength);
+        Assert.Equal(TimeSpan.FromSeconds(60), route.RouteLifetime);
+    }
+
+    // RFC 4191 Section 2.3: a prefix length needs a prefix field that can hold it.
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(8, 65)]
+    [InlineData(8, 128)]
+    [InlineData(16, 129)]
+    public void RouterAdvertisement_WithARouteInformationOptionTooShortForItsPrefixLength_SkipsIt(
+        int prefixOctets,
+        int prefixLength
+    )
+    {
+        byte[] value = new byte[6 + prefixOctets];
+        value[0] = (byte)prefixLength;
+
+        RouterAdvertisementMessage advertisement = new();
+        advertisement.Options.Add(new RaOption((byte)RaOptionCodeEnum.RouteInformation, value));
+        byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
         Assert.True(
             RaMessageReader.TryReadRouterAdvertisement(

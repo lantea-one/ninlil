@@ -25,9 +25,10 @@ namespace Ninlil.Dhcp.Common.Wire.Ra;
 ///             <item><see cref="PrefixLength" /> <c>1</c>-<c>64</c>: 8 prefix octets;</item>
 ///             <item><see cref="PrefixLength" /> <c>65</c>-<c>128</c>: 16 prefix octets.</item>
 ///         </list>
-///         <see cref="TryDecode" /> accepts only these smallest forms. RFC 4191 also allows a
-///         longer prefix field than needed (8 or 16 octets for length 0, 16 for lengths 1-64),
-///         which this decoder rejects; only tests decode Router Advertisements.
+///         <see cref="TryDecode" /> also accepts a longer prefix field than needed, as RFC 4191
+///         Section 2.3 allows: 8 or 16 octets for length 0, and 16 octets for lengths 1-64. The
+///         option's Length is 1, 2 or 3 (0, 8 or 16 prefix octets), and the prefix field must be
+///         long enough to hold <see cref="PrefixLength" /> bits.
 ///     </para>
 /// </summary>
 public class RaRouteInformationOption
@@ -87,8 +88,9 @@ public class RaRouteInformationOption
 
     /// <summary>
     ///     This method decodes a Route Information option's value (everything after the
-    ///     type/length header). It rejects a length that is not one of the smallest forms (see
-    ///     the class summary) and the reserved preference value.
+    ///     type/length header). It rejects a value that is not 6, 14 or 22 bytes long (RFC 4191
+    ///     Section 2.3 Length 1, 2 or 3), a prefix field too short for the prefix length (see the
+    ///     class summary) and the reserved preference value.
     /// </summary>
     internal static bool TryDecode(
         ReadOnlySpan<byte> data,
@@ -116,9 +118,8 @@ public class RaRouteInformationOption
         {
             failureReason =
                 $"A Route Information option's own {prefixOctets}-octet prefix cannot carry a "
-                + $"prefix length of {prefixLength} -- this reader accepts 0 octets for length "
-                + "0, 8 octets for lengths 1-64, and 16 octets for lengths 65-128 (RFC 4191 Section 2.3 "
-                + "also allows a longer prefix field).";
+                + $"prefix length of {prefixLength}: RFC 4191 Section 2.3 needs at least 8 octets "
+                + "for lengths 1-64 and 16 octets for lengths 65-128.";
             return false;
         }
 
@@ -193,8 +194,9 @@ public class RaRouteInformationOption
     }
 
     /// <summary>
-    ///     This method reports whether a prefix length matches the smallest prefix field of the
-    ///     given size: 0 octets for length 0, 8 for 1-64, 16 for 65-128.
+    ///     This method reports whether a prefix field of the given size can hold a prefix length
+    ///     (RFC 4191 Section 2.3): 0 octets only for length 0, 8 octets for 0-64 and 16 octets for
+    ///     0-128. A field longer than the smallest form is valid.
     /// </summary>
     private static bool IsPrefixLengthConsistentWithItsOwnOctetCount(
         byte prefixLength,
@@ -203,8 +205,8 @@ public class RaRouteInformationOption
         prefixOctets switch
         {
             0 => prefixLength == 0,
-            8 => prefixLength is >= 1 and <= 64,
-            16 => prefixLength is >= 65 and <= 128,
+            8 => prefixLength <= 64,
+            16 => prefixLength <= 128,
             _ => false,
         };
 
