@@ -59,6 +59,16 @@ public class PtrSyncService(
     /// </summary>
     private const uint PtrRecordTimeToLiveSeconds = 3600;
 
+    /// <summary>
+    ///     This field serializes the passes of this process. A pass reads the managed records, works
+    ///     out the difference and writes it, so two passes that overlap both see the same missing
+    ///     records and both add them; the database has no unique key on records that would refuse the
+    ///     second copy. The event-driven pass and <c>POST /api/zones/{id}/reconcile-ptr</c>
+    ///     run on separate scopes, so a per-instance lock cannot cover them. One lock for all zones
+    ///     is enough: a pass only needs the database for a few commands.
+    /// </summary>
+    private static readonly SemaphoreSlim passLock = new(1, 1);
+
     private const uint DefaultSoaRefreshSeconds = 3600;
     private const uint DefaultSoaRetrySeconds = 900;
     private const uint DefaultSoaExpireSeconds = 604800;
@@ -91,6 +101,26 @@ public class PtrSyncService(
     public async Task<PtrReconciliationResult> ReconcileZoneAsync(
         Guid forwardZoneId,
         CancellationToken stoppingToken = default
+    )
+    {
+        await passLock.WaitAsync(stoppingToken);
+        try
+        {
+            return await ReconcileZoneUnlockedAsync(forwardZoneId, stoppingToken);
+        }
+        finally
+        {
+            passLock.Release();
+        }
+    }
+
+    /// <summary>
+    ///     This method is one pass of <see cref="ReconcileZoneAsync" />; the caller holds
+    ///     <see cref="passLock" />.
+    /// </summary>
+    private async Task<PtrReconciliationResult> ReconcileZoneUnlockedAsync(
+        Guid forwardZoneId,
+        CancellationToken stoppingToken
     )
     {
         ZoneEntity forwardZone = await zoneRepository.GetByIdAsync(forwardZoneId, stoppingToken);

@@ -726,6 +726,82 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
         Assert.Equal(0, secondPass.RecordsRemoved);
     }
 
+    /// <summary>
+    ///     This test starts several passes for one forward zone at the same moment, the way a
+    ///     <c>DnsZoneChangedEvent</c> pass and <c>POST /api/zones/{id}/reconcile-ptr</c> do, and
+    ///     repeats the round on a fresh zone each time. Each pass must see the others' writes, so
+    ///     every address ends with exactly one PTR record and the reverse zone exists once. With
+    ///     <paramref name="reverseZoneExists" /> the reverse zone is created by an earlier pass, so
+    ///     the passes race only on the records; without it they race on the zone too.
+    /// </summary>
+    /// <param name="reverseZoneExists">Whether a first pass creates the reverse zone before the race.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConcurrentPassesForOneForwardZoneStoreEachPtrRecordOnce(
+        bool reverseZoneExists
+    )
+    {
+        const int rounds = 8;
+        const int passesPerRound = 3;
+        const int addressesPerZone = 4;
+
+        for (int round = 0; round < rounds; round++)
+        {
+            string zoneName = $"ptr-race-{round}.example.com";
+            Guid zoneId = await SeedForwardZoneAsync(
+                zoneName,
+                ZoneTypeEnum.Primary,
+                autoManagePtrRecords: true
+            );
+            for (int host = 1; host <= addressesPerZone; host++)
+            {
+                await AddARecordAsync(
+                    zoneId,
+                    $"host{host}.{zoneName}",
+                    IPAddress.Parse($"198.51.{100 + round}.{host}")
+                );
+
+                // One pass after the first address makes the reverse zone exist before the race.
+                if (reverseZoneExists && host == 1)
+                    await CreateService().ReconcileZoneAsync(zoneId);
+            }
+
+            using ManualResetEventSlim start = new(false);
+            Task[] passes =
+            [
+                .. Enumerable
+                    .Range(0, passesPerRound)
+                    .Select(_ =>
+                        Task.Run(async () =>
+                        {
+                            PtrSyncService service = CreateService();
+                            start.Wait();
+                            await service.ReconcileZoneAsync(zoneId);
+                        })
+                    ),
+            ];
+            start.Set();
+            await Task.WhenAll(passes);
+
+            ZoneEntity reverseZone = await _zoneRepository.FindByNameAsync(
+                $"{100 + round}.51.198.in-addr.arpa"
+            );
+            Assert.NotNull(reverseZone);
+
+            IReadOnlyList<RecordEntity> ptrRecords = (
+                await _recordRepository.ListByZoneIdAsync(reverseZone.Id)
+            )
+                .Where(record => record.Type == DnsResourceRecordTypeEnum.Ptr)
+                .ToList();
+            Assert.Equal(addressesPerZone, ptrRecords.Count);
+            Assert.Equal(
+                addressesPerZone,
+                ptrRecords.Select(record => record.Name).Distinct().Count()
+            );
+        }
+    }
+
     [Fact]
     public void IsEligibleZoneTypeMatchesExactlyPrimaryAndCloudPrimary()
     {
