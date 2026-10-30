@@ -1,53 +1,76 @@
 # Environment Variable Reference
 
-Ninlil reads **every** setting it supports — its own configuration classes and a handful of
-.NET/ASP.NET Core framework-level variables — through one single, consistent naming scheme: a
-`NINLIL_`-prefixed, single-underscore-separated name. There is no other supported
-environment-variable surface; ASP.NET Core's own default double-underscore convention
-(`Section__Key`) is deliberately disabled and does nothing in this application.
+This file lists every `NINLIL_*` environment variable Ninlil reads: one table row per variable, with
+what it controls and its default. It is the only list; the [README](./README.md) links here from
+each guide instead of repeating names. Ninlil recognizes no other environment-variable name for its
+own settings. ASP.NET Core's default double-underscore form (`Section__Key`) is disabled and does
+nothing here.
 
-This document is a complete, generated-and-verified listing of every one of those variables. It
-was produced by a throwaway console program that referenced this repository's own
-`Ninlil.Common.Configuration` and `Ninlil.Web` assemblies and called the exact same
-reflection-based mapping builder (`OptionsEnvironmentVariableMap.BuildMappings`, fed by
-`OptionsEnvironmentVariableRegistry.Roots`) that `Ninlil.Web/Program.cs` itself calls at startup —
-so this list can never drift from what the running application actually recognizes. Defaults shown
-below were read directly from each bound configuration class's own property initializer.
+## How to read this file
 
-**How the naming transform works**: a real internal configuration path (colon-separated
-section/key segments, each written in ordinary PascalCase — e.g. `DnsServer:Web:HttpPort`) becomes
-its own environment variable name by uppercasing and underscore-splitting every PascalCase
-segment, then joining every segment (both the original `:` separators and the new
-intra-segment word breaks) with a single `_`, prefixed with the literal `NINLIL_`. For example,
-`DnsServer:Web:HttpPort` becomes `NINLIL_DNS_SERVER_WEB_HTTP_PORT`. The one irregularity: `IPv4`/
-`IPv6` are each treated as one atomic word (`IPV4`/`IPV6`) rather than split further.
+1. **Find the row.** Use the table of contents below, or search the file for part of the variable name.
+2. **Read the Default column.** A value in code font is the value the setting has when nothing sets it.
+   `*(empty)*` is an empty string. `*(none)*` is no value at all. A note in italics says what Ninlil
+   does instead when the setting is unset.
+3. **Check for a startup rule.** A few defaults are changed or filled in while Ninlil starts. Those
+   rows say so (for example the Identity password rules, the cluster node id and the JWT signing key).
+4. **Locate a `data/` path.** A path shown as `data/...` is inside the `data` folder next to the
+   Ninlil program files (the application's base directory), not inside the current working
+   directory.
+5. **Set the variable.** Put it in the environment of the Ninlil process. An environment variable
+   overrides `appsettings.json`, and a command-line argument overrides an environment variable.
+   Every setting in the tables outside "Framework-level variables" also has a matching key in
+   `appsettings.json` (nested JSON that mirrors the `:`-separated configuration path). Most also
+   have an admin console page and a REST endpoint; the README says which surface to prefer for
+   day-to-day work.
 
-**A `TimeSpan` default is shown in .NET's own `[d.]hh:mm:ss` format** — for example `1.00:00:00`
-means one day, `00:05:00` means five minutes.
+A `TimeSpan` default uses .NET's `[d.]hh:mm:ss` format: `1.00:00:00` is one day and `00:05:00` is
+five minutes.
 
-**Not every setting has an environment variable.** A list-valued setting (allowed DNSSEC
-algorithms, ACME contact emails, a reverse proxy's own known-proxy list, the recursive resolver's
-Insecure domains, and so on) has no fixed,
-finite environment-variable name to assign — ASP.NET Core's configuration binder represents a list
-as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
-configuration file or the REST API/admin console.
+## How the names are built
 
+A configuration path is a run of `:`-separated segments written in PascalCase, for example
+`DnsServer:Web:HttpPort`. The variable name is `NINLIL_` followed by every PascalCase word of every
+segment, uppercased and joined with `_`: `DnsServer:Web:HttpPort` becomes
+`NINLIL_DNS_SERVER_WEB_HTTP_PORT`. `IPv4` and `IPv6` each count as one word (`IPV4`, `IPV6`).
+
+A list-valued setting has no variable, because the configuration binder stores a list as an
+open-ended run of index-suffixed keys. Allowed DNSSEC algorithms, ACME contact emails, a reverse
+proxy's known-proxy list and the recursive resolver's Insecure domains are examples. Each is
+reachable through `appsettings.json`, the REST API and the admin console.
+
+## What keeps this file correct
+
+`EnvironmentVariableDocumentationTests` (in `Ninlil.Web.Tests`) fails when a row is missing, when a
+row names a variable that does not exist, when a variable has two rows, or when a number in the
+totals sentence below is wrong. It builds the expected list from the same mapping code that
+`Program.cs` runs at startup (`OptionsEnvironmentVariableMap.BuildMappings`). The test does not
+check the Default column or the descriptions. When you change an option's default or behavior,
+update its row by hand, then run:
+
+```bash
+dotnet test src/dotnet/tests/Ninlil.Web.Tests --filter "FullyQualifiedName~EnvironmentVariableDocumentationTests|FullyQualifiedName~OptionsEnvironmentVariableRegistryTests"
+```
+
+When you add an option, add its row to the section for its class and take the totals from the
+mapping, not from hand arithmetic.
+
+<!-- EnvironmentVariableDocumentationTests matches the "Total:" sentence with a regular expression
+(TotalsPattern). Keep its wording and change only the numbers. -->
 Total: **332 individual settings** across 58 bound configuration classes, plus **3 standalone**
 variables read directly by configuration key (the two bootstrap administrator credentials and
-`NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's own real,
-unprefixed equivalents — **342 environment variables in total**. The `NINLIL_DOTNET_*` runtime
-settings in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not
-part of that total.
-
-A file-based alternative to any of these exists too: every setting below also has a matching key
-in `appsettings.json` (nested JSON mirroring the `:`-separated configuration path), and the large
-majority also have a REST/admin-console settings page — see the main [`README.md`](./README.md)
-for which surface to prefer for day-to-day operation versus first-boot/container bring-up.
+`NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's unprefixed
+equivalents, giving **342 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
+in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not part of that
+total.
 
 ---
 
 ## Table of contents
 
+- [How to read this file](#how-to-read-this-file)
+- [How the names are built](#how-the-names-are-built)
+- [What keeps this file correct](#what-keeps-this-file-correct)
 - [Storage engine](#storage-engine)
 - [Identity, authentication & SSO](#identity-authentication--sso)
 - [DNS transports](#dns-transports)
@@ -64,7 +87,9 @@ for which surface to prefer for day-to-day operation versus first-boot/container
 - [DHCP, DHCPv6, Router Advertisement & TFTP](#dhcp-dhcpv6-router-advertisement--tftp)
 - [Web host (Kestrel, reverse proxy, branding)](#web-host-kestrel-reverse-proxy-branding)
 - [Framework-level variables](#framework-level-variables)
+  - [.NET runtime settings](#net-runtime-settings)
 - [Bootstrap administrator credentials](#bootstrap-administrator-credentials)
+- [Host filtering](#host-filtering)
 
 ---
 
@@ -83,7 +108,7 @@ MongoDB).
 | Variable | Controls | Default |
 |---|---|---|
 | `NINLIL_STORAGE_ENGINE` | Which storage backend is active: `Sqlite`, `PostgreSql`, `MySql`, `SqlServer`, or `MongoDb`. Relational engines get their EF Core migrations applied automatically on startup; MongoDB is schemaless. | `Sqlite` |
-| `NINLIL_STORAGE_CONNECTION_STRING` | The connection string for the selected engine. Ignored for SQLite unless you want to override the default local database file location. | *(none — SQLite uses a local file under `data/` when unset)* |
+| `NINLIL_STORAGE_CONNECTION_STRING` | The connection string for the selected engine. Ignored for SQLite unless you want to override the default local database file location. | *(none — SQLite uses the file `data/ninlil-dns.sqlite3`)* |
 | `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT` | Whether a snapshot of the database is taken before pending migrations are applied to a database that already holds data. SQLite snapshots are files in a `migration-snapshots` folder next to the database file. Set `false` to migrate without one. | `true` |
 | `NINLIL_STORAGE_MIGRATION_SAFETY_SNAPSHOTS_TO_KEEP` | How many finished snapshots are kept after a successful migration; the oldest are deleted first. Values below 1 count as 1. | `3` |
 | `NINLIL_STORAGE_MIGRATION_SAFETY_RETRY_FAILED_MIGRATION` | Whether a start may try a migration again after an earlier attempt failed and may have left the database partly migrated. By default that start is refused until the snapshot is restored. | `false` |
@@ -112,17 +137,17 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NINLIL_IDENTITY_USER_REQUIRE_UNIQUE_EMAIL` | Whether two accounts may share the same email address. | `false` |
+| `NINLIL_IDENTITY_USER_REQUIRE_UNIQUE_EMAIL` | Whether each account must have a unique email address. `true` refuses an account whose address another account has, and an account with no address. Ninlil sets this to `true` at startup before it reads your configuration. | `true` |
 | `NINLIL_IDENTITY_USER_ALLOWED_USER_NAME_CHARACTERS` | The character set a sign-in username may be composed from. | `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+` |
-| `NINLIL_IDENTITY_PASSWORD_REQUIRED_LENGTH` | Minimum password length. | `6` |
+| `NINLIL_IDENTITY_PASSWORD_REQUIRED_LENGTH` | Minimum password length. Ninlil sets this to 12 at startup before it reads your configuration. | `12` |
 | `NINLIL_IDENTITY_PASSWORD_REQUIRED_UNIQUE_CHARS` | Minimum count of distinct characters a password must contain. | `1` |
 | `NINLIL_IDENTITY_PASSWORD_REQUIRE_DIGIT` | Whether a password must contain a digit. | `true` |
 | `NINLIL_IDENTITY_PASSWORD_REQUIRE_LOWERCASE` | Whether a password must contain a lowercase letter. | `true` |
 | `NINLIL_IDENTITY_PASSWORD_REQUIRE_UPPERCASE` | Whether a password must contain an uppercase letter. | `true` |
 | `NINLIL_IDENTITY_PASSWORD_REQUIRE_NON_ALPHANUMERIC` | Whether a password must contain a non-alphanumeric character. | `true` |
-| `NINLIL_IDENTITY_LOCKOUT_ALLOWED_FOR_NEW_USERS` | Whether lockout-after-failed-attempts protection applies to newly created accounts. | `true` |
-| `NINLIL_IDENTITY_LOCKOUT_MAX_FAILED_ACCESS_ATTEMPTS` | Failed sign-in attempts allowed before an account is locked out. | `5` |
-| `NINLIL_IDENTITY_LOCKOUT_DEFAULT_LOCKOUT_TIME_SPAN` | How long an account stays locked out after exceeding the failed-attempt limit. | `00:05:00` |
+| `NINLIL_IDENTITY_LOCKOUT_ALLOWED_FOR_NEW_USERS` | No effect. Sign-in does not count failed passwords and nothing else starts a lockout, so this flag is never acted on. The admin console does not show it; the identity settings API still accepts it. | `true` |
+| `NINLIL_IDENTITY_LOCKOUT_MAX_FAILED_ACCESS_ATTEMPTS` | No effect. Sign-in does not count failed passwords, so no account reaches this limit. The admin console does not show it; the identity settings API still accepts it. | `5` |
+| `NINLIL_IDENTITY_LOCKOUT_DEFAULT_LOCKOUT_TIME_SPAN` | No effect. Sign-in does not count failed passwords, so no account is locked out for this time. The admin console does not show it; the identity settings API still accepts it. To slow password guessing, use the admin login rate limit below. Ninlil sets this to 15 minutes at startup before it reads your configuration. | `00:15:00` |
 | `NINLIL_IDENTITY_SIGN_IN_REQUIRE_CONFIRMED_ACCOUNT` | Whether sign-in is blocked until the account is confirmed. | `false` |
 | `NINLIL_IDENTITY_SIGN_IN_REQUIRE_CONFIRMED_EMAIL` | Whether sign-in is blocked until the account's email is confirmed. | `false` |
 | `NINLIL_IDENTITY_SIGN_IN_REQUIRE_CONFIRMED_PHONE_NUMBER` | Whether sign-in is blocked until the account's phone number is confirmed. | `false` |
@@ -141,7 +166,7 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 | `NINLIL_IDENTITY_CLAIMS_IDENTITY_SECURITY_STAMP_CLAIM_TYPE` | The claim type name carrying the account's security stamp (invalidated on password change). | `AspNet.Identity.SecurityStamp` |
 | `NINLIL_JWT_ISSUER` | The `iss` claim value every issued access/refresh token carries. | `Ninlil.Dns` |
 | `NINLIL_JWT_AUDIENCE` | The `aud` claim value every issued token carries and every request is validated against. | `Ninlil.Web` |
-| `NINLIL_JWT_SIGNING_KEY` | The symmetric key signing every JWT. **Deliberately config-file-only in practice** — no REST/UI surface rotates this (see `README.md`); must be set explicitly for a real deployment. | *(none — must be supplied)* |
+| `NINLIL_JWT_SIGNING_KEY` | The secret that signs and verifies every JWT access token. When it is unset, Ninlil generates a random key at the first start and keeps it in `data/jwt-signing-key.txt` (readable by its owner only), so tokens stay valid across restarts. Set it yourself when several nodes must accept each other's tokens, or when a reinstall or a restore on another host must keep sessions valid: Ninlil does not copy the key between cluster nodes, and a backup does not contain it. Use a random value of at least 32 bytes. No REST endpoint or console page changes it. | *(none — generated and kept in `data/jwt-signing-key.txt`)* |
 | `NINLIL_JWT_ACCESS_TOKEN_LIFETIME` | How long an issued access token remains valid. | `00:15:00` |
 | `NINLIL_JWT_REFRESH_TOKEN_LIFETIME` | How long an issued refresh token remains valid — for API clients and for browser sign-ins with "Remember me" checked. Renewed on every refresh. | `30.00:00:00` |
 | `NINLIL_JWT_BROWSER_SESSION_REFRESH_TOKEN_LIFETIME` | How long a browser sign-in *without* "Remember me" stays renewable without activity. Every refresh restarts the window. | `12:00:00` |
@@ -227,7 +252,7 @@ and key rollover, RFC 9432 Catalog Zone sync, and CAA/PTR reconciliation timing.
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NINLIL_DNS_SERVER_AUTHORITATIVE_HOSTNAME_STRING` | This server's own advertised hostname (used in generated SOA/NS content and CHAOS `hostname.bind` queries). | `asgard` |
+| `NINLIL_DNS_SERVER_AUTHORITATIVE_HOSTNAME_STRING` | This server's advertised hostname, used in generated SOA/NS content and in CHAOS `hostname.bind` answers. | *(the host's machine name)* |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_VERSION_STRING` | The version string returned by a CHAOS `version.bind`/`version.server` query. | `Ninlil` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ENABLE_CHAOS_VERSION_QUERIES` | Whether CHAOS-class version queries are answered at all. | `false` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_RECORDS_PER_MESSAGE` | How many records are packed into each AXFR/IXFR response message. | `100` |
@@ -250,7 +275,7 @@ and key rollover, RFC 9432 Catalog Zone sync, and CAA/PTR reconciliation timing.
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_SIGNING_INCEPTION_OFFSET` | How far in the past a freshly generated RRSIG's inception timestamp is backdated (clock-skew tolerance). | `01:00:00` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_DNSSEC_KEY_ROLLOVER_POLL_INTERVAL` | How often the RFC 6781 key-rollover walker checks every zone's own keys. | `00:15:00` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_DNSSEC_KEY_ROLLOVER_PROPAGATION_DELAY` | Assumed DNS propagation delay factored into rollover timing. | `01:00:00` |
-| `NINLIL_DNS_SERVER_AUTHORITATIVE_DNSSEC_KEY_ROLLOVER_EXTERNAL_PARENT_DS_TTL` | Assumed DS-record TTL used to time the final withdrawal wait when a KSK's parent zone is external (this server has no live way to query a real registrar's actual DS TTL). | `1.00:00:00` |
+| `NINLIL_DNS_SERVER_AUTHORITATIVE_DNSSEC_KEY_ROLLOVER_EXTERNAL_PARENT_DS_TTL` | Assumed DS-record TTL used to time the final withdrawal wait when a KSK's parent zone is external (this server cannot query a registrar for the DS TTL). | `1.00:00:00` |
 | `NINLIL_CATALOG_SYNC_ADDRESS_RECONCILE_INTERVAL` | How often RFC 9432 Catalog Zone membership is reconciled against actually-hosted zones. | `00:01:00` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_PTR_SYNC_DEFAULT_ENABLED` | The global default for whether a new zone auto-manages PTR records (a zone can override this). | `false` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_PTR_SYNC_DEFAULT_IPV4_REVERSE_ZONE_PREFIX_BITS` | Default IPv4 reverse-zone grouping granularity (a zone can override, `25`-`30` enabling RFC 2317 classless delegation). | `24` |
@@ -264,7 +289,7 @@ Cookies, source-port pooling, EDNS Client Subnet, and DNS64.
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NINLIL_DNS_SERVER_PIPELINE_WORKER_COUNT` | How many tasks take queries off the queue. | processor count |
+| `NINLIL_DNS_SERVER_PIPELINE_WORKER_COUNT` | How many tasks take queries off the queue. | *(the number of processors)* |
 | `NINLIL_DNS_SERVER_PIPELINE_MAX_CONCURRENT_QUERIES` | How many queries are answered at once. When all slots are busy, queries wait in the queue (and transports wait to enqueue). | `1000` |
 | `NINLIL_DNS_SERVER_PIPELINE_CHANNEL_CAPACITY` | The bounded channel capacity queries wait in before a worker picks them up. | `4096` |
 | `NINLIL_DNS_SERVER_PIPELINE_MAX_UDP_PAYLOAD_SIZE_OCTETS` | Maximum UDP response size before truncation/EDNS fragmentation logic applies. | `1232` |
@@ -278,7 +303,7 @@ Cookies, source-port pooling, EDNS Client Subnet, and DNS64.
 | `NINLIL_DNS_SERVER_OUTBOUND_QUERY_ENABLE_SOURCE_PORT_POOL` | Whether outbound (recursive/forwarder) queries draw from a pre-bound pool of source ports rather than binding a fresh ephemeral port per query. Off by default so every query gets a fresh random source port; turn on only when per-query binds cost too much. | `false` |
 | `NINLIL_DNS_SERVER_OUTBOUND_QUERY_POOL_SIZE_PER_ADDRESS_FAMILY` | How many source ports are pre-bound per IP address family. | `128` |
 | `NINLIL_DNS_SERVER_CLIENT_SUBNET_ENABLE` | Whether EDNS Client Subnet (ECS) is attached to outbound recursive queries. | `false` |
-| `NINLIL_DNS_SERVER_CLIENT_SUBNET_OVERRIDE_ADDRESS` | A fixed address to report via ECS instead of the real querying client's address. | *(none)* |
+| `NINLIL_DNS_SERVER_CLIENT_SUBNET_OVERRIDE_ADDRESS` | A fixed address to report via ECS instead of the querying client's address. | *(none)* |
 | `NINLIL_DNS_SERVER_CLIENT_SUBNET_SOURCE_PREFIX_LENGTH_IPV4` | IPv4 prefix length truncated into the ECS option; also caps an ECS option a client sends. | `24` |
 | `NINLIL_DNS_SERVER_CLIENT_SUBNET_SOURCE_PREFIX_LENGTH_IPV6` | IPv6 prefix length truncated into the ECS option; also caps an ECS option a client sends. | `56` |
 | `NINLIL_DNS_SERVER_DNS64_ENABLE` | Whether DNS64 (synthesizing AAAA from A for an IPv6-only client) is enabled. | `false` |
@@ -391,7 +416,7 @@ query log.
 | `NINLIL_DNS_SERVER_RATE_LIMITING_SUBNET_UDP_QUERY_LIMIT` | Max UDP queries per subnet per sample window before truncation/throttling kicks in. | `500` |
 | `NINLIL_DNS_SERVER_RATE_LIMITING_SUBNET_TCP_QUERY_LIMIT` | Max TCP queries per subnet per sample window. | `100` |
 | `NINLIL_DNS_SERVER_RATE_LIMITING_SUBNET_TRUNCATE_PERCENTAGE` | The percentage of over-limit UDP responses forced to truncate (pushing the client to retry over TCP) rather than being dropped outright. | `50` |
-| `NINLIL_DNS_SERVER_QUERY_LOGGING_ENABLE` | Whether the persistent, searchable query log is active (on by default — the one deliberate exception to this project's usual "off by default" posture, for parity with dedicated ad-blocking tools). | `true` |
+| `NINLIL_DNS_SERVER_QUERY_LOGGING_ENABLE` | Whether the persistent, searchable query log is active. It is on by default because the log is how an operator sees what the server answers. | `true` |
 | `NINLIL_DNS_SERVER_QUERY_LOGGING_PRIVACY_LEVEL` | How much client-identifying detail is recorded: `Full`, `DomainRedacted`, `ClientAnonymized`, or `FullyAnonymous`. | `Full` |
 | `NINLIL_DNS_SERVER_QUERY_LOGGING_MAX_RETAINED_ENTRIES` | Hard cap on total retained log entries. | `1000000` |
 | `NINLIL_DNS_SERVER_QUERY_LOGGING_RETENTION_PERIOD` | Age-based retention window; older entries are swept regardless of the count cap. | `30.00:00:00` |
@@ -427,7 +452,7 @@ the settings below govern only its automatic refresh from the IEEE's own publish
 | `NINLIL_DNS_SERVER_MAC_VENDOR_LOOKUP_MA_L_REGISTRY_URL` | Where the MA-L (24-bit OUI) registry CSV is downloaded from. | `https://standards-oui.ieee.org/oui/oui.csv` |
 | `NINLIL_DNS_SERVER_MAC_VENDOR_LOOKUP_MA_M_REGISTRY_URL` | Where the MA-M (28-bit) registry CSV is downloaded from. | `https://standards-oui.ieee.org/oui28/mam.csv` |
 | `NINLIL_DNS_SERVER_MAC_VENDOR_LOOKUP_MA_S_REGISTRY_URL` | Where the MA-S (36-bit) registry CSV is downloaded from. | `https://standards-oui.ieee.org/oui36/oui36.csv` |
-| `NINLIL_DNS_SERVER_MAC_VENDOR_LOOKUP_DATA_FILE_PATH` | Where refreshed vendor data is persisted (plus a `.state.json` bookkeeping file beside it); read once at startup. | `<app>/data/mac-vendors.snapshot.br` |
+| `NINLIL_DNS_SERVER_MAC_VENDOR_LOOKUP_DATA_FILE_PATH` | Where refreshed vendor data is persisted (plus a `.state.json` bookkeeping file beside it); read once at startup. | `data/mac-vendors.snapshot.br` |
 
 ## Webhooks, backup, self-update & clustering
 
@@ -441,15 +466,15 @@ self-update service, and multi-node clustering.
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_MAX_RETRY_DELAY` | Maximum backoff delay between retries. | `00:00:30` |
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_SWEEP_INTERVAL` | How often the persisted retry-sweep background service looks for deliveries due for another attempt. | `00:00:05` |
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_ATTEMPT_RETENTION_PERIOD` | How long a completed delivery attempt's history is retained before it's aged out. | `30.00:00:00` |
-| `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY` | Where the Data Protection key ring is stored — bundled into a backup archive since every encrypted secret in the database is only decryptable with these files present. | `data/` |
+| `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY` | The directory a backup reads the Data Protection key ring (`key-*.xml`) from. A backup bundles these files because every encrypted secret in the database can be decrypted only with them. Startup sets this to the `data/` directory and replaces any value you configure, so changing it has no effect. | `data/` |
 | `NINLIL_DNS_SERVER_BACKUP_MINIMUM_PASSPHRASE_LENGTH` | Minimum required length for a backup archive's own encryption passphrase. | `12` |
-| `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH` | Path to the runtime settings JSON file bundled into/restored from a backup archive. | *(empty)* |
+| `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH` | The runtime settings JSON file a backup bundles and a restore writes back. Startup sets this to the file named by `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` and replaces any value you configure, so changing it has no effect. | *(empty — set at startup)* |
 | `NINLIL_DNS_SERVER_BACKUP_MAXIMUM_RESTORED_PAYLOAD_BYTES` | The most decompressed bytes a restore reads from one archive, summed over all entries. It stops a zip bomb; there is no reason to change it in production. | `4294967296` (4 GiB) |
-| `NINLIL_DNS_SERVER_SELF_UPDATE_ENABLE_AUTOMATIC_CHECK` | Whether the self-update checker runs automatically (check-only — there is no in-process "apply now" action). | `true` |
+| `NINLIL_DNS_SERVER_SELF_UPDATE_ENABLE_AUTOMATIC_CHECK` | Whether the self-update checker runs automatically. It only checks and shows a notice; it never applies an update. With no feed URL (the next row) each check records an "unconfigured" status and fetches nothing. | `true` |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_CHECK_INTERVAL` | How often the automatic check runs (beyond the always-performed startup check). | `1.00:00:00` |
-| `NINLIL_DNS_SERVER_SELF_UPDATE_RELEASE_FEED_URL` | The URL of the release-feed JSON document to check against. | *(empty — no default hosting location yet)* |
+| `NINLIL_DNS_SERVER_SELF_UPDATE_RELEASE_FEED_URL` | The URL of the release-feed JSON document to check. The checker does nothing until you set it, and Ninlil does not publish a feed, so point it at a feed you host. | *(empty — no feed is checked)* |
 | `NINLIL_CLUSTER_ENABLE` | Whether multi-node clustering is enabled. | `false` |
-| `NINLIL_CLUSTER_NODE_ID` | This node's own unique cluster identifier. | `00000000-0000-0000-0000-000000000000` |
+| `NINLIL_CLUSTER_NODE_ID` | This node's unique cluster identifier. When it is unset, startup creates one at the first start and keeps it in `data/cluster-node-id.txt`, so it survives restarts. Every peer that joins records this id, so do not change it afterwards. No REST endpoint changes it. | `00000000-0000-0000-0000-000000000000` (replaced by a generated id at startup) |
 | `NINLIL_CLUSTER_ADVERTISED_HOST` | The hostname/address this node advertises to its cluster peers. | *(empty)* |
 | `NINLIL_CLUSTER_ADVERTISED_PORT` | The port this node advertises for cluster membership traffic; `0` means the web HTTPS port. | `0` |
 | `NINLIL_CLUSTER_HEARTBEAT_INTERVAL` | How often this node sends a heartbeat to its peers. | `00:00:30` |
@@ -486,17 +511,17 @@ Advertisement content, and the PXE-boot TFTP server. Every DHCP-family transport
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV6_RELAY_LINK_ADDRESS` | The RFC 8415 `link-address` this relay inserts into RELAY-FORW messages; a global or unique-local address on the client-facing link. When unset, the first IPv6 address that is neither loopback nor link-local is detected at startup. | *(none)* |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV6_INTERFACE_ID` | The RFC 8415 Section 21.18 Interface-ID, as ASCII text, added to every RELAY-FORW; when unset, no Interface-ID option is added. | *(none)* |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_ENABLE` | Whether the raw-socket Router Advertisement/Solicitation transport is active. | `false` |
-| `NINLIL_DHCP_SERVER_PROTOCOL_RA_MIN_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's minimum interval between unsolicited periodic advertisements. | `00:03:18` |
-| `NINLIL_DHCP_SERVER_PROTOCOL_RA_MAX_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's maximum interval between unsolicited periodic advertisements. | `00:10:00` |
-| `NINLIL_DHCP_SERVER_RA_ROUTER_LIFETIME` | The advertised router lifetime (how long hosts may use this router as a default). | `00:00:00` |
-| `NINLIL_DHCP_SERVER_RA_CURRENT_HOP_LIMIT` | The advertised current IPv6 hop limit. | `64` |
-| `NINLIL_DHCP_SERVER_RA_REACHABLE_TIME` | The advertised neighbor-reachable time. | `00:00:00` |
-| `NINLIL_DHCP_SERVER_RA_RETRANS_TIMER` | The advertised neighbor-solicitation retransmit timer. | `00:00:00` |
+| `NINLIL_DHCP_SERVER_PROTOCOL_RA_MIN_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's shortest interval between unsolicited advertisements (MinRtrAdvInterval). The default is about a third of the default maximum. The settings API requires at least 3 seconds and at most 0.75 times the maximum below. | `00:03:18` |
+| `NINLIL_DHCP_SERVER_PROTOCOL_RA_MAX_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's longest interval between unsolicited advertisements (MaxRtrAdvInterval). Each interval is a random time between the minimum and the maximum. The settings API requires 4 to 65535 seconds. | `00:10:00` |
+| `NINLIL_DHCP_SERVER_RA_ROUTER_LIFETIME` | The advertised router lifetime: how long hosts may use this server as a default router. `00:00:00` means this server is not a default router. The field holds at most 65535 seconds: the settings API rejects a larger value and a value from the configuration file is sent as 65535. | `00:00:00` |
+| `NINLIL_DHCP_SERVER_RA_CURRENT_HOP_LIMIT` | The advertised current IPv6 hop limit. `0` means no recommendation. | `64` |
+| `NINLIL_DHCP_SERVER_RA_REACHABLE_TIME` | The advertised neighbor-reachable time. `00:00:00` means no recommendation. The maximum is one hour (RFC 4861 §6.2.1). | `00:00:00` |
+| `NINLIL_DHCP_SERVER_RA_RETRANS_TIMER` | The advertised neighbor-solicitation retransmit timer. `00:00:00` means no recommendation. | `00:00:00` |
 | `NINLIL_DHCP_SERVER_RA_MANAGED_ADDRESS_CONFIGURATION` | Whether the advertised "M" flag tells hosts to use DHCPv6 for address assignment. | `false` |
 | `NINLIL_DHCP_SERVER_RA_OTHER_CONFIGURATION` | Whether the advertised "O" flag tells hosts to use DHCPv6 for other (non-address) configuration. | `false` |
-| `NINLIL_DHCP_SERVER_RA_LINK_MTU` | An advertised link MTU option value, if any. | *(none)* |
-| `NINLIL_DHCP_SERVER_RA_RECURSIVE_DNS_SERVER_LIFETIME` | The advertised RFC 8106 RDNSS option lifetime. | `00:30:00` |
-| `NINLIL_DHCP_SERVER_RA_DNS_SEARCH_LIST_LIFETIME` | Reserved lifetime value for a future DNS Search List option (DNSSL itself is not yet implemented — see `README.md`'s known-limitations note). | `00:30:00` |
+| `NINLIL_DHCP_SERVER_RA_LINK_MTU` | The link MTU to advertise in the MTU option. When unset, no MTU option is sent. A value below 1280 (RFC 8200 §5) is rejected by the settings API and left out of the advertisement. | *(none)* |
+| `NINLIL_DHCP_SERVER_RA_RECURSIVE_DNS_SERVER_LIFETIME` | The lifetime of the RFC 8106 RDNSS option, which gives SLAAC hosts their DNS servers. The server addresses are a list and have no variable: at most 75 IPv6 addresses fit in one option, and the advertisement skips any beyond that. The default is three times the default maximum interval above. | `00:30:00` |
+| `NINLIL_DHCP_SERVER_RA_DNS_SEARCH_LIST_LIFETIME` | The lifetime of the RFC 8106 DNSSL option, which the router advertisement sends to give SLAAC hosts their DNS search domains. The domains are a list and have no variable: the option is at most 1208 octets, and the advertisement leaves out any domain that would not fit. | `00:30:00` |
 | `NINLIL_DHCP_SERVER_TFTP_ENABLE` | Whether the read-only PXE-boot TFTP server is active. | `false` |
 | `NINLIL_DHCP_SERVER_TFTP_PORT` | The TFTP UDP port. | `69` |
 | `NINLIL_DHCP_SERVER_TFTP_ROOT_DIRECTORY` | The filesystem root TFTP serves boot files from (a leading `/` means this root; a path or link leading outside it is always rejected). | *(empty)* |
@@ -527,13 +552,14 @@ appearance/branding.
 | `NINLIL_DNS_SERVER_APPEARANCE_PALETTE` | The admin console's default color palette: `Teal`, `Indigo`, `Amber`, `Rose`, or `Emerald`. | `Teal` |
 | `NINLIL_DNS_SERVER_BRANDING_SITE_TITLE` | A custom browser-tab/header title overriding the default "Ninlil". | *(none)* |
 | `NINLIL_DNS_SERVER_BRANDING_LOGO_DATA_URI` | A custom logo, as a `data:` URI, overriding the default. | *(none)* |
-| `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` | Path to the JSON file certain settings pages atomically merge their changes into at runtime (rather than requiring a restart). | *(none — set by `Program.cs` at startup)* |
+| `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` | Path of the JSON file that the settings pages merge their changes into at runtime, so a change survives a restart without editing the file by hand. | *(empty — startup uses `appsettings.json` in the content root)* |
 
 ## Framework-level variables
 
-These redirect onto .NET/ASP.NET Core's own real, unprefixed hosting-layer variable names, applied
-as the literal first statement of `Program.cs` — strictly before anything else reads them. They
-cover the generic host/WebHost's own bootstrap surface, not this project's own configuration.
+Each of these copies its value onto the unprefixed .NET or ASP.NET Core hosting variable named in
+the second column. Ninlil does the copy before the web host builder reads its configuration, in
+`FrameworkEnvironmentVariableBootstrap.Apply` (called from `Program.cs`). They configure the host,
+not Ninlil's own options.
 
 | Variable | Redirects to | Controls |
 |---|---|---|
@@ -555,7 +581,7 @@ is present at startup, the server restarts itself in place — the same process,
 log shows `Restarting to apply .NET runtime settings: ...` when it does. Matching ignores case and
 underscores, because the runtime's names are case-sensitive and mixed-case — `DOTNET_gcServer`
 works, `DOTNET_GCSERVER` is silently ignored — so `NINLIL_DOTNET_GC_SERVER=1` becomes
-`DOTNET_gcServer=1`. On macOS, set these under their real `DOTNET_*` names instead.
+`DOTNET_gcServer=1`. On macOS, set these under their `DOTNET_*` names instead.
 
 | Variable | Becomes | Controls |
 |---|---|---|
@@ -579,7 +605,7 @@ might silently ignore.
 ## Bootstrap administrator credentials
 
 Two settings read directly by configuration key rather than through a bound `Options` class — a
-one-time bootstrap credential has no real reason to be an injectable configuration object.
+one-time bootstrap credential does not need to be an injectable configuration object.
 
 | Variable | Controls | Default |
 |---|---|---|
