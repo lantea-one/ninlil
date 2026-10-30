@@ -65,7 +65,7 @@ public class DnsOverQuicOptions
     /// <summary>
     ///     This property contains how many QUIC connections the listener serves at once, across
     ///     all its listen addresses. A connection over the limit is closed at once with
-    ///     <c>DOQ_EXCESSIVE_LOAD</c> (RFC 9250 §8.4). The default matches DNS over TLS. Applies
+    ///     <c>DOQ_EXCESSIVE_LOAD</c> (RFC 9250 §4.3). The default matches DNS over TLS. Applies
     ///     on restart.
     /// </summary>
     public int MaxConcurrentConnections { get; set; } = 512;

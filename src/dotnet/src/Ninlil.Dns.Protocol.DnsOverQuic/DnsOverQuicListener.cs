@@ -126,13 +126,13 @@ public sealed class DnsOverQuicListener(
 
     /// <summary>
     ///     This constant contains the DoQ application error code for a protocol violation, here a
-    ///     message that does not decode (RFC 9250 §8.4, <c>DOQ_PROTOCOL_ERROR</c>).
+    ///     message that does not decode (RFC 9250 §4.3.3, <c>DOQ_PROTOCOL_ERROR</c>).
     /// </summary>
     private const long DoqProtocolError = 0x2;
 
     /// <summary>
     ///     This constant contains the DoQ application error code for a stream the server gives
-    ///     up on: a missed deadline or a dropped query (RFC 9250 §8.4,
+    ///     up on: a missed deadline or a dropped query (RFC 9250 §4.3,
     ///     <c>DOQ_REQUEST_CANCELLED</c>).
     /// </summary>
     private const long DoqRequestCancelled = 0x3;
@@ -140,7 +140,7 @@ public sealed class DnsOverQuicListener(
     /// <summary>
     ///     This constant contains the DoQ application error code for refusing work because the
     ///     server is loaded: a connection over the limit, or a rate-limited query (RFC 9250
-    ///     §8.4, <c>DOQ_EXCESSIVE_LOAD</c>).
+    ///     §4.3, <c>DOQ_EXCESSIVE_LOAD</c>).
     /// </summary>
     private const long DoqExcessiveLoad = 0x4;
 
@@ -422,7 +422,7 @@ public sealed class DnsOverQuicListener(
     /// <summary>
     ///     This method refuses a connection that arrived over
     ///     <see cref="DnsOverQuicOptions.MaxConcurrentConnections" />, closing it with
-    ///     <c>DOQ_EXCESSIVE_LOAD</c> (RFC 9250 §8.4) so a well-behaved client backs off. It runs
+    ///     <c>DOQ_EXCESSIVE_LOAD</c> (RFC 9250 §4.3) so a well-behaved client backs off. It runs
     ///     off the accept loop, which must not wait for a slow peer.
     /// </summary>
     private async Task RejectConnectionAsync(QuicConnection connection)
@@ -455,7 +455,7 @@ public sealed class DnsOverQuicListener(
     ///     worker never writes to the stream: the stream's own task waits for the reply, then
     ///     writes it framed the same way and closes the stream's write side (RFC 9250 §4.2),
     ///     within <paramref name="idleTimeout" />. A stream that misses a deadline, or whose
-    ///     query the pipeline drops, is reset with a DoQ error code (RFC 9250 §8.4) instead of
+    ///     query the pipeline drops, is reset with a DoQ error code (RFC 9250 §4.3) instead of
     ///     being left open. A message that does not decode is logged at Debug and the stream
     ///     reset. A message whose ID is not 0 (RFC 9250 §4.2.1) is a protocol error: the whole
     ///     connection is closed with <c>DOQ_PROTOCOL_ERROR</c> and nothing is answered (RFC 9250

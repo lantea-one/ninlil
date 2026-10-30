@@ -215,7 +215,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         DnsMessage firstResponse = await ReadResponseAsync(stream);
         DnsMessage secondResponse = await ReadResponseAsync(stream);
 
-        // Pipelined queries (RFC 7766 §6.2.1) are answered by a shared worker pool, so either may
+        // Pipelined queries (RFC 7766 §6.2.1.1) are answered by a shared worker pool, so either may
         // finish first; only the set of IDs is guaranteed, not the order.
         Assert.Equal(
             new HashSet<ushort> { 10, 11 },
