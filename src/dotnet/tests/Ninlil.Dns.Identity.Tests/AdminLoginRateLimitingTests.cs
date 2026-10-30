@@ -191,6 +191,89 @@ public class AdminLoginRateLimitingTests
     }
 
     /// <summary>
+    ///     This test checks that the <c>429</c> carries <c>Retry-After</c> (RFC 9110 §10.2.3) with
+    ///     the whole seconds until the fixed window ends, never more than the window and at least
+    ///     one second, so a client knows how long to wait.
+    /// </summary>
+    [Fact]
+    public async Task Login_PastThePermitLimit_SendsRetryAfterWithinTheWindow()
+    {
+        (WebApplication app, HttpClient client) = await StartHostAsync(
+            enable: true,
+            permitLimit: 1,
+            window: TimeSpan.FromMinutes(5)
+        );
+
+        try
+        {
+            Assert.Equal(
+                HttpStatusCode.OK,
+                (await client.PostAsync("/login", content: null)).StatusCode
+            );
+
+            HttpResponseMessage rejected = await client.PostAsync("/login", content: null);
+
+            Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+            TimeSpan? retryAfter = rejected.Headers.RetryAfter?.Delta;
+            Assert.NotNull(retryAfter);
+            Assert.InRange(retryAfter.Value, TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(5));
+            Assert.Equal(TimeSpan.FromSeconds((int)retryAfter.Value.TotalSeconds), retryAfter);
+
+            // The Forgot Password policy rejects the same way.
+            Assert.Equal(
+                HttpStatusCode.OK,
+                (await client.PostAsync("/forgot-password", content: null)).StatusCode
+            );
+            HttpResponseMessage resetRejected = await client.PostAsync(
+                "/forgot-password",
+                content: null
+            );
+            Assert.Equal(HttpStatusCode.TooManyRequests, resetRejected.StatusCode);
+            Assert.NotNull(resetRejected.Headers.RetryAfter?.Delta);
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    /// <summary>
+    ///     This test checks that <c>Retry-After</c> is the time left in the window, not the whole
+    ///     window: three seconds into an eight-second window it is at most six seconds.
+    /// </summary>
+    [Fact]
+    public async Task Login_PartWayThroughTheWindow_SendsTheTimeLeftNotTheWholeWindow()
+    {
+        (WebApplication app, HttpClient client) = await StartHostAsync(
+            enable: true,
+            permitLimit: 1,
+            window: TimeSpan.FromSeconds(8)
+        );
+
+        try
+        {
+            Assert.Equal(
+                HttpStatusCode.OK,
+                (await client.PostAsync("/login", content: null)).StatusCode
+            );
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            HttpResponseMessage rejected = await client.PostAsync("/login", content: null);
+
+            Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+            Assert.InRange(
+                rejected.Headers.RetryAfter.Delta.Value,
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(6)
+            );
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    /// <summary>
     ///     This test checks that the lockout ends when the window rolls over, so a locked-out client
     ///     can sign in again without intervention; the lockout lasts
     ///     <see cref="Ninlil.Dns.Identity.Options.AdminLoginRateLimitOptions.Window" />.

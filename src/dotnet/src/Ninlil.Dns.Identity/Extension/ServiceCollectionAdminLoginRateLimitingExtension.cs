@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.RateLimiting;
@@ -73,14 +74,56 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
                 .Get<AdminLoginRateLimitOptions>()
             ?? new AdminLoginRateLimitOptions();
 
+        RateLimitWindowClock windowClock = new(options.Window);
+
         instance.AddRateLimiter(rateLimiterOptions =>
         {
             // Set explicitly so a change in the library default cannot alter the response.
             rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
+            // RFC 6585 §4 says a 429 may carry Retry-After, and RFC 9110 §10.2.3 gives its form:
+            // whole seconds. The limiter's own retry time is the whole window length, so the
+            // time left comes from the window clock; the limiter's value is the fallback. Rounded
+            // up and at least one second, so a client never retries too early.
+            rateLimiterOptions.OnRejected = (context, _) =>
+            {
+                string policyName = context
+                    .HttpContext.GetEndpoint()
+                    ?.Metadata.GetMetadata<EnableRateLimitingAttribute>()
+                    ?.PolicyName;
+
+                TimeSpan? retryAfter = policyName is null
+                    ? null
+                    : windowClock.Remaining(
+                        policyName,
+                        GetPartitionKey(context.HttpContext.Connection.RemoteIpAddress)
+                    );
+
+                if (
+                    retryAfter is null
+                    && context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan reported)
+                )
+                    retryAfter = reported;
+
+                if (retryAfter is not null)
+                    context.HttpContext.Response.Headers.RetryAfter = Math.Max(
+                            1,
+                            (long)Math.Ceiling(retryAfter.Value.TotalSeconds)
+                        )
+                        .ToString(CultureInfo.InvariantCulture);
+
+                return ValueTask.CompletedTask;
+            };
+
             // Each policy keeps its own partitions, so the two counters are independent.
-            rateLimiterOptions.AddPolicy(AuthenticationEndpointPolicyName, GetPartition);
-            rateLimiterOptions.AddPolicy(PasswordResetEndpointPolicyName, GetPartition);
+            rateLimiterOptions.AddPolicy(
+                AuthenticationEndpointPolicyName,
+                httpContext => GetPartition(AuthenticationEndpointPolicyName, httpContext)
+            );
+            rateLimiterOptions.AddPolicy(
+                PasswordResetEndpointPolicyName,
+                httpContext => GetPartition(PasswordResetEndpointPolicyName, httpContext)
+            );
         });
 
         return instance;
@@ -106,19 +149,26 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
             return $"{new IPAddress(network)}/64";
         }
 
-        RateLimitPartition<string> GetPartition(HttpContext httpContext)
+        RateLimitPartition<string> GetPartition(string policyName, HttpContext httpContext)
         {
             string partitionKey = GetPartitionKey(httpContext.Connection.RemoteIpAddress);
 
             return options.Enable
                 ? RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey,
-                    _ => new FixedWindowRateLimiterOptions
+                    _ =>
                     {
-                        PermitLimit = options.PermitLimit,
-                        Window = options.Window,
-                        QueueLimit = 0,
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        // Runs once when the partition's limiter is created, which is also when
+                        // its replenishment timer starts.
+                        windowClock.WindowStarted(policyName, partitionKey);
+
+                        return new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = options.PermitLimit,
+                            Window = options.Window,
+                            QueueLimit = 0,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        };
                     }
                 )
                 : RateLimitPartition.GetNoLimiter(partitionKey);
