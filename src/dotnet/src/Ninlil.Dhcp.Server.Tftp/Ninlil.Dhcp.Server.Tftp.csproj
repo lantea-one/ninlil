@@ -2,8 +2,7 @@
   <PropertyGroup>
     <Description>
             This library is Ninlil's read-only RFC 1350 TFTP server -- the bundled boot-file
-            delivery half of this project's own PXE support, matching dnsmasq's own bundled
-            checklist behavior. Serves files from a single configured root directory; a Write
+            delivery half of this project's own PXE support. Serves files from a single configured root directory; a Write
             Request is always rejected, and a request naming a path outside that root is always
             rejected. Shares no wire format or transport concept with DHCPv4/DHCPv6 -- its only
             dependency on another Ninlil.Dhcp.* project is Ninlil.Dhcp.Common's own

@@ -129,7 +129,7 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
             DnsFilterListEntity list = new()
             {
                 Id = Guid.NewGuid(),
-                Name = "AdGuard-style subscription",
+                Name = "Adblock-syntax subscription",
                 Kind = DnsFilterListKindEnum.Domain,
                 Action = action,
                 Source = DnsFilterListSourceEnum.Subscribed,

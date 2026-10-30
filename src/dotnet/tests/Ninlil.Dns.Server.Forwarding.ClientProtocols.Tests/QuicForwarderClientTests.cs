@@ -34,7 +34,7 @@ public sealed class QuicForwarderClientTests
         };
 
     [Fact]
-    public async Task ForwardAsync_AgainstAdGuardsRealDoqResolver_ReturnsARealValidatedAnswer()
+    public async Task ForwardAsync_AgainstAPublicDoqResolver_ReturnsAValidatedAnswer()
     {
         if (!QuicConnection.IsSupported)
         {

@@ -60,10 +60,10 @@ public class DnsFilterListParserTests
     }
 
     [Theory]
-    [InlineData("! Title: AdGuard DNS filter")]
+    [InlineData("! Title: Example DNS filter")]
     [InlineData("!")]
     [InlineData("[Adblock Plus 2.0]")]
-    [InlineData("[AdGuard]")]
+    [InlineData("[Example list]")]
     [InlineData("# a hosts-file comment")]
     [InlineData("#")]
     [InlineData("##.ad-banner")]

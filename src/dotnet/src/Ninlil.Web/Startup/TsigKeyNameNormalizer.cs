@@ -75,7 +75,7 @@ public static class TsigKeyNameNormalizer
                 )
                     logger.LogWarning(
                         "TSIG keys {KeyNames} differ only in letter case, so none was renamed to "
-                            + "'{LowercaseName}'. A BIND client matches only the lowercase name; "
+                            + "'{LowercaseName}'. Key names compare without case, so "
                             + "rename or delete the others.",
                         string.Join(", ", members.Select(key => $"'{key.Name}'")),
                         group.Key

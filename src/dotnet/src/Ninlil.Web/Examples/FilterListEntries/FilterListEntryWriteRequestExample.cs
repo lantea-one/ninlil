@@ -36,7 +36,7 @@ public class FilterListEntryWriteRequestExample
             {
                 Name = "Wildcard glob",
                 Summary =
-                    "AdGuard Home-style '*'/'?' glob syntax, matched against the full queried name.",
+                    "Glob syntax, '*' for any run of characters and '?' for one, matched against the full queried name.",
                 Value = new FilterListEntryWriteRequest(
                     "*.ads.example.net",
                     "Matches every ad-network subdomain, however deep.",
@@ -46,7 +46,7 @@ public class FilterListEntryWriteRequestExample
             new()
             {
                 Name = "Regular expression",
-                Summary = "Pi-hole-style regex syntax, matched against the full queried name.",
+                Summary = "Regular expression syntax, matched against the full queried name.",
                 Value = new FilterListEntryWriteRequest(
                     """^track\d+\.example\.net$""",
                     "Matches every numbered tracking subdomain.",

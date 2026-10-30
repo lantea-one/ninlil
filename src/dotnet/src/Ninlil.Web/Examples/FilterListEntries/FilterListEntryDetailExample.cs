@@ -37,7 +37,7 @@ public class FilterListEntryDetailExample : IMultipleExamplesProvider<FilterList
             {
                 Name = "Wildcard glob",
                 Summary =
-                    "AdGuard Home-style '*'/'?' glob syntax, matched against the full queried name.",
+                    "Glob syntax, '*' for any run of characters and '?' for one, matched against the full queried name.",
                 Value = new FilterListEntryDetail(
                     Guid.Parse("2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f02"),
                     Guid.Parse("3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111"),
@@ -50,7 +50,7 @@ public class FilterListEntryDetailExample : IMultipleExamplesProvider<FilterList
             new()
             {
                 Name = "Regular expression",
-                Summary = "Pi-hole-style regex syntax, matched against the full queried name.",
+                Summary = "Regular expression syntax, matched against the full queried name.",
                 Value = new FilterListEntryDetail(
                     Guid.Parse("3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a03"),
                     Guid.Parse("3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111"),
