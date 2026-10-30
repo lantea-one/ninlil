@@ -91,58 +91,16 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side: the first check runs a
   minute after start, later ones follow the RFC's refresh rule (at most the configured interval),
   and a root key counts as revoked only if it signed its own revocation.
-  The validator builds the chain of trust from the root trust anchor and keeps the zones it has
-  proven in the `dnssec` cache (listed, and flushable, with the other caches). With a trust anchor
-  configured, a DS or DNSKEY lookup that fails or does not verify makes the answer bogus, so the
-  client gets SERVFAIL unless it set the CD bit; a network that blocks DNSSEC data needs
-  `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION=false`. A recursive answer carries the AD
-  bit only when it validated and the client set DO or AD; a DO client also gets the RRSIGs, and the
-  NSEC or NSEC3 records that prove a wildcard answer, in the authority section. Cached answers
-  never outlive their signatures. With DNS64 on, the A answer is validated before AAAA is
-  synthesized: a bogus one gives SERVFAIL (NODATA if the client set CD), and a client that set both
-  DO and CD gets no synthesis. A zone that fails validation is logged as a warning, at most once
-  per zone per hour. Forwarded answers are validated the same way: the forwarder asks its upstream
-  with DO and CD set, checks the answer itself, and builds the reply for each client, so AD is
-  set only for an answer this server validated (never copied from the upstream) and only for a
-  client that set DO or AD, a client without DO gets no RRSIG, NSEC or NSEC3 records, and no
-  upstream EDNS option reaches a client. A bogus forwarded answer makes the forwarder count as
-  failed unless the client set CD. The DS and DNSKEY records for the chain of trust are asked of the
-  same forwarders, in the same order and with the same per-forwarder timeout, and cached, so a
-  network that only reaches its forwarders still validates without iterating to the internet. A
-  failed DS or DNSKEY lookup under a trust anchor makes the answer bogus. A cached forwarded answer
-  never outlives its shortest RRSIG Original TTL or its earliest RRSIG expiration.
-  **Private zones.** A zone that is served only on your network (`corp.internal`, `home.arpa`, a
-  private reverse zone such as `10.in-addr.arpa`) has no chain of trust from the public root: the
-  root or `arpa` proves, with a signed answer, that it does not exist, and validation would end in
-  SERVFAIL. Two settings keep such names working with validation on. First, the **Insecure
-  domains** list (a negative trust anchor list) on the Recursive Resolver settings page, in the
-  REST API (`GET` and `PATCH /api/recursive-settings`, field `insecureDomains`) and in the
-  configuration file (`DnsServer:Recursive:InsecureDomains` with
-  `DnsServer:Recursive:UseCustomInsecureDomains` set to `true`): a query for a name at or below an
-  entry is not validated, so it is answered as insecure, without the AD bit and without a DNSSEC
-  SERVFAIL, whether it was forwarded or resolved recursively. The list starts as the built-in one:
-  `home.arpa` (RFC 8375), `internal` (reserved by ICANN for private use) and the locally-served
-  zones of RFC 6303 and RFC 7793 (the RFC 1918 reverse zones, `127.in-addr.arpa`,
-  `254.169.in-addr.arpa`, the documentation and shared address space ranges, and the `ip6.arpa`
-  zones for `::`, `::1`, `fd00::/8`, `fe80::/10` and `2001:db8::/32`). It is fully editable: saving
-  a list replaces the built-in one entirely (an empty list exempts nothing), and "Restore
-  defaults" (`insecureDomains: null` in the API) goes back to the built-in list, which then
-  follows later releases. A change applies to the next query; the forwarded-answer cache is
-  flushed, because it remembers whether an answer was validated. Only the queried name counts, so a
-  CNAME from a public name into a listed domain is still validated. Add your own private zones, for
-  example `corp.example`, to the list. Second, each **conditional forwarder zone** has a
-  *Validate answers with DNSSEC* switch (`validateDnssec` in the zone API), **off by default** and
-  off for every zone that existed before it was added: answers for the zone are forwarded without
-  validation and never carry AD. Turn it on for a forwarded zone that is signed under the public
-  root. It works only while validation is on globally, and a name on the Insecure domains list is
-  still not validated. The global forwarders follow the global setting alone.
+  Validation of recursive and forwarded answers, and the Insecure domains list that keeps private zones
+  working, are in [Forwarding and recursion](#forwarding-and-recursion). DNS64 is in
+  [Encrypted transports and DNS64](#encrypted-transports-and-dns64).
 - **Every major DNS transport**: plain UDP/TCP (on by default — this is a DNS server, after all),
   DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, and DNSCrypt v2. Every transport beyond plain DNS is
   off by default; see [Enabling additional transports](#enabling-additional-transports). Each one,
   and the web listener, can be limited to chosen IP addresses, to keep it off a WAN interface or
   share a host with another DNS service.
 - **General upstream forwarding** with health-checked failover, independent of the recursive
-  resolver, supporting the full `sdns://` DNSCrypt stamp grammar, and a TTL-honouring answer cache
+  resolver, supporting DNSCrypt `sdns://` stamps, and a TTL-honouring answer cache
   (RFC 2308 negative caching, serve-stale) that operators can inspect and flush from the console.
 - **TSIG (RFC 8945)** signed transfers and dynamic updates with HMAC-SHA1, -SHA256 (the default),
   -SHA384 or -SHA512 keys. A key is not server-wide: each zone lists the keys allowed to update it
@@ -158,8 +116,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   blocklists (hosts-file, plain-domain or adblock `||domain^`/`@@` syntax), CNAME-cloaking
   protection, a curated "blocked services" catalog, Safe Search enforcement, per-client and
   per-client-group policy, time-of-day schedules, and a one-click time-boxed pause — all resolved
-  against a persistent per-device client identity (via DHCP lease data, live ARP/neighbor-table
-  observation, or an operator-defined static IP/CIDR pin, in that order of preference).
+  against a persistent per-device client identity (an operator-defined static address mapping,
+  then DHCP lease data, then the host's ARP and neighbor table, tried in that order). See
+  [Filtering, rewrites and parental controls](#filtering-rewrites-and-parental-controls).
 - **DNS rewrites** (lightweight domain-to-address/CNAME overrides), general **rate limiting**, and
   **RFC 7873 DNS Cookies** for abuse hardening.
 - **A persistent, searchable query log** with configurable privacy levels and a per-client activity
@@ -2059,35 +2018,1085 @@ Not run: issuing a certificate needs a public domain and a reachable CA.
 
 ### Forwarding and recursion
 
-Recursive resolution and upstream forwarding are both off by default. Turn recursion on with
-`NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` and forwarding with `NINLIL_DNS_SERVER_FORWARDING_ENABLE`;
-the settings are in [Recursive resolver](./ENVIRONMENT.md#recursive-resolver) and
-[Forwarding](./ENVIRONMENT.md#forwarding).
+#### What it does
+
+Ninlil can find the answer to a query for a name it does not host in two ways:
+
+- **Forwarding.** Ninlil sends the query to one or more **forwarders**, which are DNS servers you
+  name, and relays the answer. A forwarder can be a public resolver or a resolver of your own.
+- **Recursion.** Ninlil asks the servers of the DNS tree itself, starting at the root servers and
+  following the delegations down to the server that holds the answer.
+
+Both are **recursive service**: Ninlil does the work of finding an answer for the client. Both are off
+by default, because a server that answers anyone can be misused in an attack. A query reaches them
+in this order:
+
+1. A name inside a zone that Ninlil hosts is answered from the zone.
+2. Otherwise Ninlil tries forwarding, if it is on.
+3. If no forwarder answered, Ninlil tries recursion, if it is on.
+
+A client gets recursive service when its query has the RD (recursion desired) bit set, which every
+stub resolver sets, and the client is **permitted recursion**. A client is permitted when
+[`NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION`](./ENVIRONMENT.md#recursive-resolver) is `true`, or
+when an access rule gives its address the `RecursionAccess` capability. Ninlil answers any other
+client's query for a name it does not host with `REFUSED`.
+
+There are two kinds of forwarder:
+
+- **Global forwarders** are a list. Ninlil tries them in order for every name.
+- **Conditional forwarder zones** are zones of the type `Forwarder`. A zone sends the names at and
+  below its own name to its own list of servers instead of the global list. Use one to send a
+  private domain, such as `corp.example`, to the servers that know it. The closest enabled zone
+  above the queried name wins.
+
+Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour worth knowing" below.
+
+#### Before you start
+
+1. A running Ninlil and a signed-in API token. [Quick start](#quick-start) steps 2 to 4 start the
+   server and sign in. The commands use the Quick start values: the API on
+   `https://127.0.0.1:18443` and DNS on port `15300`. `<token>` is the `accessToken` from the
+   sign-in answer, as in [Zones and records](#zones-and-records) "Before you start".
+2. A user that holds the `recursivesettings:write`, `forwardingsettings:write`, `forwarders:write`,
+   `zones:write` and `accesscontrol:write` permissions. The bootstrap administrator holds every
+   permission.
+3. `dig` and an upstream server that Ninlil can reach on UDP and TCP port 53. This guide uses the
+   public resolver Quad9 (`9.9.9.9` and `149.112.112.112`). Check that it answers from this host:
+
+   ```bash
+   dig @9.9.9.9 example.com A +short
+   ```
+
+   ```text
+   104.20.23.154
+   172.66.147.243
+   ```
+
+   (Your addresses differ.) No output and a `timed out` message mean a firewall blocks the path.
+   Fix that first.
+4. A DNS name that you can look up from a stub client. The checks use `example.com`.
+
+#### Steps
+
+**Allow recursive service.** Choose one of the two ways.
+
+1. To serve every client, turn recursion on. The answer says the change takes effect at once. The
+   configuration reload can take about a second, so wait a few seconds before the first query:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/recursive-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enableRecursion":true}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   ```
+
+   In the console: **Presets & Settings**, **Recursive Resolver**, tick **Recurse for a query this
+   server does not itself host** and save.
+2. To serve only some clients, leave recursion off and add an access rule for them instead. The
+   `cidr` is an address (one host) or a network such as `192.168.1.0/24`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/access-control-rules -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"Local network","cidr":"127.0.0.1","capabilities":["RecursionAccess"]}'
+   ```
+
+   ```text
+   {"id":"...","name":"Local network","cidr":"127.0.0.1","capabilities":["RecursionAccess"],"isDisabled":false, ...
+   ```
+
+   In the console: **Access Control Rules**, **New rule**. The Quick start `dig` commands come from
+   `127.0.0.1`, so this rule serves them.
+
+**Forward to global forwarders.**
+
+3. Turn forwarding on:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/forwarding-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   ```
+
+   In the console: **Presets & Settings**, **Forwarding**.
+4. Add a forwarder. `definitionString` says where to send queries; the table after this step lists
+   the forms. `sortOrder` puts the forwarder in line: lower values are tried first.
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/forwarders -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"quad9","definitionString":"9.9.9.9","sortOrder":0}'
+   ```
+
+   ```text
+   {"id":"...","name":"quad9","definitionString":"9.9.9.9","protocol":"Plain","sortOrder":0,"isDisabled":false, ...
+   ```
+
+   Add a second one so a failure of the first has a fallback:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/forwarders -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"quad9-secondary","definitionString":"149.112.112.112","sortOrder":1}'
+   ```
+
+   In the console: **Forwarders**, **New forwarder**. The form offers well-known public resolvers
+   in a list, grouped by provider, and a field for a definition you type.
+
+   | `definitionString` | Meaning |
+   |---|---|
+   | `9.9.9.9` or `9.9.9.9:53` | Plain DNS over UDP, with TCP when an answer is truncated. `udp://` and `tcp://` in front mean the same. |
+   | `[2620:fe::fe]:53` | Plain DNS over IPv6. A port after an IPv6 address needs brackets. Without a port, `2620:fe::fe` also works. |
+   | `tls://dns.quad9.net` | DNS-over-TLS, port 853 unless you add `:<port>`. The host name is also the name Ninlil expects in the server's certificate. |
+   | `https://dns.quad9.net/dns-query` | DNS-over-HTTPS. |
+   | `quic://dns.example.net` | DNS-over-QUIC, port 853 unless you add `:<port>`. Needs `libmsquic` 2.4.20 or later on this host. |
+   | `sdns://...` | A DNSCrypt stamp. See [Encrypted transports and DNS64](#encrypted-transports-and-dns64). |
+
+   Ninlil checks the syntax when you save, and never looks a host name up at that point. A
+   definition it cannot parse answers `400` with the reason, for example `an IPv6 address with a
+   port must be written as [address]:port`.
+
+**Forward one domain to its own servers (conditional forwarder zone).**
+
+5. Create a zone of the type `Forwarder`. This example sends `corp.example` and every name below it
+   to `192.0.2.53`. Use the address of a server you run:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"corp.example","type":"Forwarder","forwarderAddresses":["192.0.2.53"]}'
+   ```
+
+   ```text
+   {"id":"<forwarder-zone-id>","name":"corp.example","type":"Forwarder", ... "forwarderAddresses":["192.0.2.53"], ... "validateDnssec":false, ...
+   ```
+
+   Copy the `id` as `<forwarder-zone-id>`. The addresses use the same forms as the table above. In
+   the console: **Zones**, **New zone**, type **Forwarder**.
+6. The zone has *Validate answers with DNSSEC* (`validateDnssec`) off, which is right for a private
+   domain. Turn it on only for a domain that is signed under the public root:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<forwarder-zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"validateDnssec":true}'
+   ```
+
+**Let a private domain pass DNSSEC validation (Insecure domains).**
+
+7. DNSSEC validation is on. A private domain has no chain of trust from the public root, so the
+   public DNS proves it does not exist and validation fails. Put the domain on the Insecure domains
+   list. A name at or below an entry skips validation and is answered without the AD bit. Saving a
+   list replaces the built-in one:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/recursive-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"insecureDomains":["corp.example","home.arpa","internal"]}'
+   ```
+
+   To go back to the built-in list, send `{"insecureDomains":null}`. The console has the list on
+   **Presets & Settings**, **Recursive Resolver**, with a **Restore defaults** button.
+
+**Look at the caches and flush them.**
+
+8. List this node's DNS caches, with sizes and hit counts:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dns-cache -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   [{"name":"dnssec","entryCount":3,"maxEntries":10000,"hits":0,"misses":3},{"name":"forwarded","entryCount":6, ...},{"name":"recursive", ...}]
+   ```
+
+9. Forget one name in every cache, or empty every cache. Both need the `recursivesettings:write`
+   permission. Neither touches another cluster node:
+
+   ```bash
+   curl -k -X DELETE https://127.0.0.1:18443/api/dns-cache/entries/example.com -H 'Authorization: Bearer <token>'
+   curl -k -X DELETE https://127.0.0.1:18443/api/dns-cache -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"removedEntryCount":0}
+   {"removedEntryCount":27}
+   ```
+
+   (Your counts differ. The answer is the number of cache entries removed.)
+
+#### Check that it worked
+
+1. Ask Ninlil for a name it does not host:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 example.com A +noall +comments +answer
+   ```
+
+   ```text
+   ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 52613
+   ;; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+   example.com.		235	IN	A	172.66.147.243
+   example.com.		235	IN	A	104.20.23.154
+   ```
+
+   (Trimmed to the lines that matter. Your numbers and addresses differ.) `status: NOERROR` and an
+   answer mean Ninlil found the name.
+   The flag `ra` (recursion available) shows the client is served. `ad` (authentic data) shows
+   Ninlil validated the answer with DNSSEC; a name in an unsigned zone has no `ad`.
+2. Ask again after a few seconds. The TTL counts down, because Ninlil answers from its cache.
+3. If you added a conditional forwarder zone, ask for a name below it. A name that the zone's
+   servers know gets their answer, without `ad` while `validateDnssec` is off.
+4. A client that is not permitted recursion gets `status: REFUSED`. To see that, turn
+   `enableRecursion` off, remove the access rules and ask again.
 
 #### Behaviour worth knowing
 
-- **Forwarder zone names ignore case and a trailing dot.** `Corp.Example`, `corp.example` and
-  `corp.example.` all match the same conditional forwarder zone.
+- **Who is forwarded for.** Forwarding needs RD and a client that is permitted recursion. A query
+  without RD is answered from local data only.
+- **Forwarders are tried in order.** Ninlil sends the query to the first forwarder and waits for
+  the per-forwarder timeout (3 seconds by default). A forwarder has **failed** when it does not
+  answer in time, or answers with any code except `NOERROR` and `NXDOMAIN` (for example
+  `SERVFAIL`, `REFUSED` or `FORMERR`). Then Ninlil asks the next forwarder. `NOERROR` and
+  `NXDOMAIN` are answers and end the search. When every forwarder has failed, Ninlil serves an
+  expired cached answer if serve-stale allows it, and otherwise asks the recursive resolver,
+  which is allowed for this client by the same rule.
+- **The failover strategy.** The default, `HealthCheckedRoundRobin`, takes turns among the healthy
+  forwarders so the load spreads, and leaves out a forwarder that failed 3 queries or probes in a
+  row. One success makes it healthy again, and a probe runs every 30 seconds. When none is
+  healthy Ninlil tries all of them, so forwarding is never locked out. `TryInOrder` always starts
+  with the first forwarder.
+- **Host names resolve in the background.** A forwarder given as a host name, such as
+  `tls://dns.quad9.net`, is looked up by the operating system's resolver when Ninlil starts and
+  again about every 5 minutes. A query never waits for the lookup. While a name has no known address,
+  that forwarder is skipped and the next one is tried. A failed lookup keeps the last good address.
+  On a server whose own system resolver is Ninlil, the lookup can succeed only through recursion or
+  another forwarder. Give the forwarders as addresses, or keep recursion on.
+- **A conditional forwarder zone replaces the global list.** The addresses of the closest enabled
+  zone are the only forwarders for a name below it. Zone names ignore case and a trailing dot:
+  `Corp.Example`, `corp.example` and `corp.example.` are the same zone. A zone of the type
+  `SecondaryForwarder` gets its list of addresses from a primary by zone transfer. Its
+  `validateDnssec` switch is not transferred: set it on each node.
+- **Forwarded answers are validated.** While [DNSSEC validation](./ENVIRONMENT.md#recursive-resolver)
+  is on (the default), Ninlil asks the forwarder with the DO and CD bits set, checks the answer
+  itself and builds the reply for each client. The AD bit is set only for an answer that Ninlil
+  validated and only for a client that set DO or AD; an AD bit from the forwarder is ignored. A
+  client without DO gets no RRSIG, NSEC or NSEC3 records. The DS and DNSKEY records of the chain of
+  trust are asked of the same forwarders. A forwarded answer never stays in the cache longer than
+  its shortest signature lifetime.
+- **Recursive answers are validated the same way.** The validator builds the chain of trust from
+  the root trust anchor and keeps the zones it has proven in the `dnssec` cache, which the cache
+  list shows and the flush calls empty. A recursive answer carries the AD bit only when it
+  validated and the client set DO or AD. A client that set DO also gets the RRSIG records and, in
+  the authority section, the NSEC or NSEC3 records that prove a wildcard answer. A cached answer
+  never outlives its signatures. A zone that fails validation is logged as a Warning, at most
+  once per zone per hour.
+- **A bogus forwarded answer counts as a failure.** The forwarder is treated as failed and the
+  next one is tried. A client that set CD gets the data without AD, and Ninlil does not cache it.
+  When no forwarder gives a valid answer, Ninlil falls back to recursion (if allowed), which
+  asks the public DNS. A private name behind an unsigned conditional forwarder zone therefore gets
+  the public DNS's answer, `NXDOMAIN`, when validation is on and the name is not on the Insecure
+  domains list. The log shows `returned a Bogus (DNSSEC-invalid) answer`.
+- **The Insecure domains list.** It starts with the built-in list: `home.arpa` (RFC 8375),
+  `internal` and the locally served reverse zones of RFC 6303 and RFC 7793 (the RFC 1918 ranges,
+  `127.in-addr.arpa`, `254.169.in-addr.arpa`, the documentation ranges and the shared address
+  space, and the `ip6.arpa` zones for `::`, `::1`, `fd00::/8`, `fe80::/10` and `2001:db8::/32`).
+  It does not include `resolver.arpa` and `service.arpa`. A change applies to the next query, and the
+  forwarded cache is flushed, because it remembers whether an answer was validated. Only the
+  queried name counts, so a CNAME from a public name into a listed domain is still validated.
+  In the configuration file, the list (`DnsServer:Recursive:InsecureDomains`) needs
+  `NINLIL_DNS_SERVER_RECURSIVE_USE_CUSTOM_INSECURE_DOMAINS=true`. Without it Ninlil ignores the
+  list, uses the built-in one and logs a Warning at start.
+- **Identical queries in flight share one upstream query.** While the response cache is on (the
+  default), the first query for a name, type and set of flags that is not cached goes upstream, and
+  an identical query that arrives meanwhile waits for it. The waiting query is answered from the
+  cache, or tries upstream on its own when the cache has nothing after the first query ends. This
+  keeps the number of identical outstanding queries per upstream server at one. RFC 5452 §5
+  explains the risk of more: each identical outstanding query raises the chance that an attacker's
+  spoofed reply matches.
+- **What the cache shares between clients.** A cached answer is reused for a query with the same
+  name, type, class, DO, CD and RD bits, EDNS use and forwarder set. With EDNS Client Subnet on,
+  the subnet sent upstream is part of that key, so only clients that disclose the same subnet
+  share an answer. Filtering, rewrites and schedules still apply to each client's reply.
+- **Recursion** walks from the root down, uses QNAME minimization (RFC 9156) so each server learns
+  only what it needs, serves an expired answer when the servers are unreachable (RFC 8767), and
+  refreshes a popular answer shortly before it expires (prefetch). It keeps the root trust anchors
+  up to date by itself (RFC 5011), saved in `data/recursive-trust-anchors.json`. A network that
+  blocks DNSSEC data needs `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION=false`, because with
+  validation on a failed DS or DNSKEY lookup makes the answer bogus and the client gets `SERVFAIL`.
+
+#### Settings
+
+- [Recursive resolver](./ENVIRONMENT.md#recursive-resolver): recursion, validation, serve-stale,
+  prefetch, limits and trust anchors. The Insecure domains list itself has no variable.
+- [Forwarding](./ENVIRONMENT.md#forwarding): the switch, the failover strategy, the health-check
+  interval, the timeout and the cache.
+- [Query pipeline & cross-cutting DNS behavior](./ENVIRONMENT.md#query-pipeline--cross-cutting-dns-behavior):
+  EDNS Client Subnet and the outbound source-port pool.
+
+#### When something goes wrong
+
+- *Every query answers `REFUSED`.* The client is not permitted recursion. Turn on
+  `enableRecursion` or add an access rule for the client's address, and wait a few seconds.
+- *`dig` says `recursion requested but not available`.* The same cause: the reply carries no `ra`
+  flag.
+- *The answer is `SERVFAIL`.* Validation failed or no server answered. Read the Ninlil log for
+  `Bogus` or `Forwarder` lines. If a private zone is the cause, add it to the Insecure domains
+  list. If your network blocks DNSSEC data, turn validation off.
+- *A host-name forwarder never answers.* The lookup of its name failed. The log shows one Warning
+  after two failures in a row. Use an address, or make sure the system resolver can find the name.
+- *A forwarder you added seems ignored.* Another forwarder earlier in the order, or a conditional zone,
+  answers first. List the forwarders with `GET /api/forwarders` and look at `sortOrder`.
+- *A cached answer is stale after you changed upstream data.* Forget the name with the commands in
+  step 9.
 
 ### Filtering, rewrites and parental controls
 
-Filtering blocks or allows names by list, per client and per client group, with schedules. Rewrites
-override a name with an address or a CNAME. The settings are in
-[Filtering, rewrites, rate limiting & query log](./ENVIRONMENT.md#filtering-rewrites-rate-limiting--query-log).
+#### What it does
+
+Three features change what a client gets for a query. All three apply to every transport.
+
+- **Filtering** blocks or allows names. You collect names in **filter lists**. A list is a block
+  list or an allow list. A list holds domain names, or addresses (see "Behaviour worth knowing").
+  Lists come from you (**local** lists) or from a web address that Ninlil fetches on a schedule
+  (**subscribed** lists). A list does nothing until you assign it to a **client group** or to a
+  single **client**.
+- **Rewrites** answer a name with an address or another name that you choose, instead of the real
+  answer. Use one for a name on your network or to send a search engine to its safe-search address.
+- **Parental controls** are per-client and per-group pauses and time-of-day schedules, the blocked
+  services catalog and Safe Search. They sit on top of lists and rewrites.
+
+A **client** is a device Ninlil knows by a MAC address (IPv4) or a DHCP unique identifier (IPv6), not
+by an address that can change. Ninlil finds the client behind a query's source address, in this
+order: a static address mapping you wrote, then the lease table of Ninlil's own DHCP server, then
+the host's ARP and neighbor table. A **client group** is a set of clients and networks that share
+lists, schedules and rewrites.
+
+#### Before you start
+
+1. A running Ninlil and a signed-in API token, with the Quick start values
+   ([Forwarding and recursion](#forwarding-and-recursion) "Before you start" step 1).
+2. A user that holds the `filteringsettings:write`, `filterlists:write`, `clientgroups:write`,
+   `clients:write`, `rewritesettings:write` and `dnsrewrites:write` permissions. The bootstrap
+   administrator holds every permission.
+3. Recursive service for your test client, so that names outside your zones resolve. Follow "Allow
+   recursive service" in [Forwarding and recursion](#forwarding-and-recursion), steps 1 to 4.
+4. `dig`. Every check asks `dig @127.0.0.1 -p 15300`.
+
+#### Steps
+
+**Block names with a list.**
+
+1. Turn filtering on. It is off by default:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/filtering-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   ```
+
+   In the console: **Presets & Settings**, **Filtering**.
+2. Create a client group and make it the **default group**. A client that matches no other group
+   gets the lists of the default group. Copy the answer's `id` as `<group-id>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/client-groups -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"Everyone","isDefault":true}'
+   ```
+
+   ```text
+   {"id":"<group-id>","name":"Everyone","isDefault":true,"isDisabled":false, ...
+   ```
+
+   Only one group is the default. Saving a second default group takes the flag from the first. In
+   the console: **Client Groups**, **New client group**.
+3. Create a local block list. Copy the `id` as `<list-id>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/filter-lists -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"My blocks","kind":"Domain","action":"Block","source":"Local"}'
+   ```
+
+   ```text
+   {"id":"<list-id>","name":"My blocks","kind":"Domain","action":"Block","source":"Local", ...
+   ```
+
+4. Add a name to the list. A plain name blocks the name and every name below it:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/filter-lists/<list-id>/entries -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"value":"ads.example.org"}'
+   ```
+
+   ```text
+   {"id":"...","listId":"<list-id>","value":"ads.example.org","comment":null,"kind":"Domain", ...
+   ```
+
+   Two other entry kinds exist, set with `"kind"`: `Wildcard`, a glob where `*` stands for any
+   characters and `?` for one (`"value":"ads*.example.org"`), and `Regex`, a .NET regular
+   expression. Both match the whole queried name. Try a pattern before you save it:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/filter-pattern-preview -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"kind":"Wildcard","value":"ads*.example.org","sampleDomains":["ads1.example.org","www.example.org"]}'
+   ```
+
+   ```text
+   {"isValid":true,"error":null,"matches":[{"domain":"ads1.example.org","isMatch":true},{"domain":"www.example.org","isMatch":false}]}
+   ```
+
+5. Assign the list to the group:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/client-groups/<group-id>/list-assignments -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"listId":"<list-id>"}'
+   ```
+
+   ```text
+   {"id":"...","clientGroupId":"<group-id>","listId":"<list-id>", ...
+   ```
+
+   In the console: **Filter Lists**, **New filter list**, then add entries on the list. Open
+   **Client Groups** and use the group's list assignments.
+
+**Subscribe to a list that someone else maintains.**
+
+6. A subscribed list needs the web address of a list file. Ninlil reads three formats: a hosts file
+   (`0.0.0.0 tracker.example.org`), one domain per line, and the ad-blocking syntax
+   (`||adblock.example.org^`, with `@@||allowed.example.org^` as an exception that cancels
+   matches inside the same list). To try it without a third party, serve a small file from your own
+   machine. Run these in a second terminal and leave the server running:
+
+   ```bash
+   mkdir -p lists
+   printf '# a test list\n0.0.0.0 tracker.example.org\n||adblock.example.org^\n@@||allowed.adblock.example.org^\n' > lists/list.txt
+   python3 -m http.server 18999 --bind 127.0.0.1 --directory lists
+   ```
+
+7. Create the subscribed list and assign it. `refreshInterval` is `hh:mm:ss` and at least one hour;
+   leave it out for 24 hours. Copy the `id` as `<subscribed-list-id>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/filter-lists -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"My subscription","kind":"Domain","action":"Block","source":"Subscribed","subscriptionUrl":"http://127.0.0.1:18999/list.txt","refreshInterval":"01:00:00"}'
+   curl -k https://127.0.0.1:18443/api/client-groups/<group-id>/list-assignments -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"listId":"<subscribed-list-id>"}'
+   ```
+
+   Ninlil looks for due lists once a minute, so the first fetch happens within about a minute. A
+   shorter interval answers `400`: `'refreshInterval' must be at least 01:00:00, or null for the
+   default of 24 hours.` The entries of a subscribed list cannot be edited by hand (`409`).
+
+**Allow a name that a block list catches, and decide who wins.**
+
+8. Create a local allow list (`"action":"Allow"`), add the name and assign it to the group, with the
+   same three calls as steps 3 to 5. When a name is in a block list and an allow list for the same
+   client, the setting `precedence` decides. The default is `AllowWins`. To let the block list win:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/filtering-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"precedence":"BlockWins"}'
+   ```
+
+**Choose what a blocked client sees.**
+
+9. By default a blocked name answers `NXDOMAIN`. To answer with an address that goes nowhere
+   instead (`0.0.0.0` for A, `::` for AAAA, with a TTL of 60 seconds), use sinkhole mode:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/filtering-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"blockResponseMode":"SinkholeAddress"}'
+   ```
+
+   To use other addresses, set `sinkholeAddressV4`, `sinkholeAddressV6` and
+   `sinkholeTimeToLiveSeconds` in the same call.
+
+**Give one group or one device its own rules.**
+
+10. Add a second group and put networks in it. A `cidr` is a network (`192.168.1.0/24`) or one
+    address (`192.168.1.77`). A `clientId` is a label that a DNS-over-HTTPS client puts in the URL,
+    `https://<host>/dns-query/<client-id>`; the match ignores case:
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/client-groups -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"Kids"}'
+    curl -k https://127.0.0.1:18443/api/client-groups/<kids-group-id>/networks -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"cidr":"192.168.1.0/24"}'
+    curl -k https://127.0.0.1:18443/api/client-groups/<kids-group-id>/networks -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"clientId":"kids-tablet"}'
+    ```
+
+    Copy the first answer's `id` as `<kids-group-id>`. A row sets either `cidr` or `clientId`,
+    never both. Assign lists to this group as in step 5. A client that matches this group gets
+    its lists, not those of the default group.
+11. Register a device as a client, so that you can pause it, give it a schedule or assign lists to
+    it alone. First tell Ninlil which MAC address belongs to the device's address, unless Ninlil's
+    DHCP server or the ARP table already knows it:
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/client-static-address-mappings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"cidr":"127.0.0.1","clientIdentifier":"aa:bb:cc:00:00:01","protocolVersion":"IPv4"}'
+    curl -k https://127.0.0.1:18443/api/clients -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"clientIdentifier":"aa:bb:cc:00:00:01","protocolVersion":"IPv4","displayName":"Test laptop"}'
+    ```
+
+    The second answer starts with the client's `id`. Copy it as `<client-id>`. This example maps
+    `127.0.0.1`, the address of your own test queries. In the console: **Clients**,
+    **Static Address Mappings**.
+12. Pause the client for 10 minutes. A pause blocks all of the client's queries, whatever lists,
+    schedules and rewrites say. Calling it again replaces the pause:
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/clients/<client-id>/pause -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"durationMinutes":10}'
+    curl -k -X POST https://127.0.0.1:18443/api/clients/<client-id>/resume -H 'Authorization: Bearer <token>'
+    ```
+
+    A group has the same two calls, `/api/client-groups/<group-id>/pause` and `/resume`. A group
+    pause blocks the registered clients that belong to the group.
+13. Add a time-of-day schedule. The window blocks queries from the start time to the end time in
+    the named time zone, and an end time before the start time crosses midnight. `daysOfWeek` is a
+    comma-separated list of day names:
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/clients/<client-id>/schedules -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"daysOfWeek":"Monday, Tuesday, Wednesday, Thursday, Sunday","startTime":"21:00:00","endTime":"07:00:00","timeZoneId":"Europe/Berlin"}'
+    ```
+
+    A group has the same call under `/api/client-groups/<group-id>/schedules`.
+
+**Block a service or force Safe Search.**
+
+14. The blocked services catalog turns a named service on or off with one call. Enabling it creates
+    a subscribed list from a public list file. Always name the group or client to block it for:
+    a call without `clientGroupId` or `clientId` creates the list but assigns it to nobody.
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/blocked-services -H 'Authorization: Bearer <token>'
+    curl -k -X POST "https://127.0.0.1:18443/api/blocked-services/tiktok?clientGroupId=<group-id>" -H 'Authorization: Bearer <token>'
+    ```
+
+    The first call lists the catalog keys. In the console: **Presets & Settings**, **Blocked
+    Services**.
+15. Safe Search makes a search engine's own safe-search address the answer for its search host
+    names. Enabling an entry turns rewrites on if they were off:
+
+    ```bash
+    curl -k -X POST https://127.0.0.1:18443/api/safe-search/google -H 'Authorization: Bearer <token>'
+    ```
+
+    Add `?clientGroupId=<group-id>` or `?clientId=<client-id>` to limit it to one group or one
+    client. In the console: **Presets & Settings**, **Safe Search**.
+
+**Answer a name with an address you choose (rewrite).**
+
+16. Turn rewrites on, then add one. A target that is an IP address answers as an A or AAAA record. A
+    target that is a name answers as a CNAME:
+
+    ```bash
+    curl -k -X PATCH https://127.0.0.1:18443/api/rewrite-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+    curl -k https://127.0.0.1:18443/api/dns-rewrites -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"domain":"nas.home.test","target":"192.168.1.20"}'
+    curl -k https://127.0.0.1:18443/api/dns-rewrites -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"domain":"alias.home.test","target":"example.com"}'
+    curl -k https://127.0.0.1:18443/api/dns-rewrites -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"domain":"*.dev.home.test","target":"192.168.1.30"}'
+    ```
+
+    ```text
+    {"id":"...","domain":"nas.home.test","target":"192.168.1.20","targetKind":"A","isDisabled":false, ...
+    ```
+
+    In the console: **DNS Rewrites**, **New rewrite**.
+
+#### Check that it worked
+
+1. Ask for the blocked name from step 4:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 ads.example.org A +noall +comments +answer
+   ```
+
+   In the default mode (before step 9) the answer is `NXDOMAIN`. After step 9 (sinkhole mode) it
+   is an address that goes nowhere. These are the trimmed lines:
+
+   ```text
+   ;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 7919
+   ```
+
+   ```text
+   ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 39615
+   ads.example.org.	60	IN	A	0.0.0.0
+   ```
+
+   A name that is on no list resolves as usual. Choose a name in a domain that you do not host: the
+   Quick start zone `example.test` answers every name below it itself.
+2. Ask for the subscribed list's names after the first fetch (a minute or so):
+
+   ```bash
+   dig @127.0.0.1 -p 15300 tracker.example.org A +noall +comments +answer
+   dig @127.0.0.1 -p 15300 allowed.adblock.example.org A +noall +comments +answer
+   ```
+
+   In sinkhole mode the first answers `0.0.0.0`. The second is not blocked, because the list's `@@`
+   exception cancels the block. The Ninlil log shows how the fetch went:
+
+   ```text
+   Refreshed block/allow list 'My subscription' (4 entries, 1 of them exceptions; 0 unsupported rules skipped) from 'http://127.0.0.1:18999/list.txt'.
+   ```
+
+3. Ask for the rewrites from step 16:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 nas.home.test A +noall +answer
+   dig @127.0.0.1 -p 15300 alias.home.test A +noall +answer
+   dig @127.0.0.1 -p 15300 x.dev.home.test A +noall +answer
+   ```
+
+   ```text
+   nas.home.test.		300	IN	A	192.168.1.20
+   alias.home.test.	300	IN	CNAME	example.com.
+   example.com.		5	IN	A	172.66.147.243
+   x.dev.home.test.	300	IN	A	192.168.1.30
+   ```
+
+   (The `example.com` addresses and TTL differ.) The `alias.home.test` answer holds the CNAME and the
+   addresses of its target.
+4. For a DNS-over-HTTPS client in the Kids group (step 10), a name on the Kids lists is blocked
+   on `/dns-query/kids-tablet` and not on `/dns-query`.
+5. Ask the API for the lists that apply to a group: `GET
+   /api/client-groups/<group-id>/list-assignments`.
 
 #### Behaviour worth knowing
 
 - **Filter data is loaded when Ninlil starts.** A background service loads the clients, the filter
   configuration and the entries of every list in use, so the first DNS query does not wait for
   them. It does not delay readiness. It does nothing while filtering is off at start.
+- **Which lists apply to a client.** A client gets the lists of every non-default group it matches,
+  all together. It matches a group by a network row that contains its address, by a ClientID row,
+  or because the client is registered into that group. The default group applies only when no
+  other group matches. The lists assigned to the registered client itself are added on top,
+  whether or not it matched a group.
+- **Entry kinds.** A plain domain entry blocks the name and every name below it, so
+  `example.com` also blocks `www.example.com`. A rewrite is different and matches one exact name.
+  A wildcard or regex match that takes longer than 250 milliseconds counts as no match and is
+  logged, so a bad pattern cannot stall queries.
+- **List kinds.** `Domain` lists match the queried name. `ResponseIp` lists hold addresses or
+  networks and match the A and AAAA addresses in the answer. `ClientSource` lists hold addresses
+  or networks and match the client's source address; a `Block` match denies the client and gets
+  no reply. Wildcard and regex entries belong to `Domain` lists only.
+- **CNAME cloaking.** With `blockCnameCloaking` on (the default), an answer is also blocked when a
+  CNAME target in it is on one of the client's block lists. This catches a tracker hidden behind a
+  subdomain of a site. A name on an allow list is never blocked for where it points.
+- **Subscribed lists.** A list without an interval refreshes every 24 hours. The minimum is one
+  hour, and a stored smaller value counts as one hour. A fetch that fails keeps the old entries and
+  the old fetch time. The next try waits 1, 2, 4 ... minutes after each failure in a row, at most
+  one hour. A download over 128 MiB is refused, and the entries of a refresh replace the old
+  ones as a whole. Refreshing runs only while filtering is on.
+- **What a delete removes.** Deleting a filter list removes its entries and every assignment of it
+  to a group or a client. Deleting a client group removes its networks, list assignments,
+  schedules and scoped rewrites, and the clients in it stay and lose the group. Deleting a client
+  removes its addresses, schedules, list assignments and scoped rewrites. DHCP leases and DNS
+  records are not touched.
+- **Rewrites match one name.** `nas.home.test` does not match `sub.nas.home.test`. `*` in a
+  rewrite domain needs at least a label there: `*.dev.home.test` does not match `dev.home.test`.
+  The record types differ by target. An A rewrite answers only A queries, an AAAA rewrite only
+  AAAA queries, and a CNAME rewrite answers A, AAAA and CNAME queries. Any other type is
+  answered as if no rewrite existed, so a name that exists only through a rewrite can answer
+  `NXDOMAIN` to a query of another type. The TTL of every rewrite answer is
+  `NINLIL_DNS_SERVER_REWRITES_TIME_TO_LIVE_SECONDS` (300 by default). Of two rewrites for the same
+  name, an exact one beats a wildcard, then a client's beats a group's, which beats a global one.
+- **A CNAME rewrite returns the target's addresses** when the client may use forwarding or
+  recursion. Ninlil looks the target up once, as a normal query, and adds its records to the
+  answer. A client that is not permitted recursion gets the CNAME alone, and so does a CNAME query.
+- **What replicates in a cluster.** Filter lists, blocked service lists, global rewrites and the
+  global Safe Search rewrites replicate to the other nodes. The assignment of a list to a group
+  or client, and a rewrite scoped to a client or group, stay on the node where you made them,
+  because clients and groups exist only there. Turning rewrites on through Safe Search turns them on
+  for every node. See also [Clustering, events and webhooks](#clustering-events-and-webhooks).
+- **Filtering applies to a cached answer.** The forwarded and recursive caches hold the real
+  answer, and Ninlil filters and rewrites it per client on each reply.
+
+#### Settings
+
+- [Filtering, rewrites, rate limiting & query log](./ENVIRONMENT.md#filtering-rewrites-rate-limiting--query-log):
+  the switches, precedence, the sinkhole addresses and the rewrite TTL.
+- The client groups, lists, assignments, schedules, networks and rewrites themselves are data,
+  not settings. They have no variable.
+
+#### When something goes wrong
+
+- *A list does not block.* A list does nothing until it is assigned. Check the assignment with
+  `GET /api/client-groups/<group-id>/list-assignments`. Check that filtering is on and that the
+  client matches the group you assigned it to. A client that matches a non-default group does
+  not get the default group's lists.
+- *A subscribed list shows no `lastFetchedAtUtc`.* Wait a minute and read the log. A fetch
+  warning names the reason, such as a refused connection, a status code or the 128 MiB limit.
+- *A blocked service blocks nothing.* It is not assigned. Repeat step 14 with a target.
+- *`400` on an entry.* The pattern does not compile, or the kind does not fit the list. Use the
+  pattern preview in step 4.
+- *A rewrite is ignored.* Rewrites are off (`GET /api/rewrite-settings`), a more specific rewrite
+  wins, or the query type is not one the target answers.
+- *A client keeps being blocked after you removed its list.* A pause or schedule still applies.
+  Resume the client and list its schedules.
 
 ### Encrypted transports and DNS64
 
-Every transport beyond plain DNS is off by default; [Ports](#ports) lists them and
-[Enabling additional transports](#enabling-additional-transports) shows how to turn one on.
-DNS-over-QUIC needs `libmsquic` 2.4.20 or later. A DNSCrypt TCP connection carries one query and
-closes after its answer (DNSCrypt v2 specification, section 6). DNS64 belongs to the recursive
-resolver. The settings are in [DNS transports](./ENVIRONMENT.md#dns-transports).
+#### What it does
+
+Plain DNS over UDP and TCP sends every query in the clear. Ninlil also answers over four encrypted
+transports. Each is off by default, and each has its own on/off switch:
+
+| Transport | Standard | Default port | Notes |
+|---|---|---|---|
+| DNS-over-TLS (DoT) | RFC 7858 | `853` TCP | A TLS connection that carries DNS messages. |
+| DNS-over-HTTPS (DoH) | RFC 8484 | the web HTTPS port (`443`), path `/dns-query` | Served by the same listener as the console and the REST API. |
+| DNS-over-QUIC (DoQ) | RFC 9250 | `853` UDP | Needs the native library `libmsquic` 2.4.20 or later on the host. The container image ships it. |
+| DNSCrypt v2 | the DNSCrypt v2 specification | `5443` UDP and TCP | Needs a provider name. Clients use a DNS Stamp (`sdns://...`) to find the server. |
+
+Ninlil can also use these transports towards an upstream. See "Forward to global forwarders" in
+[Forwarding and recursion](#forwarding-and-recursion).
+
+**DNS64** helps a client that has only IPv6. For a name with an A record and no AAAA record, Ninlil
+invents an AAAA record by placing the IPv4 address inside an IPv6 prefix that a NAT64 gateway
+translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway.
+
+**Certificates.** DoT, DoH and DoQ use a TLS certificate.
+
+- With no setting, Ninlil makes a self-signed certificate for the name `localhost`, valid for two
+  years, and saves it as `protocol-tls-certificate.pfx` in the [data
+  directory](#the-data-directory). DoT and DoQ share it. Clients refuse a self-signed certificate
+  unless you tell them to trust it. Use it to rehearse.
+- For clients on your network, point the PFX path of the transport at a certificate that
+  your clients trust, such as one from [Certificates (ACME)](#certificates-acme).
+- DoH is not a listener of its own. It uses the port, addresses and certificate of the web
+  listener, so set `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PATH` (and the password variable
+  beside it) for DoH.
+
+#### Before you start
+
+1. A running Ninlil and a signed-in API token, with the Quick start values
+   ([Forwarding and recursion](#forwarding-and-recursion) "Before you start" step 1).
+2. A user that holds the `transportsettings:write` permission. DNS64 needs `dns64settings:write`
+   and the PROXY step needs `reverseproxy:write`.
+3. Free ports. The commands use `18853` for DoT and DoQ (they use TCP and UDP, so they do not
+   collide) and `15443` for DNSCrypt. The Quick start ports are already taken. Check one:
+
+   ```bash
+   ss -ltnu 'sport = :18853'
+   ```
+
+   Only the header line means the port is free.
+4. `openssl`, `curl` and a `dig` that supports `+tls` (version 9.18 or later; `dig -v` prints
+   the version). Check them:
+
+   ```bash
+   openssl version
+   curl --version
+   dig -v
+   ```
+
+5. For DoQ, `libmsquic` 2.4.20 or later. Check it:
+
+   ```bash
+   ldconfig -p | grep libmsquic
+   ```
+
+   ```text
+   	libmsquic.so.2 (libc6,x86-64) => /usr/lib/libmsquic.so.2
+   ```
+
+   Without a line, install it as the [Installation](#installation) section for your install type
+   says. With an older version a peer that advertises a 1200-byte UDP payload size over IPv4 can
+   abort the process.
+6. For the Quick start examples, a zone that answers: the `www.example.test` record from
+   [Quick start](#quick-start).
+
+#### Steps
+
+**Turn on DNS-over-TLS.**
+
+1. Set the port, then switch the transport on. Set the port first: a transport reads its port when
+   it starts. A switch takes effect at once, with no restart:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/transport-settings/dns-over-tls -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"port":18853}'
+   curl -k -X PATCH https://127.0.0.1:18443/api/transport-settings/dns-over-tls -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file, and the underlying transport listener was started or stopped to match -- this transport's enabled/disabled state took effect immediately, no restart required."}
+   ```
+
+   In the console: **Presets & Settings**, **Transports**.
+2. Save Ninlil's self-signed certificate, so that a client can trust it. The command connects,
+   reads the certificate and writes it to `ninlil-cert.pem`:
+
+   ```bash
+   openssl s_client -connect 127.0.0.1:18853 -servername localhost </dev/null 2>/dev/null | openssl x509 -out ninlil-cert.pem
+   openssl x509 -in ninlil-cert.pem -noout -subject -dates
+   ```
+
+   ```text
+   subject=CN=localhost
+   notBefore=Oct 29 19:14:07 2026 GMT
+   notAfter=Oct 29 19:14:07 2028 GMT
+   ```
+
+**Turn on DNS-over-HTTPS.**
+
+3. DoH needs no port, because the web listener serves it. Switch it on:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/transport-settings/dns-over-https -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   The URL path (`/dns-query`) and the largest request (65535 bytes) are the other two fields. A
+   DoH client can add one more path segment, `/dns-query/<client-id>`, to choose a client group
+   (see [Filtering, rewrites and parental controls](#filtering-rewrites-and-parental-controls) step 10).
+
+**Turn on DNS-over-QUIC.**
+
+4. Set the port, then switch the transport on:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/transport-settings/dns-over-quic -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"port":18853}'
+   curl -k -X PATCH https://127.0.0.1:18443/api/transport-settings/dns-over-quic -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+**Turn on DNSCrypt.**
+
+5. A DNSCrypt server needs a **provider name**, the DNS name under which clients find its
+   certificates. Choose a name below a domain you control, for example `dnscrypt.example.net`. Ninlil
+   publishes the certificates as TXT records at `2.dnscrypt-cert.<provider-name>`. You can write the
+   name with or without the `2.dnscrypt-cert.` prefix; Ninlil never doubles it. Set the name and
+   the port, then switch the transport on:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/transport-settings/dnscrypt -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"providerName":"dnscrypt.example.net","port":15443}'
+   curl -k -X PATCH https://127.0.0.1:18443/api/transport-settings/dnscrypt -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   With no provider name the switch still answers `200`, but the listeners do not start and the
+   log says `DNSCrypt is enabled, but no ProviderName is configured`. If you set the name after
+   you switched the transport on, restart the two listeners:
+
+   ```bash
+   curl -k -X POST https://127.0.0.1:18443/api/services/dnscrypt-udp/restart -H 'Authorization: Bearer <token>'
+   curl -k -X POST https://127.0.0.1:18443/api/services/dnscrypt-tcp/restart -H 'Authorization: Bearer <token>'
+   ```
+
+   Enabling DNSCrypt creates the server's identity, a key pair, in `dnscrypt-certificates.json` in
+   the data directory. Ninlil keeps that file across restarts. Back it up: clients pin the
+   public key, so a different identity means every client must learn a different stamp.
+6. Make the DNS Stamp your clients import. A stamp holds the server address, the identity's public
+   key and the provider name in the full form. This command builds one from the identity file.
+   Replace `<data-directory>` with your [data directory](#the-data-directory), and
+   `<server-address>` with the address and port that clients use, such as `192.0.2.1:5443`:
+
+   ```bash
+   python3 -c 'import base64,json,sys; d,a,n=sys.argv[1:4]; k=base64.b64decode(json.load(open(d+"/dnscrypt-certificates.json"))["ProviderPublicKey"]); lp=lambda b:bytes([len(b)])+b; r=b"\x01"+bytes(8)+lp(a.encode())+lp(k)+lp(n.encode()); print("sdns://"+base64.urlsafe_b64encode(r).decode().rstrip("="))' <data-directory> <server-address> 2.dnscrypt-cert.dnscrypt.example.net
+   ```
+
+   ```text
+   sdns://AQAAAAAAAAAADzEyNy4wLjAuMToxNTQ0MyCZD7AEiqTnvuJGWOgu7B52ehNmoCZrsxgE4eP9Y6AqJCYyLmRuc2NyeXB0LWNlcnQucmVzb2x2ZXIyLmV4YW1wbGUudGVzdA
+   ```
+
+   (Your stamp differs.) The stamp has the layout of the DNS Stamps specification for a DNSCrypt
+   server: the byte `0x01`, eight bytes of properties, then the address, the public key and the
+   provider name, each with a length byte, all in unpadded base64url.
+
+**Put a PROXY-protocol load balancer in front of DNS-over-TLS (optional).**
+
+7. A TCP proxy in front of Ninlil hides the client's address. The proxy can send a PROXY protocol
+   header (version 1 text or version 2 binary) at the start of each connection, so Ninlil sees the
+   real client address in access rules, filters, rate limits and the query log. Ninlil trusts the
+   header only from the addresses you list, because anyone else could forge it. This example
+   trusts one proxy at `10.0.0.5`. The setting needs a restart of Ninlil:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/reverse-proxy-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"dnsOverTls":{"enable":true,"knownProxies":["10.0.0.5"]}}'
+   ```
+
+   Use `knownNetworks` (for example `["10.0.0.0/24"]`) for a proxy whose address changes. In the
+   console: **Presets & Settings**, **Reverse proxy**.
+
+**Synthesize AAAA records (DNS64).**
+
+8. DNS64 works on the recursive path only. A forwarder's answer is relayed unchanged, so turn
+   forwarding off while you use DNS64 (`{"enable":false}` to `/api/forwarding-settings`), or leave
+   DNS64 off. Recursion must be on (see [Forwarding and
+   recursion](#forwarding-and-recursion)). Then switch DNS64 on:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/dns64-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   The default prefix is the Well-Known Prefix `64:ff9b::/96`. If your NAT64 gateway uses its own
+   prefix, set it:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/dns64-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"synthesisPrefix":"2001:db8:64::/96"}'
+   ```
+
+   Ninlil accepts the RFC 6052 lengths `/32`, `/40`, `/48`, `/56`, `/64` and `/96` only. A prefix that
+   is multicast, inside `::ffff:0:0/96` or has a non-zero "u" octet (bits 64 to 71) answers `400`.
+   In the console: **Presets & Settings**, **DNS64**.
+
+#### Check that it worked
+
+1. DNS-over-TLS. `+tls-ca` names the saved certificate and `+tls-hostname` the name inside it:
+
+   ```bash
+   dig @127.0.0.1 -p 18853 +tls +tls-ca=ninlil-cert.pem +tls-hostname=localhost www.example.test A +noall +answer
+   ```
+
+   ```text
+   www.example.test.	3600	IN	A	192.0.2.10
+   ```
+
+   Without `+tls-ca`, `dig` stops with `TLS peer certificate verification ... failed: self-signed
+   certificate`. That is the expected refusal of an untrusted certificate.
+2. DNS-over-HTTPS. The `dns` parameter is the query in base64url. This one asks for `www.example.com`
+   type A. The status line and the media type show a DNS answer:
+
+   ```bash
+   curl -s -i --cacert ninlil-cert.pem --resolve localhost:18443:127.0.0.1 'https://localhost:18443/dns-query?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB' | head -6
+   ```
+
+   ```text
+   HTTP/2 200 
+   content-type: application/dns-message
+   date: Fri, 30 Oct 2026 19:20:20 GMT
+   server: Kestrel
+   cache-control: private, max-age=300
+   ```
+
+   `max-age` is the smallest TTL in the answer (RFC 8484 §5.1). `private` tells a shared HTTP cache
+   not to reuse the answer for another client.
+3. DNS-over-QUIC. Ask the service list, then the socket:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/services -H 'Authorization: Bearer <token>'
+   ss -lun 'sport = :18853'
+   ```
+
+   ```text
+   [{"name":"dns-over-https","category":"Transport","isRunning":true},{"name":"dns-over-quic","category":"Transport","isRunning":true}, ...
+   ```
+
+   ```text
+   State  Recv-Q Send-Q Local Address:Port  Peer Address:Port
+   UNCONN 0      0                  *:18853            *:*
+   ```
+
+   The `ss` command lists several UDP sockets on the port, because QUIC opens more than one. If
+   `isRunning` is `false` the log says why, for example that `libmsquic` is missing. Test a real
+   query with a DoQ client of your choice.
+4. DNSCrypt. A client finds the server by asking for the TXT record of the certificates over UDP
+   or TCP. Two records answer, one for each cipher:
+
+   ```bash
+   dig @127.0.0.1 -p 15443 2.dnscrypt-cert.dnscrypt.example.net TXT +noall +comments | grep -E 'status|ANSWER:'
+   ```
+
+   ```text
+   ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 967
+   ;; flags: qr; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 0
+   ```
+
+   To test a full encrypted query, add the stamp as a forwarder on a second Ninlil host (see
+   [Forwarding and recursion](#forwarding-and-recursion)) and ask that host for a name. The first
+   host's query log then shows `"protocol":"DnsCrypt"` for it (check 5).
+5. Every query appears in the query log with its transport:
+
+   ```bash
+   curl -k 'https://127.0.0.1:18443/api/query-log?take=5' -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"items":[{"id":"...","occurredAtUtc":"...","clientAddress":"127.0.0.1","protocol":"Https","queriedName":"www.example.com.", ...
+   ```
+
+   `protocol` is `Udp`, `Tcp`, `Tls`, `Https`, `Quic` or `DnsCrypt`.
+6. DNS64. Ask for the AAAA record of a name that has only an A record:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 ipv4.google.com AAAA +noall +comments +answer
+   ```
+
+   ```text
+   ;; flags: qr rd ra; QUERY: 1, ANSWER: 7, AUTHORITY: 0, ADDITIONAL: 1
+   ipv4.google.com.	...	IN	CNAME	ipv4.l.google.com.
+   ipv4.l.google.com.	...	IN	AAAA	64:ff9b::8efb:1071
+   ```
+
+   (Your addresses differ.) The last 32 bits of each synthesized address are the IPv4 address. With
+   a prefix of your own, the addresses start with it. The reply has no `ad` flag, because nobody
+   signed the invented records.
+7. PROXY protocol (step 7). After the restart, a query that arrives through the proxy shows the
+   client's address, not the proxy's, as `clientAddress` in the query log (check 5). A connection
+   from an address that is not in `knownProxies` or `knownNetworks` shows its own address.
+
+#### Behaviour worth knowing
+
+- **Every transport beyond plain DNS is off by default**, and each switch applies at once. A port,
+  a certificate or a limit is read when the transport's listener starts: change it, then restart
+  that listener with `POST /api/services/<name>/restart` (`dns-over-tls`, `dns-over-quic`,
+  `dnscrypt-udp`, `dnscrypt-tcp`) or restart Ninlil. The ports table in [Ports](#ports) lists the
+  defaults.
+- **Each transport can listen on chosen addresses.** The `ListenAddresses` setting limits it, for
+  example to keep it off a WAN interface. An address the host does not have is logged and
+  skipped. DoH follows the web listener's addresses.
+- **DNS-over-QUIC.** A query must carry message ID 0 (RFC 9250 §4.2.1). Ninlil closes the
+  connection with `DOQ_PROTOCOL_ERROR` for another ID, or for a message it cannot decode, and sends no
+  answer. It resets a stream that it gives up on, such as a missed deadline, with
+  `DOQ_INTERNAL_ERROR`. It closes a connection over the connection limit with `DOQ_EXCESSIVE_LOAD`.
+  Ninlil does not enable 0-RTT. Ninlil's own DoQ forwarder sends ID 0, as the RFC says.
+- **`libmsquic` 2.4.20 or later.** An older version aborts the whole process when a peer advertises
+  a UDP payload size of 1200 over IPv4, such as the Quad9 service over IPv4. The container image
+  ships a fixed version. For that reason the forwarder list in the console has no
+  DNS-over-QUIC entry for Cloudflare or Quad9.
+- **DNS-over-HTTPS.** A GET carries the query in the `dns` parameter and a POST carries it in the
+  body with the media type `application/dns-message`. Ninlil compares the media type without case
+  and ignores parameters such as `; charset=utf-8`; another type answers `415`. A bad `dns`
+  parameter answers `400`. A rate-limited query answers `429`. A denied client gets no answer at all.
+  Ninlil's answers carry no `Content-Length` header. `curl` reads them. `dig` 9.20.30 reports
+  `short (< header size) message` for them.
+- **DNSCrypt.**
+  - The server offers two ciphers (XChaCha20-Poly1305 and XSalsa20-Poly1305) and publishes one
+    certificate for each. A certificate is valid for 28 hours. Ninlil issues a replacement every 24
+    hours and drops the old one, with its secret key, when it expires.
+  - A DNSCrypt TCP connection carries one query. The server closes it after the answer
+    (DNSCrypt v2 specification, section 6), so a client opens a new connection per query.
+  - The identity file exists only after you enable DNSCrypt.
+  - As a client (a forwarder defined by a stamp), Ninlil pads each query: to at least 256 bytes over
+    UDP, and by a random 1 to 256 bytes over TCP, as the specification asks. It fetches the
+    certificate over UDP first and over TCP when UDP fails or is truncated.
+- **PROXY protocol on DNS-over-TLS.** The header must end with CRLF within its first 107 characters
+  (PROXY protocol specification, section 2.1); a longer line closes the connection. A header from an address
+  that is not in the list is never read, so it cannot forge a client address. A client that
+  does not send a header on a trusted address is refused.
+- **DNS64 details.** Under the Well-Known Prefix `64:ff9b::/96`, Ninlil leaves out IPv4 addresses
+  that are not globally reachable (private, loopback, link-local, documentation and similar,
+  RFC 6052 §3.1). A network-specific prefix embeds every address. Ninlil ignores a real AAAA
+  record inside `::ffff:0:0/96`, because an IPv6-only client cannot use it, and counts the name as
+  having no AAAA record (RFC 6147 §5.1.4). A synthesized record gets the smaller of the A
+  record's TTL and the TTL of the SOA record in the empty AAAA answer, or 600 seconds without an
+  SOA (RFC 6147 §5.1.7). Ninlil does not synthesize when the A answer fails DNSSEC validation (the
+  client gets `SERVFAIL`, or an empty answer if it set CD), or when the client set both DO and CD.
+  Synthesis is for AAAA queries that get an empty answer, never for `NXDOMAIN` or for authoritative
+  data.
+
+#### Settings
+
+- [DNS transports](./ENVIRONMENT.md#dns-transports): the switch, port, addresses, limits and
+  certificate of each transport. The DoH port and certificate rows apply only when DoH has its
+  own listener, which Ninlil does not use: set the web listener's values in [Web
+  host](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding).
+- [Query pipeline & cross-cutting DNS behavior](./ENVIRONMENT.md#query-pipeline--cross-cutting-dns-behavior):
+  `NINLIL_DNS_SERVER_DNS64_ENABLE` and `NINLIL_DNS_SERVER_DNS64_SYNTHESIS_PREFIX`.
+- The list-valued settings (`ListenAddresses`, the self-signed certificate's alternative names, the
+  PROXY protocol sources) have no variable. Set them in the console, through the API, or in
+  `appsettings.json`.
+
+#### When something goes wrong
+
+- *`dig +tls` says `self-signed certificate`.* Pass `+tls-ca=ninlil-cert.pem` as in the check, or
+  use a certificate your clients trust (see "Certificates").
+- *A client says the certificate name does not match.* The self-signed certificate names only
+  `localhost`. Set `certificate.selfSignedSubjectAlternativeNames` to the name clients use, delete
+  `protocol-tls-certificate.pfx` from the data directory and restart: a saved certificate is not
+  made again when the names change. Or use a certificate for your name.
+- *The switch answers `200` but nothing listens.* The log has the reason. For DoQ it names
+  `libmsquic`. For DNSCrypt it names the missing provider name.
+- *Ninlil stops at start and the log says `BackgroundService failed` with `SocketException`.* An
+  enabled transport could not bind its port when Ninlil started: `Permission denied` for a port
+  below 1024 without the right to use it, or `Address already in use`. Ninlil stops instead of
+  running without the transport. Change the port, or switch the transport off in
+  `appsettings.json`, and start again.
+- *DoQ clients are cut off.* A query with a message ID other than 0 closes the connection.
+  Check the client.
+- *A DNSCrypt client cannot find the server.* Check that the stamp's provider name has the
+  `2.dnscrypt-cert.` prefix, and that the address in the stamp reaches the DNSCrypt port.
+- *The client address in the query log is the proxy.* The PROXY setting needs a restart, and the
+  proxy's address must be in `knownProxies` or `knownNetworks`.
+- *DNS64 gives no AAAA record.* Forwarding is on and answered the query, the name has a real AAAA
+  record, or the only A records are non-global addresses under `64:ff9b::/96`.
 
 ### DHCP, DHCPv6 and Router Advertisement
 
