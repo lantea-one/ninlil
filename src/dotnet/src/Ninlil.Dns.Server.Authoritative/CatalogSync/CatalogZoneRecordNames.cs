@@ -18,28 +18,28 @@ namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 public static class CatalogZoneRecordNames
 {
     /// <summary>
-    ///     This constant contains the catalog schema version produced and accepted, the RFC 9432 §3
+    ///     This constant contains the catalog schema version produced and accepted, the RFC 9432 §4.2.1
     ///     <c>version</c> TXT value. RFC 9432 is schema version 2; version 1 is not supported.
     /// </summary>
     public const string SchemaVersion = "2";
 
     /// <summary>
     ///     This method builds the owner name of the version TXT record, <c>version.$CATZ</c>
-    ///     (RFC 9432 §3).
+    ///     (RFC 9432 §4.2.1).
     /// </summary>
     /// <param name="catalogZoneName">The catalog zone's fully-qualified name, without a trailing dot.</param>
     public static string VersionRecordOwnerName(string catalogZoneName) =>
         $"version.{catalogZoneName.TrimEnd('.')}";
 
     /// <summary>
-    ///     This method builds the name member entries live under, <c>zones.$CATZ</c> (RFC 9432 §5).
+    ///     This method builds the name member entries live under, <c>zones.$CATZ</c> (RFC 9432 §4.1).
     /// </summary>
     /// <param name="catalogZoneName">The catalog zone's fully-qualified name, without a trailing dot.</param>
     public static string MembersContainerName(string catalogZoneName) =>
         $"zones.{catalogZoneName.TrimEnd('.')}";
 
     /// <summary>
-    ///     This method computes a member's unique label (<c>&lt;unique-N&gt;</c>, RFC 9432 §5). RFC 9432
+    ///     This method computes a member's unique label (<c>&lt;unique-N&gt;</c>, RFC 9432 §4.1). RFC 9432
     ///     leaves the algorithm open; this uses the lowercase hex SHA-1 of the member's lowercase name
     ///     without a trailing dot. Deriving it from the name means no mapping is stored: a rename
     ///     gives a new label, and consumers see a remove and an add.
@@ -55,7 +55,7 @@ public static class CatalogZoneRecordNames
 
     /// <summary>
     ///     This method builds a member's PTR owner name, <c>&lt;unique-N&gt;.zones.$CATZ</c>
-    ///     (RFC 9432 §5).
+    ///     (RFC 9432 §4.1).
     /// </summary>
     /// <param name="catalogZoneName">The catalog zone's fully-qualified name, without a trailing dot.</param>
     /// <param name="uniqueLabel">The member's unique label, from <see cref="ComputeUniqueLabel" />.</param>

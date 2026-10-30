@@ -72,11 +72,11 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
 
     /// <summary>
     ///     This method finds the hosted zone for a name: the one whose name is the longest suffix
-    ///     of <paramref name="name" /> (RFC 1035 §4.3.2).
+    ///     of <paramref name="name" /> (RFC 1034 §4.3.2).
     ///     <para>
     ///         NS and DS queries are the exception. When <paramref name="name" /> is itself a hosted
     ///         zone's apex and a hosted ancestor zone delegates it with NS records, the ancestor is
-    ///         returned, because the DS belongs to the parent (RFC 4035 §2.7). Otherwise, with parent
+    ///         returned, because the DS belongs to the parent (RFC 4035 §3.1.4.1). Otherwise, with parent
     ///         and child on the same server, the child would answer DS queries it has no data for.
     ///     </para>
     /// </summary>

@@ -21,7 +21,7 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Refresh;
 
 /// <summary>
-///     This hosted service keeps secondary zones current (RFC 1035 §4.3.5, RFC 1996). For each
+///     This hosted service keeps secondary zones current (RFC 1034 §4.3.5, RFC 1996). For each
 ///     Secondary, SecondaryCatalog, SecondaryForwarder and Stub zone, on its SOA Refresh interval
 ///     or at once after a NOTIFY (<see cref="ISecondaryZoneRefreshTrigger" />), it asks the
 ///     primaries for their serial and pulls an AXFR/IXFR through the zone's
@@ -29,7 +29,7 @@ namespace Ninlil.Dns.Server.Authoritative.Refresh;
 ///     <see cref="IZoneUpdateService" />. Stub zones get an NS query instead.
 ///     <para>
 ///         Retry: when every primary fails, a zone with a local SOA is checked again after its SOA
-///         Retry interval (RFC 1035 §4.3.5); <see cref="SecondaryZoneRefreshOptions.DefaultRetryInterval" />
+///         Retry interval (RFC 1034 §4.3.5); <see cref="SecondaryZoneRefreshOptions.DefaultRetryInterval" />
 ///         applies to a zone with no local SOA yet and to stub zones. When each zone is next due is
 ///         kept in memory only; after a restart every zone is checked at once, which at worst costs
 ///         one "already current" round trip.
@@ -888,7 +888,7 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method schedules the next check after every primary failed (RFC 1035 §4.3.5: the
+    ///     This method schedules the next check after every primary failed (RFC 1034 §4.3.5: the
     ///     SOA Retry interval), and logs the expiry once if the Expire interval has passed. A zone
     ///     with no local SOA, so no Retry value, uses
     ///     <see cref="SecondaryZoneRefreshOptions.DefaultRetryInterval" />.

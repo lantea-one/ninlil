@@ -85,7 +85,8 @@ public class DynamicUpdateQueryResolver(
                 ErrorResponse(request, DnsResponseCodeEnum.FormatError)
             );
 
-        // RFC 2136 §3.1.1: the Zone Section names the zone by SOA/IN, not an arbitrary query type.
+        // RFC 2136 §3.1.1: the Zone Section's type must be SOA, else FORMERR. This server hosts
+        // class IN only, so it also answers FORMERR for any other class.
         DnsQuestion zoneSection = request.Questions[0];
 
         if (
@@ -98,7 +99,7 @@ public class DynamicUpdateQueryResolver(
 
         CachedZone zone = zoneCache.FindZone(zoneSection.Name);
 
-        // RFC 2136 §3.1.2: a server that does not host the named zone, or is given a name that is
+        // RFC 2136 §3.1.1: a server that does not host the named zone, or is given a name that is
         // not the zone's apex, answers NOTAUTH.
         if (zone is null || zone.ApexName != zoneSection.Name)
             return DnsQueryResolution.Handled(
@@ -189,8 +190,8 @@ public class DynamicUpdateQueryResolver(
 
         // A CloudPrimary zone is served by the provider's servers too, so an added record the
         // providers cannot hold would be answered locally and never publicly, while the client
-        // sees success. Refuse the whole update (RFC 2136 §3.4.2: an update is atomic, so
-        // nothing is applied). Deletions are always allowed.
+        // sees success. Refuse the whole update (RFC 2136 §3.4.2.1: a failed update is undone as
+        // a whole, so nothing is applied). Deletions are always allowed.
         if (
             isCloudPrimary
             && toAdd.Find(record => !CloudZoneUpdatePolicy.IsPushable(record, zone.Zone.Name))
@@ -217,7 +218,7 @@ public class DynamicUpdateQueryResolver(
                 stoppingToken
             );
 
-            // The change is committed locally, which is the point RFC 2136 §3.6 requires before
+            // The change is committed locally, which is the point RFC 2136 §3.5 requires before
             // the reply. The push is only requested: it does not delay the answer, and a failed
             // push heals on the next pass.
             if (isCloudPrimary)

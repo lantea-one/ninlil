@@ -387,7 +387,7 @@ public sealed class CloudPrimaryDynamicUpdateTests : IAsyncLifetime
     public async Task Update_AddingAnARecordAndAPtrRecordTogether_AppliesNeitherOfThem()
     {
         // Control: the A record alone is accepted by the same zone (see the first test), so the
-        // refusal here comes from the PTR record, and the whole update is atomic (RFC 2136 §3.4.2).
+        // refusal here comes from the PTR record, and the whole update is refused (RFC 2136 §3.4.2.1).
         DnsResponseCodeEnum code = await UpdateAsync(
             CloudZone,
             UpdateKey,

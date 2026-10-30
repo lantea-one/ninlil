@@ -21,7 +21,7 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Refresh;
 
 /// <summary>
-///     This class covers SOA Expire and Retry at a secondary (RFC 1035 §4.3.5): an expired zone
+///     This class covers SOA Expire and Retry at a secondary (RFC 1034 §4.3.5): an expired zone
 ///     answers SERVFAIL with AA clear and refuses a transfer with a signed SERVFAIL, the state
 ///     survives a restart through the stored refresh time, SOA Expire 0 means no expiry, and the
 ///     next check after a failure follows the SOA Retry field. Each test builds a SQLite host with a

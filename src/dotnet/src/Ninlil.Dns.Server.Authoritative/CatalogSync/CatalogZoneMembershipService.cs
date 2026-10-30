@@ -18,7 +18,7 @@ namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 ///     <see cref="IZoneUpdateService" />, so the catalog reaches a
 ///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> peer by the usual NOTIFY and AXFR/IXFR with TSIG.
 ///     <para>
-///     Only the RFC 9432 §5 member PTR (<c>&lt;unique-N&gt;.zones.$CATZ</c>) and the §3
+///     Only the RFC 9432 §4.1 member PTR (<c>&lt;unique-N&gt;.zones.$CATZ</c>) and the §4.2.1
 ///     <c>version.$CATZ</c> record are produced; the <c>coo</c> and <c>group</c> properties are not
 ///     supported.
 ///     </para>
@@ -37,7 +37,7 @@ public class CatalogZoneMembershipService(
 )
 {
     /// <summary>
-    ///     This constant contains the TTL of catalog records: 0, since RFC 9432 §3 says the TTL has
+    ///     This constant contains the TTL of catalog records: 0, since RFC 9432 §4.1 says the TTL has
     ///     no meaning and consumers should ignore it.
     /// </summary>
     private const uint CatalogRecordTimeToLiveSeconds = 0;
@@ -255,7 +255,7 @@ public class CatalogZoneMembershipService(
     }
 
     /// <summary>
-    ///     This method adds the RFC 9432 §3 version TXT record to <paramref name="recordsToAdd" /> if
+    ///     This method adds the RFC 9432 §4.2.1 version TXT record to <paramref name="recordsToAdd" /> if
     ///     the catalog does not have it yet.
     /// </summary>
     private async Task EnsureVersionRecordAsync(

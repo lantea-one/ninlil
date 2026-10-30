@@ -88,8 +88,9 @@ public class ZoneNotifyEventSubscriber(
                     continue;
                 }
 
-                // RFC 1996 §3.7: a NOTIFY sets AA and may carry the current SOA as a hint, so
-                // the secondary can skip a transfer if it is already current.
+                // RFC 1996 §3.7: the answer section may carry the current SOA as an unsecured hint, so
+                // the secondary can skip a transfer if it already has that data. The AA flag follows
+                // the RFC 1996 §4.5 example.
                 DnsMessage notifyMessage = new()
                 {
                     Id = (ushort)Random.Shared.Next(ushort.MaxValue + 1),

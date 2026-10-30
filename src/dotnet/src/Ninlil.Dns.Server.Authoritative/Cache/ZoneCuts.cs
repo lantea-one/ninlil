@@ -13,7 +13,7 @@ internal static class ZoneCuts
     /// <summary>
     ///     This method picks the topmost zone cuts from the names that own NS records: a non-apex
     ///     NS owner with no NS-owning ancestor below the apex. A cut nested inside another is
-    ///     occluded data and is not returned (RFC 1034 §4.2.1; RFC 4035 §2.2). The apex NS records
+    ///     occluded data and is not returned (RFC 1034 §4.2.1). The apex NS records
     ///     name this zone's own servers and never make a cut.
     /// </summary>
     /// <param name="apexName">The zone's apex name.</param>

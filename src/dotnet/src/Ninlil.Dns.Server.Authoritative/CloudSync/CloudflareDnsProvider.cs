@@ -205,7 +205,7 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
         System.Enum.TryParse(typeName, ignoreCase: true, out type);
 
     /// <summary>
-    ///     This method converts Cloudflare's CAA <c>data.flags</c> value (0-255, RFC 8659 §4) to the
+    ///     This method converts Cloudflare's CAA <c>data.flags</c> value (0-255, RFC 8659 §4.1) to the
     ///     Critical bit <see cref="Ninlil.Dns.Common.Wire.Records.CaaRecordData" /> models, the only bit
     ///     RFC 8659 assigns.
     /// </summary>
@@ -268,7 +268,7 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
     /// <param name="Weight">An SRV record's weight.</param>
     /// <param name="Port">An SRV record's port.</param>
     /// <param name="Target">An SRV record's target host.</param>
-    /// <param name="Flags">A CAA record's raw flags octet (0-255, per RFC 8659 §4).</param>
+    /// <param name="Flags">A CAA record's raw flags octet (0-255, per RFC 8659 §4.1).</param>
     /// <param name="Tag">A CAA record's tag (for example, <c>issue</c>).</param>
     /// <param name="Value">A CAA record's policy value.</param>
     private sealed record CloudflareRecordData(

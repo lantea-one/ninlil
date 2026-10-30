@@ -232,7 +232,7 @@ public sealed class CachedZone
     ///     This method looks up the records at the source of synthesis for a name, the wildcard
     ///     <c>*.closestEncloser</c> (RFC 4592 §3.3.1). Only this one wildcard can answer for the
     ///     name: a wildcard further up never applies, because the closest encloser stops the
-    ///     search (RFC 4592 §2.1.3).
+    ///     search.
     /// </summary>
     /// <param name="closestEncloser">The closest encloser from <see cref="FindClosestEncloser" />.</param>
     /// <param name="type">

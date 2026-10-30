@@ -249,7 +249,7 @@ public sealed class DigitalOceanDnsProvider(HttpClient httpClient) : ICloudDnsPr
     private static string EnsureTrailingDot(string name) => name.EndsWith('.') ? name : name + ".";
 
     /// <summary>
-    ///     This method converts DigitalOcean's CAA <c>flags</c> value (0-255, RFC 8659 §4) to the
+    ///     This method converts DigitalOcean's CAA <c>flags</c> value (0-255, RFC 8659 §4.1) to the
     ///     Critical bit <see cref="Ninlil.Dns.Common.Wire.Records.CaaRecordData" /> models, the only bit
     ///     RFC 8659 assigns.
     /// </summary>
@@ -301,7 +301,7 @@ public sealed class DigitalOceanDnsProvider(HttpClient httpClient) : ICloudDnsPr
     /// <param name="Priority">An MX or SRV record's priority value; <see langword="null" /> for every other type.</param>
     /// <param name="Port">An SRV record's port; <see langword="null" /> for every other type.</param>
     /// <param name="Weight">An SRV record's weight; <see langword="null" /> for every other type.</param>
-    /// <param name="Flags">A CAA record's raw flags value (0-255, per RFC 8659 §4); <see langword="null" /> for every other type.</param>
+    /// <param name="Flags">A CAA record's raw flags value (0-255, per RFC 8659 §4.1); <see langword="null" /> for every other type.</param>
     /// <param name="Tag">A CAA record's tag (for example, <c>issue</c>); <see langword="null" /> for every other type.</param>
     private sealed record DigitalOceanRecord(
         [property: JsonPropertyName("id")] long Id,
@@ -327,7 +327,7 @@ public sealed class DigitalOceanDnsProvider(HttpClient httpClient) : ICloudDnsPr
     /// <param name="Priority">An MX or SRV record's priority value; <see langword="null" /> for every other type.</param>
     /// <param name="Port">An SRV record's port; <see langword="null" /> for every other type.</param>
     /// <param name="Weight">An SRV record's weight; <see langword="null" /> for every other type.</param>
-    /// <param name="Flags">A CAA record's raw flags value (0-255, per RFC 8659 §4); <see langword="null" /> for every other type.</param>
+    /// <param name="Flags">A CAA record's raw flags value (0-255, per RFC 8659 §4.1); <see langword="null" /> for every other type.</param>
     /// <param name="Tag">A CAA record's tag (for example, <c>issue</c>); <see langword="null" /> for every other type.</param>
     private sealed record DigitalOceanCreateRequest(
         [property: JsonPropertyName("type")] string Type,

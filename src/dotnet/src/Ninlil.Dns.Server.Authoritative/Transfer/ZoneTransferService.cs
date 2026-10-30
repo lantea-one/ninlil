@@ -41,7 +41,7 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     every transfer.
 /// </param>
 /// <param name="expiryTracker">
-///     Which secondary zones have expired (RFC 1035 §4.3.5); a transfer of one gets a signed
+///     Which secondary zones have expired (RFC 1034 §4.3.5); a transfer of one gets a signed
 ///     SERVFAIL, so a downstream secondary does not copy an expired zone. <see langword="null" />
 ///     means no zone expires.
 /// </param>
@@ -401,7 +401,7 @@ public class ZoneTransferService(
     )
     {
         // RFC 5936 §4.2 limits AXFR to TCP. IXFR is limited too, so its UDP truncate-and-retry
-        // (RFC 1995 §3) need not be implemented. TLS (RFC 9103) and QUIC are stream transports
+        // (RFC 1995 §2) need not be implemented. TLS (RFC 9103) and QUIC are stream transports
         // and are accepted; only UDP is refused.
         if (
             context.Protocol

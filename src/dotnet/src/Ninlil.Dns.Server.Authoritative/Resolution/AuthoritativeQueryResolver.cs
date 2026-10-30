@@ -36,7 +36,7 @@ namespace Ninlil.Dns.Server.Authoritative.Resolution;
 ///     singleton.
 /// </param>
 /// <param name="expiryTracker">
-///     Which secondary zones have expired (RFC 1035 §4.3.5); an expired zone is answered with
+///     Which secondary zones have expired (RFC 1034 §4.3.5); an expired zone is answered with
 ///     SERVFAIL and the authoritative bit clear. <see langword="null" /> means no zone expires,
 ///     which keeps hand-built resolvers in tests working.
 /// </param>
@@ -79,7 +79,7 @@ public class AuthoritativeQueryResolver(
             return ValueTask.FromResult(DnsQueryResolution.NotHandled);
 
         // A secondary whose SOA Expire passed without a successful refresh no longer holds a
-        // trustworthy copy (RFC 1035 §4.3.5). SERVFAIL with AA clear tells resolvers to try
+        // trustworthy copy (RFC 1034 §4.3.5). SERVFAIL with AA clear tells resolvers to try
         // another server of the zone; falling through to forwarding or recursion could return
         // data for the zone from elsewhere. The tracker never holds Primary or Stub zones.
         if (
@@ -163,7 +163,7 @@ public class AuthoritativeQueryResolver(
         // child's servers. FindEnclosingDelegation returns the topmost cut, so names under a
         // nested cut are referred to the outer one. Two exceptions, only at a cut that is
         // itself reached: an NS query (those NS records are in this zone), and a DS query, since
-        // the DS RRset belongs to the parent (RFC 4035 §2.7).
+        // the DS RRset belongs to the parent (RFC 4035 §3.1.4.1).
         if (zone.FindEnclosingDelegation(question.Name) is { } delegation)
         {
             if (delegation.DelegationPoint == question.Name)
@@ -276,7 +276,7 @@ public class AuthoritativeQueryResolver(
                 signedData
             );
 
-        // A wildcard CNAME answers every type, like a CNAME at an existing name (RFC 4592 §2.2).
+        // A wildcard CNAME answers every type, like a CNAME at an existing name (RFC 4592 §4.3).
         IReadOnlyList<RecordEntity> wildcardCnames = zone.GetSourceOfSynthesisRecords(
             closestEncloser,
             DnsResourceRecordTypeEnum.Cname
@@ -405,9 +405,9 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds an answer synthesized from a wildcard (RFC 1035 §4.3.3): the records
+    ///     This method builds an answer synthesized from a wildcard (RFC 1034 §4.3.3): the records
     ///     are served under the queried name, not the <c>*</c> name they are stored under. With
-    ///     DNSSEC, the wildcard's RRSIGs are served under the queried name too (RFC 4035 §3.1.3).
+    ///     DNSSEC, the wildcard's RRSIGs are served under the queried name too (RFC 4035 §3.1.3.3).
     ///     Their Labels field still counts the wildcard name, which is how a validator detects
     ///     the expansion. The proof that no closer match exists is added to the Authority section.
     /// </summary>
@@ -469,9 +469,10 @@ public class AuthoritativeQueryResolver(
 
     /// <summary>
     ///     This method answers a DS query at a delegation point. DS is the one type at that name
-    ///     the parent is authoritative for (RFC 4035 §2.7), so it is answered instead of referred.
+    ///     the parent is authoritative for (RFC 4035 §3.1.4.1), so it is answered instead of referred.
     ///     A signed zone answers its DS RRset (generated and stored records) with RRSIGs; an
-    ///     unsigned zone answers the stored DS records (RFC 4035 §2.4). With no DS the answer is
+    ///     unsigned zone answers the stored DS records as they are (RFC 4035 §2.4 puts a DS RRset at
+    ///     the delegation point in the parent). With no DS the answer is
     ///     NODATA.
     /// </summary>
     private DnsMessage BuildDsResponse(
@@ -595,7 +596,8 @@ public class AuthoritativeQueryResolver(
         SignedZoneData signedData
     )
     {
-        // A name covered by the wildcard at its closest encloser exists too (RFC 4592 §2.2.1).
+        // A name covered by the wildcard at its closest encloser is answerable too, so it is not
+        // NXDOMAIN (RFC 4592 §3.3.1).
         bool nameExists =
             zone.NameExistsOrIsEmptyNonTerminal(question.Name)
             || zone.GetSourceOfSynthesisRecords(zone.FindClosestEncloser(question.Name)).Count > 0;

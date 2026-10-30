@@ -575,7 +575,7 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
 
     /// <summary>
     ///     This method writes strings as TXT RDATA, one character-string each; a string over 255
-    ///     octets is split into several (RFC 1035 §3.3.14). With no strings, one empty
+    ///     octets is split into several (RFC 1035 §3.3, §3.3.14). With no strings, one empty
     ///     character-string.
     /// </summary>
     private static byte[] BuildTxtRdata(List<byte[]> strings)

@@ -77,7 +77,7 @@ public static class ServiceCollectionAuthoritativeExtension
         // The expiry clock. TryAdd keeps a clock another extension or a test registered.
         instance.TryAddSingleton(TimeProvider.System);
 
-        // Which secondary zones have expired (RFC 1035 §4.3.5): filled by the refresh service,
+        // Which secondary zones have expired (RFC 1034 §4.3.5): filled by the refresh service,
         // read by the authoritative resolver and the zone transfer service.
         instance.AddSingleton<SecondaryZoneExpiryTracker>();
 

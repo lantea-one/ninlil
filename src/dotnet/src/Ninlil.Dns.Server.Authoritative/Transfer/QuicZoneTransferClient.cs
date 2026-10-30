@@ -44,7 +44,7 @@ public class QuicZoneTransferClient(
 ) : IZoneTransferClient
 {
     /// <summary>
-    ///     This constant contains the DNS-over-QUIC ALPN token from RFC 9250 §7.1, which zone
+    ///     This constant contains the DNS-over-QUIC ALPN token from RFC 9250 §4.1, which zone
     ///     transfers over QUIC also use.
     /// </summary>
     private static readonly SslApplicationProtocol DoqApplicationProtocol = new("doq");

@@ -107,7 +107,7 @@ internal sealed class ZoneTransferResponseAssembler(uint? requestedSerial)
                 return failure;
         }
 
-        // RFC 1995 §4: a primary answers an IXFR whose client is current with the SOA alone in
+        // RFC 1995 §2: a primary answers an IXFR whose client is current with the SOA alone in
         // the first message. A single SOA that is newer than the request is only the start of a
         // longer answer, so reading goes on; a close before its end is then a failure.
         if (

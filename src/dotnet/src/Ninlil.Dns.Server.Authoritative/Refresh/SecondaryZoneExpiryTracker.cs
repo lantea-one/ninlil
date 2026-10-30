@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 namespace Ninlil.Dns.Server.Authoritative.Refresh;
 
 /// <summary>
-///     This class is the in-memory view of which secondary zones have expired (RFC 1035 §4.3.5:
+///     This class is the in-memory view of which secondary zones have expired (RFC 1034 §4.3.5:
 ///     when a secondary cannot reach any primary for the SOA Expire interval, it stops answering
 ///     for the zone). <see cref="SecondaryZoneRefreshService" /> fills and updates it from the
 ///     persisted refresh state; <see cref="Resolution.AuthoritativeQueryResolver" /> reads it on
