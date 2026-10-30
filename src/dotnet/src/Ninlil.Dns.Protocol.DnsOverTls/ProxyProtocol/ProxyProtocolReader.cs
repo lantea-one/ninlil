@@ -57,11 +57,13 @@ public static class ProxyProtocolReader
 
     /// <summary>
     ///     This constant contains how many bytes a v1 text header may take, CRLF included, before
-    ///     it is declared invalid. The specification (section 2.1) puts the longest valid line, CRLF
-    ///     included, at 107 characters and says a 108-byte buffer holds it with a trailing zero.
-    ///     This reader accepts a CRLF anywhere in the 108 bytes.
+    ///     it is declared invalid. The specification (section 2.1) puts the longest valid line,
+    ///     CRLF included, at 107 characters, and says a receiver should declare the line invalid
+    ///     when the CRLF is not within the first 107 characters. A 108-byte buffer in the
+    ///     specification holds that line with a trailing zero for string processing; this reader
+    ///     needs no trailing zero, so its buffer is 107 bytes.
     /// </summary>
-    private const int MaximumV1HeaderBytes = 108;
+    private const int MaximumV1HeaderBytes = 107;
 
     /// <summary>
     ///     This method reads and parses one PROXY protocol header from the start of

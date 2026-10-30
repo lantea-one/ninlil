@@ -197,9 +197,43 @@ public sealed class ProxyProtocolReaderTests
     }
 
     [Fact]
+    public async Task V1_ALineOf107CharactersWithItsCrlf_IsAccepted()
+    {
+        // PROXY protocol section 2.1: the longest valid v1 line is 107 characters, CRLF included.
+        // An UNKNOWN line may carry any text after the keyword, which makes a line of exact length.
+        string line = "PROXY UNKNOWN ";
+        line += new string('x', 105 - line.Length) + "\r\n";
+        Assert.Equal(107, line.Length);
+
+        ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(
+            StreamOf(Encoding.ASCII.GetBytes(line)),
+            CancellationToken.None
+        );
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public async Task V1_ALineOf108CharactersWithItsCrlf_IsRejected()
+    {
+        // One character past the specification's limit: the CRLF is not found in the first 107
+        // characters, so the line is invalid.
+        string line = "PROXY UNKNOWN ";
+        line += new string('x', 106 - line.Length) + "\r\n";
+        Assert.Equal(108, line.Length);
+
+        ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(
+            StreamOf(Encoding.ASCII.GetBytes(line)),
+            CancellationToken.None
+        );
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
     public async Task V1_ALineWithNoTerminatingCrlfWithinTheDefensiveMaximum_IsRejected()
     {
-        // Well past the 108-byte maximum, with no CRLF anywhere.
+        // Well past the 107-byte maximum, with no CRLF anywhere.
         byte[] bytes = Encoding.ASCII.GetBytes("PROXY " + new string('X', 200));
 
         ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(
