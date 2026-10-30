@@ -13,7 +13,7 @@ using Ninlil.Dns.Common.Net;
 namespace Ninlil.Dhcp.Server.Relay;
 
 /// <summary>
-///     This class is the DHCPv4 relay agent (RFC 2131 Section 4.1, with RFC 3046 Relay Agent
+///     This class is the DHCPv4 relay agent (RFC 1542 Section 4 and RFC 2131 Section 4.1, with RFC 3046 Relay Agent
 ///     Information): the <see cref="IDhcpv4RequestHandler" /> that <see cref="Dhcpv4UdpListener" />
 ///     uses instead of the local engine when <see cref="Dhcpv4RelayOptions.Enable" /> is set.
 ///     <para>
@@ -48,9 +48,10 @@ namespace Ninlil.Dhcp.Server.Relay;
 public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
 {
     /// <summary>
-    ///     This constant is the "hops" value (RFC 2131 Section 2) at which a request is no longer
-    ///     forwarded, a guard against relay loops. RFC 2131 sets no limit; 16 is this server's
-    ///     choice.
+    ///     This constant is the "hops" value (RFC 2131 Section 2, RFC 1542 Section 4.1.1) at which a request is no longer
+    ///     forwarded, a guard against relay loops. RFC 1542 Section 4.1.1 has a relay discard a
+    ///     request whose "hops" exceeds 16 and suggests a lower, configurable default of 4; this
+    ///     relay stops at 16 and offers no setting.
     /// </summary>
     private const byte MaxHops = 16;
 
@@ -195,7 +196,7 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
 
     /// <summary>
     ///     This method forwards a request, from a client or from another relay, by unicast to
-    ///     every configured upstream server (RFC 2131 Section 4.1). It drops the request when no
+    ///     every configured upstream server (RFC 1542 Section 4.1.1). It drops the request when no
     ///     upstream is configured or the hop count has reached <see cref="MaxHops" />.
     /// </summary>
     private async Task RelayRequestUpstreamAsync(
@@ -239,16 +240,16 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
             return;
         }
 
-        // Every relay on the path increments "hops" (RFC 2131 Section 2).
+        // Every relay on the path increments "hops" (RFC 1542 Section 4.1.1).
         request.Hops = (byte)(request.Hops + 1);
 
-        // Only "the first BOOTP relay agent" sets "giaddr" (RFC 2131 Section 2); a later relay
-        // keeps it, since it names the client's subnet.
+        // Only the first relay sets "giaddr" and a later relay must not modify a non-zero value
+        // (RFC 1542 Section 4.1.1), since it names the client's subnet.
         if (request.RelayAgentIpAddress.Equals(IPAddress.Any))
             request.RelayAgentIpAddress = _addressProvider.Value;
 
-        // RFC 3046 Section 1: the Relay Agent Information option is added by "the relay agent
-        // closest to the DHCP client". With a Circuit ID or Remote ID configured, set the option,
+        // RFC 3046 Section 2.1: the relay agent adds the Relay Agent Information option to a
+        // request it forwards. With a Circuit ID or Remote ID configured, set the option,
         // replacing any value already present. A request that carries the option and has no
         // giaddr came straight from a client, which must not send one, was dropped above.
         byte[] wireBytes;

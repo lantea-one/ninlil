@@ -115,7 +115,7 @@ public sealed class Dhcpv6RelayAgent
         );
         _outboundSocket.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
 
-        // The link-address names the client link (RFC 8415 Section 19.1), so its interface is the
+        // The link-address names the client link (RFC 8415 Section 19.1.1), so its interface is the
         // one a client's link-local address belongs to. Found once: the address is fixed until a
         // restart.
         _clientInterfaceIndex = interfaceIndexOf(addressProvider.Value);
@@ -376,7 +376,7 @@ public sealed class Dhcpv6RelayAgent
             return null;
         }
 
-        // The server copies link-address from the RELAY-FORW (RFC 8415 Section 19.3), so a
+        // The server copies link-address from the RELAY-FORW (RFC 8415 Section 9.2), so a
         // different value means the packet does not answer a message this relay sent.
         if (!ClientAddress.IsSameAddress(message.LinkAddress, _addressProvider.Value))
         {

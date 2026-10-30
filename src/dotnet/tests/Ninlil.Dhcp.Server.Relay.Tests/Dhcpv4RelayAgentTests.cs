@@ -65,9 +65,9 @@ public sealed class Dhcpv4RelayAgentTests
             reason
         );
 
-        // RFC 2131 Section 2: only "the first" relay agent sets giaddr, so it is unchanged.
+        // RFC 1542 Section 4.1.1: a relay never modifies a non-zero giaddr, so it is unchanged.
         Assert.Equal(upstreamRelayAddress, forwarded.RelayAgentIpAddress);
-        // Every relay increments hops, first or not.
+        // Every relay increments hops, first or not (RFC 1542 Section 4.1.1).
         Assert.Equal((byte)2, forwarded.Hops);
     }
 

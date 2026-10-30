@@ -3,8 +3,8 @@ namespace Ninlil.Dhcp.Server.Relay;
 
 /// <summary>
 ///     This class binds to the <c>DhcpServer:Relay:Dhcpv4</c> section of the application's
-///     configuration and controls whether this server acts as a DHCPv4 relay agent (RFC 2131
-///     Section 4.1, with RFC 3046 Relay Agent Information), forwarding client requests to
+///     configuration and controls whether this server acts as a DHCPv4 relay agent (RFC 1542
+///     Section 4 and RFC 2131 Section 4.1, with RFC 3046 Relay Agent Information), forwarding client requests to
 ///     upstream DHCPv4 servers instead of answering them from local scopes, and how.
 ///     <para>
 ///         <b>Relay or local engine, not both.</b> One listener cannot both answer and forward
@@ -59,7 +59,7 @@ public sealed class Dhcpv4RelayOptions
     public string RelayAgentAddress { get; set; }
 
     /// <summary>
-    ///     This property optionally contains the RFC 3046 Section 2.1 Agent Circuit ID, as ASCII
+    ///     This property optionally contains the RFC 3046 Section 3.1 Agent Circuit ID, as ASCII
     ///     text, which tells the upstream server which relay interface or circuit the client is
     ///     on. With it or <see cref="RelayAgentRemoteId" /> set, the relay puts a Relay Agent
     ///     Information option (tag 82) on every request it forwards, replacing any already there
@@ -72,7 +72,7 @@ public sealed class Dhcpv4RelayOptions
     public string RelayAgentCircuitId { get; set; }
 
     /// <summary>
-    ///     This property optionally contains the RFC 3046 Section 2.2 Agent Remote ID, as ASCII
+    ///     This property optionally contains the RFC 3046 Section 3.2 Agent Remote ID, as ASCII
     ///     text, usually naming the client or its access device more specifically than the Circuit
     ///     ID. Left <see langword="null" /> or empty (the default), no Remote ID sub-option is
     ///     added; see <see cref="RelayAgentCircuitId" /> for how the two combine.
