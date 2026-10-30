@@ -10,7 +10,10 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)TestSupport/TemporaryFiles.cs" Link="TestSupport/TemporaryFiles.cs" />
+    <Compile
+      Include="$(MSBuildThisFileDirectory)TestSupport/TemporaryFiles.cs"
+      Link="TestSupport/TemporaryFiles.cs"
+    />
     <Using Include="Ninlil.TestSupport" />
   </ItemGroup>
 </Project>
