@@ -36,7 +36,8 @@ public sealed class RaProtocolOptions
     /// <summary>
     ///     This property contains the longest interval between two unsolicited advertisements on
     ///     an interface (RFC 4861 Section 6.2.1's "MaxRtrAdvInterval"). The default, 600 seconds,
-    ///     is the RFC default. The settings API requires 4 to 65535 seconds.
+    ///     is the RFC default. The settings API requires 4 to 65535 seconds (RFC 4861 Section 6.2.1
+    ///     allows 4 to 1800; RFC 8319 Section 4 raises the upper bound to 65535).
     /// </summary>
     public TimeSpan MaxRouterAdvertisementInterval { get; set; } = TimeSpan.FromSeconds(600);
 }

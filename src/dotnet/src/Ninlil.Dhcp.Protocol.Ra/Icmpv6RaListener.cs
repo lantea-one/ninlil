@@ -60,7 +60,8 @@ namespace Ninlil.Dhcp.Protocol.Ra;
 ///         <c>IPV6_RECVPKTINFO</c> through <c>ReceiveMessageFromAsync</c>, which failed with
 ///         <c>ENOPROTOOPT</c> on a raw ICMPv6 socket on Linux. So a solicitation from a unicast
 ///         source gets a unicast reply, routed by the address's scope ID. A solicitation from the
-///         unspecified address (<c>::</c>) must be answered by multicast (RFC 4861 Section 6.2.6),
+///         unspecified address (<c>::</c>) can only be answered by multicast (RFC 4861 Section 6.2.6 allows a unicast answer to a
+///         source other than <c>::</c>),
 ///         so that reply is sent on every usable interface, accepting duplicates on hosts with
 ///         several interfaces.
 ///     </para>

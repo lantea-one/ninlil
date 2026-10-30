@@ -17,7 +17,7 @@ public static class RaMulticastGroups
     public static readonly IPAddress AllRouters = IPAddress.Parse("ff02::2");
 
     /// <summary>
-    ///     The "all-nodes" address (RFC 4861 Section 6.2.4) that unsolicited advertisements, and
+    ///     The "all-nodes" address (RFC 4861 Sections 4.2 and 6.2.6) that unsolicited advertisements, and
     ///     replies to solicitations from the unspecified address, are sent to.
     /// </summary>
     public static readonly IPAddress AllNodes = IPAddress.Parse("ff02::1");

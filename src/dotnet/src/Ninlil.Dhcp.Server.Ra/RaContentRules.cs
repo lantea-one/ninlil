@@ -66,8 +66,8 @@ public static class RaContentRules
 
     /// <summary>
     ///     This field holds the largest allowed maximum advertisement interval in seconds. RFC
-    ///     4861 Section 6.2.1 caps MaxRtrAdvInterval at 1800 s; the limit here is the 16-bit
-    ///     Router Lifetime width, since RFC 8319 Section 4 lets a router lifetime reach it.
+    ///     4861 Section 6.2.1 caps MaxRtrAdvInterval at 1800 s; RFC 8319 Section 4 changes that cap
+    ///     to 65535 s, the limit here.
     /// </summary>
     public const int MaxMaxIntervalSeconds = ushort.MaxValue;
 
