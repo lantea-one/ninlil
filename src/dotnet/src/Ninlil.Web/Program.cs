@@ -213,6 +213,24 @@ if (string.IsNullOrWhiteSpace(signingKey))
     builder.Configuration["Jwt:SigningKey"] = signingKey;
 }
 
+// A key too short for HMAC-SHA256 would start the host and then fail every sign-in with HTTP 500,
+// so the start stops here with the same exit code as the database guards below.
+try
+{
+    JwtSigningKeyGuard.EnsureLongEnough(signingKey);
+}
+catch (DatabaseStartupRefusedException refusal)
+{
+    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
+        logging.AddConsole()
+    );
+    refusalLoggerFactory
+        .CreateLogger("Ninlil.Web.Jwt")
+        .LogCritical("Startup refused: {Message}", refusal.Message);
+    Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
+    return;
+}
+
 // This node's cluster identity, generated once and kept so it survives a restart, like the JWT
 // signing key above. It cannot be edited through the API (see ClusterOptions.NodeId): every
 // peer that joins records it as RemoteNodeId, so changing it would leave their records stale.

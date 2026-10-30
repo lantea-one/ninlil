@@ -28,15 +28,19 @@ public class JwtOptions
 
     /// <summary>
     ///     This property contains the shared secret used to sign and validate a token's HMAC-SHA256
-    ///     signature. It must be at least 32 bytes (256 bits) as UTF-8 and kept secret: anyone who
-    ///     has it can forge tokens this server accepts.
+    ///     signature. It must be at least <see cref="JwtSigningKeyGuard.MinimumSigningKeyBytes" />
+    ///     bytes as UTF-8, or the server refuses to start (exit code 78); 32 bytes (256 bits) or
+    ///     more is recommended. Keep it secret: anyone who has it can forge tokens this server
+    ///     accepts.
     /// </summary>
     public string SigningKey { get; set; }
 
     /// <summary>
     ///     This property contains how long a new access token stays valid. It is short because a
     ///     leaked access token cannot be revoked before it expires; callers renew it with the
-    ///     refresh token.
+    ///     refresh token. Disabling or deleting the account, or changing its permissions, does not
+    ///     wait for this time: every request is checked against the account (see
+    ///     <see cref="Authentication.IAccessTokenRevalidator" />).
     /// </summary>
     public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
 
