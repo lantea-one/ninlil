@@ -434,16 +434,36 @@ public class TsigKnownAnswerTests
         return (wire, offset, reparsed);
     }
 
+    /// <summary>
+    ///     This test covers RFC 8945 §5.2.2.1 for every MAC size around the limits: above the hash
+    ///     length and below the larger of 10 octets and half the hash length are FORMERR; a size in
+    ///     between is a valid truncation, verified on its leading bytes (NoError here means
+    ///     valid). RFC 8945 §5.2.4 lets local policy refuse a truncation the RFC allows with
+    ///     BADTRUNC; Ninlil's policy floor is 12 octets (HMAC-SHA1-96), so HMAC-SHA1 with 10 or 11
+    ///     octets is BADTRUNC. A truncated prefix of the real MAC stays valid because the digest
+    ///     does not cover the TSIG record's MAC field.
+    /// </summary>
     [Theory]
     [InlineData("V1", 33, DnsResponseCodeEnum.FormatError)]
     [InlineData("V1", 15, DnsResponseCodeEnum.FormatError)]
-    [InlineData("V1", 20, DnsResponseCodeEnum.BadTruncation)]
-    [InlineData("V1", 16, DnsResponseCodeEnum.BadTruncation)]
+    [InlineData("V1", 0, DnsResponseCodeEnum.FormatError)]
+    [InlineData("V1", 16, DnsResponseCodeEnum.NoError)]
+    [InlineData("V1", 20, DnsResponseCodeEnum.NoError)]
+    [InlineData("V1", 31, DnsResponseCodeEnum.NoError)]
     [InlineData("A1", 21, DnsResponseCodeEnum.FormatError)]
-    [InlineData("A1", 19, DnsResponseCodeEnum.BadTruncation)]
+    [InlineData("A1", 9, DnsResponseCodeEnum.FormatError)]
+    [InlineData("A1", 10, DnsResponseCodeEnum.BadTruncation)]
+    [InlineData("A1", 11, DnsResponseCodeEnum.BadTruncation)]
+    [InlineData("A1", 12, DnsResponseCodeEnum.NoError)]
+    [InlineData("A1", 19, DnsResponseCodeEnum.NoError)]
+    [InlineData("A2", 49, DnsResponseCodeEnum.FormatError)]
+    [InlineData("A2", 23, DnsResponseCodeEnum.FormatError)]
+    [InlineData("A2", 24, DnsResponseCodeEnum.NoError)]
     [InlineData("A3", 65, DnsResponseCodeEnum.FormatError)]
-    [InlineData("A3", 63, DnsResponseCodeEnum.BadTruncation)]
-    public async Task Verify_AMacOfTheWrongLength_IsFormErrOrBadTrunc(
+    [InlineData("A3", 31, DnsResponseCodeEnum.FormatError)]
+    [InlineData("A3", 32, DnsResponseCodeEnum.NoError)]
+    [InlineData("A3", 63, DnsResponseCodeEnum.NoError)]
+    public async Task Verify_AMacOfAGivenSize_FollowsRfc8945Section5_2_2_1(
         string id,
         int length,
         DnsResponseCodeEnum expected
@@ -455,8 +475,108 @@ public class TsigKnownAnswerTests
 
         TsigVerificationResult result = await harness.Service.VerifyAsync(wire, offset, message);
 
-        Assert.False(result.IsValid);
         Assert.Equal(expected, result.Error);
+        Assert.Equal(expected == DnsResponseCodeEnum.NoError, result.IsValid);
+    }
+
+    [Fact]
+    public async Task Verify_ATruncatedMacWithAWrongByte_IsBadSig()
+    {
+        Vector vector = Vectors["A1"];
+        Harness harness = CreateHarness(vector);
+        (byte[] wire, int offset, DnsMessage message) = WithMacOfLength(vector, 12);
+        message.Tsig.Mac[0] ^= 0xFF;
+
+        TsigVerificationResult result = await harness.Service.VerifyAsync(wire, offset, message);
+
+        Assert.Equal(DnsResponseCodeEnum.BadVersionOrBadSignature, result.Error);
+    }
+
+    [Fact]
+    public async Task Verify_AShortMacWithAWrongClock_IsBadTimeBeforeBadTrunc()
+    {
+        // RFC 8945 §5.2 checks the time (step 3) before the truncation policy (step 4).
+        Vector vector = Vectors["A1"];
+        Harness harness = CreateHarness(vector);
+        harness.Clock.Advance(TimeSpan.FromHours(1));
+        (byte[] wire, int offset, DnsMessage message) = WithMacOfLength(vector, 10);
+
+        TsigVerificationResult result = await harness.Service.VerifyAsync(wire, offset, message);
+
+        Assert.Equal(DnsResponseCodeEnum.BadTime, result.Error);
+    }
+
+    [Fact]
+    public async Task Verify_AShortMacThatDoesNotMatch_IsBadSigBeforeBadTrunc()
+    {
+        // RFC 8945 §5.2 checks the MAC (step 2) before the truncation policy (step 4).
+        Vector vector = Vectors["A1"];
+        Harness harness = CreateHarness(vector);
+        (byte[] wire, int offset, DnsMessage message) = WithMacOfLength(vector, 10);
+        message.Tsig.Mac[0] ^= 0xFF;
+
+        TsigVerificationResult result = await harness.Service.VerifyAsync(wire, offset, message);
+
+        Assert.Equal(DnsResponseCodeEnum.BadVersionOrBadSignature, result.Error);
+    }
+
+    [Fact]
+    public async Task Verify_AnEmptyMacOnAnErrorRecord_IsNeverAccepted()
+    {
+        // RFC 8945 §5.2.2.1 allows a zero-length MAC on the unsigned TSIG error replies of
+        // §5.3.2. It authenticates nothing, so it must not match an empty prefix.
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
+        (byte[] wire, int offset, DnsMessage message) = WithMacOfLength(vector, 0);
+        DnsTsigOptions tsig = message.Tsig;
+        message.Tsig = new DnsTsigOptions(
+            tsig.KeyName,
+            tsig.AlgorithmName,
+            tsig.TimeSigned,
+            tsig.Fudge,
+            [],
+            tsig.OriginalId,
+            DnsResponseCodeEnum.BadKey,
+            []
+        );
+
+        TsigVerificationResult result = await harness.Service.VerifyAsync(wire, offset, message);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(DnsResponseCodeEnum.BadVersionOrBadSignature, result.Error);
+    }
+
+    [Fact]
+    public async Task SignResponse_ForATruncatedRequest_DigestsTheTruncatedRequestMac()
+    {
+        // RFC 8945 §5.2.2.1: "The request MAC used when calculating the TSIG MAC for a reply is
+        // the truncated request MAC." The digest starts with the MAC size (12), then the 12 octets.
+        Vector request = Vectors["A1"];
+        Harness harness = CreateHarness(request);
+        (byte[] wire, int offset, DnsMessage message) = WithMacOfLength(request, 12);
+        Assert.True((await harness.Service.VerifyAsync(wire, offset, message)).IsValid);
+        byte[] truncatedRequestMac = message.Tsig.Mac;
+
+        DnsMessage reply = await harness.Service.SignResponseAsync(
+            SoaAnswer(0x4567),
+            request.KeyName.TrimEnd('.'),
+            request.OriginalId,
+            truncatedRequestMac
+        );
+
+        DnsTsigOptions replyTsig = reply.Tsig;
+        byte[] digestInput =
+        [
+            .. new byte[] { 0, 12 },
+            .. truncatedRequestMac,
+            .. Convert.FromHexString(Vectors["A1-reply"].UnsignedHex),
+            .. TsigCodec.BuildVariables(replyTsig),
+        ];
+        byte[] expected = System.Security.Cryptography.HMACSHA1.HashData(
+            request.Secret,
+            digestInput
+        );
+        Assert.Equal(expected, replyTsig.Mac);
     }
 
     [Fact]

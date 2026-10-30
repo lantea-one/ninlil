@@ -13,7 +13,7 @@ namespace Ninlil.Dns.Server.Tsig.Tests;
 ///     This class tests <see cref="TsigService" /> (RFC 8945) against the EF Core key repository
 ///     on a temporary SQLite database (<see cref="TsigServiceTestFixture" />), with secrets
 ///     encrypted by Data Protection. It covers sign/verify round trips, tampering, BADTIME,
-///     BADKEY (unknown, disabled, unsupported algorithm), wrong MAC length, and the request-MAC
+///     BADKEY (unknown, disabled, unsupported algorithm), a forged truncated MAC, and the request-MAC
 ///     and prior-MAC chaining used by multi-message zone transfers.
 /// </summary>
 public class TsigServiceTests(TsigServiceTestFixture fixture)
@@ -294,7 +294,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
     }
 
     [Fact]
-    public async Task VerifyFailsForAWrongLengthMac()
+    public async Task VerifyFailsForAMacThatIsNotThePrefixOfTheRealMac()
     {
         TsigKeyEntity key = await CreateKeyAsync();
         await using AsyncServiceScope scope = fixture.Services.CreateAsyncScope();
@@ -306,7 +306,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             DnsTsigOptions.HmacSha256AlgorithmName,
             (ulong)fixture.Clock.GetUtcNow().ToUnixTimeSeconds(),
             300,
-            new byte[16], // HMAC-SHA256 produces 32 bytes; truncated MACs are not supported.
+            new byte[16], // A 16-octet truncation is allowed (RFC 8945 §5.2.2.1) but all zeros is not the MAC.
             message.Id,
             DnsResponseCodeEnum.NoError,
             []
@@ -320,7 +320,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         );
 
         Assert.False(result.IsValid);
-        Assert.Equal(DnsResponseCodeEnum.BadTruncation, result.Error);
+        Assert.Equal(DnsResponseCodeEnum.BadVersionOrBadSignature, result.Error);
     }
 
     [Fact]

@@ -9,8 +9,9 @@ namespace Ninlil.Dns.Server.Tsig;
 ///     §6 makes HMAC-SHA1 and HMAC-SHA256 mandatory to implement; HMAC-SHA384 and HMAC-SHA512 are
 ///     optional and supported too. <see cref="TsigService" /> looks the algorithm up by the name in
 ///     the TSIG record or key, and the TSIG key API in <c>Ninlil.Web</c> offers
-///     <see cref="Supported" /> as the choice for a new key. HMAC-MD5 and the truncated variants are
-///     not supported.
+///     <see cref="Supported" /> as the choice for a new key. HMAC-MD5 and the algorithm names of the
+///     truncated variants (such as <c>hmac-sha256-128</c>) are not supported; a MAC truncated
+///     under a supported algorithm name is verified (RFC 8945 §5.2.2.1).
 /// </summary>
 public sealed class TsigAlgorithm
 {

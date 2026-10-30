@@ -46,11 +46,21 @@ public class TsigService(
 ) : ITsigService
 {
     /// <summary>
-    ///     This constant contains the shortest MAC accepted. Truncated MACs (RFC 8945 §5.2.2.1) are
-    ///     not supported: a MAC shorter than this is malformed (FORMERR) and one between this and
-    ///     the full digest length is BADTRUNC (RFC 8945 §5.2.4).
+    ///     This constant contains the local truncation policy (RFC 8945 §5.2.4, §7): the shortest
+    ///     truncated MAC accepted, in octets. HMAC-SHA1 truncated to 96 bits (12 octets) is the
+    ///     truncation RFC 8945 §6 asks implementations to support, so 12 is the floor. A MAC the
+    ///     RFC allows (RFC 8945 §5.2.2.1: at least the larger of 10 octets and half the hash
+    ///     length) but that is shorter than this is BADTRUNC, which only HMAC-SHA1 with 10 or 11
+    ///     octets can reach.
     /// </summary>
-    private const int MinimumMacLength = 16;
+    private const int MinimumPolicyMacLength = 12;
+
+    /// <summary>
+    ///     This constant contains the smallest MAC size any algorithm allows, in octets
+    ///     (RFC 8945 §5.2.2.1: "the larger of 10 (octets) and half the length of the hash
+    ///     function in use").
+    /// </summary>
+    private const int AbsoluteMinimumMacLength = 10;
 
     /// <inheritdoc />
     public Task<TsigVerificationResult> VerifyAsync(
@@ -224,9 +234,11 @@ public class TsigService(
 
     /// <summary>
     ///     This method does the work for all three verify methods, in the order RFC 8945 §5.2
-    ///     gives, except that the MAC length is checked before the MAC:
-    ///     a supported algorithm, a known, enabled, non-cluster key of that algorithm (and, when
-    ///     <paramref name="expectedKeyName" /> is set, that exact key), the MAC length, the MAC (compared in constant time) and finally the time window.
+    ///     gives: a supported algorithm, a known, enabled, non-cluster key of that algorithm (and,
+    ///     when <paramref name="expectedKeyName" /> is set, that exact key), the MAC (compared in
+    ///     constant time, on the truncated bytes when the MAC is truncated), the time window and
+    ///     last the truncation policy. A MAC size the RFC forbids (RFC 8945 §5.2.2.1) is FORMERR
+    ///     before any of these, because the TSIG record is then not interpretable.
     /// </summary>
     private async Task<TsigVerificationResult> VerifyCoreAsync(
         byte[] rawMessage,
@@ -268,12 +280,19 @@ public class TsigService(
         if (!IsUsable(key) || TsigAlgorithm.Find(key.AlgorithmName) != algorithm)
             return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadKey);
 
-        // A wrong-length MAC can never match, so skip the MAC computation.
-        if (tsig.Mac.Length > algorithm.DigestLength || tsig.Mac.Length < MinimumMacLength)
-            return TsigVerificationResult.Failure(DnsResponseCodeEnum.FormatError);
+        // RFC 8945 §5.2.2.1: a MAC larger than the hash output, or smaller than the larger of 10
+        // octets and half the hash length, is dropped with FORMERR. The one exception is the
+        // empty MAC of an unsigned TSIG error reply (RFC 8945 §5.3.2); it carries nothing to
+        // authenticate, so it fails as BADSIG instead of matching an empty prefix.
+        int macLength = tsig.Mac.Length;
+        if (macLength == 0 && tsig.Error != DnsResponseCodeEnum.NoError)
+            return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadVersionOrBadSignature);
 
-        if (tsig.Mac.Length < algorithm.DigestLength)
-            return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadTruncation);
+        if (
+            macLength > algorithm.DigestLength
+            || macLength < Math.Max(AbsoluteMinimumMacLength, algorithm.DigestLength / 2)
+        )
+            return TsigVerificationResult.Failure(DnsResponseCodeEnum.FormatError);
 
         byte[] secret = secretProtector.Unprotect(key.SecretEncrypted);
         byte[] signedMessageBytes = TsigCodec.ExtractSignedMessageBytes(
@@ -288,7 +307,9 @@ public class TsigService(
 
         // A comparison that stops at the first mismatch would leak through timing how many
         // leading bytes are right, letting a MAC be guessed byte by byte.
-        if (!CryptographicOperations.FixedTimeEquals(expectedMac, tsig.Mac))
+        // A truncated MAC keeps the leading octets of the keyed hash, and only those are compared
+        // (RFC 8945 §5.2.2.1).
+        if (!CryptographicOperations.FixedTimeEquals(expectedMac.AsSpan(0, macLength), tsig.Mac))
             return TsigVerificationResult.Failure(
                 DnsResponseCodeEnum.BadVersionOrBadSignature,
                 key
@@ -299,8 +320,13 @@ public class TsigService(
         long nowUnixSeconds = timeProvider.GetUtcNow().ToUnixTimeSeconds();
         long skewSeconds = Math.Abs(nowUnixSeconds - (long)tsig.TimeSigned);
 
-        return skewSeconds > tsig.Fudge
-            ? TsigVerificationResult.Failure(DnsResponseCodeEnum.BadTime, key)
+        if (skewSeconds > tsig.Fudge)
+            return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadTime, key);
+
+        // RFC 8945 §5.2.4: the truncation policy is checked last, so a sender that is not
+        // authenticated or has the wrong clock never learns the policy.
+        return macLength < MinimumPolicyMacLength
+            ? TsigVerificationResult.Failure(DnsResponseCodeEnum.BadTruncation)
             : TsigVerificationResult.Success(key);
     }
 

@@ -15,11 +15,12 @@ namespace Ninlil.Dns.Server.Tsig;
 public interface ITsigService
 {
     /// <summary>
-    ///     This method verifies a signed message in this order: algorithm and key
-    ///     (unknown, disabled, cluster or of another algorithm: BADKEY), MAC length (FORMERR or
-    ///     BADTRUNC), MAC (BADSIG), then time (BADTIME). RFC 8945 §5.2 checks the key, the MAC,
-    ///     the time and the truncation policy; this method rejects a MAC of the wrong length
-    ///     before it computes the MAC. Key lookups are cached for a few seconds
+    ///     This method verifies a signed message in the order of RFC 8945 §5.2: algorithm and key
+    ///     (unknown, disabled, cluster or of another algorithm: BADKEY), MAC (BADSIG), time
+    ///     (BADTIME), then the truncation policy (BADTRUNC). A MAC size RFC 8945 §5.2.2.1 forbids
+    ///     (above the hash length, or below the larger of 10 octets and half the hash length) is
+    ///     FORMERR and is rejected first. A valid truncated MAC, such as HMAC-SHA1-96, is
+    ///     compared on its truncated bytes. Key lookups are cached for a few seconds
     ///     (<see cref="TsigKeyLookupCache" />).
     /// </summary>
     /// <param name="rawMessage">The complete message as received from the wire.</param>
