@@ -3227,10 +3227,11 @@ key.
    `NINLIL_JWT_SIGNING_KEY=<jwt-key>` in `/etc/ninlil/ninlil.env`.
 
    Why: Ninlil checks an access token's signature with this key, and its issuer, audience and
-   expiry. It looks nothing up in a database, and the token itself carries the permissions. A token
-   that node A signed is therefore accepted by node B only when both use the same key. Without it,
-   every client that moves from one node to the other gets `401`. Use a value of at least 32 bytes:
-   a key shorter than 16 bytes makes every sign-in fail with HTTP 500.
+   expiry. It then checks the account in its own database, so the account must exist and be enabled
+   on that node. A token that node A signed is therefore accepted by node B only when both use the
+   same key and node B has the account (cluster sync copies users). Without the same key, every
+   client that moves from one node to the other gets `401`. Use a value of at least 32 bytes:
+   Ninlil refuses to start with a key shorter than 16 bytes.
 2. On every node, switch clustering on and tell the node which address its peers use. Run this on
    node A and again on node B with that node's name (`<node-a>` is the name or IP address peers
    use to reach this node, without `https://`):
@@ -3431,6 +3432,12 @@ Each command below runs on node A unless it says otherwise.
 - **Refresh tokens and API tokens belong to the node that issued them.** Behind a load balancer,
   send each client to the same node, or the client signs in again when a refresh request reaches
   another node. Access tokens work on every node that shares the JWT key.
+- **Disabling an account or changing permissions reaches issued tokens on every node.** Cluster
+  sync copies users and roles to every healthy peer when you save the change, and each peer then
+  rejects a disabled account's access token on its next request, and uses the permissions you saved (see
+  [Security](#security)). A peer that was unreachable at that moment keeps the old state until the
+  next save of that user or role, so its access tokens for the account keep working there until
+  they expire (15 minutes by default).
 - **A user name is checked on the peers.** Creating a user asks every healthy peer whether the name
   exists and returns `409` if one has it. A peer that cannot be reached is skipped.
 - **A change on another node reaches DNS answers after a delay.** On the node where you make a
@@ -3613,7 +3620,7 @@ only while no account exists, and never deletes it.
    curl -k -X PUT https://127.0.0.1:18443/api/users/<admin-id> -H "Authorization: Bearer <alice-token>" -H 'Content-Type: application/json' -d '{"displayName":"Administrator","email":"admin@localhost.local","isDisabled":true}'
    ```
 
-   Ninlil answers `204`. Sign-in and API tokens of a disabled account are refused. The account stays
+   Ninlil answers `204`. Sign-in, refresh, API tokens and access tokens already issued to a disabled account are refused (`401`). The account stays
    in the list, so you can switch it back on with `"isDisabled":false`.
 
 **Give each person the permissions they need.**
@@ -3706,6 +3713,18 @@ e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes nee
    ```
 
    Run this against a test installation, because it blocks the address you run it from for five minutes.
+   While it is blocked, the answer to the next attempt names the wait in seconds:
+
+   ```bash
+   curl -k -s -D - -o /dev/null https://127.0.0.1:18443/api/auth/login -H 'Content-Type: application/json' -d '{"userName":"admin","password":"wrong-password-1A!"}' | grep -i -E '^(HTTP|retry-after)'
+   ```
+
+   ```text
+   HTTP/2 429
+   retry-after: 290
+   ```
+
+   The number counts down while the window runs and never exceeds 300 with the default window.
 
 #### Behaviour worth knowing
 
@@ -3722,7 +3741,8 @@ e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes nee
   password sign-in and the second-factor sign-in together, and returns `429 Too Many Requests` after
   that. An IPv6 client counts by its /64 network, so an attacker cannot rotate through addresses of
   one subscriber. A Forgot password request has a separate count of 5 in 5 minutes. The window is
-  fixed: a client that reaches the limit waits until the window ends. The settings are read at
+  fixed: a client that reaches the limit waits until the window ends, and the `429` carries a
+  `Retry-After` header with the seconds that are left. The settings are read at
   startup, so a change needs a restart
   ([`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso)).
 - **Two-factor codes have separate limits, kept per node in memory.** Five wrong codes in 15
@@ -3730,16 +3750,23 @@ e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes nee
   e-mailed code can be requested once a minute, and a pending sign-in may ask for three. A pending
   sign-in lasts 5 minutes and its token works once. A restart, or a second node, starts these
   counts again.
-- **Access tokens live 15 minutes, and Ninlil does not cancel one early.** Disabling an account or
-  changing its permissions does not affect a token that exists; the change applies to the
-  next sign-in or refresh. A refresh token lasts 30 days (12 hours of inactivity for a browser
-  session without "Remember me"), changes at every refresh, and cannot be used twice. API tokens
-  (`Authorization: ApiToken <token>`) use the owner's current permissions at each request, and
-  stop working when revoked or when the owner is disabled. The lifetimes are
+- **Ninlil checks an access token against its account at every request.** An access token lasts
+  15 minutes, but disabling or deleting the account, locking it out, or changing its roles or
+  permissions applies to a token that already exists on the next request: a disabled or deleted
+  account gets `401`, and the token carries the account's current permissions, not the ones it was
+  issued with. Ninlil keeps each account's state in memory for 15 seconds, and a change made through
+  the API, the console or cluster sync clears it at once, so no request reads the database. A change
+  made directly in the database reaches issued tokens within those 15 seconds. A live feed
+  connection (see [Using the admin console](#using-the-admin-console)) is checked when it opens and
+  closes when its token expires, so one that is already open can outlast a disabled account by up
+  to 15 minutes. A refresh token lasts 30 days (12 hours of inactivity for a browser session without
+  "Remember me"), changes at every refresh, and cannot be used twice; a disabled account cannot
+  refresh. API tokens (`Authorization: ApiToken <token>`) use the owner's current permissions at
+  each request, and stop working when revoked or when the owner is disabled. The lifetimes are
   [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) settings.
-- **A token is checked with the JWT signing key alone.** Whoever holds
-  `data/jwt-signing-key.txt` can make a token with any permission, including `*`. Treat the file
-  like a root password.
+- **The JWT signing key proves a token is Ninlil's.** Whoever holds `data/jwt-signing-key.txt` can
+  make a token for any enabled account, the bootstrap administrator's included, and the token then
+  gets that account's permissions. Treat the file like a root password.
 - **The key ring and the JWT signing key are not encrypted on disk.** Ninlil stores the Data
   Protection key ring in the data directory, and ASP.NET Core Data Protection warns about it in the log:
   `No XML encryptor configured. Key {...} may be persisted to storage in unencrypted form.` The
@@ -3785,11 +3812,13 @@ e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes nee
 
 - *An account is refused with `PasswordTooShort` or `DuplicateEmail`.* Choose a password that
   meets the rules above, or another e-mail address.
-- *Every sign-in answers `429`.* The address reached the sign-in limit. Wait for the window to end
-  (5 minutes by default) or restart Ninlil. Behind a reverse proxy without the
+- *Every sign-in answers `429`.* The address reached the sign-in limit. Wait for the seconds in the
+  `Retry-After` header (the window is 5 minutes by default) or restart Ninlil. Behind a reverse proxy without the
   Reverse proxy settings, all users share one address, so one user's mistakes block the others.
-- *Every sign-in answers HTTP 500 after you set a JWT key.* The key is shorter than 16 bytes. Use
-  at least 32 bytes (`openssl rand -base64 48`) and restart.
+- *Ninlil does not start and exits with code 78, and the log says `The JWT signing key is <n> bytes
+  long`.* The JWT key (as UTF-8) is shorter than 16 bytes. Use at least 32 bytes
+  (`openssl rand -base64 48`) in [`NINLIL_JWT_SIGNING_KEY`](./ENVIRONMENT.md#identity-authentication--sso),
+  or delete `data/jwt-signing-key.txt` so Ninlil generates a key, and start again.
 - *You are signed out when you move between cluster nodes.* See
   [Clustering, events and webhooks](#clustering-events-and-webhooks).
 - *The bootstrap password is lost.* Ninlil prints a generated password once in the log, and never
