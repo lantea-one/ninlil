@@ -18,7 +18,8 @@ import { base64ToHex, EVEN_LENGTH_HEX_PATTERN, hexToBase64 } from '../record-dat
 
 /**
  * This interface mirrors the backend's `SvcbParameter` field for field. `value` is base64; the form
- * edits it as hex, the RFC 9460 §2.4 generic presentation of a parameter value.
+ * edits it as hex. RFC 9460 §2.1 writes a parameter value in a zone file as an escaped
+ * character-string, so hex is this console's choice for showing the exact bytes.
  */
 export interface SvcbParameterFormData {
   key: number;

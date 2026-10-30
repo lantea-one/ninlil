@@ -20,9 +20,9 @@ export interface CaaRecordFormData {
 
 /**
  * This constant lists the property tags of the IANA "Certification Authority Restriction
- * Properties" registry that are in use, in registry order: `issue`, `issuewild` and `iodef`
- * (RFC 8659 §4), `issuemail` (RFC 9495), `issuevmc` (Verified Mark Certificates), `contactemail`
- * and `contactphone` (CA/Browser Forum). The registry's reserved tags (`auth`, `path`, `policy`)
+ * Properties" registry that are in use: `issue`, `issuewild` and `iodef` (RFC 8659 §4.2 to §4.4),
+ * `issuemail` (RFC 9495), `issuevmc` (Verified Mark Certificates), `contactemail` and
+ * `contactphone` (CA/Browser Forum). The registry's reserved tags (`auth`, `path`, `policy`)
  * are left out. {@link CaaRecordFormComponent} offers these in its tag select.
  */
 export const CAA_PROPERTY_TAGS: readonly string[] = [

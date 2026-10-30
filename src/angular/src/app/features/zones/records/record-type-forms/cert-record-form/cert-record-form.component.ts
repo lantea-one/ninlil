@@ -14,7 +14,7 @@ const NO_ALGORITHM = 'NONE';
 
 /**
  * This interface mirrors the backend's `CertRecordData` field for field. `algorithm` is `null` for
- * RFC 4398 §2.1's "no algorithm" value 0. `certificate` is base64, as in zone files and the API.
+ * the value 0, which RFC 4398 §2 reads as an algorithm unknown to a secure DNS. `certificate` is base64, as in zone files and the API.
  */
 export interface CertRecordFormData {
   certificateType: number;

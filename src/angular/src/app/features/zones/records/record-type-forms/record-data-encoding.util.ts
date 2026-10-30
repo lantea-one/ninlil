@@ -4,9 +4,11 @@
  * `byte[]` converter, so every `byte[]` on a `*RecordData` model travels as a base64 string.
  *
  * Several of those fields are normally written in hex: DS digests, SSHFP fingerprints, TLSA and
- * SMIMEA association data (as in zone files and `ssh-keygen -r` output), and the generic
- * presentation of an unknown SVCB/HTTPS parameter (RFC 9460 §2.4). {@link hexToBase64} and
- * {@link base64ToHex} let those forms show and accept hex while sending base64.
+ * SMIMEA association data (as in zone files and `ssh-keygen -r` output), and an SVCB/HTTPS
+ * parameter value. RFC 9460 §2.1 writes a parameter value in a zone file as an escaped
+ * character-string, so hex is this console's choice for showing the exact bytes.
+ * {@link hexToBase64} and {@link base64ToHex} let those forms show and accept hex while sending
+ * base64.
  *
  * The rule per field: **hex** for digests, hashes, salts, fingerprints and opaque data (SSHFP,
  * DS/CDS, TLSA/SMIMEA, the NSEC3/NSEC3PARAM salt, NSEC3's next hashed owner name, SVCB/HTTPS
@@ -18,7 +20,7 @@
 
 /**
  * This constant matches a hexadecimal string of whole bytes, including the empty string, since an
- * NSEC3/NSEC3PARAM salt may be empty (RFC 5155 §3.1.5).
+ * NSEC3/NSEC3PARAM salt may be empty (RFC 5155 §3.1.4: a Salt Length of 0 is allowed).
  */
 export const EVEN_LENGTH_HEX_PATTERN = /^([0-9a-fA-F]{2})*$/;
 
