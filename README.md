@@ -1100,8 +1100,7 @@ of a zone into the matching reverse zone.
   30 use RFC 2317 classless delegation. `ptrIpv6PrefixLength` must be a multiple of 4 from 16 to
   124 (default 64). A value outside these ranges answers `400`. Every change to the zone's A and
   AAAA records starts a pass again. `POST /api/zones/<zone-id>/reconcile-ptr` runs one pass on
-  demand and answers with the counts of PTR records added and removed; use it to repeat a pass
-  later, not right after a change.
+  demand and answers with the counts of PTR records added and removed.
 
 #### Settings
 
@@ -1122,10 +1121,6 @@ of a zone into the matching reverse zone.
   `nsupdate -y`; the secret is the one the key creation answered.
 - *`nsupdate` prints `update failed: NOTAUTH`.* The zone name in the update file is not a zone
   that Ninlil hosts, or the update names a class other than `IN`.
-- *A record's `data` shows `null` fields, as in `{"address":null}`.* The data you sent did not fit
-  the record type (a wrong field name, or a value such as an address that does not parse). Delete
-  the record and add it again with the fields the type needs. A record with empty data stops the
-  zone from being signed, so remove it first when the zone is signed.
 
 ### DNSSEC
 
