@@ -10,8 +10,9 @@ namespace Ninlil.Dhcp.Protocol.Ra;
 public static class RaMulticastGroups
 {
     /// <summary>
-    ///     The "all-routers" address that hosts send Router Solicitations to (RFC 4861 Section
-    ///     6.2.6). <see cref="Icmpv6RaListener" /> joins it on every usable interface so
+    ///     The "all-routers" address that hosts send Router Solicitations to (RFC 4861 Sections
+    ///     4.1 and 6.3.7). A router joins it on each advertising interface (RFC 4861 Section
+    ///     6.2.2), and <see cref="Icmpv6RaListener" /> joins it on every usable interface so
     ///     solicitations are delivered to its socket.
     /// </summary>
     public static readonly IPAddress AllRouters = IPAddress.Parse("ff02::2");
