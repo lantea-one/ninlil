@@ -2,7 +2,7 @@
  * One public DNS resolver endpoint offered in the forwarder form's resolver dropdown: one
  * transport (plain, DoT, DoH or DoQ) of one provider.
  *
- * Each {@link value} is an address or URL the provider publishes for this use, written in the
+ * Each {@link value} is an address or URL for this use, written in the
  * definition syntax `UpstreamForwarderDefinitionParser` accepts: a bare address for plain DNS,
  * `tls://host[:port]` for DNS-over-TLS, a full `https://` URL for DNS-over-HTTPS and
  * `quic://host[:port]` for DNS-over-QUIC.
@@ -20,8 +20,10 @@ export interface KnownForwarderOption {
 
 /**
  * This constant lists the resolvers the forwarder form's dropdown offers: four public providers,
- * not an exhaustive list. A provider's transport appears only if the provider documents it
- * (Google Public DNS and OpenDNS publish no DNS-over-QUIC endpoint, so none is listed).
+ * not an exhaustive list. Every plain, DoT and DoH entry is an endpoint the provider documents at
+ * the page named above its group. The DoQ entries (Cloudflare and Quad9) are Ninlil's offer: the
+ * pages named there list no QUIC endpoint. Google Public DNS lists none either, so none is offered
+ * for it.
  *
  * Each provider's IPv6 addresses are listed with its IPv4 ones. An IPv6 literal is always
  * bracketed (`[addr]` or `[addr]:port`), because the parser splits host and port at the last `:`
@@ -30,8 +32,8 @@ export interface KnownForwarderOption {
  * which resolve over either address family.
  */
 export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
-  // Cloudflare (1.1.1.1): plain, DoT, DoH and DoQ, documented at
-  // https://developers.cloudflare.com/1.1.1.1/.
+  // Cloudflare (1.1.1.1): plain, DoT and DoH are documented at
+  // https://developers.cloudflare.com/1.1.1.1/. The DoQ entries are not on those pages.
   {
     provider: 'Cloudflare',
     label: 'Plain -- 1.1.1.1',
@@ -125,8 +127,8 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
     name: 'Google Public DNS (Plain, IPv6 secondary)',
   },
 
-  // Quad9, which blocks malware and validates DNSSEC by default, documented at
-  // https://www.quad9.net/service/service-addresses-and-features.
+  // Quad9, which blocks malware and validates DNSSEC by default. Plain, DoT and DoH are documented at
+  // https://www.quad9.net/service/service-addresses-and-features. The DoQ entry is not on that page.
   {
     provider: 'Quad9',
     label: 'Plain -- 9.9.9.9',
