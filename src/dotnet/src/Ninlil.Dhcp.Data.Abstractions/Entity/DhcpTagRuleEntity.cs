@@ -107,7 +107,7 @@ public class DhcpTagRuleEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property optionally contains the Agent Circuit ID sub-option value (RFC 3046
-    ///     Section 2.1, inside option 82) to require, as an uppercase hex string compared for
+    ///     Section 3.1, inside option 82) to require, as an uppercase hex string compared for
     ///     byte equality (case-insensitively as hex). The value is often a binary VLAN or port
     ///     identifier with no text form, so there is no prefix mode. A request that was not
     ///     relayed has no Circuit ID and does not match. <see langword="null" /> or empty means
@@ -119,7 +119,7 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     /// <summary>
     ///     This property optionally contains a remote ID to require, encoded and compared like
     ///     <see cref="RelayAgentCircuitIdHex" />. The DHCPv4 engine compares it with the Agent
-    ///     Remote ID sub-option (RFC 3046 Section 2.2, inside option 82) and the DHCPv6 engine
+    ///     Remote ID sub-option (RFC 3046 Section 3.2, inside option 82) and the DHCPv6 engine
     ///     with the Remote-ID option (RFC 4649, option 37); both name the client or its attachment
     ///     point as the relay agent chose. Both protocols check it, so it fits any rule.
     /// </summary>

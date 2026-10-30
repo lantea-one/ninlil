@@ -26,7 +26,7 @@ namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 ///     <para>
 ///         <b>Parameter Request List.</b> The standard Subnet Mask, Router and Domain Name Server
 ///         options are filtered by the client's Parameter Request List (RFC 2131 Section 3.5
-///         says a server "SHOULD" include the requested parameters it has). A custom option is
+///         and RFC 2132 Section 9.8 let a client list the parameters it wants). A custom option is
 ///         always sent, whether or not the list (DHCPv6: the Option Request Option) names its tag, because many embedded and PXE
 ///         clients expect vendor or boot options they never request.
 ///     </para>
