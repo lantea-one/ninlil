@@ -123,8 +123,7 @@ public static class DnsServerPresetCatalog
     );
 
     /// <summary>
-    ///     This preset is named after the "Family Filter" and "FamilyShield" terms CleanBrowsing
-    ///     and OpenDNS use for this category. It is <see cref="Protective" />, threat list
+    ///     This preset is the family-safe tier. It is <see cref="Protective" />, threat list
     ///     included, plus StevenBlack's <c>fakenews-gambling-porn</c> hosts file (one
     ///     <c>0.0.0.0 domain</c> per line) on the same default client group. That file is
     ///     StevenBlack's unified ad and malware list extended with fake-news, gambling and adult

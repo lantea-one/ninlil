@@ -9,8 +9,8 @@ namespace Ninlil.Dhcp.Common.OptionCatalog;
 ///     This static class is the read-only metadata catalog of DHCPv4 options, one
 ///     <see cref="DhcpOptionCatalogEntry" /> per option. It is written from the IANA BOOTP/DHCP
 ///     Parameters registry (<c>https://www.iana.org/assignments/bootp-dhcp-parameters/</c>) and
-///     the RFC 2132 text, under the clean-room rule in <c>NOTICE.md</c>, never from Technitium's
-///     or dnsmasq's code or documentation.
+///     the RFC 2132 text, under the clean-room rule in <c>NOTICE.md</c>, never from another DHCP
+///     server's code or documentation.
 ///     <para>
 ///         <b>Scope.</b> RFC 2132 defines over 60 options; this catalog covers the ones a home or
 ///         homelab operator is likely to set by hand. Subnet Mask, Router, Domain Name Server and

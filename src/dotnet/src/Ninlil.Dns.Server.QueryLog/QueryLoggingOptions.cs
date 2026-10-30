@@ -28,10 +28,10 @@ public sealed class QueryLoggingOptions
     /// <summary>
     ///     This property controls whether answered queries are written to the query log. It is on
     ///     by default, an exception to the usual rule that features which expand what the server
-    ///     does start off, to match what Pi-hole and AdGuard Home do. Turning it off stops new
-    ///     writes at once but keeps existing entries, which <see cref="DnsQueryLogCleanupService" />
-    ///     still ages out. Turning it on needs a restart when it was off at startup, since the
-    ///     subscriber is registered only if it is on then.
+    ///     does start off, because the log is how an operator sees what the server answers.
+    ///     Turning it off stops new writes at once but keeps existing entries, which
+    ///     <see cref="DnsQueryLogCleanupService" /> still ages out. Turning it on needs a restart
+    ///     when it was off at startup, since the subscriber is registered only if it is on then.
     /// </summary>
     public bool Enable { get; set; } = true;
 

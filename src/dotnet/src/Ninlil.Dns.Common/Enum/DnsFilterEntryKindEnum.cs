@@ -7,7 +7,7 @@ namespace Ninlil.Dns.Common.Enum;
 /// <summary>
 ///     This enumeration describes how the <c>Value</c> of a <c>DnsFilterListEntryEntity</c> is
 ///     matched. It is Ninlil vocabulary, not an IANA-assigned value. Besides plain domains it
-///     covers the regex lists of Pi-hole and the wildcard syntax of AdGuard Home.
+///     covers glob patterns and regular expressions.
 ///     <para>
 ///         <see cref="Domain" /> is 0, so an entry that does not set a kind matches as a plain
 ///         domain.
@@ -31,8 +31,8 @@ public enum DnsFilterEntryKindEnum
 
     /// <summary>
     ///     The <c>Value</c> is a shell-style glob (<c>*</c> matches zero or more characters, <c>?</c>
-    ///     matches one), matched against the full presentation form of the queried name, like the
-    ///     AdGuard Home wildcard syntax. <c>DnsFilterEngine</c> translates it to an anchored regular
+    ///     matches one), matched against the full presentation form of the queried name.
+    ///     <c>DnsFilterEngine</c> translates it to an anchored regular
     ///     expression instead of using a second matching engine; its doc comment explains why.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Wildcard")]
@@ -40,7 +40,7 @@ public enum DnsFilterEntryKindEnum
 
     /// <summary>
     ///     The <c>Value</c> is a .NET regular expression, matched against the full presentation form
-    ///     of the queried name, like Pi-hole regex lists. Matching has a timeout (see
+    ///     of the queried name. Matching has a timeout (see
     ///     <c>DnsFilterEngine</c>) so a pattern with catastrophic backtracking cannot stall query
     ///     answering.
     /// </summary>

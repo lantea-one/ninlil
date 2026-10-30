@@ -28,7 +28,8 @@ public class DnsQueryProcessingPipelineOptions
     ///     read its reply) holds one slot instead of a whole worker, so it cannot stall other
     ///     clients. When every slot is busy the workers stop reading, the queue fills, and
     ///     transports wait to enqueue (the kernel drops UDP datagrams). The default, 1000,
-    ///     matches the <c>recursive-clients</c> limit of BIND.
+    ///     is a bound on the memory that queries in progress hold, chosen to leave room for a
+    ///     recursion that waits several seconds on an upstream server.
     /// </summary>
     public int MaxConcurrentQueries { get; set; } = 1000;
 

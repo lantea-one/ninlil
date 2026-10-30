@@ -7,8 +7,8 @@ namespace Ninlil.Web.Models;
 /// </summary>
 /// <param name="Name">
 ///     The key's name, matched against the key name in a signed message. It is stored and returned
-///     in lowercase, because DNS names compare without case and BIND lowercases key names on the
-///     wire.
+///     in lowercase, because DNS names compare without case and the MAC covers the key name in
+///     lowercase canonical wire format (RFC 8945 §4.3.3, RFC 4034 §6.2).
 /// </param>
 /// <param name="AlgorithmName">
 ///     The key's MAC algorithm: <c>hmac-sha1</c>, <c>hmac-sha256</c>, <c>hmac-sha384</c> or

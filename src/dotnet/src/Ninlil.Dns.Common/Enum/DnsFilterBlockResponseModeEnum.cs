@@ -20,7 +20,7 @@ public enum DnsFilterBlockResponseModeEnum
 
     /// <summary>
     ///     The query is answered with an A or AAAA record that points at a configured sinkhole
-    ///     address (by default <c>0.0.0.0</c> or <c>::</c>), the approach Pi-hole made common.
+    ///     address (by default <c>0.0.0.0</c> or <c>::</c>), an address that connects nowhere.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "SinkholeAddress")]
     SinkholeAddress = 1,

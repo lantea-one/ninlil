@@ -36,8 +36,8 @@ public sealed record DnsFilterListParseResult(
 ///         A domain list may be written in any mix of three formats, line by line: hosts-file
 ///         lines (<c>0.0.0.0 ads.example</c>, <c>127.0.0.1 ads.example</c>,
 ///         <c>:: ads.example</c>, several names per line allowed), bare domains (one per line),
-///         and the DNS-relevant subset of adblock/AdGuard syntax that popular lists such as the
-///         AdGuard DNS filter and OISD's ABP variant are published in:
+///         and the DNS-relevant subset of adblock syntax that popular lists such as OISD's ABP
+///         variant are published in:
 ///     </para>
 ///     <list type="bullet">
 ///         <item><c>||ads.example^</c> covers <c>ads.example</c> and every subdomain, which is what

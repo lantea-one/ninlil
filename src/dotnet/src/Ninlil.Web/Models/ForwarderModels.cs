@@ -10,7 +10,7 @@ namespace Ninlil.Web.Models;
 /// </summary>
 /// <param name="Name">An operator-chosen, human-readable, unique name for the forwarder.</param>
 /// <param name="DefinitionString">
-///     The forwarder definition, in the style Technitium and AdGuard Home use: a bare address; a
+///     The forwarder definition: a bare address; a
 ///     <c>udp://</c>, <c>tcp://</c>, <c>tls://</c>, <c>https://</c> or <c>quic://</c> URL; or an
 ///     <c>sdns://</c> DNSCrypt stamp. An IPv6 address with a port is written in brackets, for example
 ///     <c>[2001:db8::1]:53</c>. The syntax is checked with <c>IUpstreamForwarderDefinitionParser</c>

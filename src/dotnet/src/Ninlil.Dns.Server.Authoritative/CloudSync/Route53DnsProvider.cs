@@ -13,7 +13,9 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 /// <summary>
 ///     This class implements <see cref="ICloudDnsProvider" /> for Amazon Route 53 with the AWS
 ///     SDK's <see cref="AmazonRoute53Client" />, which handles SigV4 signing. The SDK is Apache-2.0
-///     licensed; the clean-room rules in <c>NOTICE.md</c> concern Technitium and dnsmasq only.
+///     licensed, so linking it raises no licence conflict. The clean-room rule in <c>NOTICE.md</c>
+///     covers other DNS, DHCP and ad-blocking projects' code, UI and docs, not a library used as
+///     a dependency.
 ///     <para>
 ///     Route 53 stores each value as one string whose format depends on the type: MX packs the
 ///     preference with the exchange, TXT is quoted, and SRV and CAA pack several space-separated

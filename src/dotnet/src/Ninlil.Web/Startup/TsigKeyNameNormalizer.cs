@@ -7,9 +7,10 @@ namespace Ninlil.Web.Startup;
 
 /// <summary>
 ///     This class lowercases the names of TSIG keys stored with capital letters. The TSIG key API
-///     stores every name in lowercase (DNS names compare without case, RFC 4343, and BIND
-///     lowercases a key name on the wire), so a mixed-case row written earlier would never match
-///     a BIND client's signature. <c>Program.cs</c> runs this once per startup after the schema is
+///     stores every name in lowercase (DNS names compare without case, RFC 4343, and the MAC
+///     covers the key name in lowercase canonical wire format, RFC 8945 §4.3.3 and RFC 4034
+///     §6.2), so a mixed-case row written earlier would not be the name a signature covers.
+///     <c>Program.cs</c> runs this once per startup after the schema is
 ///     ready; it does nothing when every name is already lowercase.
 ///     <para>
 ///         It goes through <see cref="ITsigKeyRepository" />, so one implementation covers

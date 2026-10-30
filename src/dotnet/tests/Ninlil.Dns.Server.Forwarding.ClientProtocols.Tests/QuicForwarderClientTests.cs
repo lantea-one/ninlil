@@ -9,8 +9,8 @@ using Ninlil.Dns.Server.Forwarding.Clients;
 namespace Ninlil.Dns.Server.Forwarding.ClientProtocols.Tests;
 
 /// <summary>
-///     This class tests <see cref="QuicForwarderClient" /> end to end against AdGuard DNS's public
-///     DoQ endpoint over the internet, for the reason <see cref="TlsForwarderClientTests" />
+///     This class tests <see cref="QuicForwarderClient" /> end to end against a public DoQ
+///     resolver over the internet, for the reason <see cref="TlsForwarderClientTests" />
 ///     gives. It needs internet access and <c>libmsquic</c>; when
 ///     <see cref="QuicConnection.IsSupported" /> is <see langword="false" />, the test returns
 ///     early and passes.

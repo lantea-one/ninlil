@@ -44,7 +44,7 @@ public class TsigKeysController(
 {
     /// <summary>
     ///     This property contains the algorithm a new key gets when the request names none:
-    ///     HMAC-SHA256, one of the two algorithms RFC 8945 §6 makes mandatory to implement, that BIND also defaults to.
+    ///     HMAC-SHA256, one of the two algorithms RFC 8945 §6 makes mandatory to implement.
     /// </summary>
     private static readonly TsigAlgorithm DefaultAlgorithm = TsigAlgorithm.Find(
         DnsTsigOptions.HmacSha256AlgorithmName
@@ -316,9 +316,9 @@ public class TsigKeysController(
 
     /// <summary>
     ///     This method validates a key name and returns its stored form: the canonical lowercase
-    ///     presentation without the trailing dot. DNS names compare without case (RFC 4343), and
-    ///     BIND lowercases a key name on the wire, so a mixed-case stored name would never match a
-    ///     BIND client's signature.
+    ///     presentation without the trailing dot. DNS names compare without case (RFC 4343), and the
+    ///     MAC covers the key name in canonical wire format (RFC 8945 §4.3.3), which is lowercase
+    ///     (RFC 4034 §6.2), so the lowercase form is the one stored.
     /// </summary>
     /// <exception cref="ValidationException">The name is not a valid, non-root domain name.</exception>
     private static string ParseName(string requestedName)

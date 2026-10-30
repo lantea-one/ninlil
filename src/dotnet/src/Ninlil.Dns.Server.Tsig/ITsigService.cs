@@ -77,7 +77,7 @@ public interface ITsigService
     /// </summary>
     /// <remarks>
     ///     The request MAC is digested with its two-octet MAC Size in front, as RFC 8945 §4.3.1
-    ///     requires, so other implementations (BIND, dnspython) verify the answer.
+    ///     requires, so a requester that follows the RFC verifies the answer.
     /// </remarks>
     /// <param name="message">The response message to sign, not yet carrying a TSIG record.</param>
     /// <param name="keyName">The name of the pre-shared key to sign with.</param>

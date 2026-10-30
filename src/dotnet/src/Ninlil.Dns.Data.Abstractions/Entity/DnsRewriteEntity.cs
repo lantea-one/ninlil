@@ -4,7 +4,7 @@ namespace Ninlil.Dns.Data.Abstractions.Entity;
 /// <summary>
 ///     This class represents a DNS rewrite: a lightweight <c>domain -&gt; target</c> override that
 ///     <c>DnsRewriteEngine</c> applies early in <c>DnsQueryProcessingPipeline</c>, before zone,
-///     forwarder and recursive resolution (like the "DNS rewrites" of AdGuard Home). It is its own
+///     forwarder and recursive resolution. It is its own
 ///     entity rather than records in a hidden "local overrides" <see cref="ZoneEntity" />, which
 ///     would DNSSEC-sign every override and need apex and SOA bookkeeping for nothing.
 /// </summary>

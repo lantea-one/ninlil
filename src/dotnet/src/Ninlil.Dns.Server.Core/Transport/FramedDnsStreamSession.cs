@@ -39,11 +39,11 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///     </para>
 ///     <para>
 ///         <b>Limits.</b> At most <see cref="MaxInFlightQueriesPerConnection" /> queries are in
-///         flight per connection (BIND 9 allows 23 pipelined queries). A query counts from the
-///         moment its frame is read until its reply has been written, dropped or discarded. At the
-///         limit the session stops reading, which pushes back through TCP flow control. Every
-///         write must finish within the idle timeout. A write that misses it aborts the connection,
-///         which frees all of its slots. Reading is also limited by the idle timeout, per frame.
+///         flight per connection, so one client cannot take a large share of the pipeline's
+///         query slots. A query counts from the moment its frame is read until its reply has been
+///         written, dropped or discarded. At the limit the session stops reading, which pushes
+///         back through TCP flow control. Every write must finish within the idle timeout. A write
+///         that misses it aborts the connection, which frees all of its slots. Reading is also limited by the idle timeout, per frame.
 ///     </para>
 ///     <para>
 ///         <b>Idle, EOF and shutdown.</b> RFC 7766 §3 says a connection with queries
@@ -61,16 +61,17 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///     </para>
 ///     <para>
 ///         <b>Zone transfers.</b> A transfer runs inside the handler on <see cref="Lifetime" /> and
-///         not on the read-idle token, bounded by <see cref="MaxTransferDuration" /> (BIND's
-///         <c>max-transfer-time-out</c>), and sends its messages with <see cref="SendAsync" />. A
-///         secondary that stops reading is cut by the write deadline.
+///         not on the read-idle token, bounded by <see cref="MaxTransferDuration" />, and sends
+///         its messages with <see cref="SendAsync" />. A secondary that stops reading is cut by
+///         the write deadline.
 ///     </para>
 /// </summary>
 public sealed class FramedDnsStreamSession
 {
     /// <summary>
     ///     This constant contains how many queries one connection may have in flight at once. It
-    ///     is below BIND 9's limit of 23.
+    ///     lets a client pipeline a useful batch while keeping one connection to a small share of
+    ///     the pipeline's concurrent query slots.
     /// </summary>
     public const int MaxInFlightQueriesPerConnection = 16;
 
@@ -89,9 +90,9 @@ public sealed class FramedDnsStreamSession
     public const int MaxBatchOctets = 65536;
 
     /// <summary>
-    ///     This field contains how long one zone transfer may run, after BIND's
-    ///     <c>max-transfer-time-out</c> of 120 minutes. The idle timeout does not apply to a
-    ///     transfer.
+    ///     This field contains how long one zone transfer may run. Two hours leaves room for a
+    ///     very large zone on a slow link and still ends a transfer whose peer has stalled. The
+    ///     idle timeout does not apply to a transfer.
     /// </summary>
     public static readonly TimeSpan MaxTransferDuration = TimeSpan.FromHours(2);
 

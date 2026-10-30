@@ -28,8 +28,8 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///         At most <see cref="DnsQueryProcessingPipelineOptions.MaxConcurrentQueries" /> queries
 ///         are in progress. A worker takes a slot before it reads from the queue, so when every
 ///         slot is busy the queue fills and transports wait to enqueue. That is the intended
-///         backpressure, as it is for BIND's <c>recursive-clients</c>. <see cref="StopAsync" />
-///         cancels the queries in progress and waits for them to finish.
+///         backpressure: it bounds the memory that queries in progress hold.
+///         <see cref="StopAsync" /> cancels the queries in progress and waits for them to finish.
 ///     </para>
 ///     <para>
 ///         <b>Every query is answered or reported.</b> For each message a worker takes off the

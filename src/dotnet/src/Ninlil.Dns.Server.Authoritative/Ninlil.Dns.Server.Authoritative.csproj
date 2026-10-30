@@ -43,8 +43,9 @@
 
   <!--
       Route53DnsProvider.cs talks to Amazon Route 53 through the official AWS SDK rather than
-      hand-rolling AWS SigV4 request signing. Apache-2.0 licensed, not GPL, so it carries none
-      of the clean-room restrictions this project's own NOTICE.md imposes on Technitium/dnsmasq.
+      hand-rolling AWS SigV4 request signing. Apache-2.0 licensed, so linking it raises no
+      licence conflict. The clean-room rule in NOTICE.md covers other DNS, DHCP and ad-blocking
+      projects' code, UI and docs, not a library used as a dependency.
     -->
   <ItemGroup>
     <PackageReference Include="AWSSDK.Route53" Version="4.0.100.11" />

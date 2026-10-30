@@ -18,8 +18,9 @@
       Certes is an MIT-licensed, RFC 8555-compliant .NET ACME client (JOSE/JWS request signing,
       the full account/order/authorization/challenge state machine). Used here rather than
       hand-rolling that protocol from scratch, the same judgment call this project already made
-      for AWSSDK.Route53 over hand-rolled AWS SigV4 signing. MIT licensed, not GPL, so none of
-      this project's own clean-room restrictions (NOTICE.md, scoped to Technitium/dnsmasq) apply.
+      for AWSSDK.Route53 over hand-rolled AWS SigV4 signing. MIT licensed, so linking it raises no
+      licence conflict. The clean-room rule in NOTICE.md covers other DNS, DHCP and ad-blocking
+      projects' code, UI and docs, not a library used as a dependency.
     -->
   <ItemGroup>
     <PackageReference Include="Certes" Version="3.0.4" />

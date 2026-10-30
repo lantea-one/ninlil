@@ -6,10 +6,10 @@ namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
 ///     This enumeration lists the privacy levels of the persistent query log: one 0-3 scale that
-///     controls how much of each answered query is written to storage. It covers both a
-///     Pi-hole-style privacy scale and an AdGuard Home-style "anonymize client IPs" toggle with a
-///     single setting. Each level applies every redaction of the level below it plus its own, so
-///     there are never two settings that could disagree.
+///     controls how much of each answered query is written to storage. One scale covers
+///     full logging, redacted domain names and anonymized client addresses, so there is a single
+///     setting to reason about. Each level applies every redaction of the level below it plus
+///     its own, so there are never two settings that could disagree.
 ///     <para>
 ///         The level in effect when a query is answered is the one applied. It is a write-time
 ///         decision, not a display filter: a field that was never written cannot be recovered by

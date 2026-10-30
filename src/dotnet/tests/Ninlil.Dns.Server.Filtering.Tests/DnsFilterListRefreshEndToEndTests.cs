@@ -29,7 +29,7 @@ namespace Ninlil.Dns.Server.Filtering.Tests;
 public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
 {
     /// <summary>
-    ///     This constant is a small list in the shape the AdGuard DNS filter is published in,
+    ///     This constant is a small list in the shape adblock-syntax DNS filters are published in,
     ///     with a couple of hosts-file lines mixed in and CRLF line endings.
     /// </summary>
     private const string AdblockList =

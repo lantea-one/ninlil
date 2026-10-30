@@ -28,13 +28,13 @@ public sealed record BlockedServiceCatalogEntry(
 /// <summary>
 ///     This class holds the "blocked services" catalog: a small set of consumer services an
 ///     operator can block with one toggle, each backed by an independently maintained,
-///     permissively licensed domain list. None of it comes from Technitium DNS Server, AdGuard
-///     Home or Pi-hole (see the clean-room policy in <c>NOTICE.md</c>).
+///     permissively licensed domain list. None of it comes from another DNS, DHCP or
+///     ad-blocking project (see the clean-room policy in <c>NOTICE.md</c>).
 ///     <para>
 ///         <b>Source.</b> <b>The Block List Project</b>
 ///         (<see href="https://github.com/blocklistproject/Lists" />), a community-maintained set
 ///         of category and service hosts-file lists with no authorship or fork relationship to
-///         those three projects. <b>License</b>: the repository's <c>LICENSE</c> is <b>The
+///         any other DNS, DHCP or ad-blocking project. <b>License</b>: the repository's <c>LICENSE</c> is <b>The
 ///         Unlicense</b> (public domain), and each list's header also states
 ///         <c>License: MIT</c>. Either permits fetching the lists at runtime, as published, with
 ///         no attribution required; the source is credited here and in <c>NOTICE.md</c> anyway.

@@ -13,7 +13,7 @@ namespace Ninlil.Dns.Server.Tsig.Tests;
 
 /// <summary>
 ///     This class checks <see cref="TsigCodec" />, <see cref="TsigAlgorithm" /> and
-///     <see cref="TsigService" /> against known-answer vectors made by dnspython and BIND
+///     <see cref="TsigService" /> against known-answer vectors made by dnspython and by a BIND server run as a black box
 ///     (<c>Vectors/tsig-vectors.json</c>, see the README next to it). The tests only read the
 ///     vectors. The service runs on an in-memory key repository and a manual clock set to each
 ///     vector's Time Signed, so no test depends on the wall clock or a database.
@@ -146,8 +146,8 @@ public class TsigKnownAnswerTests
     {
         Harness harness = new(At(vector.TimeSigned));
 
-        // BIND writes the key name in lowercase on the wire even when given a mixed-case one, so
-        // the exact-text row is stored as the message spells it.
+        // A vector's wire form carries the key name in lowercase even when the signer was given
+        // a mixed-case one, so the exact-text row is stored as the message spells it.
         DnsMessage message = DnsMessageReader.Read(vector.Wire, out _);
         string name = message.Tsig.KeyName.ToString().TrimEnd('.');
         harness.AddKey(
