@@ -280,7 +280,7 @@ public static class DenialOfExistenceProofBuilder
 
     /// <summary>
     ///     This method finds the closest encloser (the nearest existing ancestor, or the apex) and
-    ///     the next closer name (RFC 5155 §7.2.1: the name one label longer, on the way to
+    ///     the next closer name (RFC 5155 §1.3: the name one label longer, on the way to
     ///     <paramref name="name" />, which does not exist). Existence is tested with
     ///     <see cref="FindExactMatch" />, so it works for NSEC3's hashed names too.
     /// </summary>

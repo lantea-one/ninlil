@@ -279,7 +279,7 @@ public sealed class ZoneSigningServiceNoSigningKeyTests
         await AddProhibitedOnlyZoneAsync(host, "kid.par.test", []);
         await host.StartAsync();
 
-        // The DS belongs to the parent (RFC 4035 §2.7), which has none for this child. The
+        // The DS belongs to the parent (RFC 4035 §3.1.4.1), which has none for this child. The
         // child's own zone is served unsigned, so a validator must see an insecure delegation:
         // a NODATA answer with the parent's SOA, no DS and the NSEC (or the matching NSEC3)
         // record whose type bitmap lists NS but not DS (RFC 4035 §3.1.4, RFC 5155 §7.2.4).

@@ -390,8 +390,8 @@ public class DnssecKeyRolloverBackgroundService(
     ///     Whether the parent is hosted here, the parent's zone identifier (null when it is not),
     ///     and the DS TTL to wait for: at least <see cref="LocalDelegationDsTtl" />, or the
     ///     longest TTL of a DS record stored at the child's name in the parent when that is
-    ///     longer, because the signer gives the DS RRset the stored TTL (RFC 4034 §3.1.4 needs
-    ///     the RRSIG to carry the same TTL). For an external parent the TTL is the 3600-second
+    ///     longer, because the signer gives the DS RRset the stored TTL (RFC 4034 §3 needs the
+    ///     RRSIG to carry the same TTL). For an external parent the TTL is the 3600-second
     ///     floor and the caller does not use it.
     /// </returns>
     internal (bool IsLocalParent, Guid? ParentZoneId, TimeSpan DsTtl) FindLocalParent(
@@ -409,8 +409,9 @@ public class DnssecKeyRolloverBackgroundService(
         )
             return (false, null, LocalDelegationDsTtl);
 
-        // A cut above the child occludes it (RFC 1034 §4.2.1): the parent then does not
-        // delegate the child itself and publishes no DS for it.
+        // Names below a cut are not authoritative data of the zone above it (RFC 1034 §4.2.1),
+        // so a cut above the child leaves the parent without a delegation for the child itself
+        // and publishes no DS for it.
         if (parent.FindEnclosingDelegation(childName)?.DelegationPoint != childName)
             return (false, null, LocalDelegationDsTtl);
 

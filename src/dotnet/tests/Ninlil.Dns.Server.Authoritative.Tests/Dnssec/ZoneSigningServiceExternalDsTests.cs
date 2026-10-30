@@ -24,7 +24,7 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 ///     a delegated child is served and signed (also by an unsigned parent), it is merged with the
 ///     DS generated for a child that is hosted and signed here, the RRSIG over a generated DS has
 ///     the DS TTL as Original TTL (RFC 4034 §3.1.4), and a zone transfer sends each record once
-///     (RFC 2181 §5). Each test builds one or two SQLite <see cref="AuthoritativeTestZoneHost" />
+///     (RFC 5936 §2.2). Each test builds one or two SQLite <see cref="AuthoritativeTestZoneHost" />
 ///     instances with real signed zones and reads answers through the resolver and transfers
 ///     through <see cref="IZoneTransferService" />, as the other signing tests do.
 /// </summary>

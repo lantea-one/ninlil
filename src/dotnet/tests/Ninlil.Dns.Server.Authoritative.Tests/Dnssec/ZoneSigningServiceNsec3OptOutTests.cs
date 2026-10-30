@@ -195,7 +195,8 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
         // The chain covers at least the apex, "www" and the insecure delegation.
         Assert.True(nsec3Records.Count >= 3);
 
-        // The zone has an insecure delegation, so RFC 5155 §7.1 sets Opt-Out on every record.
+        // The zone has an insecure delegation, so the signer sets Opt-Out on every record
+        // (RFC 5155 §3.1.2.1).
         Assert.All(nsec3Records, entry => Assert.True(entry.Data.IsOptOut));
 
         // Validator, case 1: the signer keeps the insecure delegation's NSEC3 record (RFC 5155 §7.1

@@ -582,7 +582,7 @@ public class ZoneSigningService(
 
     /// <summary>
     ///     This method lists the types for a name's NSEC or NSEC3 type bitmap. At a delegation point
-    ///     only NS is listed (RFC 4035 §2.2), plus DS when the delegation has a DS RRset.
+    ///     only NS is listed (RFC 4034 §4.1.2), plus DS when the delegation has a DS RRset.
     /// </summary>
     private static List<DnsResourceRecordTypeEnum> ComputePresentTypes(
         DnsName name,
@@ -709,9 +709,9 @@ public class ZoneSigningService(
             ? []
             : Convert.FromHexString(zone.Nsec3SaltHex);
 
-        // RFC 5155 §7.1: Opt-Out applies to the whole zone. If any delegation has no DS
-        // (neither generated nor stored), every NSEC3 record gets the flag. With no
-        // insecure delegations the flag stays clear, which per §3.1.2.1 means no record covers
+        // Opt-Out is a flag on each NSEC3 record (RFC 5155 §3.1.2.1). Ninlil sets it on every
+        // record of the chain when any delegation has no DS (neither generated nor stored). With
+        // no insecure delegations the flag stays clear, which per §3.1.2.1 means no record covers
         // an unsigned delegation.
         bool useOptOut = delegationPoints.Any(delegationPoint =>
             !generatedDs.ContainsKey(delegationPoint)
