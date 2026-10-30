@@ -23,7 +23,9 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     <para>
 ///         At a delegation point only the generated DS RRset is signed; NS records and any other
 ///         stored records there (including a hand-entered DS) are skipped. Names below a
-///         delegation point (glue) are signed and included in the chain like any other name.
+///         delegation point (glue included) are the child's data and are neither signed nor
+///         part of the chain (RFC 4035 §2.2); the zone keeps and transfers them unsigned.
+///         A stored record whose data cannot be written as RDATA is left out with a Warning.
 ///     </para>
 /// </summary>
 /// <param name="zoneRepository">The repository this service reads zones from.</param>

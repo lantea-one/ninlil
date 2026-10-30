@@ -16,11 +16,13 @@ namespace Ninlil.Dns.Server.Tsig;
 ///     <see cref="TsigCodec.BuildDigestInput" />, so each group shares one core method and both
 ///     groups share the digest construction.
 ///     <para>
-///         Verification checks the algorithm and key, the MAC length, the MAC, then the time.
-///         RFC 8945 §5.2 checks the key, the MAC, the time and the truncation policy; the MAC
-///         length comes before the MAC here because a wrong-length MAC can never match. The time
-///         check comes last so that BADTIME, which is answered with a signed
-///         reply, is only ever sent to a sender that proved it holds the key.
+///         Verification follows RFC 8945 §5.2: the algorithm and key, the MAC length, the MAC,
+///         the time and last the truncation policy. A MAC length the RFC forbids is FORMERR
+///         (§5.2.2.1), and the MAC length comes before the MAC because a wrong-length MAC can
+///         never match. The time check comes after the MAC so that BADTIME, which is answered
+///         with a signed reply, is only ever sent to a sender that proved it holds the key. The
+///         policy check (BADTRUNC for a MAC shorter than the policy minimum) comes last, so a
+///         sender that is not authenticated or has the wrong clock never learns the policy.
 ///     </para>
 ///     <para>
 ///         Keys named by clustering (a peer's key or an unused invite key) are not ordinary TSIG
