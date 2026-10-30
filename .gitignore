@@ -856,7 +856,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-!src/dotnet/Ninlil.Technitium.Common/Model/Api/Logs
 
 # AI coding-assistant local state and per-developer instructions.
 .claude/
