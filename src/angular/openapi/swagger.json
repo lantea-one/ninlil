@@ -15582,7 +15582,15 @@
                       "db-standby-2.example.net:5432"
                     ],
                     "readPreference": null
-                  }
+                  },
+                  "topologyVariables": [
+                    "NINLIL_STORAGE_READ_REPLICA_CONNECTION_STRING",
+                    "NINLIL_STORAGE_READ_REPLICA_STICKY_AFTER_WRITE_SECONDS",
+                    "NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS",
+                    "NINLIL_STORAGE_READ_REPLICA_LAG_CHECK_INTERVAL_SECONDS",
+                    "NINLIL_STORAGE_POSTGRESQL_TARGET_SESSION_ATTRIBUTES",
+                    "NINLIL_STORAGE_MONGODB_REPLICA_SET"
+                  ]
                 }
               }
             }
@@ -17578,7 +17586,8 @@
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
                       "memberOfCatalogZoneId": null,
-                      "validateDnssec": false
+                      "validateDnssec": false,
+                      "dnssecServedUnsigned": false
                     },
                     {
                       "id": "9f8e7d6c-5b4a-4392-81c0-f0e1d2c3b4a5",
@@ -17613,7 +17622,8 @@
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
                       "memberOfCatalogZoneId": null,
-                      "validateDnssec": false
+                      "validateDnssec": false,
+                      "dnssecServedUnsigned": false
                     }
                   ],
                   "skip": 0,
@@ -17796,7 +17806,8 @@
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
                       "memberOfCatalogZoneId": null,
-                      "validateDnssec": false
+                      "validateDnssec": false,
+                      "dnssecServedUnsigned": false
                     }
                   },
                   "Secondary zone": {
@@ -17834,7 +17845,8 @@
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
                       "memberOfCatalogZoneId": null,
-                      "validateDnssec": false
+                      "validateDnssec": false,
+                      "dnssecServedUnsigned": false
                     }
                   }
                 }
@@ -17910,7 +17922,8 @@
                       "updatedAtUtc": "2026-08-15T14:30:00+00:00",
                       "transferTransport": "Plain",
                       "memberOfCatalogZoneId": null,
-                      "validateDnssec": false
+                      "validateDnssec": false,
+                      "dnssecServedUnsigned": false
                     }
                   },
                   "Secondary zone": {
@@ -17948,7 +17961,8 @@
                       "updatedAtUtc": null,
                       "transferTransport": "Tls",
                       "memberOfCatalogZoneId": null,
-                      "validateDnssec": false
+                      "validateDnssec": false,
+                      "dnssecServedUnsigned": false
                     }
                   }
                 }
@@ -25074,6 +25088,14 @@
           },
           "readReplica": {
             "$ref": "#/components/schemas/StorageReadReplicaStatus"
+          },
+          "topologyVariables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The `NINLIL_*` environment variables that configure the read replica and the\nengine-specific cluster settings (`Storage:ReadReplica`, `Storage:PostgreSql`,\n`Storage:MySql`, `Storage:SqlServer` and `Storage:MongoDb`), taken from the\nsame table that maps environment variables to settings at startup. The console lists\nthem so the page cannot name a variable the server does not read. Grouped by section in\nthat order, in the order of the options classes within a section.",
+            "nullable": true
           }
         },
         "additionalProperties": false,
@@ -26262,6 +26284,10 @@
           "validateDnssec": {
             "type": "boolean",
             "description": "Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default,\nbecause a private zone has no chain of trust from the public root. The global DNSSEC\nvalidation setting must also be on, and names on the Insecure domain list are never\nvalidated."
+          },
+          "dnssecServedUnsigned": {
+            "type": "boolean",
+            "description": "True when this zone is marked signed and enabled, is a Primary or CloudPrimary zone, and\nthe node that answered is currently serving it unsigned because no key can sign it (none\nexists, every key is Removed, or every remaining key uses an algorithm prohibited for\nsigning). The value comes from this node's in-memory signing cache, so each node of a\ncluster reports for itself, and right after a key change it can lag the reload that the\nchange triggers by moments. Always false for a zone of any other type: a secondary's\nDNSSEC data arrives by zone transfer."
           }
         },
         "additionalProperties": false,

@@ -125,6 +125,10 @@ export interface ZoneDetail {
      * Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default, because a private zone has no chain of trust from the public root. The global DNSSEC validation setting must also be on, and names on the Insecure domain list are never validated.
      */
     validateDnssec?: boolean;
+    /**
+     * True when this zone is marked signed and enabled, is a Primary or CloudPrimary zone, and the node that answered is currently serving it unsigned because no key can sign it (none exists, every key is Removed, or every remaining key uses an algorithm prohibited for signing). The value comes from this node\'s in-memory signing cache, so each node of a cluster reports for itself, and right after a key change it can lag the reload that the change triggers by moments. Always false for a zone of any other type: a secondary\'s DNSSEC data arrives by zone transfer.
+     */
+    dnssecServedUnsigned?: boolean;
 }
 export namespace ZoneDetail {
 }

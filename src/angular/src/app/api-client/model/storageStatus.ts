@@ -27,6 +27,10 @@ export interface StorageStatus {
     switchSupportedEngines?: Array<StorageEngineEnum> | null;
     primary?: StoragePrimaryStatus;
     readReplica?: StorageReadReplicaStatus;
+    /**
+     * The `NINLIL_*` environment variables that configure the read replica and the engine-specific cluster settings (`Storage:ReadReplica`, `Storage:PostgreSql`, `Storage:MySql`, `Storage:SqlServer` and `Storage:MongoDb`), taken from the same table that maps environment variables to settings at startup. The console lists them so the page cannot name a variable the server does not read. Grouped by section in that order, in the order of the options classes within a section.
+     */
+    topologyVariables?: Array<string> | null;
 }
 export namespace StorageStatus {
 }
