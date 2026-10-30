@@ -1,20 +1,79 @@
 # Ninlil
 
-Ninlil is a from-scratch, clean-room, **MIT-licensed** DNS / DHCPv4 / DHCPv6 server suite, built
-on **.NET 10**, with a full REST API (OpenAPI/Swagger/ReDoc) and an **Angular** admin console for
-day-to-day operation. It runs as a single combined host process — the DNS engine, the DHCP engine,
-the REST API, a real-time SignalR event feed, and the admin console are all served from one
-`dotnet run`, with no separate services to wire together.
+Ninlil is a from-scratch, clean-room, **MIT-licensed** DNS, DHCPv4, DHCPv6 and Router
+Advertisement server suite, built on **.NET 10**, with a full REST API (OpenAPI, Swagger, ReDoc)
+and an **Angular** admin console for day-to-day operation. It runs as one host process: the DNS
+engine, the DHCP engine, the REST API, a real-time SignalR event feed and the admin console are all
+served from one program, with no separate services to wire together.
 
-Ninlil is an independent, clean-room implementation that brings together, in one project, the
-kind of functionality more commonly found split across three separate categories of tool: a
-full-featured, standards-based authoritative-and-recursive DNS server (in the spirit of Technitium
-DNS Server), a network-wide ad/tracker blocker with per-client filtering and parental controls (in
-the spirit of Pi-hole and AdGuard Home), and a lightweight DNS/DHCP forwarder and address
-management service (in the spirit of dnsmasq) — designed and built entirely against public IETF
-RFCs and IANA registries, never by reading or porting any other project's source code. See
+Ninlil is an independent, clean-room implementation that brings together, in one project,
+functionality that is more often split across three categories of tool:
+
+- a full-featured, standards-based authoritative and recursive DNS server;
+- a network-wide ad and tracker blocker with per-client filtering and parental controls;
+- a lightweight DNS and DHCP forwarder with address management.
+
+It is one option among the tools in these categories. It is designed and built against public
+IETF RFCs and IANA registries (and, for the few protocols without an RFC, their own published
+specifications), never by reading or porting any other project's source code. See
 [`NOTICE.md`](./NOTICE.md) for the full clean-room statement and third-party dependency license
 table, and [`LICENSE`](./LICENSE) for the MIT license text.
+
+## Contents
+
+- [What's in the box](#whats-in-the-box)
+  - [DNS server](#dns-server)
+  - [DHCP, DHCPv6 & Router Advertisement](#dhcp-dhcpv6--router-advertisement)
+  - [Admin API & console](#admin-api--console)
+- [Quick start](#quick-start)
+- [Installation](#installation)
+  - [Download a binary](#download-a-binary)
+  - [Windows](#windows)
+  - [Arch Linux](#arch-linux)
+  - [Debian, Ubuntu, Fedora, RHEL and Rocky Linux](#debian-ubuntu-fedora-rhel-and-rocky-linux)
+  - [Container image](#container-image)
+  - [Build and run from source](#build-and-run-from-source)
+- [First run](#first-run)
+  - [Ports](#ports)
+  - [The data directory](#the-data-directory)
+- [Configuration](#configuration)
+  - [Environment variables](#environment-variables)
+  - [Enabling additional transports](#enabling-additional-transports)
+- [Guides](#guides)
+  - [Zones and records](#zones-and-records)
+  - [DNSSEC](#dnssec)
+  - [Secondary zones and transfers](#secondary-zones-and-transfers)
+  - [Cloud DNS sync](#cloud-dns-sync)
+  - [Certificates (ACME)](#certificates-acme)
+  - [Forwarding and recursion](#forwarding-and-recursion)
+  - [Filtering, rewrites and parental controls](#filtering-rewrites-and-parental-controls)
+  - [Encrypted transports and DNS64](#encrypted-transports-and-dns64)
+  - [DHCP, DHCPv6 and Router Advertisement](#dhcp-dhcpv6-and-router-advertisement)
+  - [TFTP and PXE](#tftp-and-pxe)
+  - [Clustering, events and webhooks](#clustering-events-and-webhooks)
+  - [Security](#security)
+  - [Storage](#storage)
+  - [Backup and restore](#backup-and-restore)
+  - [Self-update](#self-update)
+- [Using the admin console](#using-the-admin-console)
+- [REST API](#rest-api)
+- [Running with Docker](#running-with-docker)
+  - [Run it](#run-it)
+  - [DHCP and Router Advertisement](#dhcp-and-router-advertisement)
+  - [A fuller example: `docker-compose.yml`](#a-fuller-example-docker-composeyml)
+  - [Building the image yourself](#building-the-image-yourself)
+- [Releases and versioning](#releases-and-versioning)
+  - [Using the libraries from NuGet](#using-the-libraries-from-nuget)
+  - [Cutting a release](#cutting-a-release)
+  - [The pipeline](#the-pipeline)
+- [Contributing](#contributing)
+  - [Development](#development)
+  - [Branches](#branches)
+  - [Conventions](#conventions)
+  - [Backend: adding a new entity end-to-end](#backend-adding-a-new-entity-end-to-end)
+  - [Frontend: adding a feature page](#frontend-adding-a-feature-page)
+  - [Project layout](#project-layout)
+- [License](#license)
 
 ## What's in the box
 
@@ -150,7 +209,7 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
 
 ### Admin API & console
 
-- **A complete REST API** (65+ controllers) covering full CRUD for every DNS/DHCP resource, every
+- **A complete REST API** (more than 80 controllers) covering full CRUD for every DNS/DHCP resource, every
   settings surface, and identity/admin management, documented via Swagger UI (`/swagger`) and
   ReDoc (`/documentation`), with real, pushed-down pagination throughout.
 - **JWT bearer authentication** with refresh-token rotation, static API tokens, TOTP and email
@@ -163,16 +222,151 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   light and dark themes across five color palettes.
 - **A `GET /status` health endpoint** with ten independent subsystem checks.
 
+## Quick start
+
+This walk-through starts Ninlil on unprivileged ports, signs in, creates one zone with one record
+and asks the server for that record. It changes nothing outside the folder you run it in.
+
+#### Before you start
+
+1. A Linux x86-64 host. On another platform, install Ninlil as described in
+   [Installation](#installation) and use the same ports and commands from step 3 on.
+2. `curl` and `dig` (your distribution's DNS utilities package provides `dig`). Check both:
+
+   ```bash
+   curl --version
+   dig -v
+   ```
+
+   Each prints a version line. A `command not found` message means the tool is missing.
+3. Three free TCP/UDP ports. This walk-through uses `18080` (web, HTTP), `18443` (web, HTTPS) and
+   `15300` (DNS). Check one of them; the command prints only a header line when the port is free:
+
+   ```bash
+   ss -ltnu 'sport = :15300'
+   ```
+
+   ```text
+   Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port
+   ```
+
+#### Steps
+
+1. Download, check and unpack the binary: follow steps 1 to 3 of
+   [Download a binary](#download-a-binary). Stay in the folder that holds `ninlil-linux-amd64`.
+2. Start Ninlil. The password is the bootstrap administrator's password (at least 12 characters);
+   the variables move the ports off the privileged defaults:
+
+   ```bash
+   NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD='Change-Me-Now1!' \
+   NINLIL_DNS_SERVER_WEB_HTTP_PORT=18080 \
+   NINLIL_DNS_SERVER_WEB_HTTPS_PORT=18443 \
+   NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=15300 \
+   ./ninlil-linux-amd64
+   ```
+
+   Leave it running and open a second terminal for the next steps. To use the container image
+   instead, run it as in [Running with Docker](#running-with-docker) with the same variable passed
+   as `-e` and the ports published as `-p 18080:80 -p 18443:443 -p 15300:53/udp -p 15300:53/tcp`.
+3. Check that it is healthy:
+
+   ```bash
+   curl http://127.0.0.1:18080/status
+   ```
+
+   ```text
+   {"status":"Healthy","components":null}
+   ```
+
+4. Sign in. `-k` accepts the self-signed certificate Ninlil generated:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/auth/login -H 'Content-Type: application/json' -d '{"userName":"admin","password":"Change-Me-Now1!"}'
+   ```
+
+   ```text
+   {"requiresTwoFactor":false,"mfaToken":null,"accessToken":"eyJhbGciOi...
+   ```
+
+   Copy the long `accessToken` value. The next commands call it `<token>`.
+5. Create a primary zone. The answer starts with the zone's `id`; copy it. The next commands call
+   it `<zone-id>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"example.test","type":"Primary"}'
+   ```
+
+   ```text
+   {"id":"<zone-id>","name":"example.test","type":"Primary", ...
+   ```
+
+6. Add the zone's SOA record. A zone's first record must be its SOA record:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"example.test","type":"SOA","timeToLiveSeconds":3600,"data":{"primaryNameServer":"ns1.example.test","responsiblePersonMailbox":"admin.example.test","serial":1,"refreshSeconds":3600,"retrySeconds":900,"expireSeconds":1209600,"minimumTtlSeconds":3600}}'
+   ```
+
+   ```text
+   {"id":"...","zoneId":"<zone-id>","name":"example.test","type":"SOA", ...
+   ```
+
+7. Add an A record:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"www.example.test","type":"A","timeToLiveSeconds":3600,"data":{"address":"192.0.2.10"}}'
+   ```
+
+   ```text
+   {"id":"...","zoneId":"<zone-id>","name":"www.example.test","type":"A", ...
+   ```
+
+#### Check that it worked
+
+Ask the server for the record:
+
+```bash
+dig @127.0.0.1 -p 15300 www.example.test A +noall +answer
+```
+
+```text
+www.example.test.	3600	IN	A	192.0.2.10
+```
+
+Then open `https://localhost:18443/` in a browser (accept the certificate warning, which the
+self-signed certificate causes), sign in as `admin` with the password from step 2 and open
+**Zones**: `example.test` is listed. Press Ctrl+C in the first terminal to stop Ninlil. To start
+over, delete the `data` folder next to the executable.
+
+#### When something goes wrong
+
+- *Step 7 or 6 answers `A zone's very first record must be its own SOA record.`* Run step 6 first.
+- *The `dig` answer has status `NXDOMAIN`.* The record is missing or has another name: list the
+  zone's records with `GET /api/zones/<zone-id>/records` and compare.
+- *Ninlil does not start.* Read the log lines in the first terminal. A port that is already in
+  use is the usual cause: choose other port numbers.
+
+To go on from here, read [Installation](#installation) for a permanent setup and the
+[Guides](#guides) for each feature.
+
 ## Installation
 
 Every release, and every build of every branch, is published from the project's Forgejo pipeline
 (see [Releases and versioning](#releases-and-versioning)). Pick whichever fits:
 
+| You want | Use |
+|---|---|
+| To try Ninlil on Linux or macOS in minutes | [Download a binary](#download-a-binary) |
+| Ninlil as a Windows service | [Windows](#windows) |
+| An Arch Linux package | [Arch Linux](#arch-linux) |
+| A service on Debian, Ubuntu, Fedora, RHEL, Rocky Linux or AlmaLinux | [Debian, Ubuntu, Fedora, RHEL and Rocky Linux](#debian-ubuntu-fedora-rhel-and-rocky-linux) |
+| A container | [Container image](#container-image) |
+| To change the code | [Build and run from source](#build-and-run-from-source) |
+
 ### Download a binary
 
 Each [release](https://git.lantea.one/Lantea.One/ninlil/releases) carries a self-contained,
-single-file executable per platform — no .NET installation needed; the runtime, every native
-library, and the admin console are all inside the one file:
+single-file executable per platform. No .NET installation is needed: the runtime, every native
+library and the admin console are inside the one file.
 
 | Platform | File |
 |---|---|
@@ -180,29 +374,87 @@ library, and the admin console are all inside the one file:
 | Linux ARM64 | `ninlil-linux-arm64` |
 | macOS Intel | `ninlil-macos-amd64` |
 | macOS Apple Silicon | `ninlil-macos-arm64` |
-| Windows x86-64 | `ninlil-windows-amd64.exe` |
+| Windows x86-64 | `ninlil-windows-amd64.exe` (see [Windows](#windows)) |
+
+#### Before you start
+
+1. Choose a folder the user that runs Ninlil can write to, for example `/opt/ninlil`. Ninlil keeps
+   all of its state in a `data/` directory next to the executable, so `/usr/local/bin` does not
+   work for a user without write access there.
+2. Check that port 53 is free. The command prints only a header line when it is:
+
+   ```bash
+   ss -lntu 'sport = :53'
+   ```
+
+   If it lists a listener, another program uses port 53 and Ninlil cannot bind it. Stop that
+   program or choose another Ninlil port (see [Ports](#ports)). On a Linux desktop the program is
+   usually the `systemd-resolved` stub listener.
+3. Remember that ports 53, 80 and 443 are privileged on Linux and macOS: run Ninlil as root, or
+   choose other ports (see [Ports](#ports)).
+
+#### Steps
+
+1. Download the executable and the checksum list. Replace `<version>` with the release's version:
+
+   ```bash
+   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<version>/ninlil-linux-amd64
+   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<version>/SHA256SUMS
+   ```
+
+2. Check the download. The command must print `OK` for your file:
+
+   ```bash
+   sha256sum --check --ignore-missing SHA256SUMS
+   ```
+
+   ```text
+   ninlil-linux-amd64: OK
+   ```
+
+3. Make the file executable:
+
+   ```bash
+   chmod +x ninlil-linux-amd64
+   ```
+
+4. Start it. `sudo` allows the privileged default ports; for a trial without root, set other
+   ports as shown in [Ports](#ports):
+
+   ```bash
+   sudo ./ninlil-linux-amd64
+   ```
+
+#### Check that it worked
+
+In a second terminal (use your own HTTP port if you changed it):
 
 ```bash
-curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<version>/ninlil-linux-amd64
-curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<version>/SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS
-chmod +x ninlil-linux-amd64
-sudo ./ninlil-linux-amd64        # or override the ports, see "Ports" below
+curl http://localhost/status
 ```
 
-The server keeps all of its state in a `data/` directory **next to the executable**, so put the
-binary somewhere its user can write to (for example `/opt/ninlil/`), not in `/usr/local/bin`.
-On first start, the native libraries bundled in the file are extracted once to
-`~/.net/` (override with `DOTNET_BUNDLE_EXTRACT_BASE_DIR`). A systemd unit to start from lives in
-[`src/script/systemd/`](./src/script/systemd/).
+```text
+{"status":"Healthy","components":null}
+```
 
-**macOS** binaries are ad-hoc signed, not notarized: remove the download quarantine flag once with
-`xattr -d com.apple.quarantine ninlil-macos-arm64` before the first run. On macOS the DNS server,
-REST API, and admin console work fully; the DHCP, Router Advertisement, and passive device-presence
-features rely on Linux kernel interfaces and are unavailable, and DNS-over-QUIC needs `libmsquic`
-from Homebrew.
+The first-start log lines and the bootstrap administrator password are described in
+[First run](#first-run).
 
-#### Windows
+#### Behaviour worth knowing
+
+- On the first start, the native libraries bundled in the file are extracted once to `~/.net/`
+  (override with `DOTNET_BUNDLE_EXTRACT_BASE_DIR`).
+- A systemd unit to start from lives in [`src/script/systemd/`](./src/script/systemd/).
+- **macOS** binaries are ad-hoc signed, not notarized: remove the download quarantine flag once with
+  `xattr -d com.apple.quarantine ninlil-macos-arm64` before the first run. On macOS the DNS server,
+  REST API and admin console work fully; the DHCP, Router Advertisement and passive device-presence
+  features rely on Linux kernel interfaces and are unavailable. DNS-over-QUIC needs `libmsquic`
+  2.4.20 or later: install it with `brew install libmsquic` and start Ninlil with
+  `DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix)/lib` set, as
+  [Microsoft's QUIC documentation](https://learn.microsoft.com/en-us/dotnet/fundamentals/networking/quic/quic-overview)
+  describes.
+
+### Windows
 
 The Windows executable is a plain console program that also runs as a Windows service. It is
 **unsigned**, so Windows SmartScreen warns the first time you start it. Verify the download against
@@ -210,6 +462,14 @@ The Windows executable is a plain console program that also runs as a Windows se
 `ninlil-windows-amd64.exe` line there, ignoring case) before you accept the warning. The DNS server,
 REST API, and admin console work fully; the DHCP, Router Advertisement, and passive device-presence
 features rely on Linux kernel interfaces and are unavailable, as on macOS.
+
+#### Before you start
+
+1. A Windows x86-64 machine and an administrator PowerShell.
+2. Free ports: the defaults use 53 (UDP and TCP), 80 and 443; or override the ports, see
+   [Ports](#ports).
+
+#### Steps
 
 Try it from a console first (an administrator PowerShell, because the defaults use ports 53, 80, and
 443; or override the ports, see "Ports" below):
@@ -256,23 +516,42 @@ To run it as a service that starts with Windows (all in an administrator PowerSh
 To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil`. Your `C:\Ninlil\data` folder stays.
 Updating means stopping the service, replacing the `.exe`, and starting it again.
 
-The Data Protection key ring and the JWT signing key are stored as plain files in `data\` (they are
-not tied to a Windows account), so changing the service account later only needs the new account to
-have modify rights on that folder. Protect the folder with its permissions.
+Changing the service account later only needs the new account to have modify rights on the `data`
+folder. How the keys in it are stored is described in [Security](#security).
 
 ### Arch Linux
 
-Every release carries installable `ninlil` packages for `x86_64` and `aarch64`:
+Every release carries installable `ninlil` packages for `x86_64` and `aarch64`.
 
-```bash
-sudo pacman -U https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
-sudo systemctl enable --now ninlil
-```
+#### Steps
+
+1. Install the package and start the service. Replace `<tag>` and `<pkgver>` with the release's
+   tag and version:
+
+   ```bash
+   sudo pacman -U https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
+   sudo systemctl enable --now ninlil
+   ```
 
 [`src/archlinux/`](./src/archlinux/) also has the AUR PKGBUILDs that build from source:
 `ninlil-git-stable` (the newest release branch) and `ninlil-git-next` (the latest `develop`
 commit). All three install a `ninlil` systemd service running as an unprivileged user with its
 state in `/var/lib/ninlil`.
+
+DNS-over-QUIC needs `libmsquic` 2.4.20 or later. The package lists it as an optional dependency
+(`msquic`) and does not install it.
+
+#### Check that it worked
+
+```bash
+curl http://localhost/status
+```
+
+```text
+{"status":"Healthy","components":null}
+```
+
+The bootstrap administrator's password is in `journalctl -u ninlil`.
 
 ### Debian, Ubuntu, Fedora, RHEL and Rocky Linux
 
@@ -285,8 +564,12 @@ unprivileged `ninlil` user, all state in `/var/lib/ninlil`, and the settings in
 Each package is install-tested on every build, on `amd64`, on Debian 12, Ubuntu 22.04, Ubuntu 24.04,
 Rocky Linux 9 and Fedora 41. The `arm64` packages are built from the same files but not run by the
 pipeline. The package manager installs the libraries the server needs (the C++ runtime, OpenSSL and
-ICU) from your distribution. DNS-over-QUIC needs `libmsquic`, which the package only suggests; see
+ICU) from your distribution. DNS-over-QUIC needs `libmsquic` 2.4.20 or later: the package
+suggests it and does not install it, because an older release aborts the whole process when a
+QUIC peer advertises the minimum UDP payload size over IPv4. See
 [Microsoft's package repository](https://learn.microsoft.com/en-us/linux/packages) if you want it.
+
+#### Steps
 
 1. Open the [releases page](https://git.lantea.one/Lantea.One/ninlil/releases), pick a release
    and copy the link of the package for your distribution and CPU (`uname -m` prints `x86_64` or
@@ -335,7 +618,19 @@ ICU) from your distribution. DNS-over-QUIC needs `libmsquic`, which the package 
    `/etc/ninlil/ninlil.env` before the first start. That file takes every `NINLIL_*` setting listed in
    [`ENVIRONMENT.md`](./ENVIRONMENT.md); run `sudo systemctl restart ninlil` after editing it.
 
-Day-to-day:
+#### Check that it worked
+
+```bash
+sudo systemctl is-active ninlil
+curl http://localhost/status
+```
+
+```text
+active
+{"status":"Healthy","components":null}
+```
+
+#### Day-to-day
 
 - **Upgrade:** install the newer package the same way (`apt install ./newer.deb`,
   `dnf install ./newer.rpm`), then `sudo systemctl restart ninlil`. Your edits to
@@ -348,47 +643,68 @@ Day-to-day:
   settings file) or `dnf remove`, delete the data yourself with `sudo rm -r /var/lib/ninlil` and
   the user with `sudo userdel ninlil`. The package never deletes your data.
 
-The package definition is [`src/linux-packages/nfpm.yaml`](./src/linux-packages/nfpm.yaml); the
-pipeline builds it with [nFPM](https://nfpm.goreleaser.com/) through
-[`linux-packages.sh`](./.forgejo/scripts/linux-packages.sh) and tests it with
-[`linux-packages-smoke.sh`](./.forgejo/scripts/linux-packages-smoke.sh). To run that test on your
-machine, build the packages with `in-container.sh packages` (it needs a `dist/` folder holding
-`ninlil-linux-amd64` and `ninlil-linux-arm64` and the `DEB_VERSION`, `RPM_VERSION` and `RPM_RELEASE`
-variables) and run `.forgejo/scripts/linux-packages-smoke.sh dist`.
-
-### Run the container image
+### Container image
 
 A hardened, multi-architecture (`linux/amd64`, `linux/arm64`) image is published to the Forgejo
-container registry:
-
-```bash
-docker run -d --name ninlil \
-  -p 80:80 -p 443:443 -p 53:53/udp -p 53:53/tcp \
-  -v ninlil-data:/app/data \
-  git.lantea.one/lantea.one/ninlil:latest
-```
-
-See [Running with Docker](#running-with-docker) below for what the image contains and how to run
-DHCP from it.
+container registry. Its tags, the command to run it and how to run DHCP from it are in
+[Running with Docker](#running-with-docker).
 
 ### Build and run from source
 
-| Tool | Why | Notes |
-|---|---|---|
-| [.NET 10 SDK](https://dotnet.microsoft.com/download) | Builds and runs everything under `src/dotnet/` | Version pinned by [`global.json`](./global.json) |
-| [Node.js](https://nodejs.org/) + npm | Builds the Angular admin console | Only needed to build the admin console; the DNS/DHCP engines and REST API build without it |
-| A Java runtime (JRE/JDK) | `@openapitools/openapi-generator-cli` (used to regenerate the Angular app's typed API client from the backend's own OpenAPI spec) wraps the real, Java-based OpenAPI Generator tool | Only needed when the Angular build actually runs — see [Frontend](#frontend-srcangular) below |
+#### Before you start
+
+You need these tools. Check each with the command in the last column; the first one must print a
+`10.x` version.
+
+| Tool | Why | Notes | Check |
+|---|---|---|---|
+| [.NET 10 SDK](https://dotnet.microsoft.com/download) | Builds and runs everything under `src/dotnet/` | Version pinned by [`global.json`](./global.json) | `dotnet --version` |
+| [Node.js](https://nodejs.org/) + npm | Builds the Angular admin console | Only needed to build the admin console; the DNS/DHCP engines and REST API build without it | `node --version` |
+| A Java runtime (JRE/JDK) | `@openapitools/openapi-generator-cli` (used to regenerate the Angular app's typed API client from the backend's own OpenAPI spec) wraps the Java-based OpenAPI Generator tool | Only needed when the Angular build actually runs — see [Frontend](#frontend-srcangular) below | `java -version` |
 
 You do **not** need PostgreSQL, MySQL, SQL Server, or MongoDB to get started — the default storage
 engine is SQLite, and the database file is created and migrated automatically on first run.
 
-```bash
-git clone https://git.lantea.one/Lantea.One/ninlil.git
-cd ninlil
-dotnet run --project src/dotnet/src/Ninlil.Web
+#### Steps
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://git.lantea.one/Lantea.One/ninlil.git
+   cd ninlil
+   ```
+
+2. Build and run it. The ports are moved off the privileged defaults (see [Ports](#ports)):
+
+   ```bash
+   NINLIL_DNS_SERVER_WEB_HTTP_PORT=18080 \
+   NINLIL_DNS_SERVER_WEB_HTTPS_PORT=18443 \
+   NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=15300 \
+   dotnet run --project src/dotnet/src/Ninlil.Web
+   ```
+
+#### Check that it worked
+
+The log ends with these lines (the `Storage:` line comes earlier; your paths differ):
+
+```text
+      Storage: Sqlite, primary a local file, no read replica.
+      Now listening on: http://[::]:18080
+      Now listening on: https://[::]:18443
+      Application started. Press Ctrl+C to shut down.
 ```
 
-That's it. A single `dotnet build`/`dotnet run`/`dotnet publish` of `Ninlil.Web` automatically
+```bash
+curl http://localhost:18080/status
+```
+
+```text
+{"status":"Healthy","components":null}
+```
+
+#### Behaviour worth knowing
+
+A single `dotnet build`/`dotnet run`/`dotnet publish` of `Ninlil.Web` automatically
 builds the Angular workspace too (via a custom MSBuild target, `NinlilBuildAngularAdminSpa`) and
 copies its production output into that project's own `wwwroot/`, so the admin console is served
 from the exact same process and port as the REST API — no separate `npm run build`/`ng serve`
@@ -415,14 +731,40 @@ On first run, the host will:
 Once it's up, open a browser to the host's configured HTTPS port (see below) to reach the admin
 console, or `/documentation` for a browsable REST API reference.
 
+#### Check that it worked
+
+The data directory (see [The data directory](#the-data-directory)) holds these files. Your list
+can hold more:
+
+```text
+cluster-node-id.txt
+jwt-signing-key.txt
+key-<guid>.xml
+ninlil-dns.sqlite3
+protocol-tls-certificate.pfx
+recursive-trust-anchors.json
+```
+
+The log holds one warning line with the administrator account. A generated password follows
+`Password:` in that line; if you set `NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD`, the line
+says so and prints no password:
+
+```text
+warn: Ninlil.Web.Startup.AdministratorBootstrapper[0]
+      No user account existed yet, so a bootstrap administrator account was created using the configured Identity:BootstrapAdministratorPassword. Username: admin -- sign in and change this password, or create a real account and delete this one, as soon as possible.
+```
+
+The browser warns about the self-signed certificate on the HTTPS port. Accept it for a first look.
+
 ### Ports
 
 | Port | Purpose | Default state |
 |---|---|---|
-| `80` / `443` (`DnsServer:Web:HttpPort`/`HttpsPort`) | REST API, SignalR hub, the Angular admin console, and DNS-over-HTTPS — all on one Kestrel listener | Always on |
+| `80` / `443` (`DnsServer:Web:HttpPort`/`HttpsPort`) | REST API, SignalR hub and the Angular admin console, on one Kestrel listener | Always on |
+| `443` (the web HTTPS port, path `/dns-query`) | DNS-over-HTTPS (`DnsServer:Protocol:DnsOverHttps:Enable`) | Off by default |
 | `53` UDP/TCP (`DnsServer:Protocol:Plain:Port`) | Plain DNS | On by default (the one transport that is) |
 | `853` (`DnsServer:Protocol:DnsOverTls:Port`) | DNS-over-TLS | Off by default |
-| `853` UDP (`DnsServer:Protocol:DnsOverQuic:Port`) | DNS-over-QUIC | Off by default (needs `libmsquic`/OpenSSL on the host OS) |
+| `853` UDP (`DnsServer:Protocol:DnsOverQuic:Port`) | DNS-over-QUIC | Off by default (needs `libmsquic` 2.4.20 or later on the host; the container image ships it) |
 | `5443` UDP/TCP (`DnsServer:Protocol:DnsCrypt:Port`) | DNSCrypt v2 | Off by default |
 | `67`/`68` UDP (`DhcpServer:Protocol:Dhcpv4:*Port`) | DHCPv4 | Off by default |
 | `547`/`546` UDP (`DhcpServer:Protocol:Dhcpv6:*Port`) | DHCPv6 | Off by default |
@@ -442,10 +784,42 @@ NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=5300 \
 dotnet run --project src/dotnet/src/Ninlil.Web
 ```
 
-Every environment variable this application reads follows this same single, `NINLIL_`-prefixed,
-single-underscore naming scheme. **See [`ENVIRONMENT.md`](./ENVIRONMENT.md) for the complete,
-generated-and-verified reference of every supported variable**, organized by subsystem — the
-table below covers only the handful you're most likely to set for a first deployment.
+### The data directory
+
+Ninlil keeps its files in one folder, the **data directory**. Where it is depends on how you
+installed Ninlil:
+
+| Installed as | Data directory |
+|---|---|
+| Linux package (Deb, RPM, Arch) | `/var/lib/ninlil` |
+| Docker image | `/app/data` (the volume you mount) |
+| Windows service | the `data` folder next to the executable, such as `C:\Ninlil\data` |
+| A downloaded binary or `dotnet run` | the `data` folder next to the executable or the built program |
+
+On Linux and macOS the folder is readable by its owner only (mode 0700). Back it up with
+[Backup and restore](#backup-and-restore) or by copying all of it while Ninlil is stopped.
+
+## Configuration
+
+Ninlil reads its settings from three sources. A later source overrides an earlier one:
+
+1. `appsettings.json` in the content root (the folder Ninlil starts in; the packages and the container
+   image set it to the data directory).
+2. `NINLIL_*` environment variables.
+3. Command-line arguments, such as `--Storage:MigrationSafety:RestoreSnapshot=<id>`.
+
+The admin console's settings pages write your changes to `appsettings.json` and show a note that
+says whether the change applies at once or after a restart. Environment variables are read once, at
+start, so restart Ninlil after you change one. A value set by an environment variable overrides
+the same value saved on a page.
+
+### Environment variables
+
+Every environment variable this application reads follows one `NINLIL_`-prefixed,
+single-underscore naming scheme. **See [`ENVIRONMENT.md`](./ENVIRONMENT.md) for the reference of
+every supported variable**, organized by subsystem. The reference is written by hand, and a test
+fails when a variable has no row. The table below covers only the handful you are most likely to
+set for a first deployment.
 
 | Variable | Controls | Default |
 |---|---|---|
@@ -454,7 +828,7 @@ table below covers only the handful you're most likely to set for a first deploy
 | `NINLIL_DNS_SERVER_WEB_HTTP_PORT` / `..._HTTPS_PORT` | The REST API/admin-console ports | `80` / `443` |
 | `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT` | The plain DNS port | `53` |
 | `NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD` | Set the bootstrap admin password explicitly instead of accepting a random one | *(random, printed once)* |
-| `NINLIL_JWT_SIGNING_KEY` | The JWT signing key — set this explicitly for any real deployment | *(none — must be supplied)* |
+| `NINLIL_JWT_SIGNING_KEY` | The JWT signing key. Ninlil generates one at the first start; when to set it yourself is in its [row](./ENVIRONMENT.md#identity-authentication--sso) | *(generated; see the row)* |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` | Whether this server answers recursive queries | `false` |
 | `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE` / `...DHCPV6_ENABLE` | Whether the local DHCPv4/DHCPv6 engines are active | `false` |
 
@@ -474,7 +848,187 @@ page for a curated bundle). For example, to turn on DNS-over-TLS:
 }
 ```
 
-### Choosing a storage engine
+## Guides
+
+One guide per feature. Each says what the feature does and links the settings that control it.
+
+### Zones and records
+
+Ninlil serves primary, secondary, stub, forwarder and catalog zones. Open **Zones** in the admin
+console to create one; every registered record type has its own form. The REST API manages the same
+data under `/api/zones`. The settings are in
+[Authoritative DNS engine](./ENVIRONMENT.md#authoritative-dns-engine) and [TSIG](./ENVIRONMENT.md#tsig).
+
+### DNSSEC
+
+Ninlil signs the zones it serves (RSA, ECDSA and EdDSA keys; NSEC or NSEC3) and validates answers on
+the recursive path and for forwarded answers. Signing is per zone: tick **Sign this zone with
+DNSSEC** on the zone form. The settings are in [Recursive resolver](./ENVIRONMENT.md#recursive-resolver)
+and [DNSSEC, ACME & CAA](./ENVIRONMENT.md#dnssec-acme--caa).
+
+### Secondary zones and transfers
+
+A secondary zone copies its records from a primary server by AXFR or IXFR, over plain TCP, TLS or
+QUIC. Choose the zone type **Secondary**, list the primary server addresses and pick the transfer
+transport on the zone form. A TSIG key can sign the transfer.
+
+### Cloud DNS sync
+
+A zone can be kept in sync with Cloudflare, AWS Route 53 or DigitalOcean. On the zone form, pick the
+**Cloud provider credential** and enter the provider's own zone ID.
+
+### Certificates (ACME)
+
+Ninlil has an ACME (RFC 8555) DNS-01 client that issues certificates for zones this server hosts
+itself. A renewed certificate updates every TLS-based listener at once, with no restart. The
+settings are in [DNSSEC, ACME & CAA](./ENVIRONMENT.md#dnssec-acme--caa).
+
+### Forwarding and recursion
+
+Recursive resolution and upstream forwarding are both off by default. Turn recursion on with
+`NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` and forwarding with `NINLIL_DNS_SERVER_FORWARDING_ENABLE`;
+the settings are in [Recursive resolver](./ENVIRONMENT.md#recursive-resolver) and
+[Forwarding](./ENVIRONMENT.md#forwarding).
+
+#### Behaviour worth knowing
+
+- **Forwarder zone names ignore case and a trailing dot.** `Corp.Example`, `corp.example` and
+  `corp.example.` all match the same conditional forwarder zone.
+
+### Filtering, rewrites and parental controls
+
+Filtering blocks or allows names by list, per client and per client group, with schedules. Rewrites
+override a name with an address or a CNAME. The settings are in
+[Filtering, rewrites, rate limiting & query log](./ENVIRONMENT.md#filtering-rewrites-rate-limiting--query-log).
+
+#### Behaviour worth knowing
+
+- **Filter data is loaded when Ninlil starts.** A background service loads the clients, the filter
+  configuration and the entries of every list in use, so the first DNS query does not wait for
+  them. It does not delay readiness. It does nothing while filtering is off at start.
+
+### Encrypted transports and DNS64
+
+Every transport beyond plain DNS is off by default; [Ports](#ports) lists them and
+[Enabling additional transports](#enabling-additional-transports) shows how to turn one on.
+DNS-over-QUIC needs `libmsquic` 2.4.20 or later. A DNSCrypt TCP connection carries one query and
+closes after its answer (DNSCrypt v2 specification, section 6). DNS64 belongs to the recursive
+resolver. The settings are in [DNS transports](./ENVIRONMENT.md#dns-transports).
+
+### DHCP, DHCPv6 and Router Advertisement
+
+The local DHCPv4 and DHCPv6 engines are off by default and need Linux. Turn them on with
+`NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE` and `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV6_ENABLE`. A relay
+agent can run instead of the local engine. In a container, DHCP needs host networking (see
+[DHCP and Router Advertisement](#dhcp-and-router-advertisement)). The settings are in
+[DHCP, DHCPv6, Router Advertisement & TFTP](./ENVIRONMENT.md#dhcp-dhcpv6-router-advertisement--tftp).
+
+#### Behaviour worth knowing
+
+- **A DHCP relay sends its replies out the client's link.** The DHCPv4 relay sends replies to
+  clients from its `giaddr` address, bound (on Linux) to the interface that owns it, so a
+  broadcast reply does not leave on the interface of the default route. The DHCPv6 relay gives a
+  client's link-local address the scope of the interface that owns its link-address. When no
+  interface holds `giaddr` (DHCPv4) or the link-address (DHCPv6), the relay logs one Warning at
+  start and falls back to the routing table's choice. The automated tests cover this on the
+  loopback interface only. A relay with two real links is checked by hand with
+  `src/script/development/dhcp-relay-two-link-test.sh /path/to/Ninlil.Web` (as root; it needs
+  `tcpdump`, a DHCPv4 and a DHCPv6 client, and asks you to create one DHCPv4 and one DHCPv6 scope
+  in the server instance). CI does not run the script, so run it after a change to the relay sockets.
+
+### TFTP and PXE
+
+A read-only TFTP server (RFC 1350) delivers PXE boot files. It is off by default and listens on UDP
+port 69. A scope's boot file name and next-server address drive what clients receive.
+
+### Clustering, events and webhooks
+
+Nodes can form a cluster that shares membership and operational settings. Events reach the console
+through SignalR and can go to a RabbitMQ or ActiveMQ broker; webhooks send them to URLs you
+subscribe. The settings are in
+[Webhooks, backup, self-update & clustering](./ENVIRONMENT.md#webhooks-backup-self-update--clustering)
+and [Event broker (message queue) transports](./ENVIRONMENT.md#event-broker-message-queue-transports).
+
+#### Behaviour worth knowing
+
+- **In a Ninlil cluster, a change made on one node reaches the others' DNS answers after a delay.**
+  Each node keeps its own database and caches. On the node where you make a change, the answer
+  changes at once. On the other nodes, filter and client settings, rewrites, client schedules and
+  forwarder zones show up after at most 60 seconds, and the entries of a filter list after at most
+  5 minutes. With a [read replica](#read-replicas-and-database-clusters), add the replica's lag
+  limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by default).
+
+### Security
+
+Sign in with the bootstrap administrator once, then create accounts with the permissions each person
+needs (see [Using the admin console](#using-the-admin-console)).
+
+On Windows, the Data Protection key ring and the JWT signing key are stored as plain files in
+`data\` (they are not tied to a Windows account). Protect the folder with its permissions.
+
+#### Single sign-on and e-mail secrets
+
+The SSO client secret, the SMTP password, the reverse-proxy shared secret and the event broker
+passwords can come from two places. Each is stored encrypted
+with this server's Data Protection key ring when you save it in the admin console, or it can be
+supplied in plaintext from outside the application. The plaintext source wins.
+
+| Secret | Plaintext variable | Admin console page |
+|---|---|---|
+| SSO client secret | `NINLIL_IDENTITY_SSO_CLIENT_SECRET` | Single sign-on |
+| SMTP password | `NINLIL_EMAIL_PASSWORD` | SMTP |
+| Reverse-proxy shared secret | `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET` | Reverse proxy |
+| RabbitMQ password | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PASSWORD` | Event broker |
+| ActiveMQ password | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PASSWORD` | Event broker |
+
+**Supply a secret from the environment** (containers, secret stores):
+
+1. Set the variable for the Ninlil process, for example `NINLIL_IDENTITY_SSO_CLIENT_SECRET=<secret>`
+   in your compose file or systemd unit.
+2. Restart Ninlil. SSO settings are read once at startup.
+3. Open the settings page. It shows that the secret comes from the environment and overrides
+   anything saved there. A secret you save on the page has no effect until you unset the variable.
+
+A plaintext secret typed into the configuration file is encrypted at startup and the plaintext is
+removed. A secret from the environment is never written to disk.
+
+The reverse-proxy shared secret and the event broker passwords are also replicated in a cluster.
+The node you save one on sends it to
+the other nodes over the encrypted, signed cluster channel, and each node encrypts it with its
+own key ring before it writes its file. It never goes through the event broker.
+
+**If the key ring is lost.** The Data Protection key ring lives in the data directory. If it is
+recreated, or the configuration file is copied to another host without it, a stored secret can no
+longer be decrypted. The same happens if you put a plaintext value into a
+`..._ENCRYPTED` variable. Ninlil keeps running and logs an Error at startup (SSO) or when a mail
+is sent (SMTP). The settings page shows that the saved secret cannot be decrypted. SSO sign-in
+then fails at the identity provider and sends the user back to the sign-in page with an error.
+An unreadable reverse-proxy shared secret fails closed: Ninlil logs an Error at startup and trusts
+no reverse proxy, so every request is treated as coming from its own connection address, until you
+enter the secret again and restart. An unreadable broker password becomes an empty password: the
+broker refuses the login, Ninlil logs an Error at startup and keeps running, and the event broker
+stays disconnected until you enter the password again and restart.
+
+To recover:
+
+1. Open the SSO, SMTP, Reverse proxy or Event broker settings page, or set the plaintext variable above.
+2. Enter the secret again and save (or restart with the variable set).
+3. For SSO, the reverse proxy and the event broker, restart Ninlil so the new secret is read.
+
+An SMTP user name needs a password: Ninlil rejects a save that would leave a user name without
+one, and logs a warning at startup if the configuration already has that state. Clear the user
+name for a mail server that accepts anonymous connections.
+
+### Storage
+
+This guide is for the person who runs a Ninlil installation: moving to another database engine,
+upgrading safely, and the settings that change how the database behaves. Every setting it names is
+listed in [`ENVIRONMENT.md`](./ENVIRONMENT.md#storage-engine). Where a step needs a file or a
+setting you have not met yet, the step says where to find it.
+
+The default is SQLite. The data directory is described in [The data directory](#the-data-directory).
+
+#### Choosing a storage engine
 
 The default is SQLite (`Storage:Engine = Sqlite`); PostgreSQL, MySQL, SQL Server, and MongoDB are
 all also fully supported. Set `Storage:Engine` and the matching connection string — for example,
@@ -507,24 +1061,7 @@ snapshot of the existing data, so an upgrade can be undone (see
 needs no migration step. To move an installation to another engine later, see
 [Switching the storage engine](#switching-the-storage-engine).
 
-## Operating the database
-
-This section is for the person who runs a Ninlil installation: moving to another database engine,
-upgrading safely, and the settings that change how the database behaves. Every setting it names is
-listed in [`ENVIRONMENT.md`](./ENVIRONMENT.md#storage-engine). Where a step needs a file or a
-setting you have not met yet, the step says where to find it.
-
-Where Ninlil keeps its files depends on how you installed it. This section calls that folder the
-**data directory**:
-
-| Installed as | Data directory |
-|---|---|
-| Linux package (Deb, RPM, Arch) | `/var/lib/ninlil` |
-| Docker image | `/app/data` (the volume you mount) |
-| Windows service | the `data` folder next to the executable, such as `C:\Ninlil\data` |
-| `dotnet run` | the `data` folder next to the built program |
-
-### Switching the storage engine
+#### Switching the storage engine
 
 You can move an installation between SQLite, PostgreSQL, MySQL and SQL Server. MongoDB cannot be
 the source or the target of a switch. A switch takes effect at the **next restart**: you ask for
@@ -537,7 +1074,7 @@ the query log, the operational log and metrics, the zone change journal, webhook
 attempts and the cluster sync tombstones. The Data Protection key ring, the certificates and the
 configuration file stay where they are. Ninlil does not delete the old database.
 
-**Before you start**
+#### Before you start
 
 1. Create the target database and its account. For PostgreSQL, MySQL and SQL Server, the scripts
    in [`src/script/database/`](./src/script/database/README.md) do this.
@@ -547,7 +1084,7 @@ configuration file stay where they are. Ninlil does not delete the old database.
    for the new engine.
 3. Sign in with an account that holds the `storage:manage` permission (the bootstrap `admin` does).
 
-**Steps**
+#### Steps
 
 1. Open **Settings**, then **Storage** (`/settings/storage`).
 2. Choose the target engine and fill in its connection fields: a file path for SQLite; host,
@@ -576,7 +1113,7 @@ configuration file stay where they are. Ninlil does not delete the old database.
 7. Open **Settings**, then **Storage** again. The last-outcome card shows that the copy worked and
    how many rows it moved, or why it failed. It shows the outcome of the latest start only.
 
-**When something goes wrong**
+#### When something goes wrong
 
 - *The configuration file decided the storage and the copy failed.* Ninlil keeps running on the old
   database, deletes the saved request and shows the failure on the Storage page. Fix the cause and
@@ -590,7 +1127,7 @@ configuration file stay where they are. Ninlil does not delete the old database.
   the three engines, keeps the request, and changes nothing. Cancel the request on the Storage
   page, or set the variables to one of the two databases.
 
-### Upgrades and migration snapshots
+#### Upgrades and migration snapshots
 
 A new Ninlil version can change the database layout. For SQLite, PostgreSQL, MySQL and SQL Server,
 Ninlil applies those changes itself at start (these are the *migrations*) and takes a **snapshot**
@@ -635,7 +1172,7 @@ unchanged and refuses to start with a message that says why. Fix the cause, or s
 `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT=false` to migrate without a snapshot (Ninlil then
 logs a warning). A SQLite database held in memory has no file to copy and gets no snapshot.
 
-**Settings**
+#### Settings
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -749,7 +1286,7 @@ above that: `ulimit -n 64000` before starting `mongod`, `LimitNOFILE=64000` in i
 or `docker run --ulimit nofile=64000:64000 ...` for the container. Without it, `mongod` can abort
 with `Too many open files`.
 
-### Read replicas and database clusters
+#### Read replicas and database clusters
 
 For a large installation you can add a **read replica**: a second database server that holds a
 copy of the primary and answers some of Ninlil's reads. Nothing changes until you configure one.
@@ -954,7 +1491,7 @@ zone, signed-zone and access-rule caches have no timer and always read the prima
   so replicas hold them too and need the disk space. A restore runs on the primary and the replicas
   follow.
 
-### Behaviour worth knowing
+#### Behaviour worth knowing
 
 - **SQL statements are logged at Debug level.** At the default level the log shows none. To see
   every statement, add this to `appsettings.json` (or pass
@@ -971,27 +1508,18 @@ zone, signed-zone and access-rule caches have no timer and always read the prima
   sets `synchronous = NORMAL`, which keeps the database consistent after a crash; a power cut can
   lose the last second of writes. It also runs `PRAGMA optimize` at every start and after the
   query log cleanup deleted rows, so queries on large logs choose good indexes.
-- **A DHCP relay sends its replies out the client's link.** The DHCPv4 relay sends replies to
-  clients from its `giaddr` address, bound (on Linux) to the interface that owns it, so a
-  broadcast reply does not leave on the interface of the default route. The DHCPv6 relay gives a
-  client's link-local address the scope of the interface that owns its link-address. When no
-  interface holds `giaddr` (DHCPv4) or the link-address (DHCPv6), the relay logs one Warning at
-  start and falls back to the routing table's choice. The automated tests cover this on the
-  loopback interface only. A relay with two real links is checked by hand with
-  `src/script/development/dhcp-relay-two-link-test.sh /path/to/Ninlil.Web` (as root; it needs
-  `tcpdump`, a DHCPv4 and a DHCPv6 client, and asks you to create one DHCPv4 and one DHCPv6 scope
-  in the server instance). CI does not run the script, so run it after a change to the relay sockets.
-- **Filter data is loaded when Ninlil starts.** A background service loads the clients, the filter
-  configuration and the entries of every list in use, so the first DNS query does not wait for
-  them. It does not delay readiness. It does nothing while filtering is off at start.
-- **Forwarder zone names ignore case and a trailing dot.** `Corp.Example`, `corp.example` and
-  `corp.example.` all match the same conditional forwarder zone.
-- **In a Ninlil cluster, a change made on one node reaches the others' DNS answers after a delay.**
-  Each node keeps its own database and caches. On the node where you make a change, the answer
-  changes at once. On the other nodes, filter and client settings, rewrites, client schedules and
-  forwarder zones show up after at most 60 seconds, and the entries of a filter list after at most
-  5 minutes. With a [read replica](#read-replicas-and-database-clusters), add the replica's lag
-  limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by default).
+
+### Backup and restore
+
+**Backup & Restore** in the admin console writes a full-system, passphrase-encrypted backup file and
+restores one. The backup leaves out the query log and other history. The settings are in
+[Webhooks, backup, self-update & clustering](./ENVIRONMENT.md#webhooks-backup-self-update--clustering).
+
+### Self-update
+
+Ninlil can check for a newer release but never installs one. The check does nothing until you set
+`NINLIL_DNS_SERVER_SELF_UPDATE_RELEASE_FEED_URL`, and Ninlil publishes no feed. The settings are in
+[Webhooks, backup, self-update & clustering](./ENVIRONMENT.md#webhooks-backup-self-update--clustering).
 
 ## Using the admin console
 
@@ -1006,59 +1534,6 @@ exactly once, at creation — copy them down immediately), filtering and client/
 management, DHCP scopes/reservations/leases, forwarders, outbound webhooks, server settings
 (presets, rate limiting, the event broker, DNS Cookies, clustering), and your own account's
 two-factor authentication setup (via the account menu in the top-right corner).
-
-### Single sign-on and e-mail secrets
-
-The SSO client secret, the SMTP password, the reverse-proxy shared secret and the event broker
-passwords can come from two places. Each is stored encrypted
-with this server's Data Protection key ring when you save it in the admin console, or it can be
-supplied in plaintext from outside the application. The plaintext source wins.
-
-| Secret | Plaintext variable | Admin console page |
-|---|---|---|
-| SSO client secret | `NINLIL_IDENTITY_SSO_CLIENT_SECRET` | Single sign-on |
-| SMTP password | `NINLIL_EMAIL_PASSWORD` | SMTP |
-| Reverse-proxy shared secret | `NINLIL_DNS_SERVER_REVERSE_PROXY_SHARED_SECRET` | Reverse proxy |
-| RabbitMQ password | `NINLIL_DNS_SERVER_EVENTS_RABBIT_MQ_PASSWORD` | Event broker |
-| ActiveMQ password | `NINLIL_DNS_SERVER_EVENTS_ACTIVE_MQ_PASSWORD` | Event broker |
-
-**Supply a secret from the environment** (containers, secret stores):
-
-1. Set the variable for the Ninlil process, for example `NINLIL_IDENTITY_SSO_CLIENT_SECRET=<secret>`
-   in your compose file or systemd unit.
-2. Restart Ninlil. SSO settings are read once at startup.
-3. Open the settings page. It shows that the secret comes from the environment and overrides
-   anything saved there. A secret you save on the page has no effect until you unset the variable.
-
-A plaintext secret typed into the configuration file is encrypted at startup and the plaintext is
-removed. A secret from the environment is never written to disk.
-
-The reverse-proxy shared secret and the event broker passwords are also replicated in a cluster.
-The node you save one on sends it to
-the other nodes over the encrypted, signed cluster channel, and each node encrypts it with its
-own key ring before it writes its file. It never goes through the event broker.
-
-**If the key ring is lost.** The Data Protection key ring lives in the data directory. If it is
-recreated, or the configuration file is copied to another host without it, a stored secret can no
-longer be decrypted. The same happens if you put a plaintext value into a
-`..._ENCRYPTED` variable. Ninlil keeps running and logs an Error at startup (SSO) or when a mail
-is sent (SMTP). The settings page shows that the saved secret cannot be decrypted. SSO sign-in
-then fails at the identity provider and sends the user back to the sign-in page with an error.
-An unreadable reverse-proxy shared secret fails closed: Ninlil logs an Error at startup and trusts
-no reverse proxy, so every request is treated as coming from its own connection address, until you
-enter the secret again and restart. An unreadable broker password becomes an empty password: the
-broker refuses the login, Ninlil logs an Error at startup and keeps running, and the event broker
-stays disconnected until you enter the password again and restart.
-
-To recover:
-
-1. Open the SSO, SMTP, Reverse proxy or Event broker settings page, or set the plaintext variable above.
-2. Enter the secret again and save (or restart with the variable set).
-3. For SSO, the reverse proxy and the event broker, restart Ninlil so the new secret is read.
-
-An SMTP user name needs a password: Ninlil rejects a save that would leave a user name without
-one, and logs a warning at startup if the configuration already has that state. Clear the user
-name for a mail server that accepts anonymous connections.
 
 ## REST API
 
@@ -1076,12 +1551,13 @@ console are meant to be served from the same origin, as they are by default.
 ## Running with Docker
 
 The published image (`git.lantea.one/lantea.one/ninlil`) is the same single combined host
-described above — the DNS and DHCP engines, the REST API, and the admin console in one process —
+described above (the DNS and DHCP engines, the REST API and the admin console in one process),
 built for a small attack surface:
 
-- **Chiseled base image** (`mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra`): no shell,
-  no package manager, nothing but the .NET runtime, ICU, time-zone data, OpenSSL, and
-  `libmsquic` for DNS-over-QUIC.
+- **Chiseled base image** (`mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra`): no
+  shell and no package manager. It holds the libraries a self-contained .NET program needs (C and
+  C++ runtime, ICU, time-zone data, OpenSSL) plus `libmsquic` 2.6.2 for DNS-over-QUIC and its
+  dependency `libnuma1`, which the image build adds from a pinned list.
 - **Non-root**: the server runs as uid `1654`. The application files are read-only to it; only
   `/app/data` is writable.
 - **Everything persistent in one volume**: `/app/data` holds the database (with the default SQLite
@@ -1095,6 +1571,15 @@ built for a small attack surface:
 | `<yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>` | A branch build; removed after 24 hours |
 
 ### Run it
+
+#### Before you start
+
+1. Docker installed. Check it with `docker --version`.
+2. Port 53 free on the host. On a Linux desktop `systemd-resolved` usually holds it for its stub
+   listener, so publishing `53:53` fails with `address already in use`: publish another host port
+   (`-p 5353:53/udp -p 5353:53/tcp`) or disable the stub listener.
+
+#### Steps
 
 ```bash
 docker run -d --name ninlil \
@@ -1117,6 +1602,16 @@ default and need their own port published once enabled (see [Ports](#ports)).
 `.NET` runtime settings such as server garbage collection can be set with the same `NINLIL_`
 scheme as everything else — `NINLIL_DOTNET_GC_SERVER=1` — see
 [`ENVIRONMENT.md`](./ENVIRONMENT.md#net-runtime-settings).
+
+#### Check that it worked
+
+```bash
+docker logs ninlil
+curl http://localhost/status
+```
+
+The log ends with `Now listening on: http://[::]:80`, `Now listening on: https://[::]:443` and
+`Application started.`. The status call prints `{"status":"Healthy","components":null}`.
 
 ### DHCP and Router Advertisement
 
@@ -1165,89 +1660,6 @@ docker buildx build --build-context binaries=dist -t ninlil .
 docker buildx build --build-context binaries=dist \
   --platform linux/amd64,linux/arm64 -t <registry>/ninlil --push .
 ```
-
-## Development
-
-### Backend (`src/dotnet/`)
-
-```bash
-dotnet tool restore                      # one-time: restores dotnet-ef, csharpier, reportgenerator
-dotnet restore Ninlil.slnx
-dotnet build Ninlil.slnx -c Release      # should build with 0 warnings
-dotnet csharpier check .                 # formatting gate — CI enforces this
-dotnet test Ninlil.slnx -c Release       # the full xUnit test suite
-```
-
-Run `dotnet csharpier format .` before committing — CI runs `dotnet csharpier check .` and will
-fail on anything that doesn't already match.
-
-### Frontend (`src/angular/`)
-
-```bash
-cd src/angular
-npm install
-npm run build          # regenerates the typed API client from the committed OpenAPI snapshot, then builds
-npm run lint            # eslint
-npm run format:check    # prettier
-npm test                # Jasmine/Karma unit tests (needs Chromium/Chrome; set CHROME_BIN if it
-                         # is not found automatically, e.g. CHROME_BIN=/usr/bin/chromium)
-```
-
-`npm run fetch:openapi` re-fetches `openapi/swagger.json` from a locally running instance of the
-backend (adjust the URL in `package.json` to match how you're running it) whenever the backend's
-own REST surface changes; the committed snapshot is what every `npm run build` actually codegens
-against (via the automatic `prebuild` step, `npm run generate:api`), so this is a deliberate,
-separate, manual step, not something that happens automatically. **Building this workspace
-requires a Java runtime** on top of Node/npm, since the generator wraps a Java-based tool.
-
-`OpenApiSnapshotTests` in `Ninlil.Web.Tests` fails whenever the snapshot no longer matches the
-controllers. To regenerate it without a running backend, run this from the repository root, then
-`npm run generate:api` here:
-
-```bash
-NINLIL_UPDATE_OPENAPI_SNAPSHOT=true dotnet test src/dotnet/tests/Ninlil.Web.Tests \
-  --filter FullyQualifiedName~OpenApiSnapshotTests
-```
-
-### Standard verification loop
-
-Before considering a change done, both sides of the codebase have the same shape of gate:
-
-1. `dotnet build Ninlil.slnx` → fix errors → `dotnet csharpier format .` →
-   `dotnet test Ninlil.slnx` (must stay green) → re-run any relevant scratch smoke test for
-   anything touching runtime wiring (DI composition, migrations, event delivery, real
-   sockets/TLS/HTTP) — a passing build is not evidence anything works at runtime.
-2. For Angular: `npm run lint` / `npm run format:check` / `npm run build` / `npm test`, all clean.
-
-The pipeline runs exactly these checks, each in a throwaway container of the matching toolchain
-(see [The pipeline](#the-pipeline)). The pipeline also lints its own scripts and workflows and
-runs their self-tests; run the same check locally, before pushing a change under `.forgejo/`,
-`docker/` or `src/script/`, with `./.forgejo/scripts/in-container.sh lint ./.forgejo/scripts/lint.sh`.
-A few .NET tests start their own database
-containers through Testcontainers, so the .NET suite needs Docker running; they carry the
-`RequiresDocker` test category, which the pull-request build excludes (see
-[The pipeline](#the-pipeline)). Every test listener,
-Karma's included, takes a port the operating system reports as free, never a fixed or well-known
-one, and neither suite needs root, so both can run on a machine that already hosts DNS, DHCP,
-web, or database services.
-
-### Publishing the binaries
-
-[`.forgejo/scripts/publish-binary.sh`](./.forgejo/scripts/publish-binary.sh) builds one
-self-contained, single-file executable — the same command the pipeline runs — with the admin
-console embedded, so build the console into `Ninlil.Web/wwwroot` first:
-
-```bash
-.forgejo/scripts/build-admin-console.sh               # npm ci + npm run build, then into wwwroot
-.forgejo/scripts/publish-binary.sh linux-amd64 dist   # or linux-arm64, macos-amd64, macos-arm64, windows-amd64
-```
-
-[`.forgejo/scripts/pack-packages.sh`](./.forgejo/scripts/pack-packages.sh) builds the NuGet
-packages the same way: `.forgejo/scripts/pack-packages.sh 'Ninlil.*' packages`.
-
-Each script uses whatever Node.js or .NET SDK is installed. To use the pipeline's own toolchains
-instead, needing nothing but Docker, prefix it with `.forgejo/scripts/in-container.sh node` or
-`.forgejo/scripts/in-container.sh dotnet`.
 
 ## Releases and versioning
 
@@ -1344,12 +1756,18 @@ runs with `--filter "Category!=RequiresDocker"`, which skips the PostgreSQL quer
 same-repo branch is pushed before its pull request, and that push build runs them with the socket.
 Mark any new test that starts a container with `[Trait("Category", "RequiresDocker")]`.
 
-**Fork pull requests (set before the repository goes public).** The runners run steps on the host
-as a user in the Docker group, and a pull request from a fork runs its own copy of every workflow,
-so the rule above cannot stop a malicious fork by itself. Before going public, enable the Forgejo
-setting that makes workflow runs from fork pull requests wait for a maintainer's approval (or
-disable Actions for forks), and read the diff of `.forgejo/` and every script it runs before
-approving a run.
+**Fork pull requests.** The runners run steps on the host as a user in the Docker group, and a pull
+request from a fork runs its own copy of every workflow, so the rule above cannot stop a malicious
+fork by itself. Workflow runs from fork pull requests wait for a maintainer's approval, and the
+maintainer reads the diff of `.forgejo/` and every script it runs before approving a run.
+
+**Linux packages.** The package definition is [`src/linux-packages/nfpm.yaml`](./src/linux-packages/nfpm.yaml);
+the pipeline builds it with [nFPM](https://nfpm.goreleaser.com/) through
+[`linux-packages.sh`](./.forgejo/scripts/linux-packages.sh) and tests it with
+[`linux-packages-smoke.sh`](./.forgejo/scripts/linux-packages-smoke.sh). To run that test on your
+machine, build the packages with `in-container.sh packages` (it needs a `dist/` folder holding
+`ninlil-linux-amd64` and `ninlil-linux-arm64` and the `DEB_VERSION`, `RPM_VERSION` and `RPM_RELEASE`
+variables) and run `.forgejo/scripts/linux-packages-smoke.sh dist`.
 
 **Pins.** Every base image is `name:tag@sha256:<multi-architecture index digest>` (the
 [`Dockerfile`](./Dockerfile), [`docker/ci.Dockerfile`](./docker/ci.Dockerfile),
@@ -1371,7 +1789,94 @@ Debian version from Ubuntu `noble`, `noble-updates` and `noble-security` (and Mi
 `noble` repository for `libmsquic`). The Microsoft repository package that the CI toolchain image
 installs is pinned by SHA-256 in `docker/ci.Dockerfile` and bumped the same way.
 
-## Contributing: adding a feature
+## Contributing
+
+This section is for people who change Ninlil. It holds the development commands, the branch model,
+the conventions and two worked examples. [`AGENTS.md`](./AGENTS.md) is the guide for AI agents and
+a fast orientation for people.
+
+### Development
+
+#### Backend (`src/dotnet/`)
+
+```bash
+dotnet tool restore                      # one-time: restores dotnet-ef, csharpier, reportgenerator
+dotnet restore Ninlil.slnx
+dotnet build Ninlil.slnx -c Release      # should build with 0 warnings
+dotnet csharpier check .                 # formatting gate — CI enforces this
+dotnet test Ninlil.slnx -c Release       # the full xUnit test suite
+```
+
+Run `dotnet csharpier format .` before committing — CI runs `dotnet csharpier check .` and will
+fail on anything that doesn't already match.
+
+#### Frontend (`src/angular/`)
+
+```bash
+cd src/angular
+npm install
+npm run build          # regenerates the typed API client from the committed OpenAPI snapshot, then builds
+npm run lint            # eslint
+npm run format:check    # prettier
+npm test                # Jasmine/Karma unit tests (needs Chromium/Chrome; set CHROME_BIN if it
+                         # is not found automatically, e.g. CHROME_BIN=/usr/bin/chromium)
+```
+
+`npm run fetch:openapi` re-fetches `openapi/swagger.json` from a locally running instance of the
+backend (adjust the URL in `package.json` to match how you're running it) whenever the backend's
+own REST surface changes; the committed snapshot is what every `npm run build` actually codegens
+against (via the automatic `prebuild` step, `npm run generate:api`), so this is a deliberate,
+separate, manual step, not something that happens automatically. **Building this workspace
+requires a Java runtime** on top of Node/npm, since the generator wraps a Java-based tool.
+
+`OpenApiSnapshotTests` in `Ninlil.Web.Tests` fails whenever the snapshot no longer matches the
+controllers. To regenerate it without a running backend, run this from the repository root, then
+`npm run generate:api` here:
+
+```bash
+NINLIL_UPDATE_OPENAPI_SNAPSHOT=true dotnet test src/dotnet/tests/Ninlil.Web.Tests \
+  --filter FullyQualifiedName~OpenApiSnapshotTests
+```
+
+#### Standard verification loop
+
+Before considering a change done, both sides of the codebase have the same shape of gate:
+
+1. `dotnet build Ninlil.slnx` → fix errors → `dotnet csharpier format .` →
+   `dotnet test Ninlil.slnx` (must stay green) → re-run any relevant scratch smoke test for
+   anything touching runtime wiring (DI composition, migrations, event delivery, real
+   sockets/TLS/HTTP) — a passing build is not evidence anything works at runtime.
+2. For Angular: `npm run lint` / `npm run format:check` / `npm run build` / `npm test`, all clean.
+
+The pipeline runs exactly these checks, each in a throwaway container of the matching toolchain
+(see [The pipeline](#the-pipeline)). The pipeline also lints its own scripts and workflows and
+runs their self-tests; run the same check locally, before pushing a change under `.forgejo/`,
+`docker/` or `src/script/`, with `./.forgejo/scripts/in-container.sh lint ./.forgejo/scripts/lint.sh`.
+A few .NET tests start their own database
+containers through Testcontainers, so the .NET suite needs Docker running; they carry the
+`RequiresDocker` test category, which the pull-request build excludes (see
+[The pipeline](#the-pipeline)). Every test listener,
+Karma's included, takes a port the operating system reports as free, never a fixed or well-known
+one, and neither suite needs root, so both can run on a machine that already hosts DNS, DHCP,
+web, or database services.
+
+#### Publishing the binaries
+
+[`.forgejo/scripts/publish-binary.sh`](./.forgejo/scripts/publish-binary.sh) builds one
+self-contained, single-file executable — the same command the pipeline runs — with the admin
+console embedded, so build the console into `Ninlil.Web/wwwroot` first:
+
+```bash
+.forgejo/scripts/build-admin-console.sh               # npm ci + npm run build, then into wwwroot
+.forgejo/scripts/publish-binary.sh linux-amd64 dist   # or linux-arm64, macos-amd64, macos-arm64, windows-amd64
+```
+
+[`.forgejo/scripts/pack-packages.sh`](./.forgejo/scripts/pack-packages.sh) builds the NuGet
+packages the same way: `.forgejo/scripts/pack-packages.sh 'Ninlil.*' packages`.
+
+Each script uses whatever Node.js or .NET SDK is installed. To use the pipeline's own toolchains
+instead, needing nothing but Docker, prefix it with `.forgejo/scripts/in-container.sh node` or
+`.forgejo/scripts/in-container.sh dotnet`.
 
 ### Branches
 
@@ -1516,28 +2021,17 @@ The general shape:
 7. Run `npm run lint` / `npm run format:check` / `npm run build` / `npm test` before considering
    the page done.
 
-## Project layout
+### Project layout
 
-```
-src/dotnet/src/     .NET solution — DNS/DHCP engines, storage, identity, REST host, one project per concern
-src/dotnet/tests/   xUnit test projects, one per src/ project
-src/angular/         Angular 22 admin console — a separate npm workspace, sibling to src/dotnet/
-Ninlil.slnx          Solution file (the newer XML-based .slnx format)
-NOTICE.md             Clean-room statement and third-party dependency licenses
-ENVIRONMENT.md         Complete, generated reference of every NINLIL_ environment variable
-Dockerfile              Every build output: the container image, the binaries, and the test stages
-docker/                 Build-time helper scripts for the container image
-docker-compose.yml      Example deployment: Ninlil + PostgreSQL, with a host-networking DHCP/RA variant
-.forgejo/               CI/CD workflows and the scripts they run (versioning, releases, cleanup)
-src/archlinux/          The ninlil, ninlil-git-stable, and ninlil-git-next Arch Linux packages
-src/linux-packages/     The Deb and RPM package definition (nFPM) and its install scripts
-src/script/             Operational scripts: database helpers and a systemd unit
-```
-
-The reasoning behind a specific design choice lives with the code: every class and public member
-carries a doc comment explaining *why* it is shaped the way it is.
+[`AGENTS.md`](./AGENTS.md#repository-layout) holds the table of every folder and root file, with the
+role of each .NET project family. The files you meet first in the repository root are this
+`README.md`, [`ENVIRONMENT.md`](./ENVIRONMENT.md), [`NOTICE.md`](./NOTICE.md), [`LICENSE`](./LICENSE),
+`AGENTS.md`, the solution file `Ninlil.slnx`, the [`Dockerfile`](./Dockerfile) and the example
+[`docker-compose.yml`](./docker-compose.yml). The reasoning behind a design choice lives with the
+code: every class and public member carries a doc comment explaining why it is shaped the way it is.
 
 ## License
 
 MIT — see [`LICENSE`](./LICENSE). See [`NOTICE.md`](./NOTICE.md) for the clean-room statement and
 third-party dependency license table.
+
