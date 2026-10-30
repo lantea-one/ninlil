@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Identity.Authentication;
 
 // Define our namespace.
 namespace Ninlil.Dns.Identity.Store;
@@ -14,8 +15,15 @@ namespace Ninlil.Dns.Identity.Store;
 /// </summary>
 /// <param name="roleRepository">The repository this store reads roles from and writes roles to.</param>
 /// <param name="unitOfWork">The unit of work this store commits its changes through.</param>
-public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unitOfWork)
-    : IRoleClaimStore<RoleEntity>
+/// <param name="accessTokenRevalidator">
+///     Told after every change to a role or its permissions, so the change applies to the access
+///     tokens of the role's members on their next request.
+/// </param>
+public class NinlilDnsRoleStore(
+    IRoleRepository roleRepository,
+    IUnitOfWork unitOfWork,
+    IAccessTokenRevalidator accessTokenRevalidator
+) : IRoleClaimStore<RoleEntity>
 {
     /// <inheritdoc />
     public Task<string> GetRoleIdAsync(RoleEntity role, CancellationToken stoppingToken) =>
@@ -70,6 +78,7 @@ public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unit
         // saves those.
         roleRepository.Update(role);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        accessTokenRevalidator.Invalidate();
 
         return IdentityResult.Success;
     }
@@ -79,6 +88,7 @@ public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unit
     {
         roleRepository.Remove(role);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        accessTokenRevalidator.Invalidate();
 
         return IdentityResult.Success;
     }
@@ -107,12 +117,22 @@ public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unit
     }
 
     /// <inheritdoc />
-    public Task AddClaimAsync(RoleEntity role, Claim claim, CancellationToken stoppingToken) =>
-        roleRepository.AddClaimAsync(role.Id, claim.Type, claim.Value, stoppingToken);
+    public async Task AddClaimAsync(RoleEntity role, Claim claim, CancellationToken stoppingToken)
+    {
+        await roleRepository.AddClaimAsync(role.Id, claim.Type, claim.Value, stoppingToken);
+        accessTokenRevalidator.Invalidate();
+    }
 
     /// <inheritdoc />
-    public Task RemoveClaimAsync(RoleEntity role, Claim claim, CancellationToken stoppingToken) =>
-        roleRepository.RemoveClaimAsync(role.Id, claim.Type, claim.Value, stoppingToken);
+    public async Task RemoveClaimAsync(
+        RoleEntity role,
+        Claim claim,
+        CancellationToken stoppingToken
+    )
+    {
+        await roleRepository.RemoveClaimAsync(role.Id, claim.Type, claim.Value, stoppingToken);
+        accessTokenRevalidator.Invalidate();
+    }
 
     /// <inheritdoc />
     public void Dispose()

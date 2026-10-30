@@ -28,6 +28,7 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
     private readonly RoleRepository _repository;
     private readonly EntityFrameworkUnitOfWork _unitOfWork;
     private readonly RoleClusterConfigSyncApplier _applier;
+    private readonly CountingAccessTokenRevalidator _revalidator = new();
 
     private static readonly Guid NodeA = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
     private static readonly Guid NodeB = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000000");
@@ -46,7 +47,8 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
             _repository,
             new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
-            NullLogger<RoleClusterConfigSyncApplier>.Instance
+            NullLogger<RoleClusterConfigSyncApplier>.Instance,
+            _revalidator
         );
     }
 
@@ -71,6 +73,24 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
                 permissions ?? []
             )
         );
+
+    [Fact]
+    public async Task ApplyAsyncFlushesTheAccessTokenCacheSoAPeersPermissionChangeAppliesToIssuedTokens()
+    {
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                RoleClusterConfigSyncApplier.EntityTypeName,
+                Guid.NewGuid().ToString(),
+                IsDeleted: false,
+                Payload(permissions: ["zones:read"]),
+                DateTimeOffset.UtcNow,
+                NodeA
+            ),
+            CancellationToken.None
+        );
+
+        Assert.Equal(1, _revalidator.InvalidateCount);
+    }
 
     [Fact]
     public async Task ApplyAsyncCreatesANewLocalRoleWhenNoneExistsYetForTheEntityKey()

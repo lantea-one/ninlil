@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
@@ -84,6 +85,11 @@ public static class ServiceCollectionAuthenticationExtension
             configuration.GetSection(OidcSsoOptions.SectionName).Get<OidcSsoOptions>()
             ?? new OidcSsoOptions();
 
+        // Also registered by AddNinlilDnsIdentity; this keeps the JWT event below working for a
+        // host that registers only the authentication schemes.
+        instance.TryAddSingleton(TimeProvider.System);
+        instance.TryAddSingleton<IAccessTokenRevalidator, AccessTokenRevalidator>();
+
         AuthenticationBuilder authenticationBuilder = instance
             .AddAuthentication(options =>
             {
@@ -126,6 +132,29 @@ public static class ServiceCollectionAuthenticationExtension
                     IssuerSigningKey = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(jwtOptions.SigningKey)
                     ),
+                };
+
+                // A valid signature only proves Ninlil issued the token. The account may have
+                // been disabled or lost a permission since, and that must apply to the token
+                // at once (see AccessTokenRevalidator). Program.cs adds its own handler for the
+                // message-received event and keeps this one.
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        IAccessTokenRevalidator revalidator =
+                            context.HttpContext.RequestServices.GetRequiredService<IAccessTokenRevalidator>();
+
+                        if (
+                            !await revalidator.RevalidateAsync(
+                                context.Principal,
+                                context.HttpContext.RequestAborted
+                            )
+                        )
+                            context.Fail(
+                                "The token's account no longer exists, is disabled or is locked out."
+                            );
+                    },
                 };
             })
             .AddScheme<ApiTokenAuthenticationSchemeOptions, ApiTokenAuthenticationHandler>(

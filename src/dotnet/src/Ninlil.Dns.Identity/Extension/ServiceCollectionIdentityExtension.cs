@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Identity.Claims;
 using Ninlil.Dns.Identity.Email;
 using Ninlil.Dns.Identity.Options;
@@ -93,6 +95,11 @@ public static class ServiceCollectionIdentityExtension
             configuration.GetSection(EmailSenderOptions.SectionName)
         );
         instance.Configure<OidcSsoOptions>(configuration.GetSection(OidcSsoOptions.SectionName));
+
+        // One cache for the whole process: the stores flush it and the JWT bearer scheme reads it
+        // (see AccessTokenRevalidator).
+        instance.TryAddSingleton(TimeProvider.System);
+        instance.TryAddSingleton<IAccessTokenRevalidator, AccessTokenRevalidator>();
 
         instance.AddScoped<IUserClaimsBuilder, UserClaimsBuilder>();
         instance.AddScoped<IJwtTokenService, JwtTokenService>();

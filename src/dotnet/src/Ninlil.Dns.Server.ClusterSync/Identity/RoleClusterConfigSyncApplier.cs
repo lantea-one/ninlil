@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
+using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Server.ClusterSync.Shared;
 using Ninlil.Dns.Server.Core.ClusterSync;
 
@@ -20,12 +21,17 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 /// <param name="roleRepository">The repository this applier reads and writes roles through.</param>
 /// <param name="tombstoneRepository">The repository deletions are remembered through (see <see cref="ClusterSyncTombstones" />).</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
+/// <param name="accessTokenRevalidator">
+///     Told after an envelope is applied, so an account, role or permission change from a peer
+///     applies to access tokens already issued on this node on their next request.
+/// </param>
 /// <param name="logger">The logger a malformed envelope or a detected collision is recorded to.</param>
 public class RoleClusterConfigSyncApplier(
     IRoleRepository roleRepository,
     IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
-    ILogger<RoleClusterConfigSyncApplier> logger
+    ILogger<RoleClusterConfigSyncApplier> logger,
+    IAccessTokenRevalidator accessTokenRevalidator
 ) : IClusterConfigSyncApplier
 {
     /// <summary>
@@ -38,6 +44,26 @@ public class RoleClusterConfigSyncApplier(
 
     /// <inheritdoc />
     public async Task ApplyAsync(
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    )
+    {
+        try
+        {
+            await ApplyCoreAsync(envelope, stoppingToken);
+        }
+        finally
+        {
+            // Also after a failure part-way: some of the change may have been saved.
+            accessTokenRevalidator.Invalidate();
+        }
+    }
+
+    /// <summary>
+    ///     This method applies one envelope; see <see cref="ApplyAsync" />, which flushes the
+    ///     access-token cache around it.
+    /// </summary>
+    private async Task ApplyCoreAsync(
         ClusterConfigSyncEnvelope envelope,
         CancellationToken stoppingToken
     )

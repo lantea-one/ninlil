@@ -34,6 +34,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
     private readonly IDataProtectionProvider _dataProtectionProvider =
         new EphemeralDataProtectionProvider();
     private readonly UserClusterConfigSyncApplier _applier;
+    private readonly CountingAccessTokenRevalidator _revalidator = new();
 
     private static readonly Guid NodeA = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
     private static readonly Guid NodeB = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000000");
@@ -55,7 +56,8 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
             new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             _dataProtectionProvider,
-            NullLogger<UserClusterConfigSyncApplier>.Instance
+            NullLogger<UserClusterConfigSyncApplier>.Instance,
+            _revalidator
         );
     }
 
@@ -102,6 +104,24 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
                 permissions ?? []
             )
         );
+
+    [Fact]
+    public async Task ApplyAsyncFlushesTheAccessTokenCacheSoAPeersChangeAppliesToIssuedTokens()
+    {
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                Guid.NewGuid().ToString(),
+                IsDeleted: false,
+                Payload(permissions: ["zones:read"]),
+                DateTimeOffset.UtcNow,
+                NodeA
+            ),
+            CancellationToken.None
+        );
+
+        Assert.Equal(1, _revalidator.InvalidateCount);
+    }
 
     [Fact]
     public async Task ApplyAsyncCreatesANewLocalUserWhenNoneExistsYetForTheEntityKey()

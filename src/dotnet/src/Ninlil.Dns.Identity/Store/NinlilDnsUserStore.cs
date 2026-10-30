@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Identity.Authentication;
 
 // Define our namespace.
 namespace Ninlil.Dns.Identity.Store;
@@ -25,11 +26,16 @@ namespace Ninlil.Dns.Identity.Store;
 /// <param name="dataProtectionProvider">
 ///     The provider used to encrypt a user's TOTP authenticator key before it is persisted.
 /// </param>
+/// <param name="accessTokenRevalidator">
+///     Told after every change that can alter what an issued access token may do (the account,
+///     its roles and its permission claims), so the change applies on the next request.
+/// </param>
 public class NinlilDnsUserStore(
     IUserRepository userRepository,
     IRoleRepository roleRepository,
     IUnitOfWork unitOfWork,
-    IDataProtectionProvider dataProtectionProvider
+    IDataProtectionProvider dataProtectionProvider,
+    IAccessTokenRevalidator accessTokenRevalidator
 )
     : IUserStore<UserEntity>,
         IUserPasswordStore<UserEntity>,
@@ -142,6 +148,7 @@ public class NinlilDnsUserStore(
         // key), so this saves those too.
         userRepository.Update(user);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        accessTokenRevalidator.Invalidate();
 
         return IdentityResult.Success;
     }
@@ -151,6 +158,7 @@ public class NinlilDnsUserStore(
     {
         userRepository.Remove(user);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        accessTokenRevalidator.Invalidate();
 
         return IdentityResult.Success;
     }
@@ -394,25 +402,29 @@ public class NinlilDnsUserStore(
     }
 
     /// <inheritdoc />
-    public Task AddClaimsAsync(
+    public async Task AddClaimsAsync(
         UserEntity user,
         IEnumerable<Claim> claims,
         CancellationToken stoppingToken
-    ) =>
-        userRepository.AddClaimsAsync(
+    )
+    {
+        await userRepository.AddClaimsAsync(
             user.Id,
             claims.Select(claim => (claim.Type, claim.Value)),
             stoppingToken
         );
+        accessTokenRevalidator.Invalidate();
+    }
 
     /// <inheritdoc />
-    public Task ReplaceClaimAsync(
+    public async Task ReplaceClaimAsync(
         UserEntity user,
         Claim claim,
         Claim newClaim,
         CancellationToken stoppingToken
-    ) =>
-        userRepository.ReplaceClaimAsync(
+    )
+    {
+        await userRepository.ReplaceClaimAsync(
             user.Id,
             claim.Type,
             claim.Value,
@@ -420,18 +432,23 @@ public class NinlilDnsUserStore(
             newClaim.Value,
             stoppingToken
         );
+        accessTokenRevalidator.Invalidate();
+    }
 
     /// <inheritdoc />
-    public Task RemoveClaimsAsync(
+    public async Task RemoveClaimsAsync(
         UserEntity user,
         IEnumerable<Claim> claims,
         CancellationToken stoppingToken
-    ) =>
-        userRepository.RemoveClaimsAsync(
+    )
+    {
+        await userRepository.RemoveClaimsAsync(
             user.Id,
             claims.Select(claim => (claim.Type, claim.Value)),
             stoppingToken
         );
+        accessTokenRevalidator.Invalidate();
+    }
 
     /// <inheritdoc />
     public async Task<IList<UserEntity>> GetUsersForClaimAsync(
@@ -463,6 +480,7 @@ public class NinlilDnsUserStore(
             );
 
         await userRepository.AddToRoleAsync(user.Id, role.Id, stoppingToken);
+        accessTokenRevalidator.Invalidate();
     }
 
     /// <inheritdoc />
@@ -481,6 +499,7 @@ public class NinlilDnsUserStore(
             return;
 
         await userRepository.RemoveFromRoleAsync(user.Id, role.Id, stoppingToken);
+        accessTokenRevalidator.Invalidate();
     }
 
     /// <inheritdoc />
