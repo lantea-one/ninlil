@@ -2352,7 +2352,7 @@ Three features change what a client gets for a query. All three apply to every t
   list or an allow list. A list holds domain names, or addresses (see "Behaviour worth knowing").
   Lists come from you (**local** lists) or from a web address that Ninlil fetches on a schedule
   (**subscribed** lists). A list does nothing until you assign it to a **client group** or to a
-  single **client**.
+  single **client**. The one exception is a blocked service switched on for everyone (step 14).
 - **Rewrites** answer a name with an address or another name that you choose, instead of the real
   answer. Use one for a name on your network or to send a search engine to its safe-search address.
 - **Parental controls** are per-client and per-group pauses and time-of-day schedules, the blocked
@@ -2546,16 +2546,22 @@ lists, schedules and rewrites.
 **Block a service or force Safe Search.**
 
 14. The blocked services catalog turns a named service on or off with one call. Enabling it creates
-    a subscribed list from a public list file. Always name the group or client to block it for:
-    a call without `clientGroupId` or `clientId` creates the list but assigns it to nobody.
+    a subscribed list from a public list file. A call without `clientGroupId` or `clientId` blocks
+    the service for every client, including one that matches no group. A call with one of them
+    blocks it for that group or client only. The two add up: a group or client cannot unblock a
+    service that is blocked for everyone, except through an allow list for the same name (the
+    `precedence` setting of step 8 decides).
 
     ```bash
     curl -k https://127.0.0.1:18443/api/blocked-services -H 'Authorization: Bearer <token>'
+    curl -k -X POST "https://127.0.0.1:18443/api/blocked-services/tiktok" -H 'Authorization: Bearer <token>'
     curl -k -X POST "https://127.0.0.1:18443/api/blocked-services/tiktok?clientGroupId=<group-id>" -H 'Authorization: Bearer <token>'
     ```
 
-    The first call lists the catalog keys. In the console: **Presets & Settings**, **Blocked
-    Services**.
+    The first call lists the catalog keys. The second blocks TikTok for every client, the third for
+    one group. `DELETE` with the same query turns the same toggle off. Turning the toggle for
+    everyone off keeps the block of any group or client that still has one. In the console:
+    **Presets & Settings**, **Blocked Services**.
 15. Safe Search makes a search engine's own safe-search address the answer for its search host
     names. Enabling an entry turns rewrites on if they were off:
 
@@ -2651,7 +2657,8 @@ lists, schedules and rewrites.
   all together. It matches a group by a network row that contains its address, by a ClientID row,
   or because the client is registered into that group. The default group applies only when no
   other group matches. The lists assigned to the registered client itself are added on top,
-  whether or not it matched a group.
+  whether or not it matched a group. A list that applies to every client, which a blocked
+  service switched on without a target is, is added for every client.
 - **Entry kinds.** A plain domain entry blocks the name and every name below it, so
   `example.com` also blocks `www.example.com`. A rewrite is different and matches one exact name.
   A wildcard or regex match that takes longer than 250 milliseconds counts as no match and is
@@ -2685,7 +2692,8 @@ lists, schedules and rewrites.
   recursion. Ninlil looks the target up once, as a normal query, and adds its records to the
   answer. A client that is not permitted recursion gets the CNAME alone, and so does a CNAME query.
 - **What replicates in a cluster.** Filter lists, blocked service lists, global rewrites and the
-  global Safe Search rewrites replicate to the other nodes. The assignment of a list to a group
+  global Safe Search rewrites replicate to the other nodes, and so does the setting that makes a
+  blocked service apply to every client. The assignment of a list to a group
   or client, and a rewrite scoped to a client or group, stay on the node where you made them,
   because clients and groups exist only there. Turning rewrites on through Safe Search turns them on
   for every node. See also [Clustering, events and webhooks](#clustering-events-and-webhooks).
@@ -2707,7 +2715,8 @@ lists, schedules and rewrites.
   not get the default group's lists.
 - *A subscribed list shows no `lastFetchedAtUtc`.* Wait a minute and read the log. A fetch
   warning names the reason, such as a refused connection, a status code or the 128 MiB limit.
-- *A blocked service blocks nothing.* It is not assigned. Repeat step 14 with a target.
+- *A blocked service blocks nothing.* Filtering is off, or its list has not been fetched yet.
+  Turn filtering on (step 1) and read `lastFetchedAtUtc` of the list in `/api/filter-lists`.
 - *`400` on an entry.* The pattern does not compile, or the kind does not fit the list. Use the
   pattern preview in step 4.
 - *A rewrite is ignored.* Rewrites are off (`GET /api/rewrite-settings`), a more specific rewrite
