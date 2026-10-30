@@ -430,7 +430,8 @@ public static class DenialOfExistenceValidator
         if (entries.Count == 0)
             return false;
 
-        // RFC 5155 §8.2: all NSEC3 records of one proof must share their parameters.
+        // RFC 5155 §8.2 lets a validator treat NSEC3 records with different parameters as bogus;
+        // this one refuses a proof whose records do not share their parameters.
         Nsec3RecordData first = entries[0].Data;
 
         if (
@@ -494,8 +495,8 @@ public static class DenialOfExistenceValidator
     /// <summary>
     ///     This method derives the closest encloser of a name from the NSEC that covers it: the
     ///     longer of the name's common suffixes with the NSEC's owner and with its next name
-    ///     (RFC 4035 §5.4). The name's closest encloser is its longest ancestor that is also an
-    ///     ancestor of, or equal to, one end of the covering range.
+    ///     (RFC 4035 §5.4). The name's closest encloser (RFC 4592 §3.3.1) is its longest ancestor
+    ///     that is also an ancestor of, or equal to, one end of the covering range.
     /// </summary>
     private static DnsName DeriveClosestEncloser(
         DnsName name,

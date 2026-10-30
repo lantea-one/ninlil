@@ -640,7 +640,7 @@ public sealed class DnssecValidator(
 
     /// <summary>
     ///     This method builds the root's trust: its DNSKEY RRset must be signed by a key that
-    ///     matches a trust anchor (RFC 4035 §5.2, RFC 5011 §4).
+    ///     matches a trust anchor (RFC 4035 §5.3.1, RFC 5011 §4).
     /// </summary>
     private async Task<ZoneTrust> BuildRootTrustAsync(ValidationContext context)
     {
@@ -787,7 +787,8 @@ public sealed class DnssecValidator(
 
             case RecursiveResolutionStatusEnum.NxDomain:
                 // A name that holds a zone, or has records below it, exists: NXDOMAIN for its DS
-                // (RFC 4035 §3.1.4.1) contradicts the data under test.
+                // contradicts the data under test; the DS RRset sits on the parent side of the cut
+                // (RFC 4035 §3.1.4.1).
                 return new DelegationProbe(
                     ZoneTrust.Bogus($"'{parent}' answered NXDOMAIN for the DS of '{name}'."),
                     false

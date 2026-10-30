@@ -221,7 +221,8 @@ public static class RrsetSignatureVerifier
     ///     This method finds the records in a DNSKEY RRset that match the parent's DS RRset for
     ///     the same name, with key tag, algorithm and digest agreeing (RFC 4035 §5.2). DS records
     ///     with an unsupported digest type or algorithm are ignored. A SHA-1 DS is also ignored
-    ///     when a SHA-256 or SHA-384 DS exists for the same key tag and algorithm (RFC 4509 §3).
+    ///     when a SHA-256 or SHA-384 DS exists for the same key tag and algorithm (RFC 4509 §3 for
+    ///     SHA-256, RFC 6605 §2 for SHA-384).
     /// </summary>
     /// <param name="dnsKeyRecords">The child zone's DNSKEY RRset.</param>
     /// <param name="ownerName">The DNSKEY RRset's owner name, the child zone's apex.</param>
@@ -235,8 +236,9 @@ public static class RrsetSignatureVerifier
     {
         List<DsRecordData> dsList = DecodeSupportedDs(dsRecords);
 
-        // RFC 4509 §3: a validator that has the stronger digest must not accept the key on the
-        // SHA-1 digest alone.
+        // RFC 4509 §3 says a validator SHOULD ignore a SHA-1 DS when a SHA-256 DS is present, and
+        // RFC 6605 §2 defines the SHA-384 digest the way RFC 4509 defines SHA-256. This validator
+        // always ignores the SHA-1 DS in that case, so a key never matches on the SHA-1 digest alone.
         dsList.RemoveAll(ds =>
             ds.DigestType == 1
             && dsList.Any(other =>
