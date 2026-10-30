@@ -81,6 +81,22 @@ describe('BlockedServicesComponent', () => {
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
+  it('says on the global page that a block applies to every client', async () => {
+    const fixture = await createComponent();
+
+    expect(fixture.nativeElement.querySelector('.global-note')?.textContent).toContain(
+      'for every client',
+    );
+  });
+
+  it('does not show the global note on a client panel', async () => {
+    const fixture = await createComponent();
+    fixture.componentRef.setInput('clientId', 'client-1');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.global-note')).toBeNull();
+  });
+
   it('toggle() enables a disabled entry', async () => {
     const fixture = await createComponent();
     apiSpy.apiBlockedServicesKeyPost.and.returnValue(

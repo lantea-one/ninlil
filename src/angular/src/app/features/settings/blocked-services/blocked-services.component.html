@@ -13,6 +13,13 @@
   for the real domain data behind every entry below.
 </p>
 
+@if (!clientId && !clientGroupId) {
+  <p class="global-note">
+    Blocking a service here blocks it for every client. A client or client group can block more on
+    its own page, but cannot unblock a service that is blocked here.
+  </p>
+}
+
 @if (loading()) {
   <c-spinner class="loading-spinner" />
 } @else {

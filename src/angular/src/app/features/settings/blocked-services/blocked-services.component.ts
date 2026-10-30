@@ -26,8 +26,8 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  *
  * <p>The client and client group forms embed it as a panel with {@link clientId} or
  * {@link clientGroupId} set (at most one), which scopes every toggle to that target; see
- * `BlockedServicesController` for the backend rules. On the settings page neither is set and the
- * toggles act globally.
+ * `BlockedServicesController` for the backend rules. On the settings page neither is set, the
+ * toggles block the service for every client, and the page says so.
  */
 @Component({
   selector: 'app-blocked-services',
