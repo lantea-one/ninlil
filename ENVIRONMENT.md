@@ -193,10 +193,12 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 ## DNS transports
 
 Each transport beyond plain UDP/TCP is off by default. `Certificate*` settings appear once per
-TLS-based transport (DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC), each with its own independent
-listener configuration. While their PFX paths are empty, they all load the self-signed
-certificate Ninlil generates on first run and saves at the same default state path, so they share
-one file. An ACME certificate reaches a transport only when you set its PFX path to that
+TLS-based transport (DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC). DNS-over-TLS and DNS-over-QUIC
+each have an independent listener configuration. The DNS-over-HTTPS `Port` and `Certificate*`
+settings have no effect: it is served by the web listener, on its port and certificate. While
+their PFX paths are empty, DNS-over-TLS and DNS-over-QUIC load the self-signed certificate Ninlil
+generates on first run and saves at the default state path, so they share one file. An ACME
+certificate reaches a transport only when you set its PFX path to that
 certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 
 | Variable | Controls | Default |
@@ -211,20 +213,20 @@ certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_MAX_CONCURRENT_CONNECTIONS` | Max simultaneous DoT connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_IDLE_TIMEOUT` | Idle timeout before an inactive DoT connection is closed. | `00:00:30` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH` | Path to a PFX certificate file for DoT. Leave empty to use the self-signed certificate saved at the state path below. To use an ACME certificate, set this to its file in the ACME certificate directory. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override (`None` = OS/runtime default negotiation). | `None` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | How often the certificate file's mtime is polled for an ACME-renewed replacement. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_PROXY_PROTOCOL_ENABLE` | Whether this DoT listener accepts a PROXY protocol (v1/v2) preamble from a trusted upstream load balancer. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_ENABLE` | Whether DNS-over-HTTPS (RFC 8484) is enabled. | `false` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT` | The DoH listen port (served from the same combined Kestrel host). | `443` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT` | No effect in Ninlil: DNS-over-HTTPS is served by the web listener, on its port and certificate (`NINLIL_DNS_SERVER_WEB_HTTPS_PORT`). | `443` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PATH` | The URL path DoH queries are served from. | `/dns-query` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_MAX_MESSAGE_SIZE_BYTES` | Maximum accepted DoH request/response message size. | `65535` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for DoH (if served on a dedicated listener rather than the main Kestrel one). | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override. | `None` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `data/protocol-tls-certificate.pfx` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `None` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_ENABLE` | Whether DNS-over-QUIC (RFC 9250) is enabled. Needs `libmsquic` — included in the Docker image; install it yourself on a bare-metal host. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_PORT` | The DoQ listen port. | `853` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
@@ -232,7 +234,7 @@ certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_BIDIRECTIONAL_STREAMS` | Max concurrent bidirectional QUIC streams per connection. | `100` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_CONNECTIONS` | Max concurrent QUIC connections; one over the limit is closed with `DOQ_EXCESSIVE_LOAD`. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for DoQ. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override. | `None` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
@@ -542,7 +544,7 @@ appearance/branding.
 | `NINLIL_DNS_SERVER_WEB_HTTPS_PORT` | The HTTPS port serving the REST API, SignalR hub, admin console, and DNS-over-HTTPS. | `443` |
 | `NINLIL_DNS_SERVER_WEB_LISTEN_ADDRESSES` | Comma-separated IP addresses the HTTP and HTTPS ports listen on, and so the admin console, REST API and DNS-over-HTTPS (for example `192.168.1.10`); empty listens on every address. An address this host doesn't have is skipped; if none can be used, the listener falls back to loopback so the console can't be locked out. Applies on restart. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for the web listener. | *(empty)* |
-| `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
+| `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. Every TLS-based DNS transport has the same default path, so they share one certificate while their PFX paths are empty. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override. | `None` |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
