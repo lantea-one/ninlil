@@ -40,7 +40,7 @@ export interface BlockedServicesServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every catalog entry with whether it is enabled: globally by default, or for the given &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; (not both, which returns 400). Requires &#x60;filterlists:read&#x60;.
+     * This action lists every catalog entry with whether it is enabled: for every client by default, or for the given &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; (not both, which returns 400). Requires &#x60;filterlists:read&#x60;.
      * 
      * @endpoint get /api/blocked-services
 * @param requestParameters
@@ -48,7 +48,7 @@ export interface BlockedServicesServiceInterface {
     apiBlockedServicesGet(requestParameters: ApiBlockedServicesGetRequestParams, extraHttpRequestParams?: any): Observable<Array<BlockedServiceDetail>>;
 
     /**
-     * This action disables one catalog entry. Without a target it deletes the entry\&#39;s managed &#x60;DnsFilterListEntity&#x60;, its entries and every client and client-group assignment that refers to it (as &#x60;DELETE /api/filter-lists/{id}&#x60; does), and tells the cluster peers to delete the list too. With a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; it removes only that target\&#39;s assignment, which stays on this node, and leaves the list and every other target alone, so unblocking a service for one device does not unblock it for everyone. Having nothing to remove is not an error. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
+     * This action disables one catalog entry. Without a target it clears &#x60;DnsFilterListEntity.AppliesToAllClients&#x60;, so the service is no longer blocked for every client, and tells the cluster peers. The managed &#x60;DnsFilterListEntity&#x60; stays while a client or client group is still assigned to it; when none is, the action deletes the list and its entries (as &#x60;DELETE /api/filter-lists/{id}&#x60; does) and tells the peers to delete it. With a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; it removes only that target\&#39;s assignment, which stays on this node, and leaves the list and every other target alone, so unblocking a service for one device does not unblock it for everyone. Having nothing to remove is not an error. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint delete /api/blocked-services/{key}
 * @param requestParameters
@@ -56,7 +56,7 @@ export interface BlockedServicesServiceInterface {
     apiBlockedServicesKeyDelete(requestParameters: ApiBlockedServicesKeyDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action enables one catalog entry: it creates the entry\&#39;s managed &#x60;DnsFilterListEntity&#x60; if none exists or re-enables a disabled one, and, with a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60;, also assigns the list to that target if it is not already. Enabling an enabled entry just returns its state. Returns 400 when both targets are given or the target does not exist, and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
+     * This action enables one catalog entry: it creates the entry\&#39;s managed &#x60;DnsFilterListEntity&#x60; if none exists or re-enables a disabled one, and, with a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60;, also assigns the list to that target if it is not already. Without a target it marks the list as applying to every client. Enabling an enabled entry just returns its state. Returns 400 when both targets are given or the target does not exist, and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint post /api/blocked-services/{key}
 * @param requestParameters

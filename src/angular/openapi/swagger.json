@@ -1060,7 +1060,7 @@
         "tags": [
           "BlockedServices"
         ],
-        "summary": "This action lists every catalog entry with whether it is enabled: globally by default,\nor for the given `clientId` or `clientGroupId` (not both, which returns 400).\nRequires `filterlists:read`.",
+        "summary": "This action lists every catalog entry with whether it is enabled: for every client by\ndefault, or for the given `clientId` or `clientGroupId` (not both, which\nreturns 400).\nRequires `filterlists:read`.",
         "operationId": "apiBlockedServicesGet",
         "parameters": [
           {
@@ -1120,7 +1120,7 @@
         "tags": [
           "BlockedServices"
         ],
-        "summary": "This action enables one catalog entry: it creates the entry's managed\n`DnsFilterListEntity` if none exists or re-enables a disabled one, and,\nwith a `clientId` or `clientGroupId`, also assigns the list to that target if\nit is not already. Enabling an enabled entry just returns its state. Returns 400 when\nboth targets are given or the target does not exist, and 404 for an unknown key.\nRequires `filterlists:write`.",
+        "summary": "This action enables one catalog entry: it creates the entry's managed\n`DnsFilterListEntity` if none exists or re-enables a disabled one, and,\nwith a `clientId` or `clientGroupId`, also assigns the list to that target if\nit is not already. Without a target it marks the list as applying to every client.\nEnabling an enabled entry just returns its state. Returns 400 when\nboth targets are given or the target does not exist, and 404 for an unknown key.\nRequires `filterlists:write`.",
         "operationId": "apiBlockedServicesKeyPost",
         "parameters": [
           {
@@ -1173,7 +1173,7 @@
         "tags": [
           "BlockedServices"
         ],
-        "summary": "This action disables one catalog entry. Without a target it deletes the entry's managed\n`DnsFilterListEntity`, its entries and every client and client-group\nassignment that refers to it (as `DELETE /api/filter-lists/{id}` does), and\ntells the cluster peers to delete the list too. With a `clientId` or\n`clientGroupId` it removes only that target's assignment, which stays on this node,\nand leaves the list and every other target alone, so unblocking a service for one\ndevice does not unblock it for everyone. Having nothing to remove is not\nan error. Returns 400 when both targets are given and 404 for an unknown key. Requires\n`filterlists:write`.",
+        "summary": "This action disables one catalog entry. Without a target it clears\n`DnsFilterListEntity.AppliesToAllClients`, so the service is no longer\nblocked for every client, and tells the cluster peers. The managed\n`DnsFilterListEntity` stays while a client or client group is still\nassigned to it; when none is, the action deletes the list and its entries (as\n`DELETE /api/filter-lists/{id}` does) and tells the peers to delete it. With\na `clientId` or\n`clientGroupId` it removes only that target's assignment, which stays on this node,\nand leaves the list and every other target alone, so unblocking a service for one\ndevice does not unblock it for everyone. Having nothing to remove is not\nan error. Returns 400 when both targets are given and 404 for an unknown key. Requires\n`filterlists:write`.",
         "operationId": "apiBlockedServicesKeyDelete",
         "parameters": [
           {
@@ -24207,7 +24207,7 @@
           },
           "isEnabled": {
             "type": "boolean",
-            "description": "Whether the entry's managed filter list exists and is enabled. When the request names a\nclient or client group, it also requires that target to have an assignment of the list."
+            "description": "Whether the service is blocked for every client: the entry's managed filter list is\nenabled and applies to all clients. When the request names a client or client group, it is\nwhether that target has an assignment of the enabled list instead."
           },
           "filterListId": {
             "type": "string",
