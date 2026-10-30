@@ -69,28 +69,102 @@ public class OutboundQuerySettingsControllerTests(NinlilDnsWebApplicationFactory
     }
 
     [Fact]
-    public async Task Patch_WithNewValues_WritesThemToTheConfigurationFile()
+    public async Task Patch_WithPoolSizeAndExcludedPorts_WritesThemAndReturnsTheMixedNote()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        HttpResponseMessage response = await client.SendAsync(
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    "/api/outbound-query-settings",
+                    new { poolSizePerAddressFamily = 64, excludedSourcePorts = new[] { 51820 } }
+                )
+            );
+            response.EnsureSuccessStatusCode();
+
+            RuntimeSettingsWriteResult result =
+                await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+            Assert.Equal(RuntimeSettingsWriteResult.OutboundQueryMixedReloadNote, result.Note);
+
+            JsonObject root = (JsonObject)
+                JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+            JsonObject section = (JsonObject)root["DnsServer"]["OutboundQuery"];
+            Assert.Equal(64, section["PoolSizePerAddressFamily"].GetValue<int>());
+            Assert.Equal(51820, section["ExcludedSourcePorts"][0].GetValue<int>());
+        }
+        finally
+        {
+            await RestoreDefaultsAsync(client);
+        }
+    }
+
+    [Fact]
+    public async Task Patch_WithOnlyThePoolSize_ReturnsTheRestartRequiredNote()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest("/api/outbound-query-settings", new { poolSizePerAddressFamily = 64 })
+            );
+            response.EnsureSuccessStatusCode();
+
+            RuntimeSettingsWriteResult result =
+                await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+            Assert.Equal(
+                RuntimeSettingsWriteResult.OutboundQueryPoolSizeRestartRequiredNote,
+                result.Note
+            );
+        }
+        finally
+        {
+            await RestoreDefaultsAsync(client);
+        }
+    }
+
+    [Fact]
+    public async Task Patch_WithOnlyLiveFields_ReturnsTheHotReloadedNote()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    "/api/outbound-query-settings",
+                    new { enableSourcePortPool = true, excludedSourcePorts = new[] { 51820 } }
+                )
+            );
+            response.EnsureSuccessStatusCode();
+
+            RuntimeSettingsWriteResult result =
+                await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+            Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
+        }
+        finally
+        {
+            await RestoreDefaultsAsync(client);
+        }
+    }
+
+    /// <summary>
+    ///     This method writes the compiled-in defaults back so the shared host's later tests see
+    ///     them.
+    /// </summary>
+    private static Task<HttpResponseMessage> RestoreDefaultsAsync(HttpClient client) =>
+        client.SendAsync(
             PatchRequest(
                 "/api/outbound-query-settings",
-                new { poolSizePerAddressFamily = 64, excludedSourcePorts = new[] { 51820 } }
+                new
+                {
+                    enableSourcePortPool = false,
+                    poolSizePerAddressFamily = 128,
+                    excludedSourcePorts = Array.Empty<int>(),
+                }
             )
         );
-        response.EnsureSuccessStatusCode();
-
-        RuntimeSettingsWriteResult result =
-            await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        Assert.Contains("no restart", result.Note, StringComparison.OrdinalIgnoreCase);
-
-        JsonObject root = (JsonObject)
-            JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
-        JsonObject section = (JsonObject)root["DnsServer"]["OutboundQuery"];
-        Assert.Equal(64, section["PoolSizePerAddressFamily"].GetValue<int>());
-        Assert.Equal(51820, section["ExcludedSourcePorts"][0].GetValue<int>());
-    }
 
     [Fact]
     public async Task OutboundQuerySettingsEndpoint_WithoutAToken_ReturnsUnauthorized()

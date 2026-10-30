@@ -66,8 +66,11 @@ public class OutboundQuerySettingsController(
     public async Task<ActionResult<RuntimeSettingsWriteResult>> Patch([FromBody] JsonElement patch)
     {
         List<PresetConfigurationSetting> settings = [];
+        bool touchedHotReloadingField = false;
+        bool touchedRestartRequiringField = false;
 
         if (patch.TryGetMergePatchBoolean("enableSourcePortPool", out bool enableSourcePortPool))
+        {
             settings.Add(
                 new PresetConfigurationSetting(
                     OutboundQueryOptions.SectionName,
@@ -75,6 +78,8 @@ public class OutboundQuerySettingsController(
                     enableSourcePortPool
                 )
             );
+            touchedHotReloadingField = true;
+        }
 
         if (
             patch.TryGetMergePatchInt32(
@@ -84,6 +89,7 @@ public class OutboundQuerySettingsController(
                 65535
             )
         )
+        {
             settings.Add(
                 new PresetConfigurationSetting(
                     OutboundQueryOptions.SectionName,
@@ -91,8 +97,11 @@ public class OutboundQuerySettingsController(
                     poolSizePerAddressFamily
                 )
             );
+            touchedRestartRequiringField = true;
+        }
 
         if (patch.TryGetMergePatchField("excludedSourcePorts", out JsonElement excludedSourcePorts))
+        {
             settings.Add(
                 new PresetConfigurationSetting(
                     OutboundQueryOptions.SectionName,
@@ -100,6 +109,8 @@ public class OutboundQuerySettingsController(
                     ReadPortList(excludedSourcePorts)
                 )
             );
+            touchedHotReloadingField = true;
+        }
 
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
@@ -109,7 +120,16 @@ public class OutboundQuerySettingsController(
             runtimeConfigurationOptions.ConfigurationFilePath
         );
 
-        return Ok(new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.HotReloadedNote));
+        // The pool size is read once per address family; the other two fields are read on every
+        // use, so the note depends on which kinds the patch touched.
+        string note = (touchedHotReloadingField, touchedRestartRequiringField) switch
+        {
+            (true, true) => RuntimeSettingsWriteResult.OutboundQueryMixedReloadNote,
+            (false, true) => RuntimeSettingsWriteResult.OutboundQueryPoolSizeRestartRequiredNote,
+            _ => RuntimeSettingsWriteResult.HotReloadedNote,
+        };
+
+        return Ok(new RuntimeSettingsWriteResult(note));
     }
 
     /// <summary>

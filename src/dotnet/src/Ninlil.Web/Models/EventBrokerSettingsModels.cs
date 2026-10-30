@@ -289,4 +289,27 @@ public record RuntimeSettingsWriteResult(string Note)
         + "no restart required; 'path' and 'maxMessageSizeBytes' in this same write are read "
         + "once, when the web host maps its routes at startup, so a full process restart is "
         + "needed for them. Restarting the dns-over-https service does not apply them.";
+
+    /// <summary>
+    ///     This constant contains the note <see cref="Controllers.OutboundQuerySettingsController.Patch" />
+    ///     returns when a write changed only <c>poolSizePerAddressFamily</c>. The outbound socket
+    ///     pool reads it once per address family, when the first query for that family creates the
+    ///     family's gate, so only a process restart applies a new size.
+    /// </summary>
+    public const string OutboundQueryPoolSizeRestartRequiredNote =
+        "Written to the configuration file. 'poolSizePerAddressFamily' is read once per address "
+        + "family, when the first outbound query for that family creates its socket gate, so a "
+        + "full process restart is needed for this change to take effect.";
+
+    /// <summary>
+    ///     This constant contains the note <see cref="Controllers.OutboundQuerySettingsController.Patch" />
+    ///     returns when one write changed <c>poolSizePerAddressFamily</c> (see
+    ///     <see cref="OutboundQueryPoolSizeRestartRequiredNote" />) together with
+    ///     <c>enableSourcePortPool</c> or <c>excludedSourcePorts</c>, which apply at once.
+    /// </summary>
+    public const string OutboundQueryMixedReloadNote =
+        "Written to the configuration file. 'enableSourcePortPool'/'excludedSourcePorts' took "
+        + "effect immediately, no restart required; 'poolSizePerAddressFamily' in this same write "
+        + "is read once per address family, so a full process restart is needed for that change "
+        + "to take effect.";
 }
