@@ -230,7 +230,7 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
     ///     <see cref="Dhcpv4Message.ClientIpAddress" /> is loopback, as in
     ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c>, to force a unicast
     ///     reply instead of relying on broadcast delivery. A RELEASE replaces it with the leased
-    ///     address, which RFC 2131 Section 4.3.6 puts in <c>ciaddr</c>.
+    ///     address, which RFC 2131 Section 4.4.1 (Table 5) puts in <c>ciaddr</c>.
     /// </summary>
     private static Dhcpv4Message NewMessage(byte[] clientHardwareAddress, uint transactionId) =>
         new()

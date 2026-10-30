@@ -14,7 +14,7 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 ///     repositories, the counterpart of <see cref="Dhcpv4OptionOverlayService" />. It applies the
 ///     scope's enabled custom options first (the option code is <see cref="DhcpScopeCustomOptionEntity.OptionTag" />;
 ///     a custom option is sent whether or not the client's Option Request Option names it, as
-///     RFC 8415 Section 21.7 permits a server to send options the client did not request, and
+///     RFC 8415 Section 18.3 permits a server to send options the client did not request, and
 ///     it replaces a standard option with the same code, such as 23), then the options of every
 ///     enabled, eligible tag rule whose criteria the request meets, in the order described on
 ///     <see cref="DhcpTagRuleEntity" />, so the last rule to set a code wins and a tag rule beats

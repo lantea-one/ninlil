@@ -155,7 +155,7 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
 
         Dhcpv6Message request = new();
         request.SetClientIdentifier(duid);
-        // A relay may send :: and identify the link by Interface-ID only (RFC 8415 Section 19.1.1).
+        // RFC 8415 Section 13.1 has a server ignore a link-address of :: (RFC 6221).
         request.RelayLinkAddress = IPAddress.IPv6Any;
 
         DhcpScopeEntity resolved = await ResolveAsync(request);

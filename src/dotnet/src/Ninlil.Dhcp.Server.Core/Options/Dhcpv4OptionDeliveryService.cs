@@ -10,11 +10,12 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 /// <summary>
 ///     This static class puts a scope's standard DHCPv4 options on a reply: the Server Identifier,
 ///     the IP Address Lease Time (for OFFER and ACK, not INFORM), Subnet Mask, Router and Domain
-///     Name Server (RFC 2131 Section 4.3), and the PXE boot fields. <see cref="Dhcpv4RequestHandler" />
+///     Name Server (RFC 2131 Section 4.3.1, Table 3), and the PXE boot fields. <see cref="Dhcpv4RequestHandler" />
 ///     calls it before <see cref="IDhcpv4OptionOverlayService" />.
 ///     <para>
-///         RFC 2131 Section 3.5 says the reply "SHOULD include" the parameters a client lists in
-///         its Parameter Request List (tag 55, RFC 2132 Section 9.8) that the server has values
+///         RFC 2131 Section 3.5 lets a client list the parameters it wants in its Parameter Request
+///         List (tag 55, RFC 2132 Section 9.8, where the server "MUST try to insert the requested
+///         options in the order requested"), and this class answers with the ones it has values
 ///         for. Subnet Mask, Router, Domain Name Server and the Bootfile Name and TFTP Server Name
 ///         options are therefore sent only if listed, when the client sent a list; a client with
 ///         no list gets all of them.

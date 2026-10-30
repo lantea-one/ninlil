@@ -43,8 +43,8 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         REQUEST (see <c>DetachQuarantineAsync</c>).
 ///     </para>
 ///     <para>
-///         <b>Offer order</b> (RFC 2131 Section 4.3.1): the client's enabled reservation (the
-///         manual binding of RFC 2131 Section 1) first, then the address on the client's own row
+///         <b>Offer order</b> (RFC 2131 Section 4.3.1, after the reservation): the client's enabled
+///         reservation (the manual allocation of RFC 2131 Section 1) first, then the address on the client's own row
 ///         when it is still usable, then the requested address, then the first free pool address.
 ///     </para>
 /// </summary>
@@ -105,8 +105,8 @@ public sealed class Dhcpv4LeaseAllocationService(
         )
             existing = null;
 
-        // RFC 2131 Section 4.3.1 order: the client's reservation (the manual binding), the
-        // address it already has, the address it asked for, then the first free pool address.
+        // RFC 2131 Section 4.3.1 order, preceded by the reservation (the manual allocation of
+        // Section 1): the client's reservation, the address it already has, the address it asked for, then the first free pool address.
         (bool hasReservation, IPAddress candidate) = await ResolveReservationAsync(
             scope,
             clientKey,
@@ -362,8 +362,8 @@ public sealed class Dhcpv4LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method looks up the client's enabled reservation. A reservation outranks the
-    ///     client's current binding (RFC 2131 Section 1), and <see cref="ConfirmAsync" /> refuses
+    ///     This method looks up the client's enabled reservation. A reservation is a manual
+    ///     allocation (RFC 2131 Section 1) and outranks the client's current binding, and <see cref="ConfirmAsync" /> refuses
     ///     every other address, so a conflict gives no offer at all.
     /// </summary>
     /// <returns>

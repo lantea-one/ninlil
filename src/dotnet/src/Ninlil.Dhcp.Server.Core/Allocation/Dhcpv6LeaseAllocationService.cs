@@ -31,7 +31,7 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///         <c>DelegatedPrefixLength</c> and never overlap a blocking row of any length: the sticky
 ///         prefix must be aligned and not on an <c>Expired</c> row, and the IAPREFIX hint is used
 ///         only when it has the scope's length, is aligned, is a prefix the pool scan could
-///         yield and overlaps no blocking row (RFC 8415 §18.3.1: hints are advisory).
+///         yield and overlaps no blocking row (RFC 8415 §18.3.9: hints are advisory).
 ///     </para>
 ///     <para>
 ///         Address and prefix allocation are separate methods rather than one generic version:
@@ -90,8 +90,9 @@ public sealed class Dhcpv6LeaseAllocationService(
         )
             existing = null;
 
-        // Order (RFC 8415 Section 18.3.9, the same as DHCPv4): the client's reservation, the
-        // address it already has, the IAADDR hint, then the first free pool address.
+        // Order, the same as DHCPv4: the client's reservation, the address it already has, the
+        // IAADDR hint (RFC 8415 Section 18.3.9 lets a server use it), then the first free pool
+        // address. RFC 8415 Section 13.1 leaves the choice to the administrator's policy.
         (bool hasReservation, IPAddress candidate) = await ResolveReservationAsync(
             scope,
             clientKey,

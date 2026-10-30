@@ -6,7 +6,7 @@ namespace Ninlil.Dhcp.Server.Core.Administration;
 /// <summary>
 ///     This interface lets an operator force-release a stuck or stale <see cref="LeaseEntity" />
 ///     from the REST API and UI, without waiting for the client's DHCPv4 RELEASE (RFC 2131
-///     Section 4.3.6) or DHCPv6 RELEASE (RFC 8415 Section 18.2.7) or for
+///     Section 4.3.4) or DHCPv6 RELEASE (RFC 8415 Section 18.2.7) or for
 ///     <see cref="Dhcpv4LeaseExpirySweepService" />. Apart from the expiry sweep, it is the only
 ///     change to a lease that does not come from a client message.
 /// </summary>

@@ -89,7 +89,7 @@ public interface IDhcpv4LeaseAllocationService
 
     /// <summary>
     ///     This method frees an address a client gave back before its lease expired (RFC 2131
-    ///     Section 4.3.6, DHCPRELEASE), so it can be handed out again at once, and publishes a
+    ///     Section 4.3.4, DHCPRELEASE), so it can be handed out again at once, and publishes a
     ///     released event. A RELEASE that does not match the client's lease is ignored.
     /// </summary>
     /// <param name="scope">The scope <paramref name="releasedAddress" /> belongs to.</param>

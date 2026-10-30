@@ -17,8 +17,8 @@ namespace Ninlil.Dhcp.Server.Core.Scope;
 ///     request without a Client Identifier gets no scope.
 ///     <para>
 ///         <b>Relayed address requests.</b> When a request for an address-assignment scope
-///         carries a usable RELAY-FORW <c>link-address</c> (not <c>::</c>; a relay may send
-///         <c>::</c> and identify the link by Interface-ID only, RFC 8415 Section 19.1.1),
+///         carries a usable RELAY-FORW <c>link-address</c> (not <c>::</c>, which RFC 8415
+///         Section 13.1 has a server ignore),
 ///         <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c> copies it to
 ///         <see cref="Dhcpv6Message.RelayLinkAddress" /> and the request is served from the scope
 ///         whose subnet contains it, and from no other (RFC 8415 Section 13.1). When no enabled

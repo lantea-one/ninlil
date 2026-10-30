@@ -263,8 +263,8 @@ public sealed class Dhcpv4RequestHandler(
     ///     address in use, for example by ARP, and names it in the Requested IP Address option
     ///     (tag 50). The address is quarantined only when it is the declining client's own lease
     ///     (see <see cref="IDhcpv4LeaseAllocationService.DeclineAsync" />); there is no reply. A
-    ///     DECLINE that names another server is dropped. RFC 2131 Section 4.3.3 requires the
-    ///     option, but one without it is tolerated, as other servers do; the ownership check
+    ///     DECLINE that names another server is dropped. RFC 2131 Section 4.4.1 (Table 5) makes
+    ///     the option a MUST for the client, but one without it is tolerated; the ownership check
     ///     still applies.
     /// </summary>
     private async Task<Dhcpv4Message> HandleDeclineAsync(
@@ -302,7 +302,7 @@ public sealed class Dhcpv4RequestHandler(
         && !server.Equals(serverIdentifierProvider.Value);
 
     /// <summary>
-    ///     This method handles a DHCPRELEASE (RFC 2131 Section 4.3.6): the client gives up its
+    ///     This method handles a DHCPRELEASE (RFC 2131 Section 4.3.4): the client gives up its
     ///     lease, named by <c>ciaddr</c>, before it expires. There is no reply. A RELEASE that
     ///     names another server is dropped; one without a Server Identifier is tolerated.
     /// </summary>
@@ -366,7 +366,7 @@ public sealed class Dhcpv4RequestHandler(
 
     /// <summary>
     ///     This method builds the fields every reply copies from the request, as RFC 2131
-    ///     Section 4.3 expects: the transaction identifier, hardware address fields, <c>giaddr</c>
+    ///     Section 4.3.1 (Table 3) expects: the transaction identifier, hardware address fields, <c>giaddr</c>
     ///     and the broadcast flag.
     /// </summary>
     private static Dhcpv4Message NewReply(Dhcpv4Message request, IPAddress yourIpAddress) =>

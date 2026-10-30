@@ -26,8 +26,9 @@ namespace Ninlil.Dhcp.Server.Core;
 ///         <b>Messages.</b> SOLICIT (with optional Rapid Commit), REQUEST, RENEW, REBIND, RELEASE,
 ///         DECLINE, CONFIRM and INFORMATION-REQUEST are handled. REQUEST, RENEW and REBIND share
 ///         <see cref="HandleConfirmingExchangeAsync" />, since each commits an address or prefix
-///         the client names; REQUEST and RENEW must name this server, REBIND need not (RFC 8415
-///         Section 18.2.5). Server message types get no answer. RELAY-FORW arrives through
+///         the client names; REQUEST and RENEW must name this server (RFC 8415 Sections 16.4 and
+///         16.6); REBIND carries no Server Identifier, and the handler does not check one
+///         (Section 16.7). Server message types get no answer. RELAY-FORW arrives through
 ///         <see cref="HandleRelayMessageAsync" />.
 ///     </para>
 ///     <para>
@@ -116,10 +117,11 @@ public sealed class Dhcpv6RequestHandler(
     );
 
     /// <summary>
-    ///     This constant is the highest RELAY-FORW hop count (RFC 8415 Section 7.1 "hop-count")
+    ///     This constant is the highest RELAY-FORW hop count (RFC 8415 Section 9.1 "hop-count")
     ///     that is still processed, a guard against relay loops and malformed input like
     ///     <c>Ninlil.Dhcp.Server.Relay.Dhcpv4RelayAgent.MaxHops</c>. A single-hop chain (see
-    ///     <see cref="Dhcpv6RelayMessage" />) arrives with hop count 0.
+    ///     <see cref="Dhcpv6RelayMessage" />) arrives with hop count 0. RFC 8415 Section 7.6 sets
+    ///     the relay agent's HOP_COUNT_LIMIT to 8; this server's limit is its own.
     /// </summary>
     private const byte MaxRelayHopCount = 16;
 
@@ -1427,7 +1429,7 @@ public sealed class Dhcpv6RequestHandler(
     ///     is set whenever the reply's S differs from the client's (RFC 4704 Section 4.1). S=1 promises an
     ///     attempt, not a result: <c>DhcpDnsRegistrationService</c> can still refuse a name that
     ///     belongs to a static record or another active client, or fail the update (RFC 4704
-    ///     Section 6), and the client is not told. The policy is not asked when the request had no
+    ///     Sections 6.1 and 8 leave both to the server), and the client is not told. The policy is not asked when the request had no
     ///     Client FQDN option, nor when no address or host name makes the answer false anyway.
     /// </summary>
     private static async Task ApplyClientFqdnReplyAsync(
