@@ -1,11 +1,12 @@
 /**
  * One public DNS resolver endpoint offered in the forwarder form's resolver dropdown: one
- * transport (plain, DoT, DoH or DoQ) of one provider.
+ * transport (plain, DoT or DoH) of one provider.
  *
  * Each {@link value} is an address or URL for this use, written in the
  * definition syntax `UpstreamForwarderDefinitionParser` accepts: a bare address for plain DNS,
  * `tls://host[:port]` for DNS-over-TLS, a full `https://` URL for DNS-over-HTTPS and
- * `quic://host[:port]` for DNS-over-QUIC.
+ * `quic://host[:port]` for DNS-over-QUIC. The dropdown offers no DNS-over-QUIC entry (see
+ * {@link KNOWN_FORWARDER_OPTIONS}), but the parser accepts the form.
  */
 export interface KnownForwarderOption {
   /** The provider, used as the dropdown's `<optgroup>` label. */
@@ -21,9 +22,11 @@ export interface KnownForwarderOption {
 /**
  * This constant lists the resolvers the forwarder form's dropdown offers: four public providers,
  * not an exhaustive list. Every plain, DoT and DoH entry is an endpoint the provider documents at
- * the page named above its group. The DoQ entries (Cloudflare and Quad9) are Ninlil's offer: the
- * pages named there list no QUIC endpoint. Google Public DNS lists none either, so none is offered
- * for it.
+ * the page named above its group. No DoQ entry is offered. Cloudflare, Quad9 and Google Public DNS
+ * document no QUIC endpoint. A DNS-over-QUIC query (ALPN `doq`, port 853) to Cloudflare's 1.1.1.1
+ * and `2606:4700:4700::1111` got no answer. Quad9's host name answers it over IPv6 only. Ninlil
+ * connects to the IPv4 address of a host name that has one (`ForwarderEndpointCache`), and a
+ * handshake with Quad9's IPv4 addresses aborted a probe process inside libmsquic 2.4.11.
  *
  * Each provider's IPv6 addresses are listed with its IPv4 ones. An IPv6 literal is always
  * bracketed (`[addr]` or `[addr]:port`), because the parser splits host and port at the last `:`
@@ -33,7 +36,7 @@ export interface KnownForwarderOption {
  */
 export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
   // Cloudflare (1.1.1.1): plain, DoT and DoH are documented at
-  // https://developers.cloudflare.com/1.1.1.1/. The DoQ entries are not on those pages.
+  // https://developers.cloudflare.com/1.1.1.1/.
   {
     provider: 'Cloudflare',
     label: 'Plain -- 1.1.1.1',
@@ -60,12 +63,6 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
   },
   {
     provider: 'Cloudflare',
-    label: 'DNS-over-QUIC -- quic://1.1.1.1',
-    value: 'quic://1.1.1.1',
-    name: 'Cloudflare (DoQ)',
-  },
-  {
-    provider: 'Cloudflare',
     label: 'Plain (IPv6) -- 2606:4700:4700::1111',
     value: '[2606:4700:4700::1111]',
     name: 'Cloudflare (Plain, IPv6)',
@@ -81,12 +78,6 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
     label: 'DNS-over-TLS (IPv6) -- tls://[2606:4700:4700::1111]',
     value: 'tls://[2606:4700:4700::1111]',
     name: 'Cloudflare (DoT, IPv6)',
-  },
-  {
-    provider: 'Cloudflare',
-    label: 'DNS-over-QUIC (IPv6) -- quic://[2606:4700:4700::1111]',
-    value: 'quic://[2606:4700:4700::1111]',
-    name: 'Cloudflare (DoQ, IPv6)',
   },
 
   // Google Public DNS, documented at https://developers.google.com/speed/public-dns.
@@ -128,7 +119,7 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
   },
 
   // Quad9, which blocks malware and validates DNSSEC by default. Plain, DoT and DoH are documented at
-  // https://www.quad9.net/service/service-addresses-and-features. The DoQ entry is not on that page.
+  // https://www.quad9.net/service/service-addresses-and-features.
   {
     provider: 'Quad9',
     label: 'Plain -- 9.9.9.9',
@@ -152,12 +143,6 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
     label: 'DNS-over-HTTPS -- https://dns.quad9.net/dns-query',
     value: 'https://dns.quad9.net/dns-query',
     name: 'Quad9 (DoH)',
-  },
-  {
-    provider: 'Quad9',
-    label: 'DNS-over-QUIC -- quic://dns.quad9.net',
-    value: 'quic://dns.quad9.net',
-    name: 'Quad9 (DoQ)',
   },
   {
     provider: 'Quad9',
