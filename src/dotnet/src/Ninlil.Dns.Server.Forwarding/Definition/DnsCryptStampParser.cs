@@ -18,12 +18,14 @@ namespace Ninlil.Dns.Server.Forwarding.Definition;
 ///         The decoded layout is
 ///         <c>0x01 || props (8 bytes, little-endian) || LP(addr) || LP(pk) || LP(providerName)</c>,
 ///         where <c>LP(x) = len(x) (1 byte) || x</c>. Everything after <c>sdns://</c> is
-///         base64url without padding (the specification does not say, and published stamps omit
-///         it).
+///         base64url without padding (the specification does not say whether padding is
+///         written, so this parser reads the unpadded form).
 ///     </para>
 ///     <para>
-///         <b>Provider name.</b> By DNSCrypt convention a stamp's <c>providerName</c> is already
-///         the full certificate-discovery name (for example <c>2.dnscrypt-cert.example.com</c>).
+///         <b>Provider name.</b> The DNSCrypt v2 specification (section 12) defines the provider
+///         name as <c>&lt;major-version&gt;.dnscrypt-cert.&lt;zone&gt;</c>, so a stamp's
+///         <c>providerName</c> is already the full certificate-discovery name (for example
+///         <c>2.dnscrypt-cert.example.com</c>).
 ///         The server-role <c>DnsCryptOptions.ProviderName</c> accepts either that full
 ///         name or only the zone part, and
 ///         <c>DnsCryptCertificateDiscoveryResponder.BuildProviderCertificateName</c> adds the
@@ -181,9 +183,9 @@ public static class DnsCryptStampParser
 
         int lastColon = addr.LastIndexOf(':');
 
-        // A bare IPv4 address has no colon and one with a port has one. The specification does
-        // not define an unbracketed IPv6 address; one is split at its last colon, and usually
-        // fails to parse.
+        // A bare IPv4 address has no colon and one with a port has one. The specification
+        // requires square brackets around an IPv6 address, so an unbracketed one is malformed;
+        // it is split at its last colon, and usually fails to parse.
         if (lastColon < 0)
             return (ParseIpAddress(addr, stampString), DefaultPort);
 

@@ -141,9 +141,9 @@ public static class DnsCryptEnvelopeCodec
         clientNonceHalf.CopyTo(nonce, 0);
         resolverNonceHalf.CopyTo(nonce, HalfNonceLength);
 
-        // The spec requires <resolver-response> <resolver-response-pad> to be a multiple of 64
-        // bytes with a pad (marker included) of 1 to 256 bytes; padding to the next 64-byte
-        // boundary always gives 1 to 64.
+        // DNSCrypt v2 section 8 requires <resolver-response> <resolver-response-pad> to be a
+        // multiple of 64 bytes with a pad (marker included) of 1 to 256 bytes that stays constant
+        // for one client nonce; padding to the next 64-byte boundary always gives 1 to 64.
         byte[] paddedResponse = DnsCryptPadding.PadToBlockSize(responseMessage, 64);
 
         byte[] encryptedResponse = DnsCryptCryptoBox.Encrypt(

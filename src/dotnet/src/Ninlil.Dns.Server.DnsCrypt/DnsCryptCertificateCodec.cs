@@ -7,7 +7,7 @@ namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
 ///     This class encodes a <see cref="DnsCryptCertificate" /> into the 124-byte wire layout the
-///     DNSCrypt spec defines, and decodes one for the DNSCrypt forwarder client in
+///     DNSCrypt v2 specification defines (section 12), and decodes one for the DNSCrypt forwarder client in
 ///     <c>Ninlil.Dns.Server.Forwarding</c>:
 ///     <c>&lt;cert-magic&gt; &lt;es-version&gt; &lt;protocol-minor-version&gt; &lt;signature&gt;
 ///     &lt;resolver-pk&gt; &lt;client-magic&gt; &lt;serial&gt; &lt;ts-start&gt; &lt;ts-end&gt;

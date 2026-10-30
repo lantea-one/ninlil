@@ -24,7 +24,7 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///         query as a datagram and caps its reply to the size of the query packet (see
 ///         <see cref="MaxPlaintextResponseLength" />), so the pipeline truncates an answer that
 ///         would not fit and the encrypted reply is never larger than the query, as the DNSCrypt
-///         spec requires. A stream query has no cap.
+///         v2 specification (section 9) asks. A stream query has no cap.
 ///     </para>
 ///     <para>
 ///         The certificate discovery answer is plaintext and unauthenticated, so it passes the
@@ -193,9 +193,9 @@ internal static class DnsCryptQueryHandler
     /// <summary>
     ///     This method returns the largest plaintext DNS response that
     ///     <see cref="DnsCryptEnvelopeCodec.EncryptResponse" /> turns into a packet of at most
-    ///     <paramref name="queryPacketLength" /> bytes. The DNSCrypt spec forbids a response
-    ///     packet larger than the query packet, so a longer answer must be truncated (TC) and the
-    ///     client retries over TCP.
+    ///     <paramref name="queryPacketLength" /> bytes. The DNSCrypt v2 specification (section
+    ///     9) says a response over UDP should never be longer than the query packet, so a longer
+    ///     answer is truncated (TC) and the client retries over TCP (section 4).
     ///     <para>
     ///         The arithmetic, for a query packet of L bytes: a response packet is the resolver
     ///         magic (8) + the nonce (24) + the MAC (16) + the padded plaintext, so the envelope

@@ -9,7 +9,8 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///     This class answers the one query DNSCrypt clients send unencrypted: a TXT query for
 ///     <c>&lt;protocol-major-version&gt;.dnscrypt-cert.&lt;provider-name&gt;</c>, through which a
 ///     client finds the resolver's valid certificates (public keys, ciphers, and the client-magic
-///     to tag its encrypted queries with). No zone holds this name, so
+///     to tag its encrypted queries with); the DNSCrypt v2 specification describes the exchange in
+///     section 12. No zone holds this name, so
 ///     <see cref="DnsCryptQueryHandler" /> answers it here rather than sending it through
 ///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" />. The handler
 ///     applies the rate limits and, over UDP, the size ceiling to the answer built here; the

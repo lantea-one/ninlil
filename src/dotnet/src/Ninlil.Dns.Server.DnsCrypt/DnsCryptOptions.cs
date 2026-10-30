@@ -64,8 +64,8 @@ public class DnsCryptOptions
 
     /// <summary>
     ///     This property contains every <see cref="DnsCryptEsVersion" /> the resolver keeps a valid
-    ///     certificate for. The default is both: the cipher the current spec requires and the
-    ///     older one many clients still use.
+    ///     certificate for. The default is both: the cipher the current spec defines and the
+    ///     earlier XSalsa20 one.
     /// </summary>
     public List<DnsCryptEsVersion> EnabledEsVersions { get; set; } =
     [DnsCryptEsVersion.XChaCha20Poly1305, DnsCryptEsVersion.XSalsa20Poly1305];

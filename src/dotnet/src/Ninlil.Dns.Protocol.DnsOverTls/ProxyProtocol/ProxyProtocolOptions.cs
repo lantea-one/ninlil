@@ -19,7 +19,9 @@ namespace Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
 ///     <para>
 ///         It is off by default: honoring a claimed address from any connection would let a
 ///         client prepend a forged header and pose as another client, so an operator opts in only
-///         with a correctly configured proxy in front of the listener.
+///         with a correctly configured proxy in front of the listener. The PROXY protocol
+///         specification (section 5) gives the same advice: rely on a configuration setting, and
+///         accept the header only from known sources.
 ///     </para>
 ///     <para>
 ///         <b>There is no shared secret, unlike the HTTP side.</b> The PROXY protocol header has no

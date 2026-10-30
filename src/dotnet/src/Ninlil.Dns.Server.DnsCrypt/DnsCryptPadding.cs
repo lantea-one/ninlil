@@ -2,7 +2,7 @@
 namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
-///     This class implements the ISO/IEC 7816-4 padding the DNSCrypt spec uses on both sides of
+///     This class implements the ISO/IEC 7816-4 padding DNSCrypt v2 (sections 3, 5 and 8) uses on both sides of
 ///     a query and its response: one <c>0x80</c> byte followed by zero or more <c>0x00</c> bytes,
 ///     added before encryption so the plaintext length is a multiple of a block size (64 bytes
 ///     in <see cref="DnsCryptEnvelopeCodec" />). Padding to a block size hides the exact length

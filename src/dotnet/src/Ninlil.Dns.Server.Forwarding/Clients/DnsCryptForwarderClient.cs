@@ -113,8 +113,8 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
     ///     This method encrypts the query with a fresh client key pair, a fresh nonce half and a
     ///     fresh message ID, sends it over UDP or TCP and returns the decrypted reply. Every call
     ///     is a new query, so the UDP and TCP attempts never share a nonce under one key pair (the
-    ///     DNSCrypt v2 specification requires the client nonce to be unique per query under a
-    ///     key pair; unverified, the specification was not reachable).
+    ///     DNSCrypt v2 specification, section 2, requires a client nonce to be unique per
+    ///     client secret key and resolver public key).
     /// </summary>
     /// <param name="certificate">The certificate the resolver's keys and magic come from.</param>
     /// <param name="query">The caller's query; its ID is replaced on the wire.</param>

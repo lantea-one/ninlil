@@ -8,10 +8,11 @@ namespace Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
 
 /// <summary>
 ///     This class parses a HAProxy-style PROXY protocol header (both the v1 text form and the v2
-///     binary form) off a <see cref="Stream" />, following the public specification at
-///     <c>https://www.haproxy.org/download/2.8/doc/proxy-protocol.txt</c>. Like the RFCs, it is a
-///     published specification rather than source code, so implementing it raises no clean-room
-///     concern. <see cref="DnsOverTlsListener" /> calls it.
+///     binary form) off a <see cref="Stream" />, following the specification "The PROXY protocol,
+///     Versions 1 &amp; 2" (Willy Tarreau, HAProxy Technologies,
+///     <c>https://www.haproxy.org/download/2.8/doc/proxy-protocol.txt</c>): section 2.1 for the v1
+///     text form and section 2.2 for the v2 binary form. It is a published specification rather
+///     than source code, so implementing it raises no clean-room concern. <see cref="DnsOverTlsListener" /> calls it.
 ///     <para>
 ///         Every read is on the plaintext connection stream, before the TLS handshake: a proxy
 ///         sends the header first, ahead of what it relays (here, a TLS <c>ClientHello</c>).
@@ -56,8 +57,9 @@ public static class ProxyProtocolReader
 
     /// <summary>
     ///     This constant contains how many bytes a v1 text header may take, CRLF included, before
-    ///     it is declared invalid. The specification says a 108-byte buffer always holds a valid
-    ///     v1 line.
+    ///     it is declared invalid. The specification (section 2.1) puts the longest valid line, CRLF
+    ///     included, at 107 characters and says a 108-byte buffer holds it with a trailing zero.
+    ///     This reader accepts a CRLF anywhere in the 108 bytes.
     /// </summary>
     private const int MaximumV1HeaderBytes = 108;
 
@@ -118,8 +120,8 @@ public static class ProxyProtocolReader
                 return ParseV1Line(Encoding.ASCII.GetString(buffer, 0, length - 2));
         }
 
-        // No CRLF within the maximum: the specification says "if the CRLF sequence is not found
-        // ... the receiver should declare the line invalid".
+        // No CRLF within the maximum: section 2.1 says "If the CRLF sequence is not found in the
+        // first 107 characters, the receiver should declare the line invalid".
         return ProxyProtocolParseResult.Failed;
     }
 
@@ -197,9 +199,8 @@ public static class ProxyProtocolReader
         int version = versionAndCommand >> 4;
         int command = versionAndCommand & 0x0F;
 
-        // Only version 2 is understood. Any other version is treated as malformed rather than
-        // guessed at, as the specification's "any sequence which does not exactly match the
-        // protocol must ... abort the connection" requires.
+        // Only version 2 is understood. Section 2.2 says the version "must always be sent as \x2
+        // and the receiver must only accept this value", so any other version is malformed.
         if (version != 0x2)
             return ProxyProtocolParseResult.Failed;
 
