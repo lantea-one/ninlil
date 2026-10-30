@@ -8,6 +8,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Acme.Caa;
 using Ninlil.Dns.Server.Authoritative.CatalogSync;
+using Ninlil.Dns.Server.Authoritative.Dnssec;
 using Ninlil.Dns.Server.Authoritative.Ptr;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Dnssec.Algorithms;
@@ -58,6 +59,9 @@ namespace Ninlil.Web.Controllers;
 ///     Runs <see cref="ReconcilePtr" />; it is the same instance <c>PtrSyncEventSubscriber</c>
 ///     uses.
 /// </param>
+/// <param name="signedZoneCache">
+///     This node's signing cache, read for <see cref="ZoneDetail.DnssecServedUnsigned" />.
+/// </param>
 [ApiController]
 [Route("api/zones")]
 public class ZonesController(
@@ -69,7 +73,8 @@ public class ZonesController(
     IDnsServerEventPublisher eventPublisher,
     CatalogZoneMembershipService catalogZoneMembershipService,
     CaaRecordReconciliationService caaRecordReconciliationService,
-    PtrSyncService ptrSyncService
+    PtrSyncService ptrSyncService,
+    SignedZoneCache signedZoneCache
 ) : ControllerBase
 {
     /// <summary>
@@ -774,9 +779,12 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This method converts a zone entity to its API representation.
+    ///     This method converts a zone entity to its API representation. The served-unsigned flag
+    ///     is read from this node's signing cache: a Primary or CloudPrimary zone that is enabled
+    ///     and marked signed but has no signed data cached is served unsigned (no key can sign
+    ///     it, or the cache has not signed it yet after a change).
     /// </summary>
-    private static ZoneDetail ToDetail(ZoneEntity zone) =>
+    private ZoneDetail ToDetail(ZoneEntity zone) =>
         new(
             zone.Id,
             zone.Name,
@@ -807,6 +815,13 @@ public class ZonesController(
             zone.UpdatedAtUtc,
             zone.TransferTransport,
             zone.MemberOfCatalogZoneId,
-            zone.ValidateDnssec
+            zone.ValidateDnssec,
+            zone
+                is {
+                    IsDnssecSigned: true,
+                    IsDisabled: false,
+                    Type: ZoneTypeEnum.Primary or ZoneTypeEnum.CloudPrimary,
+                }
+                && signedZoneCache.GetSignedData(zone.Id) is null
         );
 }

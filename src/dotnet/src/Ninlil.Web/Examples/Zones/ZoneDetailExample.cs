@@ -53,6 +53,7 @@ public class ZoneDetailExample : IMultipleExamplesProvider<ZoneDetail>
                     DateTimeOffset.Parse("2026-08-15T14:30:00+00:00"),
                     ZoneTransferTransportEnum.Plain,
                     null,
+                    false,
                     false
                 ),
             },
@@ -90,6 +91,7 @@ public class ZoneDetailExample : IMultipleExamplesProvider<ZoneDetail>
                     null,
                     ZoneTransferTransportEnum.Tls,
                     null,
+                    false,
                     false
                 ),
             },

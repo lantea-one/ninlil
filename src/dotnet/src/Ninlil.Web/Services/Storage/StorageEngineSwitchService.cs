@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Ninlil.Common.Configuration;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
@@ -7,6 +8,7 @@ using Ninlil.Dns.Data.Abstractions.Topology;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Data.MongoDb.Topology;
+using Ninlil.Web.EnvironmentVariables;
 using Ninlil.Web.Models;
 using Ninlil.Web.Options;
 
@@ -68,6 +70,18 @@ public sealed class StorageEngineSwitchService(
         StorageEngineEnum.SqlServer,
     ];
 
+    /// <summary>
+    ///     This field lists the environment variables of the storage topology sections, built once
+    ///     from the table that maps environment variables to settings at startup
+    ///     (<see cref="OptionsEnvironmentVariableMap.BuildMappings" /> over
+    ///     <see cref="OptionsEnvironmentVariableRegistry.Roots" />). The mapping goes from the
+    ///     variable name to the configuration path, so a path under one of the five sections
+    ///     selects its variable. Sections come in the order of the table in the storage options
+    ///     class and the operator guide; names within a section keep the order of the options
+    ///     class properties.
+    /// </summary>
+    private static readonly IReadOnlyList<string> TopologyVariables = BuildTopologyVariables();
+
     /// <inheritdoc />
     public StorageStatus GetStatus()
     {
@@ -89,8 +103,44 @@ public sealed class StorageEngineSwitchService(
             new StoragePrimaryStatus(
                 StorageHostLister.List(currentOptions.Engine, PrimaryConnectionString())
             ),
-            DescribeReadReplica()
+            DescribeReadReplica(),
+            TopologyVariables
         );
+    }
+
+    /// <summary>
+    ///     This method selects, from the full environment variable table, the variables whose
+    ///     setting lives under a topology section of <see cref="StorageOptions" />.
+    /// </summary>
+    private static IReadOnlyList<string> BuildTopologyVariables()
+    {
+        IReadOnlyDictionary<string, string> mappings = OptionsEnvironmentVariableMap.BuildMappings(
+            OptionsEnvironmentVariableRegistry.Roots,
+            OptionsEnvironmentVariableRegistry.StandaloneConfigurationPaths
+        );
+
+        string[] sections =
+        [
+            nameof(StorageOptions.ReadReplica),
+            nameof(StorageOptions.PostgreSql),
+            nameof(StorageOptions.MySql),
+            nameof(StorageOptions.SqlServer),
+            nameof(StorageOptions.MongoDb),
+        ];
+
+        return
+        [
+            .. sections.SelectMany(section =>
+                mappings
+                    .Where(mapping =>
+                        mapping.Value.StartsWith(
+                            $"{StorageOptions.SectionName}:{section}:",
+                            StringComparison.Ordinal
+                        )
+                    )
+                    .Select(mapping => mapping.Key)
+            ),
+        ];
     }
 
     /// <summary>

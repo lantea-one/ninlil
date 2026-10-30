@@ -29,13 +29,22 @@ namespace Ninlil.Web.Models;
 ///     configured (no <c>Storage:ReadReplica:ConnectionString</c> on a relational engine, a
 ///     <c>Primary</c> read preference on MongoDB).
 /// </param>
+/// <param name="TopologyVariables">
+///     The <c>NINLIL_*</c> environment variables that configure the read replica and the
+///     engine-specific cluster settings (<c>Storage:ReadReplica</c>, <c>Storage:PostgreSql</c>,
+///     <c>Storage:MySql</c>, <c>Storage:SqlServer</c> and <c>Storage:MongoDb</c>), taken from the
+///     same table that maps environment variables to settings at startup. The console lists
+///     them so the page cannot name a variable the server does not read. Grouped by section in
+///     that order, in the order of the options classes within a section.
+/// </param>
 public record StorageStatus(
     StorageEngineEnum Engine,
     PendingStorageSwitchInfo PendingSwitch,
     StorageSwitchOutcome LastSwitchOutcome,
     IReadOnlyList<StorageEngineEnum> SwitchSupportedEngines,
     StoragePrimaryStatus Primary,
-    StorageReadReplicaStatus ReadReplica
+    StorageReadReplicaStatus ReadReplica,
+    IReadOnlyList<string> TopologyVariables
 );
 
 /// <summary>
