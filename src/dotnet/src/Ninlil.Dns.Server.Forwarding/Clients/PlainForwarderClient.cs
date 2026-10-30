@@ -12,8 +12,9 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 
 /// <summary>
 ///     This class forwards a query over plain DNS (RFC 1035): one UDP datagram out, one back,
-///     and a single TCP retry when the UDP answer is truncated (RFC 1035 §4.2.1), as a stub
-///     resolver does.
+///     and a single TCP retry when the UDP answer is truncated (RFC 1035 §4.2.1 defines the TC
+///     bit; RFC 1123 §6.1.3.2 and RFC 7766 §5 send the requester to TCP), as a stub resolver
+///     does.
 ///     <para>
 ///         Every attempt (the UDP datagram and the TCP retry alike) sends a copy of the query with
 ///         a new random message ID, so the ID on the wire is unpredictable to an off-path forger

@@ -28,7 +28,7 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 public sealed class QuicForwarderClient : IUpstreamForwarderClient
 {
     /// <summary>
-    ///     This field contains the registered DNS-over-QUIC ALPN token (RFC 9250 §7.1). The
+    ///     This field contains the registered DNS-over-QUIC ALPN token (RFC 9250 §4.1). The
     ///     listener in <c>Ninlil.Dns.Protocol.DnsOverQuic</c> keeps a private copy of it.
     /// </summary>
     private static readonly SslApplicationProtocol DoqApplicationProtocol = new("doq");

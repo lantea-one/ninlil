@@ -273,7 +273,7 @@ public sealed class DnsFilterEngine(
     ///     <para>
     ///         Checking the targets is enough to cover the whole chain, since each later record
     ///         in a chain is owned by the previous record's target. A DNAME answer carries a
-    ///         synthesized CNAME (RFC 6672 §3.4), so it is covered too.
+    ///         synthesized CNAME (RFC 6672 §3.2), so it is covered too.
     ///     </para>
     /// </summary>
     private async Task<DnsFilterDecision> EvaluateCnameTargetsAsync(
