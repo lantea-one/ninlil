@@ -226,7 +226,7 @@ export class TransportSettingsComponent implements OnInit {
     esVersionXChaCha20Poly1305: [true],
     esVersionXSalsa20Poly1305: [true],
     certificateRotationInterval: ['1.00:00:00', [Validators.required]],
-    certificateValidityDuration: ['2.00:00:00', [Validators.required]],
+    certificateValidityDuration: ['1.04:00:00', [Validators.required]],
     certificateClockSkewTolerance: ['00:05:00', [Validators.required]],
   });
 
@@ -521,7 +521,7 @@ export class TransportSettingsComponent implements OnInit {
         ),
         esVersionXSalsa20Poly1305: (dnsCrypt.enabledEsVersions ?? []).includes('XSalsa20Poly1305'),
         certificateRotationInterval: dnsCrypt.certificateRotationInterval ?? '1.00:00:00',
-        certificateValidityDuration: dnsCrypt.certificateValidityDuration ?? '2.00:00:00',
+        certificateValidityDuration: dnsCrypt.certificateValidityDuration ?? '1.04:00:00',
         certificateClockSkewTolerance: dnsCrypt.certificateClockSkewTolerance ?? '00:05:00',
       });
       this.dnsCryptTracker.markClean(this.dnsCryptForm.getRawValue());
