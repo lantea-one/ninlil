@@ -136,23 +136,25 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
 
 ### DHCP, DHCPv6 & Router Advertisement
 
-- **A full dual-stack DHCPv4/DHCPv6 service** running in the same host process as DNS: DHCPv4
-  answers a real DORA exchange (plus DECLINE/RELEASE/INFORM) with static reservations, standard
-  option delivery, and tag-based conditional option delivery (Vendor Class Identifier/User
-  Class/Relay Agent Circuit/Remote ID matching). DHCPv6 answers SOLICIT/REQUEST/RENEW/REBIND/
-  RELEASE/DECLINE/CONFIRM/INFORMATION-REQUEST with stateful address assignment (IA_NA) and Prefix
-  Delegation (IA_PD) side by side, plus optional Rapid Commit.
-- **A genuine, mutually-exclusive relay-agent mode** for each protocol (RFC 1542 and RFC 2131 §4.1
-  with the RFC 3046 option for DHCPv4, RFC 8415 §9 and §19 RELAY-FORW/RELAY-REPL for DHCPv6), as an
-  alternative to running the local engine.
-- **RFC 4861/4862 Router Advertisement/SLAAC**, including per-interface-distinct prefix/flag
-  configuration.
-- **A real, read-only RFC 1350 TFTP server** for PXE boot delivery, driven by a scope's own boot
-  file name and next-server address.
-- **Automatic DNS registration**: a granted lease auto-registers a real A/AAAA record (including a
-  host name presented via the DHCPv6 Client FQDN option) in a scope-configured DNS zone, removed
-  again on release or natural expiry — with a reverse PTR record as a free side effect of the
-  existing PTR-sync feature.
+- **A dual-stack DHCP service** in the same process as DNS. DHCPv4 answers DISCOVER, REQUEST,
+  DECLINE, RELEASE and INFORM, with static reservations, standard options and tag-based options
+  (matching the Vendor Class Identifier, the User Class and the relay's Circuit ID or Remote ID).
+  DHCPv6 answers SOLICIT, REQUEST, RENEW, REBIND, RELEASE, DECLINE, CONFIRM and
+  INFORMATION-REQUEST with stateful addresses (IA_NA) and prefix delegation (IA_PD) side by side,
+  and with optional Rapid Commit.
+- **A relay-agent mode** for each protocol, which replaces the local server for that protocol
+  (RFC 1542 and RFC 2131 §4.1 with the RFC 3046 option for DHCPv4, RFC 8415 §9 and §19
+  RELAY-FORW/RELAY-REPL for DHCPv6).
+- **Router Advertisement** (RFC 4861) for SLAAC, with the RFC 8106 DNS servers and search domains,
+  RFC 4191 routes, and different content per interface.
+- **A read-only TFTP server** (RFC 1350) for PXE boot files. A scope's boot file name and
+  next-server address tell the computers what to fetch.
+- **Automatic DNS registration**: a granted lease writes an A or AAAA record for the device's host
+  name (for DHCPv6, the one in the Client FQDN option) in the zone the scope names, and removes it
+  when the lease is released, declined or expires. A PTR record follows when the zone manages PTR
+  records (see [Zones and records](#zones-and-records)).
+- Step by step: [DHCP, DHCPv6 and Router Advertisement](#dhcp-dhcpv6-and-router-advertisement) and
+  [TFTP and PXE](#tftp-and-pxe).
 
 ### Admin API & console
 
@@ -3122,29 +3124,712 @@ translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway.
 
 ### DHCP, DHCPv6 and Router Advertisement
 
-The local DHCPv4 and DHCPv6 engines are off by default and need Linux. Turn them on with
-`NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE` and `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV6_ENABLE`. A relay
-agent can run instead of the local engine. In a container, DHCP needs host networking (see
-[DHCP and Router Advertisement](#dhcp-and-router-advertisement)). The settings are in
-[DHCP, DHCPv6, Router Advertisement & TFTP](./ENVIRONMENT.md#dhcp-dhcpv6-router-advertisement--tftp).
+#### What it does
+
+A device that joins a network needs an address, a router and a DNS server. Ninlil can hand these
+out. Four services take part, and each one is off until you turn it on:
+
+| Service | Answers | Standard | Default port |
+|---|---|---|---|
+| DHCPv4 | A device that asks for an IPv4 address, router and DNS server | RFC 2131 | UDP `67` (server), `68` (client) |
+| DHCPv6 | A device that asks for an IPv6 address, or for a block of addresses to hand out on a network behind it | RFC 8415 | UDP `547` (server), `546` (client) |
+| Router Advertisement (RA) | A device that builds an IPv6 address itself (SLAAC) and needs the network's prefix, router and DNS server | RFC 4861, RFC 8106 | none, it uses raw ICMPv6 |
+| TFTP | A device that fetches a boot file | RFC 1350 | UDP `69`, see [TFTP and PXE](#tftp-and-pxe) |
+
+The services run on Linux. For macOS and Windows, see [Download a binary](#download-a-binary) and
+[Windows](#windows). Words this guide uses:
+
+- A **scope** is one pool of addresses plus the settings that go with them: router, DNS servers
+  and lease times. A scope is for IPv4 or for IPv6. A scope of kind `PrefixDelegation` hands out
+  blocks of IPv6 addresses (prefixes) instead of single addresses.
+- A **lease** is an address that Ninlil has granted to one device for a limited time. A device
+  renews it before it ends.
+- A **reservation** ties one address to one device, so the device always gets that address.
+- A **client identifier** is how Ninlil recognises a device: its hardware (MAC) address for
+  DHCPv4, or its DHCP unique identifier (DUID) for DHCPv6.
+- A **custom option** is an extra DHCP option that a scope sends to every device. A **tag rule**
+  sends options to the devices that match its criteria, such as a vendor class.
+- A **relay agent** forwards the requests of one network to a DHCP server on another network.
+  Each protocol runs either as Ninlil's DHCP server or as a relay agent, never both.
+
+When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each leased device
+(see "Register leased names in DNS" below).
+
+#### Before you start
+
+1. A running Ninlil and a signed-in API token, with the placeholders `<token>` and `<zone-id>` and
+   the Quick start values, as in [Zones and records](#zones-and-records) "Before you start". A
+   Linux host.
+2. A user that holds `dhcpscopes:write`, `dhcpleases:read`, `dhcpsettings:write`,
+   `dhcpservices:manage`, `dhcptagrules:write` and `dhcpleases:manage`. The bootstrap administrator
+   holds every permission.
+3. A network where Ninlil may answer DHCP. Turn off any other DHCP server on that network first:
+   two servers answer the same request, and a device takes either answer. For a first try, use a
+   network that has no other DHCP server.
+4. The numbers for your network. The commands use an example network `192.168.50.0/24`: Ninlil on
+   `192.168.50.2`, the router on `192.168.50.1`, and the pool `192.168.50.100` to
+   `192.168.50.150`. Replace them with yours. Check the host's address:
+
+   ```bash
+   ip -4 -brief address
+   ```
+
+   ```text
+   lo               UNKNOWN        127.0.0.1/8
+   eth0             UP             192.168.50.2/24
+   ```
+
+   (Your values differ.) Ninlil's address on that network is the **Server Identifier** that a
+   device names when it accepts an offer.
+5. The right to open the ports. DHCPv4 uses UDP port `67`, which is below `1024`: run Ninlil as
+   root or grant `CAP_NET_BIND_SERVICE` (see [Ports](#ports)). Router Advertisement opens a raw
+   socket and needs `CAP_NET_RAW` or root. In a container, DHCP needs host networking (see
+   [DHCP and Router Advertisement](#dhcp-and-router-advertisement) under Running with Docker).
+6. Optional, for the DNS step: the `example.test` zone from [Quick start](#quick-start) and the
+   `zones:write` permission.
+
+#### Steps
+
+**Turn on DHCPv4.**
+
+1. Start the service without a restart. It runs until you stop it or restart Ninlil:
+
+   ```bash
+   curl -k -X POST https://127.0.0.1:18443/api/dhcp-services/Dhcpv4/start -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"kind":"Dhcpv4","enabled":false,"isRunning":true}
+   ```
+
+   `enabled` is the saved switch, `isRunning` is the running state. In the console: **DHCP Services**.
+2. Save the switch, so the service starts with Ninlil. Set `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE=true`
+   when you start Ninlil, or save it through the API and restart:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/protocol -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   ```
+
+   In the console: **Presets & Settings**, **DHCP**, the **DHCPv4 Protocol** card.
+
+**Create a scope.**
+
+3. Create the scope for your network. Durations are written `hours:minutes:seconds`, or
+   `days.hours:minutes:seconds`, so `08:00:00` is eight hours and `1.00:00:00` is one day:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-scopes -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"lan","protocolVersion":"IPv4","rangeStartAddress":"192.168.50.100","rangeEndAddress":"192.168.50.150","subnetPrefixLength":24,"defaultLeaseDuration":"08:00:00","maxLeaseDuration":"1.00:00:00","gatewayAddresses":["192.168.50.1"],"dnsServerAddresses":["192.168.50.2"]}'
+   ```
+
+   ```text
+   {"id":"<scope-id>","name":"lan","protocolVersion":"IPv4","rangeStartAddress":"192.168.50.100","rangeEndAddress":"192.168.50.150", ...
+   ```
+
+   Copy the `id`. The next commands call it `<scope-id>`. `subnetPrefixLength` `24` gives the
+   subnet mask `255.255.255.0`. `defaultLeaseDuration` is the lease for a device that asks for
+   none, and `maxLeaseDuration` caps what a device may ask for. In the console: **DHCP Scopes**.
+
+**Reserve an address for one device.**
+
+4. Give a device with the hardware address `aa:bb:cc:dd:ee:10` the fixed address
+   `192.168.50.20`. Ninlil accepts the hardware address as `aa:bb:cc:dd:ee:10`,
+   `aa-bb-cc-dd-ee-10`, `aabb.ccdd.ee10` or `aabbccddee10` and stores it as
+   `aa:bb:cc:dd:ee:10`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-scopes/<scope-id>/reservations -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"clientIdentifier":"AA-BB-CC-DD-EE-10","ipAddress":"192.168.50.20","hostName":"printer"}'
+   ```
+
+   ```text
+   {"id":"...","scopeId":"<scope-id>","clientIdentifier":"aa:bb:cc:dd:ee:10","ipAddress":"192.168.50.20","hostName":"printer", ...
+   ```
+
+   In the console: **DHCP Scopes**, the **Manage reservations** button of the scope.
+
+**Register leased names in DNS (optional).**
+
+5. Name the zone for the scope. A device that sends a host name then gets an `A` record in that
+   zone while its lease is active. The zone must be a `Primary` or `CloudPrimary` zone:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-scopes/<scope-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"dnsZoneId":"<zone-id>"}'
+   ```
+
+   The answer is `204` with no body.
+
+**Send one more option to every device of the scope (optional).**
+
+6. A custom option has a tag (the DHCP option number) and a value written in hexadecimal. This one
+   sends the domain name (option `15`, plain text). `6C616E2E6578616D706C652E74657374` is
+   `lan.example.test`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-scopes/<scope-id>/custom-options -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"optionTag":15,"valueHex":"6C616E2E6578616D706C652E74657374"}'
+   ```
+
+   ```text
+   {"id":"...","scopeId":"<scope-id>","optionTag":15,"valueHex":"6C616E2E6578616D706C652E74657374","isDisabled":false,"valueSource":"Custom", ...
+   ```
+
+   A value of `"valueSource":"ServerAddress"` (and no `valueHex`) sends Ninlil's address
+   instead, for example as the time server (option `42`). In the console: **DHCP Scopes**, edit
+   the scope, custom options.
+
+**Send an option to some devices only (optional).**
+
+7. A tag rule matches devices by what they send. This rule matches every device whose vendor
+   class starts with `printer-`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-tag-rules -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"printers","vendorClassIdentifierMatch":"printer-","vendorClassIdentifierMatchMode":"Prefix"}'
+   ```
+
+   ```text
+   {"id":"<rule-id>","name":"printers","scopeId":null,"priority":0, ...
+   ```
+
+8. Add the option the rule sends. `C0A83201` is `192.168.50.1`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-tag-rules/<rule-id>/options -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"optionTag":42,"valueHex":"C0A83201"}'
+   ```
+
+   ```text
+   {"id":"...","tagRuleId":"<rule-id>","optionTag":42,"valueHex":"C0A83201","valueSource":"Custom", ...
+   ```
+
+   In the console: **DHCP Tag Rules**.
+
+**Turn on DHCPv6 (optional).**
+
+9. Start the service, then save the switch with the `dhcpv6-protocol` section:
+
+   ```bash
+   curl -k -X POST https://127.0.0.1:18443/api/dhcp-services/Dhcpv6/start -H 'Authorization: Bearer <token>'
+   curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/dhcpv6-protocol -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+   ```
+
+   (The environment variable is `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV6_ENABLE`.)
+10. Create a scope for the addresses. A DHCPv6 scope has no gateway, because IPv6 routers announce
+    themselves (see Router Advertisement below):
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/dhcp-scopes -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"lan6","protocolVersion":"IPv6","rangeStartAddress":"fd00:50::1000","rangeEndAddress":"fd00:50::10ff","subnetPrefixLength":64,"defaultLeaseDuration":"08:00:00","maxLeaseDuration":"1.00:00:00","dnsServerAddresses":["fd00:50::2"]}'
+    ```
+
+11. To delegate blocks of addresses to routers (prefix delegation), create a second scope of kind
+    `PrefixDelegation`. The range is the pool of prefixes, `subnetPrefixLength` is the size of the
+    whole pool, and `delegatedPrefixLength` is the size of each block. This pool is
+    `2001:db8:100::/48` and delegates `/56` blocks, 256 of them:
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/dhcp-scopes -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"delegation","protocolVersion":"IPv6","kind":"PrefixDelegation","rangeStartAddress":"2001:db8:100::","rangeEndAddress":"2001:db8:100:ff00::","subnetPrefixLength":48,"delegatedPrefixLength":56,"defaultLeaseDuration":"08:00:00","maxLeaseDuration":"1.00:00:00"}'
+    ```
+
+    The reservations of a DHCPv6 scope use the device's DUID as `clientIdentifier`, for example
+    `00:03:00:01:aa:bb:cc:00:06:01`. A `PrefixDelegation` scope takes no reservations.
+
+**Advertise the network with Router Advertisement (optional).**
+
+12. Router Advertisement sends nothing until there is something to say. Set the content. This
+    turns on the "O" flag (devices ask DHCPv6 for the rest), makes this host a default router for
+    30 minutes, sets the link MTU, and announces the DNS server and search domain (RFC 8106):
+
+    ```bash
+    curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/ra -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"managedAddressConfiguration":false,"otherConfiguration":true,"routerLifetime":"00:30:00","linkMtu":1500,"recursiveDnsServers":["fd00:50::2"],"dnsSearchListDomains":["example.test"]}'
+    ```
+
+    ```text
+    {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+    ```
+
+    In the console: **Presets & Settings**, **DHCP**, the **Router Advertisement Content** card.
+13. Add the prefix that devices build their addresses from. The API and the console cannot set
+    prefixes: add them to `appsettings.json` (see [Configuration](#configuration)), next to any
+    `Ra` settings the previous step saved. Ninlil reads the change at once:
+
+    ```json
+    {
+      "DhcpServer": {
+        "Ra": {
+          "Prefixes": [ { "Prefix": "fd00:50::", "PrefixLength": 64 } ]
+        }
+      }
+    }
+    ```
+
+14. Start the service and save the switch with the `ra-protocol` section:
+
+    ```bash
+    curl -k -X POST https://127.0.0.1:18443/api/dhcp-services/RouterAdvertisement/start -H 'Authorization: Bearer <token>'
+    curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/ra-protocol -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
+    ```
+
+    (The environment variable is `NINLIL_DHCP_SERVER_PROTOCOL_RA_ENABLE`.)
+
+**Use Ninlil as a relay agent instead (optional).**
+
+15. A relay agent forwards the requests of its network to a DHCP server somewhere else. On the
+    host that acts as the relay, set `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE=true` and
+    `NINLIL_DHCP_SERVER_RELAY_DHCPV4_ENABLE=true`, start Ninlil, and save the relay settings:
+    the upstream servers, the relay's address on the clients' network (`giaddr`), and an
+    optional circuit ID that the server can match:
+
+    ```bash
+    curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/relay -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"upstreamServerAddresses":["192.168.50.2"],"relayAgentAddress":"192.168.50.3","relayAgentCircuitId":"port-7"}'
+    ```
+
+    Restart Ninlil. On the upstream server, a scope must cover the relay address
+    (`192.168.50.3` falls in the scope created above). The DHCPv6 relay works the same way with
+    the `dhcpv6-relay` section (`NINLIL_DHCP_SERVER_RELAY_DHCPV6_ENABLE`, the upstream addresses
+    and `relayLinkAddress`).
+
+#### Check that it worked
+
+1. On a device on the network, renew the lease the way the operating system does it, for example
+   `sudo dhclient -v <interface>` on Linux or `ipconfig /renew` on Windows.
+2. List the leases:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-leases -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"items":[{"id":"...","protocolVersion":"IPv4","scopeName":"lan","clientIdentifier":"aa:bb:cc:00:00:01","ipAddress":"192.168.50.100","hostName":"laptop","state":"Active","leaseObtainedAtUtc":"2026-10-30T23:40:43.1061981+00:00","leaseExpiresAtUtc":"2026-10-31T07:40:43.1061981+00:00", ...
+   ```
+
+   (Your values differ.) A device appears with `"state":"Active"` after its request. In the
+   console: **DHCP Leases**.
+3. See how full a scope is:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-scopes/<scope-id>/statistics -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"scopeId":"<scope-id>","scopeName":"lan","protocolVersion":"IPv4","kind":"AddressAssignment","totalSlots":"51","leasedCount":1,"offeredCount":0,"reservedCount":1,"availableSlots":"50"}
+   ```
+
+4. If you chose the DNS step, ask Ninlil for the device's name (use your DNS port; `15300` is the
+   Quick start port):
+
+   ```bash
+   dig @127.0.0.1 -p 15300 laptop.example.test A +noall +answer
+   ```
+
+   ```text
+   laptop.example.test.	300	IN	A	192.168.50.100
+   ```
+
+5. If you chose Router Advertisement, read the settings back and look at the device. On a Linux
+   device in the network, `ip -6 address show dev <interface>` lists an address in the advertised
+   prefix, and `ip -6 route show default` lists this host as the router when the router lifetime
+   is above zero.
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-settings/ra -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"managedAddressConfiguration":false,"otherConfiguration":true,"routerLifetime":"00:30:00","currentHopLimit":64,"reachableTime":"00:00:00","retransTimer":"00:00:00","linkMtu":1500,"recursiveDnsServers":["fd00:50::2"], ...
+   ```
+
+6. Check the services:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-services -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   [{"kind":"Dhcpv4","enabled":true,"isRunning":true},{"kind":"Dhcpv6","enabled":true,"isRunning":true},{"kind":"RouterAdvertisement","enabled":true,"isRunning":true}, ...
+   ```
 
 #### Behaviour worth knowing
 
-- **A DHCP relay sends its replies out the client's link.** The DHCPv4 relay sends replies to
-  clients from its `giaddr` address, bound (on Linux) to the interface that owns it, so a
-  broadcast reply does not leave on the interface of the default route. The DHCPv6 relay gives a
-  client's link-local address the scope of the interface that owns its link-address. When no
-  interface holds `giaddr` (DHCPv4) or the link-address (DHCPv6), the relay logs one Warning at
-  start and falls back to the routing table's choice. The automated tests cover this on the
-  loopback interface only. A relay with two real links is checked by hand with
-  `src/script/development/dhcp-relay-two-link-test.sh /path/to/Ninlil.Web` (as root; it needs
-  `tcpdump`, a DHCPv4 and a DHCPv6 client, and asks you to create one DHCPv4 and one DHCPv6 scope
-  in the server instance). CI does not run the script, so run it after a change to the relay sockets.
+- **Which scope serves a device.** A request that arrives through a relay is served from the scope
+  whose subnet holds the relay address, and from no other. A request from the local network is
+  served, in this order, from: the scope that holds an enabled reservation for the device; the
+  scope that holds the address the device already has (`ciaddr`, a renewing device); the scope that
+  holds a lease row for the device; and the only enabled scope, if there is exactly one. **With
+  two or more enabled scopes, a new device on the local network that has no reservation gets no
+  reply.** Ninlil listens on one socket for all networks and does not know which network a
+  request came from. Put a reservation on the device, or serve the other network through a relay.
+  DHCPv6 follows the same rules with the relay's link address, and a request for prefixes (prefix
+  delegation) also falls back to the lease row and the only scope.
+- **One Server Identifier.** Ninlil names one address as the server in every reply. By default
+  it is the first IPv4 address of the first interface that is up and not loopback. On a host with
+  several networks, or with container bridges, set `NINLIL_DHCP_SERVER_CORE_SERVER_IDENTIFIER_ADDRESS`
+  to the address your clients can reach. DHCPv6 picks its DUID and the server's IPv6 address from
+  the first suitable interface in the same way, and has settings to override them
+  (`NINLIL_DHCP_SERVER_CORE_SERVER_DUID` and `NINLIL_DHCP_SERVER_CORE_SERVER_IPV6_ADDRESS`).
+- **Where the reply goes.** A reply to a relayed request goes to the relay. A refusal (`DHCPNAK`)
+  is always broadcast. Any other reply is broadcast when the device asked for a broadcast reply,
+  sent straight to the device's address when it already has one, and broadcast otherwise (RFC 2131
+  Section 4.1). Ninlil cannot unicast to a device that has no address yet, so it broadcasts.
+- **A device is known by its client identifier.** For DHCPv4 it is the Client-identifier option
+  (option `61`) when the device sends one, and the hardware address otherwise. Many devices send
+  option `61` as the type byte `01` followed by the hardware address. Ninlil then keeps
+  `01:aa:bb:cc:dd:ee:10`, not `aa:bb:cc:dd:ee:10`, and a reservation written with the plain
+  hardware address does not match. Read the identifier in the lease list and use that. An
+  identifier is at most 85 bytes. A request with a longer one gets no reply, and the log gets one
+  Warning a minute that counts the refusals: `Refused 1 DHCPv4 request(s) since the last warning
+  because the client identifier is longer than 85 bytes`.
+- **A reservation wins.** A device with a reservation can lease only its reserved address, and no
+  other device gets that address. Ninlil does not check the reserved address against the scope's
+  range or its IP version, so the address may lie outside the pool (a fixed address often does).
+  Check the address: a reservation that holds an address of the other IP version (an IPv4
+  address in a DHCPv6 scope) makes the server fail that device's requests with an error in the log.
+  The reservation's `hostName` is a note for you. DNS registration uses the host name the device
+  sends.
+- **Ninlil does not check scopes against each other.** It does not check that a range lies inside
+  its subnet or that two scopes do not overlap. Read the numbers twice.
+- **Lease length.** A DHCPv4 device may ask for a lease time. It gets that time, capped at
+  `maxLeaseDuration`, or `defaultLeaseDuration` when it asks for none. DHCPv6 ignores the times a
+  device suggests: the preferred and valid lifetimes are `defaultLeaseDuration` capped at
+  `maxLeaseDuration`, the renewal time (T1) is half of it and the rebinding time (T2) is 0.8 of it.
+  An offered address stays held for that device for `NINLIL_DHCP_SERVER_CORE_OFFER_HOLD_DURATION`
+  (30 seconds).
+- **Which options a reply carries.** The subnet mask, router and DNS servers are sent only when the
+  device lists them in its Parameter Request List (DHCPv4) or Option Request option (DHCPv6, for the
+  DNS servers), or when it sends no list. The server identifier and the lease time are always sent.
+  Custom options and tag-rule options are always sent, listed or not.
+- **Custom options.** DHCPv4: tags `1` to `254`, except `52`, `53` and `82`, which Ninlil or a
+  relay sets; the value is at most 255 bytes. Tags `66` (TFTP server name) and `67` (boot file
+  name) are text: printable ASCII only. A binary address belongs in tag `150`. DHCPv6: codes `1` to
+  `255` except the ones Ninlil writes itself, with a value of at most 65535 bytes; a code above 255
+  cannot be set. Code `24` (domain search list) takes domain names in wire form, for example
+  `076578616D706C65047465737400` for `example.test`. The API refuses a value
+  that breaks these rules with `400`.
+- **Tag rules.** A rule matches when every criterion it sets matches. A rule with no criterion
+  matches every device it applies to. The criteria are the vendor class and the user class (exact
+  or prefix match, case-sensitive), the relay circuit ID and remote ID, and, for DHCPv6 only, the
+  relay interface ID and the vendor class enterprise number. Matching rules apply in ascending
+  `priority`, then creation time, and the last rule that sets a tag wins; a rule's option beats a
+  custom option with the same tag. A rule with no `scopeId` is a DHCPv4 rule that applies in every
+  DHCPv4 scope, and the DHCPv6 engine ignores it. A DHCPv6 rule names a DHCPv6 scope, so make one
+  rule per DHCPv6 scope. The API refuses a criterion that does not fit the rule's protocol with
+  `400`. A stored rule that already breaks this never matches, and every `PATCH` of it returns
+  `400` until the patch clears the criterion.
+- **Declined addresses.** A device that finds its new address already in use sends `DHCPDECLINE`.
+  Ninlil then keeps that address out of the pool for
+  `NINLIL_DHCP_SERVER_CORE_DECLINED_ADDRESS_QUARANTINE_DURATION` (10 minutes). The lease list shows
+  the address with the client identifier `declined:<address>`, and the console labels it
+  **Declined address**. To end the quarantine early, release that row:
+  `POST /api/dhcp-leases/<lease-id>/release` (the console button is **End the quarantine early**).
+  A `DHCPDECLINE` or `DHCPRELEASE` for an address that is not the sender's lease changes nothing; for a
+  decline the log gets a Warning, `Ignored DECLINE of <address> from <identifier> in scope '<name>':
+  not its lease.`
+- **DHCP has no authentication here.** Ninlil does not implement DHCP authentication (RFC 3118 for
+  DHCPv4), so a host on the network that sends a `DHCPRELEASE` or `DHCPDECLINE` with another
+  device's identifier ends that device's lease or quarantines its address. Keep untrusted hosts off
+  the network that Ninlil serves.
+- **Answers that are not an address.** A DHCPv4 `REQUEST` for an address Ninlil cannot confirm gets a
+  `DHCPNAK`; a request from a device that no scope covers gets no reply. In DHCPv6, a `SOLICIT`
+  that a scope cannot serve gets an `ADVERTISE` with the status `NoAddrsAvail` (or `NoPrefixAvail`)
+  in the affected association; a `REQUEST`, `RENEW` or `REBIND` that cannot be confirmed gets
+  `NoBinding`; a `SOLICIT` that no scope covers gets no reply. Ninlil handles the first
+  address association (`IA_NA`) and the first prefix association (`IA_PD`) of a request, and
+  ignores temporary addresses (`IA_TA`).
+- **Rapid Commit.** DHCPv6 Rapid Commit (a two-message exchange) is off. Turn it on with
+  `NINLIL_DHCP_SERVER_CORE_ENABLE_DHCPV6_RAPID_COMMIT=true` only when the network has one DHCPv6
+  server: with several, all but one commit a lease that the device does not use (RFC 8415
+  Section 21.14).
+- **DNS registration.** Ninlil registers the host name a device sends: the Host Name option for
+  DHCPv4, the Client FQDN option for DHCPv6. The name becomes a label of the scope's zone: letters
+  are lowercased, any character that is not a letter, digit or hyphen becomes a hyphen, and the
+  label is at most 63 characters. The record has a TTL of 300 seconds. Ninlil removes the record when the lease is
+  released, declined or expired, and keeps the PTR record in step when the zone manages PTR
+  records (see [Zones and records](#zones-and-records)). Registration works for DHCPv6 leases
+  while DHCPv4 runs as a relay.
+  **A name that is taken gets no record.** If the name holds a record that Ninlil's DHCP did not
+  write (an `A`, `AAAA`, `CNAME`, `NS` or `TXT` record you entered), or belongs to another
+  device's active lease, Ninlil writes no record and logs a Warning on every renewal, `DHCP->DNS
+  registration refused for client <identifier> with host name <name>: owner name <fqdn> is
+  unavailable because ...`. The device keeps its lease.
+  In its DHCPv6 reply to a Client FQDN option, Ninlil sets `S=1` when it will try to register the
+  name (the scope has an eligible zone and the device sent a name) and `N=1` otherwise (RFC 4704
+  Section 4.1). `S=1` promises an attempt, not a result: a refused name still gets `S=1`.
+- **Leases expire in a sweep.** No device announces that a lease ran out, so Ninlil checks every
+  `NINLIL_DHCP_SERVER_CORE_LEASE_EXPIRY_SWEEP_INTERVAL` (one minute). An expired lease loses its
+  DNS record at that sweep.
+- **Which settings need a restart.** All DHCP, relay, TFTP and RA transport settings, and all
+  `Core` settings except the sweep interval, are read once at start. The `PATCH` answers say so,
+  and `GET` shows the value that runs until the restart. These apply without a restart: the
+  Router Advertisement content (including `Prefixes` in `appsettings.json`) from the next
+  advertisement, and the sweep interval from the next sweep. The start and stop calls of the
+  **DHCP Services** page change the running state without saving anything.
+- **A scope is removed with its settings, not its history.** Deleting a scope deletes its
+  reservations and custom options. Its leases stay as records. A tag rule that names the scope
+  stays and never matches.
+- **A cluster does not copy DHCP data** (see [Clustering, events and webhooks](#clustering-events-and-webhooks)).
+  Each Ninlil instance that serves DHCP needs separate scopes, and two instances must not serve the
+  same range. On MongoDB, do not point two instances at one database (see
+  [Storage](#storage)).
+- **Relay agent.**
+  - A protocol runs as a relay or as Ninlil's server, chosen once at start. The DHCPv4 and DHCPv6
+    choices are independent, and the listener of the protocol must be on too.
+  - The relay sends each request to every upstream server. It relays a reply only when the reply's
+    source address is one of the listed upstream addresses, so list the address the server answers
+    from. With no upstream address, the relay drops every request and logs a Warning. The
+    upstream list has no environment variable: save it with the `relay` or `dhcpv6-relay`
+    section, or in `appsettings.json`.
+  - Set `relayAgentAddress` (`giaddr`) to the relay's address on the clients' network. The upstream
+    server picks the scope from it. Left empty, the relay uses the address it detects for itself,
+    which is often the wrong network on a host with several. With a circuit ID or remote ID
+    set, the relay adds the Relay Agent Information option (option `82`, RFC 3046) to each client
+    request, and a tag rule on the server can match it (`relayAgentCircuitIdHex`:
+    `706F72742D37` is `port-7`). A request that already carries a relay address came from
+    another relay: the relay keeps that address and adds no option. The DHCPv6 relay supports one
+    hop.
+  - **A DHCP relay sends its replies out the client's link.** The DHCPv4 relay sends replies to
+    clients from its `giaddr` address, bound (on Linux) to the interface that owns it, so a
+    broadcast reply does not leave on the interface of the default route. The DHCPv6 relay gives a
+    client's link-local address the scope of the interface that owns its link-address. When no
+    interface holds `giaddr` (DHCPv4) or the link-address (DHCPv6), the relay logs one Warning at
+    start and falls back to the routing table's choice. The automated tests cover this on the
+    loopback interface only. A relay with two real links is checked by hand with
+    `src/script/development/dhcp-relay-two-link-test.sh /path/to/Ninlil.Web` (as root; it needs
+    `tcpdump`, a DHCPv4 and a DHCPv6 client, and asks you to create one DHCPv4 and one DHCPv6 scope
+    in the server instance). CI does not run the script, so run it after a change to the relay sockets.
+- **Router Advertisement.**
+  - Ninlil advertises nothing while the content is empty: no prefix, no router lifetime, no flag,
+    no MTU, no DNS server, no search domain, no route. The router lifetime is `00:00:00` by default, which says this
+    host is not a default router. The "M" flag tells devices to ask DHCPv6 for addresses. The "O"
+    flag tells them to ask DHCPv6 for the rest.
+  - Ninlil sends an advertisement on every usable interface at a random time between the minimum
+    (198 seconds) and the maximum (600 seconds) interval, and answers a device's solicitation after
+    a random delay of up to half a second. The API requires a minimum of at least 3 seconds and at
+    most 0.75 times the maximum, and a maximum from 4 to 65535 seconds.
+  - **Size limits.** An advertisement is at most 1240 octets, so no network drops it as a
+    fragment. A longer one is split into several advertisements. One option cannot be split, so
+    the API refuses more than 75 DNS server addresses and a search list that encodes to more than
+    1208 octets with `400`. Other limits: router lifetime at most 65535 seconds, reachable time at
+    most one hour, link MTU at least 1280.
+  - **Per-interface content.** `interfaceOverrides` changes the content for one interface by name
+    (`eth0`), and `"exclude":true` stops advertisements on it. A device that solicits from a
+    unicast address still gets an advertisement with the default content, because Ninlil does not
+    know which interface a solicitation arrived on.
+  - Ninlil accepts a solicitation only from a link-local, unspecified or loopback address. The
+    process needs `CAP_NET_RAW` or root, because it opens a raw ICMPv6 socket.
+- **Statistics are computed when you ask.** `/api/dhcp-scopes/<scope-id>/statistics` counts the
+  leases at that moment. `totalSlots` and `availableSlots` are strings, because an IPv6 pool can
+  hold more slots than a JSON number carries.
+
+#### Settings
+
+- [DHCP, DHCPv6, Router Advertisement & TFTP](./ENVIRONMENT.md#dhcp-dhcpv6-router-advertisement--tftp):
+  the switches, ports, server identity, hold and quarantine times, sweep interval, Rapid Commit,
+  relay and RA settings.
+- The list-valued settings have no variable: the relay's upstream addresses, the RA prefixes,
+  DNS server addresses, search domains, routes and interface overrides. Save the ones the API
+  carries with `PATCH /api/dhcp-settings/...`, and set the RA prefixes in `appsettings.json`.
+- In the console: **DHCP Services**, **DHCP Scopes**, **DHCP Tag Rules**, **DHCP Leases**, and
+  **Presets & Settings**, **DHCP**.
+
+#### When something goes wrong
+
+- *A device gets no address.* Work through the list:
+  1. `GET /api/dhcp-services` must show the service `isRunning`.
+  2. The scope must be enabled (`"isDisabled":false`) and have a free address (`availableSlots`).
+  3. With two or more enabled scopes, a new local device needs a reservation or a relay (see
+     "Which scope serves a device").
+  4. The log has the reason when Ninlil refused the request: `Refused ... because the client
+     identifier is longer than 85 bytes`, or `No address is currently available in scope '<name>'
+     to offer client <identifier>.`
+- *Ninlil stops at start with `Hosting failed to start` and `System.Net.Sockets.SocketException
+  (13): Permission denied`, then `Unhandled exception`.* DHCPv4, DHCPv6 or Router Advertisement is
+  enabled and the process may not open its socket: ports below `1024` need root or
+  `CAP_NET_BIND_SERVICE`, and Router Advertisement needs `CAP_NET_RAW` (see "Before you start"
+  step 5). `SocketException (98): Address already in use` means another program holds the port.
+  An enabled DHCP service that cannot bind stops Ninlil. Fix the cause, or turn the service off
+  with its `Enable` setting. The start call of **DHCP Services** answers `500` and logs the same
+  exception.
+- *A reservation is ignored.* The identifier does not match. Compare it with the one in the lease
+  list, and remember the `01:` prefix of option `61`.
+- *The DHCPv6 log has `An IAADDR option's address must be an IPv6 address.`* A reservation of the
+  scope holds an IPv4 address. Correct or delete it. The same fault in a DHCPv4 scope logs
+  `A DHCPv4 message's address fields must each be an IPv4 address.`
+- *No DNS record for a device.* The scope needs a zone of type `Primary` or `CloudPrimary`, and
+  the device must send a host name. The log shows `DHCP->DNS registration refused` when the name is
+  taken.
+- *The relay drops everything.* The log has `Dropping a DHCPv4 request this relay would otherwise
+  forward: no upstream server addresses are configured`. Save `upstreamServerAddresses` and
+  restart.
+- *A relayed device gets no reply.* No enabled scope on the upstream server covers `giaddr`
+  (Debug log: `DHCPv4 request relayed from <address>, which no enabled scope covers; no reply`), or
+  the upstream server answers from an address that is not in the list.
+- *No Router Advertisement arrives.* `GET /api/dhcp-settings/ra` must show content (a prefix, a
+  router lifetime, a flag, an MTU, a DNS server or a route), the service must run, and the process
+  needs `CAP_NET_RAW` or root.
 
 ### TFTP and PXE
 
-A read-only TFTP server (RFC 1350) delivers PXE boot files. It is off by default and listens on UDP
-port 69. A scope's boot file name and next-server address drive what clients receive.
+#### What it does
+
+PXE lets a computer boot from the network. The computer asks DHCP for an address and for the name
+and place of a boot file, then fetches the file over TFTP, the Trivial File Transfer Protocol
+(RFC 1350). Ninlil does both parts: the [DHCP scope](#dhcp-dhcpv6-and-router-advertisement) tells
+the computer which file to fetch and from where, and Ninlil's TFTP server sends the file.
+
+The TFTP server is read-only. It serves the files below one root directory, in binary (`octet`)
+mode, in 512-byte blocks. It is off by default and listens on UDP port `69`.
+
+#### Before you start
+
+1. A running Ninlil, a signed-in API token and the placeholders `<token>` and `<scope-id>`, as in
+   [DHCP, DHCPv6 and Router Advertisement](#dhcp-dhcpv6-and-router-advertisement) "Before you
+   start". A DHCPv4 scope for the network of the computers that boot.
+2. A user that holds `dhcpsettings:write` and `dhcpscopes:write`. The bootstrap administrator
+   holds every permission.
+3. A directory with the boot files, readable by the user that runs Ninlil. This guide uses
+   `/srv/tftp` and a file `boot.bin` in it. Check them:
+
+   ```bash
+   ls -l /srv/tftp
+   ```
+
+   ```text
+   -rw-r--r-- 1 root root 1300 Oct 30 19:24 boot.bin
+   ```
+
+   (Your owner, size and date differ.)
+
+4. Port `69` is below `1024`: run Ninlil as root or grant `CAP_NET_BIND_SERVICE` (see
+   [Ports](#ports)).
+5. `curl` with TFTP support, to test the server. Check the protocol list for `tftp`:
+
+   ```bash
+   curl --version | grep -o tftp
+   ```
+
+   ```text
+   tftp
+   ```
+
+#### Steps
+
+1. Set the root directory and turn the server on. The settings take effect at the next start:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/tftp -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true,"rootDirectory":"/srv/tftp"}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   ```
+
+   The environment variables are `NINLIL_DHCP_SERVER_TFTP_ENABLE` and
+   `NINLIL_DHCP_SERVER_TFTP_ROOT_DIRECTORY`. Restart Ninlil. In the console: **Presets & Settings**,
+   **DHCP**, the **TFTP Server** card. The **DHCP Services** page starts and stops the server
+   without a restart, once a root directory is saved.
+2. Tell the computers which file to fetch. `bootFileName` is the name the computer requests, as
+   the TFTP server sees it (relative to the root directory). `nextServerAddress` is the address of
+   the TFTP server. Without it, Ninlil sends its Server Identifier address:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-scopes/<scope-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"bootFileName":"boot.bin","nextServerAddress":"192.168.50.2"}'
+   ```
+
+   The answer is `204` with no body. In the console: **DHCP Scopes**, edit the scope, **PXE boot
+   file name** and **Next server (TFTP) address**.
+3. Optional: send a different boot file to computers of one kind. A tag rule can set option `67`
+   (the boot file name, text) for a vendor class. This one matches vendor classes that start with
+   `PXEClient:Arch:00007` (read what your computers send in a packet capture), and
+   `697078652E656669` is `ipxe.efi`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-tag-rules -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"uefi pxe","vendorClassIdentifierMatch":"PXEClient:Arch:00007","vendorClassIdentifierMatchMode":"Prefix","priority":10}'
+   curl -k https://127.0.0.1:18443/api/dhcp-tag-rules/<rule-id>/options -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"optionTag":67,"valueHex":"697078652E656669"}'
+   ```
+
+   The first answer holds the rule's `id`, which the second command calls `<rule-id>`.
+
+#### Check that it worked
+
+1. Fetch the file from another machine, with the address of the TFTP server:
+
+   ```bash
+   curl -s tftp://192.168.50.2/boot.bin -o boot.bin -w '%{size_download}\n'
+   ```
+
+   ```text
+   1300
+   ```
+
+   The number is the size of the file in bytes.
+2. Ask for a file that does not exist. `curl` exits with code `68` (TFTP: file not found):
+
+   ```bash
+   curl -s tftp://192.168.50.2/missing.bin -o /dev/null -w 'curl exit %{exitcode}\n'
+   ```
+
+   ```text
+   curl exit 68
+   ```
+
+3. Read the scope back. A PXE computer receives these two values in the DHCP reply:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/dhcp-scopes/<scope-id> -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"id":"<scope-id>","name":"lan", ... ,"bootFileName":"boot.bin","nextServerAddress":"192.168.50.2","kind":"AddressAssignment","delegatedPrefixLength":null}
+   ```
+
+#### Behaviour worth knowing
+
+- **The server serves one directory.** A file name may use `/` or `\` between directories
+  (Windows PXE clients send `\`), and a leading `/` or `\` means the root directory. A name that
+  leaves the root with `..`, and a symbolic link whose target or any step on the way lies outside
+  the root, get an Access Violation error. The root directory itself may be a link.
+- **Read requests only, binary mode only.** A write request gets the error `This TFTP server is
+  read-only.` A `netascii` or `mail` request gets `Only octet (binary) transfer mode is
+  supported.` TFTP options such as `blksize` (RFC 2347) are ignored, so every transfer uses
+  512-byte blocks.
+- **Limits.** At most `NINLIL_DHCP_SERVER_TFTP_MAX_CONCURRENT_TRANSFERS` transfers run at once
+  (50), and at most four of them belong to one client address. A request over a limit is dropped
+  without a reply, because an error packet sent to a forged address would be reflected traffic.
+  Ninlil logs one Warning a minute that counts such drops, abandoned transfers, client errors and
+  refused paths. A block that the computer does not acknowledge is sent again after
+  `NINLIL_DHCP_SERVER_TFTP_RETRANSMIT_TIMEOUT` (2 seconds) up to
+  `NINLIL_DHCP_SERVER_TFTP_MAX_RETRANSMISSIONS` times (5).
+- **Without a root directory the server does not bind.** An enabled TFTP server with an empty or
+  missing root directory logs a Warning and opens no socket. Ninlil keeps running.
+- **Ninlil does not check the boot file name.** The scope sends `bootFileName` whether or not the
+  file exists in the root directory.
+- **DHCP carries the boot file in two places.** The scope's boot file name goes into the `file` field of
+  every reply, and into option `67` when the device lists option `67` in its Parameter Request
+  List. A tag rule that sets option `67` changes the option, not the `file` field. The next server
+  address goes into `siaddr`, and into option `66` as text when the device lists it. A custom
+  option or tag-rule option `66` must be text; use option `150` for a binary address.
+- **A scope allows 128 bytes of boot file name.** This is the size of the `file` field in
+  RFC 2131.
+
+#### Settings
+
+- [DHCP, DHCPv6, Router Advertisement & TFTP](./ENVIRONMENT.md#dhcp-dhcpv6-router-advertisement--tftp):
+  the TFTP rows (switch, port, root directory, retransmission and transfer limits).
+- In the console: **Presets & Settings**, **DHCP**, **TFTP Server**.
+
+#### When something goes wrong
+
+- *`curl` exits with `68`.* The file is missing, or the name does not match. The server's error
+  text is `'<name>' does not exist.`
+- *The server answers `The requested path is outside this server's configured root directory.`*
+  The name uses `..`, or a link leads out of the root. Put the file below the root.
+- *Nothing answers.* The log must show `The TFTP server started and is now bound to UDP port 69.`
+  If it shows `The TFTP server is enabled but no DhcpServer:Tftp:RootDirectory is configured; it
+  will not bind a socket.` or `... root directory '<path>' does not exist; it will not bind a
+  socket.`, fix the root directory and restart. `GET /api/dhcp-services` shows `isRunning`.
+- *Ninlil stops at start with `Hosting failed to start` and `SocketException (13): Permission
+  denied` or `(98): Address already in use`.* The process may not open port `69`, or another
+  program holds it. An enabled TFTP server that cannot bind stops Ninlil, as DHCP does (see "When
+  something goes wrong" in [DHCP, DHCPv6 and Router Advertisement](#dhcp-dhcpv6-and-router-advertisement)).
 
 ### Clustering, events and webhooks
 
