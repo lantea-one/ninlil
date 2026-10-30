@@ -60,7 +60,8 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
 
                 DnsResourceRecord wireRecord = type switch
                 {
-                    // Cloudflare puts SRV and CAA fields in a nested "data" object instead of "content".
+                    // Cloudflare's API reference puts SRV and CAA fields in a nested "data" object, and
+                    // "content" for them is read-only.
                     DnsResourceRecordTypeEnum.Srv => CloudDnsRecordMapper.ToSrvWireRecord(
                         record.Name,
                         (ushort)(record.Data?.Priority ?? 0),

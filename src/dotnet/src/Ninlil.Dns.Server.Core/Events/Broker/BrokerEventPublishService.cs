@@ -14,8 +14,10 @@ namespace Ninlil.Dns.Server.Core.Events.Broker;
 ///     <see cref="DnsServerEventPublisher.InstanceId" />) and awaits
 ///     <see cref="IDnsServerEventBrokerTransport.PublishAsync" />. Encoding and a slow broker
 ///     therefore never delay the thread that raised the event, and a single reader means the
-///     transport's session or channel is never used by two threads at once (a JMS session and an
-///     AMQP channel are not safe for concurrent publishing). With the in-memory transport it does
+///     transport's session or channel is never used by two threads at once (the Jakarta
+///     Messaging specification, section 2.14, says a session is accessed by one thread at a time,
+///     and the RabbitMQ ".NET/C# Client API Guide" says channel instances must not be shared by
+///     threads that publish on them). With the in-memory transport it does
 ///     nothing. A failed publish is not retried: local subscribers already have the event. The
 ///     failures are logged as one warning per minute with the count and the last exception.
 /// </summary>

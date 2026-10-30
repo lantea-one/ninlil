@@ -48,7 +48,7 @@ public enum NetlinkDumpStatus
 ///     code, so tests can run it against constructed byte sequences.
 ///     <para>
 ///         Every layout below is taken from the Linux <c>netlink(7)</c> and <c>rtnetlink(7)</c>
-///         manual pages. A reply is a sequence of messages, each a 16-octet <c>nlmsghdr</c>
+///         manual pages and the kernel's "Introduction to Netlink" document. A reply is a sequence of messages, each a 16-octet <c>nlmsghdr</c>
 ///         (<c>u32 len, u16 type, u16 flags, u32 seq, u32 pid</c>) padded to a 4-octet boundary; a
 ///         neighbor message's payload is a 12-octet <c>ndmsg</c>
 ///         (<c>u8 family, u8 pad, u16 pad, s32 ifindex, u16 state, u8 flags, u8 type</c>) followed
@@ -147,8 +147,9 @@ public static class NetlinkNeighborMessageParser
             if (length < HeaderLength || offset + length > datagram.Length)
                 return NetlinkDumpStatus.Failed;
 
-            // The kernel sets NLM_F_DUMP_INTR when the table changed while it was being dumped, so
-            // the entries may repeat or miss devices (netlink(7)).
+            // The kernel sets NLM_F_DUMP_INTR on any message of a dump (the NLMSG_DONE message
+            // included) when the dump was interrupted and may be inconsistent, for example missing
+            // objects (kernel document "Introduction to Netlink", "Dump consistency").
             if ((flags & FlagDumpInterrupted) != 0)
                 return NetlinkDumpStatus.Failed;
 
@@ -169,8 +170,9 @@ public static class NetlinkNeighborMessageParser
             }
             else if (type == MessageTypeDone)
             {
-                // A multi-part reply's NLMSG_DONE may carry an s32 status; a negative one is an
-                // error that ended the dump early. A bare NLMSG_DONE has no payload.
+                // A multi-part reply's NLMSG_DONE may carry an s32 status (kernel document
+                // "Introduction to Netlink"); a negative one is an error that ended the dump early.
+                // A bare NLMSG_DONE has no payload.
                 if (payload.Length >= 4 && BinaryPrimitives.ReadInt32LittleEndian(payload) < 0)
                     return NetlinkDumpStatus.Failed;
 

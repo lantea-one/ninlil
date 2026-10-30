@@ -61,7 +61,7 @@ public sealed class ActiveMqEventBrokerOptions
     /// <summary>
     ///     This property contains the name of the shared topic every connected Ninlil instance
     ///     publishes to and subscribes to. It must be a topic: a JMS queue delivers each message
-    ///     to only one consumer, while
+    ///     to only one consumer (Jakarta Messaging specification, section 4.1.2), while
     ///     <see cref="Server.Core.Events.Broker.IDnsServerEventBrokerTransport" /> requires every
     ///     instance, including the publisher, to receive every event.
     /// </summary>

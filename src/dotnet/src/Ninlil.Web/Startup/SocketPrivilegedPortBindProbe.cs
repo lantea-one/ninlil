@@ -26,9 +26,9 @@ public sealed class SocketPrivilegedPortBindProbe : IPrivilegedPortBindProbe
     /// <inheritdoc />
     public bool CanBind(int port)
     {
-        // The privileged-port rule is a POSIX kernel rule (bind() fails with EACCES below 1024 for
-        // an unprivileged process). Windows has no such rule at the socket level, so the port is
-        // reported as bindable there to avoid a false warning.
+        // The privileged-port rule is a Unix kernel rule (ip(7): only a privileged process may
+        // bind to a port below 1024; bind(2) fails with EACCES otherwise). The probe applies it on
+        // Unix only and reports every port as bindable on Windows, so it raises no warning there.
         if (OperatingSystem.IsWindows())
             return true;
 

@@ -26,8 +26,8 @@ namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 ///     same ID (<c>name|TYPE</c>). <see cref="CreateRecordAsync" /> and
 ///     <see cref="DeleteRecordAsync" /> read the current set first and change it as a whole: CREATE
 ///     for a new set, UPSERT when values remain, DELETE with the set exactly as listed when the last
-///     value goes, because Route 53 rejects a CREATE of an existing set and a DELETE that does not
-///     match the set. The sync service runs zones one at a time, so the read and the change do not
+///     value goes, because Route 53 deletes a set only when the request repeats the values it was
+///     created with (API Reference, ChangeResourceRecordSets, "Deleting Resource Record Sets"). The sync service runs zones one at a time, so the read and the change do not
 ///     race with each other.
 ///     </para>
 ///     <para>
@@ -247,8 +247,9 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
 
     /// <summary>
     ///     This method reads the record set with the given name and type, the way Route 53 documents
-    ///     it: ListResourceRecordSets starts at the name and type and returns the first set at or
-    ///     after them, so the result is checked against both.
+    ///     it: ListResourceRecordSets returns up to 300 sets in ASCII order, beginning at a position
+    ///     specified by the name and type, so the first set returned may be a later one and the
+    ///     result is checked against both.
     /// </summary>
     /// <param name="client">The client to read with.</param>
     /// <param name="providerZoneId">The hosted zone's ID.</param>
@@ -448,7 +449,8 @@ public sealed class Route53DnsProvider(ILogger<Route53DnsProvider> logger = null
 
     /// <summary>
     ///     This method writes a name that sits inside a record value in Route 53's form, with the
-    ///     trailing dot Route 53 expects (see <see cref="EncodeRoute53Name" />).
+    ///     trailing dot (Route 53 accepts it with or without, Developer Guide, "Supported DNS record
+    ///     types"; see <see cref="EncodeRoute53Name" />).
     /// </summary>
     private static string EncodeValueName(string name) =>
         EncodeRoute53Name(DnsName.Parse(EnsureTrailingDot(name)));

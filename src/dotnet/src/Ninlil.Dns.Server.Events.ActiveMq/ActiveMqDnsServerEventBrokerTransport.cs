@@ -28,8 +28,8 @@ namespace Ninlil.Dns.Server.Events.ActiveMq;
 ///     </para>
 ///     <para>
 ///         <see cref="BrokerEventPublishService" /> calls <see cref="PublishAsync" /> one event at
-///         a time, which the JMS rule that a session is used by one thread at a time requires for
-///         the shared publish session. The send itself blocks its thread (the NMS
+///         a time, which the JMS rule that a session is used by one thread at a time (Jakarta
+///         Messaging specification, section 2.14) requires for the shared publish session. The send itself blocks its thread (the NMS
 ///         <c>IMessageProducer.Send</c>), so a slow broker delays only that service's task, never
 ///         the code that raised the event. <see cref="ActiveMqEventBrokerOptions.PublishTimeout" />
 ///         bounds one send.

@@ -34,7 +34,7 @@ public static class BackupArchiveCodec
 
     /// <summary>
     ///     This constant contains how many PBKDF2-HMAC-SHA256 iterations derive the AES key for a
-    ///     new archive: 600,000, the OWASP recommendation for that pairing. It slows brute force
+    ///     new archive: 600,000, the figure the OWASP Password Storage Cheat Sheet (section "PBKDF2") recommends for that pairing. It slows brute force
     ///     without making a backup or restore noticeably slow. The count is stored in each archive,
     ///     and <see cref="Decrypt" /> uses the stored value.
     /// </summary>

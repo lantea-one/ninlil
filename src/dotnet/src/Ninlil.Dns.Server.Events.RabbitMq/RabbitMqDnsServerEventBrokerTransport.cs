@@ -15,7 +15,11 @@ namespace Ninlil.Dns.Server.Events.RabbitMq;
 ///     connected Ninlil instance publishes to one shared fanout exchange
 ///     (<see cref="RabbitMqEventBrokerOptions.ExchangeName" />) and consumes from it through an
 ///     exclusive, auto-delete queue of its own, so every instance, including the publisher,
-///     gets a copy of each event, as <see cref="IDnsServerEventBrokerTransport" /> requires.
+///     gets a copy of each event, as <see cref="IDnsServerEventBrokerTransport" /> requires. A
+///     fanout exchange routes a copy of each message to every bound queue, and RabbitMQ ignores
+///     the AMQP <c>no-local</c> flag of <c>basic.consume</c>, so a consumer also receives what
+///     its own connection published (RabbitMQ documentation, "Exchanges" and "Compatibility
+///     and Conformance").
 ///     <para>
 ///         A background loop (<see cref="MaintainConnectionAsync" />) connects and reconnects
 ///         with exponential backoff whenever the connection is lost, so a restarted broker is
@@ -184,7 +188,8 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
     // Disposes the channel, then the connection, each in its own try so one failure cannot skip
     // the other. A connection the broker already closed throws on dispose; that is expected.
     // Closing the connection also makes the broker delete the exclusive, auto-delete queue of any
-    // consumer that used it (AMQP 0-9-1), so the old consumer disappears with it.
+    // consumer that used it (RabbitMQ documentation, "Queues": an exclusive queue is deleted when
+    // its connection closes), so the old consumer disappears with it.
     private async Task CloseAsync(
         IChannel channel,
         IConnection connection,

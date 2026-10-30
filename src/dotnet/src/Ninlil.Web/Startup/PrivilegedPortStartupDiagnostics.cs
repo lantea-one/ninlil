@@ -32,8 +32,9 @@ namespace Ninlil.Web.Startup;
 public static class PrivilegedPortStartupDiagnostics
 {
     /// <summary>
-    ///     This constant contains the highest port POSIX treats as privileged, 1023; a port at or
-    ///     below it may need elevation to bind.
+    ///     This constant contains the highest port Linux treats as privileged, 1023 (ip(7): "port
+    ///     numbers below 1024 are called privileged ports"); a port at or below it may need
+    ///     elevation to bind.
     /// </summary>
     private const int HighestPrivilegedPort = 1023;
 

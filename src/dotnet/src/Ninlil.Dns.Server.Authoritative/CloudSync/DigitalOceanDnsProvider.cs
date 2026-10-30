@@ -144,8 +144,9 @@ public sealed class DigitalOceanDnsProvider(HttpClient httpClient) : ICloudDnsPr
                     or DnsResourceRecordTypeEnum.NS
                     or DnsResourceRecordTypeEnum.MX;
 
-            // DigitalOcean's documented convention for a domain-name-valued record is a
-            // fully-qualified value ending in a dot.
+            // DigitalOcean's documentation ("How to Create, Edit, and Delete DNS Records") says to
+            // write a fully qualified domain name with a period at the end, which tells it from a
+            // subdomain prefix.
             data = isNameValued ? EnsureTrailingDot(content) : content;
             priority = record.Type == DnsResourceRecordTypeEnum.MX ? mxPreference : null;
         }

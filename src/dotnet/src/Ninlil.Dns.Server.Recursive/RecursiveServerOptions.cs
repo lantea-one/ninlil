@@ -44,7 +44,7 @@ public class RecursiveServerOptions
     ///     <see cref="UseCustomInsecureDomains" /> is off. They are the zones that are served
     ///     locally and never signed under the public root, so a signed proof of their
     ///     non-existence from the root or <c>arpa</c> is not an attack:
-    ///     <c>home.arpa</c> (RFC 8375), <c>internal</c> (reserved by ICANN for private use), and
+    ///     <c>home.arpa</c> (RFC 8375), <c>internal</c> (reserved by ICANN for private use, board resolution "Reserving .INTERNAL for Private-Use Applications"), and
     ///     the zones of the IANA "Locally-Served DNS Zones" registry: the IPv4 zones of RFC 6303
     ///     §4.1 (RFC 1918 space) and §4.2 (loopback, "this network", link-local space, the
     ///     documentation ranges, the broadcast address), the IPv6 zones of RFC 6303 §4.3 to §4.6
