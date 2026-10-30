@@ -141,6 +141,44 @@ public sealed class DynamicUpdateQueryResolverTests : IAsyncLifetime
         );
     }
 
+    [Theory]
+    [InlineData(DnsClassEnum.Chaos)]
+    [InlineData(DnsClassEnum.Hesiod)]
+    [InlineData(DnsClassEnum.Any)]
+    public async Task TryResolve_ForAZoneSectionOfAClassOtherThanIn_ReturnsNotAuth(
+        DnsClassEnum zoneClass
+    )
+    {
+        // RFC 2136 §3.1.1: ZCLASS names the zone's class; this server hosts class IN only, so the
+        // zone is not one of its authority zones and the answer is NOTAUTH, not FORMERR.
+        Assert.Equal(
+            DnsResponseCodeEnum.NotAuthoritative,
+            await ResolveAsync(
+                new DnsQuestion(
+                    DnsName.Parse(EnabledZone),
+                    DnsResourceRecordTypeEnum.Soa,
+                    zoneClass
+                )
+            )
+        );
+    }
+
+    [Fact]
+    public async Task TryResolve_ForAZoneSectionThatIsNotAnSoa_ReturnsFormatError()
+    {
+        // RFC 2136 §3.1.1: ZTYPE must be SOA, else FORMERR; this check comes before the class.
+        Assert.Equal(
+            DnsResponseCodeEnum.FormatError,
+            await ResolveAsync(
+                new DnsQuestion(
+                    DnsName.Parse(EnabledZone),
+                    DnsResourceRecordTypeEnum.A,
+                    DnsClassEnum.Chaos
+                )
+            )
+        );
+    }
+
     [Fact]
     public async Task TryResolve_ForAZoneWithUpdatesDisabled_ReturnsRefused()
     {

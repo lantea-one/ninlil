@@ -85,16 +85,21 @@ public class DynamicUpdateQueryResolver(
                 ErrorResponse(request, DnsResponseCodeEnum.FormatError)
             );
 
-        // RFC 2136 §3.1.1: the Zone Section's type must be SOA, else FORMERR. This server hosts
-        // class IN only, so it also answers FORMERR for any other class.
+        // RFC 2136 §3.1.1: the Zone Section's type must be SOA, else FORMERR. That check comes
+        // first, as in the RFC.
         DnsQuestion zoneSection = request.Questions[0];
 
-        if (
-            zoneSection.Type != DnsResourceRecordTypeEnum.Soa
-            || zoneSection.Class != DnsClassEnum.Internet
-        )
+        if (zoneSection.Type != DnsResourceRecordTypeEnum.Soa)
             return DnsQueryResolution.Handled(
                 ErrorResponse(request, DnsResponseCodeEnum.FormatError)
+            );
+
+        // RFC 2136 §3.1.1: ZCLASS is the class of the zone, and "the ZNAME and ZCLASS are checked
+        // to see if the zone so named is one of this server's authority zones, else signal
+        // NOTAUTH". This server hosts class IN only, so any other class names no zone here.
+        if (zoneSection.Class != DnsClassEnum.Internet)
+            return DnsQueryResolution.Handled(
+                ErrorResponse(request, DnsResponseCodeEnum.NotAuthoritative)
             );
 
         CachedZone zone = zoneCache.FindZone(zoneSection.Name);
