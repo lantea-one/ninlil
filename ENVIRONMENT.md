@@ -194,8 +194,10 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 
 Each transport beyond plain UDP/TCP is off by default. `Certificate*` settings appear once per
 TLS-based transport (DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC), each with its own independent
-listener configuration but all sharing the same underlying self-signed/ACME certificate file by
-default.
+listener configuration. While their PFX paths are empty, they all load the self-signed
+certificate Ninlil generates on first run and saves at the same default state path, so they share
+one file. An ACME certificate reaches a transport only when you set its PFX path to that
+certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 
 | Variable | Controls | Default |
 |---|---|---|
@@ -208,7 +210,7 @@ default.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_MAX_CONCURRENT_CONNECTIONS` | Max simultaneous DoT connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_IDLE_TIMEOUT` | Idle timeout before an inactive DoT connection is closed. | `00:00:30` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH` | Path to a custom PFX certificate for DoT (leave unset to use the shared auto-generated/ACME certificate). | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH` | Path to a PFX certificate file for DoT. Leave empty to use the self-signed certificate saved at the state path below. To use an ACME certificate, set this to its file in the ACME certificate directory. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override (`None` = OS/runtime default negotiation). | `None` |
@@ -541,7 +543,7 @@ appearance/branding.
 | `NINLIL_DNS_SERVER_WEB_LISTEN_ADDRESSES` | Comma-separated IP addresses the HTTP and HTTPS ports listen on, and so the admin console, REST API and DNS-over-HTTPS (for example `192.168.1.10`); empty listens on every address. An address this host doesn't have is skipped; if none can be used, the listener falls back to loopback so the console can't be locked out. Applies on restart. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for the web listener. | *(empty)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
-| `NINLIL_DNS_SERVER_WEB_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted — the same file every TLS-based DNS transport shares by default. | `data/protocol-tls-certificate.pfx` |
+| `NINLIL_DNS_SERVER_WEB_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. Every TLS-based DNS transport has the same default path, so they share one certificate while their PFX paths are empty. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override. | `None` |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
 | `NINLIL_DNS_SERVER_REVERSE_PROXY_ENABLE` | Whether this host trusts `X-Forwarded-*` headers from a reverse proxy (independent from DNS-over-TLS's own separate PROXY-protocol trust list). | `false` |
