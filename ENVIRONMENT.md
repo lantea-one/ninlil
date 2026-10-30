@@ -261,7 +261,7 @@ and key rollover, RFC 9432 Catalog Zone sync, and CAA/PTR reconciliation timing.
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_CONNECT_TIMEOUT` | Connect timeout when this server pulls a zone transfer as a secondary. | `00:00:05` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_READ_TIMEOUT` | Read timeout during an in-progress transfer pull. | `00:00:10` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_SOA_QUERY_TIMEOUT` | Timeout for the preliminary SOA-serial check before a transfer is attempted. | `00:00:03` |
-| `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_PRIMARY_PORT` | Default port used to reach a primary over plain TCP. | `53` |
+| `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_PRIMARY_PORT` | Default port used to reach a primary for plain TCP transfers, for the UDP SOA serial check that every transfer type (plain, TLS, QUIC) starts with, and for stub zone NS pulls. | `53` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_PRIMARY_TLS_PORT` | Default port used to reach a primary over TLS-wrapped transfer. | `853` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_PRIMARY_QUIC_PORT` | Default port used to reach a primary over QUIC-wrapped transfer. | `853` |
 | `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_VALIDATE_SERVER_CERTIFICATE` | Whether a TLS/QUIC transfer validates the primary's own certificate chain. | `true` |
