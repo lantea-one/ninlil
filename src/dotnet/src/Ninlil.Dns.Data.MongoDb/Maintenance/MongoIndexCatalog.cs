@@ -17,10 +17,11 @@ namespace Ninlil.Dns.Data.MongoDb.Maintenance;
 ///     filter or sort of the repository method named next to it.
 /// </summary>
 /// <remarks>
-///     Every index is non-unique: the relational unique constraints are not mirrored (a database
-///     that already holds duplicates must still start). Index creation is idempotent, so every
-///     start runs it. Indexes are performance-only, so an older build ignores the extra ones and
-///     a failure to create one is logged and does not stop the start.
+///     Every index is non-unique except the one on <c>SecondaryZoneRefreshStates.ZoneId</c>: the
+///     other relational unique constraints are not mirrored (a database that already holds
+///     duplicates must still start). Index creation is idempotent, so every start runs it. An
+///     older build ignores the extra indexes, and a failure to create one, the unique index
+///     included, is logged and does not stop the start.
 /// </remarks>
 public static class MongoIndexCatalog
 {
