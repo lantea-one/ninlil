@@ -145,29 +145,15 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   resolver, supporting the full `sdns://` DNSCrypt stamp grammar, and a TTL-honouring answer cache
   (RFC 2308 negative caching, serve-stale) that operators can inspect and flush from the console.
 - **TSIG (RFC 8945)** signed transfers and dynamic updates with HMAC-SHA1, -SHA256 (the default),
-  -SHA384 or -SHA512 keys, shown and stored with lowercase names (BIND lowercases them on the
-  wire; keys saved earlier with capitals are lowercased at startup, and two names that differ
-  only in case are left as they are with a warning in the log). The keys that clustering creates
-  for its peers are labelled as cluster keys: they can be disabled but not renamed or deleted,
-  never sign or verify zone transfers, and go away when the peer is removed. A key is
-  not server-wide: each zone lists the keys allowed to update it and the keys allowed to transfer
-  it (AXFR and IXFR), and an empty list accepts no key, so a verified key that is not listed gets
-  a signed REFUSED. Bind keys on the zone form after creating them; a zone you upgrade from an
-  earlier setup where any key worked needs its lists filled in. Also an **ACME (RFC 8555) DNS-01
-  client** for automated certificate issuance against zones this server hosts itself, with
+  -SHA384 or -SHA512 keys. A key is not server-wide: each zone lists the keys allowed to update it
+  and the keys allowed to transfer it. See [Zones and records](#zones-and-records) and
+  [Secondary zones and transfers](#secondary-zones-and-transfers). Also an **ACME (RFC 8555)
+  DNS-01 client** for automated certificate issuance against zones this server hosts itself, with
   optional automated CAA record and PTR/reverse-zone management (including RFC 2317 classless
-  delegation).
+  delegation). See [Certificates (ACME)](#certificates-acme).
 - **Cloud DNS zone sync**: Cloudflare, AWS Route 53, and DigitalOcean, kept in sync alongside
-  classic AXFR/IXFR zones, covering A/AAAA/CNAME/MX/NS/TXT/SRV/CAA records.
-  A CloudPrimary zone also accepts RFC 2136 dynamic updates, with the same rules as a primary
-  zone: the zone opts in, the update is TSIG-signed and the key is listed on the zone. An accepted
-  update is stored locally and answered at once, then pushed to the provider within moments. If
-  the push fails, the zone's regular sync retries it and a cloud-sync-failed event is raised;
-  records added directly at the provider are removed by the next push. An update that adds a
-  record type the providers cannot hold (anything but A, AAAA, CNAME, MX, NS, TXT, SRV and CAA)
-  is refused as a whole, so a CloudPrimary reverse zone cannot take PTR updates; deletions are
-  allowed. The provider keeps its own SOA and apex NS, so an update to them changes only what
-  this server serves. An update to a zone with no SOA record gets SERVFAIL until you add one.
+  classic AXFR/IXFR zones, covering A/AAAA/CNAME/MX/NS/TXT/SRV/CAA records. A `CloudPrimary` zone
+  also accepts RFC 2136 dynamic updates. See [Cloud DNS sync](#cloud-dns-sync).
 - **Filtering and parental controls**: block/allow-list filtering with subscribed external
   blocklists (hosts-file, plain-domain or adblock `||domain^`/`@@` syntax), CNAME-cloaking
   protection, a curated "blocked services" catalog, Safe Search enforcement, per-client and
@@ -854,34 +840,1227 @@ One guide per feature. Each says what the feature does and links the settings th
 
 ### Zones and records
 
-Ninlil serves primary, secondary, stub, forwarder and catalog zones. Open **Zones** in the admin
-console to create one; every registered record type has its own form. The REST API manages the same
-data under `/api/zones`. The settings are in
-[Authoritative DNS engine](./ENVIRONMENT.md#authoritative-dns-engine) and [TSIG](./ENVIRONMENT.md#tsig).
+#### What it does
+
+A zone is one part of the DNS name space that this server answers for. Ninlil stores a zone as a
+list of records. The zone's type says where its records come from:
+
+| Type | Where the records come from |
+|---|---|
+| `Primary` | You write them. This is the usual type. |
+| `Secondary` | A copy of a zone on another server, kept current by zone transfer. See [Secondary zones and transfers](#secondary-zones-and-transfers). |
+| `Stub` | A copy of only the zone's NS records, to learn which servers answer for the zone. |
+| `Forwarder` | None. Ninlil sends every query for names under the zone to the servers you list. See [Forwarding and recursion](#forwarding-and-recursion). |
+| `SecondaryForwarder` | A copy, by zone transfer, of a forwarding setup that another server holds. |
+| `Catalog` | A list of other zones that peers create on their own (an RFC 9432 catalog zone). |
+| `SecondaryCatalog` | A copy of a catalog zone from another server. |
+| `CloudPrimary` | You write them, and Ninlil also pushes them to a cloud DNS provider. See [Cloud DNS sync](#cloud-dns-sync). |
+| `CloudSecondary` | Pulled from a cloud DNS provider. See [Cloud DNS sync](#cloud-dns-sync). |
+
+A zone you create has no records, not even an SOA record. The first record you add must be the
+zone's SOA record. After that, every accepted change to the zone's records advances the SOA serial
+by one, so you do not edit the serial yourself. The REST API manages zones under `/api/zones` and their
+records under `/api/zones/<zone-id>/records`. The console does the same under **Zones**.
+
+#### Before you start
+
+1. A running Ninlil and a signed-in API token. [Quick start](#quick-start) steps 2 to 4 start the
+   server and sign in. A token is valid for 15 minutes by default
+   ([`NINLIL_JWT_ACCESS_TOKEN_LIFETIME`](./ENVIRONMENT.md#identity-authentication--sso)). A request
+   with an expired token answers `401` with no body: sign in again.
+2. The commands in this guide and the next four use the Quick start values: the API on
+   `https://127.0.0.1:18443` and DNS on port `15300`. Replace them if you chose other ports. `-k`
+   accepts Ninlil's self-signed certificate. Two placeholders stand for values you copy from an
+   answer: `<token>` is the `accessToken` from the sign-in answer and `<zone-id>` is a zone's `id`.
+3. A user that holds the `zones:read` and `zones:write` permissions. The bootstrap administrator
+   holds every permission.
+4. The Quick start zone `example.test`, with its SOA record and the `www` A record. Check that it
+   exists and copy its `id`:
+
+   ```bash
+   curl -k 'https://127.0.0.1:18443/api/zones?skip=0&take=100' -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"items":[{"id":"<zone-id>","name":"example.test","type":"Primary", ...
+   ```
+
+   A page holds 50 zones unless you set `take` (500 at most). With more zones than one page, raise
+   `skip` to reach the next page.
+
+#### Steps
+
+**Add and change records.**
+
+1. Add an MX record, a TXT record and a CNAME record. Each record's `data` object has the fields
+   of its type (`preference` and `exchange` for MX, a `values` list for TXT, a `target` for CNAME).
+   The console form shows the fields for the type you pick, and `/swagger` lists them for each
+   type.
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"example.test","type":"MX","timeToLiveSeconds":300,"data":{"preference":10,"exchange":"mail.example.test"}}'
+   ```
+
+   ```text
+   {"id":"<mx-record-id>","zoneId":"<zone-id>","name":"example.test","type":"MX", ...
+   ```
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"example.test","type":"TXT","timeToLiveSeconds":300,"data":{"values":["v=spf1 -all"]}}'
+   ```
+
+   ```text
+   {"id":"<txt-record-id>","zoneId":"<zone-id>","name":"example.test","type":"TXT", ...
+   ```
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"web.example.test","type":"CNAME","timeToLiveSeconds":300,"data":{"target":"www.example.test"}}'
+   ```
+
+   ```text
+   {"id":"...","zoneId":"<zone-id>","name":"web.example.test","type":"CNAME", ...
+   ```
+
+   Each answer starts with the new record's `id`. Copy the MX record's `id` as `<mx-record-id>` and
+   the TXT record's `id` as `<txt-record-id>`. In the console: open **Zones**, press **Manage
+   records** on the zone's row, press **Add record**, fill in the form and press **Save**.
+2. To find the `id` of a record you did not just add, list the zone's records. Each item holds its
+   `id`:
+
+   ```bash
+   curl -k 'https://127.0.0.1:18443/api/zones/<zone-id>/records?skip=0&take=100' -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"items":[{"id":"...","zoneId":"<zone-id>","name":"example.test","type":"SOA", ...
+   ```
+
+3. Change the preference of the MX record. A `PATCH` changes only the fields you send; `data` is
+   replaced as a whole, so send every field of the type:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id>/records/<mx-record-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"data":{"preference":20,"exchange":"mail.example.test"}}'
+   ```
+
+   An answer of `204` with no body means the change is saved.
+4. Take the TXT record out of service without deleting it, and then delete it:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id>/records/<txt-record-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"isDisabled":true}'
+   curl -k -X DELETE https://127.0.0.1:18443/api/zones/<zone-id>/records/<txt-record-id> -H 'Authorization: Bearer <token>'
+   ```
+
+   Both answer `204`.
+
+**Accept dynamic updates (optional).** A client can change a zone's records with an RFC 2136
+dynamic update. Ninlil accepts an update only for a `Primary` or `CloudPrimary` zone that opts in,
+and only when the update is signed with a TSIG key that the zone lists.
+
+1. Create a TSIG key. Leave out `secret` and Ninlil generates one. The answer shows the secret
+   once; copy it. The next steps call it `<secret>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/tsig-keys -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"update-key"}'
+   ```
+
+   ```text
+   {"key":{"id":"...","name":"update-key","algorithmName":"hmac-sha256", ...},"secret":"<secret>"}
+   ```
+
+   In the console: **TSIG Keys**, **New key**. The console needs the `tsigkeys:write` permission.
+2. Turn updates on for the zone and list the key. An empty list accepts no key:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"dynamicUpdateEnabled":true,"updateTsigKeyNames":["update-key"]}'
+   ```
+
+   In the console: edit the zone, open **Dynamic updates & transfers**, tick **Accept RFC 2136
+   dynamic updates** and tick the key under **Keys allowed to send dynamic updates**.
+3. Send an update with `nsupdate`, a command-line client that your distribution's DNS utilities
+   package provides. First write the update to a file:
+
+   ```bash
+   printf 'server 127.0.0.1 15300\nzone example.test\nupdate add dyn.example.test. 300 A 192.0.2.99\nsend\n' > update.txt
+   ```
+
+   Then send it, signed with the key:
+
+   ```bash
+   nsupdate -y 'hmac-sha256:update-key:<secret>' update.txt
+   ```
+
+   `nsupdate` prints nothing when the update succeeds.
+
+**Keep PTR records in step (optional).** Ninlil can write a PTR record for every A and AAAA record
+of a zone into the matching reverse zone.
+
+1. Create the reverse zone and its SOA record. The reverse zone for `192.0.2.0/24` is
+   `2.0.192.in-addr.arpa`. The first answer starts with the new zone's `id`; copy it as
+   `<reverse-zone-id>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"2.0.192.in-addr.arpa","type":"Primary"}'
+   ```
+
+   ```text
+   {"id":"<reverse-zone-id>","name":"2.0.192.in-addr.arpa","type":"Primary", ...
+   ```
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<reverse-zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"2.0.192.in-addr.arpa","type":"SOA","timeToLiveSeconds":3600,"data":{"primaryNameServer":"ns1.example.test","responsiblePersonMailbox":"admin.example.test","serial":1,"refreshSeconds":3600,"retrySeconds":900,"expireSeconds":1209600,"minimumTtlSeconds":3600}}'
+   ```
+
+2. Turn PTR management on for `example.test`. The change starts a pass in the background, which
+   writes the PTR records within a few seconds:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"autoManagePtrRecords":true}'
+   ```
+
+   The answer is `204`. Wait a few seconds before the check below.
+
+#### Check that it worked
+
+1. Ask for the records you added:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 example.test MX +noall +answer
+   dig @127.0.0.1 -p 15300 web.example.test A +noall +answer
+   ```
+
+   ```text
+   example.test.		300	IN	MX	20 mail.example.test.
+   web.example.test.	300	IN	CNAME	www.example.test.
+   www.example.test.	3600	IN	A	192.0.2.10
+   ```
+
+   The CNAME answer also carries the A record it points at.
+2. Read the SOA serial. It is higher than before your changes (your values differ):
+
+   ```bash
+   dig @127.0.0.1 -p 15300 example.test SOA +noall +answer
+   ```
+
+   ```text
+   example.test.		3600	IN	SOA	ns1.example.test. admin.example.test. 8 3600 900 1209600 3600
+   ```
+
+3. After the dynamic update:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 dyn.example.test A +noall +answer
+   ```
+
+   ```text
+   dyn.example.test.	300	IN	A	192.0.2.99
+   ```
+
+4. After the PTR pass:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 -x 192.0.2.10 +noall +answer
+   ```
+
+   ```text
+   10.2.0.192.in-addr.arpa. 3600	IN	PTR	www.example.test.
+   ```
+
+#### Behaviour worth knowing
+
+- A disabled record is kept but never answered: its name answers `NXDOMAIN` when nothing else
+  lives there. A disabled zone answers `REFUSED`.
+- A record marked **Exclude from sync** (`excludeFromSync`) is local-only. Zone transfers and
+  cloud pushes never send it, and an incoming transfer or sync never overwrites or deletes it.
+- Ninlil sends a NOTIFY to the addresses in a zone's `notifyAddresses` after every change. See
+  [Secondary zones and transfers](#secondary-zones-and-transfers).
+- A TSIG key name is stored and shown in lowercase. DNS names compare without case
+  (RFC 4343 §3), and the MAC covers the key name in lowercase canonical wire format (RFC 8945
+  §4.3.3, RFC 4034 §6.2), so one spelling must do the signing. At start, Ninlil lowercases a key
+  that was saved with capitals. When two keys differ only in case, it leaves both as they are and
+  writes a warning that names them to the log.
+- A TSIG key is not server-wide. Each zone lists the keys allowed to update it
+  (`updateTsigKeyNames`) and the keys allowed to transfer it (`transferTsigKeyNames`). An empty list
+  accepts no key. A request signed with a valid key that the zone does not list gets a signed
+  `REFUSED`.
+- The keys that clustering creates for its peers carry the label `isClusterKey`. They can be
+  disabled but not renamed or deleted, they never sign or verify zone transfers or updates, and
+  they go away when the peer is removed.
+- Ninlil verifies a TSIG MAC that the sender truncated (for example HMAC-SHA1-96 or
+  HMAC-SHA256-128) on its leading octets. A MAC longer than the hash, or shorter than the larger
+  of 10 octets and half the hash length, gets `FORMERR` (RFC 8945 §5.2.2.1). An HMAC-SHA1 MAC of
+  10 or 11 octets passes that rule but gets `BADTRUNC` (TSIG error 22), because Ninlil accepts no
+  MAC shorter than 12 octets.
+- A dynamic update answers `NOTAUTH` when the zone section names a class other than `IN` or a
+  zone that Ninlil does not host. It answers `REFUSED` for an unsigned update, for a key the zone
+  does not list, for a zone type that is not `Primary` or `CloudPrimary` and for a zone that has
+  not opted in. A zone with no SOA record answers `SERVFAIL`.
+- PTR management is off unless `autoManagePtrRecords` is `true` on the zone or the server-wide
+  default is on. It works for `Primary` and `CloudPrimary` zones only. `ptrIpv4PrefixLength` picks
+  the size of each reverse zone: 24 (the default) means one reverse zone per third octet, and 25 to
+  30 use RFC 2317 classless delegation. `ptrIpv6PrefixLength` must be a multiple of 4 from 16 to
+  124 (default 64). A value outside these ranges answers `400`. Every change to the zone's A and
+  AAAA records starts a pass again. `POST /api/zones/<zone-id>/reconcile-ptr` runs one pass on
+  demand and answers with the counts of PTR records added and removed; use it to repeat a pass
+  later, not right after a change.
+
+#### Settings
+
+- [Authoritative DNS engine](./ENVIRONMENT.md#authoritative-dns-engine): the PTR defaults
+  (`NINLIL_DNS_SERVER_AUTHORITATIVE_PTR_SYNC_DEFAULT_ENABLED` and the two prefix defaults) and the
+  NOTIFY settings.
+- [TSIG](./ENVIRONMENT.md#tsig): `NINLIL_DNS_SERVER_TSIG_DEFAULT_FUDGE_SECONDS`, the clock
+  difference a signed message may have (`300` seconds).
+- In the console: **Presets & Settings**, **Zone Management**, **PTR Sync** and **TSIG**.
+
+#### When something goes wrong
+
+- *`401` with no body.* The token expired. Sign in again.
+- *`400` "A zone's very first record must be its own SOA record."* Add the SOA record first (the
+  [Quick start](#quick-start) shows it).
+- *`nsupdate` prints `update failed: REFUSED`.* Check, in this order: the zone has
+  `dynamicUpdateEnabled` set to `true`; the key name in `updateTsigKeyNames` is the one you pass to
+  `nsupdate -y`; the secret is the one the key creation answered.
+- *`nsupdate` prints `update failed: NOTAUTH`.* The zone name in the update file is not a zone
+  that Ninlil hosts, or the update names a class other than `IN`.
+- *A record's `data` shows `null` fields, as in `{"address":null}`.* The data you sent did not fit
+  the record type (a wrong field name, or a value such as an address that does not parse). Delete
+  the record and add it again with the fields the type needs. A record with empty data stops the
+  zone from being signed, so remove it first when the zone is signed.
 
 ### DNSSEC
 
-Ninlil signs the zones it serves (RSA, ECDSA and EdDSA keys; NSEC or NSEC3) and validates answers on
-the recursive path and for forwarded answers. Signing is per zone: tick **Sign this zone with
-DNSSEC** on the zone form. The settings are in [Recursive resolver](./ENVIRONMENT.md#recursive-resolver)
-and [DNSSEC, ACME & CAA](./ENVIRONMENT.md#dnssec-acme--caa).
+#### What it does
+
+Ninlil signs the zones it originates (`Primary` and `CloudPrimary`) and validates answers from other
+servers on the recursive and forwarding paths. This guide covers signing. Validation is described
+under [DNS server](#dns-server) in "What's in the box".
+
+A signed zone carries three kinds of data besides its own records: a DNSKEY record set that
+publishes the zone's public keys, RRSIG records that sign each record set, and a chain of NSEC or
+NSEC3 records that proves which names do not exist. A zone uses two roles of key:
+
+- The **Zone Signing Key (ZSK)** signs the zone's ordinary record sets.
+- The **Key Signing Key (KSK)** signs the DNSKEY record set. The parent zone refers to the KSK with
+  a **DS record**, the fingerprint of the KSK, which is how a validator finds your keys from
+  outside the zone.
+
+Signing is per zone. Ticking **Sign this zone with DNSSEC** (`isDnssecSigned`) marks a zone, and
+the zone is signed only while it holds a key that can sign. Ninlil never generates keys by itself:
+you create them, and Ninlil signs the zone again at once. It generates the key pair on the server
+and never returns the private key.
+
+#### Before you start
+
+1. A running Ninlil, a signed-in API token and the Quick start zone `example.test`, as in
+   [Zones and records](#zones-and-records) "Before you start". The placeholders `<token>` and
+   `<zone-id>` mean the same here.
+2. A user that holds the `zones:read` and `zones:write` permissions. The bootstrap administrator
+   holds every permission.
+3. `dig`. Check it with `dig -v`.
+4. To publish a DS record for a zone that is not a child of a zone Ninlil hosts: a login to the
+   registrar or to the parent zone's DNS provider.
+
+#### Steps
+
+**Sign a zone.**
+
+1. Mark the zone as signed. A zone you create uses NSEC3 with 0 extra iterations and no salt. Change those
+   fields in the same call only if you have a reason ("Denial of existence" under "Behaviour worth
+   knowing" below gives the rules):
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"isDnssecSigned":true}'
+   ```
+
+   The answer is `204` with no body. In the console: edit the zone, open **DNSSEC signing**, tick
+   **Sign this zone with DNSSEC** and press **Save**.
+2. Read the zone's `dnssecServedUnsigned` field. It is `true` because the zone has no key yet:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' | grep -o '"dnssecServedUnsigned":[a-z]*'
+   ```
+
+   ```text
+   "dnssecServedUnsigned":true
+   ```
+
+   The server log holds one warning: `Zone 'example.test' (<zone-id>) is marked signed but has no
+   key that can sign; it is served unsigned until a key with a permitted algorithm is added. If a
+   parent zone published a DS record for it, replace or remove that DS.`
+3. Create the KSK. The answer holds the key's `id`, its `lifecycleState` (`Active`) and its DS
+   record:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/dnssec-keys -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"role":"Ksk","algorithm":"ECDSAP256SHA256"}'
+   ```
+
+   ```text
+   {"id":"<key-id>","zoneId":"<zone-id>","role":"KSK","algorithm":"ECDSAP256SHA256", ... "lifecycleState":"Active", ... "dsRecord":"example.test. IN DS 27562 13 2 CF3287E3...","dsDigest":"CF3287E3..."}
+   ```
+
+4. Create the ZSK:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/dnssec-keys -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"role":"Zsk","algorithm":"ECDSAP256SHA256"}'
+   ```
+
+   In the console, steps 3 and 4 are **Zones**, **Manage DNSSEC keys**, **Generate key**. The
+   algorithms Ninlil signs with are `RSASHA256`, `RSASHA512`, `ECDSAP256SHA256`,
+   `ECDSAP384SHA384`, `ED25519` and `ED448`. For an RSA key, `keySizeBits` is `0` (2048 bits) or a
+   multiple of 64 from 2048 to 4096.
+
+**Publish the DS record at the parent.**
+
+5. Read the KSK's DS record. A ZSK has none, so its `dsRecord` is `null`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/dnssec-keys -H 'Authorization: Bearer <token>' | grep -o '"dsRecord":[^,]*'
+   ```
+
+   ```text
+   "dsRecord":null
+   "dsRecord":"example.test. IN DS 27562 13 2 CF3287E34FEDDF18A6732808880B7372E6B88C1D7964EFFBE77E12C405B44683"
+   ```
+
+   The order of the keys in the list can differ.
+
+   In the console, the key list has a **DS and DNSKEY records** button on each KSK.
+6. Enter the key tag, algorithm, digest type and digest at your registrar or at the parent zone's
+   provider. The key list and the API also give the digest alone (`dsDigest`). Until the parent
+   publishes the DS record, validators treat your zone as unsigned.
+
+**Publish the DS record from a parent that Ninlil hosts (optional).** When Ninlil hosts both the
+parent zone and a signed child zone, the parent publishes the child's DS record itself. This
+example uses the parent `example.test` and the child `child.example.test`. The child needs its own
+zone, SOA record and keys: create them as in the steps above and in
+[Zones and records](#zones-and-records), then continue here. The child's answer starts with the
+child zone's `id`; copy it as `<child-zone-id>`.
+
+7. Add the delegation to the parent: an NS record at the child's name.
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"child.example.test","type":"NS","timeToLiveSeconds":300,"data":{"nameServer":"ns.child.example.test"}}'
+   ```
+
+8. The parent adds the DS record the next time it is signed. A key added to the child does not start
+   that, so change the parent in any way, for example its comment:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"comments":"signed child"}'
+   ```
+
+**Roll a key (optional).** A rollover replaces a key without breaking validation. Ninlil follows
+the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signature for a KSK
+(§4.1.2).
+
+9. Start the rollover of an `Active` key. `<key-id>` is the `id` of the key to replace. The
+   answer describes the new key:
+
+   ```bash
+   curl -k -X POST https://127.0.0.1:18443/api/zones/<zone-id>/dnssec-keys/<key-id>/roll -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{}'
+   ```
+
+   ```text
+   {"id":"<new-key-id>","zoneId":"<zone-id>","role":"ZSK","algorithm":"ECDSAP256SHA256", ... "lifecycleState":"Published", ...
+   ```
+
+   A KSK's new key starts in `DoubleSignature`. Add `"algorithm":"ED25519"` to the body to change
+   the algorithm in the same rollover. In the console, the key list has a **Start a rollover**
+   button.
+10. For a KSK whose parent zone Ninlil does not host, publish the new key's DS record at the parent
+    (steps 5 and 6, using the new key), and then tell Ninlil. `<new-key-id>` is the id from step 9:
+
+    ```bash
+    curl -k -X POST https://127.0.0.1:18443/api/zones/<zone-id>/dnssec-keys/<new-key-id>/confirm-parent-ds-updated -H 'Authorization: Bearer <token>'
+    ```
+
+    The answer is `204`. In the console, press **Confirm parent DS updated** on the new key. Ninlil
+    cannot look at a registrar, so the rollover waits for this call.
+11. Watch the states. Each pass of the rollover service moves a key when its wait is over:
+
+    ```bash
+    curl -k https://127.0.0.1:18443/api/zones/<zone-id>/dnssec-keys -H 'Authorization: Bearer <token>' | grep -o -E '"role":"[A-Z]*"|"lifecycleState":"[A-Za-z]*"'
+    ```
+
+    ```text
+    "role":"ZSK"
+    "lifecycleState":"Active"
+    "role":"ZSK"
+    "lifecycleState":"Published"
+    "role":"KSK"
+    "lifecycleState":"Active"
+    ```
+
+    This is the list after a ZSK rollover began. Each `role` line is followed by the
+    `lifecycleState` of the same key, and the order of the keys can differ.
+
+#### Check that it worked
+
+1. Ask for a record with the DO bit set. The answer carries an RRSIG record (your values differ):
+
+   ```bash
+   dig @127.0.0.1 -p 15300 www.example.test A +dnssec +noall +answer
+   ```
+
+   ```text
+   www.example.test.	3600	IN	A	192.0.2.10
+   www.example.test.	3600	IN	RRSIG	A 13 3 3600 20261129184349 20261030174349 2348 example.test. Afr5olY+...
+   ```
+
+2. The zone publishes its keys: flag `257` marks a KSK and flag `256` a ZSK. With one KSK and one
+   ZSK, as after step 4, you see two:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 example.test DNSKEY +noall +answer
+   ```
+
+   ```text
+   example.test.		3600	IN	DNSKEY	257 3 13 YN6opwRdsRMlb2HZK6oXYVoyVw08lQQrXVQmX/coF+y/OB2Kvnard4Ua 6zOTEstLGQDPnTwuqyoF3156+54UPA==
+   example.test.		3600	IN	DNSKEY	256 3 13 XiDCOmy95sbyViNUFF3Q4Nd+A0GBwQWM/R2izc/q2q3tR4SqWfENT2eY WpjtS7nuFyR5Y+W0ZlaP6Z5dK/pwUg==
+   ```
+
+3. `dnssecServedUnsigned` is `false` (the command of step 2):
+
+   ```text
+   "dnssecServedUnsigned":false
+   ```
+
+4. With a parent that Ninlil hosts, the parent answers the DS question:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 child.example.test DS +noall +answer
+   ```
+
+   ```text
+   child.example.test.	3600	IN	DS	64665 13 2 D14342D5DFD3EEBD229C004DB0C1CE3DC340B93D366D61739FC1B870 A8A906BB
+   child.example.test.	3600	IN	RRSIG	DS 13 3 3600 20261129184433 20261030174433 2348 example.test. 7dzq37pK...
+   ```
+
+#### Behaviour worth knowing
+
+- **No key, no signatures.** A zone marked signed that has no key that can sign is served unsigned,
+  with one warning in the log. Signatures from keys you removed are never served, because they
+  would expire into a zone that validators reject. The zone is signed again as soon as it gets a
+  usable key. This covers a zone with no key, with only `Removed` keys, and with only keys whose
+  algorithm Ninlil never signs with.
+- **`dnssecServedUnsigned`.** A zone response carries this field. It is `true` for a `Primary` or
+  `CloudPrimary` zone that is enabled and marked signed while this node serves it unsigned. It is
+  always `false` for other zone types. Each node reads its own in-memory signing state, so each
+  node of a cluster reports for itself, and just after a key change the field can lag the new
+  signing by moments. The console shows a warning icon on the zone list and a banner on the key
+  list.
+- **Algorithms Ninlil never signs with.** RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1,
+  RSASHA1-NSEC3-SHA1 and ECC-GOST: RFC 8624 §3.1 marks each as `MUST NOT` or `NOT RECOMMENDED`
+  for signing. Creating such a key, or setting one as the zone's `dnssecAlgorithm`, answers `400`.
+  Ninlil still validates zones that other servers sign with these algorithms. A key like this that
+  already exists is not published and signs nothing. When it was the zone's only signing key, the
+  zone is served unsigned until a key with a permitted algorithm exists. A parent zone at another
+  operator that still publishes a DS record for that key must replace or remove the DS record.
+- **Which algorithms may be created.** The policy lists the algorithms a new key may use. An empty
+  list allows every algorithm Ninlil signs with. Change it in the console under **Presets &
+  Settings**, **Zone Management**, **DNSSEC Policy**, or through `PATCH /api/dnssec-policy-settings`.
+  It limits only new keys.
+- **Delegations.** At a delegation point (a name below the apex with its own NS records), Ninlil
+  signs only the DS record set. The NS records are the child's data and stay unsigned (RFC 4035
+  §2.2), and so do names below the delegation, which includes glue. Glue stays in the zone and in
+  transfers. A DS record at a delegation is served and signed. It holds a DS record for each
+  `Active` KSK of a signed child zone that Ninlil hosts, plus the DS records you stored there. A
+  KSK in `DoubleSignature` has no generated DS record: the parent swaps the DS record when the
+  rollover promotes the new key.
+- **Denial of existence.** `denialOfExistenceMode` is `NSEC3` or `NSEC`. NSEC3 hides the names in
+  the zone, at the cost of hashing work. A zone you create uses NSEC3 with 0 extra iterations and no salt,
+  which is what RFC 9276 §3.1 requires ("an iterations count of 0 MUST be used") and advises
+  ("Operators SHOULD NOT use a salt"). The API accepts at most 150 iterations
+  (`nsec3Iterations`) and answers `400` above that. Ninlil's own validator treats a zone above 150
+  as insecure, and any validator may treat a count above 0 as insecure (RFC 9276 §3.2).
+- **Key sizes.** Only RSA keys use `keySizeBits`: `0` for 2048 bits, or a multiple of 64 from 2048
+  to 4096. The multiple of 64 comes from Windows, which creates RSA keys only in steps of 64 bits.
+  Other algorithms ignore the field.
+- **Signature timing.** Signatures are valid for 30 days and are backdated by one hour. Ninlil signs
+  the zone again when a record or key changes, and a background pass re-signs a zone 5 days before
+  its earliest signature expires. That pass runs every 6 hours.
+- **The two roles.** The ZSK signs ordinary record sets and the KSK signs the DNSKEY record set.
+  With no signing ZSK the KSK signs everything, and with no signing KSK the ZSKs sign the DNSKEY
+  record set.
+- **How long a rollover takes.** The wait times follow RFC 6781. The rollover service checks every
+  15 minutes and adds a propagation delay of one hour to each wait (the time for a change to reach
+  all your servers):
+
+  | Key | Step | Moves on after |
+  |---|---|---|
+  | ZSK | `Published` to `Active` (the old ZSK becomes `Retired`) | the DNSKEY TTL plus the propagation delay |
+  | ZSK | `Retired` to `Removed` | the largest TTL of an enabled record in the zone plus the propagation delay |
+  | KSK | `DoubleSignature` (new key) to `Active` (the old key stays in `DoubleSignature`) | the DNSKEY TTL plus the propagation delay, and the parent must be able to publish the DS record: at once when Ninlil hosts the parent, otherwise after you confirm it |
+  | KSK | `DoubleSignature` (old key) to `Removed` | the DS TTL plus the propagation delay |
+
+  The DNSKEY TTL is the TTL of the zone's SOA record (3600 seconds without one). For a parent that
+  Ninlil hosts, the DS TTL is the longer of 3600 seconds and the TTL of a DS record you stored at
+  the child's name. For any other parent, Ninlil assumes one day, because it cannot read a
+  registrar.
+- **A parent hosted here, at any distance.** To find a parent that Ninlil hosts, Ninlil asks which
+  zone answers the child's DS question, however many labels lie between them. The zone counts when
+  it is a signed `Primary` or `CloudPrimary` zone and the child's name is the topmost zone cut
+  below it. Ninlil then re-signs that parent when the child's new KSK takes over.
+- **Forcing a key state.** `PUT` or `PATCH` on a key with `isRetired` sets the state by hand:
+  `true` moves the key to `Removed` at once and `false` moves it to `Active`, whatever state it
+  was in, which also cancels a rollover. A `PUT` that leaves out `isRetired` sets it to `false`, which moves the key to `Active`.
+  Prefer a rollover for a key that is in use.
+- **Zone transfers and secondaries.** A secondary zone holds no keys. It serves the DNSSEC records
+  it received by zone transfer, once the secondary zone itself is marked signed (see
+  [Secondary zones and transfers](#secondary-zones-and-transfers)).
+
+#### Settings
+
+- [Authoritative DNS engine](./ENVIRONMENT.md#authoritative-dns-engine): the signature timing,
+  `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_SIGNING_SIGNATURE_VALIDITY_PERIOD` (`30.00:00:00`),
+  `..._REFRESH_BEFORE_EXPIRATION` (`5.00:00:00`), `..._INCEPTION_OFFSET` (`01:00:00`) and
+  `..._ZONE_SIGNING_POLL_INTERVAL` (`06:00:00`), and the rollover timing,
+  `NINLIL_DNS_SERVER_AUTHORITATIVE_DNSSEC_KEY_ROLLOVER_PROPAGATION_DELAY` (`01:00:00`),
+  `..._EXTERNAL_PARENT_DS_TTL` (`1.00:00:00`) and `..._DNSSEC_KEY_ROLLOVER_POLL_INTERVAL`
+  (`00:15:00`).
+- [DNSSEC, ACME & CAA](./ENVIRONMENT.md#dnssec-acme--caa): the list of algorithms a new key may
+  use has no variable; set it in the console or through the API.
+- In the console: **Presets & Settings**, **Zone Management**, **Zone Signing**, **DNSSEC Key
+  Rollover** and **DNSSEC Policy**.
+- [Recursive resolver](./ENVIRONMENT.md#recursive-resolver): the validation settings.
+
+#### When something goes wrong
+
+- *The answer has no RRSIG although the zone is marked signed.* Read `dnssecServedUnsigned`. When it
+  is `true`, create a key (steps 3 and 4) or turn signing off.
+- *`400` "DNSSEC algorithm ... is prohibited for signing".* Choose one of the six algorithms in
+  step 4.
+- *`400` "RSA key size must be a multiple of 64 between 2048 and 4096 bits; 0 means 2048."* Use a
+  permitted size.
+- *`400` "'151' is not a valid NSEC3 iteration count".* Use 0 to 150, and 0 unless you need more.
+- *`409` "A Zsk rollover is already in progress".* A zone has one rollover per role at a time. Wait
+  for the running one, or cancel it by setting the incoming key's `isRetired` to `true`.
+- *A KSK stays in `DoubleSignature` for days.* The parent is not hosted here and nobody confirmed
+  the DS record. Publish the DS record and call `confirm-parent-ds-updated` (step 10).
+- *Validators call the zone bogus after a change at the registrar.* The parent's DS record does
+  not match a published KSK. Compare the registrar's DS with the `dsRecord` of the `Active` KSK.
+- *The parent hosted here shows no DS record for the child.* Change the parent in any way (step 8)
+  and ask again. The child must be signed, and the delegation NS record must sit at the child's
+  name.
+- *The zone stops being re-signed and the log shows `Failed to sign zone`.* A record with empty
+  data may sit in the zone. See [Zones and records](#zones-and-records) "When something goes
+  wrong".
 
 ### Secondary zones and transfers
 
-A secondary zone copies its records from a primary server by AXFR or IXFR, over plain TCP, TLS or
-QUIC. Choose the zone type **Secondary**, list the primary server addresses and pick the transfer
-transport on the zone form. A TSIG key can sign the transfer.
+#### What it does
+
+A secondary zone is a copy of a zone that another server (the primary) holds. Ninlil keeps the copy
+current by zone transfer: AXFR (RFC 5936) copies the whole zone and IXFR (RFC 1995) copies only
+the changes since the serial the secondary holds. A transfer travels over plain TCP, over TLS
+(RFC 9103) or over QUIC. A TSIG key (RFC 8945) signs it. The primary tells the secondary about a
+change with a NOTIFY message (RFC 1996), so the copy follows a change within seconds.
+
+Ninlil plays both roles. As a primary it serves AXFR and IXFR for its `Primary` zones. As a
+secondary it keeps `Secondary`, `SecondaryCatalog`, `SecondaryForwarder` and `Stub` zones. A stub
+zone copies only the NS records (and glue) of the zone it names.
+
+#### Before you start
+
+1. A primary server that allows zone transfers with a TSIG key. This guide uses a Ninlil primary:
+   the Quick start server with the zone `example.test` ([Zones and records](#zones-and-records)
+   "Before you start" explains `<token>` and `<zone-id>`).
+2. A second Ninlil as the secondary. To rehearse on one machine, copy the executable into a new
+   empty folder (each Ninlil keeps its data in a `data` folder next to its executable) and start
+   it there on other ports. The transfer client reaches the primary on port 53 unless you set
+   another port, so the secondary also gets the primary's DNS port:
+
+   ```bash
+   NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD='Change-Me-Now1!' \
+   NINLIL_DNS_SERVER_WEB_HTTP_PORT=18081 \
+   NINLIL_DNS_SERVER_WEB_HTTPS_PORT=18444 \
+   NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=15301 \
+   NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_PRIMARY_PORT=15300 \
+   ./ninlil-linux-amd64
+   ```
+
+   Stop the first Ninlil (Ctrl+C) and start it again with one more variable, which sends NOTIFY
+   to the secondary's DNS port instead of port 53. It keeps its data, because the `data` folder
+   stays where it is:
+
+   ```bash
+   NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD='Change-Me-Now1!' \
+   NINLIL_DNS_SERVER_WEB_HTTP_PORT=18080 \
+   NINLIL_DNS_SERVER_WEB_HTTPS_PORT=18443 \
+   NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=15300 \
+   NINLIL_DNS_SERVER_AUTHORITATIVE_NOTIFY_SECONDARY_PORT=15301 \
+   ./ninlil-linux-amd64
+   ```
+
+   With two machines, skip the port variables: both servers use port 53, and the addresses below
+   are the machines' own. Sign in to the secondary as in the Quick start (step 4, with port
+   `18444`); its token is `<secondary-token>` below, and the primary's is `<token>`.
+3. `dig`, to read the copy and to start a transfer by hand.
+4. The clocks of the two servers differ by less than 300 seconds. A TSIG signature carries the
+   time it was made and a fudge (300 seconds by default), and a clock difference above the fudge
+   fails verification.
+
+#### Steps
+
+**On the primary.**
+
+1. Create a TSIG key. Leave out `secret` and Ninlil generates one. The answer shows the secret
+   once. Copy it; the next steps call it `<secret>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/tsig-keys -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"xfer-key"}'
+   ```
+
+   ```text
+   {"key":{"id":"...","name":"xfer-key","algorithmName":"hmac-sha256", ...},"secret":"<secret>"}
+   ```
+
+2. Allow that key to transfer the zone, and list the secondary for NOTIFY. `notifyAddresses`
+   holds the secondary's IP address (without a port):
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"transferTsigKeyNames":["xfer-key"],"notifyAddresses":["127.0.0.1"]}'
+   ```
+
+   The answer is `204`. In the console: edit the zone, open **Dynamic updates & transfers**, type
+   the address under **Notify addresses** and tick the key under **Keys allowed to transfer this
+   zone (AXFR and IXFR)**.
+
+**On the secondary.**
+
+3. Create the same key with the same name, the same secret and the same algorithm (`hmac-sha256`
+   is the default on both):
+
+   ```bash
+   curl -k https://127.0.0.1:18444/api/tsig-keys -H 'Authorization: Bearer <secondary-token>' -H 'Content-Type: application/json' -d '{"name":"xfer-key","secret":"<secret>"}'
+   ```
+
+4. Create the secondary zone. `primaryServerAddresses` lists the primaries in the order to try
+   them. `tsigKeyName` is the key that signs the requests. `transferTransport` is `Plain`
+   (the default), `Tls` or `Quic`:
+
+   ```bash
+   curl -k https://127.0.0.1:18444/api/zones -H 'Authorization: Bearer <secondary-token>' -H 'Content-Type: application/json' -d '{"name":"example.test","type":"Secondary","primaryServerAddresses":["127.0.0.1"],"tsigKeyName":"xfer-key"}'
+   ```
+
+   ```text
+   {"id":"<secondary-zone-id>","name":"example.test","type":"Secondary", ...
+   ```
+
+   In the console: **Zones**, **New zone**, type **Secondary**, then fill **Transfer source** and
+   the **Security** section's **TSIG key**.
+5. Wait for the first transfer. The secondary looks for zones that are due every 15 seconds
+   (`NINLIL_DNS_SERVER_AUTHORITATIVE_SECONDARY_ZONE_REFRESH_POLL_INTERVAL`), so wait up to half a
+   minute.
+
+#### Check that it worked
+
+1. The secondary answers from the copy:
+
+   ```bash
+   dig @127.0.0.1 -p 15301 www.example.test A +noall +answer
+   ```
+
+   ```text
+   www.example.test.	300	IN	A	192.0.2.10
+   ```
+
+2. The primary and the secondary report the same SOA serial (your values differ):
+
+   ```bash
+   dig @127.0.0.1 -p 15300 example.test SOA +short
+   dig @127.0.0.1 -p 15301 example.test SOA +short
+   ```
+
+   ```text
+   ns1.example.test. admin.example.test. 8 3600 900 1209600 3600
+   ns1.example.test. admin.example.test. 8 3600 900 1209600 3600
+   ```
+
+3. A change on the primary reaches the secondary within seconds, through NOTIFY:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"notify.example.test","type":"A","timeToLiveSeconds":300,"data":{"address":"192.0.2.77"}}'
+   dig @127.0.0.1 -p 15301 notify.example.test A +noall +answer
+   ```
+
+   ```text
+   notify.example.test.	300	IN	A	192.0.2.77
+   ```
+
+4. Start a transfer by hand to see what a secondary receives. `dig` signs the request with
+   `-y`:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 example.test AXFR -y 'hmac-sha256:xfer-key:<secret>' +noall +answer
+   ```
+
+   ```text
+   example.test.		3600	IN	SOA	ns1.example.test. admin.example.test. 12 3600 900 1209600 3600
+   dyn.example.test.	300	IN	A	192.0.2.99
+   web.example.test.	300	IN	CNAME	www.example.test.
+   www.example.test.	3600	IN	A	192.0.2.10
+   ...
+   example.test.		3600	IN	SOA	ns1.example.test. admin.example.test. 12 3600 900 1209600 3600
+   ```
+
+   The first and the last record are the zone's SOA record (your records and serial differ).
+5. Without the key, or with a key that the zone does not list, the primary refuses:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 example.test AXFR +noall +comments
+   ```
+
+   ```text
+   ;; Got answer:
+   ;; ->>HEADER<<- opcode: QUERY, status: REFUSED, id: 18170
+   ;; flags: qr; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 0
+
+   ; Transfer failed.
+   ```
+
+#### Behaviour worth knowing
+
+- **What the primary requires.** A transfer must arrive over TCP, TLS or QUIC (never UDP), must
+  carry a TSIG signature that verifies, and must name the zone's apex. The key must be one of the
+  zone's `transferTsigKeyNames`; an empty list accepts no key. Anything else gets `REFUSED`, and
+  the refusal is signed when the key verified. A secondary that has expired (see below) answers a
+  transfer with a signed `SERVFAIL`, so it does not feed a copy of old data to another secondary.
+- **How a secondary refreshes.** The secondary waits the SOA Refresh time of its copy, asks the
+  primary for the SOA serial over UDP and pulls a transfer when the primary's serial is ahead
+  (RFC 1982 serial arithmetic). A NOTIFY from a configured primary address makes it check at
+  once. With several primaries it tries them in order. A zone with no copy yet asks for AXFR; a
+  zone with a copy asks for IXFR, and the primary falls back to a full transfer when its change
+  history does not reach that serial.
+- **Whole transfers only.** A transfer ends with the zone's closing SOA record (RFC 5936 §2.2,
+  RFC 1995 §4). A transfer that stops before it, for example when the primary goes down, is not
+  applied: the log says `The primary closed the connection before the closing SOA (RFC 5936 §2.2);
+  the transfer is incomplete and was not applied.`
+- **Retry.** When every primary fails, the secondary asks again after the SOA Retry time of its
+  copy (RFC 1034 §4.3.5). A zone without a copy, and a stub zone, retry after 30 seconds
+  (`NINLIL_DNS_SERVER_AUTHORITATIVE_SECONDARY_ZONE_REFRESH_DEFAULT_RETRY_INTERVAL`).
+- **Expire.** A refresh succeeds when a primary shows that the copy is current or a transfer is
+  applied. When no refresh succeeds for the SOA Expire time, the secondary answers `SERVFAIL` for
+  the zone, and to transfers of it, until the next refresh succeeds. Ninlil stores the time of the
+  last success per zone on each node, so a restart does not give an expired zone a fresh
+  interval. A copy that exists but has no stored time (the first start, a restore, a switch of
+  storage engine, a zone enabled again) starts a fresh interval at that moment. An Expire of `0`
+  means the zone never expires; Ninlil logs a warning at load. Stub zones do not expire.
+- **TSIG.** Every secondary request is signed with the zone's `tsigKeyName`. The primary signs
+  each message of the answer in a chain (RFC 8945 §5.3.1). A signed SOA answer that fails
+  verification is logged and ignored. Truncated MACs and the other TSIG rules are in
+  [Zones and records](#zones-and-records) "Behaviour worth knowing".
+- **Plain, TLS and QUIC.** The serial check always uses plain UDP on the primary's DNS port
+  (`..._ZONE_TRANSFER_CLIENT_PRIMARY_PORT`, `53`), because the serial is not secret. The transfer
+  then uses `transferTransport`: plain TCP on the same port, TLS on port `853`
+  (`..._PRIMARY_TLS_PORT`) or QUIC on port `853` (`..._PRIMARY_QUIC_PORT`). A TLS or QUIC transfer
+  needs the primary's DNS-over-TLS or DNS-over-QUIC transport turned on
+  ([Enabling additional transports](#enabling-additional-transports)). The secondary checks the
+  primary's certificate against the operating system's trust store. A Ninlil primary with its
+  self-signed certificate fails that check. Either give the primary a certificate that the
+  secondary trusts (for example one from [Certificates (ACME)](#certificates-acme)) or set
+  `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_VALIDATE_SERVER_CERTIFICATE=false`. With
+  the check off, only TSIG protects the content, and the connection can be intercepted.
+- **Signed zones.** A transfer of a signed zone carries the DNSKEY, RRSIG, NSEC or NSEC3,
+  NSEC3PARAM and generated DS records. The secondary holds no keys and signs nothing. To serve the
+  DNSSEC records it received, the secondary zone itself must be marked signed:
+
+  ```bash
+  curl -k -X PATCH https://127.0.0.1:18444/api/zones/<secondary-zone-id> -H 'Authorization: Bearer <secondary-token>' -H 'Content-Type: application/json' -d '{"isDnssecSigned":true}'
+  ```
+
+  Without that flag, the secondary answers without RRSIG records even to a client that sets the DO
+  bit. The console zone form shows the **DNSSEC signing** section for `Primary` and
+  `CloudPrimary` zones only, so set the flag through the API.
+- **Local-only records.** A record marked **Exclude from sync** is left out of every transfer. On
+  a secondary, an incoming transfer never deletes such a record.
+- **NOTIFY.** A secondary accepts a NOTIFY only for the apex of one of its secondary zones and only
+  from one of that zone's primary addresses. The primary sends it by UDP to every address in
+  `notifyAddresses`, up to 5 times, 3 seconds apart, and waits 3 seconds for the acknowledgement
+  (`..._NOTIFY_MAX_ATTEMPTS`, `..._NOTIFY_RETRY_DELAY`, `..._NOTIFY_RESPONSE_TIMEOUT`). It sends
+  to port 53 unless `..._NOTIFY_SECONDARY_PORT` says otherwise.
+
+#### Settings
+
+- [Authoritative DNS engine](./ENVIRONMENT.md#authoritative-dns-engine): the transfer settings
+  (`NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_RECORDS_PER_MESSAGE`, `100`), the transfer client
+  settings (ports, timeouts and the certificate check, all starting with
+  `NINLIL_DNS_SERVER_AUTHORITATIVE_ZONE_TRANSFER_CLIENT_`), the NOTIFY settings and the two
+  secondary refresh settings.
+- [TSIG](./ENVIRONMENT.md#tsig): `NINLIL_DNS_SERVER_TSIG_DEFAULT_FUDGE_SECONDS` (`300`).
+- In the console: **Presets & Settings**, **Zone Management**, **NOTIFY**, **Zone Transfer**,
+  **Zone Transfer Client**, **Secondary Zone Refresh** and **TSIG**.
+
+#### When something goes wrong
+
+- *`dig ... AXFR` answers `REFUSED`.* The request was unsigned, signed with a key that the zone does
+  not list in `transferTsigKeyNames`, or sent over UDP. Check the zone's list and the key name.
+- *The secondary log says `The SOA answer from <address> for zone <zone>. was rejected: it failed
+  TSIG verification with key xfer-key: BadVersionOrBadSignature.` and then `No usable SOA answer
+  from primary <address> for zone '<zone>' (no reply, or the reply was rejected).`* The two keys
+  differ. The name, the secret and the algorithm must be identical on both servers. A key's secret
+  cannot be changed: delete the key and create it again with the same secret.
+- *The same message without a TSIG line before it.* The primary does not answer on the port the
+  secondary uses. Check the primary's address and port, and that the primary is running.
+- *A change on the primary reaches the secondary only after the Refresh time.* The primary's NOTIFY
+  did not arrive or was refused. The secondary accepts a NOTIFY only from an address in the zone's
+  `primaryServerAddresses`, and the primary sends it only to addresses in `notifyAddresses`.
+- *`Pulling zone '<zone>' from <address> failed` followed by a certificate error.* The TLS or QUIC
+  certificate check failed. See "Plain, TLS and QUIC" above.
+- *`Secondary zone '<zone>' expired: no primary confirmed it for 00:01:00; it answers SERVFAIL
+  until a refresh succeeds.`* No primary has confirmed the copy for the SOA Expire time. Restore the
+  link to a primary. The log then says `Secondary zone '<zone>' was refreshed and answers again.`
+- *The secondary has the records but no RRSIG records.* Mark the secondary zone as signed (the
+  command under "Signed zones").
 
 ### Cloud DNS sync
 
-A zone can be kept in sync with Cloudflare, AWS Route 53 or DigitalOcean. On the zone form, pick the
-**Cloud provider credential** and enter the provider's own zone ID.
+#### What it does
+
+Ninlil keeps a zone in step with a zone at a cloud DNS provider: Cloudflare, AWS Route 53 or
+DigitalOcean. The zone type picks the direction:
+
+- A `CloudPrimary` zone is the source of truth. Ninlil serves its records and pushes them to the
+  provider.
+- A `CloudSecondary` zone is a read-only copy. Ninlil pulls the provider's records and serves them.
+
+The sync matches records by content, because the providers number their records themselves. It
+handles the record types A, AAAA, CNAME, MX, NS, TXT, SRV and CAA. A credential set holds the
+secrets for one provider account. Several zones can share it.
+
+#### Before you start
+
+1. A running Ninlil, a signed-in API token and the placeholders `<token>` and `<zone-id>`, as in
+   [Zones and records](#zones-and-records) "Before you start".
+2. A user that holds the `cloudprovidercredentials:write` and `zones:write` permissions.
+3. At the provider, a zone that already exists (Ninlil does not create it) and the zone's
+   identifier. What counts as the identifier depends on the provider:
+
+   | Provider (`providerType`) | `credentials` fields | `cloudProviderZoneId` |
+   |---|---|---|
+   | `Cloudflare` | `ApiToken` | the zone ID |
+   | `Route53` | `AccessKeyId` and `SecretAccessKey` | the hosted zone ID |
+   | `DigitalOcean` | `ApiToken` | the domain name |
+
+4. Credentials that can list, create and delete DNS records in that zone. For a `CloudSecondary`
+   zone, listing is enough.
+5. The connectors have not been tried against a live provider account. Their tests use stand-in
+   servers that follow each provider's documented API. Try a new zone with test records first.
+
+#### Steps
+
+**Push a zone to a provider (`CloudPrimary`).**
+
+1. Create a credential set. The answer shows the secrets once. The next steps call the set's `id`
+   `<credential-id>`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/cloud-provider-credentials -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"my-cloudflare","providerType":"Cloudflare","credentials":{"ApiToken":"<provider-api-token>"}}'
+   ```
+
+   ```text
+   {"credential":{"id":"<credential-id>","name":"my-cloudflare","providerType":"Cloudflare", ...},"secrets":{"ApiToken":"..."}}
+   ```
+
+   `<provider-api-token>` is the token that you create at the provider. In the console:
+   **Cloud Credentials**, **New credential set**.
+2. Create the zone. `cloudSyncInterval` is how often Ninlil syncs (`hh:mm:ss`; the default is five
+   minutes):
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"example.com","type":"CloudPrimary","cloudProviderCredentialId":"<credential-id>","cloudProviderZoneId":"<provider-zone-id>","cloudSyncInterval":"00:05:00"}'
+   ```
+
+   ```text
+   {"id":"<zone-id>","name":"example.com","type":"CloudPrimary", ...
+   ```
+
+   In the console: **Zones**, **New zone**, type **CloudPrimary**, then pick the credential under
+   **Cloud provider credential** and type the provider's zone ID under **Cloud provider's own zone
+   ID**.
+3. Add the zone's SOA record, then its other records, as in [Zones and
+   records](#zones-and-records). The SOA record stays local: the provider keeps its own.
+4. Wait for the next sync. A zone you just created syncs within about half a minute (Ninlil looks for due
+   zones every 30 seconds). Records that you add later wait for the zone's next interval.
+
+**Copy a provider's zone (`CloudSecondary`).**
+
+5. Create the zone with the type `CloudSecondary` and the same two provider fields as step 2.
+6. Add an SOA record. Ninlil never copies the provider's SOA, so the zone needs its own SOA record
+   before the first copy. When the provider answers and the zone has no record yet, the log says
+   `seed it with its own SOA record`:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"example.com","type":"SOA","timeToLiveSeconds":3600,"data":{"primaryNameServer":"ns1.example.com","responsiblePersonMailbox":"admin.example.com","serial":1,"refreshSeconds":3600,"retrySeconds":900,"expireSeconds":1209600,"minimumTtlSeconds":3600}}'
+   ```
+
+7. Wait for the next sync. The zone's records then match the provider's.
+
+**Accept dynamic updates on a `CloudPrimary` zone (optional).** Follow "Accept dynamic updates"
+in [Zones and records](#zones-and-records). The zone opts in, the update is signed with a TSIG key
+and the zone lists the key, as for a `Primary` zone.
+
+#### Check that it worked
+
+Not run: the checks below need a provider account.
+
+1. In the provider's dashboard, or with the provider's own API, the zone shows the records that you
+   added to Ninlil (`CloudPrimary`), apart from the SOA and the apex NS records.
+2. Ask one of the provider's name servers for a record that you added:
+
+   ```bash
+   dig @<provider-name-server> www.example.com A +noall +answer
+   ```
+
+3. For a `CloudSecondary` zone, ask Ninlil for a record that exists only at the provider:
+
+   ```bash
+   dig @127.0.0.1 -p 15300 <provider-only-name> A +noall +answer
+   ```
+
+#### Behaviour worth knowing
+
+- **What a push does.** A push creates the supported local records that the provider lacks. It
+  deletes the supported records at the provider that the zone does not have. A record that you
+  add directly at the provider is therefore removed by the next push.
+- **What the sync leaves alone.** The sync never creates or deletes the SOA record or the apex NS
+  records, on either side, and it ignores the provider's own. It never touches a record marked
+  **Exclude from sync**. Records of a type outside the eight above are served locally and never
+  pushed.
+- **Route 53 sets.** A Route 53 record set holds all values of one name and type under one TTL
+  (RFC 2181 §5.2). Ninlil syncs every value of a set. It never lists or changes alias sets and
+  routing-policy sets (weighted, latency, failover, geolocation, multi-value answer): a create or
+  delete for the name and type of such a set does nothing and logs a warning.
+- **When a sync runs.** The interval is a field of each zone (`cloudSyncInterval`). Ninlil keeps the
+  time of each zone's last sync in memory only, so after a restart every zone syncs once at once.
+  An edit through the REST API or the console waits for the next interval. A dynamic update, and
+  the ACME challenge record, start a push right away.
+- **Dynamic updates on a `CloudPrimary` zone.** The zone accepts RFC 2136 updates with the rules of
+  a `Primary` zone: the zone opts in, the update is TSIG-signed and the key is listed on the zone.
+  Ninlil stores an accepted update and answers it at once, then pushes the zone within moments. If
+  the push fails, the zone's regular sync retries it and a `CloudDnsZoneSyncFailed` event is
+  raised. An update that adds a record of a type the providers cannot hold (anything but A, AAAA,
+  CNAME, MX, NS, TXT, SRV and CAA) is refused as a whole, so a `CloudPrimary` reverse zone cannot
+  take PTR updates. Deletions are allowed. The provider keeps its own SOA and apex NS records, so
+  an update to them changes only what Ninlil serves. An update to a zone with no SOA record gets
+  `SERVFAIL` until you add one.
+- **One failure does not stop the rest.** A zone that fails to sync gets a log warning and a
+  `CloudDnsZoneSyncFailed` event; the other zones go on. A webhook can deliver the event (see
+  [Clustering, events and webhooks](#clustering-events-and-webhooks)).
+- **Credentials.** Secrets are encrypted at rest and shown only when you create a set. A `PUT`
+  replaces the secrets with the values you send. A `PATCH` without `credentials` changes only the
+  name, the comments or the disabled flag. A zone whose credential set is disabled or missing is
+  skipped with a warning.
+
+#### Settings
+
+There are no `NINLIL_*` variables for cloud sync. The interval, the credential and the provider
+zone ID are fields of each zone. The ACME settings that use cloud zones are in
+[Certificates (ACME)](#certificates-acme).
+
+#### When something goes wrong
+
+- *The log shows `Cloud DNS sync failed for zone '<zone>'.` followed by an HTTP error.* Read the
+  last line of the error. A made-up zone ID gives `404 (Not Found)`. Check the credential, its
+  permissions and the provider zone ID. The sync tries again at the next interval.
+- *`Zone '<zone>' is cloud-synced but has no credential or provider zone ID configured; skipping.`*
+  Set `cloudProviderCredentialId` and `cloudProviderZoneId` on the zone.
+- *`Zone '<zone>' references a missing or disabled cloud DNS provider credential; skipping.`* Enable
+  the credential set or pick another.
+- *`Zone '<zone>' is a new CloudSecondary zone with no local records yet`.* Add the zone's SOA
+  record (step 6).
+- *Records at the provider keep disappearing.* The zone is a `CloudPrimary` zone, and Ninlil is the
+  source of truth. Add the record to the zone in Ninlil, or mark the zone `CloudSecondary` if the
+  provider is the source.
 
 ### Certificates (ACME)
 
-Ninlil has an ACME (RFC 8555) DNS-01 client that issues certificates for zones this server hosts
-itself. A renewed certificate updates every TLS-based listener at once, with no restart. The
-settings are in [DNSSEC, ACME & CAA](./ENVIRONMENT.md#dnssec-acme--caa).
+#### What it does
+
+Ninlil has an ACME (RFC 8555) client that gets and renews TLS certificates from a certificate
+authority (CA) such as Let's Encrypt. It proves control of a domain with the DNS-01 challenge: it
+publishes a TXT record at `_acme-challenge.<domain>` in a zone that Ninlil hosts (RFC 8555 §8.4),
+waits until the zone's servers serve it, and asks the CA to check. The CA then issues the
+certificate, which Ninlil stores as a PKCS#12 file (`.pfx`).
+
+#### Before you start
+
+1. A running Ninlil, a signed-in API token and the placeholders `<token>` and `<zone-id>`, as in
+   [Zones and records](#zones-and-records) "Before you start".
+2. A user that holds `acmesettings:read` and `acmesettings:write` to change the settings, and
+   `acmesettings:manage` to issue a certificate on demand.
+3. A public domain whose zone Ninlil hosts as `Primary` or `CloudPrimary`, and whose name servers
+   at the registrar answer for that zone. The CA asks the public DNS, so the TXT record must be
+   visible there. Any other zone type is refused, because Ninlil is not the source of truth for
+   it.
+4. A decision about the CA. The default is the Let's Encrypt production directory, which limits
+   how often you may request certificates. Use the staging directory
+   `https://acme-staging-v02.api.letsencrypt.org/directory` until the setup works.
+5. Optional: an e-mail address for the CA to reach you. Ninlil registers every address that you
+   list as a `mailto:` contact (RFC 8555 §7.3). With none, the account has no contact.
+
+#### Steps
+
+1. Change the ACME settings. `domains` lists every name a certificate is wanted for, one
+   certificate per entry; a leading `*.` asks for a wildcard certificate. Replace `example.com` with
+   your domain:
+
+   ```bash
+   curl -k -X PATCH https://127.0.0.1:18443/api/acme-settings -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"directoryUri":"https://acme-staging-v02.api.letsencrypt.org/directory","domains":["www.example.com","*.example.com"],"contactEmails":["admin@example.com"],"enable":true}'
+   ```
+
+   ```text
+   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   ```
+
+   The change shows in a read within a few seconds. In the console: **Presets & Settings**,
+   **Integrations & Delivery**, **ACME / Certificates**; the page turns **Save** on only when you
+   change something.
+2. List the domains and their certificates:
+
+   ```bash
+   curl -k https://127.0.0.1:18443/api/acme-settings/certificates -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   [{"domain":"www.example.com","hasCertificate":false,"issuedAtUtc":null,"expiresAtUtc":null,"isDueForRenewal":true,"lastFailureAtUtc":null,"lastFailureMessage":null}, ...]
+   ```
+
+3. Ask for the first certificate now instead of waiting for the next check (Ninlil checks every 12
+   hours). The call returns the domain's entry; a failure is not an HTTP error, it shows in the
+   entry:
+
+   ```bash
+   curl -k -X POST https://127.0.0.1:18443/api/acme-settings/certificates/www.example.com/issue -H 'Authorization: Bearer <token>'
+   ```
+
+   ```text
+   {"domain":"www.example.com","hasCertificate":true,"issuedAtUtc":"...","expiresAtUtc":"...","isDueForRenewal":false,"lastFailureAtUtc":null,"lastFailureMessage":null}
+   ```
+
+   In the console, the page lists the domains with an **Issue/renew now** button. For a wildcard
+   entry, put the name in the path as it is and quote the URL, so that the shell does not expand
+   the `*`: `'https://127.0.0.1:18443/api/acme-settings/certificates/*.example.com/issue'`.
+4. Point the TLS listeners at the certificate file. Ninlil writes each certificate as
+   `<domain>.pfx` in `data/acme-certificates` (next to the executable), with an empty password. The
+   name is lowercase, and a wildcard's `*.` becomes `_wildcard.`, so `*.example.com` gives
+   `_wildcard.example.com.pfx`. Set the path for the web listener (the console, the API and
+   DNS-over-HTTPS) and restart Ninlil once. Start it as in the Quick start, with the one extra
+   variable; replace `/path/to` with the folder that holds the executable:
+
+   ```bash
+   NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD='Change-Me-Now1!' \
+   NINLIL_DNS_SERVER_WEB_HTTP_PORT=18080 \
+   NINLIL_DNS_SERVER_WEB_HTTPS_PORT=18443 \
+   NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=15300 \
+   NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PATH='/path/to/data/acme-certificates/www.example.com.pfx' \
+   ./ninlil-linux-amd64
+   ```
+
+   DNS-over-TLS and DNS-over-QUIC take their own `..._CERTIFICATE_PFX_PATH` variables, listed under
+   [DNS transports](./ENVIRONMENT.md#dns-transports).
+
+#### Check that it worked
+
+Not run: issuing a certificate needs a public domain and a reachable CA.
+
+1. The domain's entry shows `"hasCertificate":true` and an `expiresAtUtc` in the future (the
+   command of step 2).
+2. The file exists. Run the command in the folder that holds the executable:
+
+   ```bash
+   ls data/acme-certificates
+   ```
+
+   ```text
+   www.example.com.pfx
+   ```
+
+3. After the restart in step 4, the web listener presents the certificate:
+
+   ```bash
+   openssl s_client -connect 127.0.0.1:18443 -servername www.example.com </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -enddate
+   ```
+
+#### Behaviour worth knowing
+
+- **Where the challenge record goes.** The record has a 60-second TTL. It reaches the zone's
+  secondaries by NOTIFY and a transfer, and a `CloudPrimary` zone is pushed to its provider at
+  once. Ninlil does not call a provider's API for the challenge itself: the record is an
+  ordinary record of the zone, and the zone's normal push sends it. Ninlil removes the record
+  after the check.
+- **Waiting for the servers.** Before it asks the CA to check, Ninlil waits until its own zone and
+  every server that may answer for the zone serve the record: the addresses in the zone's
+  `notifyAddresses` and the addresses of the zone's apex NS hosts. The wait is two minutes at most,
+  with a probe every 5 seconds. On a timeout the log names the servers that never served the
+  record, and Ninlil asks the CA to check anyway, because a server that Ninlil cannot reach may
+  still answer the CA.
+- **Wildcards.** A wildcard such as `*.example.com` is validated at its base name, so its
+  challenge record is `_acme-challenge.example.com` (RFC 8555 §7.1.3, §8.4).
+- **Domain names.** An entry is a host name of letters, digits and hyphens with at least two
+  labels, in `xn--` form for an internationalized name, optionally with a leading `*.`. Anything
+  else answers `400`.
+- **Renewal.** A background pass runs every 12 hours (`..._ACME_POLL_INTERVAL`). It requests a
+  certificate for each domain that has none, or whose certificate expires within 30 days
+  (`..._ACME_RENEW_BEFORE_EXPIRATION`). A failed attempt is recorded in `lastFailureMessage` and
+  retried at the next pass. Webhooks can deliver `AcmeCertificateRenewalSucceeded` and
+  `AcmeCertificateRenewalFailed` (see [Clustering, events and webhooks](#clustering-events-and-webhooks)).
+- **Renewed certificates reach the listeners.** Each TLS listener checks the last-write time of its
+  certificate file every 5 minutes (`..._CERTIFICATE_RELOAD_POLL_INTERVAL`) and loads a replaced
+  file without a restart. A listener picks up renewals only while its path points at the ACME
+  file. Pointing it at the file for the first time needs one restart.
+- **The ACME account.** Ninlil keeps the account key and the state of each domain in
+  `data/acme-account.json`, encrypted. A change to its path (`..._ACME_ACCOUNT_STATE_FILE_PATH`)
+  needs a restart; every other ACME setting applies without one. A change of the contact list
+  reaches the CA at the next issuance.
+- **CAA records.** CAA records tell a CA whether it may issue for a name (RFC 8659). Ninlil can
+  keep one in each `Primary` or `CloudPrimary` zone. It writes the `issue` tag with the CA's
+  domain, and only when an issuer domain is set. It never changes a CAA record that you added
+  yourself. The issuer domain comes from the zone (`caaIssuerDomain`) or from the server-wide
+  default (`NINLIL_DNS_SERVER_ACME_CAA_AUTO_MANAGEMENT_DEFAULT_ISSUER_DOMAIN`, empty). Management
+  is on by default (`NINLIL_DNS_SERVER_ACME_CAA_AUTO_MANAGEMENT_DEFAULT_ENABLED`), and it writes
+  nothing until an issuer domain exists. Setting the issuer domain of a zone starts a pass in the
+  background; wait a few seconds, then ask for the record:
+
+  ```bash
+  curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"caaIssuerDomain":"letsencrypt.org"}'
+  dig @127.0.0.1 -p 15300 example.test CAA +noall +answer
+  ```
+
+  ```text
+  example.test.		3600	IN	CAA	0 issue "letsencrypt.org"
+  ```
+
+  `POST /api/zones/<zone-id>/reconcile-caa` runs one pass on demand and answers with the counts of
+  CAA records added and removed.
+
+#### Settings
+
+- [DNSSEC, ACME & CAA](./ENVIRONMENT.md#dnssec-acme--caa): every `NINLIL_DNS_SERVER_ACME_*`
+  variable. The list-valued settings `domains` and `contactEmails` have no variable; set them in
+  the console or through the API.
+- [DNS transports](./ENVIRONMENT.md#dns-transports) and
+  [Web host](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding): the certificate paths and
+  the reload interval of each listener.
+
+#### When something goes wrong
+
+- *The entry shows `lastFailureMessage`.* Read it. With a made-up `.test` name the CA answers
+  `urn:ietf:params:acme:error:rejectedIdentifier: Invalid identifiers requested :: Cannot issue for
+  "www.example.test": Domain name does not end with a valid public suffix (TLD)`. Use a domain
+  that the CA can issue for.
+- *The log says the domain is not a zone this server hosts.* Add the zone to Ninlil first. The domain
+  must lie inside a `Primary` or `CloudPrimary` zone.
+- *The log names servers that never served the challenge record.* A secondary or a provider did not
+  receive the record in two minutes. Check the zone's `notifyAddresses`, the secondary's transfer
+  and the cloud sync. The CA may still succeed if its server sees the record.
+- *`404` from the issue call.* The domain is not in the `domains` list. Look at the list, and
+  remember that a change shows after a few seconds.
+- *The entry shows `urn:ietf:params:acme:error:invalidContact`.* The CA refused a contact address,
+  for example one at a domain that has no valid public suffix. Fix `contactEmails`; the CA sees the
+  change at the next issuance.
+- *The CA rate limit refuses the request.* You used the production CA too often. Use the staging
+  directory while you test.
 
 ### Forwarding and recursion
 
