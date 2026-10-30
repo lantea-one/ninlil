@@ -99,7 +99,13 @@
       *appIfPermission="'dnspipelinesettings:write'"
       class="d-flex justify-content-end"
     >
-      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+      <button
+        cButton
+        color="primary"
+        [disabled]="form.invalid || submitting() || !hasChanges()"
+        [attr.title]="hasChanges() ? null : 'No changes to save'"
+        (click)="save()"
+      >
         @if (submitting()) {
           <c-spinner size="sm" />
         } @else {

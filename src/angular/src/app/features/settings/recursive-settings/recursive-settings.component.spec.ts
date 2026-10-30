@@ -16,8 +16,9 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the Recursive Resolver page: loading, saving, when the root hint and trust
- * anchor lists are sent, the cache card and errors, plus the row conversion helpers. TestBed with a
+ * These tests cover the Recursive Resolver page: loading, saving only the changed fields, Save
+ * disabled without a change, the baseline moving after a save, when the root hint, trust anchor
+ * and Insecure domain lists are sent, the cache card and errors, plus the row conversion helpers. TestBed with a
  * spy-backed settings service and `NotificationService`.
  */
 describe('RecursiveSettingsComponent', () => {
@@ -110,7 +111,7 @@ describe('RecursiveSettingsComponent', () => {
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
-  it('save() PATCHes the full form, then surfaces the hot-reload note', async () => {
+  it('save() PATCHes only the changed field, then surfaces the hot-reload note', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiRecursiveSettingsPatch.and.returnValue(
         of({
@@ -122,12 +123,55 @@ describe('RecursiveSettingsComponent', () => {
     fixture.componentInstance.form.patchValue({ enableRecursion: true });
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ enableRecursion: true, maxReferralDepth: 30 }),
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { enableRecursion: true },
     });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('takes effect immediately'),
     );
+  });
+
+  it('disables Save with a tooltip while nothing changed and does not send an empty patch', async () => {
+    const fixture = await createComponent();
+    const button = (fixture.nativeElement as HTMLElement).querySelector(
+      '.form-card c-card-footer button',
+    ) as HTMLButtonElement;
+
+    expect(button.disabled).toBeTrue();
+    expect(button.getAttribute('title')).toBe('No changes to save');
+
+    await fixture.componentInstance.save();
+    expect(apiSpy.apiRecursiveSettingsPatch).not.toHaveBeenCalled();
+
+    fixture.componentInstance.form.patchValue({ enableRecursion: true });
+    fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+    expect(button.hasAttribute('title')).toBeFalse();
+  });
+
+  it('treats a time span written differently but equal as unchanged', async () => {
+    const fixture = await createComponent();
+
+    fixture.componentInstance.form.patchValue({ prefetchRecentAccessWindow: '0:05:00' });
+
+    expect(fixture.componentInstance.hasChanges()).toBeFalse();
+  });
+
+  it('save() moves the baseline, so the next save sends only what changed since', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.form.patchValue({ enableRecursion: true });
+    await fixture.componentInstance.save();
+    expect(fixture.componentInstance.hasChanges()).toBeFalse();
+
+    fixture.componentInstance.form.patchValue({ maxReferralDepth: 20 });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0]).toEqual({
+      body: { maxReferralDepth: 20 },
+    });
   });
 
   it('shows an error message when saving fails', async () => {
@@ -137,9 +181,12 @@ describe('RecursiveSettingsComponent', () => {
       );
     });
 
+    fixture.componentInstance.form.patchValue({ enableRecursion: true });
     await fixture.componentInstance.save();
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
+    // A failed save keeps the edit pending.
+    expect(fixture.componentInstance.hasChanges()).toBeTrue();
   });
 
   it('loads the root hint and trust anchor overrides as editable rows', async () => {
@@ -163,6 +210,7 @@ describe('RecursiveSettingsComponent', () => {
       apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' }));
     });
 
+    fixture.componentInstance.form.patchValue({ enableRecursion: true });
     await fixture.componentInstance.save();
 
     const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
@@ -181,13 +229,9 @@ describe('RecursiveSettingsComponent', () => {
     component.rootHintServers.at(0).setValue({ name: 'a.root.test.', addresses: '192.0.2.1' });
     await component.save();
 
-    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({
-        rootHintServersOverride: [{ name: 'a.root.test.', addresses: ['192.0.2.1'] }],
-      }),
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { rootHintServersOverride: [{ name: 'a.root.test.', addresses: ['192.0.2.1'] }] },
     });
-    const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
-    expect('trustAnchorsOverride' in body).toBeFalse();
   });
 
   it('removing the last row sends an empty list, restoring the built-in root', async () => {
@@ -199,8 +243,8 @@ describe('RecursiveSettingsComponent', () => {
     fixture.componentInstance.removeRootHintServer(0);
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ rootHintServersOverride: [] }),
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { rootHintServersOverride: [] },
     });
   });
 
@@ -230,6 +274,7 @@ describe('RecursiveSettingsComponent', () => {
       apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' }));
     });
 
+    fixture.componentInstance.form.patchValue({ enableRecursion: true });
     await fixture.componentInstance.save();
 
     const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
@@ -246,15 +291,14 @@ describe('RecursiveSettingsComponent', () => {
     component.form.controls.insecureDomainsText.setValue('home.arpa\nCorp.Example.\n');
     await component.save();
 
-    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ insecureDomains: ['home.arpa', 'corp.example'] }),
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { insecureDomains: ['home.arpa', 'corp.example'] },
     });
     expect(component.insecureDomainsCustom()).toBeTrue();
 
-    // A second save without a change sends nothing for the list.
+    // A second save without a change sends nothing: Save is disabled and the call is refused.
     await component.save();
-    const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
-    expect('insecureDomains' in body).toBeFalse();
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledTimes(1);
   });
 
   it('save() can send an empty Insecure domain list', async () => {
@@ -265,8 +309,8 @@ describe('RecursiveSettingsComponent', () => {
     fixture.componentInstance.form.controls.insecureDomainsText.setValue('');
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ insecureDomains: [] }),
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { insecureDomains: [] },
     });
   });
 
@@ -286,8 +330,8 @@ describe('RecursiveSettingsComponent', () => {
 
     await component.save();
 
-    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ insecureDomains: null }),
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { insecureDomains: null },
     });
     expect(component.insecureDomainsCustom()).toBeFalse();
   });
@@ -303,8 +347,8 @@ describe('RecursiveSettingsComponent', () => {
     component.form.controls.insecureDomainsText.setValue('internal');
     await component.save();
 
-    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ insecureDomains: ['internal'] }),
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { insecureDomains: ['internal'] },
     });
   });
 

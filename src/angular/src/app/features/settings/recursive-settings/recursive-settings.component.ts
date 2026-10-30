@@ -1,4 +1,5 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import {
   FormControl,
   FormGroup,
@@ -25,7 +26,7 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, map } from 'rxjs';
 import {
   DnssecAlgorithmEnum,
   RecursiveRootHintServerDetail,
@@ -35,6 +36,10 @@ import {
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+import {
+  changedFields,
+  hasChangedFields,
+} from '../../../shared/settings-patch/changed-fields.util';
 import { DnsCacheCardComponent } from '../dns-cache-card/dns-cache-card.component';
 
 /** One root hint server row: a name server's name and its addresses, comma-separated. */
@@ -74,14 +79,17 @@ const TRUST_ANCHOR_ALGORITHMS: DnssecAlgorithmEnum[] = [
  * automatic trust anchor updates.
  *
  * <p>Every field is hot-reloaded except the root hint and trust anchor override lists, which are
- * read at startup. Those lists are edited as rows at the bottom of the form and sent only when
- * they changed, so saving another field does not produce the restart note.
+ * read at startup. Those lists are edited as rows at the bottom of the form. The backend picks
+ * its note from the fields present in the request, so the page sends only the fields that changed
+ * since the last load or save (`changedFields`), and saving another field does not produce the
+ * restart note. A list is sent whole when any entry changed. Save stays disabled while nothing
+ * changed.
  *
  * <p>The Insecure domains section edits the list of domain names (negative trust anchors) that skip
  * DNSSEC validation, one name per line. The list starts as the built-in one (private zones such as
  * `home.arpa`, `internal` and the RFC 6303 reverse zones) and is fully editable. "Restore
  * defaults" puts the built-in names back and, on save, sends `null` so the server goes back to
- * following its built-in list. The list is sent only when it changed.
+ * following its built-in list.
  *
  * <p>Below the form, {@link DnsCacheCardComponent} shows the forwarded and recursive answer caches
  * and can flush them; it uses this page's permissions.
@@ -149,20 +157,34 @@ export class RecursiveSettingsComponent implements OnInit {
   /** The algorithms a trust anchor row offers (see `TRUST_ANCHOR_ALGORITHMS`). */
   readonly trustAnchorAlgorithms = TRUST_ANCHOR_ALGORITHMS;
 
-  /** The two override lists as last loaded or saved, to tell whether a save must send them. */
-  private loadedOverrides = { rootHints: '[]', trustAnchors: '[]' };
-
   /** The built-in Insecure domain list the server reports, for "Restore defaults". */
   readonly builtInInsecureDomains = signal<string[]>([]);
 
   /** Whether the saved Insecure domain list is the operator's own rather than the built-in one. */
   readonly insecureDomainsCustom = signal(false);
 
-  /** The Insecure domain list as last loaded or saved, to tell whether a save must send it. */
-  private loadedInsecureDomains = '[]';
-
   /** Whether "Restore defaults" was clicked since the last load or save. */
-  private restoreRequested = false;
+  private readonly restoreRequested = signal(false);
+
+  /** The form's value after every edit, so the difference below follows the inputs. */
+  private readonly formValue = toSignal(
+    this.form.valueChanges.pipe(map(() => this.form.getRawValue())),
+    { initialValue: this.form.getRawValue() },
+  );
+
+  /** The request fields as last loaded or saved; the fields that differ from it are sent. */
+  private readonly baseline = signal<Record<string, unknown> | null>(null);
+
+  /** The fields edited since the last load or save, the body of the next `PATCH`. */
+  readonly changes = computed(() => {
+    const baseline = this.baseline();
+    return baseline === null
+      ? {}
+      : changedFields(baseline, this.buildBody(this.formValue(), this.restoreRequested()));
+  });
+
+  /** Whether any field was edited since the last load or save. */
+  readonly hasChanges = computed(() => hasChangedFields(this.changes()));
 
   /** Every root hint server row. */
   get rootHintServers() {
@@ -197,60 +219,32 @@ export class RecursiveSettingsComponent implements OnInit {
   restoreInsecureDomainDefaults(): void {
     this.form.controls.insecureDomainsText.setValue(this.builtInInsecureDomains().join('\n'));
     this.form.controls.insecureDomainsText.markAsDirty();
-    this.restoreRequested = true;
+    this.restoreRequested.set(true);
   }
 
   ngOnInit(): void {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field (the override lists only when changed), then shows the backend's note. */
+  /** This method PATCHes the changed fields only, then shows the backend's note. */
   async save(): Promise<void> {
-    if (this.form.invalid || this.submitting()) return;
+    if (this.form.invalid || this.submitting() || !this.hasChanges()) return;
 
     this.submitting.set(true);
     this.errorMessage.set(null);
 
-    const { rootHintServers, trustAnchors, insecureDomainsText, ...value } =
-      this.form.getRawValue();
-    const body: Record<string, unknown> = { ...value };
-
-    // The list is sent only when it changed or when the defaults are restored. Restoring while
-    // the text still equals the built-in names sends null; any edit after that sends the list.
-    const insecureDomains = toInsecureDomains(insecureDomainsText);
-    const restoring =
-      this.restoreRequested &&
-      JSON.stringify(insecureDomains) === JSON.stringify(this.builtInInsecureDomains());
-    if (restoring) {
-      body['insecureDomains'] = null;
-    } else if (JSON.stringify(insecureDomains) !== this.loadedInsecureDomains) {
-      body['insecureDomains'] = insecureDomains;
-    }
-
-    // The override lists are read only at startup, so sending them unchanged would make the
-    // backend report that a restart is needed when nothing that needs one was touched.
-    const rootHints = toRootHintServers(rootHintServers);
-    if (JSON.stringify(rootHints) !== this.loadedOverrides.rootHints) {
-      body['rootHintServersOverride'] = rootHints;
-    }
-    const anchors = toTrustAnchors(trustAnchors);
-    if (JSON.stringify(anchors) !== this.loadedOverrides.trustAnchors) {
-      body['trustAnchorsOverride'] = anchors;
-    }
+    const body = this.changes();
+    const saved = this.buildBody(this.form.getRawValue(), false);
 
     try {
       const result = await firstValueFrom(this.recursiveApi.apiRecursiveSettingsPatch({ body }));
-      this.loadedOverrides = {
-        rootHints: JSON.stringify(rootHints),
-        trustAnchors: JSON.stringify(anchors),
-      };
-      this.loadedInsecureDomains = JSON.stringify(insecureDomains);
-      if (restoring) {
+      this.baseline.set(saved);
+      if (body['insecureDomains'] === null) {
         this.insecureDomainsCustom.set(false);
       } else if ('insecureDomains' in body) {
         this.insecureDomainsCustom.set(true);
       }
-      this.restoreRequested = false;
+      this.restoreRequested.set(false);
       this.notification.success(result.note ?? 'Recursive resolver settings saved.');
     } catch (error) {
       this.errorMessage.set(
@@ -259,6 +253,29 @@ export class RecursiveSettingsComponent implements OnInit {
     } finally {
       this.submitting.set(false);
     }
+  }
+
+  /**
+   * This method turns the form value into the request fields. The Insecure domain list is `null`
+   * while "Restore defaults" is pending and the text still equals the built-in names, which asks
+   * the server to follow its built-in list again; any edit after that sends the list itself.
+   */
+  private buildBody(
+    value: ReturnType<typeof this.form.getRawValue>,
+    restoreRequested: boolean,
+  ): Record<string, unknown> {
+    const { rootHintServers, trustAnchors, insecureDomainsText, ...scalars } = value;
+    const insecureDomains = toInsecureDomains(insecureDomainsText);
+    const restoring =
+      restoreRequested &&
+      JSON.stringify(insecureDomains) === JSON.stringify(this.builtInInsecureDomains());
+
+    return {
+      ...scalars,
+      insecureDomains: restoring ? null : insecureDomains,
+      rootHintServersOverride: toRootHintServers(rootHintServers),
+      trustAnchorsOverride: toTrustAnchors(trustAnchors),
+    };
   }
 
   private async loadSettings(): Promise<void> {
@@ -293,8 +310,7 @@ export class RecursiveSettingsComponent implements OnInit {
       this.builtInInsecureDomains.set(settings.builtInInsecureDomains ?? []);
       this.insecureDomainsCustom.set(settings.useCustomInsecureDomains ?? false);
       this.form.controls.insecureDomainsText.setValue(insecureDomains.join('\n'));
-      this.loadedInsecureDomains = JSON.stringify(toInsecureDomains(insecureDomains.join('\n')));
-      this.restoreRequested = false;
+      this.restoreRequested.set(false);
 
       this.rootHintServers.clear();
       for (const server of settings.rootHintServersOverride ?? []) {
@@ -304,10 +320,7 @@ export class RecursiveSettingsComponent implements OnInit {
       for (const anchor of settings.trustAnchorsOverride ?? []) {
         this.trustAnchors.push(this.buildTrustAnchorGroup(anchor));
       }
-      this.loadedOverrides = {
-        rootHints: JSON.stringify(toRootHintServers(this.rootHintServers.getRawValue())),
-        trustAnchors: JSON.stringify(toTrustAnchors(this.trustAnchors.getRawValue())),
-      };
+      this.baseline.set(this.buildBody(this.form.getRawValue(), false));
     } catch (error) {
       this.errorMessage.set(
         extractErrorMessage(error, 'Could not load recursive resolver settings.'),

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { QueryLogPrivacyLevelEnum, QueryLoggingSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { QueryLoggingSettingsComponent } from './query-logging-settings.component';
 
@@ -10,7 +11,8 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the Query logging page: loading, saving with the backend note, the privacy
+ * These tests cover the Query logging page: loading, saving only the changed fields with the
+ * backend note, Save disabled without a change, the baseline moving after a save, the privacy
  * level description and a save error. TestBed with a spy-backed settings service and
  * `NotificationService`.
  */
@@ -47,6 +49,8 @@ describe('QueryLoggingSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // An administrator's view: every permission held, so the write-only footer renders.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(QueryLoggingSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -62,7 +66,7 @@ describe('QueryLoggingSettingsComponent', () => {
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
-  it('save() PATCHes the full form, then surfaces the restart-required note', async () => {
+  it('save() PATCHes only the changed field, then surfaces the restart-required note', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiQueryLoggingSettingsPatch.and.returnValue(
         of({ note: 'Written to the configuration file. ... a restart is required.' }),
@@ -72,8 +76,8 @@ describe('QueryLoggingSettingsComponent', () => {
     fixture.componentInstance.form.patchValue({ enable: false });
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiQueryLoggingSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ enable: false, retentionPeriod: '30.00:00:00' }),
+    expect(apiSpy.apiQueryLoggingSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { enable: false },
     });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('a restart is required'),
@@ -87,9 +91,12 @@ describe('QueryLoggingSettingsComponent', () => {
       );
     });
 
+    fixture.componentInstance.form.patchValue({ enable: false });
     await fixture.componentInstance.save();
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
+    // A failed save keeps the edit pending.
+    expect(fixture.componentInstance.hasChanges()).toBeTrue();
   });
 
   it('defaults the privacy level to Full and shows its own description', async () => {
@@ -115,7 +122,7 @@ describe('QueryLoggingSettingsComponent', () => {
     );
   });
 
-  it('save() includes privacyLevel in the PATCH body and surfaces a mixed-reload note verbatim', async () => {
+  it('save() sends privacyLevel alone, without the restart-only fields, and surfaces a mixed-reload note verbatim', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiQueryLoggingSettingsPatch.and.returnValue(
         of({
@@ -129,11 +136,46 @@ describe('QueryLoggingSettingsComponent', () => {
     });
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiQueryLoggingSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ privacyLevel: QueryLogPrivacyLevelEnum.ClientAnonymized }),
+    expect(apiSpy.apiQueryLoggingSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { privacyLevel: QueryLogPrivacyLevelEnum.ClientAnonymized },
     });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('no restart required'),
     );
+  });
+
+  it('disables Save with a tooltip while nothing changed and does not send an empty patch', async () => {
+    const fixture = await createComponent();
+    const button = (fixture.nativeElement as HTMLElement).querySelector(
+      'c-card-footer button',
+    ) as HTMLButtonElement;
+
+    expect(button.disabled).toBeTrue();
+    expect(button.getAttribute('title')).toBe('No changes to save');
+
+    await fixture.componentInstance.save();
+    expect(apiSpy.apiQueryLoggingSettingsPatch).not.toHaveBeenCalled();
+
+    fixture.componentInstance.form.patchValue({ enable: false });
+    fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+    expect(button.hasAttribute('title')).toBeFalse();
+  });
+
+  it('save() moves the baseline, so the next save sends only what changed since', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiQueryLoggingSettingsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.form.patchValue({ enable: false });
+    await fixture.componentInstance.save();
+    expect(fixture.componentInstance.hasChanges()).toBeFalse();
+
+    fixture.componentInstance.form.patchValue({ cleanupInterval: '02:00:00' });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiQueryLoggingSettingsPatch.calls.mostRecent().args[0]).toEqual({
+      body: { cleanupInterval: '02:00:00' },
+    });
   });
 });

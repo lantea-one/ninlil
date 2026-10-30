@@ -1,4 +1,5 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   AlertComponent,
@@ -16,11 +17,15 @@ import {
   FormSelectDirective,
   SpinnerComponent,
 } from '@coreui/angular';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, map } from 'rxjs';
 import { QueryLogPrivacyLevelEnum, QueryLoggingSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+import {
+  changedFields,
+  hasChangedFields,
+} from '../../../shared/settings-patch/changed-fields.util';
 
 /**
  * This constant lists the query log privacy levels with a label and a one-line description of what
@@ -64,8 +69,10 @@ const PRIVACY_LEVEL_OPTIONS: {
  * `querylog:write`, the query log's permissions): whether answered queries are logged, how long
  * and how many entries are kept, the cleanup interval and the privacy level.
  *
- * <p>Only `privacyLevel` is hot-reloaded; the other fields need a restart. The backend's note in
- * the success notification says which applies.
+ * <p>Only `privacyLevel` is hot-reloaded; the other fields need a restart. The backend picks its
+ * note from the fields present in the request, so the page sends only the fields that changed
+ * since the last load or save (`changedFields`): saving the privacy level alone reports a hot
+ * reload. Save stays disabled while nothing changed.
  */
 @Component({
   selector: 'app-query-logging-settings',
@@ -110,6 +117,24 @@ export class QueryLoggingSettingsComponent implements OnInit {
     privacyLevel: [QueryLogPrivacyLevelEnum.Full as QueryLogPrivacyLevelEnum],
   });
 
+  /** The form's value after every edit, so the difference below follows the inputs. */
+  private readonly formValue = toSignal(
+    this.form.valueChanges.pipe(map(() => this.form.getRawValue())),
+    { initialValue: this.form.getRawValue() },
+  );
+
+  /** The form as last loaded or saved; the fields that differ from it are the ones to send. */
+  private readonly baseline = signal<ReturnType<typeof this.form.getRawValue> | null>(null);
+
+  /** The fields edited since the last load or save, the body of the next `PATCH`. */
+  readonly changes = computed(() => {
+    const baseline = this.baseline();
+    return baseline === null ? {} : changedFields(baseline, this.formValue());
+  });
+
+  /** Whether any field was edited since the last load or save. */
+  readonly hasChanges = computed(() => hasChangedFields(this.changes()));
+
   /** This method returns the description for the selected, unsaved level. */
   selectedPrivacyLevelDescription(): string {
     const selected = this.privacyLevelOptions.find(
@@ -122,19 +147,20 @@ export class QueryLoggingSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field, then shows the backend's note. */
+  /** This method PATCHes the changed fields only, then shows the backend's note. */
   async save(): Promise<void> {
-    if (this.form.invalid || this.submitting()) return;
+    if (this.form.invalid || this.submitting() || !this.hasChanges()) return;
 
     this.submitting.set(true);
     this.errorMessage.set(null);
 
-    const value = this.form.getRawValue();
+    const saved = this.form.getRawValue();
 
     try {
       const result = await firstValueFrom(
-        this.queryLoggingApi.apiQueryLoggingSettingsPatch({ body: value }),
+        this.queryLoggingApi.apiQueryLoggingSettingsPatch({ body: this.changes() }),
       );
+      this.baseline.set(saved);
       this.notification.success(result.note ?? 'Query logging settings saved.');
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save query logging settings.'));
@@ -156,6 +182,7 @@ export class QueryLoggingSettingsComponent implements OnInit {
         cleanupInterval: settings.cleanupInterval ?? '01:00:00',
         privacyLevel: settings.privacyLevel ?? QueryLogPrivacyLevelEnum.Full,
       });
+      this.baseline.set(this.form.getRawValue());
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load query logging settings.'));
     } finally {

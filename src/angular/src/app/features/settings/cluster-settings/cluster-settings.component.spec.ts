@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { ClusterSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ClusterSettingsComponent } from './cluster-settings.component';
 
@@ -10,8 +11,9 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the Cluster settings page: loading, saving (including the catalog sync
- * interval), a blank heartbeat interval and a save error. TestBed with a spy-backed settings
+ * These tests cover the Cluster settings page: loading, saving only the changed fields (including
+ * the catalog sync interval), Save disabled without a change, the baseline moving after a save, a
+ * blank heartbeat interval and a save error. TestBed with a spy-backed settings
  * service and `NotificationService`.
  */
 describe('ClusterSettingsComponent', () => {
@@ -50,6 +52,8 @@ describe('ClusterSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // An administrator's view: every permission held, so the write-only footer renders.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(ClusterSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -68,7 +72,7 @@ describe('ClusterSettingsComponent', () => {
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
-  it('save() PATCHes the form', async () => {
+  it('save() PATCHes only the changed fields', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiClusterSettingsPatch.and.returnValue(
         of({ note: 'takes effect immediately -- no restart required.' }),
@@ -78,8 +82,8 @@ describe('ClusterSettingsComponent', () => {
     fixture.componentInstance.form.patchValue({ enable: true, advertisedHost: '10.0.1.10' });
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiClusterSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ enable: true, advertisedHost: '10.0.1.10' }),
+    expect(apiSpy.apiClusterSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { enable: true, advertisedHost: '10.0.1.10' },
     });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('no restart required'),
@@ -96,12 +100,73 @@ describe('ClusterSettingsComponent', () => {
     fixture.componentInstance.form.patchValue({ addressReconcileInterval: '00:05:00' });
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiClusterSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ addressReconcileInterval: '00:05:00' }),
+    expect(apiSpy.apiClusterSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { addressReconcileInterval: '00:05:00' },
     });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('after a restart'),
     );
+  });
+
+  it('save() sends a hot-reloaded field alone, so the restart note is not asked for', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiClusterSettingsPatch.and.returnValue(
+        of({ note: 'takes effect immediately -- no restart required.' }),
+      );
+    });
+
+    fixture.componentInstance.form.patchValue({ heartbeatTimeout: '00:00:20' });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiClusterSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { heartbeatTimeout: '00:00:20' },
+    });
+    expect(notificationSpy.success).toHaveBeenCalledWith(
+      jasmine.stringContaining('no restart required'),
+    );
+  });
+
+  it('disables Save with a tooltip while nothing changed and does not send an empty patch', async () => {
+    const fixture = await createComponent();
+    const button = (fixture.nativeElement as HTMLElement).querySelector(
+      'c-card-footer button',
+    ) as HTMLButtonElement;
+
+    expect(button.disabled).toBeTrue();
+    expect(button.getAttribute('title')).toBe('No changes to save');
+
+    await fixture.componentInstance.save();
+    expect(apiSpy.apiClusterSettingsPatch).not.toHaveBeenCalled();
+
+    fixture.componentInstance.form.patchValue({ heartbeatTimeout: '00:00:20' });
+    fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+    expect(button.hasAttribute('title')).toBeFalse();
+  });
+
+  it('treats a time span written differently but equal as unchanged', async () => {
+    const fixture = await createComponent();
+
+    fixture.componentInstance.form.patchValue({ addressReconcileInterval: '0:01:00' });
+
+    expect(fixture.componentInstance.hasChanges()).toBeFalse();
+  });
+
+  it('save() moves the baseline, so the next save sends only what changed since', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiClusterSettingsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.form.patchValue({ enable: true });
+    await fixture.componentInstance.save();
+    expect(fixture.componentInstance.hasChanges()).toBeFalse();
+
+    fixture.componentInstance.form.patchValue({ advertisedPort: 8443 });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiClusterSettingsPatch.calls.mostRecent().args[0]).toEqual({
+      body: { advertisedPort: 8443 },
+    });
   });
 
   it('does not save when the heartbeat interval is blank', async () => {
@@ -122,8 +187,11 @@ describe('ClusterSettingsComponent', () => {
       );
     });
 
+    fixture.componentInstance.form.patchValue({ advertisedPort: 8443 });
     await fixture.componentInstance.save();
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad advertised port');
+    // A failed save keeps the edit pending.
+    expect(fixture.componentInstance.hasChanges()).toBeTrue();
   });
 });

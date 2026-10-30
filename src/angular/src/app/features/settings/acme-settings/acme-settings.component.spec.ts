@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { AcmeSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { AcmeSettingsComponent } from './acme-settings.component';
 
@@ -10,8 +11,9 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the ACME page: loading settings and the certificate list, saving (textareas
- * split into arrays), errors, issue/renew now and the date display. TestBed with a spy-backed
+ * These tests cover the ACME page: loading settings and the certificate list, saving only the
+ * changed fields (textareas split into arrays, the nested CAA object sent whole, Save disabled
+ * without a change, the baseline moving after a save), errors, issue/renew now and the date display. TestBed with a spy-backed
  * `AcmeSettingsService` and `NotificationService`.
  */
 describe('AcmeSettingsComponent', () => {
@@ -57,6 +59,8 @@ describe('AcmeSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // An administrator's view: every permission held, so the write-only footer renders.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(AcmeSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -92,15 +96,81 @@ describe('AcmeSettingsComponent', () => {
     await fixture.componentInstance.save();
 
     expect(apiSpy.apiAcmeSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({
+      body: {
         enable: true,
         domains: ['dns.example.com', 'dns2.example.com'],
         contactEmails: ['admin@example.com'],
-      }),
+      },
     });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('takes effect immediately'),
     );
+  });
+
+  it('save() sends only the hot-reloaded field that changed, so no restart note is asked for', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiAcmeSettingsPatch.and.returnValue(
+        of({ note: 'takes effect immediately -- no restart required.' }),
+      );
+    });
+
+    fixture.componentInstance.form.patchValue({ csrOrganization: 'Home lab' });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiAcmeSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { csrOrganization: 'Home lab' },
+    });
+    expect(notificationSpy.success).toHaveBeenCalledWith(
+      jasmine.stringContaining('no restart required'),
+    );
+  });
+
+  it('save() sends the whole nested CAA object when one of its fields changed', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiAcmeSettingsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.form.patchValue({ caaDefaultIssuerDomain: 'letsencrypt.org' });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiAcmeSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { caaAutoManagement: { defaultEnabled: true, defaultIssuerDomain: 'letsencrypt.org' } },
+    });
+  });
+
+  it('disables Save with a tooltip while nothing changed and does not send an empty patch', async () => {
+    const fixture = await createComponent();
+    const button = (fixture.nativeElement as HTMLElement).querySelector(
+      'c-card-footer button',
+    ) as HTMLButtonElement;
+
+    expect(button.disabled).toBeTrue();
+    expect(button.getAttribute('title')).toBe('No changes to save');
+
+    await fixture.componentInstance.save();
+    expect(apiSpy.apiAcmeSettingsPatch).not.toHaveBeenCalled();
+
+    fixture.componentInstance.form.patchValue({ csrOrganization: 'Home lab' });
+    fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+    expect(button.hasAttribute('title')).toBeFalse();
+  });
+
+  it('save() moves the baseline, so the next save sends only what changed since', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiAcmeSettingsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.form.patchValue({ csrOrganization: 'Home lab' });
+    await fixture.componentInstance.save();
+    expect(fixture.componentInstance.hasChanges()).toBeFalse();
+
+    fixture.componentInstance.form.patchValue({ pollInterval: '06:00:00' });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiAcmeSettingsPatch.calls.mostRecent().args[0]).toEqual({
+      body: { pollInterval: '06:00:00' },
+    });
   });
 
   it('shows an error message when saving fails', async () => {
@@ -110,9 +180,12 @@ describe('AcmeSettingsComponent', () => {
       );
     });
 
+    fixture.componentInstance.form.patchValue({ csrOrganization: 'Home lab' });
     await fixture.componentInstance.save();
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
+    // A failed save keeps the edit pending.
+    expect(fixture.componentInstance.hasChanges()).toBeTrue();
   });
 
   it('issueOrRenewNow() drives the manual trigger, refreshes the inventory, and reports a real failure', async () => {

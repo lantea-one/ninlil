@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { DnsPipelineSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { DnsPipelineSettingsComponent } from './dns-pipeline-settings.component';
 
@@ -10,7 +11,7 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the Pipeline page: loading, the max concurrent queries field (binding and its minimum), saving with the backend note and a save error.
+ * These tests cover the Pipeline page: loading, the max concurrent queries field (binding and its minimum), saving only the changed fields with the backend note, Save disabled without a change, the baseline moving after a save and a save error.
  * TestBed with a spy-backed settings service and `NotificationService`.
  */
 describe('DnsPipelineSettingsComponent', () => {
@@ -47,6 +48,8 @@ describe('DnsPipelineSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // An administrator's view: every permission held, so the write-only footer renders.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(DnsPipelineSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -63,7 +66,7 @@ describe('DnsPipelineSettingsComponent', () => {
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
-  it('save() PATCHes the full form, then surfaces whatever note the backend returns', async () => {
+  it('save() PATCHes only the changed field, then surfaces whatever note the backend returns', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiDnsPipelineSettingsPatch.and.returnValue(
         of({ note: 'Written to the configuration file. ... restart it specifically.' }),
@@ -73,12 +76,62 @@ describe('DnsPipelineSettingsComponent', () => {
     fixture.componentInstance.form.patchValue({ workerCount: 2 });
     await fixture.componentInstance.save();
 
-    expect(apiSpy.apiDnsPipelineSettingsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ workerCount: 2 }),
+    expect(apiSpy.apiDnsPipelineSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { workerCount: 2 },
     });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('restart it specifically'),
     );
+  });
+
+  it('save() sends a hot-reloaded field alone, so the restart note is not asked for', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiDnsPipelineSettingsPatch.and.returnValue(
+        of({ note: 'takes effect immediately -- no restart required.' }),
+      );
+    });
+
+    fixture.componentInstance.form.patchValue({ maxUdpAmplificationFactor: 10 });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiDnsPipelineSettingsPatch).toHaveBeenCalledOnceWith({
+      body: { maxUdpAmplificationFactor: 10 },
+    });
+  });
+
+  it('disables Save with a tooltip while nothing changed and does not send an empty patch', async () => {
+    const fixture = await createComponent();
+    const button = (fixture.nativeElement as HTMLElement).querySelector(
+      'c-card-footer button',
+    ) as HTMLButtonElement;
+
+    expect(button.disabled).toBeTrue();
+    expect(button.getAttribute('title')).toBe('No changes to save');
+
+    await fixture.componentInstance.save();
+    expect(apiSpy.apiDnsPipelineSettingsPatch).not.toHaveBeenCalled();
+
+    fixture.componentInstance.form.patchValue({ workerCount: 2 });
+    fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+    expect(button.hasAttribute('title')).toBeFalse();
+  });
+
+  it('save() moves the baseline, so the next save sends only what changed since', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiDnsPipelineSettingsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.form.patchValue({ workerCount: 2 });
+    await fixture.componentInstance.save();
+    expect(fixture.componentInstance.hasChanges()).toBeFalse();
+
+    fixture.componentInstance.form.patchValue({ channelCapacity: 8192 });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiDnsPipelineSettingsPatch.calls.mostRecent().args[0]).toEqual({
+      body: { channelCapacity: 8192 },
+    });
   });
 
   it('binds the max concurrent queries input to its form control', async () => {
@@ -111,8 +164,11 @@ describe('DnsPipelineSettingsComponent', () => {
       );
     });
 
+    fixture.componentInstance.form.patchValue({ workerCount: 2 });
     await fixture.componentInstance.save();
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
+    // A failed save keeps the edit pending.
+    expect(fixture.componentInstance.hasChanges()).toBeTrue();
   });
 });
