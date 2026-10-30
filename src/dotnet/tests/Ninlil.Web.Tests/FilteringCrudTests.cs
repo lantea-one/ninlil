@@ -623,6 +623,71 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
+    ///     A group network that matches by DNS-over-HTTPS ClientID (no CIDR) is created, listed with a
+    ///     null <c>cidr</c>, switched to a CIDR by PUT and back to a ClientID, and deleted.
+    /// </summary>
+    [Fact]
+    public async Task ClientGroupNetwork_WithOnlyAClientId_IsCreatedListedUpdatedAndDeleted()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        HttpResponseMessage groupResponse = await client.PostAsJsonAsync(
+            "/api/client-groups",
+            new { name = $"group-clientid-{Guid.NewGuid():N}" }
+        );
+        Assert.Equal(HttpStatusCode.Created, groupResponse.StatusCode);
+        ClientGroupDetail group =
+            await groupResponse.Content.ReadFromJsonAsync<ClientGroupDetail>();
+
+        try
+        {
+            HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+                $"/api/client-groups/{group.Id}/networks",
+                new { clientId = "living-room" }
+            );
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+            ClientGroupNetworkDetail created =
+                await createResponse.Content.ReadFromJsonAsync<ClientGroupNetworkDetail>();
+            Assert.Null(created.Cidr);
+            Assert.Equal("living-room", created.ClientId);
+
+            HttpResponseMessage getResponse = await client.GetAsync(
+                $"/api/client-groups/{group.Id}/networks/{created.Id}"
+            );
+            Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+            ClientGroupNetworkDetail read =
+                await getResponse.Content.ReadFromJsonAsync<ClientGroupNetworkDetail>();
+            Assert.Null(read.Cidr);
+            Assert.Equal("living-room", read.ClientId);
+
+            // A CIDR row becomes a ClientID row and back, keeping its identifier.
+            HttpResponseMessage toCidrResponse = await client.PutAsJsonAsync(
+                $"/api/client-groups/{group.Id}/networks/{created.Id}",
+                new { cidr = "203.0.113.0/24" }
+            );
+            Assert.Equal(HttpStatusCode.NoContent, toCidrResponse.StatusCode);
+            HttpResponseMessage toClientIdResponse = await client.PutAsJsonAsync(
+                $"/api/client-groups/{group.Id}/networks/{created.Id}",
+                new { clientId = "kitchen" }
+            );
+            Assert.Equal(HttpStatusCode.NoContent, toClientIdResponse.StatusCode);
+            ClientGroupNetworkDetail updated = await (
+                await client.GetAsync($"/api/client-groups/{group.Id}/networks/{created.Id}")
+            ).Content.ReadFromJsonAsync<ClientGroupNetworkDetail>();
+            Assert.Null(updated.Cidr);
+            Assert.Equal("kitchen", updated.ClientId);
+
+            HttpResponseMessage deleteResponse = await client.DeleteAsync(
+                $"/api/client-groups/{group.Id}/networks/{created.Id}"
+            );
+            Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/client-groups/{group.Id}");
+        }
+    }
+
+    /// <summary>
     ///     A group network accepts a bare IPv4 or IPv6 address as one host and rejects a
     ///     zone-scoped or malformed address with the shared message.
     /// </summary>

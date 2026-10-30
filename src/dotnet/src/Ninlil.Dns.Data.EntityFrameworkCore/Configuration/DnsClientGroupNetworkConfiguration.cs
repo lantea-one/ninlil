@@ -25,7 +25,8 @@ public class DnsClientGroupNetworkConfiguration
         // The filtering engine loads a group's rules together.
         builder.HasIndex(network => network.ClientGroupId);
 
-        // 64 characters fits the longest IPv6 CIDR notation.
-        builder.Property(network => network.Cidr).HasMaxLength(64).IsRequired();
+        // 64 characters fits the longest IPv6 CIDR notation. The column is nullable because a row
+        // that matches by DNS-over-HTTPS ClientID has no CIDR.
+        builder.Property(network => network.Cidr).HasMaxLength(64);
     }
 }

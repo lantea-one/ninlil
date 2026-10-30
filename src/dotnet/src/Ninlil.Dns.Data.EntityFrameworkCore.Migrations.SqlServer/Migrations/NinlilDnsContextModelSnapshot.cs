@@ -804,7 +804,6 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasColumnType("uniqueidentifier");
 
                 b.Property<string>("Cidr")
-                    .IsRequired()
                     .HasMaxLength(64)
                     .HasColumnType("nvarchar(64)");
 

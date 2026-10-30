@@ -799,7 +799,6 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.Property<string>("Cidr")
-                    .IsRequired()
                     .HasMaxLength(64)
                     .HasColumnType("TEXT");
 
