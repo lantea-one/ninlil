@@ -69,7 +69,7 @@ public class DnsQueryDispatcher(
             return WithResponseCode(request, DnsResponseCodeEnum.FormatError);
 
         // RFC 1035 §4.1.1: NOTIMP means the server does not support the kind of query. IQUERY
-        // (obsolete, RFC 3425), STATUS, DSO (RFC 8490 §5.1) and unassigned opcodes would otherwise
+        // (obsolete, RFC 3425), STATUS, DSO (RFC 8490 §5.1.1) and unassigned opcodes would otherwise
         // be answered as a plain QUERY by the resolvers, which do not look at the opcode.
         if (
             request.Opcode

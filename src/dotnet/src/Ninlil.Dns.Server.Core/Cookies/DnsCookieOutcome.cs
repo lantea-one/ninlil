@@ -16,7 +16,7 @@ namespace Ninlil.Dns.Server.Core.Cookies;
 /// </param>
 /// <param name="ShouldRespondBadCookie">
 ///     Whether the query should be answered with <see cref="Common.Enum.DnsResponseCodeEnum.BadCookie" />
-///     and no answer data, per RFC 7873 §5.2. Only when <see cref="DnsCookieOptions.Require" />
+///     and no answer data, per RFC 7873 §5.2.3 and §5.2.4. Only when <see cref="DnsCookieOptions.Require" />
 ///     is set and the request has a client cookie but no valid server cookie.
 /// </param>
 /// <param name="ResponseOption">

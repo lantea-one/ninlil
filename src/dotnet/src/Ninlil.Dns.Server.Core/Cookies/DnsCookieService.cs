@@ -59,7 +59,7 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
 
         DnsCookieVerificationResultEnum verification = Verify(cookieOption, remoteAddress);
 
-        // RFC 7873 §5.2: when cookies are required, only a Valid server cookie is accepted. A
+        // RFC 7873 §5.2.3, §5.2.4: when cookies are required, only a Valid server cookie is accepted. A
         // client-only cookie or an unrecognized server cookie gets BADCOOKIE with a fresh server
         // cookie, so a real client can retry. With no usable client cookie (absent or the wrong
         // length) there is nothing to echo, so the query is answered REFUSED.

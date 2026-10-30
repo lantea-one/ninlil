@@ -18,7 +18,7 @@ namespace Ninlil.Dns.Server.Core.Tests;
 ///     This class tests that <see cref="DnsQueryProcessingPipeline" /> replies on its own copy of
 ///     a resolver's message (truncation and the cookie step never change a shared reply) and that
 ///     replies it or its engines build locally keep an OPT record for an EDNS client (RFC 6891
-///     §7). It runs the pipeline with fake resolvers, filter and rewrite engines and captures the
+///     §6.1.1). It runs the pipeline with fake resolvers, filter and rewrite engines and captures the
 ///     reply bytes; no socket is involved.
 /// </summary>
 public sealed class DnsQueryProcessingPipelineReplyOwnershipTests

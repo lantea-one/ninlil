@@ -152,7 +152,9 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
                     record.Name,
                     DnsResourceRecordTypeEnum.Aaaa,
                     record.Class,
-                    // RFC 6147 §5.1.7: the synthesized TTL should not exceed the A record's TTL.
+                    // RFC 6147 §5.1.7 sets the TTL to the smaller of the A record's TTL and the SOA TTL of
+                    // the negative AAAA answer. This service never sees that SOA, so the A record's TTL
+                    // stands.
                     record.TimeToLive,
                     DnsRecordDataCodecRegistry.Encode(DnsResourceRecordTypeEnum.Aaaa, aaaaData)
                 )

@@ -27,7 +27,7 @@ public interface IDnsTransactionSignatureService
 
     /// <summary>
     ///     This method signs a reply to a request that was checked by <see cref="VerifyAsync" />.
-    ///     For a failed signature it turns the reply into the error reply RFC 8945 §5.3.2 requires
+    ///     For a failed signature it turns the reply into the error reply RFC 8945 §5.2 and §5.3.2 require
     ///     (NOTAUTH with the TSIG error in the TSIG record, or FORMERR).
     /// </summary>
     /// <param name="response">

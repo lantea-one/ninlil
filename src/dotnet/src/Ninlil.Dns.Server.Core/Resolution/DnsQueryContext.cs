@@ -24,7 +24,7 @@ namespace Ninlil.Dns.Server.Core.Resolution;
 /// <param name="RawMessage">
 ///     The wire bytes <paramref name="Request" /> was decoded from, or <see langword="null" />.
 ///     TSIG verification (zone transfers, dynamic update) needs them because the MAC covers the
-///     bytes as received (RFC 8945 §4.3), and re-serializing <paramref name="Request" /> could
+///     bytes as received (RFC 8945 §4.3.2), and re-serializing <paramref name="Request" /> could
 ///     differ, for example in name compression. The pipeline always sets it.
 /// </param>
 /// <param name="TsigRecordStartOffset">

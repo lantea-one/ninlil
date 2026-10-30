@@ -46,7 +46,7 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///         which frees all of its slots. Reading is also limited by the idle timeout, per frame.
 ///     </para>
 ///     <para>
-///         <b>Idle, EOF and shutdown.</b> RFC 7766 §6.2.3 says a connection with queries
+///         <b>Idle, EOF and shutdown.</b> RFC 7766 §3 says a connection with queries
 ///         outstanding is not idle. When the read side goes idle or the client closes it, the
 ///         session stops reading, waits for the in-flight queries (each reply is bounded by the
 ///         write deadline), flushes the queue and returns. An abort or the stopping token ends it at

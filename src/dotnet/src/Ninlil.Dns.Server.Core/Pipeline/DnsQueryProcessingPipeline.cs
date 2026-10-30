@@ -65,7 +65,7 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///             (<see cref="IDnsFilterEngine.EvaluateResponseAsync" />) on any answer that was not
 ///             already a denial, including rewrite answers.</item>
 ///             <item>Giving a reply that has no OPT record one when the request had one (RFC 6891
-///             §7), attaching a fresh server cookie, publishing
+///             §6.1.1), attaching a fresh server cookie, publishing
 ///             <see cref="DnsQueryAnsweredEvent" />, truncating an oversized datagram reply
 ///             (<see cref="DnsInboundMessage.IsDatagram" />) with room left for the TSIG record,
 ///             signing the reply (the last change to it, because any later one would break the
@@ -797,7 +797,7 @@ public sealed class DnsQueryProcessingPipeline(
         // steps below change a copy, taken once and only when a change is due.
         bool replyIsOwned = false;
 
-        // RFC 6891 §7: a responder that receives an OPT record includes one. Replies this server
+        // RFC 6891 §6.1.1: a responder that receives an OPT record includes one. Replies this server
         // builds itself (filter denials, rewrite answers, REFUSED) carry none, so one is added.
         if (request.Edns is not null && response.Edns is null)
         {
