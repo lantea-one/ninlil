@@ -115,7 +115,7 @@ public sealed class DnsCryptCertificateRotationService(
         DateTimeOffset now = DateTimeOffset.UtcNow;
         List<DnsCryptCertificateEntry> current =
         [
-            .. store.Entries.Where(entry => entry.Certificate.ValidUntil > now),
+            .. store.Entries.Where(entry => !entry.Certificate.IsExpiredAt(now)),
         ];
 
         DateTimeOffset nextCheck = now + options.CurrentValue.CertificateRotationInterval;
@@ -129,7 +129,7 @@ public sealed class DnsCryptCertificateRotationService(
             if (hasCoverageThroughNextCheck)
                 continue;
 
-            DnsCryptCertificateEntry newEntry = GenerateCertificate(esVersion, now);
+            DnsCryptCertificateEntry newEntry = GenerateCertificate(esVersion, now, current);
             current.Add(newEntry);
 
             logger.LogInformation(
@@ -146,15 +146,19 @@ public sealed class DnsCryptCertificateRotationService(
 
     /// <summary>
     ///     This method generates and Ed25519-signs one new certificate with a new key pair, a
-    ///     random client magic, and the current Unix time as its serial.
+    ///     random client magic that no certificate in <paramref name="current" /> shares and that
+    ///     <see cref="DnsCryptClientMagic" /> allows, and the current Unix time as its serial.
     /// </summary>
     private DnsCryptCertificateEntry GenerateCertificate(
         DnsCryptEsVersion esVersion,
-        DateTimeOffset now
+        DateTimeOffset now,
+        List<DnsCryptCertificateEntry> current
     )
     {
         (byte[] publicKey, byte[] secretKey) = DnsCryptCryptoBox.GenerateKeyPair(esVersion);
-        byte[] clientMagic = RandomNumberGenerator.GetBytes(8);
+        byte[] clientMagic = DnsCryptClientMagic.Generate(
+            current.Select(entry => entry.Certificate.ClientMagic)
+        );
         uint serial = (uint)now.ToUnixTimeSeconds();
 
         DnsCryptCertificate unsigned = new(

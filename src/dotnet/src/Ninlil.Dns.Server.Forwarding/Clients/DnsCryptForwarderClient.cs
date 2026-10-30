@@ -394,7 +394,7 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
                 continue;
             }
 
-            if (candidate.ValidFrom > now || candidate.ValidUntil <= now)
+            if (!candidate.IsValidAt(now))
                 continue;
 
             byte[] signingInput = DnsCryptCertificateCodec.BuildSignedData(candidate);

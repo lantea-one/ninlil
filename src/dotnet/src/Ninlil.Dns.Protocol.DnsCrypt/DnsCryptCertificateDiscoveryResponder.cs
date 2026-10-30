@@ -111,7 +111,8 @@ internal static class DnsCryptCertificateDiscoveryResponder
     /// <summary>
     ///     This method checks whether a decoded plaintext query is a certificate discovery request
     ///     for this resolver's provider name and, if so, builds the response: one TXT record per
-    ///     certificate valid now. Expired and not-yet-valid certificates are left out.
+    ///     certificate valid now, <c>&lt;ts-end&gt;</c> included (section 12). Expired and not-yet-valid
+    ///     certificates are left out.
     /// </summary>
     /// <param name="request">A successfully decoded, plaintext query.</param>
     /// <param name="providerCertificateName">The certificate discovery name, from <see cref="BuildProviderCertificateName" />.</param>
@@ -151,7 +152,7 @@ internal static class DnsCryptCertificateDiscoveryResponder
 
         foreach (DnsCryptCertificateEntry entry in store.Entries)
         {
-            if (entry.Certificate.ValidFrom > now || entry.Certificate.ValidUntil <= now)
+            if (!entry.Certificate.IsValidAt(now))
                 continue;
 
             byte[] encodedCertificate = DnsCryptCertificateCodec.Encode(entry.Certificate);

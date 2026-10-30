@@ -22,8 +22,14 @@ namespace Ninlil.Dns.Server.DnsCrypt;
 ///     The certificate's version number; among several valid certificates, a client should
 ///     prefer the highest serial.
 /// </param>
-/// <param name="ValidFrom">The point this certificate becomes valid.</param>
-/// <param name="ValidUntil">The point this certificate stops being valid.</param>
+/// <param name="ValidFrom">
+///     The first second this certificate is valid (<c>&lt;ts-start&gt;</c>); only the whole
+///     seconds count.
+/// </param>
+/// <param name="ValidUntil">
+///     The last second this certificate is valid (<c>&lt;ts-end&gt;</c>, "valid until
+///     (inclusive)" in DNSCrypt v2 section 12); only the whole seconds count.
+/// </param>
 /// <param name="Signature">
 ///     The Ed25519 signature by the resolver's long-term provider key over the output of
 ///     <see cref="DnsCryptCertificateCodec.BuildSignedData" />, or empty before signing.
@@ -36,4 +42,22 @@ public sealed record DnsCryptCertificate(
     DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil,
     byte[] Signature
-);
+)
+{
+    /// <summary>
+    ///     This method reports whether the certificate is valid at <paramref name="moment" />.
+    ///     The wire form holds whole Unix seconds and <c>&lt;ts-end&gt;</c> is inclusive (DNSCrypt
+    ///     v2 section 12), so the certificate is valid during every part of the second
+    ///     <see cref="ValidUntil" /> names. The comparison uses whole seconds so a certificate
+    ///     behaves the same before and after it is encoded.
+    /// </summary>
+    public bool IsValidAt(DateTimeOffset moment) =>
+        ValidFrom.ToUnixTimeSeconds() <= moment.ToUnixTimeSeconds() && !IsExpiredAt(moment);
+
+    /// <summary>
+    ///     This method reports whether the second after <see cref="ValidUntil" /> has begun at
+    ///     <paramref name="moment" />, so the certificate is no longer valid and can be dropped.
+    /// </summary>
+    public bool IsExpiredAt(DateTimeOffset moment) =>
+        ValidUntil.ToUnixTimeSeconds() < moment.ToUnixTimeSeconds();
+}
