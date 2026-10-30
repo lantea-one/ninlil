@@ -211,4 +211,101 @@ public class DnsCryptCertificateRotationServiceTests
                 File.Delete(statePath);
         }
     }
+
+    [Fact]
+    public void DefaultOptions_ACertificateOutlivesTheRotationIntervalByFourHours()
+    {
+        // DNSCrypt v2 section 13: rotate at least every 24 hours, accept the old key for at least
+        // 4 hours, then throw it away. A 28 hour validity after a 24 hour interval does both.
+        DnsCryptOptions options = new();
+
+        Assert.Equal(TimeSpan.FromHours(24), options.CertificateRotationInterval);
+        Assert.Equal(TimeSpan.FromHours(28), options.CertificateValidityDuration);
+    }
+
+    [Fact]
+    public async Task ACertificateThatExpiresBetweenTwoRotationChecks_IsDroppedWhenItExpires()
+    {
+        string statePath = Path.Combine(
+            Path.GetTempPath(),
+            $"dnscrypt-rotation-expiry-test-{Guid.NewGuid():N}.json"
+        );
+
+        try
+        {
+            // A one hour interval means the next rotation check is far away; only a wake-up at
+            // the old certificate's end time can drop it within the test.
+            DnsCryptOptions options = new()
+            {
+                Enable = true,
+                CertificateStateFilePath = statePath,
+                EnabledEsVersions = [DnsCryptEsVersion.XChaCha20Poly1305],
+                CertificateRotationInterval = TimeSpan.FromHours(1),
+                CertificateValidityDuration = TimeSpan.FromHours(2),
+                CertificateClockSkewTolerance = TimeSpan.Zero,
+            };
+
+            FileDnsCryptCertificateStore store = new(
+                Options.Create(options),
+                NullLogger<FileDnsCryptCertificateStore>.Instance
+            );
+            (byte[] publicKey, byte[] secretKey) = DnsCryptCryptoBox.GenerateKeyPair(
+                DnsCryptEsVersion.XSalsa20Poly1305
+            );
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            DnsCryptCertificateEntry oldEntry = new(
+                new DnsCryptCertificate(
+                    DnsCryptEsVersion.XSalsa20Poly1305,
+                    publicKey,
+                    [1, 2, 3, 4, 5, 6, 7, 8],
+                    1,
+                    now.AddHours(-1),
+                    now.AddSeconds(2),
+                    new byte[64]
+                ),
+                secretKey
+            );
+            store.Save([oldEntry]);
+
+            DnsCryptCertificateRotationService service = new(
+                store,
+                new StaticOptionsMonitor<DnsCryptOptions>(options),
+                NullLogger<DnsCryptCertificateRotationService>.Instance
+            );
+
+            await service.StartAsync(CancellationToken.None);
+
+            // The old certificate is the only entry until the startup check runs, so wait for
+            // the new certificate first, then for the old one to go.
+            for (
+                int attempt = 0;
+                attempt < 100
+                    && !(
+                        store.Entries.Any(entry =>
+                            entry.Certificate.EsVersion == DnsCryptEsVersion.XChaCha20Poly1305
+                        )
+                        && store.Entries.All(entry =>
+                            entry.Certificate.EsVersion != DnsCryptEsVersion.XSalsa20Poly1305
+                        )
+                    );
+                attempt++
+            )
+                await Task.Delay(100);
+
+            // The startup check keeps the old certificate (it has not expired yet) and issues
+            // the enabled cipher's certificate; the wake-up after the old end time drops it.
+            Assert.Single(store.Entries);
+            Assert.Equal(
+                DnsCryptEsVersion.XChaCha20Poly1305,
+                store.Entries[0].Certificate.EsVersion
+            );
+
+            await service.StopAsync(CancellationToken.None);
+        }
+        finally
+        {
+            if (File.Exists(statePath))
+                File.Delete(statePath);
+        }
+    }
 }

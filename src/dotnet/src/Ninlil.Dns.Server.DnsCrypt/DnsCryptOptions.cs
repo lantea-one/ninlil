@@ -79,11 +79,14 @@ public class DnsCryptOptions
 
     /// <summary>
     ///     This property contains how long a new certificate stays valid. It should be longer than
-    ///     <see cref="CertificateRotationInterval" />: with the defaults a new certificate is made
-    ///     about a day before the previous one expires, so there are usually two valid
-    ///     certificates per cipher and a client that learned the older one can keep using it.
+    ///     <see cref="CertificateRotationInterval" />, so that a client that learned the older
+    ///     certificate can keep using it until it expires. DNSCrypt v2 section 13 says a resolver
+    ///     rotates at least every 24 hours, accepts the previous key for at least 4 hours, and
+    ///     then throws the previous secret key away. With the defaults a new certificate is made
+    ///     24 hours after the last, the previous one stays valid for 4 more hours, and the
+    ///     service then drops it with its secret key.
     /// </summary>
-    public TimeSpan CertificateValidityDuration { get; set; } = TimeSpan.FromHours(48);
+    public TimeSpan CertificateValidityDuration { get; set; } = TimeSpan.FromHours(28);
 
     /// <summary>
     ///     This property contains how far a new certificate's <c>&lt;ts-start&gt;</c> is

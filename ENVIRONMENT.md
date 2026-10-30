@@ -215,7 +215,7 @@ default.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PROVIDER_NAME` | The DNSCrypt provider name clients use to build an `sdns://` stamp against this server. | *(empty — must be set to actually use DNSCrypt)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_MAX_CONCURRENT_TCP_CONNECTIONS` | Max simultaneous DNSCrypt TCP connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_TCP_IDLE_TIMEOUT` | Idle timeout before an inactive DNSCrypt TCP connection is closed. | `00:00:30` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_CERTIFICATE_VALIDITY_DURATION` | How long a generated DNSCrypt provider certificate stays valid. | `2.00:00:00` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_CERTIFICATE_VALIDITY_DURATION` | How long a generated DNSCrypt provider certificate stays valid. | `1.04:00:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_CERTIFICATE_ROTATION_INTERVAL` | How often the DNSCrypt certificate is rotated. | `1.00:00:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_CERTIFICATE_CLOCK_SKEW_TOLERANCE` | Clock skew tolerance when validating certificate timestamps. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_CERTIFICATE_STATE_FILE_PATH` | Where DNSCrypt's own provider key/certificate state is persisted (filesystem-permissions-protected, not `IDataProtector`-encrypted). | `data/dnscrypt-certificates.json` |

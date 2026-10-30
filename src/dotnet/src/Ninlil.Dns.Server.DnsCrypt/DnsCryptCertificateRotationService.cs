@@ -12,9 +12,11 @@ namespace Ninlil.Dns.Server.DnsCrypt;
 ///     This hosted service keeps <see cref="IDnsCryptCertificateStore" /> supplied with a valid
 ///     certificate for every <see cref="DnsCryptOptions.EnabledEsVersions" /> cipher, without
 ///     operator action, like the automatic RFC 5011 trust-anchor rollover. It checks at startup
-///     and every <see cref="DnsCryptOptions.CertificateRotationInterval" />, drops expired
-///     certificates, and signs new ones with the store's provider key. It runs only while
-///     DNSCrypt is enabled.
+///     and every <see cref="DnsCryptOptions.CertificateRotationInterval" /> and signs new
+///     certificates with the store's provider key. It also wakes when the earliest tracked
+///     certificate expires, to drop it, so a previous certificate and its secret key do not
+///     outlive their <c>ts-end</c> (DNSCrypt v2 section 13: the previous secret key must be thrown
+///     away). It runs only while DNSCrypt is enabled.
 /// </summary>
 /// <param name="store">The certificate store this service reads from and updates.</param>
 /// <param name="options">
@@ -50,6 +52,12 @@ public sealed class DnsCryptCertificateRotationService(
     /// </summary>
     private static readonly TimeSpan FailedCheckRetryInterval = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    ///     This field is the pause added after a certificate's end time before the service wakes to
+    ///     drop it, so the wall clock has passed the end second when the check runs.
+    /// </summary>
+    private static readonly TimeSpan ExpiryWakeUpMargin = TimeSpan.FromMilliseconds(50);
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -62,6 +70,11 @@ public sealed class DnsCryptCertificateRotationService(
         {
             TimeSpan delay = TimeSpan.Zero;
 
+            // The time of the next full coverage check. A wake-up before it only drops expired
+            // certificates: a full check at an expiry wake-up would see "no certificate outlives
+            // the next check" and issue a certificate ahead of schedule.
+            DateTimeOffset nextCoverageCheck = DateTimeOffset.MinValue;
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -69,8 +82,19 @@ public sealed class DnsCryptCertificateRotationService(
                     if (delay > TimeSpan.Zero)
                         await Task.Delay(delay, stoppingToken);
 
-                    EnsureCoverage();
-                    delay = options.CurrentValue.CertificateRotationInterval;
+                    DateTimeOffset now = DateTimeOffset.UtcNow;
+
+                    if (now >= nextCoverageCheck)
+                    {
+                        EnsureCoverage();
+                        nextCoverageCheck = now + options.CurrentValue.CertificateRotationInterval;
+                    }
+                    else
+                    {
+                        DropExpiredCertificates(now);
+                    }
+
+                    delay = DelayUntilNextWakeUp(nextCoverageCheck);
                 }
                 catch (OperationCanceledException)
                 {
@@ -82,6 +106,7 @@ public sealed class DnsCryptCertificateRotationService(
                     // service or the host. The retry comes after the shorter of the rotation
                     // interval and FailedCheckRetryInterval, so a transient failure does not
                     // leave the listeners without a certificate for a whole interval.
+                    nextCoverageCheck = DateTimeOffset.MinValue;
                     delay = TimeSpan.FromTicks(
                         Math.Min(
                             options.CurrentValue.CertificateRotationInterval.Ticks,
@@ -102,6 +127,47 @@ public sealed class DnsCryptCertificateRotationService(
             // it again.
             IsRunning = false;
         }
+    }
+
+    /// <summary>
+    ///     This method returns how long to wait before the next wake-up: until the next coverage
+    ///     check, or until the second after the earliest tracked certificate's <c>ts-end</c>
+    ///     (plus a small margin so the clock has passed it), whichever comes first.
+    /// </summary>
+    private TimeSpan DelayUntilNextWakeUp(DateTimeOffset nextCoverageCheck)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        TimeSpan delay = nextCoverageCheck - now;
+
+        foreach (DnsCryptCertificateEntry entry in store.Entries)
+        {
+            TimeSpan untilExpired =
+                DateTimeOffset.FromUnixTimeSeconds(
+                    entry.Certificate.ValidUntil.ToUnixTimeSeconds() + 1
+                )
+                - now
+                + ExpiryWakeUpMargin;
+
+            if (untilExpired < delay)
+                delay = untilExpired;
+        }
+
+        return delay > TimeSpan.Zero ? delay : ExpiryWakeUpMargin;
+    }
+
+    /// <summary>
+    ///     This method drops the certificates that are expired at <paramref name="now" /> and saves
+    ///     the rest, when anything was dropped.
+    /// </summary>
+    private void DropExpiredCertificates(DateTimeOffset now)
+    {
+        List<DnsCryptCertificateEntry> current =
+        [
+            .. store.Entries.Where(entry => !entry.Certificate.IsExpiredAt(now)),
+        ];
+
+        if (current.Count != store.Entries.Count)
+            store.Save(current);
     }
 
     /// <summary>
