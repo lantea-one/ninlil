@@ -76,6 +76,18 @@ public class DnsServerPresetCatalogTests
     }
 
     [Fact]
+    public void FamilyDescription_NamesTheThreeContentCategoriesItsListBlocks()
+    {
+        // The Family list is a hosts file of fake-news, gambling and adult domains, so the
+        // description must not claim adult content alone.
+        string description = DnsServerPresetCatalog.Family.Description;
+
+        Assert.Contains("fake-news", description);
+        Assert.Contains("gambling", description);
+        Assert.Contains("adult", description);
+    }
+
+    [Fact]
     public void FamilyHasStrictlyMoreSubscriptionsThanProtective() =>
         Assert.True(
             DnsServerPresetCatalog.Family.FilterListSubscriptions.Count

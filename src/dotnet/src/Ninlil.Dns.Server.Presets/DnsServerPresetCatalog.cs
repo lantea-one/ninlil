@@ -131,7 +131,7 @@ public static class DnsServerPresetCatalog
     /// </summary>
     public static readonly PresetDefinition Family = new(
         "Family",
-        "Protective, plus an adult/explicit-content blocklist, matching CleanBrowsing/OpenDNS FamilyShield's own \"Family Filter\" scope.",
+        "Protective, plus a blocklist of fake-news, gambling and adult-content domains.",
         Protective.ConfigurationSettings,
         [
             .. Protective.FilterListSubscriptions,

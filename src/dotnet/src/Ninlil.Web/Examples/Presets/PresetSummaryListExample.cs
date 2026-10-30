@@ -38,7 +38,7 @@ public class PresetSummaryListExample : IExamplesProvider<IReadOnlyList<PresetSu
             ),
             new PresetSummary(
                 "Family",
-                "Protective, plus an adult/explicit-content blocklist, matching CleanBrowsing/OpenDNS FamilyShield's own \"Family Filter\" scope.",
+                "Protective, plus a blocklist of fake-news, gambling and adult-content domains.",
                 10,
                 2
             ),

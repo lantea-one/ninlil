@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Ninlil.Web.Controllers;
+using Ninlil.Web.Examples.Presets;
 using Ninlil.Web.Models;
 
 // Define our namespace.
@@ -38,6 +39,21 @@ public class PresetsControllerTests(NinlilDnsWebApplicationFactory factory)
         );
 
         return client;
+    }
+
+    [Fact]
+    public async Task List_MatchesTheSwaggerExample()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.GetAsync("/api/presets");
+        response.EnsureSuccessStatusCode();
+
+        List<PresetSummary> presets = await response.Content.ReadFromJsonAsync<
+            List<PresetSummary>
+        >();
+
+        Assert.Equal(new PresetSummaryListExample().GetExamples(), presets);
     }
 
     [Fact]
