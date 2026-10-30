@@ -45,6 +45,7 @@
 
   // Maximum widths for forms and cards. Tables and dashboards use the full width; a form or a
   // login card is capped at one of these instead of choosing a max-width per page.
+  --ninlil-form-max-width-sm: 20rem; // 320px: a single short field with a button (pause duration)
   --ninlil-form-max-width-compact: 40rem; // 640px: a short form (New API Token, Login)
   --ninlil-form-max-width: 56rem; // 896px: a typical single-section create/edit form
   --ninlil-form-max-width-wide: 76rem; // 1216px: a long, multi-section form (New Zone)
@@ -67,4 +68,27 @@
 // its denser `.table-sm` is opt-in per table. This rule makes every `.table` dense by default.
 .table > :not(caption) > * > * {
   padding: var(--ninlil-table-cell-padding-y) var(--ninlil-table-cell-padding-x);
+}
+
+// CoreUI's dark theme keeps its light "subtle" colors (the tinted background, border and emphasis
+// text of alerts, `bg-*-subtle` tiles and list items), which show as pale blocks on a dark page.
+// These dark values replace them for the semantic colors: a dark shade for the background, a mid
+// shade for the border and a light tint for the text, each text on its background above 4.5:1
+// (WCAG AA). The primary trio is set per palette in `themes/_<palette>.scss`.
+[data-coreui-theme='dark'] {
+  --cui-secondary-text-emphasis: #c9cfd8;
+  --cui-secondary-bg-subtle: #252b36;
+  --cui-secondary-border-subtle: #4a566d;
+  --cui-success-text-emphasis: #a3e0b5;
+  --cui-success-bg-subtle: #0f2e1a;
+  --cui-success-border-subtle: #1c6b34;
+  --cui-info-text-emphasis: #9fd3ff;
+  --cui-info-bg-subtle: #0d2a45;
+  --cui-info-border-subtle: #1f5b94;
+  --cui-warning-text-emphasis: #f9d98b;
+  --cui-warning-bg-subtle: #3a2a07;
+  --cui-warning-border-subtle: #8a5f0c;
+  --cui-danger-text-emphasis: #f5b5b5;
+  --cui-danger-bg-subtle: #3d1313;
+  --cui-danger-border-subtle: #8a2f2f;
 }

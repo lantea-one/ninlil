@@ -16,8 +16,8 @@ const DEFAULT_SITE_TITLE = 'Ninlil Admin';
  * after sign-in, because the first call fails without a session. The Branding settings page
  * edits these values.
  *
- * <p>Only the page title is applied. {@link logoDataUri} holds the logo, but no component
- * displays it.
+ * <p>The page title is applied here. {@link siteTitle} and {@link logoDataUri} also feed the
+ * shell's sidebar brand and header title (`AppShellComponent`).
  */
 @Injectable({ providedIn: 'root' })
 export class BrandingService {

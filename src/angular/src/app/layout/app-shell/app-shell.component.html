@@ -8,8 +8,12 @@
 >
   <c-sidebar-header class="border-bottom">
     <c-sidebar-brand routerLink="/dashboard" class="shell-brand">
-      <svg cIcon name="cilLan" size="xl" class="shell-brand-icon"></svg>
-      <span class="shell-brand-text sidebar-brand-full">Ninlil</span>
+      @if (logoUrl(); as logo) {
+        <img [src]="logo" [alt]="brandTitle()" class="shell-brand-logo" />
+      } @else {
+        <svg cIcon name="cilLan" size="xl" class="shell-brand-icon"></svg>
+      }
+      <span class="shell-brand-text sidebar-brand-full">{{ brandTitle() }}</span>
     </c-sidebar-brand>
   </c-sidebar-header>
 
@@ -24,7 +28,7 @@
     }
   </ul>
 
-  <c-sidebar-footer class="border-top d-none d-md-flex">
+  <c-sidebar-footer class="border-top d-none d-lg-flex">
     <button
       class="shell-collapse-toggle"
       type="button"
@@ -43,11 +47,13 @@
         cHeaderToggler
         class="d-lg-none me-2"
         type="button"
-        aria-label="Toggle sidebar"
+        ariaLabel="Toggle sidebar"
         (click)="toggleMobileSidebar()"
-      ></button>
+      >
+        <svg cIcon name="cilMenu" size="lg"></svg>
+      </button>
 
-      <span class="shell-title d-none d-md-inline">Ninlil Admin</span>
+      <span class="shell-title d-none d-md-inline">{{ headerTitle() }}</span>
 
       <ul class="shell-header-nav ms-auto">
         <li>

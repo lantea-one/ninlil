@@ -36,7 +36,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: 'dnsrewrites:read',
   },
   { label: 'TSIG Keys', path: 'tsig-keys', icon: 'cilLockLocked', permission: 'tsigkeys:read' },
-  { label: 'Cluster', path: 'cluster', icon: 'cilShareAll', permission: 'clusternodes:read' },
+  { label: 'Cluster', path: 'cluster', icon: 'cilSitemap', permission: 'clusternodes:read' },
   {
     label: 'Cloud Credentials',
     path: 'cloud-provider-credentials',
@@ -70,7 +70,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     label: 'DHCP Services',
     path: 'dhcp-services',
-    icon: 'cilCog',
+    icon: 'cilRouter',
     permission: 'dhcpservices:read',
   },
   {

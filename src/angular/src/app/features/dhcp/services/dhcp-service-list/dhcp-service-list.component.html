@@ -25,7 +25,14 @@
       @if (services().length === 0) {
         <p class="empty-state">No DHCP-family services are registered.</p>
       } @else {
-        <table cdk-table cTable hover responsive [dataSource]="services()" class="service-table">
+        <table
+          cdk-table
+          cTable
+          hover
+          [responsive]="true"
+          [dataSource]="services()"
+          class="service-table"
+        >
           <ng-container cdkColumnDef="name">
             <th cdk-header-cell *cdkHeaderCellDef>Service</th>
             <td cdk-cell *cdkCellDef="let service">{{ kindLabel(service.kind) }}</td>

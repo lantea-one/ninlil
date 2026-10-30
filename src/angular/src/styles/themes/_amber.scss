@@ -3,6 +3,9 @@
 // accent's `--cui-primary-contrast` text on the accent all meet WCAG AA (4.5:1). Backgrounds,
 // text, borders and the success/warning/danger/info colors stay at CoreUI's light and dark
 // defaults: a palette is an accent on top of CoreUI's neutrals, not a full re-theme.
+// In dark mode the primary text emphasis, subtle background and subtle border are a light tint on a
+// dark shade (alerts, badges and tinted tiles), because CoreUI's dark theme keeps the light values;
+// the text emphasis on the subtle background also meets 4.5:1.
 [data-coreui-theme='light'][data-ninlil-palette='Amber'] {
   --cui-primary: #92400e;
   --cui-primary-rgb: 146, 64, 14;
@@ -20,9 +23,9 @@
 [data-coreui-theme='dark'][data-ninlil-palette='Amber'] {
   --cui-primary: #f59e0b;
   --cui-primary-rgb: 245, 158, 11;
-  --cui-primary-text-emphasis: #92400e;
-  --cui-primary-bg-subtle: #fef3c7;
-  --cui-primary-border-subtle: #fcd34d;
+  --cui-primary-text-emphasis: #fde68a;
+  --cui-primary-bg-subtle: #451a03;
+  --cui-primary-border-subtle: #92400e;
   --cui-primary-contrast: #080a0c;
   --cui-link-color: #f59e0b;
   --cui-link-color-rgb: 245, 158, 11;

@@ -31,7 +31,7 @@
     @if (loading() && caches().length === 0) {
       <c-spinner class="loading-spinner" />
     } @else if (caches().length > 0) {
-      <table cTable responsive class="cache-table">
+      <table cTable [responsive]="true" class="cache-table">
         <thead>
           <tr>
             <th scope="col">Cache</th>

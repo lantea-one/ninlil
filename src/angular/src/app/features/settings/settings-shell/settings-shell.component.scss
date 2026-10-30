@@ -4,8 +4,10 @@
 
 // A wrapping flex layout instead of a media-query breakpoint: when the 220px nav basis and the
 // 480px content basis no longer fit side by side, the nav wraps onto its own row above the
-// content.
+// content. `container-type: inline-size` makes this element the container the `@container` rule
+// below measures; it only constrains the inline size, which the parent already decides.
 .settings-shell {
+  container-type: inline-size;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -25,11 +27,13 @@
   top: var(--ninlil-space-4);
 }
 
-// Meant to lift the 260px cap once the nav has wrapped onto its own row. Note that a container
-// query only matches inside an element with `container-type`, and no ancestor sets one.
-@container (max-width: 700px) {
+// Once the nav has wrapped onto its own row (the shell is narrower than the nav basis, the gap and
+// the content basis: 220 + 24 + 480 = 724px), it takes the full width and scrolls with the page.
+// Sticky would pin it over the content below it.
+@container (max-width: 723px) {
   .settings-nav {
     max-width: none;
+    position: static;
   }
 }
 

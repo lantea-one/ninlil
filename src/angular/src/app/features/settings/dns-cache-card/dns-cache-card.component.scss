@@ -15,6 +15,13 @@
 .cache-table {
   margin-bottom: 0;
 
+  // The "Actions" header text is `.visually-hidden`, which is absolutely positioned. Without a
+  // positioned cell it sits relative to the page, so the table's scroll wrapper does not clip it
+  // and the page scrolls sideways.
+  th {
+    position: relative;
+  }
+
   .numeric {
     text-align: right;
     font-variant-numeric: tabular-nums;

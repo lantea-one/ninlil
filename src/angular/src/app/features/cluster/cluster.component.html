@@ -212,7 +212,7 @@
       }
 
       @if (!statsLoading() && statsRows().length > 0) {
-        <table cTable hover responsive class="stats-table">
+        <table cTable hover [responsive]="true" class="stats-table">
           <thead>
             <tr>
               <th>Node</th>

@@ -8,6 +8,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { DomSanitizer } from '@angular/platform-browser';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import {
@@ -29,6 +30,7 @@ import {
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
 import { AuthService } from '../../core/auth/auth.service';
+import { BrandingService } from '../../core/branding/branding.service';
 import { ThemeSwitcherComponent } from '../../shared/theme-switcher/theme-switcher.component';
 import { NAV_ITEMS } from './nav-item.model';
 
@@ -56,8 +58,14 @@ import { NAV_ITEMS } from './nav-item.model';
  *   mobile breakpoint the sidebar manages visibility itself, and neither a `[visible]` binding
  *   nor the `cSidebarToggle` directives open it reliably there.
  *
- * <p>CoreUI's mobile breakpoint is `lg` (992px), so the header's menu button is `d-lg-none`. With
- * `md` (768px), widths from 768px to 992px would have neither a sidebar nor a button to open it.
+ * <p>CoreUI's mobile breakpoint is `lg` (992px), so the header's menu button is `d-lg-none` and
+ * the sidebar footer's collapse button is `d-lg-flex`. The menu button holds a `cilMenu` icon:
+ * CoreUI's header toggler draws nothing by itself, so without the icon the button is invisible
+ * and the navigation unreachable below `lg`. Its label is set through the directive's `ariaLabel`
+ * input; a plain `aria-label` attribute is overwritten by the directive's default.
+ *
+ * <p>The sidebar brand and the header title show the server's branding ({@link BrandingService}):
+ * the site title and, in the sidebar, the logo in place of the icon, each with a default.
  */
 @Component({
   selector: 'app-shell',
@@ -88,6 +96,8 @@ import { NAV_ITEMS } from './nav-item.model';
 export class AppShellComponent implements AfterViewInit {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly brandingService = inject(BrandingService);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly sidebarService = inject(SidebarService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -115,6 +125,23 @@ export class AppShellComponent implements AfterViewInit {
           : this.authService.hasAnyPermission(item.permission)),
     ),
   );
+
+  /** The sidebar brand text: the configured site title, or "Ninlil" when none is set. */
+  readonly brandTitle = computed(() => this.brandingService.siteTitle() ?? 'Ninlil');
+
+  /** The header title: the configured site title, or "Ninlil Admin" when none is set. */
+  readonly headerTitle = computed(() => this.brandingService.siteTitle() ?? 'Ninlil Admin');
+
+  /**
+   * The configured logo as an image source, or `null` when none is set (the sidebar then shows
+   * its icon). The server only checks that the data URI is an image, and Angular's URL sanitizer
+   * rejects SVG data URIs, so the value is trusted explicitly. An `<img>` never runs script from
+   * a data URI, and only an administrator with the branding permission can set it.
+   */
+  readonly logoUrl = computed(() => {
+    const logo = this.brandingService.logoDataUri();
+    return logo ? this.sanitizer.bypassSecurityTrustUrl(logo) : null;
+  });
 
   /** The current user's sign-in name, shown in the account menu. */
   readonly userName = this.authService.userName;
