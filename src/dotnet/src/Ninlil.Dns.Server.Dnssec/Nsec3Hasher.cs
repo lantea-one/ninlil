@@ -113,7 +113,7 @@ public static class Nsec3Hasher
 
     /// <summary>
     ///     This method decodes base32hex text (RFC 4648 §7) without padding, the reverse of
-    ///     <see cref="ToBase32Hex" />, as NSEC3 owner names use it (RFC 5155 §3.3). It rejects
+    ///     <see cref="ToBase32Hex" />, as NSEC3 owner names use it (RFC 5155 §3). It rejects
     ///     input that is not a canonical encoding, so a malformed owner name is never decoded to a
     ///     wrong hash.
     /// </summary>
