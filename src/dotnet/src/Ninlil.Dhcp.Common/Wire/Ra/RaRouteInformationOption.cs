@@ -116,8 +116,9 @@ public class RaRouteInformationOption
         {
             failureReason =
                 $"A Route Information option's own {prefixOctets}-octet prefix cannot carry a "
-                + $"prefix length of {prefixLength} -- RFC 4191 Section 2.3 requires 0 octets "
-                + "for length 0, 8 octets for lengths 1-64, and 16 octets for lengths 65-128.";
+                + $"prefix length of {prefixLength} -- this reader accepts 0 octets for length "
+                + "0, 8 octets for lengths 1-64, and 16 octets for lengths 65-128 (RFC 4191 Section 2.3 "
+                + "also allows a longer prefix field).";
             return false;
         }
 

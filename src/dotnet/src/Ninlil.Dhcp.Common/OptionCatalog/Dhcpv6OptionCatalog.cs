@@ -88,7 +88,7 @@ public static class Dhcpv6OptionCatalog
         new DhcpOptionCatalogEntry(
             60,
             "Bootfile Parameters",
-            "RFC 5970 §3.2 -- one or more opaque parameters passed to the boot file named by the Bootfile URL option.",
+            "RFC 5970 §3.2 -- one or more parameter strings passed to the boot file named by the Bootfile URL option.",
             DhcpOptionValueTypeEnum.OpaqueHex,
             IsServerAddressEligible: false
         ),
