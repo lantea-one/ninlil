@@ -12,6 +12,10 @@
 
   <ItemGroup>
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <!-- Pomelo 9.0.0 accepts MySqlConnector 2.4.0, which sends the account password before it
+         checks the server certificate in zero-configuration TLS mode (GHSA-473q-m89c-ghf8).
+         This direct reference lifts it to a fixed release. -->
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.19">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
