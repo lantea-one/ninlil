@@ -17,8 +17,10 @@ public class RecordDetailExample : IMultipleExamplesProvider<RecordDetail>
     /// <summary>
     ///     This method returns one <see cref="RecordDetail" /> per entry in
     ///     <see cref="RecordExampleCatalog.Entries" />, with the name, type, TTL, data and comments
-    ///     the matching request submits. Names inside the data are shown as submitted, without the
-    ///     trailing dot the API adds (see <see cref="RecordExampleEntry" />).
+    ///     the matching request submits. Names inside the data carry the trailing dot the API
+    ///     writes, and enum fields use the API's camelCase form (see
+    ///     <see cref="RecordExampleEntry.ResponseData" />). The SOA serial is the one submitted;
+    ///     the server assigns its own serial when it stores the record.
     /// </summary>
     public IEnumerable<SwaggerExample<RecordDetail>> GetExamples() =>
         RecordExampleCatalog.Entries.Select(entry => new SwaggerExample<RecordDetail>
@@ -32,7 +34,7 @@ public class RecordDetailExample : IMultipleExamplesProvider<RecordDetail>
                 Type: entry.Type,
                 Class: DnsClassEnum.Internet,
                 TimeToLiveSeconds: entry.TimeToLiveSeconds,
-                Data: entry.Data,
+                Data: entry.ResponseData(),
                 IsDisabled: false,
                 Comments: entry.Comments,
                 ExcludeFromSync: false,

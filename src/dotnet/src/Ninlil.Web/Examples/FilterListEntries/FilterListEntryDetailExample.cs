@@ -15,8 +15,10 @@ public class FilterListEntryDetailExample : IMultipleExamplesProvider<FilterList
     /// <summary>
     ///     This method returns the three entries <see cref="FilterListEntryWriteRequestExample" />
     ///     submits, as the server reports them, plus an <c>IsException</c> entry of the kind only a
-    ///     subscribed list's refresh creates. All four carry the identifier of the "Internal
-    ///     Allowlist" from <see cref="FilterLists.FilterListDetailExample" />.
+    ///     subscribed list's refresh creates. The first three carry the identifier of the "Internal
+    ///     Allowlist" and the exception entry that of the "Hagezi Pro Blocklist", both from
+    ///     <see cref="FilterLists.FilterListDetailExample" />: only a subscribed list has
+    ///     exceptions.
     /// </summary>
     public IEnumerable<SwaggerExample<FilterListEntryDetail>> GetExamples() =>
         [
@@ -68,7 +70,7 @@ public class FilterListEntryDetailExample : IMultipleExamplesProvider<FilterList
                     + "(and its subdomains) through despite the same list's broader rule.",
                 Value = new FilterListEntryDetail(
                     Guid.Parse("4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04"),
-                    Guid.Parse("3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111"),
+                    Guid.Parse("8f14e45f-ceea-4b7f-9e33-1f7c2f4a2222"),
                     "cdn.ads.example.net",
                     null,
                     DnsFilterEntryKindEnum.Domain,

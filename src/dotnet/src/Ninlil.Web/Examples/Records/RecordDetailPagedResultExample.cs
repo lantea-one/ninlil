@@ -41,7 +41,7 @@ public class RecordDetailPagedResultExample : IExamplesProvider<PagedResult<Reco
             Type: entry.Type,
             Class: DnsClassEnum.Internet,
             TimeToLiveSeconds: entry.TimeToLiveSeconds,
-            Data: entry.Data,
+            Data: entry.ResponseData(),
             IsDisabled: false,
             Comments: entry.Comments,
             ExcludeFromSync: false,

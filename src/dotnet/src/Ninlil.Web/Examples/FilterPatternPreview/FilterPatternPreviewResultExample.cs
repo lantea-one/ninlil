@@ -11,10 +11,10 @@ namespace Ninlil.Web.Examples.FilterPatternPreview;
 public class FilterPatternPreviewResultExample : IExamplesProvider<FilterPatternPreviewResult>
 {
     /// <summary>
-    ///     This method returns a result for <c>*.doubleclick.net</c> against the default sample
-    ///     domains, with <c>doubleclick.net</c> marked as a match. The real preview does not match
-    ///     it: the glob becomes <c>^.*\.doubleclick\.net$</c>, which needs a dot before
-    ///     <c>doubleclick.net</c>, so no default sample matches.
+    ///     This method returns the result of <c>*.example.com</c> against the default sample
+    ///     domains, as <see cref="FilterPatternPreviewRequestExample" /> submits it. The glob
+    ///     becomes <c>^.*\.example\.com$</c>, which needs a dot before <c>example.com</c>, so the
+    ///     three subdomains match and <c>example.com</c> does not.
     /// </summary>
     public FilterPatternPreviewResult GetExamples() =>
         new(
@@ -22,10 +22,10 @@ public class FilterPatternPreviewResultExample : IExamplesProvider<FilterPattern
             null,
             [
                 new FilterPatternPreviewMatch("example.com", false),
-                new FilterPatternPreviewMatch("www.example.com", false),
-                new FilterPatternPreviewMatch("shop.example.com", false),
-                new FilterPatternPreviewMatch("ads.example.com", false),
-                new FilterPatternPreviewMatch("doubleclick.net", true),
+                new FilterPatternPreviewMatch("www.example.com", true),
+                new FilterPatternPreviewMatch("shop.example.com", true),
+                new FilterPatternPreviewMatch("ads.example.com", true),
+                new FilterPatternPreviewMatch("doubleclick.net", false),
                 new FilterPatternPreviewMatch("googlesyndication.com", false),
                 new FilterPatternPreviewMatch("youtube.com", false),
                 new FilterPatternPreviewMatch("www.youtube.com", false),

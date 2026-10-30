@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Ninlil.Dns.Common.Enum;
 
 // Define our namespace.
@@ -23,9 +24,8 @@ namespace Ninlil.Web.Examples.Records;
 /// <param name="DnsNameFields">
 ///     The top-level fields of <see cref="Data" /> backed by a
 ///     <c>Ninlil.Dns.Common.Wire.DnsName</c> in the record data model, or <see langword="null" /> when there are none. The API writes
-///     such a field with a trailing dot (<c>DnsNameJsonConverter.Write</c>), but nothing reads
-///     this list yet, so <see cref="RecordDetailExample" /> shows the names as submitted, without
-///     the dot.
+///     such a field with a trailing dot (<c>DnsNameJsonConverter.Write</c>), so
+///     <see cref="ResponseData" /> adds the dot to each of them for the response examples.
 /// </param>
 internal sealed record RecordExampleEntry(
     string Key,
@@ -37,7 +37,67 @@ internal sealed record RecordExampleEntry(
     Guid Id,
     DateTimeOffset CreatedAtUtc,
     IReadOnlyList<string> DnsNameFields = null
-);
+)
+{
+    /// <summary>
+    ///     This method returns <see cref="Data" /> as the API reports it. Every field named in
+    ///     <see cref="DnsNameFields" /> carries the trailing dot of a fully qualified name, which
+    ///     is how <c>DnsNameJsonConverter.Write</c> writes a name. The record data model's enum
+    ///     fields (<c>algorithm</c>, <c>typeCovered</c> and the <c>types</c> list) are written in
+    ///     camelCase (<c>ecdsaP256Sha256</c>, <c>rrSig</c>), the form the API's serializer uses.
+    ///     The request examples keep names and enums as an operator types them.
+    /// </summary>
+    public JsonElement ResponseData()
+    {
+        JsonObject data = JsonNode.Parse(Data.GetRawText()).AsObject();
+
+        foreach (string field in DnsNameFields ?? [])
+        {
+            string name = data[field]?.GetValue<string>();
+            if (name != null && !name.EndsWith('.'))
+            {
+                data[field] = name + ".";
+            }
+        }
+
+        // Only a string is a DNSSEC algorithm name; the SSHFP and IPSECKEY algorithm fields are
+        // numbers and stay as they are.
+        if (
+            data["algorithm"] is JsonValue algorithm
+            && algorithm.GetValueKind() == JsonValueKind.String
+        )
+        {
+            data["algorithm"] = CamelCaseEnum<DnssecAlgorithmEnum>(algorithm);
+        }
+
+        if (data["typeCovered"] != null)
+        {
+            data["typeCovered"] = CamelCaseEnum<DnsResourceRecordTypeEnum>(data["typeCovered"]);
+        }
+
+        if (data["types"] is JsonArray types)
+        {
+            data["types"] = new JsonArray([
+                .. types.Select(type => CamelCaseEnum<DnsResourceRecordTypeEnum>(type)),
+            ]);
+        }
+
+        return JsonSerializer.SerializeToElement(data);
+    }
+
+    /// <summary>
+    ///     This method reads an enum value written the way the request examples write it (through
+    ///     the enum's own converter) and returns it as the API's serializer writes it: the member
+    ///     name in camelCase.
+    /// </summary>
+    private static JsonNode CamelCaseEnum<TEnum>(JsonNode node)
+        where TEnum : struct, Enum =>
+        JsonValue.Create(
+            JsonNamingPolicy.CamelCase.ConvertName(
+                JsonSerializer.Deserialize<TEnum>(node.ToJsonString()).ToString()
+            )
+        );
+}
 
 /// <summary>
 ///     This class is the single source of the 37 record type examples, one per type, so

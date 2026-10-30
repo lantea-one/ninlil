@@ -323,6 +323,17 @@ public record DhcpTagRuleOptionDetail(
 ///     (<c>POST /api/dhcp-leases/{id}/release</c>). <see cref="PrefixLength" /> is set only for a
 ///     DHCPv6 Prefix Delegation lease and is <see langword="null" /> for an address lease (see
 ///     <c>LeaseEntity.PrefixLength</c>).
+///     <para>
+///         <b>Declined addresses.</b> When a client declines an address (RFC 2131 Section 4.3.3),
+///         the lease row becomes a quarantine row: <c>ClientIdentifier</c> is
+///         <c>declined:&lt;address&gt;</c> (for example <c>declined:192.0.2.55</c>), <c>State</c> is
+///         <c>Expired</c> and <c>LeaseExpiresAtUtc</c> is the end of the quarantine, which is
+///         <c>DeclinedAddressQuarantineDuration</c> after the decline (see
+///         <see cref="DhcpCoreSettingsDetail" />). No client owns the row, and the address is not
+///         offered to any client until that time. <c>POST /api/dhcp-leases/{id}/release</c>
+///         on a quarantine row sets <c>State</c> to <c>Released</c> and ends the quarantine at
+///         once.
+///     </para>
 /// </summary>
 public record DhcpLeaseDetail(
     Guid Id,
@@ -381,8 +392,8 @@ public record DhcpProtocolSettingsDetail(bool Enable, int ServerPort, int Client
 ///     The IPv4 address the relay puts in <c>giaddr</c>, or <see langword="null" /> to detect it
 ///     at startup.
 /// </param>
-/// <param name="RelayAgentCircuitId">The Agent Circuit ID text added to every forwarded request, or <see langword="null" /> for none. Printable ASCII, at most 253 characters, and at most 251 together with the Remote ID.</param>
-/// <param name="RelayAgentRemoteId">The Agent Remote ID text added to every forwarded request, or <see langword="null" /> for none. Printable ASCII, at most 253 characters, and at most 251 together with the Circuit ID.</param>
+/// <param name="RelayAgentCircuitId">The Agent Circuit ID text added to each client request the relay receives directly (one whose <c>giaddr</c> is zero), or <see langword="null" /> for none. Printable ASCII, at most 253 characters, and at most 251 together with the Remote ID.</param>
+/// <param name="RelayAgentRemoteId">The Agent Remote ID text added to each client request the relay receives directly (one whose <c>giaddr</c> is zero), or <see langword="null" /> for none. Printable ASCII, at most 253 characters, and at most 251 together with the Circuit ID.</param>
 public record DhcpRelaySettingsDetail(
     bool Enable,
     IReadOnlyList<string> UpstreamServerAddresses,

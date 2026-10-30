@@ -474,7 +474,7 @@ public class DhcpScopesController(
     ///     This action deletes a DHCP scope with its reservations and custom options, removed
     ///     explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases
     ///     recorded for the scope (which refer to it by <c>ScopeName</c>, not id) are left alone as
-    ///     operational data, as <c>Server.Backup.BackupEntityCatalog</c> treats them. A tag rule
+    ///     operational data, as <c>BackupEntityCatalog</c> treats them. A tag rule
     ///     that names the scope (<c>DhcpTagRuleEntity.ScopeId</c>) is also left alone and simply
     ///     never matches again. Returns 404 for an unknown id. Requires <c>dhcpscopes:write</c>.
     /// </summary>

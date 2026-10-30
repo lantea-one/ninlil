@@ -13,7 +13,9 @@ public class FilterPatternPreviewRequestExample : IExamplesProvider<FilterPatter
 {
     /// <summary>
     ///     This method returns a wildcard pattern tested against the default sample domains.
+    ///     <c>*.example.com</c> matches the three sample subdomains of <c>example.com</c> and not
+    ///     <c>example.com</c> itself, which the pattern's leading dot excludes.
     /// </summary>
     public FilterPatternPreviewRequest GetExamples() =>
-        new(DnsFilterEntryKindEnum.Wildcard, "*.doubleclick.net", null);
+        new(DnsFilterEntryKindEnum.Wildcard, "*.example.com", null);
 }
