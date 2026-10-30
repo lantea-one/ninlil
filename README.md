@@ -3036,8 +3036,6 @@ translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway.
   body with the media type `application/dns-message`. Ninlil compares the media type without case
   and ignores parameters such as `; charset=utf-8`; another type answers `415`. A bad `dns`
   parameter answers `400`. A rate-limited query answers `429`. A denied client gets no answer at all.
-  Ninlil's answers carry no `Content-Length` header. `curl` reads them. `dig` 9.20.30 reports
-  `short (< header size) message` for them.
 - **DNSCrypt.**
   - The server offers two ciphers (XChaCha20-Poly1305 and XSalsa20-Poly1305) and publishes one
     certificate for each. A certificate is valid for 28 hours. Ninlil issues a replacement every 24

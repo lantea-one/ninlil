@@ -262,6 +262,10 @@ internal static class DnsOverHttpsRequestHandler
         }
 
         context.Response.ContentType = DnsMessageContentType;
+
+        // The length is known, so it is sent: without it HTTP/1.1 uses chunked encoding, and a
+        // client that reads the header first and the body after (dig) reports a short message.
+        context.Response.ContentLength = outcome.Response.Length;
         context.Response.Headers[HeaderNames.CacheControl] = CacheControlFor(outcome.Response);
         await context.Response.Body.WriteAsync(outcome.Response, context.RequestAborted);
     }

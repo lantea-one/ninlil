@@ -117,6 +117,34 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
         Assert.Equal(ExpectedAnswer, new IPAddress(response.Answers[0].Data));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task AnAnswer_CarriesAContentLengthHeaderEqualToItsBody(int majorVersion)
+    {
+        // A client that reads the header before the body (dig 9.20) needs the length up front;
+        // without it HTTP/1.1 falls back to chunked encoding and HTTP/2 sends no length at all.
+        byte[] queryBytes = DnsMessageWriter.Write(BuildQuery(3, "doh-length.example."));
+        using ByteArrayContent content = new(queryBytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/dns-message");
+        using HttpRequestMessage request = new(HttpMethod.Post, "")
+        {
+            Content = content,
+            Version = new Version(majorVersion, majorVersion == 1 ? 1 : 0),
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+
+        using HttpResponseMessage httpResponse = await _client.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead
+        );
+        byte[] body = await httpResponse.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal(new Version(majorVersion, majorVersion == 1 ? 1 : 0), httpResponse.Version);
+        Assert.False(httpResponse.Headers.TransferEncodingChunked ?? false);
+        Assert.Equal(body.Length, httpResponse.Content.Headers.ContentLength);
+    }
+
     [Fact]
     public async Task GetWithABase64UrlEncodedQueryReturnsTheSameAnswer()
     {
