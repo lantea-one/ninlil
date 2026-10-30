@@ -143,8 +143,13 @@ public class ZoneSigningService(
             zoneId,
             stoppingToken
         );
+
+        // A stored record whose data cannot be written as RDATA (a row that predates the REST
+        // check, or one written by hand) is left out with a Warning. Throwing here would stop the
+        // whole zone from signing, and the zone would keep serving its older signatures next to
+        // newer data.
         Dictionary<DnsName, List<RecordEntity>> recordsByName = storedRecords
-            .Where(record => !record.IsDisabled)
+            .Where(record => !record.IsDisabled && CanWriteRdata(record, zone.Name))
             .GroupBy(record => DnsName.Parse(record.Name))
             .ToDictionary(group => group.Key, group => group.ToList());
 
@@ -802,6 +807,36 @@ public class ZoneSigningService(
         );
 
         return (records, nsec3ParamRecord);
+    }
+
+    /// <summary>
+    ///     This method reports whether a stored record can be written as RDATA, and logs a Warning
+    ///     naming the record when it cannot. A record with no registered codec passes: it is not
+    ///     served, so the signer has nothing to say about it.
+    /// </summary>
+    /// <param name="record">The stored record to try.</param>
+    /// <param name="zoneName">The zone's name, for the Warning.</param>
+    /// <returns>Whether signing may use <paramref name="record" />.</returns>
+    private bool CanWriteRdata(RecordEntity record, string zoneName)
+    {
+        try
+        {
+            DnsName ownerName = DnsName.Parse(record.Name);
+            RecordEntityCodec.ToWireRecord(record, ownerName);
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger?.LogWarning(
+                "Zone {Zone}: the {Type} record '{Name}' ({RecordId}) holds data that cannot be written as RDATA ({Reason}); it is left out of the signed zone. Edit or delete the record.",
+                zoneName,
+                record.Type,
+                record.Name,
+                record.Id,
+                exception.Message
+            );
+            return false;
+        }
     }
 
     /// <summary>
