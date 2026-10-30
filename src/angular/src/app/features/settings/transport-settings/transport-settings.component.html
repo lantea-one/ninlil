@@ -228,7 +228,8 @@
       <button
         cButton
         color="primary"
-        [disabled]="dnsOverTlsForm.invalid || dnsOverTlsSubmitting()"
+        [disabled]="dnsOverTlsForm.invalid || dnsOverTlsSubmitting() || !dnsOverTlsHasChanges()"
+        [attr.title]="dnsOverTlsHasChanges() ? null : 'No changes to save'"
         (click)="saveDnsOverTls()"
       >
         @if (dnsOverTlsSubmitting()) {
@@ -295,7 +296,10 @@
       <button
         cButton
         color="primary"
-        [disabled]="dnsOverHttpsForm.invalid || dnsOverHttpsSubmitting()"
+        [disabled]="
+          dnsOverHttpsForm.invalid || dnsOverHttpsSubmitting() || !dnsOverHttpsHasChanges()
+        "
+        [attr.title]="dnsOverHttpsHasChanges() ? null : 'No changes to save'"
         (click)="saveDnsOverHttps()"
       >
         @if (dnsOverHttpsSubmitting()) {
@@ -460,7 +464,8 @@
       <button
         cButton
         color="primary"
-        [disabled]="dnsOverQuicForm.invalid || dnsOverQuicSubmitting()"
+        [disabled]="dnsOverQuicForm.invalid || dnsOverQuicSubmitting() || !dnsOverQuicHasChanges()"
+        [attr.title]="dnsOverQuicHasChanges() ? null : 'No changes to save'"
         (click)="saveDnsOverQuic()"
       >
         @if (dnsOverQuicSubmitting()) {
@@ -617,7 +622,8 @@
       <button
         cButton
         color="primary"
-        [disabled]="dnsCryptForm.invalid || dnsCryptSubmitting()"
+        [disabled]="dnsCryptForm.invalid || dnsCryptSubmitting() || !dnsCryptHasChanges()"
+        [attr.title]="dnsCryptHasChanges() ? null : 'No changes to save'"
         (click)="saveDnsCrypt()"
       >
         @if (dnsCryptSubmitting()) {

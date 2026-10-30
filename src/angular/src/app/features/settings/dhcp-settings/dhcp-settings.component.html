@@ -79,7 +79,8 @@
       <button
         cButton
         color="primary"
-        [disabled]="coreForm.invalid || coreSubmitting()"
+        [disabled]="coreForm.invalid || coreSubmitting() || !coreHasChanges()"
+        [attr.title]="coreHasChanges() ? null : 'No changes to save'"
         (click)="saveCore()"
       >
         @if (coreSubmitting()) {

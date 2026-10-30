@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { TransportSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { TransportSettingsComponent } from './transport-settings.component';
 
@@ -109,6 +110,10 @@ describe('TransportSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // The write footer sits behind `*appIfPermission`, so the specs that read the Save button need
+    // the permission granted before the first render.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
+
     const fixture = TestBed.createComponent(TransportSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -149,7 +154,7 @@ describe('TransportSettingsComponent', () => {
     );
   });
 
-  it('saveDnsOverTls() PATCHes enable + certificate, omitting a blank pfxPassword', async () => {
+  it('saveDnsOverTls() PATCHes only enable when it alone changed, and shows the hot note', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiTransportSettingsDnsOverTlsPatch.and.returnValue(
         of({
@@ -158,31 +163,45 @@ describe('TransportSettingsComponent', () => {
       );
     });
 
+    fixture.componentInstance.dnsOverTlsForm.patchValue({ enable: true });
+    await fixture.componentInstance.saveDnsOverTls();
+
+    // The controller names a restart whenever a restart-requiring field is present, so the
+    // untouched port, limits and certificate must stay out of the body.
+    expect(apiSpy.apiTransportSettingsDnsOverTlsPatch).toHaveBeenCalledWith({
+      body: { enable: true },
+    });
+    expect(notificationSpy.success).toHaveBeenCalledWith(
+      jasmine.stringContaining('took effect immediately'),
+    );
+  });
+
+  it('saveDnsOverTls() sends the whole certificate when one certificate field changed, without a blank pfxPassword', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnsOverTlsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
     fixture.componentInstance.dnsOverTlsForm.patchValue({
-      enable: true,
       allowedProtocolTls12: true,
       allowedProtocolTls13: true,
     });
     await fixture.componentInstance.saveDnsOverTls();
 
     expect(apiSpy.apiTransportSettingsDnsOverTlsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({
-        enable: true,
-        certificate: jasmine.objectContaining({
-          allowedProtocols: ['Tls12', 'Tls13'],
+      body: {
+        certificate: {
+          pfxPath: '',
           selfSignedSubjectAlternativeNames: ['localhost'],
-        }),
-      }),
+          certificateReloadPollInterval: '00:05:00',
+          allowedProtocols: ['Tls12', 'Tls13'],
+        },
+      },
     });
 
     // The blank pfxPassword is left out of the certificate, not sent as an empty string that
     // would clear the stored password.
     const body = apiSpy.apiTransportSettingsDnsOverTlsPatch.calls.mostRecent().args[0].body;
     expect('pfxPassword' in body.certificate).toBeFalse();
-
-    expect(notificationSpy.success).toHaveBeenCalledWith(
-      jasmine.stringContaining('took effect immediately'),
-    );
   });
 
   it('saveDnsOverTls() includes pfxPassword when the operator actually typed one', async () => {
@@ -194,10 +213,45 @@ describe('TransportSettingsComponent', () => {
     await fixture.componentInstance.saveDnsOverTls();
 
     const body = apiSpy.apiTransportSettingsDnsOverTlsPatch.calls.mostRecent().args[0].body;
+    expect(Object.keys(body)).toEqual(['certificate']);
     expect(body.certificate.pfxPassword).toBe('a-real-password');
   });
 
-  it('saveDnsOverQuic() loads the connection limit and sends an edited value, and rejects 0', async () => {
+  it('saveDnsOverTls() clears the typed password and moves the baseline, so it is not sent again', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnsOverTlsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+    const component = fixture.componentInstance;
+
+    component.dnsOverTlsForm.patchValue({ pfxPassword: 'a-real-password' });
+    await component.saveDnsOverTls();
+
+    expect(component.dnsOverTlsForm.controls.pfxPassword.value).toBe('');
+    expect(component.dnsOverTlsHasChanges()).toBeFalse();
+
+    component.dnsOverTlsForm.patchValue({ port: 8853 });
+    await component.saveDnsOverTls();
+
+    expect(apiSpy.apiTransportSettingsDnsOverTlsPatch.calls.mostRecent().args[0]).toEqual({
+      body: { port: 8853 },
+    });
+  });
+
+  it('saveDnsOverHttps() PATCHes only the edited field', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnsOverHttpsPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.dnsOverHttpsForm.patchValue({ path: '/doh' });
+    await fixture.componentInstance.saveDnsOverHttps();
+
+    expect(apiSpy.apiTransportSettingsDnsOverHttpsPatch).toHaveBeenCalledWith({
+      body: { path: '/doh' },
+    });
+    expect(fixture.componentInstance.dnsOverHttpsHasChanges()).toBeFalse();
+  });
+
+  it('saveDnsOverQuic() loads the connection limit and sends only an edited value, and rejects 0', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiTransportSettingsDnsOverQuicPatch.and.returnValue(of({ note: 'ok' }));
     });
@@ -213,24 +267,79 @@ describe('TransportSettingsComponent', () => {
     await fixture.componentInstance.saveDnsOverQuic();
 
     expect(apiSpy.apiTransportSettingsDnsOverQuicPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ maxConcurrentConnections: 64 }),
+      body: { maxConcurrentConnections: 64 },
     });
   });
 
-  it('saveDnsCrypt() builds enabledEsVersions from the checked ciphers', async () => {
+  it('saveDnsOverQuic() sends enable alone so the note is the hot one', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnsOverQuicPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.dnsOverQuicForm.patchValue({ enable: true });
+    await fixture.componentInstance.saveDnsOverQuic();
+
+    expect(apiSpy.apiTransportSettingsDnsOverQuicPatch).toHaveBeenCalledWith({
+      body: { enable: true },
+    });
+  });
+
+  it('saveDnsCrypt() sends the whole cipher list when one checkbox changed', async () => {
     const fixture = await createComponent(() => {
       apiSpy.apiTransportSettingsDnscryptPatch.and.returnValue(of({ note: 'ok' }));
     });
 
-    fixture.componentInstance.dnsCryptForm.patchValue({
-      esVersionXChaCha20Poly1305: true,
-      esVersionXSalsa20Poly1305: false,
+    fixture.componentInstance.dnsCryptForm.patchValue({ esVersionXSalsa20Poly1305: false });
+    await fixture.componentInstance.saveDnsCrypt();
+
+    // A merge patch replaces an array as one value (RFC 7396 section 2).
+    expect(apiSpy.apiTransportSettingsDnscryptPatch).toHaveBeenCalledWith({
+      body: { enabledEsVersions: ['XChaCha20Poly1305'] },
     });
+  });
+
+  it('saveDnsCrypt() sends a scalar edit alone', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnscryptPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    fixture.componentInstance.dnsCryptForm.patchValue({ providerName: '2.dnscrypt-cert.example' });
     await fixture.componentInstance.saveDnsCrypt();
 
     expect(apiSpy.apiTransportSettingsDnscryptPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ enabledEsVersions: ['XChaCha20Poly1305'] }),
+      body: { providerName: '2.dnscrypt-cert.example' },
     });
+  });
+
+  it('the four changed-only cards do nothing and disable Save while nothing changed', async () => {
+    const fixture = await createComponent();
+    const component = fixture.componentInstance;
+    const saveButton = (id: string): HTMLButtonElement =>
+      (fixture.nativeElement as HTMLElement)
+        .querySelector(`#${id}`)!
+        .closest('c-card')!
+        .querySelector('c-card-footer button')!;
+
+    await component.saveDnsOverTls();
+    await component.saveDnsOverHttps();
+    await component.saveDnsOverQuic();
+    await component.saveDnsCrypt();
+
+    expect(apiSpy.apiTransportSettingsDnsOverTlsPatch).not.toHaveBeenCalled();
+    expect(apiSpy.apiTransportSettingsDnsOverHttpsPatch).not.toHaveBeenCalled();
+    expect(apiSpy.apiTransportSettingsDnsOverQuicPatch).not.toHaveBeenCalled();
+    expect(apiSpy.apiTransportSettingsDnscryptPatch).not.toHaveBeenCalled();
+
+    for (const id of ['dot-port', 'doh-path', 'doq-port', 'dnscrypt-port']) {
+      const button = saveButton(id);
+      expect(button.disabled).withContext(id).toBeTrue();
+      expect(button.title).withContext(id).toBe('No changes to save');
+    }
+
+    component.dnsCryptForm.patchValue({ port: 5444 });
+    fixture.detectChanges();
+    expect(saveButton('dnscrypt-port').disabled).toBeFalse();
+    expect(saveButton('doh-path').disabled).toBeTrue();
   });
 
   it('shows an error message when loading fails', async () => {
@@ -250,6 +359,7 @@ describe('TransportSettingsComponent', () => {
       );
     });
 
+    fixture.componentInstance.dnsCryptForm.patchValue({ providerName: 'bad' });
     await fixture.componentInstance.saveDnsCrypt();
 
     expect(fixture.componentInstance.dnsCryptErrorMessage()).toBe('bad provider name');
@@ -272,6 +382,9 @@ describe('TransportSettingsComponent', () => {
 
   it('sends an empty list, meaning every address, when the field is cleared', async () => {
     const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnsOverTlsGet.and.returnValue(
+        of({ enable: false, port: 853, listenAddresses: ['192.0.2.1'] }),
+      );
       apiSpy.apiTransportSettingsDnsOverTlsPatch.and.returnValue(of({ note: 'Saved.' }));
     });
 
@@ -279,7 +392,7 @@ describe('TransportSettingsComponent', () => {
     await fixture.componentInstance.saveDnsOverTls();
 
     expect(apiSpy.apiTransportSettingsDnsOverTlsPatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ listenAddresses: [] }),
+      body: { listenAddresses: [] },
     });
   });
 });

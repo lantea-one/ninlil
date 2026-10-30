@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { DhcpSettingsService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { DhcpSettingsComponent } from './dhcp-settings.component';
 
@@ -35,7 +36,7 @@ describe('DhcpSettingsComponent', () => {
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  async function createComponent(raGetResponse?: object) {
+  async function createComponent(raGetResponse?: object, coreGetResponse?: object) {
     dhcpSettingsApiSpy = jasmine.createSpyObj('DhcpSettingsService', [
       'apiDhcpSettingsCoreGet',
       'apiDhcpSettingsCorePatch',
@@ -57,11 +58,13 @@ describe('DhcpSettingsComponent', () => {
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
 
     dhcpSettingsApiSpy.apiDhcpSettingsCoreGet.and.returnValue(
-      of({
-        serverIdentifierAddress: null,
-        offerHoldDuration: '00:02:00',
-        declinedAddressQuarantineDuration: '00:15:00',
-      }),
+      of(
+        coreGetResponse ?? {
+          serverIdentifierAddress: null,
+          offerHoldDuration: '00:02:00',
+          declinedAddressQuarantineDuration: '00:15:00',
+        },
+      ),
     );
     dhcpSettingsApiSpy.apiDhcpSettingsProtocolGet.and.returnValue(
       of({ enable: true, serverPort: 67, clientPort: 68 }),
@@ -132,6 +135,10 @@ describe('DhcpSettingsComponent', () => {
       ],
     }).compileComponents();
 
+    // The write footer sits behind `*appIfPermission`, so the specs that read the Save button need
+    // the permission granted before the first render.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
+
     const fixture = TestBed.createComponent(DhcpSettingsComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -160,21 +167,24 @@ describe('DhcpSettingsComponent', () => {
     expect(fixture.componentInstance.raForm.controls.currentHopLimit.value).toBe(64);
   });
 
-  it('saveCore() PATCHes core settings and surfaces the restart-required note', async () => {
+  it('saveCore() PATCHes only the edited field and surfaces the restart-required note', async () => {
     const fixture = await createComponent();
     dhcpSettingsApiSpy.apiDhcpSettingsCorePatch.and.returnValue(
       of({ note: 'Saved. A restart is required for this change to take effect.' }),
     );
 
+    fixture.componentInstance.coreForm.patchValue({ offerHoldDuration: '00:03:00' });
     await fixture.componentInstance.saveCore();
 
-    expect(dhcpSettingsApiSpy.apiDhcpSettingsCorePatch).toHaveBeenCalled();
+    expect(dhcpSettingsApiSpy.apiDhcpSettingsCorePatch).toHaveBeenCalledWith({
+      body: { offerHoldDuration: '00:03:00' },
+    });
     expect(notificationSpy.success).toHaveBeenCalledWith(
       'Saved. A restart is required for this change to take effect.',
     );
   });
 
-  it('saveCore() sends leaseExpirySweepInterval, and rejects zero and unparsable values', async () => {
+  it('saveCore() sends leaseExpirySweepInterval alone, and rejects zero and unparsable values', async () => {
     const fixture = await createComponent();
     dhcpSettingsApiSpy.apiDhcpSettingsCorePatch.and.returnValue(of({ note: 'Applied.' }));
     const control = fixture.componentInstance.coreForm.controls.leaseExpirySweepInterval;
@@ -189,8 +199,63 @@ describe('DhcpSettingsComponent', () => {
 
     await fixture.componentInstance.saveCore();
 
+    // Alone, the sweep interval is the one field that applies at once, so the server answers
+    // with the hot-reload note instead of the restart note.
     expect(dhcpSettingsApiSpy.apiDhcpSettingsCorePatch).toHaveBeenCalledWith({
-      body: jasmine.objectContaining({ leaseExpirySweepInterval: '00:00:30' }),
+      body: { leaseExpirySweepInterval: '00:00:30' },
+    });
+  });
+
+  it('saveCore() sends a cleared server identifier as null', async () => {
+    const fixture = await createComponent(undefined, {
+      serverIdentifierAddress: '192.0.2.1',
+      offerHoldDuration: '00:02:00',
+      declinedAddressQuarantineDuration: '00:15:00',
+    });
+    dhcpSettingsApiSpy.apiDhcpSettingsCorePatch.and.returnValue(of({ note: 'Saved.' }));
+
+    fixture.componentInstance.coreForm.patchValue({ serverIdentifierAddress: '' });
+    await fixture.componentInstance.saveCore();
+
+    expect(dhcpSettingsApiSpy.apiDhcpSettingsCorePatch).toHaveBeenCalledWith({
+      body: { serverIdentifierAddress: null },
+    });
+  });
+
+  it('saveCore() does nothing when no core field changed, and the Save button is disabled', async () => {
+    const fixture = await createComponent();
+    const button: HTMLButtonElement = fixture.nativeElement
+      .querySelector('#dhcp-core-server-identifier')
+      .closest('c-card')
+      .querySelector('c-card-footer button');
+
+    expect(fixture.componentInstance.coreHasChanges()).toBeFalse();
+    expect(button.disabled).toBeTrue();
+    expect(button.title).toBe('No changes to save');
+
+    await fixture.componentInstance.saveCore();
+    expect(dhcpSettingsApiSpy.apiDhcpSettingsCorePatch).not.toHaveBeenCalled();
+
+    fixture.componentInstance.coreForm.patchValue({ offerHoldDuration: '00:03:00' });
+    fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+  });
+
+  it('saveCore() moves the baseline, so a second save sends only the next edit', async () => {
+    const fixture = await createComponent();
+    dhcpSettingsApiSpy.apiDhcpSettingsCorePatch.and.returnValue(of({ note: 'Saved.' }));
+
+    fixture.componentInstance.coreForm.patchValue({ offerHoldDuration: '00:03:00' });
+    await fixture.componentInstance.saveCore();
+    expect(fixture.componentInstance.coreHasChanges()).toBeFalse();
+
+    fixture.componentInstance.coreForm.patchValue({
+      declinedAddressQuarantineDuration: '00:20:00',
+    });
+    await fixture.componentInstance.saveCore();
+
+    expect(dhcpSettingsApiSpy.apiDhcpSettingsCorePatch.calls.mostRecent().args[0]).toEqual({
+      body: { declinedAddressQuarantineDuration: '00:20:00' },
     });
   });
 

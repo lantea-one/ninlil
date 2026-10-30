@@ -1,4 +1,5 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, Signal, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   AlertComponent,
@@ -16,10 +17,14 @@ import {
   FormTextDirective,
   SpinnerComponent,
 } from '@coreui/angular';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom, map } from 'rxjs';
 import { TransportSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import {
+  changedFields,
+  hasChangedFields,
+} from '../../../shared/settings-patch/changed-fields.util';
 import {
   buildPfxPasswordPatchField,
   joinLines,
@@ -27,6 +32,77 @@ import {
   splitListenAddresses,
 } from './transport-settings.model';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+
+/**
+ * This interface is the changed-only state of one transport card: the fields edited since the
+ * card was last loaded or saved, and a way to move the baseline.
+ */
+interface ChangeTracker<TValue extends object, TBody extends object> {
+  /** The fields that differ from the baseline, the body of the card's next `PATCH`. */
+  readonly changes: Signal<Partial<TBody>>;
+  /** Whether any field differs from the baseline. */
+  readonly hasChanges: Signal<boolean>;
+  /** Makes the given form value the baseline, after a load or a successful save. */
+  markClean(value: TValue): void;
+}
+
+/**
+ * This function tracks one card's form against the `PATCH` body it last loaded or saved. The
+ * transport controllers pick the note by which fields a `PATCH` holds (the `enable` switch applies
+ * at once, the rest needs a listener or process restart), so a card sends only the fields the user
+ * changed. It must run in an injection context (a field initializer), because `toSignal` needs one.
+ *
+ * @param form The card's form.
+ * @param toBody Turns a form value into the request-shaped body, so lists are arrays on both sides
+ *   of the comparison and a secret is present only while it is typed.
+ */
+function trackChanges<TValue extends object, TBody extends object>(
+  form: { valueChanges: Observable<unknown>; getRawValue(): TValue },
+  toBody: (value: TValue) => TBody,
+): ChangeTracker<TValue, TBody> {
+  const formValue = toSignal(form.valueChanges.pipe(map(() => form.getRawValue())), {
+    initialValue: form.getRawValue(),
+  });
+  const baseline = signal<TBody | null>(null);
+  const changes = computed(() => {
+    const loaded = baseline();
+    return loaded === null ? {} : changedFields(loaded, toBody(formValue()));
+  });
+
+  return {
+    changes,
+    hasChanges: computed(() => hasChangedFields(changes())),
+    markClean: (value) => baseline.set(toBody(value)),
+  };
+}
+
+/** This type is the form value both TLS-based transports (DNS-over-TLS and DNS-over-QUIC) share. */
+interface CertificateFormValue {
+  pfxPath: string;
+  pfxPassword: string;
+  selfSignedSubjectAlternativeNames: string;
+  certificateReloadPollInterval: string;
+  allowedProtocolTls12: boolean;
+  allowedProtocolTls13: boolean;
+}
+
+/**
+ * This function builds the `certificate` part of a DNS-over-TLS or DNS-over-QUIC body. The object
+ * is compared and sent whole when any of its fields changed: every certificate field needs a
+ * restart, so the note is the same as for the changed fields alone.
+ */
+function certificateBody(value: CertificateFormValue) {
+  return {
+    pfxPath: value.pfxPath,
+    ...buildPfxPasswordPatchField(value.pfxPassword),
+    selfSignedSubjectAlternativeNames: splitLines(value.selfSignedSubjectAlternativeNames),
+    certificateReloadPollInterval: value.certificateReloadPollInterval,
+    allowedProtocols: [
+      ...(value.allowedProtocolTls12 ? ['Tls12'] : []),
+      ...(value.allowedProtocolTls13 ? ['Tls13'] : []),
+    ],
+  };
+}
 
 /**
  * This component is the "Transports" settings page (`/settings/transports`). It shows one card per
@@ -43,6 +119,12 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  * <p>A TLS transport's certificate is a PFX file path or a self-signed certificate the server
  * manages, as in `TlsCertificateOptions`; no key material is uploaded here. The PFX password is
  * never returned, so a blank field means "keep the stored one" (see `buildPfxPasswordPatchField`).
+ *
+ * <p>The DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC and DNSCrypt cards send only the fields that
+ * changed, because their controller actions pick the note by which fields a `PATCH` holds (the
+ * `enable` switch applies at once, the rest needs a restart). Save stays disabled while nothing
+ * changed. The Plain DNS card sends its whole form: every one of its fields needs a restart, so its
+ * note never depends on the fields present.
  */
 @Component({
   selector: 'app-transport-settings',
@@ -148,6 +230,26 @@ export class TransportSettingsComponent implements OnInit {
     certificateClockSkewTolerance: ['00:05:00', [Validators.required]],
   });
 
+  private readonly dnsOverTlsTracker = trackChanges(this.dnsOverTlsForm, (value) =>
+    this.dnsOverTlsBody(value),
+  );
+  private readonly dnsOverHttpsTracker = trackChanges(this.dnsOverHttpsForm, (value) => value);
+  private readonly dnsOverQuicTracker = trackChanges(this.dnsOverQuicForm, (value) =>
+    this.dnsOverQuicBody(value),
+  );
+  private readonly dnsCryptTracker = trackChanges(this.dnsCryptForm, (value) =>
+    this.dnsCryptBody(value),
+  );
+
+  /** Whether a DNS-over-TLS field was edited since the card was loaded or saved. */
+  readonly dnsOverTlsHasChanges = this.dnsOverTlsTracker.hasChanges;
+  /** Whether a DNS-over-HTTPS field was edited since the card was loaded or saved. */
+  readonly dnsOverHttpsHasChanges = this.dnsOverHttpsTracker.hasChanges;
+  /** Whether a DNS-over-QUIC field was edited since the card was loaded or saved. */
+  readonly dnsOverQuicHasChanges = this.dnsOverQuicTracker.hasChanges;
+  /** Whether a DNSCrypt field was edited since the card was loaded or saved. */
+  readonly dnsCryptHasChanges = this.dnsCryptTracker.hasChanges;
+
   ngOnInit(): void {
     void this.loadAll();
   }
@@ -176,40 +278,25 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes the DNS-over-TLS settings, including the certificate. */
+  /** This method PATCHes the changed DNS-over-TLS fields only. */
   async saveDnsOverTls(): Promise<void> {
-    if (this.dnsOverTlsForm.invalid || this.dnsOverTlsSubmitting()) return;
+    if (this.dnsOverTlsForm.invalid || this.dnsOverTlsSubmitting() || !this.dnsOverTlsHasChanges())
+      return;
 
     this.dnsOverTlsSubmitting.set(true);
     this.dnsOverTlsErrorMessage.set(null);
 
-    const value = this.dnsOverTlsForm.getRawValue();
+    const saved = this.dnsOverTlsForm.getRawValue();
 
     try {
       const result = await firstValueFrom(
         this.transportApi.apiTransportSettingsDnsOverTlsPatch({
-          body: {
-            enable: value.enable,
-            port: value.port,
-            listenAddresses: splitListenAddresses(value.listenAddresses),
-            idleTimeout: value.idleTimeout,
-            maxConcurrentConnections: value.maxConcurrentConnections,
-            certificate: {
-              pfxPath: value.pfxPath,
-              ...buildPfxPasswordPatchField(value.pfxPassword),
-              selfSignedSubjectAlternativeNames: splitLines(
-                value.selfSignedSubjectAlternativeNames,
-              ),
-              certificateReloadPollInterval: value.certificateReloadPollInterval,
-              allowedProtocols: [
-                ...(value.allowedProtocolTls12 ? ['Tls12'] : []),
-                ...(value.allowedProtocolTls13 ? ['Tls13'] : []),
-              ],
-            },
-          },
+          body: this.dnsOverTlsTracker.changes(),
         }),
       );
       this.dnsOverTlsForm.patchValue({ pfxPassword: '' });
+      // The password is write-only and cleared above, so the baseline never holds it.
+      this.dnsOverTlsTracker.markClean({ ...saved, pfxPassword: '' });
       this.notification.success(result.note ?? 'DNS-over-TLS settings saved.');
     } catch (error) {
       this.dnsOverTlsErrorMessage.set(
@@ -220,19 +307,27 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes the DNS-over-HTTPS settings. */
+  /** This method PATCHes the changed DNS-over-HTTPS fields only. */
   async saveDnsOverHttps(): Promise<void> {
-    if (this.dnsOverHttpsForm.invalid || this.dnsOverHttpsSubmitting()) return;
+    if (
+      this.dnsOverHttpsForm.invalid ||
+      this.dnsOverHttpsSubmitting() ||
+      !this.dnsOverHttpsHasChanges()
+    )
+      return;
 
     this.dnsOverHttpsSubmitting.set(true);
     this.dnsOverHttpsErrorMessage.set(null);
 
+    const saved = this.dnsOverHttpsForm.getRawValue();
+
     try {
       const result = await firstValueFrom(
         this.transportApi.apiTransportSettingsDnsOverHttpsPatch({
-          body: this.dnsOverHttpsForm.getRawValue(),
+          body: this.dnsOverHttpsTracker.changes(),
         }),
       );
+      this.dnsOverHttpsTracker.markClean(saved);
       this.notification.success(result.note ?? 'DNS-over-HTTPS settings saved.');
     } catch (error) {
       this.dnsOverHttpsErrorMessage.set(
@@ -243,41 +338,28 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes the DNS-over-QUIC settings, including the certificate. */
+  /** This method PATCHes the changed DNS-over-QUIC fields only. */
   async saveDnsOverQuic(): Promise<void> {
-    if (this.dnsOverQuicForm.invalid || this.dnsOverQuicSubmitting()) return;
+    if (
+      this.dnsOverQuicForm.invalid ||
+      this.dnsOverQuicSubmitting() ||
+      !this.dnsOverQuicHasChanges()
+    )
+      return;
 
     this.dnsOverQuicSubmitting.set(true);
     this.dnsOverQuicErrorMessage.set(null);
 
-    const value = this.dnsOverQuicForm.getRawValue();
+    const saved = this.dnsOverQuicForm.getRawValue();
 
     try {
       const result = await firstValueFrom(
         this.transportApi.apiTransportSettingsDnsOverQuicPatch({
-          body: {
-            enable: value.enable,
-            port: value.port,
-            listenAddresses: splitListenAddresses(value.listenAddresses),
-            idleTimeout: value.idleTimeout,
-            maxConcurrentBidirectionalStreams: value.maxConcurrentBidirectionalStreams,
-            maxConcurrentConnections: value.maxConcurrentConnections,
-            certificate: {
-              pfxPath: value.pfxPath,
-              ...buildPfxPasswordPatchField(value.pfxPassword),
-              selfSignedSubjectAlternativeNames: splitLines(
-                value.selfSignedSubjectAlternativeNames,
-              ),
-              certificateReloadPollInterval: value.certificateReloadPollInterval,
-              allowedProtocols: [
-                ...(value.allowedProtocolTls12 ? ['Tls12'] : []),
-                ...(value.allowedProtocolTls13 ? ['Tls13'] : []),
-              ],
-            },
-          },
+          body: this.dnsOverQuicTracker.changes(),
         }),
       );
       this.dnsOverQuicForm.patchValue({ pfxPassword: '' });
+      this.dnsOverQuicTracker.markClean({ ...saved, pfxPassword: '' });
       this.notification.success(result.note ?? 'DNS-over-QUIC settings saved.');
     } catch (error) {
       this.dnsOverQuicErrorMessage.set(
@@ -288,35 +370,23 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes the DNSCrypt settings. */
+  /** This method PATCHes the changed DNSCrypt fields only. */
   async saveDnsCrypt(): Promise<void> {
-    if (this.dnsCryptForm.invalid || this.dnsCryptSubmitting()) return;
+    if (this.dnsCryptForm.invalid || this.dnsCryptSubmitting() || !this.dnsCryptHasChanges())
+      return;
 
     this.dnsCryptSubmitting.set(true);
     this.dnsCryptErrorMessage.set(null);
 
-    const value = this.dnsCryptForm.getRawValue();
+    const saved = this.dnsCryptForm.getRawValue();
 
     try {
       const result = await firstValueFrom(
         this.transportApi.apiTransportSettingsDnscryptPatch({
-          body: {
-            enable: value.enable,
-            port: value.port,
-            listenAddresses: splitListenAddresses(value.listenAddresses),
-            providerName: value.providerName,
-            tcpIdleTimeout: value.tcpIdleTimeout,
-            maxConcurrentTcpConnections: value.maxConcurrentTcpConnections,
-            enabledEsVersions: [
-              ...(value.esVersionXChaCha20Poly1305 ? ['XChaCha20Poly1305'] : []),
-              ...(value.esVersionXSalsa20Poly1305 ? ['XSalsa20Poly1305'] : []),
-            ],
-            certificateRotationInterval: value.certificateRotationInterval,
-            certificateValidityDuration: value.certificateValidityDuration,
-            certificateClockSkewTolerance: value.certificateClockSkewTolerance,
-          },
+          body: this.dnsCryptTracker.changes(),
         }),
       );
+      this.dnsCryptTracker.markClean(saved);
       this.notification.success(result.note ?? 'DNSCrypt settings saved.');
     } catch (error) {
       this.dnsCryptErrorMessage.set(
@@ -325,6 +395,50 @@ export class TransportSettingsComponent implements OnInit {
     } finally {
       this.dnsCryptSubmitting.set(false);
     }
+  }
+
+  /** This method turns the DNS-over-TLS form value into the request-shaped body. */
+  private dnsOverTlsBody(value: ReturnType<typeof this.dnsOverTlsForm.getRawValue>) {
+    return {
+      enable: value.enable,
+      port: value.port,
+      listenAddresses: splitListenAddresses(value.listenAddresses),
+      idleTimeout: value.idleTimeout,
+      maxConcurrentConnections: value.maxConcurrentConnections,
+      certificate: certificateBody(value),
+    };
+  }
+
+  /** This method turns the DNS-over-QUIC form value into the request-shaped body. */
+  private dnsOverQuicBody(value: ReturnType<typeof this.dnsOverQuicForm.getRawValue>) {
+    return {
+      enable: value.enable,
+      port: value.port,
+      listenAddresses: splitListenAddresses(value.listenAddresses),
+      idleTimeout: value.idleTimeout,
+      maxConcurrentBidirectionalStreams: value.maxConcurrentBidirectionalStreams,
+      maxConcurrentConnections: value.maxConcurrentConnections,
+      certificate: certificateBody(value),
+    };
+  }
+
+  /** This method turns the DNSCrypt form value into the request-shaped body. */
+  private dnsCryptBody(value: ReturnType<typeof this.dnsCryptForm.getRawValue>) {
+    return {
+      enable: value.enable,
+      port: value.port,
+      listenAddresses: splitListenAddresses(value.listenAddresses),
+      providerName: value.providerName,
+      tcpIdleTimeout: value.tcpIdleTimeout,
+      maxConcurrentTcpConnections: value.maxConcurrentTcpConnections,
+      enabledEsVersions: [
+        ...(value.esVersionXChaCha20Poly1305 ? ['XChaCha20Poly1305'] : []),
+        ...(value.esVersionXSalsa20Poly1305 ? ['XSalsa20Poly1305'] : []),
+      ],
+      certificateRotationInterval: value.certificateRotationInterval,
+      certificateValidityDuration: value.certificateValidityDuration,
+      certificateClockSkewTolerance: value.certificateClockSkewTolerance,
+    };
   }
 
   private async loadAll(): Promise<void> {
@@ -365,12 +479,14 @@ export class TransportSettingsComponent implements OnInit {
         allowedProtocolTls12: (dnsOverTls.certificate?.allowedProtocols ?? []).includes('Tls12'),
         allowedProtocolTls13: (dnsOverTls.certificate?.allowedProtocols ?? []).includes('Tls13'),
       });
+      this.dnsOverTlsTracker.markClean(this.dnsOverTlsForm.getRawValue());
 
       this.dnsOverHttpsForm.patchValue({
         enable: dnsOverHttps.enable ?? false,
         path: dnsOverHttps.path ?? '/dns-query',
         maxMessageSizeBytes: dnsOverHttps.maxMessageSizeBytes ?? 65535,
       });
+      this.dnsOverHttpsTracker.markClean(this.dnsOverHttpsForm.getRawValue());
 
       this.dnsOverQuicPfxPasswordConfigured.set(
         dnsOverQuic.certificate?.pfxPasswordConfigured ?? false,
@@ -391,6 +507,7 @@ export class TransportSettingsComponent implements OnInit {
         allowedProtocolTls12: (dnsOverQuic.certificate?.allowedProtocols ?? []).includes('Tls12'),
         allowedProtocolTls13: (dnsOverQuic.certificate?.allowedProtocols ?? []).includes('Tls13'),
       });
+      this.dnsOverQuicTracker.markClean(this.dnsOverQuicForm.getRawValue());
 
       this.dnsCryptForm.patchValue({
         enable: dnsCrypt.enable ?? false,
@@ -407,6 +524,7 @@ export class TransportSettingsComponent implements OnInit {
         certificateValidityDuration: dnsCrypt.certificateValidityDuration ?? '2.00:00:00',
         certificateClockSkewTolerance: dnsCrypt.certificateClockSkewTolerance ?? '00:05:00',
       });
+      this.dnsCryptTracker.markClean(this.dnsCryptForm.getRawValue());
     } catch (error) {
       this.loadErrorMessage.set(extractErrorMessage(error, 'Could not load transport settings.'));
     } finally {

@@ -1,4 +1,5 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import {
   FormControl,
   FormGroup,
@@ -24,7 +25,7 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, map } from 'rxjs';
 import {
   DhcpRaInterfaceOverrideDetail,
   DhcpRaRouteDetail,
@@ -33,6 +34,10 @@ import {
 } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import {
+  changedFields,
+  hasChangedFields,
+} from '../../../shared/settings-patch/changed-fields.util';
 import {
   joinLines,
   maxRecursiveDnsServersValidator,
@@ -98,7 +103,11 @@ type RaInterfaceOverrideFormGroup = FormGroup<{
  * (for example, the relay `Enable` flags choose in `Program.cs`, at startup, whether the local
  * engine or the relay agent answers), and each card shows the note the API returns after a save.
  * Two things apply at once: the core `leaseExpirySweepInterval` (which must be positive) and the
- * Router Advertisement content card (`raForm`), whose note says so. The RA card limits
+ * Router Advertisement content card (`raForm`), whose note says so. The core card sends only the
+ * fields that changed, because its note depends on whether the sweep interval travels alone or
+ * with a restart-only field; Save stays disabled while nothing changed. Every other card's note is
+ * fixed (restart for the protocol, relay, TFTP and RA protocol cards, hot reload for `raForm`), so
+ * those cards send their whole form. The RA card limits
  * Recursive DNS Servers to 75 entries so one advertisement fits 1240 octets
  * ({@link maxRecursiveDnsServersValidator}).
  *
@@ -173,6 +182,29 @@ export class DhcpSettingsComponent implements OnInit {
     declinedAddressQuarantineDuration: ['00:15:00', [Validators.required]],
     leaseExpirySweepInterval: ['00:01:00', [Validators.required, positiveDurationValidator]],
   });
+
+  /** The core form's value after every edit, so the difference below follows the inputs. */
+  private readonly coreFormValue = toSignal(
+    this.coreForm.valueChanges.pipe(map(() => this.coreForm.getRawValue())),
+    { initialValue: this.coreForm.getRawValue() },
+  );
+
+  /**
+   * The core settings as last loaded or saved, in the shape of the `PATCH` body. Only the core
+   * card is changed-only: `leaseExpirySweepInterval` applies at once and the other three fields
+   * need a restart, and the controller picks its note by which of them are present. Every other
+   * card's note is fixed, so those cards still send the whole form.
+   */
+  private readonly coreBaseline = signal<ReturnType<typeof this.coreBody> | null>(null);
+
+  /** The core fields edited since the last load or save, the body of the next core `PATCH`. */
+  readonly coreChanges = computed(() => {
+    const baseline = this.coreBaseline();
+    return baseline === null ? {} : changedFields(baseline, this.coreBody(this.coreFormValue()));
+  });
+
+  /** Whether any core field was edited since the last load or save. */
+  readonly coreHasChanges = computed(() => hasChangedFields(this.coreChanges()));
 
   readonly protocolForm = this.formBuilder.group({
     enable: [true],
@@ -313,26 +345,36 @@ export class DhcpSettingsComponent implements OnInit {
     });
   }
 
-  /** This method PATCHes the settings shared by every local DHCP protocol engine. */
+  /**
+   * This method turns the core form's value into the shape of the `PATCH` body. A blank server
+   * identifier is `null`, which clears the setting.
+   */
+  private coreBody(value: ReturnType<typeof this.coreForm.getRawValue>) {
+    return {
+      serverIdentifierAddress: value.serverIdentifierAddress || null,
+      offerHoldDuration: value.offerHoldDuration,
+      declinedAddressQuarantineDuration: value.declinedAddressQuarantineDuration,
+      leaseExpirySweepInterval: value.leaseExpirySweepInterval,
+    };
+  }
+
+  /**
+   * This method PATCHes the changed core fields only, so the note names what those fields need
+   * (hot-reloaded sweep interval, restart, or both).
+   */
   async saveCore(): Promise<void> {
-    if (this.coreForm.invalid || this.coreSubmitting()) return;
+    if (this.coreForm.invalid || this.coreSubmitting() || !this.coreHasChanges()) return;
 
     this.coreSubmitting.set(true);
     this.coreErrorMessage.set(null);
 
-    const value = this.coreForm.getRawValue();
+    const saved = this.coreBody(this.coreForm.getRawValue());
 
     try {
       const result = await firstValueFrom(
-        this.dhcpSettingsApi.apiDhcpSettingsCorePatch({
-          body: {
-            serverIdentifierAddress: value.serverIdentifierAddress || null,
-            offerHoldDuration: value.offerHoldDuration,
-            declinedAddressQuarantineDuration: value.declinedAddressQuarantineDuration,
-            leaseExpirySweepInterval: value.leaseExpirySweepInterval,
-          },
-        }),
+        this.dhcpSettingsApi.apiDhcpSettingsCorePatch({ body: this.coreChanges() }),
       );
+      this.coreBaseline.set(saved);
       this.notification.success(result.note ?? 'Core DHCP settings saved.');
     } catch (error) {
       this.coreErrorMessage.set(extractErrorMessage(error, 'Could not save core DHCP settings.'));
@@ -580,6 +622,7 @@ export class DhcpSettingsComponent implements OnInit {
         declinedAddressQuarantineDuration: core.declinedAddressQuarantineDuration ?? '00:15:00',
         leaseExpirySweepInterval: core.leaseExpirySweepInterval ?? '00:01:00',
       });
+      this.coreBaseline.set(this.coreBody(this.coreForm.getRawValue()));
 
       this.protocolForm.patchValue({
         enable: protocol.enable ?? true,
