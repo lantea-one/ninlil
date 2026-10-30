@@ -13,7 +13,8 @@ namespace Ninlil.Dns.Server.Acme;
 ///     This class waits, before the CA is asked to validate, until the DNS-01 TXT value is served
 ///     by this server's zone cache and by every other server that may answer for the zone: the
 ///     addresses in the zone's <c>NotifyAddresses</c> and the addresses of its apex NS hosts. The
-///     CA may ask any of them (RFC 8555 §8.4), and a secondary or a cloud provider receives the
+///     CA queries the DNS for the TXT record (RFC 8555 §8.4), so it may ask any of them, and a
+///     secondary or a cloud provider receives the
 ///     record a moment after <see cref="AcmeDnsChallengeResponder" /> publishes it.
 ///     <see cref="AcmeCertificateIssuer" /> calls it between the publish and the validation. The
 ///     wait is bounded by <see cref="Timeout" />: on timeout it logs one Warning naming the servers

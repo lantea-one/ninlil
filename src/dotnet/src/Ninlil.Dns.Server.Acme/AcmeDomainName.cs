@@ -16,7 +16,7 @@ public static class AcmeDomainName
 {
     /// <summary>
     ///     This constant contains the longest domain name, in characters without a trailing dot
-    ///     (RFC 1035 §2.3.4: 255 octets on the wire, 253 as text).
+    ///     (RFC 1035 §2.3.4 limits a name to 255 octets on the wire, which is 253 characters as text).
     /// </summary>
     private const int MaximumNameLength = 253;
 

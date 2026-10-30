@@ -15,10 +15,11 @@ namespace Ninlil.Dns.Server.Acme;
 ///     This class publishes and removes the record the RFC 8555 §8.4 DNS-01 challenge needs: a
 ///     TXT record at <c>_acme-challenge.&lt;domain&gt;</c> holding the key authorization digest.
 ///     A wildcard domain (<c>*.example.com</c>) is validated at its base name, so its record is
-///     at <c>_acme-challenge.example.com</c> (RFC 8555 §8.4).
+///     at <c>_acme-challenge.example.com</c> (RFC 8555 §7.1.3, §8.4).
 ///     It works only for domains inside a zone this server hosts
-///     (<see cref="AuthoritativeZoneCache.FindZone" />); any other domain is refused. The CA may
-///     ask any of the zone's public name servers (RFC 8555 §8.4), so the record is synced like
+///     (<see cref="AuthoritativeZoneCache.FindZone" />); any other domain is refused. The CA
+///     queries the DNS for the TXT record (RFC 8555 §8.4) and may reach any of the zone's public
+///     name servers, so the record is synced like
 ///     any record: a NOTIFY brings it to secondaries by zone transfer, and a CloudPrimary zone is
 ///     pushed to its provider at once through <see cref="ICloudZoneSyncTrigger" /> after the
 ///     publish and after the removal. Only <c>Primary</c> and <c>CloudPrimary</c> zones take a
@@ -181,7 +182,7 @@ public sealed class AcmeDnsChallengeResponder(
     /// <summary>
     ///     This method returns the name the CA validates for <paramref name="domain" />:
     ///     <c>_acme-challenge.</c> in front of the domain, or in front of a wildcard's base name
-    ///     (RFC 8555 §8.4).
+    ///     (RFC 8555 §7.1.3, §8.4).
     /// </summary>
     private static DnsName BuildChallengeName(string domain)
     {
