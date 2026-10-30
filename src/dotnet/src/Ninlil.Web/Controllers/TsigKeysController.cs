@@ -44,7 +44,7 @@ public class TsigKeysController(
 {
     /// <summary>
     ///     This property contains the algorithm a new key gets when the request names none:
-    ///     HMAC-SHA256, the RFC 8945 §6 mandatory algorithm that BIND also defaults to.
+    ///     HMAC-SHA256, one of the two algorithms RFC 8945 §6 makes mandatory to implement, that BIND also defaults to.
     /// </summary>
     private static readonly TsigAlgorithm DefaultAlgorithm = TsigAlgorithm.Find(
         DnsTsigOptions.HmacSha256AlgorithmName

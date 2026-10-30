@@ -77,8 +77,8 @@ public class ClientSubnetSettingsController(
                 )
             );
 
-        // A prefix length of 0 is valid: RFC 7871 section 6 lets a client send a SOURCE
-        // PREFIX-LENGTH of 0 to say that no address is disclosed.
+        // A prefix length of 0 is valid: RFC 7871 section 7.1.2 gives a SOURCE PREFIX-LENGTH of 0
+        // the meaning that the resolver adds no client address to its queries.
         if (
             patch.TryGetMergePatchInt32(
                 "sourcePrefixLengthIPv4",

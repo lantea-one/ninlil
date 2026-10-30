@@ -3,7 +3,7 @@ namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
 ///     This class records when a primary last confirmed or delivered this node's copy of a
-///     secondary zone: the start of the Expire interval of RFC 1035 §4.3.5. It is node-local
+///     secondary zone: the start of the Expire interval of RFC 1034 §4.3.5. It is node-local
 ///     runtime state with one row per zone, so it is not part of a backup and is not synced
 ///     between cluster nodes. The secondary refresh service writes it and reads it at start, so
 ///     a restart does not restart the Expire interval.

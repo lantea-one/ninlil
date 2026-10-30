@@ -35,7 +35,8 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
     ///     single enabled scope" only when exactly one DHCPv4 scope exists (see
     ///     <c>Ninlil.Dhcp.Server.Core.Scope.Dhcpv4ScopeResolver</c>), and other test classes add
     ///     scopes to the shared host. With <c>giaddr</c> inside this subnet, the scope is chosen by
-    ///     the RFC 2131 section 4.1 rule however many other scopes exist.
+    ///     the RFC 2131 section 4.3.1 rule (an address comes from the subnet of the relay agent in
+    ///     <c>giaddr</c>) however many other scopes exist.
     /// </summary>
     private static readonly IPAddress RelayAgentAddress = IPAddress.Parse("192.168.77.1");
 
