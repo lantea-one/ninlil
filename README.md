@@ -23,7 +23,7 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
 - **Authoritative DNS**: primary, secondary, stub, forwarder, and RFC 9432 catalog zones; RFC 1996
   NOTIFY; RFC 2136 dynamic update; AXFR/IXFR zone transfers (including DNSSEC-signed content and
   RFC 8945 §5.3.1 multi-message TSIG chaining) over plain TCP, TLS, or QUIC.
-- **Recursive & validating resolution**: a full RFC 1035 §7 iterative walk with RFC 9156 QNAME
+- **Recursive & validating resolution**: a full iterative walk (RFC 1034 §5.3.3) with RFC 9156 QNAME
   minimization, RFC 8767 serve-stale, prefetch, EDNS Client Subnet, and DNS64.
 - **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA, MD5 and GOST algorithms
   are validated but never signed with, per RFC 8624), NSEC/NSEC3 (with RFC 5155 opt-out),
@@ -136,8 +136,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   Class/Relay Agent Circuit/Remote ID matching). DHCPv6 answers SOLICIT/REQUEST/RENEW/REBIND/
   RELEASE/DECLINE/CONFIRM/INFORMATION-REQUEST with stateful address assignment (IA_NA) and Prefix
   Delegation (IA_PD) side by side, plus optional Rapid Commit.
-- **A genuine, mutually-exclusive relay-agent mode** for each protocol (RFC 3046 for DHCPv4, RFC
-  8415 §7/16 RELAY-FORW/RELAY-REPL for DHCPv6), as an alternative to running the local engine.
+- **A genuine, mutually-exclusive relay-agent mode** for each protocol (RFC 1542 and RFC 2131 §4.1
+  with the RFC 3046 option for DHCPv4, RFC 8415 §9 and §19 RELAY-FORW/RELAY-REPL for DHCPv6), as an
+  alternative to running the local engine.
 - **RFC 4861/4862 Router Advertisement/SLAAC**, including per-interface-distinct prefix/flag
   configuration.
 - **A real, read-only RFC 1350 TFTP server** for PXE boot delivery, driven by a scope's own boot
