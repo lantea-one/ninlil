@@ -12,8 +12,8 @@ namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 /// <summary>
 ///     This class tests the DNSCrypt UDP and TCP listeners over loopback sockets, using the
 ///     listeners, pipeline and fake resolver of <see cref="DnsCryptListenerTestFixture" />:
-///     certificate discovery, encrypted round trips for both supported ciphers, several queries
-///     on one TCP connection, and silent drops for packets that cannot be authenticated.
+///     certificate discovery, encrypted round trips for both supported ciphers, one transaction
+///     per TCP connection, and silent drops for packets that cannot be authenticated.
 /// </summary>
 public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
     : IClassFixture<DnsCryptListenerTestFixture>
@@ -247,7 +247,7 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
     }
 
     [Fact]
-    public async Task Tcp_AnswersTwoSequentialQueriesOnOneConnection()
+    public async Task Tcp_ClosesTheConnectionAfterTheAnswerAndDoesNotAnswerASecondQuery()
     {
         DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[
             DnsCryptEsVersion.XChaCha20Poly1305
@@ -257,87 +257,50 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
         await client.ConnectAsync(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
         using NetworkStream stream = client.GetStream();
 
-        for (ushort id = 1; id <= 2; id++)
-        {
-            DnsMessage query = DnsCryptWireTestHelper.BuildEchoQuery(id);
-            (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
-                DnsCryptWireTestHelper.BuildEncryptedQueryPacket(certificateEntry, query);
+        DnsMessage query = DnsCryptWireTestHelper.BuildEchoQuery(1);
+        (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
+            DnsCryptWireTestHelper.BuildEncryptedQueryPacket(certificateEntry, query);
 
-            await WriteFramedAsync(stream, packet);
-            byte[] responsePacket = await ReadFramedAsync(stream);
+        await WriteFramedAsync(stream, packet);
+        DnsMessage response = DnsCryptWireTestHelper.DecryptResponsePacket(
+            certificateEntry,
+            session,
+            await ReadFramedAsync(stream),
+            out _,
+            out _
+        );
 
-            DnsMessage response = DnsCryptWireTestHelper.DecryptResponsePacket(
-                certificateEntry,
-                session,
-                responsePacket,
-                out _,
-                out _
-            );
+        Assert.Equal(1, response.Id);
 
-            Assert.Equal(id, response.Id);
-            Assert.Single(response.Answers);
-        }
+        // DNSCrypt v2 section 6: "After having received a response from the resolver, the client
+        // and the resolver must close the TCP connection. Multiple transactions over the same TCP
+        // connections are not allowed by this revision of the protocol."
+        await AssertConnectionClosedAsync(stream);
     }
 
     [Fact]
-    public async Task Tcp_AnswersEveryQueryOfAPipelinedBurstLargerThanTheConnectionLimit()
+    public async Task Tcp_ClosesTheConnectionAfterACertificateDiscoveryAnswer()
     {
-        DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[
-            DnsCryptEsVersion.XChaCha20Poly1305
-        ];
-
         using TcpClient client = new();
         await client.ConnectAsync(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
         using NetworkStream stream = client.GetStream();
 
-        // Forty queries are written before any answer is read; a connection holds at most sixteen
-        // in flight and reads on as answers are written.
-        Dictionary<ushort, DnsCryptWireTestHelper.ClientQuerySession> sessions = [];
+        DnsMessage discoveryQuery = new() { Id = 2, Opcode = DnsOpcodeEnum.Query };
+        discoveryQuery.Questions.Add(
+            new DnsQuestion(
+                DnsName.Parse($"2.dnscrypt-cert.{DnsCryptListenerTestFixture.ProviderName}"),
+                DnsResourceRecordTypeEnum.Txt,
+                DnsClassEnum.Internet
+            )
+        );
 
-        for (ushort id = 1; id <= 40; id++)
-        {
-            (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
-                DnsCryptWireTestHelper.BuildEncryptedQueryPacket(
-                    certificateEntry,
-                    DnsCryptWireTestHelper.BuildEchoQuery(id)
-                );
-            sessions[id] = session;
-            await WriteFramedAsync(stream, packet);
-        }
+        await WriteFramedAsync(stream, DnsMessageWriter.Write(discoveryQuery));
+        List<byte[]> certificates = DnsCryptWireTestHelper.ExtractCertificatesFromDiscoveryResponse(
+            await ReadFramedAsync(stream)
+        );
 
-        HashSet<ushort> answered = [];
-
-        for (int count = 0; count < 40; count++)
-        {
-            byte[] responsePacket = await ReadFramedAsync(stream);
-
-            // The answers may arrive in any order, so try each outstanding session.
-            DnsMessage response = null;
-
-            foreach ((ushort id, DnsCryptWireTestHelper.ClientQuerySession session) in sessions)
-            {
-                try
-                {
-                    response = DnsCryptWireTestHelper.DecryptResponsePacket(
-                        certificateEntry,
-                        session,
-                        responsePacket,
-                        out _,
-                        out _
-                    );
-                    break;
-                }
-                catch (Exception)
-                {
-                    // Not this query's answer.
-                }
-            }
-
-            Assert.NotNull(response);
-            answered.Add(response.Id);
-        }
-
-        Assert.Equal(40, answered.Count);
+        Assert.Equal(2, certificates.Count);
+        await AssertConnectionClosedAsync(stream);
     }
 
     [Fact]
@@ -429,6 +392,30 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await client.ReceiveAsync(timeout.Token)
         );
+    }
+
+    /// <summary>
+    ///     This method asserts that the server closes the connection without sending anything
+    ///     more: the read ends at once with end of stream, or with a reset when the server closed
+    ///     with unread queries still queued from the client.
+    /// </summary>
+    private static async Task AssertConnectionClosedAsync(NetworkStream stream)
+    {
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        byte[] buffer = new byte[1];
+
+        try
+        {
+            Assert.Equal(0, await stream.ReadAsync(buffer, timeout.Token));
+        }
+        catch (IOException)
+        {
+            // A reset also shows the server closed the connection.
+        }
+        catch (OperationCanceledException)
+        {
+            Assert.Fail("The server kept the connection open after its answer.");
+        }
     }
 
     private static async Task WriteFramedAsync(NetworkStream stream, byte[] payload)

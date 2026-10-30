@@ -18,7 +18,10 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 ///     two-octet big-endian length prefix of DNS over TCP (RFC 1035 §4.2.2, RFC 7766) around
 ///     either a plaintext certificate discovery query or an encrypted client query, told apart
 ///     by <see cref="DnsCryptQueryHandler" /> as in <see cref="DnsCryptUdpListener" />. A
-///     connection stays open for further queries until
+///     connection carries one transaction: the DNSCrypt v2 specification (section 6) has the
+///     resolver close it after the response, so this listener closes it once the answer to a
+///     query or a certificate discovery request is written. A packet that gets no answer (it
+///     cannot be decrypted, or a limit drops it) leaves the connection open until
 ///     <c>DnsCryptOptions.TcpIdleTimeout</c> passes with no complete packet, or the client
 ///     disconnects.
 /// </summary>
@@ -171,10 +174,11 @@ public sealed class DnsCryptTcpListener(
     /// <summary>
     ///     This method serves one accepted connection through a
     ///     <see cref="FramedDnsStreamSession" />: it routes each length-prefixed packet through
-    ///     <see cref="DnsCryptQueryHandler" /> until <c>DnsCryptOptions.TcpIdleTimeout</c> passes
-    ///     with no complete packet, the client disconnects, or a write to the client misses that
-    ///     same timeout. The session owns the per-connection limits (16 queries in flight, one
-    ///     writer task); a query still outstanding when the connection goes idle is answered
+    ///     <see cref="DnsCryptQueryHandler" /> until the first answer has been written (the
+    ///     connection then closes, see the class summary), <c>DnsCryptOptions.TcpIdleTimeout</c>
+    ///     passes with no complete packet, the client disconnects, or a write to the client misses
+    ///     that same timeout. The session owns the per-connection limits (16 queries in flight,
+    ///     one writer task); a query still outstanding when the connection closes is answered
     ///     first.
     /// </summary>
     private async Task HandleConnectionAsync(
@@ -204,7 +208,12 @@ public sealed class DnsCryptTcpListener(
 
             await session.RunAsync(
                 async (packetBuffer, _, sessionToken) =>
-                    await DnsCryptQueryHandler.HandlePacketAsync(
+                {
+                    // Set when a certificate discovery answer is queued. A packet that gets no
+                    // reply (junk, a rate-limited discovery query) leaves the connection open.
+                    bool discoveryAnswered = false;
+
+                    bool enqueued = await DnsCryptQueryHandler.HandlePacketAsync(
                         packetBuffer,
                         remoteEndpoint.Address,
                         DnsTransportProtocolEnum.DnsCrypt,
@@ -215,14 +224,27 @@ public sealed class DnsCryptTcpListener(
                         logger,
                         // Only a certificate discovery answer takes this path; queued without a
                         // slot, since the packet's slot is released when the handler returns.
-                        (responseBytes, sendToken) => session.SendAsync(responseBytes, sendToken),
+                        (responseBytes, sendToken) =>
+                        {
+                            discoveryAnswered = true;
+                            return session.SendAsync(responseBytes, sendToken);
+                        },
                         sessionToken,
                         session.CreateResponder(),
                         session.CreateDropNotifier(),
                         rateLimiter
-                    )
-                        ? FrameOutcomeEnum.Enqueued
-                        : FrameOutcomeEnum.Handled
+                    );
+
+                    // DNSCrypt v2 section 6: after the resolver has answered, the resolver closes
+                    // the connection, and one connection carries one transaction. The session
+                    // writes the answer first and then closes.
+                    if (enqueued)
+                        return FrameOutcomeEnum.EnqueuedAndCloseAfterDrain;
+
+                    return discoveryAnswered
+                        ? FrameOutcomeEnum.CloseAfterDrain
+                        : FrameOutcomeEnum.Handled;
+                }
             );
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

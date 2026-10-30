@@ -384,10 +384,20 @@ public sealed class FramedDnsStreamSession
 
                 FrameOutcomeEnum outcome = await handleFrameAsync(message, this, Lifetime);
 
-                if (outcome != FrameOutcomeEnum.Enqueued)
+                if (
+                    outcome
+                    is not (
+                        FrameOutcomeEnum.Enqueued
+                        or FrameOutcomeEnum.EnqueuedAndCloseAfterDrain
+                    )
+                )
                     ticket.Release();
 
-                if (outcome == FrameOutcomeEnum.CloseAfterDrain)
+                if (
+                    outcome
+                    is FrameOutcomeEnum.CloseAfterDrain
+                        or FrameOutcomeEnum.EnqueuedAndCloseAfterDrain
+                )
                     return true;
             }
             catch

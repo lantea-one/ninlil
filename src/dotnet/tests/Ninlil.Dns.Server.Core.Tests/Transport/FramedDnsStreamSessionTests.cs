@@ -342,6 +342,39 @@ public sealed class FramedDnsStreamSessionTests
     }
 
     [Fact]
+    public async Task EnqueuedAndCloseAfterDrain_WaitsForTheReplyThenClosesWithoutReadingFurther()
+    {
+        int handled = 0;
+        TaskCompletionSource<DnsResponseSenderAsync> responder = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        await using Harness harness = await Harness.StartAsync(
+            TimeSpan.FromSeconds(30),
+            handler: (message, session, token) =>
+            {
+                Interlocked.Increment(ref handled);
+                responder.TrySetResult(session.CreateResponder());
+                return Task.FromResult(FrameOutcomeEnum.EnqueuedAndCloseAfterDrain);
+            }
+        );
+
+        await harness.SendFrameAsync(1, 8);
+        await harness.SendFrameAsync(2, 8);
+        DnsResponseSenderAsync respond = await responder.Task.WaitAsync(SafetyTimeout);
+
+        // The reply is still owed, so the session neither returns nor reads the second frame.
+        await Task.Delay(NegativeWindow);
+        Assert.False(harness.RunTask.IsCompleted);
+
+        await respond(new byte[] { 7, 7, 7 }, CancellationToken.None);
+
+        Assert.Equal([7, 7, 7], await harness.ReadFrameAsync());
+        Assert.Null(await harness.ReadFrameOrEndAsync());
+        await harness.RunTask.WaitAsync(SafetyTimeout);
+        Assert.Equal(1, Volatile.Read(ref handled));
+    }
+
+    [Fact]
     public async Task TheTransferToken_IsCancelledAtItsLimit_AndByAnAbort()
     {
         await using Harness harness = await Harness.StartAsync(TimeSpan.FromSeconds(30));

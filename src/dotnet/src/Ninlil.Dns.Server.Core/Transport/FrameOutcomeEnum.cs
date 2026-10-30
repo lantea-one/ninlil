@@ -28,4 +28,12 @@ public enum FrameOutcomeEnum
     ///     stream). The session releases the slot, stops reading, flushes and returns.
     /// </summary>
     CloseAfterDrain,
+
+    /// <summary>
+    ///     The handler enqueued the message onto the pipeline, as for <see cref="Enqueued" />, and
+    ///     the connection must close once that reply is written (DNSCrypt over TCP, which allows
+    ///     one transaction per connection). The session stops reading, waits for the reply or
+    ///     the drop notice that releases the slot, flushes and returns.
+    /// </summary>
+    EnqueuedAndCloseAfterDrain,
 }
