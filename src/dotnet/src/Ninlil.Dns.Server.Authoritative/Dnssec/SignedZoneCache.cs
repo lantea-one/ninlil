@@ -46,7 +46,7 @@ public sealed class SignedZoneCache(
 
     /// <summary>
     ///     This field contains the IDs of zones that are marked signed and signed here, but have
-    ///     no key that can sign (<see cref="IZoneSigningService.SignZoneAsync" /> returned
+    ///     no key that can sign, including a zone whose keys are all Removed or that has none (<see cref="IZoneSigningService.SignZoneAsync" /> returned
     ///     <see langword="null" />). They have no entry in <see cref="_signedZonesByZoneId" />, so
     ///     they are served unsigned, yet <see cref="CachedZoneIds" /> still lists them: the
     ///     rollover and re-signing services keep visiting them, so adding or rolling to a key with
@@ -86,8 +86,8 @@ public sealed class SignedZoneCache(
             cancellationToken
         );
 
-        // TrySignAndStoreAsync logs failures, so one bad zone (signed but with no key, for
-        // example) does not stop the others.
+        // TrySignAndStoreAsync logs failures, so one bad zone (a corrupt key, for example) does
+        // not stop the others.
         foreach (ZoneEntity zone in signedZones)
             await TrySignAndStoreAsync(zone.Id, zone.Name, cancellationToken);
 
@@ -231,9 +231,9 @@ public sealed class SignedZoneCache(
 
     /// <summary>
     ///     This method signs one zone, stores the result and publishes
-    ///     <see cref="DnssecZoneResigningCompletedEvent" />. A failure (usually a signed zone with
-    ///     no key) is logged, not thrown, and the previous signed data is kept. When the signing
-    ///     service returns <see langword="null" /> (no key can sign), the zone's signed data is
+    ///     <see cref="DnssecZoneResigningCompletedEvent" />. A failure (a storage error, for
+    ///     example) is logged, not thrown, and the previous signed data is kept. When the signing
+    ///     service returns <see langword="null" /> (no key can sign, or no key is left), the zone's signed data is
     ///     removed, the zone ID is kept in <see cref="_unsignableZoneIds" />, one Warning is
     ///     logged and no event is published.
     /// </summary>
@@ -259,7 +259,7 @@ public sealed class SignedZoneCache(
                 _signedZonesByZoneId.TryRemove(zoneId, out _);
                 _unsignableZoneIds[zoneId] = 0;
                 logger.LogWarning(
-                    "Zone '{ZoneName}' ({ZoneId}) is marked signed but has no key with a permitted algorithm; it is served unsigned until a key is added. If a parent zone published a DS record for it, replace or remove that DS.",
+                    "Zone '{ZoneName}' ({ZoneId}) is marked signed but has no key that can sign; it is served unsigned until a key with a permitted algorithm is added. If a parent zone published a DS record for it, replace or remove that DS.",
                     zoneName,
                     zoneId
                 );

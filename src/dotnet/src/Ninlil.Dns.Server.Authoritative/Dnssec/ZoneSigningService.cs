@@ -17,8 +17,9 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     keys from storage and computes the DNSSEC content RFC 4034 and RFC 5155 require: the
 ///     DNSKEY RRset, an RRSIG over each authoritative RRset, the full NSEC or NSEC3 chain, and DS
 ///     records for delegations to signed child zones this server also hosts. A key with a
-///     prohibited algorithm is neither published nor used; with no key left that signs, the
-///     service returns <see langword="null" /> and the zone is served unsigned.
+///     prohibited algorithm is neither published nor used; with no key left that signs, or no key
+///     at all besides Removed ones, the service returns <see langword="null" /> and the zone is
+///     served unsigned.
 ///     <para>
 ///         At a delegation point only the generated DS RRset is signed; NS records and any other
 ///         stored records there (including a hand-entered DS) are skipped. Names below a
@@ -79,10 +80,12 @@ public class ZoneSigningService(
             ),
         ];
 
+        // With no key left (none created, or every key Removed) the zone is treated like one
+        // with no key that can sign: serving the previous signed data would publish keys the
+        // operator removed and signatures that expire into a bogus zone. The caller serves the
+        // zone unsigned and signs it again when a key appears.
         if (storedKeys.Count == 0)
-            throw new InvalidOperationException(
-                $"Zone '{zone.Name}' is marked signed but has no active DNSSEC key."
-            );
+            return null;
 
         // Only Active and DoubleSignature keys sign, and never with a prohibited algorithm. Such
         // a key can exist when it was created before the prohibition; it is not published and
