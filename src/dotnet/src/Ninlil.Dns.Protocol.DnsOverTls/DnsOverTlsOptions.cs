@@ -7,9 +7,13 @@ namespace Ninlil.Dns.Protocol.DnsOverTls;
 /// <summary>
 ///     This class binds to the <c>DnsServer:Protocol:DnsOverTls</c> section of the
 ///     application's configuration and controls how <see cref="DnsOverTlsListener" /> binds and
-///     behaves. Most settings are read when the listener starts and apply on restart;
-///     <see cref="IdleTimeout" />, the allowed TLS protocols and <c>ProxyProtocol.Enable</c> are
-///     read for each connection.
+///     behaves. The listener reads <see cref="IdleTimeout" />, the allowed TLS protocols and
+///     <c>ProxyProtocol.Enable</c> from <c>IOptionsMonitor</c> for each connection. Everything
+///     else is read when the listener starts and applies after a restart: the listen addresses,
+///     the port, the connection limit, the certificate and the <c>ProxyProtocol</c> known
+///     proxies and networks, which are parsed once at start. The REST settings controller
+///     (<c>ReverseProxySettingsController</c>) reads these options through <c>IOptions</c>, so
+///     a value it shows or changes is current only after a process restart.
 /// </summary>
 public class DnsOverTlsOptions
 {
