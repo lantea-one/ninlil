@@ -835,12 +835,10 @@ function buildAdminPages(ids, api, options) {
   add('client-group-edit', needs(`/client-groups/${ids.groupId}/edit`, 'groupId'));
   add('client-group-networks', needs(`/client-groups/${ids.groupId}/networks`, 'groupId'));
   add('client-group-networks-delete-dialog', needs(`/client-groups/${ids.groupId}/networks`, 'groupId'), {
-    // Opens the delete confirmation of the ClientID row, which names the row in its text. When the
-    // ClientID row could not be seeded, it opens the first row's dialog instead.
+    // Opens the delete confirmation of the ClientID row, which names the row in its text.
     prepare: (page) => page.evaluate(`(() => {
       const rows = [...document.querySelectorAll('tr')];
-      const row = rows.find((candidate) => candidate.textContent.includes('smoke-device-1'))
-        ?? rows.find((candidate) => candidate.querySelector('button[aria-label="Delete network"]'));
+      const row = rows.find((candidate) => candidate.textContent.includes('smoke-device-1'));
       const button = row?.querySelector('button[aria-label="Delete network"]');
       if (!button) return false;
       button.click();
