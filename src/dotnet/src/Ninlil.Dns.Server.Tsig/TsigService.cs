@@ -16,8 +16,10 @@ namespace Ninlil.Dns.Server.Tsig;
 ///     <see cref="TsigCodec.BuildDigestInput" />, so each group shares one core method and both
 ///     groups share the digest construction.
 ///     <para>
-///         Verification follows the order of RFC 8945 §5.2: algorithm and key, MAC length, MAC,
-///         then time. The time check comes last so that BADTIME, which is answered with a signed
+///         Verification checks the algorithm and key, the MAC length, the MAC, then the time.
+///         RFC 8945 §5.2 checks the key, the MAC, the time and the truncation policy; the MAC
+///         length comes before the MAC here because a wrong-length MAC can never match. The time
+///         check comes last so that BADTIME, which is answered with a signed
 ///         reply, is only ever sent to a sender that proved it holds the key.
 ///     </para>
 ///     <para>
@@ -46,7 +48,7 @@ public class TsigService(
     /// <summary>
     ///     This constant contains the shortest MAC accepted. Truncated MACs (RFC 8945 §5.2.2.1) are
     ///     not supported: a MAC shorter than this is malformed (FORMERR) and one between this and
-    ///     the full digest length is BADTRUNC.
+    ///     the full digest length is BADTRUNC (RFC 8945 §5.2.4).
     /// </summary>
     private const int MinimumMacLength = 16;
 
@@ -169,7 +171,7 @@ public class TsigService(
         CancellationToken stoppingToken = default
     )
     {
-        // RFC 8945 §5.3.2: a request that is not a well-formed TSIG gets a plain FORMERR.
+        // RFC 8945 §5.2: a request whose TSIG cannot be interpreted gets a plain FORMERR.
         if (failure.Error == DnsResponseCodeEnum.FormatError)
         {
             response.ResponseCode = DnsResponseCodeEnum.FormatError;
@@ -178,7 +180,7 @@ public class TsigService(
         }
 
         // The extended TSIG codes (16 and up) do not fit the four-bit header field, so the header
-        // carries NOTAUTH (RFC 8945 §5.3) and the TSIG record carries the code.
+        // carries NOTAUTH (RFC 8945 §5.2.1 to §5.2.3) and the TSIG record carries the code.
         response.ResponseCode = DnsResponseCodeEnum.NotAuthoritative;
         ulong now = (ulong)timeProvider.GetUtcNow().ToUnixTimeSeconds();
 
@@ -221,7 +223,8 @@ public class TsigService(
     }
 
     /// <summary>
-    ///     This method does the work for all three verify methods, in the order of RFC 8945 §5.2:
+    ///     This method does the work for all three verify methods, in the order RFC 8945 §5.2
+    ///     gives, except that the MAC length is checked before the MAC:
     ///     a supported algorithm, a known, enabled, non-cluster key of that algorithm (and, when
     ///     <paramref name="expectedKeyName" /> is set, that exact key), the MAC length, the MAC (compared in constant time) and finally the time window.
     /// </summary>

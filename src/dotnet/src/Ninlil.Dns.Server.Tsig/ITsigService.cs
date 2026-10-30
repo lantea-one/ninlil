@@ -15,9 +15,11 @@ namespace Ninlil.Dns.Server.Tsig;
 public interface ITsigService
 {
     /// <summary>
-    ///     This method verifies a signed message, in the order of RFC 8945 §5.2: algorithm and key
+    ///     This method verifies a signed message in this order: algorithm and key
     ///     (unknown, disabled, cluster or of another algorithm: BADKEY), MAC length (FORMERR or
-    ///     BADTRUNC), MAC (BADSIG), then time (BADTIME). Key lookups are cached for a few seconds
+    ///     BADTRUNC), MAC (BADSIG), then time (BADTIME). RFC 8945 §5.2 checks the key, the MAC,
+    ///     the time and the truncation policy; this method rejects a MAC of the wrong length
+    ///     before it computes the MAC. Key lookups are cached for a few seconds
     ///     (<see cref="TsigKeyLookupCache" />).
     /// </summary>
     /// <param name="rawMessage">The complete message as received from the wire.</param>
@@ -73,7 +75,7 @@ public interface ITsigService
     ///     request that produced it.
     /// </summary>
     /// <remarks>
-    ///     The request MAC is digested with its two-octet MAC Size in front, as RFC 8945 §5.3
+    ///     The request MAC is digested with its two-octet MAC Size in front, as RFC 8945 §4.3.1
     ///     requires, so other implementations (BIND, dnspython) verify the answer.
     /// </remarks>
     /// <param name="message">The response message to sign, not yet carrying a TSIG record.</param>
@@ -127,7 +129,7 @@ public interface ITsigService
 
     /// <summary>
     ///     This method turns <paramref name="response" /> into the reply to a request whose TSIG
-    ///     failed verification (RFC 8945 §5.3.2). The result depends on the failure:
+    ///     failed verification (RFC 8945 §5.2, §5.3.2). The result depends on the failure:
     ///     <list type="bullet">
     ///         <item>
     ///             FORMERR: the RCODE is FORMERR and the reply has no TSIG record.
