@@ -37,6 +37,7 @@ import {
   FILTER_LIST_KIND_OPTIONS,
   FILTER_LIST_SOURCE_OPTIONS,
   KNOWN_BLOCKLIST_OPTIONS,
+  assignBulkLineNumbers,
   deriveBlocklistName,
 } from '../filter-list.model';
 
@@ -142,6 +143,13 @@ export class FilterListFormComponent implements OnInit {
 
   readonly loading = signal(this.isEditMode);
   readonly submitting = signal(false);
+
+  /**
+   * The number each bulk line got on its first save in this visit, keyed by the line text. A
+   * retried line reuses its number, so its name stays the one the first attempt would have given
+   * it; see {@link assignBulkLineNumbers}.
+   */
+  private readonly bulkLineNumbers = new Map<string, number>();
   readonly errorMessage = signal<string | null>(null);
 
   readonly form = this.formBuilder.group({
@@ -307,10 +315,13 @@ export class FilterListFormComponent implements OnInit {
     const succeeded: string[] = [];
     const failed: BulkCreateOutcome[] = [];
 
+    const lineNumbers = assignBulkLineNumbers(lines, this.bulkLineNumbers);
+    const numberedLines = Math.max(lines.length, this.bulkLineNumbers.size);
+
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index];
       const request: FilterListWriteRequestValue = {
-        name: deriveBlocklistName(line, index + 1, lines.length, value.name),
+        name: deriveBlocklistName(line, lineNumbers[index], numberedLines, value.name),
         kind: value.kind,
         action: value.action,
         source: DnsFilterListSourceEnum.Subscribed,

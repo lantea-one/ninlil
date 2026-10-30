@@ -248,4 +248,62 @@ describe('ForwarderFormComponent', () => {
 
     expect(forwardersApiSpy.apiForwardersPost).not.toHaveBeenCalled();
   });
+
+  it('save() retrying the failed line of a three-line bulk create reuses the number the line had, not its new position', async () => {
+    let failSecond = true;
+    const fixture = await createComponent(null, () => {
+      forwardersApiSpy.apiForwardersPost.and.callFake(
+        (args: { forwarderWriteRequest: { definitionString: string } }) =>
+          args.forwarderWriteRequest.definitionString === '203.0.113.2' && failSecond
+            ? throwError(() => new HttpErrorResponse({ status: 500, error: 'boom' }))
+            : of({ id: 'created' }),
+      );
+    });
+    fixture.componentInstance.form.patchValue({
+      name: 'custom',
+      definitionString: '203.0.113.1\n203.0.113.2\n203.0.113.3',
+    });
+    await fixture.componentInstance.save();
+    expect(fixture.componentInstance.form.controls.definitionString.value).toBe('203.0.113.2');
+
+    failSecond = false;
+    forwardersApiSpy.apiForwardersPost.calls.reset();
+    await fixture.componentInstance.save();
+
+    expect(forwardersApiSpy.apiForwardersPost).toHaveBeenCalledTimes(1);
+    expect(forwardersApiSpy.apiForwardersPost).toHaveBeenCalledWith({
+      forwarderWriteRequest: jasmine.objectContaining({
+        name: 'custom 2',
+        definitionString: '203.0.113.2',
+      }),
+    });
+  });
+
+  it('save() gives a line added before a retry the next unused number', async () => {
+    const fixture = await createComponent(null, () => {
+      forwardersApiSpy.apiForwardersPost.and.callFake(
+        (args: { forwarderWriteRequest: { definitionString: string } }) =>
+          args.forwarderWriteRequest.definitionString === '203.0.113.2'
+            ? throwError(() => new HttpErrorResponse({ status: 500, error: 'boom' }))
+            : of({ id: 'created' }),
+      );
+    });
+    fixture.componentInstance.form.patchValue({
+      name: 'custom',
+      definitionString: '203.0.113.1\n203.0.113.2',
+    });
+    await fixture.componentInstance.save();
+
+    fixture.componentInstance.form.patchValue({ definitionString: '203.0.113.2\n203.0.113.9' });
+    forwardersApiSpy.apiForwardersPost.calls.reset();
+    await fixture.componentInstance.save();
+
+    const names = forwardersApiSpy.apiForwardersPost.calls
+      .allArgs()
+      .map(
+        (args: unknown[]) =>
+          (args[0] as { forwarderWriteRequest: { name: string } }).forwarderWriteRequest.name,
+      );
+    expect(names).toEqual(['custom 2', 'custom 3']);
+  });
 });

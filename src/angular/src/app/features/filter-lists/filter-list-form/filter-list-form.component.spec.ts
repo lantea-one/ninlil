@@ -325,4 +325,38 @@ describe('FilterListFormComponent', () => {
     );
     expect(notificationSpy.success).toHaveBeenCalledWith('1 of 2 filter lists created.');
   });
+
+  it('save() retrying the failed line of a three-line bulk subscribe reuses the number the line had, not its new position', async () => {
+    let failSecond = true;
+    const fixture = await createComponent(null, () => {
+      filterListsApiSpy.apiFilterListsPost.and.callFake(
+        (args: { filterListWriteRequest: { subscriptionUrl: string } }) =>
+          args.filterListWriteRequest.subscriptionUrl === 'https://example.com/b.txt' && failSecond
+            ? throwError(() => new HttpErrorResponse({ status: 500, error: 'boom' }))
+            : of({ id: 'created' }),
+      );
+    });
+    fixture.componentInstance.form.patchValue({
+      name: 'custom',
+      source: DnsFilterListSourceEnum.Subscribed,
+      subscriptionUrl:
+        'https://example.com/a.txt\nhttps://example.com/b.txt\nhttps://example.com/c.txt',
+    });
+    await fixture.componentInstance.save();
+    expect(fixture.componentInstance.form.controls.subscriptionUrl.value).toBe(
+      'https://example.com/b.txt',
+    );
+
+    failSecond = false;
+    filterListsApiSpy.apiFilterListsPost.calls.reset();
+    await fixture.componentInstance.save();
+
+    expect(filterListsApiSpy.apiFilterListsPost).toHaveBeenCalledTimes(1);
+    expect(filterListsApiSpy.apiFilterListsPost).toHaveBeenCalledWith({
+      filterListWriteRequest: jasmine.objectContaining({
+        name: 'custom 2',
+        subscriptionUrl: 'https://example.com/b.txt',
+      }),
+    });
+  });
 });

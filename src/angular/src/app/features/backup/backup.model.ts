@@ -8,15 +8,15 @@ export const MINIMUM_BACKUP_PASSPHRASE_LENGTH = 12;
 
 /**
  * This function builds the file name a downloaded backup is saved under, in the
- * `ninlil-backup-{yyyyMMdd-HHmmss}.ltbk` pattern `BackupController.Create` uses, but in browser
- * local time (the server uses UTC). The download does not read the server's
+ * `ninlil-backup-{yyyyMMdd-HHmmss}.ltbk` pattern `BackupController.Create` uses, in UTC like the
+ * server, so the name does not depend on the browser's time zone. The download does not read the server's
  * `Content-Disposition` header, so the name is built here.
  */
 export function buildBackupFileName(now: Date = new Date()): string {
   const pad = (value: number) => value.toString().padStart(2, '0');
 
-  const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-  const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const datePart = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  const timePart = `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
 
   return `ninlil-backup-${datePart}-${timePart}.ltbk`;
 }

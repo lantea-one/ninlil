@@ -192,6 +192,9 @@
                       [id]="'dhcp-tag-rule-option-tag-' + $index"
                       formControlName="optionTag"
                     />
+                    @if (optionTagError(row); as tagError) {
+                      <div class="field-error">{{ tagError }}</div>
+                    }
                   </div>
                 }
 
@@ -324,6 +327,9 @@
                           formControlName="value"
                           placeholder="Hex value"
                         />
+                        @if (isDhcpv6Rule()) {
+                          <div cFormText>At most 65,535 bytes (131,070 hex digits).</div>
+                        }
                       }
                     }
                   </div>

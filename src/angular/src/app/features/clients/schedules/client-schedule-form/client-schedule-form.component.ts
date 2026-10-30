@@ -19,6 +19,7 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 import { ClientSchedulesService, DnsScheduleDayOfWeekEnum } from '../../../../api-client';
+import { timeZoneOptions } from '../../../../shared/time-zone/time-zone.util';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 
@@ -70,9 +71,9 @@ const DAY_FULL_NAMES: Record<(typeof DAY_CONTROL_NAMES)[number], string> = {
  * so the form keeps seven checkboxes ({@link DAY_CONTROL_NAMES}), builds the string itself and
  * casts it when building the request.
  *
- * <p>The time zone select lists the browser's IANA zones (`Intl.supportedValuesOf('timeZone')`),
- * or a short fallback list in a browser without it. The backend checks the id with
- * `TimeZoneInfo.FindSystemTimeZoneById`.
+ * <p>The time zone select offers `UTC` first, then the browser's IANA zones, and the stored id of
+ * the schedule being edited when the browser does not list it (see {@link timeZoneOptions}). The
+ * backend checks the id with `TimeZoneInfo.FindSystemTimeZoneById`.
  */
 @Component({
   selector: 'app-client-schedule-form',
@@ -119,7 +120,7 @@ export class ClientScheduleFormComponent implements OnInit {
   readonly dayLabels = DAY_LABELS;
 
   /** The time zone ids the select offers; see the class comment. */
-  readonly timeZoneOptions = resolveTimeZoneOptions();
+  readonly timeZoneOptions = signal(timeZoneOptions());
 
   readonly form = this.formBuilder.group({
     sunday: [false],
@@ -226,6 +227,8 @@ export class ClientScheduleFormComponent implements OnInit {
 
       // This form always sends the separate day names, but a schedule created through the API
       // may hold "All" (DnsScheduleDayOfWeekEnum.All), which checks every box.
+      // A stored id the browser does not list (an older alias) gets its own option.
+      this.timeZoneOptions.set(timeZoneOptions(schedule.timeZoneId));
       this.form.patchValue({
         sunday: selectedDays.has('Sunday') || selectedDays.has('All'),
         monday: selectedDays.has('Monday') || selectedDays.has('All'),
@@ -246,46 +249,4 @@ export class ClientScheduleFormComponent implements OnInit {
       this.loading.set(false);
     }
   }
-}
-
-/** This constant is the fallback time zone list used when {@link Intl.supportedValuesOf} is unavailable. */
-const FALLBACK_TIME_ZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Sao_Paulo',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Europe/Moscow',
-  'Africa/Cairo',
-  'Africa/Johannesburg',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Singapore',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-];
-
-/**
- * This function returns the browser's IANA time zone list from `Intl.supportedValuesOf`, or
- * {@link FALLBACK_TIME_ZONES} when that is unavailable.
- */
-function resolveTimeZoneOptions(): string[] {
-  const intlWithSupportedValuesOf = Intl as unknown as {
-    supportedValuesOf?: (key: string) => string[];
-  };
-
-  try {
-    const zones = intlWithSupportedValuesOf.supportedValuesOf?.('timeZone');
-    if (zones && zones.length > 0) return zones;
-  } catch {
-    // Use the fallback list below.
-  }
-
-  return FALLBACK_TIME_ZONES;
 }

@@ -67,7 +67,7 @@
         <div class="field full-width">
           <label cLabel for="client-group-schedule-time-zone">Time zone</label>
           <select cSelect id="client-group-schedule-time-zone" formControlName="timeZoneId">
-            @for (zone of timeZoneOptions; track zone) {
+            @for (zone of timeZoneOptions(); track zone) {
               <option [value]="zone">{{ zone }}</option>
             }
           </select>

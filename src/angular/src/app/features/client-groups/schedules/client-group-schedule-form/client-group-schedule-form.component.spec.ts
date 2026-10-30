@@ -148,4 +148,44 @@ describe('ClientGroupScheduleFormComponent', () => {
 
     expect(schedulesApiSpy.apiClientGroupsGroupIdSchedulesPost).not.toHaveBeenCalled();
   });
+
+  it('offers UTC as the first time zone option, once', async () => {
+    const fixture = await createComponent(null);
+
+    const values = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        'select[formControlName="timeZoneId"] option',
+      ),
+    ).map((option) => option.value);
+
+    expect(values[0]).toBe('UTC');
+    expect(values.filter((value) => value === 'UTC').length).toBe(1);
+    expect(fixture.componentInstance.form.controls.timeZoneId.value).toBe('UTC');
+  });
+
+  it('keeps a stored time zone the browser does not list as a selectable option', async () => {
+    const fixture = await createComponent('schedule-1', () => {
+      schedulesApiSpy.apiClientGroupsGroupIdSchedulesIdGet.and.returnValue(
+        of({
+          id: 'schedule-1',
+          clientGroupId: 'group-1',
+          daysOfWeek: 'Monday',
+          startTime: '08:00:00',
+          endTime: '09:00:00',
+          timeZoneId: 'Old/Alias',
+          isDisabled: false,
+          comments: null,
+        }),
+      );
+    });
+
+    const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
+      'select[formControlName="timeZoneId"]',
+    )!;
+    const values = Array.from(select.options).map((option) => option.value);
+
+    expect(values).toContain('Old/Alias');
+    expect(select.value).toBe('Old/Alias');
+    expect(fixture.componentInstance.form.controls.timeZoneId.value).toBe('Old/Alias');
+  });
 });

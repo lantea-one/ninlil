@@ -19,6 +19,7 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 import { ClientGroupSchedulesService, DnsScheduleDayOfWeekEnum } from '../../../../api-client';
+import { timeZoneOptions } from '../../../../shared/time-zone/time-zone.util';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 
@@ -103,7 +104,7 @@ export class ClientGroupScheduleFormComponent implements OnInit {
   readonly dayControlNames = DAY_CONTROL_NAMES;
   readonly dayLabels = DAY_LABELS;
 
-  readonly timeZoneOptions = resolveTimeZoneOptions();
+  readonly timeZoneOptions = signal(timeZoneOptions());
 
   readonly form = this.formBuilder.group({
     sunday: [false],
@@ -209,6 +210,8 @@ export class ClientGroupScheduleFormComponent implements OnInit {
       );
 
       // A schedule created through the API may hold "All", which checks every box.
+      // A stored id the browser does not list (an older alias) gets its own option.
+      this.timeZoneOptions.set(timeZoneOptions(schedule.timeZoneId));
       this.form.patchValue({
         sunday: selectedDays.has('Sunday') || selectedDays.has('All'),
         monday: selectedDays.has('Monday') || selectedDays.has('All'),
@@ -229,43 +232,4 @@ export class ClientGroupScheduleFormComponent implements OnInit {
       this.loading.set(false);
     }
   }
-}
-
-/** This constant is the fallback time zone list used when {@link Intl.supportedValuesOf} is unavailable. */
-const FALLBACK_TIME_ZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Sao_Paulo',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Europe/Moscow',
-  'Africa/Cairo',
-  'Africa/Johannesburg',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Singapore',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-];
-
-/** This function returns the browser's IANA time zone list, or {@link FALLBACK_TIME_ZONES}. */
-function resolveTimeZoneOptions(): string[] {
-  const intlWithSupportedValuesOf = Intl as unknown as {
-    supportedValuesOf?: (key: string) => string[];
-  };
-
-  try {
-    const zones = intlWithSupportedValuesOf.supportedValuesOf?.('timeZone');
-    if (zones && zones.length > 0) return zones;
-  } catch {
-    // Use the fallback list below.
-  }
-
-  return FALLBACK_TIME_ZONES;
 }

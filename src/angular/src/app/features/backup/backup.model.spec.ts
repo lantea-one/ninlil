@@ -1,17 +1,26 @@
 import { buildBackupFileName, triggerBlobDownload } from './backup.model';
 
-/** These tests cover the backup file name pattern and its zero-padding. */
+/**
+ * These tests cover the backup file name pattern, its zero-padding and that it reads the UTC
+ * fields of the instant, so the result is the same in every runner time zone.
+ */
 describe('buildBackupFileName', () => {
   it('builds a name matching the backend own ninlil-backup-{yyyyMMdd-HHmmss}.ltbk convention', () => {
-    const fixedDate = new Date(2026, 7, 31, 9, 5, 3);
+    const fixedDate = new Date(Date.UTC(2026, 7, 31, 9, 5, 3));
 
     expect(buildBackupFileName(fixedDate)).toBe('ninlil-backup-20260831-090503.ltbk');
   });
 
   it('zero-pads every date/time component below 10', () => {
-    const fixedDate = new Date(2027, 0, 2, 3, 4, 5);
+    const fixedDate = new Date(Date.UTC(2027, 0, 2, 3, 4, 5));
 
     expect(buildBackupFileName(fixedDate)).toBe('ninlil-backup-20270102-030405.ltbk');
+  });
+
+  it('uses the UTC date and time for an instant that is on another day in local time', () => {
+    const fixedDate = new Date('2026-12-31T23:59:58Z');
+
+    expect(buildBackupFileName(fixedDate)).toBe('ninlil-backup-20261231-235958.ltbk');
   });
 });
 

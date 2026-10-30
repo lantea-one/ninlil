@@ -1,3 +1,4 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
@@ -312,6 +313,48 @@ describe('DhcpTagRuleFormComponent', () => {
       expect(tag.valid).toBeTrue();
       tag.setValue(2);
       expect(tag.hasError('reservedTag')).toBeTrue();
+    });
+
+    it('says why a custom tag is refused, per protocol, and shows the DHCPv6 value length hint on DHCPv6 custom rows only', async () => {
+      const fixture = await createWithScopes();
+      const component = fixture.componentInstance;
+      const element = fixture.nativeElement as HTMLElement;
+      // The error text depends on form control state, not on a signal, so a programmatic
+      // setValue needs the view marked for check (typing does it through the input event).
+      const refresh = (): void => {
+        fixture.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+        fixture.detectChanges();
+      };
+      component.addOptionRow();
+      const tag = component.options.at(0).controls.optionTag;
+      const errorText = (): string | null =>
+        element.querySelector('.option-row .field-error')?.textContent?.trim() ?? null;
+      const hasLengthHint = (): boolean =>
+        (element.querySelector('.option-row')?.textContent ?? '').includes('At most 65,535 bytes');
+
+      tag.setValue(53);
+      refresh();
+      expect(errorText()).toContain('Tag 53 is set by the server or the relay agent');
+      tag.setValue(255);
+      refresh();
+      expect(errorText()).toContain('between 1 and 254');
+      tag.setValue(66);
+      refresh();
+      expect(errorText()).toBeNull();
+      expect(hasLengthHint()).toBeFalse();
+
+      component.form.controls.scopeId.setValue('scope-6');
+      refresh();
+      tag.setValue(2);
+      refresh();
+      expect(errorText()).toContain('Code 2 (Server Identifier) is written by the server');
+      tag.setValue(256);
+      refresh();
+      expect(errorText()).toContain('between 1 and 255');
+      tag.setValue(200);
+      refresh();
+      expect(errorText()).toBeNull();
+      expect(hasLengthHint()).toBeTrue();
     });
 
     it('turns a typed row of the other protocol into a custom row that keeps its bytes', async () => {
