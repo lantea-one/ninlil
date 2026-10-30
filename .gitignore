@@ -857,8 +857,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# AI coding-assistant local state and per-developer instructions.
-.claude/
+# AI coding-assistant local state and per-developer instructions. The shared agent definitions in
+# .claude/agents/ are tracked so every contributor's assistant uses the same ones.
+.claude/*
+!.claude/agents/
 
 # The Arch Linux packages' default environment file (a template, no secrets).
 !src/archlinux/common/ninlil.env
