@@ -793,6 +793,17 @@ second run prints only `unchanged` lines. The new issue shows its labels in the 
    when the pull request merges. A hotfix pull request into `main` uses the same lines and closes
    its issue when it merges into `main`. Write `Refs #<n>` for an issue it only works on. The
    [pull request template](./.forgejo/PULL_REQUEST_TEMPLATE.md) has the line.
+
+   When a user sees the change, the pull request also adds one entry under `## Unreleased` in
+   [`CHANGELOG.md`](./CHANGELOG.md). The entry ends with the full link to the issue. For example,
+   for issue `<n>`:
+
+   ```text
+   - **Secondary zones retry and expire.** See [Secondary zones and transfers](./README.md#secondary-zones-and-transfers). ([#<n>](https://git.lantea.one/lantea-one/ninlil/issues/<n>))
+   ```
+
+   Check that it worked: `git diff develop... -- CHANGELOG.md` shows the new line under
+   `## Unreleased` and no change below it.
 6. Watch for two traps:
    - A closing keyword on an issue with open dependencies does nothing, silently. Merge the
      dependency's pull request first, or close the issue by hand once its dependencies are closed.
