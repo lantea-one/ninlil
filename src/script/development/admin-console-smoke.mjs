@@ -140,6 +140,15 @@ function startProcess(name, command, args, spawnOptions) {
   const child = spawn(command, args, { ...spawnOptions, detached: true });
   const entry = { name, child, exited: false };
   child.on('exit', () => { entry.exited = true; });
+  // A command that cannot start (ENOENT, EACCES) emits 'error' instead of 'exit'. Without a
+  // listener Node throws outside main()'s promise, exits 1 and leaves the host running, so stop
+  // everything here and exit 2 as the header promises.
+  child.on('error', async (error) => {
+    entry.exited = true;
+    console.error(`${name} could not start (${command}): ${error.message}`);
+    await stopAll();
+    process.exit(2);
+  });
   started.push(entry);
   return entry;
 }
