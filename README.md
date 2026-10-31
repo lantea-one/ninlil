@@ -67,12 +67,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   - [Cutting a release](#cutting-a-release)
   - [The pipeline](#the-pipeline)
 - [Contributing](#contributing)
-  - [Development](#development)
   - [Branches](#branches)
-  - [Conventions](#conventions)
   - [Backend: adding a new entity end-to-end](#backend-adding-a-new-entity-end-to-end)
   - [Frontend: adding a feature page](#frontend-adding-a-feature-page)
-  - [Project layout](#project-layout)
 - [License](#license)
 
 ## What's in the box
@@ -610,7 +607,7 @@ You need these tools. Check each with the command in the last column; the first 
 |---|---|---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) | Builds and runs everything under `src/dotnet/` | Version pinned by [`global.json`](./global.json) | `dotnet --version` |
 | [Node.js](https://nodejs.org/) + npm | Builds the Angular admin console | Only needed to build the admin console; the DNS/DHCP engines and REST API build without it | `node --version` |
-| A Java runtime (JRE/JDK) | `@openapitools/openapi-generator-cli` (used to regenerate the Angular app's typed API client from the backend's own OpenAPI spec) wraps the Java-based OpenAPI Generator tool | Only needed when the Angular build actually runs — see [Frontend](#frontend-srcangular) below | `java -version` |
+| A Java runtime (JRE/JDK) | `@openapitools/openapi-generator-cli` (used to regenerate the Angular app's typed API client from the backend's own OpenAPI spec) wraps the Java-based OpenAPI Generator tool | Only needed when the Angular build runs | `java -version` |
 
 You do **not** need PostgreSQL, MySQL, SQL Server, or MongoDB to get started — the default storage
 engine is SQLite, and the database file is created and migrated automatically on first run.
@@ -5794,7 +5791,7 @@ trial.
 ### Building the image yourself
 
 The image holds nothing but a prebuilt, self-contained `ninlil-linux-<arch>` executable, so
-build those first (see [Publishing the binaries](#publishing-the-binaries)), then point the
+build those first (see [Build the binaries and packages](./CONTRIBUTING.md#build-the-binaries-and-packages)), then point the
 [`Dockerfile`](./Dockerfile)'s `binaries` build context at them. It only copies files, so a
 two-architecture image needs no CPU emulation:
 
@@ -5848,19 +5845,8 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 
 ### Cutting a release
 
-1. Merge `develop` (or a `hotfix/*` branch) into `main` through a pull request.
-2. Create the release branch from `main`, named for the release's date and that day's increment:
-
-   ```bash
-   git switch main && git pull
-   git switch -c v2026.09.24.1
-   git push -u origin v2026.09.24.1
-   ```
-
-3. The pipeline verifies the branch points at a commit on `main`, runs every test, and publishes
-   the release. A release version is published once: pushing the same release branch again with a
-   different commit fails rather than overwriting it.
-4. Merge `main` back down into `develop`.
+Maintainers cut a release from a release branch named for the date. The steps are in
+[Cutting a release](./CONTRIBUTING.md#cutting-a-release).
 
 ### The pipeline
 
@@ -5936,244 +5922,36 @@ installs is pinned by SHA-256 in `docker/ci.Dockerfile` and bumped the same way.
 
 ## Contributing
 
-This section is for people who change Ninlil. It holds the development commands, the branch model,
-the conventions and two worked examples. [`AGENTS.md`](./AGENTS.md) is the guide for AI agents and
-a fast orientation for people.
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) takes a contributor from a clean machine to a merged pull
+request: prerequisites with checks, build, test, format and lint, the browser smoke harness, the
+common changes (REST API, entity, migration, setting, console page), branches, pull requests and
+releases. [`AGENTS.md`](./AGENTS.md) holds the rules for AI agents and a fast orientation for
+people, including the table of every folder in the repository.
 
-### Development
-
-#### Backend (`src/dotnet/`)
-
-```bash
-dotnet tool restore                      # one-time: restores dotnet-ef, csharpier, reportgenerator
-dotnet restore Ninlil.slnx
-dotnet build Ninlil.slnx -c Release      # should build with 0 warnings
-dotnet csharpier check .                 # formatting gate — CI enforces this
-dotnet test Ninlil.slnx -c Release       # the full xUnit test suite
-```
-
-Run `dotnet csharpier format .` before committing — CI runs `dotnet csharpier check .` and will
-fail on anything that doesn't already match.
-
-#### Frontend (`src/angular/`)
+The short version, from a clone with .NET 10 installed:
 
 ```bash
-cd src/angular
-npm install
-npm run build          # regenerates the typed API client from the committed OpenAPI snapshot, then builds
-npm run lint            # eslint
-npm run format:check    # prettier
-npm test                # Jasmine/Karma unit tests (needs Chromium/Chrome; set CHROME_BIN if it
-                         # is not found automatically, e.g. CHROME_BIN=/usr/bin/chromium)
+dotnet tool restore
+dotnet build Ninlil.slnx -p:NinlilSkipAngularBuild=true
+dotnet test src/dotnet/tests/Ninlil.Dns.Server.Core.Tests
+dotnet csharpier check .
 ```
 
-`npm run fetch:openapi` re-fetches `openapi/swagger.json` from a locally running instance of the
-backend (adjust the URL in `package.json` to match how you're running it) whenever the backend's
-own REST surface changes; the committed snapshot is what every `npm run build` actually codegens
-against (via the automatic `prebuild` step, `npm run generate:api`), so this is a deliberate,
-separate, manual step, not something that happens automatically. **Building this workspace
-requires a Java runtime** on top of Node/npm, since the generator wraps a Java-based tool.
-
-`OpenApiSnapshotTests` in `Ninlil.Web.Tests` fails whenever the snapshot no longer matches the
-controllers. To regenerate it without a running backend, run this from the repository root, then
-`npm run generate:api` here:
-
-```bash
-NINLIL_UPDATE_OPENAPI_SNAPSHOT=true dotnet test src/dotnet/tests/Ninlil.Web.Tests \
-  --filter FullyQualifiedName~OpenApiSnapshotTests
-```
-
-#### Standard verification loop
-
-Before considering a change done, both sides of the codebase have the same shape of gate:
-
-1. `dotnet build Ninlil.slnx` → fix errors → `dotnet csharpier format .` →
-   `dotnet test Ninlil.slnx` (must stay green) → re-run any relevant scratch smoke test for
-   anything touching runtime wiring (DI composition, migrations, event delivery, real
-   sockets/TLS/HTTP) — a passing build is not evidence anything works at runtime.
-2. For Angular: `npm run lint` / `npm run format:check` / `npm run build` / `npm test`, all clean.
-
-The pipeline runs exactly these checks, each in a throwaway container of the matching toolchain
-(see [The pipeline](#the-pipeline)). The pipeline also lints its own scripts and workflows and
-runs their self-tests; run the same check locally, before pushing a change under `.forgejo/`,
-`docker/` or `src/script/`, with `./.forgejo/scripts/in-container.sh lint ./.forgejo/scripts/lint.sh`.
-A few .NET tests start their own database
-containers through Testcontainers, so the .NET suite needs Docker running; they carry the
-`RequiresDocker` test category, which the pull-request build excludes (see
-[The pipeline](#the-pipeline)). Every test listener,
-Karma's included, takes a port the operating system reports as free, never a fixed or well-known
-one, and neither suite needs root, so both can run on a machine that already hosts DNS, DHCP,
-web, or database services.
-
-#### Publishing the binaries
-
-[`.forgejo/scripts/publish-binary.sh`](./.forgejo/scripts/publish-binary.sh) builds one
-self-contained, single-file executable — the same command the pipeline runs — with the admin
-console embedded, so build the console into `Ninlil.Web/wwwroot` first:
-
-```bash
-.forgejo/scripts/build-admin-console.sh               # npm ci + npm run build, then into wwwroot
-.forgejo/scripts/publish-binary.sh linux-amd64 dist   # or linux-arm64, macos-amd64, macos-arm64, windows-amd64
-```
-
-[`.forgejo/scripts/pack-packages.sh`](./.forgejo/scripts/pack-packages.sh) builds the NuGet
-packages the same way: `.forgejo/scripts/pack-packages.sh 'Ninlil.*' packages`.
-
-Each script uses whatever Node.js or .NET SDK is installed. To use the pipeline's own toolchains
-instead, needing nothing but Docker, prefix it with `.forgejo/scripts/in-container.sh node` or
-`.forgejo/scripts/in-container.sh dotnet`.
+The build must report `0 Warning(s)`.
 
 ### Branches
 
-| Branch | Created from | Pushed to directly | Merges into | Through |
-|---|---|---|---|---|
-| `feature/*` | `develop` | Yes | `develop` | Pull request |
-| `hotfix/*` | `main` | Yes | `main` | Pull request |
-| `develop` | — | No | `main` | Pull request |
-| `main` | — | No | `v<yyyy>.<mm>.<dd>.<increment>` | A release branch created from it |
-
-`main` is merged back down into `develop` after every release. Every push to any of these
-branches produces a pre-release build, so a feature branch can be tried out as a binary or image
-before it is merged.
-
-### Conventions
-
-Ninlil has a few binding conventions every contribution follows, regardless of which side of the
-codebase it touches:
-
-- **Clean-room licensing, no exceptions**: never read, fetch, or port source code from any
-  existing DNS/DHCP/ad-blocking project as an implementation guide, even for a feature whose
-  publicly documented behavior inspired the work. Every protocol detail (enum values, wire
-  formats, algorithm numbers) is sourced from IANA registries and the actual IETF RFC text. See
-  [`NOTICE.md`](./NOTICE.md) for the full policy.
-- **Every public member gets a doc comment** (`///` in C#, TSDoc in TypeScript) explaining *why*,
-  not just what, and a method/function body gets inline comments orienting a reader who drops into
-  the middle of it cold.
-- **Format before you're done**: `dotnet csharpier format .` for any C# change, `npm run format`
-  for any Angular change — both are hard CI gates.
-- Follow the [standard verification loop](#standard-verification-loop) above before calling
-  anything finished.
+The branch model (`feature/*`, `hotfix/*`, `develop`, `main` and the release branches) is in
+[Commit, branch and pull request](./CONTRIBUTING.md#commit-branch-and-pull-request).
 
 ### Backend: adding a new entity end-to-end
 
-A recent, complete, real worked example to read start-to-finish is the static IP/CIDR-to-client
-identity pinning feature — a small, self-contained, top-level entity with no owning parent, which
-makes it a clean template for the whole pattern:
-
-- `src/dotnet/src/Ninlil.Dns.Data.Abstractions/Entity/DnsClientStaticAddressMappingEntity.cs` —
-  the storage-agnostic entity.
-- `src/dotnet/src/Ninlil.Dns.Data.Abstractions/Repository/IDnsClientStaticAddressMappingRepository.cs`
-  — the repository interface, extending the shared `IRepository<TEntity>` with real, pushed-down
-  `SearchAsync`/`CountAsync` pagination (translated `ORDER BY`/`OFFSET`/`LIMIT`, never an
-  in-memory `Skip`/`Take` over a fully materialized list).
-- `src/dotnet/src/Ninlil.Dns.Data.EntityFrameworkCore/Configuration/DnsClientStaticAddressMappingConfiguration.cs`
-  and `.../Repository/DnsClientStaticAddressMappingRepository.cs` — the EF Core entity
-  configuration and repository implementation, plus one migration per relational provider (see
-  below).
-- `src/dotnet/src/Ninlil.Dns.Data.MongoDb/Repository/DnsClientStaticAddressMappingMongoRepository.cs`
-  — the MongoDB implementation; schemaless, so this is typically just a class-map registration
-  plus the same `SearchAsync`/`CountAsync` shape, no migration needed.
-- `src/dotnet/src/Ninlil.Web/Controllers/DnsClientStaticAddressMappingsController.cs` — the REST
-  controller, along with `src/dotnet/src/Ninlil.Web/Models/DnsClientStaticAddressMappingModels.cs`
-  (request/response shapes) and `src/dotnet/src/Ninlil.Web/Examples/ClientStaticAddressMappings/`
-  (Swashbuckle example providers for Swagger).
-- `src/dotnet/tests/Ninlil.Web.Tests/ClientStaticAddressMappingCrudTests.cs` — real
-  `WebApplicationFactory<Program>` integration tests covering the full CRUD/pagination surface.
-
-The general shape, in order:
-
-1. **Entity** in the relevant `*.Data.Abstractions` project, inheriting `EntityBase` or
-   `AuditableEntityBase`, with a doc comment on the class and every property.
-2. **Repository interface** in the same project, extending `IRepository<TEntity>` with whatever
-   real query shapes the feature needs — a `SearchAsync`/`CountAsync` pair pushed down to the
-   database is the established convention for anything that could return more than a handful of
-   rows — never a full `ListAsync()` sliced with `Skip`/`Take` in memory.
-3. **EF Core implementation**: an `IEntityTypeConfiguration<TEntity>` class under
-   `Ninlil.Dns.Data.EntityFrameworkCore/Configuration/`, a repository implementation under
-   `.../Repository/`, and a migration generated **once per relational provider** — from inside
-   each provider's own migrations project (each one carries its own
-   `IDesignTimeDbContextFactory<NinlilDnsContext>`, so no `--startup-project` flag is needed):
-
-   ```bash
-   cd src/dotnet/src/Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite
-   dotnet ef migrations add AddYourNewEntity
-
-   cd ../Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql
-   dotnet ef migrations add AddYourNewEntity
-
-   cd ../Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql
-   dotnet ef migrations add AddYourNewEntity
-
-   cd ../Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer
-   dotnet ef migrations add AddYourNewEntity
-
-   cd ../../../..
-   src/script/development/file-scoped-namespaces.sh src/dotnet/src/Ninlil.Dns.Data.EntityFrameworkCore.Migrations.*/Migrations
-   ```
-
-   `dotnet ef` writes block-scoped namespaces (`namespace X { }`); the last command converts the
-   new files to the file-scoped form (`namespace X;`) the code base uses, which the lint job checks.
-
-   All four providers share one model (`NinlilDnsContext`, covering DNS *and* DHCP entities
-   alike), but **each provider's migration history must live in its own separate assembly** —
-   putting two providers' migrations in one assembly is a real, `Migrate()`-time-only runtime bug
-   that neither `dotnet build` nor `migrations add` itself will catch.
-4. **MongoDB implementation**: a repository under `Ninlil.Dns.Data.MongoDb/Repository/` against
-   the shared `NinlilDnsMongoContext` — no migration step, since a schemaless store just needs
-   `AutoMap()` to pick up the new properties (skip an explicit `MapIdProperty` on `Id`, which
-   throws; `AutoMap()` already handles it). Verify against a real `mongo:7` container via a
-   throwaway scratchpad console app, not just "matches the EF Core shape on paper."
-5. **REST controller** under `Ninlil.Web/Controllers/`, with request/response model classes and
-   Swashbuckle example providers, using the same `SearchAsync`/`CountAsync` pagination pushed all
-   the way through to the HTTP layer.
-6. **DI wiring**: one line in the owning project's own `ServiceCollectionXyzExtension`, following
-   the existing `Configure<TOptions>`/repository-registration pattern already established there.
-7. **xUnit tests**: repository tests in the matching `*.Tests` project, and a
-   `WebApplicationFactory<Program>`-based integration test in `Ninlil.Web.Tests` covering full
-   CRUD and pagination — mirror an existing test class's shape rather than inventing a new one.
+The steps, with the files of a complete example, are in
+[Add an entity end to end](./CONTRIBUTING.md#add-an-entity-end-to-end).
 
 ### Frontend: adding a feature page
 
-The matching Angular feature for the same example lives at
-`src/angular/src/app/features/client-static-address-mappings/`, with a list component
-(`static-address-mapping-list/`) and a create/edit form component
-(`static-address-mapping-form/`) as siblings under one feature folder — the established
-"list + form, each its own subfolder" shape for a CRUD-style feature page.
-
-The general shape:
-
-1. **Regenerate the typed API client** against your new backend endpoint: run the backend
-   locally, then from `src/angular/`, `npm run fetch:openapi` (re-fetches the committed
-   `openapi/swagger.json` snapshot) followed by `npm run generate:api` (regenerates
-   `src/app/api-client/`, which is 100% generated and never hand-edited) — or just `npm run build`,
-   since `generate:api` also runs automatically as a `prebuild` step against whatever snapshot is
-   already committed.
-2. **Feature folder** under `src/app/features/<feature-name>/`, standalone components only (no
-   `NgModule`), signals-based state, zoneless-compatible (no dependency on `zone.js`). Kebab-case
-   file names with a type suffix (`*.component.ts`, `*.service.ts`, `*.guard.ts`), one exported
-   artifact per file, no hand-written barrel `index.ts`.
-3. **CoreUI components** for the actual UI — this app's own CoreUI-based visual language, themed
-   via the shared token/palette system in `src/styles/`, never a copy of another product's visual
-   design (see the clean-room note above — this extends even to a narrow, function-only exception
-   for *organizational* UI/UX research; visual design is always independently built).
-4. **Routing/nav wiring**: a route entry in the relevant routing module and a nav item in the
-   admin shell's own navigation config, following an existing sibling feature's entry as a
-   template.
-5. **TSDoc** on every exported service/guard/component, matching the C# XML-doc convention's depth
-   — explain *why*, not just what.
-6. **Tests**: a Jasmine/Karma `.spec.ts` per component, following an existing spec's shape (TestBed
-   setup, mocked API client, signal-based state assertions).
-7. Run `npm run lint` / `npm run format:check` / `npm run build` / `npm test` before considering
-   the page done.
-
-### Project layout
-
-[`AGENTS.md`](./AGENTS.md#repository-layout) holds the table of every folder and root file, with the
-role of each .NET project family. The files you meet first in the repository root are this
-`README.md`, [`ENVIRONMENT.md`](./ENVIRONMENT.md), [`NOTICE.md`](./NOTICE.md), [`LICENSE`](./LICENSE),
-`AGENTS.md`, the solution file `Ninlil.slnx`, the [`Dockerfile`](./Dockerfile) and the example
-[`docker-compose.yml`](./docker-compose.yml). The reasoning behind a design choice lives with the
-code: every class and public member carries a doc comment explaining why it is shaped the way it is.
+The steps are in [Add a console page](./CONTRIBUTING.md#add-a-console-page).
 
 ## License
 
