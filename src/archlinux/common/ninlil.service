@@ -30,10 +30,10 @@ RestartSec=5
 # Exit code 78 means Ninlil refused to start on purpose: the database was upgraded by a newer
 # version, or a migration failed. Restarting cannot fix either, so systemd must not retry.
 RestartPreventExitStatus=78
-# Ports below 1024 (53, 67, 80, 443, 547) without root, and raw sockets and interface access for
-# DHCP and Router Advertisement.
-AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
+# Ports below 1024 (53, 67, 69, 80, 443, 547) without root, and a raw socket for
+# DHCP and Router Advertisement (CAP_NET_RAW). Nothing needs CAP_NET_ADMIN.
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

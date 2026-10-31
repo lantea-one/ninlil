@@ -54,5 +54,5 @@ sudo systemctl enable --now ninlil
 journalctl -u ninlil              # the bootstrap administrator's password is printed once here
 ```
 
-The unit grants `CAP_NET_BIND_SERVICE`, `CAP_NET_RAW`, and `CAP_NET_ADMIN`, so the unprivileged
+The unit grants only `CAP_NET_BIND_SERVICE` and `CAP_NET_RAW`, so the unprivileged
 user can serve DNS on port 53, the admin console on 80/443, and DHCP/Router Advertisement.
