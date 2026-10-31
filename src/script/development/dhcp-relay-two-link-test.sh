@@ -83,6 +83,7 @@ executable_directory="$(cd "$(dirname "${executable}")" && pwd)"
 executable_name="$(basename "${executable}")"
 pids=()
 
+# shellcheck disable=SC2329 # The EXIT trap below runs it; shellcheck does not follow traps.
 cleanup() {
     for pid in "${pids[@]}"; do
         kill "${pid}" 2> /dev/null || true
@@ -224,9 +225,11 @@ check() {
         failed=1
     fi
 }
+# shellcheck disable=SC2329 # Called through check, which runs its arguments as a command.
 client_has_address() {
     ip -n nl-cli addr show dev nlcr0 | grep -Eq "$1"
 }
+# shellcheck disable=SC2329 # Called through check, which runs its arguments as a command.
 capture_has() {
     grep -Eq "$1" "${work}/client-side.txt"
 }
