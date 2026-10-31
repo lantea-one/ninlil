@@ -11,7 +11,10 @@
 #     readers; the digest decides what is pulled. This script re-resolves the tag and rewrites
 #     the digest. It uses the multi-architecture index digest (never a single-architecture
 #     manifest), because the pipeline builds for amd64 and arm64 from the same line, and it fails
-#     when a tag does not resolve to an index.
+#     when a tag does not resolve to an index. One exception: an image that resolves to a single
+#     manifest and that appears only in files the repository runs on amd64 alone (the list
+#     amd64_only_files below; today the SQL Server test host, whose image exists for amd64 only)
+#     is pinned by that manifest's digest.
 #   - Workflow steps use `actions/checkout@<40-hex commit> # vX.Y.Z`. This script keeps the major
 #     version in the comment and moves to the newest vX.Y.Z tag of that major, pinned by the
 #     commit the tag points at (an annotated tag is peeled to its commit).
@@ -74,6 +77,27 @@ image_files=(
 )
 workflow_files=(.forgejo/workflows/*.yml)
 
+# Files whose images run on amd64 only. An image pinned in nothing but these files may resolve to
+# a single-architecture manifest. The SQL Server image is published for amd64 only.
+amd64_only_files=(
+    src/dotnet/tests/Ninlil.Dns.Data.EngineHosts/SqlServerEngineHost.cs
+)
+
+# Succeeds when every image file that holds the pin $1 is in amd64_only_files (and one does).
+pin_is_amd64_only() {
+    local file only found=false
+    for file in "${image_files[@]}"; do
+        grep -qF -- "$1" "${file}" || continue
+        found=true
+        only=false
+        for amd64_file in "${amd64_only_files[@]}"; do
+            [[ "${file}" == "${amd64_file}" ]] && only=true
+        done
+        "${only}" || return 1
+    done
+    "${found}"
+}
+
 # Each edit is "<file>\t<old text>\t<new text>"; all lookups finish before any file is touched.
 edits=()
 changed=0
@@ -82,13 +106,14 @@ deb_download="$(mktemp)"
 lock_candidate='docker/native-libraries.lock.new'
 trap 'rm -f "${deb_download}" "${root}/${lock_candidate}"' EXIT
 
-# Prints the multi-architecture index digest of an image reference (name:tag), or fails.
+# Prints the multi-architecture index digest of an image reference (name:tag), or fails. $2 is
+# "true" when the pin is used on amd64 only, which also accepts a single-architecture manifest.
 resolve_image_digest() {
     local manifest media_type digest
     manifest="$("${docker_command}" buildx imagetools inspect "$1" --format '{{json .Manifest}}')"
     media_type="$(jq -r '.mediaType' <<< "${manifest}")"
     digest="$(jq -r '.digest' <<< "${manifest}")"
-    if [[ "${media_type}" != *index* && "${media_type}" != *manifest.list* ]]; then
+    if [[ "${media_type}" != *index* && "${media_type}" != *manifest.list* && "${2:-false}" != true ]]; then
         echo "$1 resolves to ${media_type}, not a multi-architecture index." >&2
         return 1
     fi
@@ -128,7 +153,9 @@ mapfile -t image_pins < <(grep -ohE '[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9._-]+
 for pin in "${image_pins[@]}"; do
     reference="${pin%@*}"
     old_digest="${pin#*@}"
-    new_digest="$(resolve_image_digest "${reference}")"
+    amd64_only=false
+    if pin_is_amd64_only "${pin}"; then amd64_only=true; fi
+    new_digest="$(resolve_image_digest "${reference}" "${amd64_only}")"
     if [[ "${new_digest}" == "${old_digest}" ]]; then
         echo "image     ${reference}: unchanged (${old_digest})"
         continue

@@ -169,6 +169,23 @@ run_bump
 assert_eq 'bump: an unresolvable image exits 1' 1 "${status}"
 assert_eq 'bump: a failed lookup edits no file' "${before}" "$(checksum)"
 
+# --- A single-architecture manifest is accepted for an image only the amd64 hosts use -------------------
+write_tree
+sql_file='src/dotnet/tests/Ninlil.Dns.Data.EngineHosts/SqlServerEngineHost.cs'
+printf 'const string Image = "example.test/sql:1@%s";\n' "${old_b}" > "${tree}/${sql_file}"
+set_image example.test/runtime:1.0 "${old_a}" "${index}"
+set_image example.test/fetch:2 "${old_b}" "${index}"
+set_image example.test/sql:1 "${new_b}" 'application/vnd.docker.distribution.manifest.v2+json'
+run_bump
+assert_eq 'bump: an amd64-only single manifest exits 0' 0 "${status}"
+assert_contains 'bump: the amd64-only image moves to the manifest digest' "${output}" "example.test/sql:1: ${old_b} -> ${new_b}"
+assert_contains 'bump: the amd64-only file carries the new digest' "$(cat "${tree}/${sql_file}")" "example.test/sql:1@${new_b}"
+# The same single manifest in a file the arm64 build also uses stays refused.
+printf 'ARG X=example.test/sql:1@%s\n' "${old_b}" >> "${tree}/Dockerfile"
+run_bump
+assert_eq 'bump: a single manifest also used elsewhere exits 1' 1 "${status}"
+assert_contains 'bump: that refusal names the media type' "${output}" 'not a multi-architecture index'
+
 # --- The native-libraries lock and the Microsoft repository sum ------------------------------------
 write_tree
 set_image example.test/runtime:1.0 "${old_a}" "${index}"
