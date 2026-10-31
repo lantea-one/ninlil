@@ -4123,6 +4123,10 @@ Each command below runs on node A unless it says otherwise.
   [Security](#security)). A peer that was unreachable at that moment keeps the old state until the
   next save of that user or role, so its access tokens for the account keep working there until
   they expire (15 minutes by default).
+- **A password or two-factor change reaches every node.** The changed security stamp travels with the
+  user, so each peer rejects the account's older access tokens on its next request. Refresh tokens
+  belong to the node that issued them: a peer that receives a changed stamp also revokes the
+  account's refresh tokens, so a session opened on that node cannot refresh past the change.
 - **A user name is checked on the peers.** Creating a user asks every healthy peer whether the name
   exists and returns `409` if one has it. A peer that cannot be reached is skipped.
 - **A change on another node reaches DNS answers after a delay.** On the node where you make a
@@ -4330,7 +4334,8 @@ only while no account exists, and never deletes it.
 **Switch on two-factor sign-in** for every administrator. Open the account menu in the top-right
 corner of the console, choose **Security**, and follow the steps for an authenticator app or for
 e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes need
-[SMTP](./ENVIRONMENT.md#identity-authentication--sso) settings.
+[SMTP](./ENVIRONMENT.md#identity-authentication--sso) settings. Confirming the authenticator signs
+you out of every session, yours included; sign in again with a code from the app.
 
 **Limit who reaches the console.**
 
@@ -4449,6 +4454,21 @@ e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes nee
   refresh. API tokens (`Authorization: ApiToken <token>`) use the owner's current permissions at
   each request, and stop working when revoked or when the owner is disabled. The lifetimes are
   [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) settings.
+- **A password change or a two-factor change signs out every session of the account.** Each
+  access token carries a digest of the account's security stamp, and Ninlil compares it at every
+  request. These changes replace the stamp and revoke every refresh token of the account:
+  changing your password, an administrator resetting it
+  (`POST /api/users/<id>/reset-password`), setting a new password with a reset link (Forgot
+  password), confirming an authenticator, turning two-factor off, and generating new recovery codes.
+  Every access token issued before the change then answers `401` on its next request, and no refresh
+  token works, so a stolen session is cut off. The session that made the change is cut off too: the
+  console signs you out and the sign-in page says why, and an API client signs in again. Starting an
+  authenticator setup does not end the session, because the confirmation that follows needs it;
+  the sessions end when you confirm the new key. A token without a stamp claim gets `401`; the console
+  then asks for a new one with its refresh cookie. API
+  tokens do not carry a stamp and keep working after these changes: they belong to the account, not
+  to a password, and you revoke one by name (see [REST API](#rest-api)). Using a recovery code at
+  sign-in does not end other sessions.
 - **The JWT signing key proves a token is Ninlil's.** Whoever holds `data/jwt-signing-key.txt` can
   make a token for any enabled account, the bootstrap administrator's included, and the token then
   gets that account's permissions. Treat the file like a root password.
@@ -4500,6 +4520,8 @@ e-mailed codes. Ninlil also issues single-use recovery codes. E-mailed codes nee
 - *Every sign-in answers `429`.* The address reached the sign-in limit. Wait for the seconds in the
   `Retry-After` header (the window is 5 minutes by default) or restart Ninlil. Behind a reverse proxy without the
   Reverse proxy settings, all users share one address, so one user's mistakes block the others.
+- *A token that worked answers `401` after a password or two-factor change.* That is intended: the
+  change ended every session of the account. Sign in again.
 - *Ninlil does not start and exits with code 78, and the log says `The JWT signing key is <n> bytes
   long`.* The JWT key (as UTF-8) is shorter than 16 bytes. Use at least 32 bytes
   (`openssl rand -base64 48`) in [`NINLIL_JWT_SIGNING_KEY`](./ENVIRONMENT.md#identity-authentication--sso),
@@ -5186,6 +5208,10 @@ backup when you want one.
   another key, an access token from before is refused with `401` until the client uses its refresh
   token (`POST /api/auth/refresh`) or signs in again. The console does that for you. API
   tokens keep working.
+- **A restore applies to issued access tokens at once.** Ninlil keeps each account's state in
+  memory for 15 seconds (see [Security](#security)) and clears it when a restore ends, so a token
+  from the same key is checked against the restored accounts, roles and security stamps on its next
+  request. A token for an account the backup does not hold gets `401`.
 - **An unencrypted backup is readable by anyone who gets the file.** It holds the key ring and
   the certificate's private key in plain text. The console warns while the passphrase is empty.
 - **The query log and other history stay as they are.** A backup never captures them, and a
@@ -5424,6 +5450,11 @@ curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/users -H
   the secret. Copy it before you close the dialog; Ninlil cannot show it again.
 - **The console renews its session without you.** When a request gets `401`, it asks for a fresh
   access token once and repeats the request. If that fails it goes to the sign-in page.
+- **A password or two-factor change signs you out.** After you change your password on **Profile**,
+  or confirm an authenticator, turn two-factor off or generate recovery codes on **Security**, the
+  console signs you out and the sign-in page says what changed. Close the recovery-code dialog
+  after you copy the codes; the sign-out follows. Sign in again with the new password or with a
+  code. The other sessions of the account end too (see [Security](#security)).
 - **The live feed.** The dashboard receives events through SignalR at `/hubs/events`. An account
   sees an event type only when it holds the permission that reads the same data in the REST API
   (`querylog:read` for queries). The permission is read when the connection opens, so a change
