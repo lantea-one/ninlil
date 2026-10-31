@@ -19,6 +19,7 @@ time; later, jump to the part you need.
   - [Add a setting](#add-a-setting)
   - [Add a console page](#add-a-console-page)
 - [Build the binaries and packages](#build-the-binaries-and-packages)
+- [Report a bug or propose a change](#report-a-bug-or-propose-a-change)
 - [Commit, branch and pull request](#commit-branch-and-pull-request)
 - [Cutting a release](#cutting-a-release)
 - [Reporting a vulnerability](#reporting-a-vulnerability)
@@ -685,6 +686,57 @@ The scripts use the Node.js and .NET SDK you have installed. To use the pipeline
 which need only Docker, prefix a script with `.forgejo/scripts/in-container.sh node` or
 `.forgejo/scripts/in-container.sh dotnet`.
 
+## Report a bug or propose a change
+
+Report a vulnerability by e-mail, never here: see
+[Reporting a vulnerability](#reporting-a-vulnerability).
+Every other problem and every proposal goes to the
+[issue tracker](https://git.lantea.one/lantea-one/ninlil/issues).
+
+#### Steps
+
+1. Open [a new issue](https://git.lantea.one/lantea-one/ninlil/issues/new/choose) and pick a
+   template from [`.forgejo/ISSUE_TEMPLATE/`](./.forgejo/ISSUE_TEMPLATE/). Blank issues are off.
+   - **Bug**: Ninlil does something wrong. Give the version, the steps and what you saw.
+   - **Feature**: a behaviour you want.
+   - **Work package**: a unit of work a maintainer or an agent can pick up, with acceptance checks.
+2. Search the open and closed issues first, so you do not file a duplicate.
+3. A maintainer labels the issue. Labels have a scope, the text before the `/`. A scope marked
+   exclusive allows one label per issue. The set is in
+   [`.forgejo/labels.json`](./.forgejo/labels.json) and on the tracker's
+   [label page](https://git.lantea.one/lantea-one/ninlil/labels).
+
+   | Scope | Meaning | Examples |
+   |---|---|---|
+   | `kind/` | What sort of work | `kind/bug`, `kind/feature`, `kind/epic`, `kind/docs` |
+   | `area/` | Which part of Ninlil | `area/dns`, `area/dhcp`, `area/console`, `area/storage` |
+   | `priority/` | How soon | `priority/high`, `priority/medium`, `priority/low` |
+   | `status/` | Where the issue stands | `status/needs-design`, `status/ready`, `status/in-progress`, `status/blocked` |
+   | `agent/` | Which [agent role](./AGENTS.md#code-conventions) takes it | `agent/coder`, `agent/docs-writer` |
+   | `resolution/` | Why it closed without a change | `resolution/duplicate`, `resolution/wontfix`, `resolution/not-a-bug` |
+
+4. A milestone is a theme, not a release. A release can ship issues from several milestones. A
+   maintainer closes a milestone by hand when its last issue ships, and its description names that
+   release.
+5. An issue lists what it depends on (`Depends on: #n`). A dependency also exists in Forgejo's
+   dependency list of the issue. An issue with open dependencies cannot be closed by a closing
+   keyword (see [Commit, branch and pull request](#commit-branch-and-pull-request)).
+
+For maintainers, `.forgejo/scripts/sync-labels.sh` creates or updates the labels from
+`.forgejo/labels.json`. It never deletes a label. Read the token from a file, never type it on the
+command line:
+
+```bash
+NINLIL_CI_TOKEN="$(cat <path-to-token-file>)" FORGEJO_API=https://git.lantea.one/api/v1 .forgejo/scripts/sync-labels.sh lantea-one/ninlil
+```
+
+`<path-to-token-file>` holds a Forgejo access token that may write labels in the repository.
+
+#### Check that it worked
+
+The script prints one line per label, `created <name>`, `updated <name>` or `unchanged <name>`. A
+second run prints only `unchanged` lines. The new issue shows its labels in the tracker.
+
 ## Commit, branch and pull request
 
 #### Steps
@@ -700,8 +752,11 @@ which need only Docker, prefix a script with `.forgejo/scripts/in-container.sh n
 
    ```bash
    git switch develop && git pull
-   git switch -c feature/<short-name>
+   git switch -c feature/<issue>-<short-name>
    ```
+
+   `<issue>` is the number of the issue the branch works on; for a sub-phase it is the epic. A
+   hotfix branch is `hotfix/<issue>-<short-name>`, created from `main`.
 
 2. Commit in small logical steps. The message is one plain-English sentence in the present tense
    that describes the behaviour change as a user or caller sees it. It has no prefix (`feat:`,
@@ -711,15 +766,43 @@ which need only Docker, prefix a script with `.forgejo/scripts/in-container.sh n
 
    Keep the backend change, the snapshot with the client, and the console change in separate
    commits.
+
+   The subject carries no issue number. The body has a line above the trailers: `Closes #<n>` in
+   the commit that finishes issue `<n>`, `Refs #<n>` in every other commit about it:
+
+   ```text
+   The README explains how a secondary zone retries and expires, step by step
+
+   Closes #<n>
+
+   Co-Authored-By: <name> <e-mail>
+   ```
+
+   The commit keyword acts only when the commit reaches `main`, so it is a backstop.
 3. Run the checks from [Format and lint](#format-and-lint) and the
    [`AGENTS.md` checklist](./AGENTS.md#before-you-finish).
 4. Push the branch and open a pull request into `develop` (a hotfix goes into `main`):
 
    ```bash
-   git push -u origin feature/<short-name>
+   git push -u origin feature/<issue>-<short-name>
    ```
 
    Never commit secrets. Contributors without write access push to their fork.
+5. Name the issue in the pull request description. Issues close when their work reaches
+   `develop`: write `Closes #<n>` for the issue the pull request finishes, and Forgejo closes it
+   when the pull request merges. A hotfix pull request into `main` uses the same lines and closes
+   its issue when it merges into `main`. Write `Refs #<n>` for an issue it only works on. The
+   [pull request template](./.forgejo/PULL_REQUEST_TEMPLATE.md) has the line.
+6. Watch for two traps:
+   - A closing keyword on an issue with open dependencies does nothing, silently. Merge the
+     dependency's pull request first, or close the issue by hand once its dependencies are closed.
+   - A commit-body keyword on a commit that sits only on `develop`, a release or a hotfix branch
+     closes nothing until it reaches `main`. The pull request description is what closes.
+
+#### Check that it worked
+
+Open the merged pull request on the tracker. The issue it finished shows as closed. If it is
+still open, look at its dependencies and close it by hand.
 
 #### What the pipeline runs
 
@@ -758,6 +841,9 @@ For maintainers. The version is generated by the pipeline from the release branc
    publishes the release. A release version is published once: pushing the same release branch
    again with a different commit fails rather than overwriting it.
 5. Merge `main` back down into `develop`.
+6. Check that every issue the release ships is closed. Close by hand any issue a dependency
+   blocked. Close each milestone the release finishes, and put the release's name in its
+   description.
 
 ## Reporting a vulnerability
 

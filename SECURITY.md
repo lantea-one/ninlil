@@ -7,7 +7,8 @@ PGP key, so the message is not encrypted end to end. Leave secrets such as worki
 out of it.
 
 Do not report a vulnerability in a public issue, a pull request or a discussion. Those are visible
-to everyone before a fix exists.
+to everyone before a fix exists. Every other problem goes to the public
+[issue tracker](https://git.lantea.one/lantea-one/ninlil/issues/new/choose).
 
 ## Supported versions
 
