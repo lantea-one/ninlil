@@ -98,7 +98,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdPut(requestParameters: ApiZonesZoneIdRecordsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds a record to the zone. A zone\&#39;s first record must be its SOA, since without it there is no serial to advance; that first record bootstraps the zone through &#x60;IZoneUpdateService.BootstrapZoneAsync&#x60;, and later records go through &#x60;IZoneUpdateService.ApplyChangesAsync&#x60;. Returns 400 when the first record is not an SOA or the data does not fit the record type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and 409 for a second SOA. Requires &#x60;zones:write&#x60;.
+     * This action adds a record to the zone. A zone\&#39;s first record must be its SOA, since without it there is no serial to advance; that first record bootstraps the zone through &#x60;IZoneUpdateService.BootstrapZoneAsync&#x60;, and later records go through &#x60;IZoneUpdateService.ApplyChangesAsync&#x60;. Returns 400 when the first record is not an SOA, is an SOA that is not at the zone\&#39;s own name, or the data does not fit the record type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and 409 for a second SOA or a zone that has records but no SOA at its apex. The owner name \&quot;@\&quot; means the zone\&#39;s own name (RFC 1035 §5.1) and is stored as that name. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones/{zoneId}/records
 * @param requestParameters

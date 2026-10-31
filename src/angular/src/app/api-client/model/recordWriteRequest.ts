@@ -16,7 +16,7 @@ import { DnsClassEnum } from './dnsClassEnum';
  */
 export interface RecordWriteRequest { 
     /**
-     * The record\'s owner name.
+     * The record\'s owner name. \"@\" means the zone\'s own name (RFC 1035 §5.1) and is stored as that name; any other name is stored as given.
      */
     name?: string | null;
     type?: DnsResourceRecordTypeEnum;

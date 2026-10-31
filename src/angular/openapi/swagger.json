@@ -14617,7 +14617,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\n`IZoneUpdateService.BootstrapZoneAsync`, and later records go through\n`IZoneUpdateService.ApplyChangesAsync`. Returns 400 when the first record\nis not an SOA or the data does not fit the record type (an APL item must be in canonical\nform, RFC 3123 §4), 404 for an unknown zone, and 409\nfor a second SOA. Requires `zones:write`.",
+        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\n`IZoneUpdateService.BootstrapZoneAsync`, and later records go through\n`IZoneUpdateService.ApplyChangesAsync`. Returns 400 when the first record\nis not an SOA, is an SOA that is not at the zone's own name, or the data does not fit the\nrecord type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown\nzone, and 409 for a second SOA or a zone that has records but no SOA at its apex. The\nowner name \"@\" means the zone's own name (RFC 1035 §5.1) and is stored as that name.\nRequires `zones:write`.",
         "operationId": "apiZonesZoneIdRecordsPost",
         "parameters": [
           {
@@ -29613,7 +29613,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The record's owner name.",
+            "description": "The record's owner name. \"@\" means the zone's own name (RFC 1035 §5.1) and is stored as that\nname; any other name is stored as given.",
             "nullable": true
           },
           "type": {
