@@ -68,10 +68,14 @@ public class TransportSettingsHotReloadTests
 
     /// <summary>
     ///     This method sends a single UDP packet at <c>127.0.0.1:<paramref name="port" /></c> and
-    ///     waits briefly for a reply, returning <see langword="null" /> instead of throwing when
-    ///     none arrives in time.
+    ///     waits up to <paramref name="wait" /> (two seconds when omitted) for a reply, returning
+    ///     <see langword="null" /> instead of throwing when none arrives in time.
     /// </summary>
-    private static async Task<byte[]> TrySendAndReceiveAsync(byte[] requestBytes, int port)
+    private static async Task<byte[]> TrySendAndReceiveAsync(
+        byte[] requestBytes,
+        int port,
+        TimeSpan? wait = null
+    )
     {
         try
         {
@@ -79,7 +83,7 @@ public class TransportSettingsHotReloadTests
             client.Connect(IPAddress.Loopback, port);
             await client.SendAsync(requestBytes);
 
-            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(2));
+            using CancellationTokenSource timeout = new(wait ?? TimeSpan.FromSeconds(2));
             UdpReceiveResult result = await client.ReceiveAsync(timeout.Token);
             return result.Buffer;
         }
@@ -221,7 +225,14 @@ public class TransportSettingsHotReloadTests
 
             try
             {
-                byte[] response = await TrySendAndReceiveAsync(discoveryQuery, port);
+                // The first answer builds the signed certificate and warms code paths, which
+                // takes longer than the short wait the "no answer" checks use when the machine
+                // is busy with other test projects.
+                byte[] response = await TrySendAndReceiveAsync(
+                    discoveryQuery,
+                    port,
+                    TimeSpan.FromSeconds(30)
+                );
                 Assert.NotNull(response);
 
                 DnsMessage responseMessage = DnsMessageReader.Read(response);
