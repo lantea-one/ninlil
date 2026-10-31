@@ -3482,17 +3482,18 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   other device gets that address. Ninlil does not check the reserved address against the scope's
   range, so the address may lie outside the pool (a fixed address often does). It does check the IP
   version: the address of a reservation in a DHCPv4 scope must be IPv4 and in a DHCPv6 scope IPv6,
-  and the API answers `400` otherwise. If a restore or a database edit leaves a reservation of the
-  wrong version in a scope, Ninlil skips it, logs a Warning that names the reservation, and treats
-  the device as having none. The reservation's `hostName` is a note for you. DNS registration uses
-  the host name the device sends.
+  and the API answers `400` otherwise. The reservation's `hostName` is a note for you. DNS
+  registration uses the host name the device sends.
 - **Scope ranges are checked.** The API answers `400` when a range does not lie inside one subnet
-  of `subnetPrefixLength` (both ends must share the first `subnetPrefixLength` bits), and when an
-  enabled scope's range shares an address with another enabled scope of the same IP version and
-  kind. The message names the other scope. A disabled scope is not compared, so to move a range
+  of `subnetPrefixLength` (both ends must share the first `subnetPrefixLength` bits), when an
+  IPv4 range includes the network address (all host bits 0) or the broadcast address (all host
+  bits 1) of its subnet, and when an enabled scope's range shares an address with another enabled
+  scope of the same IP version and kind. The message names the other scope. A disabled scope is not compared, so to move a range
   between two scopes, disable the old one first. An address scope and a `PrefixDelegation` scope
-  never collide, because one hands out addresses and the other prefixes. A `PATCH` that touches
-  none of the range, the prefix length, the kind or the switch is not checked, so a scope stored
+  never collide, because one hands out addresses and the other prefixes. A `/31` or `/32` scope
+  has no network or broadcast address to avoid ([RFC 3021 Section
+  2.1](https://www.rfc-editor.org/rfc/rfc3021#section-2.1)), and DHCPv6 has no broadcast
+  address. A `PATCH` that touches none of the range, the prefix length, the kind or the switch is not checked, so a scope stored
   before these checks can still be renamed while you fix it.
 - **Lease length.** A DHCPv4 device may ask for a lease time. It gets that time, capped at
   `maxLeaseDuration`, or `defaultLeaseDuration` when it asks for none. DHCPv6 ignores the times a
@@ -3666,11 +3667,6 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   4. Check that it worked: `GET /status` reports `dhcpServices` as `Healthy`.
 - *A reservation is ignored.* The identifier does not match. Compare it with the one in the lease
   list, and remember the `01:` prefix of option `61`.
-- *The log has `The reservation for <identifier> in scope '<name>' (<address>) is not an IPv6
-  address, so it is skipped`.* A reservation of the scope holds an address of the other IP
-  version (a restore or a database edit stored it; the API refuses it). The device gets an address
-  from the pool instead. Correct or delete the reservation. A DHCPv4 scope logs `is not an IPv4
-  address`.
 - *No DNS record for a device.* The scope needs a zone of type `Primary` or `CloudPrimary`, and
   the device must send a host name. The log shows `DHCP->DNS registration refused` when the name is
   taken.
