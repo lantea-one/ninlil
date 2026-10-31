@@ -596,7 +596,10 @@
     Condition="'$(PublishSingleFile)' == 'true' and $(RuntimeIdentifier.StartsWith('win-'))"
   >
     <ItemGroup>
-      <NinlilMsQuicAsset Include="@(RuntimePackAsset)" Condition="'%(Filename)%(Extension)' == 'msquic.dll'" />
+      <NinlilMsQuicAsset
+        Include="@(RuntimePackAsset)"
+        Condition="'%(Filename)%(Extension)' == 'msquic.dll'"
+      />
     </ItemGroup>
     <Copy SourceFiles="@(NinlilMsQuicAsset)" DestinationFolder="$(PublishDir)" />
   </Target>
