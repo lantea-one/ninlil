@@ -62,19 +62,24 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
 
     private static async Task<DhcpScopeDetail> CreateScopeAsync(HttpClient client, string name)
     {
+        // Every scope takes a range of its own: a scope write refuses a range that overlaps
+        // another enabled scope, and the shared host keeps the scopes other tests created.
+        (string start, string end, int prefixLength) = DhcpTestScopeRanges.NextIPv4();
+        string gateway = $"{start[..start.LastIndexOf('.')]}.1";
+
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
             {
                 name,
                 protocolVersion = "IPv4",
-                rangeStartAddress = "192.168.50.100",
-                rangeEndAddress = "192.168.50.200",
-                subnetPrefixLength = 24,
+                rangeStartAddress = start,
+                rangeEndAddress = end,
+                subnetPrefixLength = prefixLength,
                 defaultLeaseDuration = "1.00:00:00",
                 maxLeaseDuration = "7.00:00:00",
-                gatewayAddresses = new[] { "192.168.50.1" },
-                dnsServerAddresses = new[] { "192.168.50.1" },
+                gatewayAddresses = new[] { gateway },
+                dnsServerAddresses = new[] { gateway },
             }
         );
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -135,7 +140,11 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpResponseMessage patchResponse = await client.SendAsync(
             PatchRequest(
                 $"/api/dhcp-scopes/{created.Id}",
-                new { rangeStartAddress = "192.168.50.150", isDisabled = true }
+                new
+                {
+                    rangeStartAddress = created.RangeStartAddress[..^2] + "50",
+                    isDisabled = true,
+                }
             )
         );
         patchResponse.EnsureSuccessStatusCode();
@@ -145,7 +154,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         DhcpScopeDetail afterPatch =
             await afterPatchResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
-        Assert.Equal("192.168.50.150", afterPatch.RangeStartAddress);
+        Assert.Equal(created.RangeStartAddress[..^2] + "50", afterPatch.RangeStartAddress);
         Assert.True(afterPatch.IsDisabled);
 
         // Add a reservation.
@@ -154,14 +163,14 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
             new
             {
                 clientIdentifier = "aa:bb:cc:dd:ee:01",
-                ipAddress = "192.168.50.101",
+                ipAddress = created.RangeStartAddress,
                 hostName = "test-host",
             }
         );
         Assert.Equal(HttpStatusCode.Created, reservationCreateResponse.StatusCode);
         DhcpReservationDetail reservation =
             await reservationCreateResponse.Content.ReadFromJsonAsync<DhcpReservationDetail>();
-        Assert.Equal("192.168.50.101", reservation.IpAddress);
+        Assert.Equal(created.RangeStartAddress, reservation.IpAddress);
 
         // A second reservation for the same client identifier in the same scope conflicts.
         HttpResponseMessage duplicateClientResponse = await client.PostAsJsonAsync(
@@ -173,7 +182,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         // A second reservation for the same address in the same scope also conflicts.
         HttpResponseMessage duplicateAddressResponse = await client.PostAsJsonAsync(
             $"/api/dhcp-scopes/{created.Id}/reservations",
-            new { clientIdentifier = "aa:bb:cc:dd:ee:02", ipAddress = "192.168.50.101" }
+            new { clientIdentifier = "aa:bb:cc:dd:ee:02", ipAddress = created.RangeStartAddress }
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateAddressResponse.StatusCode);
 
@@ -377,7 +386,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
                 delegatedPrefixLength = 60,
                 rangeStartAddress = "2001:db8:3000::",
                 rangeEndAddress = "2001:db8:3fff:ffff:ffff:ffff:ffff:ffff",
-                subnetPrefixLength = 48,
+                subnetPrefixLength = 36,
                 defaultLeaseDuration = "1.00:00:00",
                 maxLeaseDuration = "7.00:00:00",
             }
@@ -437,7 +446,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
                 delegatedPrefixLength = 60,
                 rangeStartAddress = "2001:db8:4000::",
                 rangeEndAddress = "2001:db8:4fff:ffff:ffff:ffff:ffff:ffff",
-                subnetPrefixLength = 48,
+                subnetPrefixLength = 36,
                 defaultLeaseDuration = "1.00:00:00",
                 maxLeaseDuration = "7.00:00:00",
             }
@@ -790,13 +799,16 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, v4DnsResponse.StatusCode);
 
+        // The scope the correct pair creates keeps this range; no other test may hold it.
+        (string v6Start, string v6End, _) = DhcpTestScopeRanges.NextIPv6();
+
         object V6Body(string[] gateways, string[] dns) =>
             new
             {
                 name = $"family-v6-{Guid.NewGuid():N}",
                 protocolVersion = "IPv6",
-                rangeStartAddress = "2001:db8:b193::100",
-                rangeEndAddress = "2001:db8:b193::200",
+                rangeStartAddress = v6Start,
+                rangeEndAddress = v6End,
                 subnetPrefixLength = 64,
                 defaultLeaseDuration = "1.00:00:00",
                 maxLeaseDuration = "7.00:00:00",
@@ -832,8 +844,8 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
             {
                 name = ok.Name,
                 protocolVersion = "IPv6",
-                rangeStartAddress = "2001:db8:b193::100",
-                rangeEndAddress = "2001:db8:b193::200",
+                rangeStartAddress = v6Start,
+                rangeEndAddress = v6End,
                 subnetPrefixLength = 64,
                 defaultLeaseDuration = "1.00:00:00",
                 maxLeaseDuration = "7.00:00:00",

@@ -137,7 +137,8 @@ public class DhcpScopesController(
     /// <summary>
     ///     This action creates a DHCP scope. Returns 400 for a missing name, a range address of the
     ///     wrong family, a bad prefix length, a non-positive lease duration or a default above the
-    ///     maximum, an invalid gateway, DNS server or next-server address, a gateway or DNS server address of
+    ///     maximum, a range that does not lie inside one subnet of the prefix length, an enabled range
+    ///     that shares an address with another enabled scope of the same IP version and kind, an invalid gateway, DNS server or next-server address, a gateway or DNS server address of
     ///     the other family than the scope's protocol, any gateway on a DHCPv6 scope, a boot file name over
     ///     128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and
     ///     409 when the name is taken. Requires <c>dhcpscopes:write</c>.
@@ -164,6 +165,16 @@ public class DhcpScopesController(
             throw new ValidationException(
                 $"'dnsZoneId' does not name an existing zone ('{dnsZoneId}')."
             );
+
+        await EnsureNoOverlapAsync(
+            null,
+            request.ProtocolVersion,
+            request.Kind,
+            request.IsDisabled,
+            request.RangeStartAddress,
+            request.RangeEndAddress,
+            stoppingToken
+        );
 
         DhcpScopeEntity scope = new()
         {
@@ -236,6 +247,16 @@ public class DhcpScopesController(
                 $"'dnsZoneId' does not name an existing zone ('{dnsZoneId}')."
             );
 
+        await EnsureNoOverlapAsync(
+            id,
+            scope.ProtocolVersion,
+            request.Kind,
+            request.IsDisabled,
+            request.RangeStartAddress,
+            request.RangeEndAddress,
+            stoppingToken
+        );
+
         string oldName = scope.Name;
         scope.Name = request.Name;
         scope.Kind = request.Kind;
@@ -271,7 +292,11 @@ public class DhcpScopesController(
     ///     The protocol version cannot be changed. The patched scope is checked as for
     ///     <see cref="Create" /> (patched gateway and DNS entries must match the scope's
     ///     protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive
-    ///     duration (400 otherwise), and the range start must not be after the range end.
+    ///     duration (400 otherwise), and the range start must not be after the range end. A patch
+    ///     that changes the range or the prefix length is checked for the subnet rule of
+    ///     <see cref="Create" />. One that changes the range, the prefix length or the kind, or turns
+    ///     the scope on, is checked for the overlap rule. A patch that touches none of these is not, so a scope
+    ///     that breaks a rule can still be renamed, commented or disabled while it is fixed.
     ///     Renaming the scope moves its leases to the new name in the same save. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
@@ -288,6 +313,7 @@ public class DhcpScopesController(
             throw new NotFoundException("DhcpScope", id.ToString());
 
         string oldName = scope.Name;
+        bool wasDisabled = scope.IsDisabled;
         if (patch.TryGetMergePatchField("name", out JsonElement name))
         {
             if (name.ValueKind != JsonValueKind.String)
@@ -458,6 +484,39 @@ public class DhcpScopesController(
         )
             throw new ValidationException(kindError);
 
+        // The placement rules look at the scope as patched. They run only when the patch touches
+        // what they read, so a scope stored before the rules existed can still be renamed, given
+        // a comment or disabled while it is being fixed.
+        bool rangeTouched =
+            patch.TryGetMergePatchField("rangeStartAddress", out _)
+            || patch.TryGetMergePatchField("rangeEndAddress", out _)
+            || patch.TryGetMergePatchField("subnetPrefixLength", out _);
+        bool enabledByPatch = !scope.IsDisabled && wasDisabled;
+
+        if (rangeTouched)
+        {
+            if (
+                !DhcpScopeRangeRules.TryCheckInsideSubnet(
+                    scope.RangeStartAddress,
+                    scope.RangeEndAddress,
+                    scope.SubnetPrefixLength,
+                    out string subnetError
+                )
+            )
+                throw new ValidationException(subnetError);
+        }
+
+        if (rangeTouched || enabledByPatch || patch.TryGetMergePatchField("kind", out _))
+            await EnsureNoOverlapAsync(
+                id,
+                scope.ProtocolVersion,
+                scope.Kind,
+                scope.IsDisabled,
+                scope.RangeStartAddress,
+                scope.RangeEndAddress,
+                stoppingToken
+            );
+
         scope.UpdatedAtUtc = DateTimeOffset.UtcNow;
         scopeRepository.Update(scope);
         await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
@@ -505,6 +564,48 @@ public class DhcpScopesController(
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
+    }
+
+    /// <summary>
+    ///     This method throws a 400 when an enabled scope's range shares an address with another
+    ///     enabled scope of the same IP version and kind. A disabled scope is not compared, on
+    ///     either side, because it answers nobody. It lists the other scopes through
+    ///     <see cref="IRepository{TEntity}.ListAsync" />, as the engine's scope resolvers do.
+    ///     <paramref name="scopeId" /> is the scope being written, left out of the comparison, or
+    ///     <see langword="null" /> for a new scope.
+    /// </summary>
+    private async Task EnsureNoOverlapAsync(
+        Guid? scopeId,
+        InternetProtocolVersionEnum protocolVersion,
+        DhcpScopeKindEnum kind,
+        bool isDisabled,
+        string rangeStartAddress,
+        string rangeEndAddress,
+        CancellationToken stoppingToken
+    )
+    {
+        if (isDisabled)
+            return;
+
+        IReadOnlyList<DhcpScopeEntity> others = await scopeRepository.ListAsync(
+            other =>
+                other.ProtocolVersion == protocolVersion
+                && other.Kind == kind
+                && !other.IsDisabled
+                && other.Id != scopeId,
+            stoppingToken
+        );
+
+        foreach (DhcpScopeEntity other in others)
+        {
+            string overlap = DhcpScopeRangeRules.DescribeOverlap(
+                rangeStartAddress,
+                rangeEndAddress,
+                other
+            );
+            if (overlap is not null)
+                throw new ValidationException(overlap);
+        }
     }
 
     /// <summary>
@@ -662,6 +763,16 @@ public class DhcpScopesController(
             error = "'rangeStartAddress' must not be after 'rangeEndAddress'.";
             return false;
         }
+
+        if (
+            !DhcpScopeRangeRules.TryCheckInsideSubnet(
+                request.RangeStartAddress,
+                request.RangeEndAddress,
+                request.SubnetPrefixLength,
+                out error
+            )
+        )
+            return false;
 
         if (request.DefaultLeaseDuration <= TimeSpan.Zero)
         {

@@ -265,11 +265,24 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
     private static object ScopeBody(
         string name,
         string protocolVersion = "IPv4",
-        string start = "10.77.0.1",
-        string end = "10.77.0.50",
+        string start = null,
+        string end = null,
         string defaultLease = "1.00:00:00"
-    ) =>
-        new
+    )
+    {
+        // A scope write refuses a range that overlaps another enabled scope and the shared host
+        // keeps every scope, so a body without a range takes a fresh one.
+        if (start is null)
+        {
+            (string freshStart, string freshEnd, _) =
+                protocolVersion == "IPv4"
+                    ? DhcpTestScopeRanges.NextIPv4()
+                    : DhcpTestScopeRanges.NextIPv6();
+            start = freshStart;
+            end = freshEnd;
+        }
+
+        return new
         {
             name,
             protocolVersion,
@@ -279,6 +292,7 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
             defaultLeaseDuration = defaultLease,
             maxLeaseDuration = "7.00:00:00",
         };
+    }
 
     private async Task<DhcpScopeDetail> CreateScopeWithTwoLeasesAsync(
         HttpClient client,
