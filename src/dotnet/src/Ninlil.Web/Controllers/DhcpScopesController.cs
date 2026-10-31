@@ -294,10 +294,8 @@ public class DhcpScopesController(
     ///     <see cref="Create" /> (patched gateway and DNS entries must match the scope's
     ///     protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive
     ///     duration (400 otherwise), and the range start must not be after the range end. A patch
-    ///     that changes the range or the prefix length is checked for the subnet rule of
-    ///     <see cref="Create" />. One that changes the range, the prefix length or the kind, or turns
-    ///     the scope on, is checked for the overlap rule. A patch that touches none of these is not, so a scope
-    ///     that breaks a rule can still be renamed, commented or disabled while it is fixed.
+    ///     is checked for the subnet, network and broadcast, and overlap rules of
+    ///     <see cref="Create" /> on the patched scope, whatever fields it touches.
     ///     Renaming the scope moves its leases to the new name in the same save. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
@@ -314,7 +312,6 @@ public class DhcpScopesController(
             throw new NotFoundException("DhcpScope", id.ToString());
 
         string oldName = scope.Name;
-        bool wasDisabled = scope.IsDisabled;
         if (patch.TryGetMergePatchField("name", out JsonElement name))
         {
             if (name.ValueKind != JsonValueKind.String)
@@ -485,48 +482,37 @@ public class DhcpScopesController(
         )
             throw new ValidationException(kindError);
 
-        // The placement rules look at the scope as patched. They run only when the patch touches
-        // what they read, so a scope stored before the rules existed can still be renamed, given
-        // a comment or disabled while it is being fixed.
-        bool rangeTouched =
-            patch.TryGetMergePatchField("rangeStartAddress", out _)
-            || patch.TryGetMergePatchField("rangeEndAddress", out _)
-            || patch.TryGetMergePatchField("subnetPrefixLength", out _);
-        bool enabledByPatch = !scope.IsDisabled && wasDisabled;
-
-        if (rangeTouched)
-        {
-            if (
-                !DhcpScopeRangeRules.TryCheckInsideSubnet(
-                    scope.RangeStartAddress,
-                    scope.RangeEndAddress,
-                    scope.SubnetPrefixLength,
-                    out string subnetError
-                )
-            )
-                throw new ValidationException(subnetError);
-
-            if (
-                !DhcpScopeRangeRules.TryCheckNoNetworkOrBroadcast(
-                    scope.RangeStartAddress,
-                    scope.RangeEndAddress,
-                    scope.SubnetPrefixLength,
-                    out string edgeError
-                )
-            )
-                throw new ValidationException(edgeError);
-        }
-
-        if (rangeTouched || enabledByPatch || patch.TryGetMergePatchField("kind", out _))
-            await EnsureNoOverlapAsync(
-                id,
-                scope.ProtocolVersion,
-                scope.Kind,
-                scope.IsDisabled,
+        // The placement rules look at the scope as patched and run on every patch, so the API
+        // never stores a range the rules refuse.
+        if (
+            !DhcpScopeRangeRules.TryCheckInsideSubnet(
                 scope.RangeStartAddress,
                 scope.RangeEndAddress,
-                stoppingToken
-            );
+                scope.SubnetPrefixLength,
+                out string subnetError
+            )
+        )
+            throw new ValidationException(subnetError);
+
+        if (
+            !DhcpScopeRangeRules.TryCheckNoNetworkOrBroadcast(
+                scope.RangeStartAddress,
+                scope.RangeEndAddress,
+                scope.SubnetPrefixLength,
+                out string edgeError
+            )
+        )
+            throw new ValidationException(edgeError);
+
+        await EnsureNoOverlapAsync(
+            id,
+            scope.ProtocolVersion,
+            scope.Kind,
+            scope.IsDisabled,
+            scope.RangeStartAddress,
+            scope.RangeEndAddress,
+            stoppingToken
+        );
 
         scope.UpdatedAtUtc = DateTimeOffset.UtcNow;
         scopeRepository.Update(scope);

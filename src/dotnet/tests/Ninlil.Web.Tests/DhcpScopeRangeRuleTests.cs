@@ -338,14 +338,14 @@ public class DhcpScopeRangeRuleTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task Patch_AScopeStoredWithABadRange_CanStillBeRenamedUntilItsRangeIsPatched()
+    public async Task Patch_ANameOnlyChangeToAScopeWithABadRange_IsRefused()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
         (string start, _, _) = DhcpTestScopeRanges.NextIPv4();
         string baseAddress = Base24(start);
 
-        // The API refuses this range, so the row is written through the repository, as a
-        // restore or an older database would hold it.
+        // The API refuses this range, so the row is written through the repository to prove
+        // that a patch is checked on the patched scope even when it names no range field.
         Guid id = Guid.NewGuid();
         string name = $"range-rule-stored-{Guid.NewGuid():N}";
         using (IServiceScope serviceScope = factory.Services.CreateScope())
@@ -371,7 +371,7 @@ public class DhcpScopeRangeRuleTests(NinlilDnsWebApplicationFactory factory)
             $"/api/dhcp-scopes/{id}",
             new { name = name + "-renamed", comments = "to be fixed" }
         );
-        Assert.Equal(HttpStatusCode.NoContent, rename.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, rename.StatusCode);
 
         HttpResponseMessage touchRange = await client.PatchAsJsonAsync(
             $"/api/dhcp-scopes/{id}",
