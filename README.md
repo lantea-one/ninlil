@@ -647,14 +647,14 @@ curl http://localhost:18080/status
 
 #### Behaviour worth knowing
 
-A single `dotnet build`/`dotnet run`/`dotnet publish` of `Ninlil.Web` automatically
-builds the Angular workspace too (via a custom MSBuild target, `NinlilBuildAngularAdminSpa`) and
-copies its production output into that project's own `wwwroot/`, so the admin console is served
-from the exact same process and port as the REST API — no separate `npm run build`/`ng serve`
-step, no CORS configuration, nothing else to run. (If `npm` isn't on your `PATH` at all, the build
-logs a warning and skips the Angular step rather than failing outright — useful if you only care
-about the DNS/DHCP engine or REST API for now — but you won't get a working admin console until
-it's built at least once.)
+A `dotnet build`, `dotnet run` or `dotnet publish` of `Ninlil.Web` also builds the Angular
+workspace (the MSBuild target `NinlilBuildAngularAdminSpa`) and copies its production output into
+the project's `wwwroot/`. The admin console is then served from the same process and port as the
+REST API, with no separate `npm run build` or `ng serve` step and no CORS configuration.
+
+When `npm` is not on your `PATH`, the build logs a warning and skips the Angular step instead of
+failing. The DNS and DHCP engines and the REST API work, but the admin console is missing until a
+build has run with `npm` available.
 
 ## First run
 
