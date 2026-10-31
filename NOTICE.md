@@ -13,8 +13,10 @@ checklist of functionality worth supporting. It was **not** produced by copying,
 or otherwise deriving code from Technitium DNS Server or TechnitiumLibrary. Those projects
 are licensed under GPL-3.0, a copyleft license that would require any derivative work to
 also be distributed under GPL-3.0; because Ninlil is a clean-room implementation built
-against public RFCs and independently designed data models, protocols, and APIs, no such
-obligation applies, and Ninlil is free to use the permissive MIT license instead.
+against public RFCs and IANA registries (for a protocol without an RFC, its own published
+specification or the vendor's documentation) and independently designed data models, protocols,
+and APIs, no such obligation applies, and Ninlil is free to use the permissive MIT license
+instead.
 
 Technitium DNS Server and its authors are acknowledged here with respect and gratitude for
 having built and open-sourced a full-featured DNS server that made a project like this one
@@ -28,20 +30,28 @@ license; none of them impose copyleft obligations on Ninlil itself.
 | Package                                          | License              |
 | ------------------------------------------------- | -------------------- |
 | Microsoft.EntityFrameworkCore.\*                   | MIT                   |
+| Microsoft.Extensions.\*, Microsoft.AspNetCore.\*, System.IdentityModel.Tokens.Jwt, System.Security.Cryptography.Pkcs | MIT |
 | Npgsql.EntityFrameworkCore.PostgreSQL              | PostgreSQL License (MIT-style) |
-| Pomelo.EntityFrameworkCore.MySql                   | MIT                   |
+| Pomelo.EntityFrameworkCore.MySql, MySqlConnector   | MIT                   |
 | MongoDB.Driver                                     | Apache-2.0            |
 | YamlDotNet                                         | MIT                   |
-| MimeKit                                            | MIT                   |
+| MimeKit, MailKit                                   | MIT                   |
 | Swashbuckle.AspNetCore.\*                          | MIT                   |
 | IdentityModel                                      | Apache-2.0            |
 | BouncyCastle.Cryptography                          | MIT                   |
 | Sodium.Core (wraps the native libsodium library)   | MIT (libsodium itself: ISC) |
 | AWSSDK.Route53                                     | Apache-2.0            |
-| Certes (transitively: Portable.BouncyCastle, Newtonsoft.Json) | MIT (all three) |
+| Certes (transitively: Portable.BouncyCastle)       | MIT (both)            |
+| Newtonsoft.Json                                    | MIT                   |
+| RabbitMQ.Client                                    | Apache-2.0 OR MPL-2.0 |
+| Apache.NMS.ActiveMQ                                | Apache-2.0            |
+| ConsoleTables                                      | MIT                   |
 
-This table is maintained by hand and grows alongside the solution's dependencies; see each
-project's `.csproj` for the authoritative, exact set of package references in use.
+The test projects and the benchmark project also use xunit (Apache-2.0) and coverlet.collector,
+Microsoft.NET.Test.Sdk, Testcontainers and BenchmarkDotNet (MIT). None of them ships in a release.
+
+This table is maintained by hand and lists the packages the projects reference directly
+(`dotnet list Ninlil.slnx package`); see each project's `.csproj` for the exact set in use.
 
 ## Third-Party Data Sources
 
