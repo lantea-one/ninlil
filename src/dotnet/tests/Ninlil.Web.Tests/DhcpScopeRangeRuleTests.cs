@@ -122,13 +122,14 @@ public class DhcpScopeRangeRuleTests(NinlilDnsWebApplicationFactory factory)
         (string start, _, _) = DhcpTestScopeRanges.NextIPv4();
         string baseAddress = Base24(start);
 
-        // A /25 covers .0 to .127 of the /24, and the range ends on its last address.
+        // A /25 covers .0 to .127 of the /24; .0 and .127 are its network and broadcast
+        // addresses, so the range ends on the last address before them.
         DhcpScopeDetail created = await CreateAsync(
             client,
-            Body("IPv4", $"{baseAddress}.1", $"{baseAddress}.127", 25)
+            Body("IPv4", $"{baseAddress}.1", $"{baseAddress}.126", 25)
         );
 
-        Assert.Equal($"{baseAddress}.127", created.RangeEndAddress);
+        Assert.Equal($"{baseAddress}.126", created.RangeEndAddress);
     }
 
     [Fact]

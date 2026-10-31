@@ -137,7 +137,8 @@ public class DhcpScopesController(
     /// <summary>
     ///     This action creates a DHCP scope. Returns 400 for a missing name, a range address of the
     ///     wrong family, a bad prefix length, a non-positive lease duration or a default above the
-    ///     maximum, a range that does not lie inside one subnet of the prefix length, an enabled range
+    ///     maximum, a range that does not lie inside one subnet of the prefix length, an IPv4 range that includes the network or
+    ///     broadcast address of its subnet (except in a /31 or /32), an enabled range
     ///     that shares an address with another enabled scope of the same IP version and kind, an invalid gateway, DNS server or next-server address, a gateway or DNS server address of
     ///     the other family than the scope's protocol, any gateway on a DHCPv6 scope, a boot file name over
     ///     128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and
@@ -504,6 +505,16 @@ public class DhcpScopesController(
                 )
             )
                 throw new ValidationException(subnetError);
+
+            if (
+                !DhcpScopeRangeRules.TryCheckNoNetworkOrBroadcast(
+                    scope.RangeStartAddress,
+                    scope.RangeEndAddress,
+                    scope.SubnetPrefixLength,
+                    out string edgeError
+                )
+            )
+                throw new ValidationException(edgeError);
         }
 
         if (rangeTouched || enabledByPatch || patch.TryGetMergePatchField("kind", out _))
@@ -766,6 +777,16 @@ public class DhcpScopesController(
 
         if (
             !DhcpScopeRangeRules.TryCheckInsideSubnet(
+                request.RangeStartAddress,
+                request.RangeEndAddress,
+                request.SubnetPrefixLength,
+                out error
+            )
+        )
+            return false;
+
+        if (
+            !DhcpScopeRangeRules.TryCheckNoNetworkOrBroadcast(
                 request.RangeStartAddress,
                 request.RangeEndAddress,
                 request.SubnetPrefixLength,
