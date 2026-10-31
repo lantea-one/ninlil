@@ -68,8 +68,9 @@ public sealed class MongoDbReplicaSetTests(MongoDbReplicaSetEngineFixture fixtur
     [Fact]
     public async Task Secondary_OnADirectWrite_RefusesIt()
     {
-        string url =
-            $"mongodb://localhost:{((MongoDbReplicaSetEngineHost)fixture.Replicated).Ports[1]}/?directConnection=true";
+        string url = ((MongoDbReplicaSetEngineHost)fixture.Replicated).BuildDirectConnectionString(
+            1
+        );
 
         await Assert.ThrowsAnyAsync<MongoException>(async () =>
             await Collection(url, "refused").InsertOneAsync(new BsonDocument("a", 1))
