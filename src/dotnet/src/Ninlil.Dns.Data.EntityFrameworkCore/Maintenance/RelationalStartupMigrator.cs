@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
@@ -147,10 +150,17 @@ public static class RelationalStartupMigrator
                 stoppingToken
             );
 
+        List<string> known = [.. context.Database.GetMigrations()];
+
         // A connection failure throws here, as it should: no marker is written and the process
         // exits non-zero so a supervisor retries once the database is up.
-        List<string> applied = [.. await context.Database.GetAppliedMigrationsAsync(stoppingToken)];
-        List<string> known = [.. context.Database.GetMigrations()];
+        (List<string> applied, bool databaseMissing) = await ReadAppliedMigrationsAsync(
+            context,
+            storageOptions,
+            known,
+            logger,
+            stoppingToken
+        );
 
         // A newer version applied migrations this build has never heard of. Its schema may differ
         // in ways this build's queries do not expect, so this build must not run on it.
@@ -228,6 +238,15 @@ public static class RelationalStartupMigrator
 
         try
         {
+            // MigrateAsync probes the database and the history table before it creates them,
+            // and each failed probe logs an Error (ConnectionError for the database, a failed
+            // command for the table). Creating both first leaves it nothing to probe.
+            if (databaseMissing)
+            {
+                await context.GetService<IRelationalDatabaseCreator>().CreateAsync(stoppingToken);
+                context.GetService<IHistoryRepository>().CreateIfNotExists();
+            }
+
             await context.Database.MigrateAsync(stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -248,6 +267,54 @@ public static class RelationalStartupMigrator
         if (snapshot != null)
             await FinishSnapshotsAsync(store, safety, snapshot, logger, stoppingToken);
     }
+
+    /// <summary>
+    ///     This method returns the migration ids in the history table, with an empty list and
+    ///     <c>true</c> when the database does not exist yet. On a server engine the first start finds no database, and
+    ///     opening a connection to a missing database makes EF Core log
+    ///     <c>RelationalEventId.ConnectionError</c> at Error before the provider turns the failure
+    ///     into "no history". The event is not lowered globally because at runtime it reports a
+    ///     real failure. <c>IRelationalDatabaseCreator.ExistsAsync</c> opens its connection with
+    ///     errors expected (EF Core logs at Debug), so asking it first avoids the Error lines.
+    ///     Any other failure, such as an unreachable server, still throws from here. SQLite
+    ///     creates its file on the first open and never logs an error for it, so it is read
+    ///     directly.
+    /// </summary>
+    private static async Task<(
+        List<string> Applied,
+        bool DatabaseMissing
+    )> ReadAppliedMigrationsAsync(
+        NinlilDnsContext context,
+        StorageOptions storageOptions,
+        List<string> known,
+        ILogger logger,
+        CancellationToken stoppingToken
+    )
+    {
+        if (storageOptions.Engine != StorageEngineEnum.Sqlite)
+        {
+            IRelationalDatabaseCreator creator = context.GetService<IRelationalDatabaseCreator>();
+            if (!await creator.ExistsAsync(stoppingToken))
+            {
+                logger.LogInformation(
+                    "The database {Database} does not exist yet; creating it and applying "
+                        + "{Count} migrations.",
+                    DatabaseName(context),
+                    known.Count
+                );
+                return ([], true);
+            }
+        }
+
+        return ([.. await context.Database.GetAppliedMigrationsAsync(stoppingToken)], false);
+    }
+
+    /// <summary>
+    ///     This method returns the database name of the context's connection for log messages,
+    ///     or an empty string when the connection has none.
+    /// </summary>
+    private static string DatabaseName(NinlilDnsContext context) =>
+        context.Database.GetDbConnection().Database;
 
     /// <summary>
     ///     This method restores the snapshot with the given id, unless it was restored already.

@@ -57,14 +57,21 @@ public abstract class EngineHost : IAsyncDisposable
     /// <param name="createSchema">
     ///     Whether to create the schema from the entity model. Ignored on MongoDB.
     /// </param>
+    /// <param name="configureServices">
+    ///     An optional callback that adds services after the storage wiring, for example a
+    ///     logger provider that records what the context logs.
+    /// </param>
     public async Task<EngineDatabase> CreateDatabaseAsync(
         string databaseName = null,
-        bool createSchema = true
+        bool createSchema = true,
+        Action<IServiceCollection, IConfiguration> configureServices = null
     )
     {
         return await BuildDatabaseAsync(
+            Engine,
             BuildConnectionString(databaseName ?? $"ninlil_{Guid.NewGuid():N}"),
-            createSchema
+            createSchema,
+            configureServices
         );
     }
 

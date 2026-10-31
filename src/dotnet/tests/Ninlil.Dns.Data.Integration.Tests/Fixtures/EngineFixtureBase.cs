@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Common.Enum;
 
 // Define our namespace.
@@ -46,8 +48,14 @@ public abstract class EngineFixtureBase(EngineHost host) : IAsyncLifetime
     /// <param name="createSchema">
     ///     Whether to create the schema from the entity model. Ignored on MongoDB.
     /// </param>
-    public Task<EngineDatabase> CreateDatabaseAsync(bool createSchema = true) =>
-        host.CreateDatabaseAsync(createSchema: createSchema);
+    /// <param name="configureServices">
+    ///     An optional callback that adds services after the storage wiring, for example a
+    ///     logger provider that records what the context logs.
+    /// </param>
+    public Task<EngineDatabase> CreateDatabaseAsync(
+        bool createSchema = true,
+        Action<IServiceCollection, IConfiguration> configureServices = null
+    ) => host.CreateDatabaseAsync(createSchema: createSchema, configureServices: configureServices);
 
     /// <summary>
     ///     This method creates a new database with the least-privilege login of the engine; see
