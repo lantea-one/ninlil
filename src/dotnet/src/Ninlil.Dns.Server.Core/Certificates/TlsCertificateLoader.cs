@@ -44,10 +44,17 @@ public static class TlsCertificateLoader
             }
         }
 
-        X509Certificate2 certificate = GenerateSelfSigned(
-            options.SelfSignedSubjectAlternativeNames
-        );
-        Persist(certificate, statePath, logger);
+        // The certificate CreateSelfSigned returns holds an ephemeral key, which Windows Schannel
+        // cannot use for a server handshake. Loading the PFX bytes gives the same key a usable
+        // store on every platform, the way the next start loads it from the state file.
+        byte[] pfxBytes;
+        using (
+            X509Certificate2 created = GenerateSelfSigned(options.SelfSignedSubjectAlternativeNames)
+        )
+            pfxBytes = created.Export(X509ContentType.Pfx);
+
+        Persist(pfxBytes, statePath, logger);
+        X509Certificate2 certificate = X509CertificateLoader.LoadPkcs12(pfxBytes, "");
 
         logger.LogInformation(
             "Generated a new self-signed TLS certificate (subject alternative names: {Names}), persisted to '{Path}'.",
@@ -105,19 +112,16 @@ public static class TlsCertificateLoader
     }
 
     /// <summary>
-    ///     This method saves a certificate with its private key as an unencrypted PFX through
+    ///     This method saves a certificate with its private key, already exported as an
+    ///     unencrypted PFX, through
     ///     <see cref="AtomicFile" />, which writes it atomically and, on non-Windows platforms,
     ///     limits the file to its owner from the moment it exists.
     /// </summary>
-    private static void Persist(X509Certificate2 certificate, string path, ILogger logger)
+    private static void Persist(byte[] pfxBytes, string path, ILogger logger)
     {
         try
         {
-            AtomicFile.WriteAllBytes(
-                path,
-                certificate.Export(X509ContentType.Pfx),
-                AtomicFilePermissions.OwnerOnly
-            );
+            AtomicFile.WriteAllBytes(path, pfxBytes, AtomicFilePermissions.OwnerOnly);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
