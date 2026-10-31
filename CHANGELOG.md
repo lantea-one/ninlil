@@ -53,7 +53,7 @@ a REST API and an admin console.
 | `ninlil-linux-amd64` binary, Arch Linux, Deb and RPM packages (amd64), container image | Everything: DNS, DHCP, Router Advertisement, TFTP, REST API, console | The .NET and console test suites run in Linux containers. Each Deb and RPM package is installed and started on Debian 12, Ubuntu 22.04, Ubuntu 24.04, Rocky Linux 9 and Fedora 41. |
 | `ninlil-linux-arm64` binary, arm64 packages and image layer | The same as amd64 | Built from the same sources. No job starts them. |
 | `ninlil-macos-amd64`, `ninlil-macos-arm64` | DNS, REST API and console. DHCP, Router Advertisement and passive device presence need Linux. | Built. No job starts them. |
-| `ninlil-windows-amd64.exe` | DNS, REST API and console. DHCP, Router Advertisement and passive device presence need Linux. | A smoke test starts it and checks `/status`, the console and one DNS query. There is no Windows test suite. |
+| `ninlil-windows-amd64.zip` (the executable and `msquic.dll`) | DNS, REST API and console. DHCP, Router Advertisement and passive device presence need Linux. | A smoke test unzips it, starts the executable and checks `/status`, the console, a DNS query over UDP, HTTPS and DNS-over-TLS on the first start, and DNS-over-QUIC. There is no Windows test suite. |
 
 Binaries are unsigned; the macOS binaries are ad-hoc signed and not notarized. Check every download
 against `SHA256SUMS`. See [Download a binary](./README.md#download-a-binary),

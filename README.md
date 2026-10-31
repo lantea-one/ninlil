@@ -309,7 +309,8 @@ Every release, and every build of every branch, is published from the project's 
 
 Each [release](https://git.lantea.one/lantea-one/ninlil/releases) carries a self-contained,
 single-file executable per platform. No .NET installation is needed: the runtime, every native
-library and the admin console are inside the one file.
+library and the admin console are inside the one file. The Windows download is a zip that also
+holds `msquic.dll`, the QUIC library for DNS-over-QUIC.
 
 | Platform | File |
 |---|---|
@@ -317,7 +318,7 @@ library and the admin console are inside the one file.
 | Linux ARM64 | `ninlil-linux-arm64` |
 | macOS Intel | `ninlil-macos-amd64` |
 | macOS Apple Silicon | `ninlil-macos-arm64` |
-| Windows x86-64 | `ninlil-windows-amd64.exe` (see [Windows](#windows)) |
+| Windows x86-64 | `ninlil-windows-amd64.zip` (the executable and `msquic.dll`; see [Windows](#windows)) |
 
 #### Before you start
 
@@ -400,9 +401,11 @@ The first-start log lines and the bootstrap administrator password are described
 ### Windows
 
 The Windows executable is a plain console program that also runs as a Windows service. It is
-**unsigned**, so Windows SmartScreen warns the first time you start it. Verify the download against
-`SHA256SUMS` (in PowerShell: `(Get-FileHash .\ninlil-windows-amd64.exe).Hash` must equal the
-`ninlil-windows-amd64.exe` line there, ignoring case) before you accept the warning. The DNS server,
+**unsigned**, so Windows SmartScreen warns the first time you start it. You download a zip that holds
+the executable and `msquic.dll`, which DNS-over-QUIC needs and which must stay in the same folder as
+the executable. Verify the download against `SHA256SUMS` (in PowerShell:
+`(Get-FileHash .\ninlil-windows-amd64.zip).Hash` must equal the `ninlil-windows-amd64.zip` line
+there, ignoring case) before you accept the warning. The DNS server,
 REST API, and admin console work fully; the DHCP, Router Advertisement, and passive device-presence
 features rely on Linux kernel interfaces and are unavailable, as on macOS.
 
@@ -417,9 +420,15 @@ features rely on Linux kernel interfaces and are unavailable, as on macOS.
 Try it from a console first (an administrator PowerShell, because the defaults use ports 53, 80, and
 443; or override the ports, see "Ports" below):
 
-1. Create the folder and put the file in it: `New-Item -ItemType Directory C:\Ninlil`, then move
-   `ninlil-windows-amd64.exe` there.
-2. Remove the download mark: `Unblock-File C:\Ninlil\ninlil-windows-amd64.exe`.
+1. Remove the download mark from the zip, then unzip it into a new folder, so that
+   `ninlil-windows-amd64.exe` and `msquic.dll` sit side by side:
+
+   ```powershell
+   Unblock-File .\ninlil-windows-amd64.zip
+   Expand-Archive .\ninlil-windows-amd64.zip -DestinationPath C:\Ninlil
+   ```
+
+2. Check the folder: `Get-ChildItem C:\Ninlil` lists both files.
 3. Run `C:\Ninlil\ninlil-windows-amd64.exe`, wait for the log lines, and open `http://localhost/`.
    Press Ctrl+C to stop it. It created `C:\Ninlil\data\` next to the executable.
 
@@ -457,10 +466,19 @@ To run it as a service that starts with Windows (all in an administrator PowerSh
    line per setting; see [`ENVIRONMENT.md`](./ENVIRONMENT.md)), then `Restart-Service Ninlil`.
 
 To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil`. Your `C:\Ninlil\data` folder stays.
-Updating means stopping the service, replacing the `.exe`, and starting it again.
+Updating means stopping the service, replacing the `.exe` and `msquic.dll` with the files from the
+new zip, and starting it again.
 
 Changing the service account later only needs the new account to have modify rights on the `data`
 folder. How the keys in it are stored is described in [Security](#security).
+
+Ninlil keeps the private key of its TLS certificate, the self-signed one or one from a PFX file, in
+the certificate store of the account that runs it (`Cert:\CurrentUser\My`, entries with the
+friendly name `Ninlil TLS ...`), because Windows cannot use a key that exists only in memory for a
+TLS server. The store holds one entry per certificate file. A start finds the entry again, and a
+changed certificate file replaces the entry and deletes its old key. If the account's store is not
+available, for example for a service account without a loaded profile, Ninlil logs a warning and
+loads the key into the account's key folder instead, which leaves one key file there per start.
 
 ### Arch Linux
 
@@ -5862,8 +5880,8 @@ build and test step runs in a throwaway container of one of the toolchains in
 [`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). One job, the Windows
 smoke test, runs on a Windows runner labelled `windows-latest` instead (the project's runner
 `lofnheim`; if it registers only under that name, change the job's `runs-on`). It runs
-[`windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1), which starts the Windows executable
-and checks `/status`, the admin console, one DNS query, HTTPS and DNS-over-TLS on the first
+[`windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1), which unzips the Windows release
+asset and starts the executable beside `msquic.dll`, and checks `/status`, the admin console, one DNS query, HTTPS and DNS-over-TLS on the first
 start, and that DNS-over-QUIC is listening (a real DoQ query under PowerShell 7). Locally, `pwsh
 .forgejo/scripts/windows-smoke.ps1 -ExecutablePath dist/ninlil-linux-amd64` runs the same checks
 against a Linux binary. The Arch Linux toolchain

@@ -370,8 +370,9 @@ failed checks first; `shots/` holds one full-page screenshot per visit; `host.lo
 - [`src/script/database/README.md`](./src/script/database/README.md) describes the per-engine
   database helper scripts.
 - [`.forgejo/scripts/windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1) starts the Windows
-  executable and checks `/status`, the console and one DNS query. The pipeline runs it on a Windows
-  runner.
+  executable (from the release zip, or a local file with `-ExecutablePath`) and checks `/status`,
+  the console, DNS over UDP, HTTPS, DNS-over-TLS and DNS-over-QUIC. The pipeline runs it on a
+  Windows runner.
 
 ## Format and lint
 
@@ -645,7 +646,8 @@ the build.
 1. Build the admin console into `wwwroot/`
    ([Get the code and build it](#get-the-code-and-build-it), step 4). The executable embeds it.
 2. Publish one self-contained, single-file executable. The name is `linux-amd64`, `linux-arm64`,
-   `macos-amd64`, `macos-arm64` or `windows-amd64`:
+   `macos-amd64`, `macos-arm64` or `windows-amd64`. The Windows build writes a zip with the
+   executable and `msquic.dll` and needs the `zip` tool (the dotnet toolchain image has it):
 
    ```bash
    .forgejo/scripts/publish-binary.sh linux-amd64 dist
