@@ -117,6 +117,18 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
             "NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PORT",
             DnsCryptPort.ToString()
         );
+
+        // Loopback is all these two real listeners need, and the tests' machines may run other
+        // services on the network interfaces. The web listeners are not bound at all, because the
+        // test server replaces Kestrel.
+        Environment.SetEnvironmentVariable(
+            "NINLIL_DNS_SERVER_PROTOCOL_PLAIN_LISTEN_ADDRESSES",
+            "127.0.0.1"
+        );
+        Environment.SetEnvironmentVariable(
+            "NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_LISTEN_ADDRESSES",
+            "127.0.0.1"
+        );
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH",
             _runtimeConfigurationFilePath

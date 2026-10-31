@@ -53,6 +53,9 @@ public sealed class ReplicatedWebApplicationFactory : WebApplicationFactory<Prog
             ["NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_USER_NAME"] = AdminUserName,
             ["NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD"] = AdminPassword,
             ["NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT"] = FreePort().ToString(),
+
+            // Loopback is all the test needs; the machine may run other services on its interfaces.
+            ["NINLIL_DNS_SERVER_PROTOCOL_PLAIN_LISTEN_ADDRESSES"] = "127.0.0.1",
             ["NINLIL_DNS_SERVER_WEB_HTTP_PORT"] = FreePort().ToString(),
             ["NINLIL_DNS_SERVER_WEB_HTTPS_PORT"] = FreePort().ToString(),
             ["NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH"] =

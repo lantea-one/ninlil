@@ -2,9 +2,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Ninlil.Dhcp.Protocol.Dhcpv6;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
-using Ninlil.Web.Startup;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -15,20 +16,19 @@ namespace Ninlil.Web.Tests;
 ///     host leaves every DHCP-family setting at its default, so DHCPv4, DHCPv6, Router
 ///     Advertisement and TFTP all start disabled and stopped.
 ///     <para>
-///         Only DHCPv6 is started, and only when the process may bind its server port 547: like
-///         DHCPv4 (67/68) and TFTP (69) it is below <c>net.ipv4.ip_unprivileged_port_start</c>
-///         (1024 by default). Without the privilege
-///         <see cref="Start_OnDhcpv6_GenuinelyBindsTheRealSocket_AndStopGenuinelyReleasesIt" /> is
-///         skipped and shows as skipped in the report (<see cref="PrivilegedPortFactAttribute" />
-///         asks <see cref="SocketPrivilegedPortBindProbe" />, the probe
-///         <c>PrivilegedPortStartupDiagnostics</c> uses at startup). Router Advertisement uses a raw socket that needs <c>CAP_NET_RAW</c> rather than a
-///         port, so it is not started here. Starting and stopping each service on real sockets is
-///         covered by <c>Dhcpv4LiveServiceControlTests</c>, <c>Dhcpv6LiveServiceControlTests</c>,
-///         <c>TftpServerLiveServiceControlTests</c> and <c>Icmpv6RaListenerLiveServiceControlTests</c>.
+///         Only DHCPv6 is started, and on a second host
+///         (<see cref="NinlilDnsWebApplicationFactory.CreateSecondHost" />) whose DHCPv6 server
+///         port is a free port the operating system chose, so the test never binds the standard
+///         port 547 that a DHCP server on the machine may hold. DHCPv4 (67/68) and TFTP (69) are
+///         not started here. Router Advertisement uses a raw socket that needs
+///         <c>CAP_NET_RAW</c> rather than a port, so it is not started either. Starting and
+///         stopping each service on real sockets is covered by <c>Dhcpv4LiveServiceControlTests</c>,
+///         <c>Dhcpv6LiveServiceControlTests</c>, <c>TftpServerLiveServiceControlTests</c> and
+///         <c>Icmpv6RaListenerLiveServiceControlTests</c>.
 ///     </para>
 ///     <para>
 ///         The DHCPv6 test checks the socket with a probe socket that binds the same
-///         <c>IPv6Any:547</c> endpoint as <c>Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6UdpListener.StartAsync</c>.
+///         <c>IPv6Any</c> endpoint as <c>Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6UdpListener.StartAsync</c>.
 ///         The probe does not set <c>SO_REUSEADDR</c>, and on Linux that option only helps a
 ///         socket that sets it, so the probe can bind only while no other socket holds the port.
 ///         This needs no DHCPv6 scope or SOLICIT exchange.
@@ -37,12 +37,14 @@ namespace Ninlil.Web.Tests;
 [Collection(WebTestCollection.Name)]
 public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory factory)
 {
-    /// <summary>The default DHCPv6 server port, a privileged port (see the class summary).</summary>
-    private const int Dhcpv6ServerPort = 547;
+    private Task<HttpClient> CreateAuthenticatedClientAsync() =>
+        CreateAuthenticatedClientAsync(factory);
 
-    private async Task<HttpClient> CreateAuthenticatedClientAsync()
+    private static async Task<HttpClient> CreateAuthenticatedClientAsync(
+        WebApplicationFactory<Program> host
+    )
     {
-        HttpClient client = factory.CreateClient();
+        HttpClient client = host.CreateClient();
 
         HttpResponseMessage loginResponse = await client.PostAsJsonAsync(
             "/api/auth/login",
@@ -140,19 +142,25 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
     ///     longer bind the port) and stopping it releases the socket (the probe can bind again),
     ///     not just that <c>IsRunning</c> changes. It always leaves DHCPv6 stopped, since the
     ///     order of test classes is not fixed, as <see cref="ServicesControllerCrudTests" /> does.
-    ///     Without the privilege to bind port 547 it is skipped
-    ///     (<see cref="PrivilegedPortFactAttribute" />).
+    ///     It runs on a second host whose DHCPv6 server port is a free port.
     /// </summary>
-    [PrivilegedPortFact(Dhcpv6ServerPort)]
+    [Fact]
     public async Task Start_OnDhcpv6_GenuinelyBindsTheRealSocket_AndStopGenuinelyReleasesIt()
     {
-        HttpClient client = await CreateAuthenticatedClientAsync();
+        int serverPort = GetFreeUdpPort();
+        using WebApplicationFactory<Program> host = factory.CreateSecondHost(builder =>
+            builder.UseSetting(
+                $"{Dhcpv6ProtocolOptions.SectionName}:{nameof(Dhcpv6ProtocolOptions.ServerPort)}",
+                serverPort.ToString()
+            )
+        );
+        using HttpClient client = await CreateAuthenticatedClientAsync(host);
 
         // Disabled at startup, not running, and the port is free.
         DhcpServiceStatus before = await GetStatusAsync(client, DhcpServiceKindEnum.Dhcpv6);
         Assert.False(before.Enabled);
         Assert.False(before.IsRunning);
-        Assert.True(CanExclusivelyBindServerPort());
+        Assert.True(CanExclusivelyBindServerPort(serverPort));
 
         try
         {
@@ -167,7 +175,7 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
             Assert.True(started.IsRunning);
 
             // The socket is bound, so the probe can no longer bind the port.
-            Assert.False(CanExclusivelyBindServerPort());
+            Assert.False(CanExclusivelyBindServerPort(serverPort));
 
             // A second Start while running must be a no-op, not a crash or a second bind.
             HttpResponseMessage secondStartResponse = await client.PostAsync(
@@ -192,7 +200,7 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
         }
 
         // The socket is released, so the probe can bind the port again.
-        Assert.True(CanExclusivelyBindServerPort());
+        Assert.True(CanExclusivelyBindServerPort(serverPort));
     }
 
     /// <summary>
@@ -215,10 +223,11 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
 
     /// <summary>
     ///     This method reports whether a probe socket without <c>SO_REUSEADDR</c> can bind the
-    ///     <c>IPv6Any:547</c> endpoint that <c>Dhcpv6UdpListener.StartAsync</c> binds. It returns
+    ///     <c>IPv6Any</c> endpoint on <paramref name="serverPort" /> that
+    ///     <c>Dhcpv6UdpListener.StartAsync</c> binds. It returns
     ///     <see langword="true" /> only when no other socket holds the port (see the class summary).
     /// </summary>
-    private static bool CanExclusivelyBindServerPort()
+    private static bool CanExclusivelyBindServerPort(int serverPort)
     {
         try
         {
@@ -227,12 +236,24 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
                 SocketType.Dgram,
                 ProtocolType.Udp
             );
-            probe.Bind(new IPEndPoint(IPAddress.IPv6Any, Dhcpv6ServerPort));
+            probe.Bind(new IPEndPoint(IPAddress.IPv6Any, serverPort));
             return true;
         }
         catch (SocketException)
         {
             return false;
         }
+    }
+
+    /// <summary>
+    ///     This method asks the operating system for a currently unused UDP port on the same
+    ///     dual-stack wildcard endpoint the DHCPv6 listener binds, by binding port 0 and reading
+    ///     back what was assigned.
+    /// </summary>
+    private static int GetFreeUdpPort()
+    {
+        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+        probe.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }

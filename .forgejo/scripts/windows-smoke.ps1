@@ -319,6 +319,12 @@ try {
     $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_PORT = "$dotPort"
     $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_ENABLE = 'true'
     $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_PORT = "$doqPort"
+    # The runner's own network interfaces may carry other services, and the checks only use
+    # loopback, so every listener binds loopback.
+    $env:NINLIL_DNS_SERVER_PROTOCOL_PLAIN_LISTEN_ADDRESSES = '127.0.0.1'
+    $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_LISTEN_ADDRESSES = '127.0.0.1'
+    $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_LISTEN_ADDRESSES = '127.0.0.1'
+    $env:NINLIL_DNS_SERVER_WEB_LISTEN_ADDRESSES = '127.0.0.1'
     $env:NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD = 'Smoke-Test-Passw0rd!'
     $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $work 'extract'
     # The test must not inherit the runner's own token.
