@@ -5,6 +5,9 @@ the next release branch cuts; a maintainer renames it to the release's name (see
 release](./CONTRIBUTING.md#cutting-a-release)). Each section describes Ninlil as that release
 ships. Installation, operation and every setting are in the [README](./README.md) and
 [`ENVIRONMENT.md`](./ENVIRONMENT.md); these notes link the guide that explains each item.
+Each entry ends with a link to its issue, for example
+`([#42](https://git.lantea.one/lantea-one/ninlil/issues/42))`. The full URL keeps the link working
+outside Forgejo.
 
 ## Unreleased
 
