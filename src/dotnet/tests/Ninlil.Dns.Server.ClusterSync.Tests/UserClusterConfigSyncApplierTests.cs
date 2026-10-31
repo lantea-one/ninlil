@@ -35,6 +35,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         new EphemeralDataProtectionProvider();
     private readonly UserClusterConfigSyncApplier _applier;
     private readonly CountingAccessTokenRevalidator _revalidator = new();
+    private readonly RecordingJwtTokenService _jwtTokenService = new();
 
     private static readonly Guid NodeA = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
     private static readonly Guid NodeB = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000000");
@@ -57,7 +58,8 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
             _unitOfWork,
             _dataProtectionProvider,
             NullLogger<UserClusterConfigSyncApplier>.Instance,
-            _revalidator
+            _revalidator,
+            _jwtTokenService
         );
     }
 
@@ -74,7 +76,8 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         string totpSecretPlain = null,
         string recoveryCodesPlain = null,
         IReadOnlyList<Guid> roleIds = null,
-        IReadOnlyList<string> permissions = null
+        IReadOnlyList<string> permissions = null,
+        string securityStamp = null
     ) =>
         JsonSerializer.Serialize(
             new UserSyncPayload(
@@ -85,7 +88,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
                 "ALICE@EXAMPLE.COM",
                 true,
                 "AQAAAAIAAYagAAAAE-some-fake-password-hash",
-                Guid.NewGuid().ToString("N"),
+                securityStamp ?? Guid.NewGuid().ToString("N"),
                 Guid.NewGuid().ToString("N"),
                 null,
                 false,
@@ -121,6 +124,60 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         );
 
         Assert.Equal(1, _revalidator.InvalidateCount);
+    }
+
+    [Fact]
+    public async Task ApplyAsyncRevokesTheRefreshTokensOfThisNodeWhenTheSecurityStampChanged()
+    {
+        Guid userId = Guid.NewGuid();
+        DateTimeOffset timestamp = DateTimeOffset.UtcNow;
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                userId.ToString(),
+                IsDeleted: false,
+                Payload(securityStamp: "stamp-one"),
+                timestamp,
+                NodeA
+            ),
+            CancellationToken.None
+        );
+        Assert.Empty(_jwtTokenService.RevokedAllFor);
+
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                userId.ToString(),
+                IsDeleted: false,
+                Payload(securityStamp: "stamp-two"),
+                timestamp.AddSeconds(1),
+                NodeA
+            ),
+            CancellationToken.None
+        );
+
+        Assert.Equal([userId], _jwtTokenService.RevokedAllFor);
+    }
+
+    [Fact]
+    public async Task ApplyAsyncKeepsTheRefreshTokensOfThisNodeWhenTheSecurityStampIsTheSame()
+    {
+        Guid userId = Guid.NewGuid();
+        DateTimeOffset timestamp = DateTimeOffset.UtcNow;
+        foreach (int second in new[] { 0, 1 })
+            await _applier.ApplyAsync(
+                new ClusterConfigSyncEnvelope(
+                    UserClusterConfigSyncApplier.EntityTypeName,
+                    userId.ToString(),
+                    IsDeleted: false,
+                    Payload(securityStamp: "stamp-same"),
+                    timestamp.AddSeconds(second),
+                    NodeA
+                ),
+                CancellationToken.None
+            );
+
+        Assert.Empty(_jwtTokenService.RevokedAllFor);
     }
 
     [Fact]

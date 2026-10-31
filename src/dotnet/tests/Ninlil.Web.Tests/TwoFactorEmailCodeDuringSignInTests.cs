@@ -356,7 +356,9 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
             emailSender,
             services.GetRequiredService<IDnsServerEventPublisher>(),
             new TwoFactorCodeAttemptLimiter(),
-            cooldown
+            cooldown,
+            services.GetRequiredService<IUserStore<UserEntity>>(),
+            services.GetRequiredService<IJwtTokenService>()
         )
         {
             ControllerContext = new ControllerContext

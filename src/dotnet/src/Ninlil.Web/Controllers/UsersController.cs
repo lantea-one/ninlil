@@ -410,11 +410,11 @@ public class UsersController(
 
     /// <summary>
     ///     This action changes the caller's password. It requires the current password; a wrong one
-    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. A successful change revokes
-    ///     every refresh token of the account, including the caller's own session: the request
-    ///     does not say which session it belongs to, so the caller's access token works until it
-    ///     expires and the caller then signs in again with the new password. Requires only a
-    ///     signed-in caller.
+    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. A successful change replaces
+    ///     the account's security stamp and revokes every refresh token of the account, including
+    ///     the caller's own session: every access token issued before the change, the caller's
+    ///     included, answers 401 on its next request, and the caller signs in again with the new
+    ///     password. Requires only a signed-in caller.
     /// </summary>
     [HttpPost("me/change-password")]
     [Authorize]
@@ -455,8 +455,9 @@ public class UsersController(
     ///             <see cref="AdminPasswordResetMode.AutoGenerate" /> sets a generated strong
     ///             password at once, through a reset token and
     ///             <see cref="UserManager{TUser}.ResetPasswordAsync" /> so Identity's usual
-    ///             validation and hashing apply, and returns it in this response only. It also revokes
-    ///             every refresh token of the account.
+    ///             validation and hashing apply, and returns it in this response only. It also replaces
+    ///             the account's security stamp and revokes every refresh token of the account, so
+    ///             every access token issued before the reset answers 401 on its next request.
     ///         </item>
     ///         <item>
     ///             <see cref="AdminPasswordResetMode.EmailLink" /> e-mails the account a link to

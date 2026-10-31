@@ -541,8 +541,9 @@ public class AuthController(
     ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
     ///     <see cref="UserManager{TUser}.ResetPasswordAsync" /> rejects a wrong, expired or used
     ///     token. An unknown account and an undecodable token return the same 400 message, so the
-    ///     response does not reveal whether an account exists. A successful reset revokes every
-    ///     refresh token of the account.
+    ///     response does not reveal whether an account exists. A successful reset replaces the
+    ///     account's security stamp and revokes every refresh token of the account, so every
+    ///     access token issued before it answers 401 on its next request.
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]

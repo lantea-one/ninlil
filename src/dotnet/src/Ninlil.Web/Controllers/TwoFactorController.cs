@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Identity.Email;
+using Ninlil.Dns.Identity.Token;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Web.Examples.TwoFactor;
 using Ninlil.Web.Extension;
@@ -37,6 +38,15 @@ namespace Ninlil.Web.Controllers;
 ///     Limits how often an e-mailed code can be requested per user, shared with the sign-in step,
 ///     so a stolen access token cannot be used to flood the owner's inbox.
 /// </param>
+/// <param name="userStore">
+///     The user store, used to write a new authenticator key without the security-stamp change
+///     that <see cref="UserManager{TUser}.ResetAuthenticatorKeyAsync" /> makes (see
+///     <see cref="SetUpAuthenticator" />).
+/// </param>
+/// <param name="jwtTokenService">
+///     Revokes the account's refresh tokens when two-factor settings change, so a stolen session
+///     cannot refresh past the change.
+/// </param>
 [ApiController]
 [Route("api/auth/two-factor")]
 [Authorize]
@@ -45,7 +55,9 @@ public class TwoFactorController(
     IEmailSender emailSender,
     IDnsServerEventPublisher eventPublisher,
     TwoFactorCodeAttemptLimiter attemptLimiter,
-    TwoFactorEmailCodeCooldown emailCodeCooldown
+    TwoFactorEmailCodeCooldown emailCodeCooldown,
+    IUserStore<UserEntity> userStore,
+    IJwtTokenService jwtTokenService
 ) : ControllerBase
 {
     /// <summary>
@@ -80,7 +92,9 @@ public class TwoFactorController(
     /// <summary>
     ///     This action generates a new TOTP shared secret for the caller and returns it with an
     ///     <c>otpauth://</c> URI for an authenticator app. <see cref="EnableAuthenticator" /> must
-    ///     confirm it before two-factor sign-in becomes required.
+    ///     confirm it before two-factor sign-in becomes required. This call does not end the
+    ///     caller's session: the confirmation that follows needs it, and
+    ///     <see cref="EnableAuthenticator" /> ends every session of the account.
     ///     <para>
     ///         While two-factor sign-in is on with an authenticator secret, the request must carry
     ///         a valid current authenticator code or an unused recovery code (which this call
@@ -95,7 +109,8 @@ public class TwoFactorController(
     [HttpPost("authenticator/setup")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(AuthenticatorSetupResultExample))]
     public async Task<ActionResult<AuthenticatorSetupResult>> SetUpAuthenticator(
-        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] TwoFactorCodeRequest request
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] TwoFactorCodeRequest request,
+        CancellationToken stoppingToken
     )
     {
         UserEntity user = await GetCurrentUserAsync();
@@ -134,7 +149,16 @@ public class TwoFactorController(
             attemptLimiter.RecordSuccess(user.Id);
         }
 
-        await userManager.ResetAuthenticatorKeyAsync(user);
+        // UserManager.ResetAuthenticatorKeyAsync would also replace the security stamp and end the
+        // access token this caller needs for the confirmation step. The key is written through
+        // the store instead; EnableAuthenticator ends the sessions when the key is confirmed.
+        await ((IUserAuthenticatorKeyStore<UserEntity>)userStore).SetAuthenticatorKeyAsync(
+            user,
+            userManager.GenerateNewAuthenticatorKey(),
+            stoppingToken
+        );
+        IdentityResult updateResult = await userManager.UpdateAsync(user);
+        updateResult.ThrowIfFailed();
         string sharedKey = await userManager.GetAuthenticatorKeyAsync(user);
 
         eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
@@ -149,11 +173,18 @@ public class TwoFactorController(
     /// <summary>
     ///     This action confirms authenticator setup by checking a code from the app, and only then
     ///     makes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a
-    ///     <c>Retry-After</c> header, after 5 wrong codes in 15 minutes.
+    ///     <c>Retry-After</c> header, after 5 wrong codes in 15 minutes. A successful call
+    ///     replaces the account's security stamp and revokes every refresh token of the account,
+    ///     including the caller's own session: every access token issued before it, the caller's
+    ///     included, answers 401 on its next request, and the caller signs in again with the
+    ///     second factor.
     /// </summary>
     [HttpPost("authenticator/enable")]
     [SwaggerRequestExample(typeof(TwoFactorCodeRequest), typeof(TwoFactorCodeRequestExample))]
-    public async Task<IActionResult> EnableAuthenticator(TwoFactorCodeRequest request)
+    public async Task<IActionResult> EnableAuthenticator(
+        TwoFactorCodeRequest request,
+        CancellationToken stoppingToken
+    )
     {
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
@@ -176,7 +207,9 @@ public class TwoFactorController(
 
         attemptLimiter.RecordSuccess(user.Id);
 
-        await userManager.SetTwoFactorEnabledAsync(user, true);
+        IdentityResult enableResult = await userManager.SetTwoFactorEnabledAsync(user, true);
+        enableResult.ThrowIfFailed();
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
 
         eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
 
@@ -186,11 +219,15 @@ public class TwoFactorController(
     /// <summary>
     ///     This action stops requiring a second factor at sign-in. It needs a valid authenticator
     ///     code as well as the access token. Returns 400 for a wrong code and 429, with a
-    ///     <c>Retry-After</c> header, after 5 wrong codes in 15 minutes.
+    ///     <c>Retry-After</c> header, after 5 wrong codes in 15 minutes. A successful call ends
+    ///     every session of the account in the same way as <see cref="EnableAuthenticator" />.
     /// </summary>
     [HttpPost("disable")]
     [SwaggerRequestExample(typeof(TwoFactorCodeRequest), typeof(TwoFactorCodeRequestExample))]
-    public async Task<IActionResult> Disable(TwoFactorCodeRequest request)
+    public async Task<IActionResult> Disable(
+        TwoFactorCodeRequest request,
+        CancellationToken stoppingToken
+    )
     {
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
@@ -213,7 +250,9 @@ public class TwoFactorController(
 
         attemptLimiter.RecordSuccess(user.Id);
 
-        await userManager.SetTwoFactorEnabledAsync(user, false);
+        IdentityResult disableResult = await userManager.SetTwoFactorEnabledAsync(user, false);
+        disableResult.ThrowIfFailed();
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
 
         eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
 
@@ -265,11 +304,16 @@ public class TwoFactorController(
     /// <summary>
     ///     This action generates a new batch of single-use recovery codes for the caller and
     ///     invalidates any earlier batch. A recovery code is a fallback for the second factor, so
-    ///     two-factor sign-in must already be enabled; otherwise this returns 400.
+    ///     two-factor sign-in must already be enabled; otherwise this returns 400. A new batch
+    ///     replaces the account's security stamp and revokes every refresh token of the account,
+    ///     so the caller's own access token answers 401 on its next request: the caller reads the
+    ///     codes from this response and signs in again.
     /// </summary>
     [HttpPost("recovery-codes/generate")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(RecoveryCodesResultExample))]
-    public async Task<ActionResult<RecoveryCodesResult>> GenerateRecoveryCodes()
+    public async Task<ActionResult<RecoveryCodesResult>> GenerateRecoveryCodes(
+        CancellationToken stoppingToken
+    )
     {
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
@@ -284,6 +328,12 @@ public class TwoFactorController(
             user,
             RecoveryCodeCount
         );
+
+        // Identity does not replace the stamp for a new batch of recovery codes; a batch is a
+        // two-factor change, so it ends the sessions like the other changes do.
+        IdentityResult stampResult = await userManager.UpdateSecurityStampAsync(user);
+        stampResult.ThrowIfFailed();
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
 
         eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
 

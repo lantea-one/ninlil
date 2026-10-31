@@ -6,6 +6,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
 using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Identity.Store;
+using Ninlil.Dns.Identity.Token;
 using Ninlil.Dns.Server.ClusterSync.Shared;
 using Ninlil.Dns.Server.Core.ClusterSync;
 
@@ -40,6 +41,14 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///         account onto a name another local account holds is resolved the same way.
 ///     </para>
 ///     <para>
+///         <b>Security stamp.</b> A password or two-factor change replaces the account's security
+///         stamp, which ends its access tokens on every node once the update is applied (the
+///         cache flush in <see cref="ApplyAsync" />). Refresh tokens are stored per node, so an
+///         update whose stamp differs from the local one also revokes the account's refresh
+///         tokens here; otherwise a session of the account opened on this node could refresh past
+///         a password change made on a peer.
+///     </para>
+///     <para>
 ///         <b>Deletions</b> leave a tombstone (see <see cref="ClusterSyncTombstones" />), so a
 ///         stale create or update arriving after the delete does not bring the account back.
 ///     </para>
@@ -54,6 +63,10 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///     applies to access tokens already issued on this node on their next request.
 /// </param>
 /// <param name="logger">The logger a malformed envelope or a detected collision is recorded to.</param>
+/// <param name="jwtTokenService">
+///     Revokes the account's refresh tokens on this node when an update carries a new security
+///     stamp (see the class summary).
+/// </param>
 public class UserClusterConfigSyncApplier(
     IUserRepository userRepository,
     IRoleRepository roleRepository,
@@ -61,7 +74,8 @@ public class UserClusterConfigSyncApplier(
     IUnitOfWork unitOfWork,
     IDataProtectionProvider dataProtectionProvider,
     ILogger<UserClusterConfigSyncApplier> logger,
-    IAccessTokenRevalidator accessTokenRevalidator
+    IAccessTokenRevalidator accessTokenRevalidator,
+    IJwtTokenService jwtTokenService
 ) : IClusterConfigSyncApplier
 {
     /// <summary>
@@ -163,12 +177,20 @@ public class UserClusterConfigSyncApplier(
         local.NormalizedUserName = normalizedUserName;
         if (conflictNote is not null)
             local.ClusterConflictNote = conflictNote;
+        bool securityStampChanged = !string.Equals(
+            local.SecurityStamp,
+            payload.SecurityStamp,
+            StringComparison.Ordinal
+        );
         ApplyCommonFields(local, payload);
         local.UpdatedAtUtc = envelope.LastModifiedUtc;
         local.OriginatingNodeId = envelope.OriginatingNodeId;
 
         userRepository.Update(local);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        if (securityStampChanged)
+            await jwtTokenService.RevokeAllRefreshTokensAsync(local.Id, stoppingToken);
 
         await ReconcileRolesAndClaimsAsync(local.Id, payload, stoppingToken);
     }
