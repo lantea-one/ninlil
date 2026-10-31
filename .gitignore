@@ -857,10 +857,14 @@ dist-ssr
 *.sln
 *.sw?
 
-# AI coding-assistant local state and per-developer instructions. The shared agent definitions in
-# .claude/agents/ are tracked so every contributor's assistant uses the same ones.
+# AI coding-assistant local state and per-developer instructions. The agent definitions in
+# .claude/agents/ are tracked: src/script/development/sync-agent-definitions.py writes them from
+# src/agents/, with those of the other assistants (.gemini/, .agents/, .codex/).
 .claude/*
 !.claude/agents/
+
+# Work packages the architect role writes when no path is given (src/agents/architect.md).
+.work-packages/
 
 # The Arch Linux packages' default environment file (a template, no secrets).
 !src/archlinux/common/ninlil.env

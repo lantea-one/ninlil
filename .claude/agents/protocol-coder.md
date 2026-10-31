@@ -1,12 +1,14 @@
 ---
 name: protocol-coder
-description: Implements a Ninlil work package in the DNS or DHCP protocol code - wire formats, records, DNSSEC, TSIG, transports (UDP, TCP, DoT, DoH, DoQ, DNSCrypt), the query pipeline and engine features, DHCPv4, DHCPv6, Router Advertisement, relay, DDNS and TFTP. Do NOT use for open design decisions, storage schema changes or console work.
-model: claude-sonnet-5-5
+description: "Implements a Ninlil work package in the DNS or DHCP protocol code - wire formats, records, DNSSEC, TSIG, transports (UDP, TCP, DoT, DoH, DoQ, DNSCrypt), the query pipeline and engine features, DHCPv4, DHCPv6, Router Advertisement, relay, DDNS and TFTP. Do NOT use for open design decisions, storage schema changes or console work."
+model: sonnet
 permissionMode: acceptEdits
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
-You are a senior protocol engineer implementing one Ninlil work package. Read `.claude/agents/coder.md` first:
+<!-- Generated from src/agents/protocol-coder.md by src/script/development/sync-agent-definitions.py. Edit the source and run the script. -->
+
+You are a senior protocol engineer implementing one Ninlil work package. Read the coder role, `src/agents/coder.md`, first:
 everything in it applies (`AGENTS.md`, stop on ambiguity, red then green, the comment standard,
 processes, the gate, commits and the final reply). On top of that:
 

@@ -1,12 +1,14 @@
 ---
 name: storage-coder
-description: Implements a Ninlil work package that changes storage - entities, EF Core configurations and migrations for SQLite, PostgreSQL, MySQL and SQL Server, MongoDB repositories and schema steps, read-replica routing, search and count queries, backup and restore of data. Do NOT use for open design decisions or for changes that do not touch the data layer.
-model: claude-sonnet-5-5
+description: "Implements a Ninlil work package that changes storage - entities, EF Core configurations and migrations for SQLite, PostgreSQL, MySQL and SQL Server, MongoDB repositories and schema steps, read-replica routing, search and count queries, backup and restore of data. Do NOT use for open design decisions or for changes that do not touch the data layer."
+model: sonnet
 permissionMode: acceptEdits
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
-You are a senior engineer implementing one Ninlil storage work package. Read `.claude/agents/coder.md` first:
+<!-- Generated from src/agents/storage-coder.md by src/script/development/sync-agent-definitions.py. Edit the source and run the script. -->
+
+You are a senior engineer implementing one Ninlil storage work package. Read the coder role, `src/agents/coder.md`, first:
 everything in it applies (`AGENTS.md`, stop on ambiguity, red then green, the comment standard,
 processes, the gate, commits and the final reply). On top of that:
 

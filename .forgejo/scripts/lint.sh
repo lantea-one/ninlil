@@ -15,7 +15,9 @@
 #   3. No tracked C# file uses a block-scoped namespace (`namespace X {`). The code base uses
 #      file-scoped ones only; `dotnet ef migrations add` writes block-scoped ones, which
 #      src/script/development/file-scoped-namespaces.sh converts.
-#   4. Every .forgejo/scripts/tests/*.test.sh.
+#   4. The agent definitions of every coding assistant (.claude/, .gemini/, .agents/, .codex/)
+#      match the roles in src/agents/ (src/script/development/sync-agent-definitions.py --check).
+#   5. Every .forgejo/scripts/tests/*.test.sh.
 #
 # Inputs: none; run from anywhere (it changes to the repository root). Needs shellcheck,
 # actionlint, find and the tools the tests need. Outputs: tool output on stdout/stderr and a
@@ -62,6 +64,13 @@ if block_namespaces="$(git grep -lE '^namespace [A-Za-z0-9_.]+[[:space:]]*$' -- 
     failed+=('file-scoped namespaces')
 else
     echo 'ok'
+fi
+
+echo '== agent definitions'
+if python3 src/script/development/sync-agent-definitions.py --check; then
+    :
+else
+    failed+=('agent definitions')
 fi
 
 echo '== script self-tests'
