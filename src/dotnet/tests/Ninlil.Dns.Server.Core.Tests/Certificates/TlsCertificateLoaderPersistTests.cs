@@ -17,7 +17,18 @@ public sealed class TlsCertificateLoaderPersistTests : IDisposable
         .CreateTempSubdirectory("ninlil-tls-tests-")
         .FullName;
 
-    public void Dispose() => Directory.Delete(_directory, recursive: true);
+    public void Dispose()
+    {
+        // On Windows the loader keeps the certificate in the current user's store; remove what
+        // these tests created.
+        if (OperatingSystem.IsWindows())
+            WindowsCertificateKeyStore.RemoveEntries(
+                Path.Combine(_directory, "tls", "self-signed.pfx"),
+                NullLogger.Instance
+            );
+
+        Directory.Delete(_directory, recursive: true);
+    }
 
     [Fact]
     public void TheGeneratedSelfSignedPfxIsSavedOwnerOnlyAndLoadsAgain()

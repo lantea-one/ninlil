@@ -24,7 +24,17 @@ public static class TlsCertificateLoader
     public static X509Certificate2 LoadOrGenerate(TlsCertificateOptions options, ILogger logger)
     {
         if (!string.IsNullOrWhiteSpace(options.PfxPath))
-            return X509CertificateLoader.LoadPkcs12FromFile(options.PfxPath, options.PfxPassword);
+            return LoadPersistingKey(
+                flags =>
+                    X509CertificateLoader.LoadPkcs12FromFile(
+                        options.PfxPath,
+                        options.PfxPassword,
+                        flags
+                    ),
+                options.PfxPath,
+                options,
+                logger
+            );
 
         string statePath = options.SelfSignedCertificateStatePath;
 
@@ -32,7 +42,12 @@ public static class TlsCertificateLoader
         {
             try
             {
-                return X509CertificateLoader.LoadPkcs12FromFile(statePath, "");
+                return LoadPersistingKey(
+                    flags => X509CertificateLoader.LoadPkcs12FromFile(statePath, "", flags),
+                    statePath,
+                    options,
+                    logger
+                );
             }
             catch (CryptographicException exception)
             {
@@ -54,7 +69,12 @@ public static class TlsCertificateLoader
             pfxBytes = created.Export(X509ContentType.Pfx);
 
         Persist(pfxBytes, statePath, logger);
-        X509Certificate2 certificate = X509CertificateLoader.LoadPkcs12(pfxBytes, "");
+        X509Certificate2 certificate = LoadPersistingKey(
+            flags => X509CertificateLoader.LoadPkcs12(pfxBytes, "", flags),
+            statePath,
+            options,
+            logger
+        );
 
         logger.LogInformation(
             "Generated a new self-signed TLS certificate (subject alternative names: {Names}), persisted to '{Path}'.",
@@ -63,6 +83,36 @@ public static class TlsCertificateLoader
         );
 
         return certificate;
+    }
+
+    /// <summary>
+    ///     This method loads PKCS#12 data so a TLS server handshake can use its key. On Windows
+    ///     it keeps one persisted key per certificate in the current account's certificate store
+    ///     (<see cref="WindowsCertificateKeyStore" />), because a plain load creates a key file
+    ///     that nothing deletes; other platforms keep the key in memory and load it directly.
+    /// </summary>
+    /// <param name="load">Loads the data with the given key storage flags.</param>
+    /// <param name="sourceIdentity">The path of the file the data comes from.</param>
+    /// <param name="options">The options whose reload interval sets how long a replaced key stays.</param>
+    /// <param name="logger">The logger the store records to.</param>
+    private static X509Certificate2 LoadPersistingKey(
+        Func<X509KeyStorageFlags, X509Certificate2> load,
+        string sourceIdentity,
+        TlsCertificateOptions options,
+        ILogger logger
+    )
+    {
+        if (!OperatingSystem.IsWindows())
+            return load(X509KeyStorageFlags.DefaultKeySet);
+
+        // Every provider that shares the certificate reloads within its poll interval, so three
+        // intervals leave the replaced key in place until they all have.
+        return WindowsCertificateKeyStore.Resolve(
+            load,
+            sourceIdentity,
+            options.CertificateReloadPollInterval * 3,
+            logger
+        );
     }
 
     /// <summary>

@@ -226,10 +226,12 @@ public sealed class AcmeCertificateIssuer(
             );
 
             // Read the expiry from the issued certificate instead of assuming the Let's Encrypt
-            // 90-day lifetime, since other CAs differ.
+            // 90-day lifetime, since other CAs differ. Only the certificate is read, so the key is
+            // not stored: on Windows a stored key would leave a key file nothing deletes.
             using X509Certificate2 issuedCertificate = X509CertificateLoader.LoadPkcs12(
                 pfxBytes,
-                ""
+                "",
+                X509KeyStorageFlags.EphemeralKeySet
             );
 
             AcmeDomainCertificateState state = new(

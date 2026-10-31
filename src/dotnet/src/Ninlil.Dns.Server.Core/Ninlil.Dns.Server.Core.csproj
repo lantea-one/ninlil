@@ -26,6 +26,11 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
   </ItemGroup>
 
+  <!-- The Windows certificate store tests remove the entries and keys they create. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.Core.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
