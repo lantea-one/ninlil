@@ -3486,8 +3486,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   never collide, because one hands out addresses and the other prefixes. A `/31` or `/32` scope
   has no network or broadcast address to avoid ([RFC 3021 Section
   2.1](https://www.rfc-editor.org/rfc/rfc3021#section-2.1)), and DHCPv6 has no broadcast
-  address. A `PATCH` that touches none of the range, the prefix length, the kind or the switch is not checked, so a scope stored
-  before these checks can still be renamed while you fix it.
+  address. A `PATCH` is checked on the patched scope, whatever fields it changes.
 - **Lease length.** A DHCPv4 device may ask for a lease time. It gets that time, capped at
   `maxLeaseDuration`, or `defaultLeaseDuration` when it asks for none. DHCPv6 ignores the times a
   device suggests: the preferred and valid lifetimes are `defaultLeaseDuration` capped at
