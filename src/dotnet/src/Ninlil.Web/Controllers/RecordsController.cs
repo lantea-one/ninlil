@@ -103,9 +103,11 @@ public class RecordsController(
     ///     without it there is no serial to advance; that first record bootstraps the zone through
     ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" />, and later records go through
     ///     <see cref="IZoneUpdateService.ApplyChangesAsync" />. Returns 400 when the first record
-    ///     is not an SOA or the data does not fit the record type (an APL item must be in canonical
-    ///     form, RFC 3123 §4), 404 for an unknown zone, and 409
-    ///     for a second SOA. Requires <c>zones:write</c>.
+    ///     is not an SOA, is an SOA that is not at the zone's own name, or the data does not fit the
+    ///     record type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown
+    ///     zone, and 409 for a second SOA or a zone that has records but no SOA at its apex. The
+    ///     owner name "@" means the zone's own name (RFC 1035 §5.1) and is stored as that name.
+    ///     Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -117,10 +119,10 @@ public class RecordsController(
         CancellationToken stoppingToken
     )
     {
-        if (await zoneRepository.GetByIdAsync(zoneId, stoppingToken) is null)
-            throw new NotFoundException("Zone", zoneId.ToString());
-
-        RecordEntity record = BuildRecord(zoneId, request);
+        ZoneEntity zone =
+            await zoneRepository.GetByIdAsync(zoneId, stoppingToken)
+            ?? throw new NotFoundException("Zone", zoneId.ToString());
+        RecordEntity record = BuildRecord(zoneId, request, zone.Name);
 
         IReadOnlyList<RecordEntity> existing = await recordRepository.ListByZoneIdAsync(
             zoneId,
@@ -132,6 +134,13 @@ public class RecordsController(
             if (request.Type != DnsResourceRecordTypeEnum.Soa)
                 throw new ValidationException(
                     "A zone's very first record must be its own SOA record."
+                );
+
+            // Without an SOA at the apex the serial logic cannot find the SOA and every later
+            // change would fail, so the first SOA must be named like the zone.
+            if (!IsSameOwnerName(record.Name, zone.Name))
+                throw new ValidationException(
+                    $"A zone's SOA record must be at the zone's own name '{zone.Name}' (or '@'), not '{record.Name}'."
                 );
 
             try
@@ -188,7 +197,8 @@ public class RecordsController(
         if (existingRecord is null || existingRecord.ZoneId != zoneId)
             throw new NotFoundException("Record", id.ToString());
 
-        ThrowIfEditMovesSoa(existingRecord, request.Type, request.Name);
+        string ownerName = await ResolveOwnerNameAsync(zoneId, request.Name, stoppingToken);
+        ThrowIfEditMovesSoa(existingRecord, request.Type, ownerName);
 
         string dataJson = RecordDataValidator.EncodeDataOrThrow(request.Type, request.Data);
 
@@ -199,7 +209,7 @@ public class RecordsController(
                 id,
                 record =>
                 {
-                    record.Name = request.Name;
+                    record.Name = ownerName;
                     record.Type = request.Type;
                     record.Class = request.Class;
                     record.TimeToLiveSeconds = request.TimeToLiveSeconds;
@@ -251,7 +261,7 @@ public class RecordsController(
 
         string patchedName = existingRecord.Name;
         if (patch.TryGetMergePatchField("name", out JsonElement patchName))
-            patchedName = patchName.GetString();
+            patchedName = await ResolveOwnerNameAsync(zoneId, patchName.GetString(), stoppingToken);
 
         ThrowIfEditMovesSoa(existingRecord, effectiveType, patchedName);
 
@@ -286,8 +296,8 @@ public class RecordsController(
                 id,
                 record =>
                 {
-                    if (patch.TryGetMergePatchField("name", out JsonElement name))
-                        record.Name = name.GetString();
+                    if (patch.TryGetMergePatchField("name", out JsonElement _))
+                        record.Name = patchedName;
 
                     record.Type = effectiveType;
 
@@ -370,9 +380,14 @@ public class RecordsController(
 
     /// <summary>
     ///     This method builds a new, unsaved record entity from a create request, checking and
-    ///     normalizing its type-specific data.
+    ///     normalizing its type-specific data and resolving an owner name of "@" to
+    ///     <paramref name="zoneName" />.
     /// </summary>
-    private static RecordEntity BuildRecord(Guid zoneId, RecordWriteRequest request)
+    private static RecordEntity BuildRecord(
+        Guid zoneId,
+        RecordWriteRequest request,
+        string zoneName
+    )
     {
         string dataJson = RecordDataValidator.EncodeDataOrThrow(request.Type, request.Data);
 
@@ -380,7 +395,7 @@ public class RecordsController(
         {
             Id = Guid.NewGuid(),
             ZoneId = zoneId,
-            Name = request.Name,
+            Name = ResolveOwnerName(request.Name, zoneName),
             Type = request.Type,
             Class = request.Class,
             TimeToLiveSeconds = request.TimeToLiveSeconds,
@@ -391,6 +406,44 @@ public class RecordsController(
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
     }
+
+    /// <summary>
+    ///     This method turns the owner name "@" into the zone's own name and returns any other name
+    ///     unchanged. RFC 1035 §5.1: "A free standing @ is used to denote the current origin." A
+    ///     name without a trailing dot, such as "www", is stored as given; the API does not append
+    ///     the zone name to it.
+    /// </summary>
+    private static string ResolveOwnerName(string name, string zoneName) =>
+        name == "@" ? zoneName : name;
+
+    /// <summary>
+    ///     This method resolves an owner name of "@" for an edit by loading the zone's name. Returns
+    ///     404 when the zone does not exist.
+    /// </summary>
+    private async Task<string> ResolveOwnerNameAsync(
+        Guid zoneId,
+        string name,
+        CancellationToken stoppingToken
+    )
+    {
+        if (name != "@")
+            return name;
+
+        ZoneEntity zone =
+            await zoneRepository.GetByIdAsync(zoneId, stoppingToken)
+            ?? throw new NotFoundException("Zone", zoneId.ToString());
+        return zone.Name;
+    }
+
+    /// <summary>
+    ///     This method compares two owner names case-insensitively, ignoring one trailing dot.
+    /// </summary>
+    private static bool IsSameOwnerName(string first, string second) =>
+        string.Equals(
+            (first ?? string.Empty).TrimEnd('.'),
+            (second ?? string.Empty).TrimEnd('.'),
+            StringComparison.OrdinalIgnoreCase
+        );
 
     /// <summary>
     ///     This method throws <see cref="ConflictException" /> when an edit would change a record's
@@ -423,8 +476,8 @@ public class RecordsController(
     ///     This method maps an <see cref="InvalidOperationException" /> from
     ///     <see cref="IZoneUpdateService" /> to a REST exception by the message wording
     ///     <see cref="ZoneUpdateService" /> uses: a missing zone or record becomes
-    ///     <see cref="NotFoundException" /> and a repeated bootstrap becomes
-    ///     <see cref="ConflictException" />. An unrecognized message is not guessed at; it becomes
+    ///     <see cref="NotFoundException" /> and a repeated bootstrap or a zone without an apex SOA
+    ///     becomes <see cref="ConflictException" />. An unrecognized message is not guessed at; it becomes
     ///     a <see cref="NinlilException" />, which still yields a <c>ProblemDetails</c> response.
     /// </summary>
     /// <param name="exception">The exception raised by the <see cref="IZoneUpdateService" /> call.</param>
@@ -456,14 +509,19 @@ public class RecordsController(
         if (message.StartsWith("An edit cannot change", StringComparison.Ordinal))
             return new ConflictException(message);
 
+        // A zone with records but no SOA at its apex. The caller can fix it by adding the SOA, so
+        // it is a conflict with the zone's state, not a server fault.
+        if (message.Contains("has no SOA record to increment", StringComparison.Ordinal))
+            return new ConflictException(message);
+
         if (
             recordId is not null
             && message.StartsWith("No record with id", StringComparison.Ordinal)
         )
             return new NotFoundException("Record", recordId.Value.ToString());
 
-        // Most likely a missing or corrupt SOA record: an understood internal state the caller
-        // could not have avoided, so not a 400, 404 or 409.
+        // Most likely a stored SOA that cannot be decoded: an internal state the caller could not
+        // have avoided, so not a 400, 404 or 409.
         return new NinlilException(message, exception);
     }
 

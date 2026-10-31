@@ -9,7 +9,10 @@ namespace Ninlil.Web.Models;
 ///     (<c>POST /api/zones/{zoneId}/records</c>) and to fully replace one
 ///     (<c>PUT /api/zones/{zoneId}/records/{id}</c>).
 /// </summary>
-/// <param name="Name">The record's owner name.</param>
+/// <param name="Name">
+///     The record's owner name. "@" means the zone's own name (RFC 1035 §5.1) and is stored as that
+///     name; any other name is stored as given.
+/// </param>
 /// <param name="Type">The record's DNS TYPE.</param>
 /// <param name="TimeToLiveSeconds">The record's time-to-live, in seconds.</param>
 /// <param name="Data">
