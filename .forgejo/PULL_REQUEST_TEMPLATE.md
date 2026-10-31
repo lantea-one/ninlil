@@ -1,10 +1,10 @@
 <One sentence: what changes for a user or caller.>
 
-Refs #<issue>
+Closes #<issue>
 
-<!-- One `Refs #n` line for every issue this pull request works on. A feature pull request never
-says `Closes`. The commit that finishes an issue carries `Closes #n` in its body, and the issue
-closes when that commit reaches `main` through the `develop` into `main` pull request. -->
+<!-- A pull request into `develop` names the issue it finishes with `Closes #n`, and Forgejo closes
+the issue when the pull request merges. Use `Refs #n` for an issue it only works on. The commit
+that finishes an issue also carries `Closes #n` in its body; other commits use `Refs #n`. -->
 
 ## Checklist
 
