@@ -145,33 +145,6 @@ public sealed class Dhcpv6AllocationIntegrityTests : IAsyncLifetime
         Assert.Equal(LeaseStateEnum.Active, lease.State);
     }
 
-    /// <summary>
-    ///     This test checks that a stored reservation holding an IPv4 address (the API refuses
-    ///     one, but a restore or a database edit can store it) is skipped with a Warning: the
-    ///     device gets a pool address instead of an encoding failure and no reply.
-    /// </summary>
-    [Fact]
-    public async Task Solicit_ForAReservationHoldingAnIPv4Address_SkipsItWithAWarningAndAdvertisesAPoolAddress()
-    {
-        DhcpScopeEntity scope = await _host.SeedAddressScopeAsync(
-            "v6-integrity-wrong-family",
-            "2001:db8:6::10",
-            "2001:db8:6::15"
-        );
-        byte[] client = Duid(9);
-        await _host.SeedReservationAsync(scope.Id, FormatDuid(client), "192.0.2.77");
-
-        IPAddress offer = AddressOf(await SolicitAsync(client));
-        Assert.Equal(IPAddress.Parse("2001:db8:6::10"), offer);
-
-        Dhcpv6Message reply = await RequestAsync(client, offer);
-        Assert.Equal(offer, AddressOf(reply));
-        Assert.Contains(
-            _host.Logs.Warnings,
-            warning => warning.Contains("192.0.2.77") && warning.Contains("is not an IPv6 address")
-        );
-    }
-
     [Fact]
     public async Task Solicit_ForAClientWhoseAddressWasReservedForAnotherClient_AdvertisesAnotherAddress()
     {

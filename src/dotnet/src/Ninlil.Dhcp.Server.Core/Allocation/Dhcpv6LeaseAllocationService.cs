@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Sockets;
 using System.Numerics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -163,7 +162,6 @@ public sealed class Dhcpv6LeaseAllocationService(
             clientKey,
             cancellationToken
         );
-        reservation = KeepOnlyUsable(scope, reservation);
         bool addressMatchesOwnReservation =
             reservation is { IsDisabled: false }
             && string.Equals(
@@ -488,35 +486,6 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method returns <paramref name="reservation" /> when its address is an
-    ///     IPv6 address, and <see langword="null" /> (with a Warning) when it is not, so the
-    ///     client is treated as having no reservation. The reservations API refuses such an
-    ///     address, but a restore or a direct database edit can still store one, and an address of
-    ///     the wrong family makes the reply impossible to encode, so the device would get no
-    ///     answer at all.
-    /// </summary>
-    private DhcpReservationEntity KeepOnlyUsable(
-        DhcpScopeEntity scope,
-        DhcpReservationEntity reservation
-    )
-    {
-        if (
-            reservation is null
-            || !IPAddress.TryParse(reservation.IpAddress, out IPAddress reserved)
-            || reserved.AddressFamily == AddressFamily.InterNetworkV6
-        )
-            return reservation;
-
-        logger.LogWarning(
-            "The reservation for {ClientIdentifier} in scope '{ScopeName}' ({Address}) is not an IPv6 address, so it is skipped and the client is treated as having no reservation. Correct or delete the reservation.",
-            reservation.ClientIdentifier,
-            scope.Name,
-            reservation.IpAddress
-        );
-        return null;
-    }
-
-    /// <summary>
     ///     This method looks up the client's enabled reservation. A reservation outranks the
     ///     client's current binding, and <see cref="ConfirmAddressAsync" /> refuses every other
     ///     address, so a conflict gives no offer at all.
@@ -539,8 +508,6 @@ public sealed class Dhcpv6LeaseAllocationService(
             clientKey,
             cancellationToken
         );
-
-        reservation = KeepOnlyUsable(scope, reservation);
 
         if (reservation is not { IsDisabled: false })
             return (false, null);
