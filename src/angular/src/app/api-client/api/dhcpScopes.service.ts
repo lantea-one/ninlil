@@ -250,7 +250,7 @@ export class DhcpScopesService extends BaseService implements DhcpScopesServiceI
     }
 
     /**
-     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for &#x60;POST /api/dhcp-scopes&#x60; (patched gateway and DNS entries must match the scope\&#39;s protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive duration (400 otherwise), and the range start must not be after the range end. Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. The protocol version cannot be changed. The patched scope is checked as for &#x60;POST /api/dhcp-scopes&#x60; (patched gateway and DNS entries must match the scope\&#39;s protocol, and a DHCPv6 scope takes no gateway); a lease duration must be a JSON string holding a positive duration (400 otherwise), and the range start must not be after the range end. A patch that changes the range or the prefix length is checked for the subnet rule of &#x60;POST /api/dhcp-scopes&#x60;. One that changes the range, the prefix length or the kind, or turns the scope on, is checked for the overlap rule. A patch that touches none of these is not, so a scope that breaks a rule can still be renamed, commented or disabled while it is fixed. Renaming the scope moves its leases to the new name in the same save. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint patch /api/dhcp-scopes/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -450,7 +450,7 @@ export class DhcpScopesService extends BaseService implements DhcpScopesServiceI
     }
 
     /**
-     * This action creates a DHCP scope. Returns 400 for a missing name, a range address of the wrong family, a bad prefix length, a non-positive lease duration or a default above the maximum, an invalid gateway, DNS server or next-server address, a gateway or DNS server address of the other family than the scope\&#39;s protocol, any gateway on a DHCPv6 scope, a boot file name over 128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and 409 when the name is taken. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action creates a DHCP scope. Returns 400 for a missing name, a range address of the wrong family, a bad prefix length, a non-positive lease duration or a default above the maximum, a range that does not lie inside one subnet of the prefix length, an enabled range that shares an address with another enabled scope of the same IP version and kind, an invalid gateway, DNS server or next-server address, a gateway or DNS server address of the other family than the scope\&#39;s protocol, any gateway on a DHCPv6 scope, a boot file name over 128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and 409 when the name is taken. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint post /api/dhcp-scopes
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
