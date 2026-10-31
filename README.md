@@ -465,7 +465,22 @@ To run it as a service that starts with Windows (all in an administrator PowerSh
    -Name Environment -Type MultiString -Value "NINLIL_DNS_SERVER_WEB_HTTP_PORT=8080"` (one `NAME=value`
    line per setting; see [`ENVIRONMENT.md`](./ENVIRONMENT.md)), then `Restart-Service Ninlil`.
 
-To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil`. Your `C:\Ninlil\data` folder stays.
+Check that the service works: `Get-Service Ninlil` shows `Running` a few seconds after
+`Start-Service Ninlil`, and `Invoke-WebRequest http://localhost/status` answers `{"status":"Healthy",...}`.
+`Stop-Service Ninlil` returns in under a second and frees the ports. Keep the program folder outside
+any user profile (such as `C:\Ninlil` or `C:\ProgramData\Ninlil`): a service account cannot read the
+profile of the user who unzipped it.
+
+Windows has no console for a service, so Ninlil writes its warnings and errors to the Windows
+Application event log under the source `Ninlil.Web`. A virtual service account is not allowed to
+create that source, so until the source exists the service logs only one entry saying it cannot log
+(find it in Event Viewer under Windows Logs, Application). The source exists after Ninlil has run
+once as LocalSystem (`sc.exe config Ninlil obj= LocalSystem`, start and stop the service, then set the
+account back).
+
+To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil`. Your `C:\Ninlil\data` folder stays. Windows
+keeps the virtual account's profile folder `C:\Windows\ServiceProfiles\Ninlil` loaded until the next
+restart; delete it after that restart, together with the key and certificate files described below.
 Updating means stopping the service, replacing the `.exe` and `msquic.dll` with the files from the
 new zip, and starting it again.
 
@@ -474,7 +489,9 @@ folder. How the keys in it are stored is described in [Security](#security).
 
 Ninlil keeps the private key of its TLS certificate, the self-signed one or one from a PFX file, in
 the certificate store of the account that runs it (`Cert:\CurrentUser\My`, entries with the
-friendly name `Ninlil TLS ...`), because Windows cannot use a key that exists only in memory for a
+friendly name `Ninlil TLS ...`; for a virtual service account that store and its key file live under
+`C:\Windows\ServiceProfiles\<service name>\AppData\Roaming\Microsoft`, for LocalSystem under
+`C:\Windows\System32\config\systemprofile` and `C:\ProgramData\Microsoft\Crypto\SystemKeys`), because Windows cannot use a key that exists only in memory for a
 TLS server. The store holds one entry per certificate file. A start finds the entry again, and a
 changed certificate file replaces the entry and deletes its old key. If the account's store is not
 available, for example for a service account without a loaded profile, Ninlil logs a warning and
