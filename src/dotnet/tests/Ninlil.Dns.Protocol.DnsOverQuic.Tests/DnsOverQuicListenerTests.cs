@@ -83,9 +83,16 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         );
         await _listener.StartAsync(CancellationToken.None);
 
-        // The listener calls QuicListener.ListenAsync on a background task; give it a moment to
-        // bind before any test connects.
-        await Task.Delay(TimeSpan.FromMilliseconds(250));
+        // The listener calls QuicListener.ListenAsync on a background task, after it creates the
+        // self-signed certificate, which takes longer on a busy machine than any fixed pause.
+        // Wait for the bind signal instead, so no test connects to a port nothing holds yet. The
+        // tests return early without QUIC, and the listener never binds then.
+        if (QuicListener.IsSupported)
+        {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
+            while (!_listener.IsListening)
+                await Task.Delay(10, timeout.Token);
+        }
     }
 
     /// <inheritdoc />
