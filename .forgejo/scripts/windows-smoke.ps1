@@ -1,12 +1,20 @@
 <#
 .SYNOPSIS
 Starts a Ninlil executable on free loopback ports and checks that it serves /status, the admin
-console and a DNS query.
+console, HTTPS on the first start, DNS-over-TLS and DNS-over-QUIC, and a DNS query.
 
 .DESCRIPTION
 This is the "windows-smoke" job of .forgejo/workflows/pipeline.yml. It proves that the Windows
 executable published by publish-binary.sh starts, serves its embedded admin console and answers a
 DNS query. It is a smoke test, not a test suite.
+
+The HTTPS, DNS-over-TLS and DNS-over-QUIC checks run against the self-signed certificate the
+executable generates on its first start. On Windows that key must be one Schannel can use for a
+server handshake, so a failure here means the first start is broken even though a restart would
+work. DNS-over-QUIC also needs msquic.dll to load. PowerShell 7 sends a real DoQ query through
+.NET's QuicConnection. Windows PowerShell 5.1 has no QUIC client, so there the script requires
+a healthy /status (it is unhealthy when an enabled transport is not listening) and no "QUIC is
+not supported" line in the executable's log.
 
 The executable comes from one of two places:
   - -ExecutablePath: a local file (how a developer runs this under pwsh on Linux, against
@@ -115,19 +123,142 @@ function Get-FreePort([bool] $alsoUdp) {
     throw 'No free port found.'
 }
 
-# Sends one A query for localhost. over UDP and returns the reply bytes, or throws on timeout.
-function Send-DnsQuery([int] $port, [byte[]] $id) {
+# A small compiled client for the TLS checks. It is C# because the certificate callback runs on a
+# thread without a PowerShell runspace, where a script block would fail; the code stays at C# 5
+# so Windows PowerShell 5.1 can compile it. The server's certificate is self-signed, so every
+# certificate is accepted: the checks are about the handshake, not about trust.
+Add-Type -TypeDefinition @'
+using System;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Text;
+
+public static class SmokeTls
+{
+    private static SslStream Connect(int port)
+    {
+        TcpClient client = new TcpClient();
+        client.Connect("127.0.0.1", port);
+        client.ReceiveTimeout = 10000;
+        client.SendTimeout = 10000;
+        SslStream stream = new SslStream(client.GetStream(), false, delegate { return true; });
+        // 0 lets the operating system choose; Tls12 and Tls13 are named by value because the
+        // enum of a .NET Framework 4.x host may not define Tls13.
+        stream.AuthenticateAsClient("localhost", null, (SslProtocols)0, false);
+        return stream;
+    }
+
+    // Returns the status line of GET /status over HTTPS (HTTP/1.0, so the server closes the connection).
+    public static string HttpsStatusLine(int port)
+    {
+        using (SslStream stream = Connect(port))
+        {
+            byte[] request = Encoding.ASCII.GetBytes("GET /status HTTP/1.0\r\nHost: localhost\r\n\r\n");
+            stream.Write(request, 0, request.Length);
+            byte[] buffer = new byte[256];
+            int read = stream.Read(buffer, 0, buffer.Length);
+            string text = Encoding.ASCII.GetString(buffer, 0, read);
+            int end = text.IndexOf('\r');
+            return end < 0 ? text : text.Substring(0, end);
+        }
+    }
+
+    // Sends one length-prefixed DNS message over DNS-over-TLS (RFC 7858) and returns the reply.
+    public static byte[] DotQuery(int port, byte[] query)
+    {
+        using (SslStream stream = Connect(port))
+        {
+            byte[] framed = new byte[query.Length + 2];
+            framed[0] = (byte)(query.Length >> 8);
+            framed[1] = (byte)query.Length;
+            Array.Copy(query, 0, framed, 2, query.Length);
+            stream.Write(framed, 0, framed.Length);
+            byte[] prefix = ReadExactly(stream, 2);
+            return ReadExactly(stream, (prefix[0] << 8) | prefix[1]);
+        }
+    }
+
+    private static byte[] ReadExactly(SslStream stream, int count)
+    {
+        byte[] data = new byte[count];
+        int done = 0;
+        while (done < count)
+        {
+            int read = stream.Read(data, done, count - done);
+            if (read <= 0) throw new System.IO.EndOfStreamException("The connection closed early.");
+            done += read;
+        }
+        return data;
+    }
+}
+'@
+
+# Builds the wire bytes of one A query for localhost. with the given 2-byte id and the RD flag.
+function New-DnsQuery([byte[]] $id) {
     $query = New-Object 'System.Collections.Generic.List[byte]'
     $query.AddRange($id)
     $query.AddRange([byte[]](0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00))
     $query.Add(9)
     $query.AddRange([Text.Encoding]::ASCII.GetBytes('localhost'))
     $query.AddRange([byte[]](0x00, 0x00, 0x01, 0x00, 0x01))
+    return , $query.ToArray()
+}
+
+# Sends one DNS-over-QUIC query (RFC 9250 §4.2.1: message id 0, one stream per query) and returns
+# the reply. Only PowerShell 7 (.NET 7 or newer) has QuicConnection.
+function Send-DoqQuery([int] $port) {
+    Add-Type -ReferencedAssemblies System.Net.Quic, System.Net.Security, System.Net.Primitives, System.Security.Cryptography, System.Collections, System.Runtime -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Quic;
+using System.Net.Security;
+using System.Threading.Tasks;
+
+public static class SmokeDoq
+{
+    public static async Task<byte[]> QueryAsync(int port, byte[] query)
+    {
+        var options = new QuicClientConnectionOptions
+        {
+            RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, port),
+            DefaultStreamErrorCode = 0,
+            DefaultCloseErrorCode = 0,
+            ClientAuthenticationOptions = new SslClientAuthenticationOptions
+            {
+                TargetHost = "localhost",
+                ApplicationProtocols = new List<SslApplicationProtocol> { new SslApplicationProtocol("doq") },
+                RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true,
+            },
+        };
+        await using QuicConnection connection = await QuicConnection.ConnectAsync(options);
+        await using QuicStream stream = await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional);
+        byte[] framed = new byte[query.Length + 2];
+        framed[0] = (byte)(query.Length >> 8);
+        framed[1] = (byte)query.Length;
+        query.CopyTo(framed, 2);
+        await stream.WriteAsync(framed, completeWrites: true);
+        byte[] prefix = new byte[2];
+        await stream.ReadExactlyAsync(prefix);
+        byte[] reply = new byte[(prefix[0] << 8) | prefix[1]];
+        await stream.ReadExactlyAsync(reply);
+        return reply;
+    }
+}
+'@
+    $query = New-DnsQuery ([byte[]](0, 0))
+    return , [SmokeDoq]::QueryAsync($port, $query).GetAwaiter().GetResult()
+}
+
+# Sends one A query for localhost. over UDP and returns the reply bytes, or throws on timeout.
+function Send-DnsQuery([int] $port, [byte[]] $id) {
+    $query = New-DnsQuery $id
     $client = New-Object Net.Sockets.UdpClient
     try {
         $client.Client.ReceiveTimeout = 5000
         $client.Connect([Net.IPAddress]::Loopback, $port)
-        [void] $client.Send($query.ToArray(), $query.Count)
+        [void] $client.Send($query, $query.Length)
         $remote = New-Object Net.IPEndPoint([Net.IPAddress]::Any, 0)
         return , $client.Receive([ref] $remote)
     } finally {
@@ -154,12 +285,18 @@ try {
     $env:NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT = "$dnsPort"
     $env:NINLIL_DNS_SERVER_WEB_HTTP_PORT = "$httpPort"
     $env:NINLIL_DNS_SERVER_WEB_HTTPS_PORT = "$httpsPort"
+    $dotPort = Get-FreePort $false
+    $doqPort = Get-FreePort $true
+    $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_ENABLE = 'true'
+    $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_PORT = "$dotPort"
+    $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_ENABLE = 'true'
+    $env:NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_PORT = "$doqPort"
     $env:NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD = 'Smoke-Test-Passw0rd!'
     $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $work 'extract'
     # The test must not inherit the runner's own token.
     Remove-Item Env:NINLIL_CI_TOKEN -ErrorAction SilentlyContinue
 
-    Write-Host "Starting $executable (DNS $dnsPort, HTTP $httpPort, HTTPS $httpsPort)"
+    Write-Host "Starting $executable (DNS $dnsPort, HTTP $httpPort, HTTPS $httpsPort, DoT $dotPort, DoQ $doqPort)"
     $process = Start-Process -FilePath $executable -WorkingDirectory $work -PassThru `
         -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
 
@@ -195,6 +332,34 @@ try {
         throw 'The DNS reply has the wrong id or is not a response.'
     }
     Write-Host "ok: DNS answered with RCODE $($reply[3] -band 0x0F)"
+    # 4. HTTPS on the first start. This is the first start of this executable in a fresh folder, so
+    # the certificate is the freshly generated one, not one reloaded from the saved PFX.
+    $line = [SmokeTls]::HttpsStatusLine($httpsPort)
+    if ($line -notmatch '^HTTP/1\.[01] 200') { throw "GET /status over HTTPS answered '$line'." }
+    Write-Host "ok: HTTPS handshake and request on the first start ($line)"
+
+    # 5. DNS-over-TLS: handshake with the same certificate, then one query.
+    $tlsId = New-Object byte[] 2
+    (New-Object Random).NextBytes($tlsId)
+    $tlsReply = [SmokeTls]::DotQuery($dotPort, (New-DnsQuery $tlsId))
+    if ($tlsReply.Length -lt 12 -or $tlsReply[0] -ne $tlsId[0] -or $tlsReply[1] -ne $tlsId[1] -or ($tlsReply[2] -band 0x80) -eq 0) {
+        throw 'The DNS-over-TLS reply has the wrong id or is not a response.'
+    }
+    Write-Host "ok: DNS-over-TLS answered with RCODE $($tlsReply[3] -band 0x0F)"
+
+    # 6. DNS-over-QUIC. Every enabled transport must be listening: /status is Unhealthy otherwise.
+    $health = ($status.Content | ConvertFrom-Json).status
+    if ($health -ne 'Healthy') { throw "/status reports '$health', not Healthy: $($status.Content)" }
+    if ((Get-Content $stdoutFile -Raw) -match 'QUIC is not supported') {
+        throw 'The executable reports that QUIC is not supported (msquic.dll did not load).'
+    }
+    if ($PSVersionTable.PSVersion.Major -ge 7 -and $IsWindows) {
+        $doqReply = Send-DoqQuery $doqPort
+        if ($doqReply.Length -lt 12 -or ($doqReply[2] -band 0x80) -eq 0) { throw 'The DNS-over-QUIC reply is not a response.' }
+        Write-Host "ok: DNS-over-QUIC answered with RCODE $($doqReply[3] -band 0x0F)"
+    } else {
+        Write-Host 'ok: DNS-over-QUIC is listening (healthy /status, no QUIC error in the log; no QUIC client in this PowerShell)'
+    }
     Write-Host 'Smoke test passed.'
 } catch {
     $failed = $true

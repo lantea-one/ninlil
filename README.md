@@ -5863,7 +5863,8 @@ build and test step runs in a throwaway container of one of the toolchains in
 smoke test, runs on a Windows runner labelled `windows-latest` instead (the project's runner
 `lofnheim`; if it registers only under that name, change the job's `runs-on`). It runs
 [`windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1), which starts the Windows executable
-and checks `/status`, the admin console and one DNS query. Locally, `pwsh
+and checks `/status`, the admin console, one DNS query, HTTPS and DNS-over-TLS on the first
+start, and that DNS-over-QUIC is listening (a real DoQ query under PowerShell 7). Locally, `pwsh
 .forgejo/scripts/windows-smoke.ps1 -ExecutablePath dist/ninlil-linux-amd64` runs the same checks
 against a Linux binary. The Arch Linux toolchain
 exists for amd64 only, so an arm64 runner runs it under emulation, which must be registered for
