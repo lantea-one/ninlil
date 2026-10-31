@@ -421,6 +421,9 @@ public class DnsCryptForwarderClientTests
                             SocketType.Dgram,
                             ProtocolType.Udp
                         );
+                        // Bind before the reply task starts: ReceiveFromAsync on an unbound socket
+                        // throws, and the SendToAsync below that would bind it runs after the task.
+                        toUpstream.Bind(new IPEndPoint(IPAddress.Loopback, 0));
                         sessions[client] = toUpstream;
                         Socket session = toUpstream;
                         tasks.Add(
