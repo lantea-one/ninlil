@@ -31,8 +31,8 @@ Every report is read and answered as soon as possible. There are no promised dea
 answer or the fix. Please keep the details private until a fix is released; the
 [README](./README.md#releases-and-versioning) explains how releases are versioned and published.
 
-When the fix is released, its security note in the release notes (`CHANGELOG.md`) names the
-reporter, unless the reporter asks not to be named.
+When the fix is released, its security note in the release notes ([`CHANGELOG.md`](./CHANGELOG.md))
+names the reporter, unless the reporter asks not to be named.
 
 Ninlil's accepted risks and security behaviour are described in the README's
 [Security](./README.md#security) guide; check it first, because a documented behaviour is not a

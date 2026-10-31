@@ -4486,7 +4486,8 @@ you out of every session, yours included; sign in again with a code from the app
   `No XML encryptor configured. Key {...} may be persisted to storage in unencrypted form.` The
   database holds the TSIG secrets, DNSSEC private keys, cloud credentials, TOTP keys and the ACME
   account key encrypted with that key ring, so a reader of the whole data directory can decrypt
-  them. This is an accepted risk. The controls are the folder permissions above and the
+  them. This is an accepted risk, listed under Accepted risks in the
+  [release notes](./CHANGELOG.md). The controls are the folder permissions above and the
   encrypted backups in [Backup and restore](#backup-and-restore). On Windows the files are
   also plain files and not tied to a Windows account.
 - **A cluster sends some secrets in the clear on the cluster channel.** User two-factor secrets and

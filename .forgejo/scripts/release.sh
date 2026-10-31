@@ -95,6 +95,8 @@ ${kind}.
 
 **Commit:** \`${COMMIT_SHA}\`
 
+**Release notes:** [CHANGELOG.md](${server}/${repository}/src/tag/${RELEASE_TAG//+/%2B}/CHANGELOG.md)
+
 ### Binaries
 
 Self-contained single-file executables; no .NET installation is needed. Download the one for your
