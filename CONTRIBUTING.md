@@ -688,7 +688,8 @@ which need only Docker, prefix a script with `.forgejo/scripts/in-container.sh n
 
 ## Report a bug or propose a change
 
-Report a vulnerability by e-mail, never here: see [Reporting a vulnerability](#reporting-a-vulnerability).
+Report a vulnerability by e-mail, never here: see
+[Reporting a vulnerability](#reporting-a-vulnerability).
 Every other problem and every proposal goes to the
 [issue tracker](https://git.lantea.one/lantea-one/ninlil/issues).
 
@@ -783,13 +784,14 @@ second run prints only `unchanged` lines. The new issue shows its labels in the 
 4. Push the branch and open a pull request into `develop` (a hotfix goes into `main`):
 
    ```bash
-   git push -u origin feature/<short-name>
+   git push -u origin feature/<issue>-<short-name>
    ```
 
    Never commit secrets. Contributors without write access push to their fork.
 5. Name the issue in the pull request description. Issues close when their work reaches
    `develop`: write `Closes #<n>` for the issue the pull request finishes, and Forgejo closes it
-   when the pull request merges. Write `Refs #<n>` for an issue it only works on. The
+   when the pull request merges. A hotfix pull request into `main` uses the same lines and closes
+   its issue when it merges into `main`. Write `Refs #<n>` for an issue it only works on. The
    [pull request template](./.forgejo/PULL_REQUEST_TEMPLATE.md) has the line.
 6. Watch for two traps:
    - A closing keyword on an issue with open dependencies does nothing, silently. Merge the

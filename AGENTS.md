@@ -284,10 +284,10 @@ page](./CONTRIBUTING.md#add-a-console-page)). Browser check of a built console: 
   (`/** */`). The build has `CS1591` muted, so this is enforced by review, not the compiler.
 - Test names read as sentences: `Method_Condition_ExpectedResult`, e.g.
   `Fallback_ForADeepLinkClientRoute_ServesIndexHtml`.
-- Pick the agent role by the work: `architect` designs and writes issue drafts; `coder` implements a backend package;
-  `storage-coder` schema, migrations and repositories; `protocol-coder` DNS and DHCP wire and
-  transport code; `console-coder` the Angular console; `docs-writer` Markdown; `mechanic` mechanical
-  edits; `api-regen` the snapshot and client; `verifier` read-only review.
+- Pick the agent role by the work: `architect` designs and writes issue drafts; `coder` implements
+  a backend package; `storage-coder` schema, migrations and repositories; `protocol-coder` DNS and
+  DHCP wire and transport code; `console-coder` the Angular console; `docs-writer` Markdown;
+  `mechanic` mechanical edits; `api-regen` the snapshot and client; `verifier` read-only review.
 
 ## Comment standard
 
@@ -323,8 +323,9 @@ Every comment is for a reader opening the file cold, today.
 - Small logical commits: backend change, snapshot + client, and UI change are separate commits.
 - Branches: `feature/<issue>-<short-name>` from `develop` → PR into `develop` → PR into `main` →
   release branch `v<yyyy>.<mm>.<dd>.<increment>`; `hotfix/<issue>-<short-name>` from `main`. For
-  a sub-phase, `<issue>` is its epic. Details: [branches](./CONTRIBUTING.md#commit-branch-and-pull-request)
-  and [cutting a release](./CONTRIBUTING.md#cutting-a-release).
+  a sub-phase, `<issue>` is its epic. Details:
+  [branches](./CONTRIBUTING.md#commit-branch-and-pull-request) and
+  [cutting a release](./CONTRIBUTING.md#cutting-a-release).
 - Issues close when their work reaches `develop`. The pull request description names the issue it
   finishes with `Closes #n` (Forgejo closes it on merge) and an issue it only works on with
   `Refs #n`.
