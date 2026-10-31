@@ -9,6 +9,11 @@ out of it.
 Do not report a vulnerability in a public issue, a pull request or a discussion. Those are visible
 to everyone before a fix exists.
 
+## Supported versions
+
+Only the latest release receives security fixes. A fix ships in a new release; older releases are
+not patched, so upgrade to the latest one.
+
 ## What to include
 
 1. The Ninlil version: the release name or the container tag (see
@@ -22,8 +27,12 @@ to everyone before a fix exists.
 
 ## Private handling
 
-Please keep the details private until a fix is released. A fix ships in a release; the
+Every report is read and answered as soon as possible. There are no promised deadlines for the
+answer or the fix. Please keep the details private until a fix is released; the
 [README](./README.md#releases-and-versioning) explains how releases are versioned and published.
+
+When the fix is released, its security note in the release notes (`CHANGELOG.md`) names the
+reporter, unless the reporter asks not to be named.
 
 Ninlil's accepted risks and security behaviour are described in the README's
 [Security](./README.md#security) guide; check it first, because a documented behaviour is not a
