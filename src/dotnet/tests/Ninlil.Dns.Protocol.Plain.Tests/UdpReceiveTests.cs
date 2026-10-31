@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -20,7 +21,8 @@ namespace Ninlil.Dns.Protocol.Plain.Tests;
 ///     bytes for the life of the query, so every datagram must reach it in an array of its own;
 ///     one test holds a first query inside the resolver while a second arrives and checks the
 ///     first one's bytes did not change. The other tests check that many clients get exactly
-///     one correct answer each and that stopping the listener ends its receive loops.
+///     one correct answer each and that stopping the listener ends its receive loops without a
+///     warning in the log.
 /// </summary>
 public sealed class UdpReceiveTests
 {
@@ -115,6 +117,25 @@ public sealed class UdpReceiveTests
         }
     }
 
+    [Fact]
+    public async Task StopAsync_WhileReceiveLoopsArePending_LogsNoWarning()
+    {
+        CapturingLogger<UdpDnsListener> logger = new();
+        Host host = await Host.StartAsync(holdFirstQuery: false, logger);
+
+        // One answered query first: the receive that follows it is the one a stop aborts. Closing
+        // the socket makes Windows fail that pending receive with SocketError.OperationAborted
+        // (995), which is the stop itself and not worth a warning in the service's log.
+        using UdpClient client = new(AddressFamily.InterNetwork);
+        client.Connect(IPAddress.Loopback, host.Port);
+        await client.SendAsync(DnsMessageWriter.Write(BuildQuery(5, "before-stop.example.")));
+        Assert.Equal(5, await ReceiveIdAsync(client));
+
+        await host.DisposeAsync();
+
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level >= LogLevel.Warning);
+    }
+
     private static async Task<List<ushort>> RunClientAsync(int port, int client, int count)
     {
         using UdpClient udp = new(AddressFamily.InterNetwork);
@@ -167,7 +188,10 @@ public sealed class UdpReceiveTests
 
         public CapturingResolver Resolver { get; private init; }
 
-        public static async Task<Host> StartAsync(bool holdFirstQuery)
+        public static async Task<Host> StartAsync(
+            bool holdFirstQuery,
+            ILogger<UdpDnsListener> listenerLogger = null
+        )
         {
             Host host = new()
             {
@@ -189,7 +213,7 @@ public sealed class UdpReceiveTests
                 new StaticOptionsMonitor<PlainProtocolOptions>(
                     new PlainProtocolOptions { Port = host.Port, ListenAddresses = "127.0.0.1" }
                 ),
-                NullLogger<UdpDnsListener>.Instance
+                listenerLogger ?? NullLogger<UdpDnsListener>.Instance
             );
             await host._udp.StartAsync(CancellationToken.None);
 
