@@ -84,8 +84,22 @@ public class TwoFactorCodeBruteForceTests(NinlilDnsWebApplicationFactory factory
             )
         ).EnsureSuccessStatusCode();
 
-        // The enrollment succeeded, so the budget starts empty.
-        return new EnrolledUser(client, userName, secret, userId);
+        // The enrollment succeeded, so the budget starts empty. Confirming the authenticator
+        // ended the session above, so the user gets a new one by signing in with the code, which
+        // also leaves the budget empty.
+        string mfaToken = await StartTwoFactorSignInAsync(userName);
+        HttpResponseMessage second = await SubmitSignInCodeAsync(
+            mfaToken,
+            TotpGenerator.GenerateCode(secret)
+        );
+        second.EnsureSuccessStatusCode();
+        HttpClient signedIn = factory.CreateClient();
+        signedIn.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            (await second.Content.ReadFromJsonAsync<LoginResponse>()).AccessToken
+        );
+
+        return new EnrolledUser(signedIn, userName, secret, userId);
     }
 
     private static string WrongCode(string secret)
@@ -164,22 +178,28 @@ public class TwoFactorCodeBruteForceTests(NinlilDnsWebApplicationFactory factory
     {
         EnrolledUser user = await CreateEnrolledUserAsync();
 
+        // The re-setup check is the success that leaves the session in place: confirming and
+        // turning off end it. A success replaces the secret, so the second round uses the new one.
         for (int i = 0; i < 4; i++)
-            await PostCodeAsync(user.Client, EnableUrl, WrongCode(user.Secret));
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (
-                await PostCodeAsync(user.Client, EnableUrl, TotpGenerator.GenerateCode(user.Secret))
-            ).StatusCode
+            await PostCodeAsync(user.Client, SetupUrl, WrongCode(user.Secret));
+        HttpResponseMessage first = await PostCodeAsync(
+            user.Client,
+            SetupUrl,
+            TotpGenerator.GenerateCode(user.Secret)
         );
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        string replaced = (
+            await first.Content.ReadFromJsonAsync<AuthenticatorSetupResult>()
+        ).SharedKey;
 
+        // Without the clear, these four wrong codes would be the eighth to ninth failure.
         for (int i = 0; i < 4; i++)
-            await PostCodeAsync(user.Client, EnableUrl, WrongCode(user.Secret));
+            await PostCodeAsync(user.Client, SetupUrl, WrongCode(replaced));
 
         Assert.Equal(
-            HttpStatusCode.NoContent,
+            HttpStatusCode.OK,
             (
-                await PostCodeAsync(user.Client, EnableUrl, TotpGenerator.GenerateCode(user.Secret))
+                await PostCodeAsync(user.Client, SetupUrl, TotpGenerator.GenerateCode(replaced))
             ).StatusCode
         );
     }

@@ -13,7 +13,9 @@ public interface IJwtTokenService
 {
     /// <summary>
     ///     This method issues a signed access token for a user with their roles and permissions as
-    ///     claims, so authorization needs no database lookup per request.
+    ///     claims and a digest of their security stamp (see
+    ///     <see cref="Claims.SecurityStampClaim" />). <see cref="Authentication.IAccessTokenRevalidator" />
+    ///     checks both on every request.
     /// </summary>
     /// <param name="user">The user to issue the token for.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -68,9 +70,10 @@ public interface IJwtTokenService
 
     /// <summary>
     ///     This method revokes every active session of a user, so none of their refresh tokens
-    ///     works again. A password change or reset calls it, so a stolen refresh token does not
-    ///     survive the password change that was meant to lock the thief out. Access tokens already
-    ///     issued stay valid until they expire.
+    ///     works again. A password change or reset and a two-factor change call it, so a stolen
+    ///     refresh token does not survive the change that was meant to lock the thief out. Access
+    ///     tokens already issued stop working through their security-stamp claim, which the same
+    ///     change replaces.
     /// </summary>
     /// <param name="userId">The identifier of the user whose sessions to revoke.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

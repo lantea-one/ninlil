@@ -15,12 +15,21 @@ namespace Ninlil.Dns.Identity.Authentication;
 ///     an issued access token at once on this node, with no database read on the hot path.
 ///     <para>
 ///         <b>Cache.</b> One entry per account holds the account's current role and permission
-///         claims, or nothing when the account is missing, disabled or locked out. An entry lives
+///         claims and the digest of its security stamp, or nothing when the account is missing,
+///         disabled or locked out. An entry lives
 ///         for <see cref="CacheLifetime" />. <see cref="Invalidate" /> empties the cache and
 ///         raises a generation number, so a load that started before the flush cannot put an old
 ///         answer back. <see cref="CacheLifetime" /> is also the bound for a change this node was
 ///         not told about (a cluster peer that has not yet applied it, or an edit made in the
 ///         database directly).
+///     </para>
+///     <para>
+///         <b>Security stamp.</b> A token must carry the <see cref="NinlilDnsClaimTypes.SecurityStamp" />
+///         claim, and its value must equal the digest of the account's current stamp (see
+///         <see cref="SecurityStampClaim" />). A password change or a two-factor change replaces
+///         the stamp, so every token issued before it, on any session of the account, answers 401
+///         on its next request. A token without the claim is rejected too: a client that holds
+///         one signs in again, or refreshes, and gets a token with the claim.
 ///     </para>
 ///     <para>
 ///         <b>Scope.</b> Loading uses a scope of its own, so the repositories read the primary
@@ -59,7 +68,13 @@ public sealed class AccessTokenRevalidator(
     /// <param name="Generation">The flush generation the answer was loaded in.</param>
     /// <param name="LoadedAt">The timestamp of the load, in <see cref="TimeProvider.GetTimestamp" /> ticks.</param>
     /// <param name="Claims">The account's role and permission claims, or <see langword="null" /> to reject.</param>
-    private sealed record CachedAccount(long Generation, long LoadedAt, Claim[] Claims);
+    /// <param name="StampHash">The digest of the account's security stamp, which a token's stamp claim must equal.</param>
+    private sealed record CachedAccount(
+        long Generation,
+        long LoadedAt,
+        Claim[] Claims,
+        string StampHash
+    );
 
     /// <inheritdoc />
     public async Task<bool> RevalidateAsync(
@@ -86,11 +101,9 @@ public sealed class AccessTokenRevalidator(
             || timeProvider.GetElapsedTime(cached.LoadedAt) >= CacheLifetime
         )
         {
-            cached = new CachedAccount(
-                generation,
-                timeProvider.GetTimestamp(),
-                await LoadAsync(userId, stoppingToken)
-            );
+            long loadedAt = timeProvider.GetTimestamp();
+            (Claim[] claims, string stampHash) = await LoadAsync(userId, stoppingToken);
+            cached = new CachedAccount(generation, loadedAt, claims, stampHash);
             _accounts[userId] = cached;
 
             // A flush that ran while the account was loading may have missed this entry.
@@ -99,6 +112,17 @@ public sealed class AccessTokenRevalidator(
         }
 
         if (cached.Claims is null)
+            return false;
+
+        // Ordinal equality is enough: the claim comes from a signed token, so a caller cannot
+        // choose it and a timing difference leaks nothing it could use.
+        if (
+            !string.Equals(
+                identity.FindFirst(NinlilDnsClaimTypes.SecurityStamp)?.Value,
+                cached.StampHash,
+                StringComparison.Ordinal
+            )
+        )
             return false;
 
         foreach (
@@ -126,8 +150,11 @@ public sealed class AccessTokenRevalidator(
     /// <summary>
     ///     This method reads the account and builds its current role and permission claims.
     /// </summary>
-    /// <returns>The claims, or <see langword="null" /> when the account is missing, disabled or locked out (the rules <see cref="ApiTokenAuthenticationHandler" /> applies to an API token).</returns>
-    private async Task<Claim[]> LoadAsync(Guid userId, CancellationToken stoppingToken)
+    /// <returns>The claims and the stamp digest; the claims are <see langword="null" /> when the account is missing, disabled or locked out (the rules <see cref="ApiTokenAuthenticationHandler" /> applies to an API token).</returns>
+    private async Task<(Claim[] Claims, string StampHash)> LoadAsync(
+        Guid userId,
+        CancellationToken stoppingToken
+    )
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IUserRepository userRepository =
@@ -142,13 +169,15 @@ public sealed class AccessTokenRevalidator(
             || user.IsDisabled
             || (user.LockoutEnabled && user.LockoutEndUtc > DateTimeOffset.UtcNow)
         )
-            return null;
+            return (null, null);
 
-        return
-        [
-            .. (await claimsBuilder.BuildClaimsAsync(user, stoppingToken)).Where(claim =>
-                claim.Type == ClaimTypes.Role || claim.Type == NinlilDnsClaimTypes.Permission
-            ),
-        ];
+        return (
+            [
+                .. (await claimsBuilder.BuildClaimsAsync(user, stoppingToken)).Where(claim =>
+                    claim.Type == ClaimTypes.Role || claim.Type == NinlilDnsClaimTypes.Permission
+                ),
+            ],
+            SecurityStampClaim.Hash(user.SecurityStamp)
+        );
     }
 }

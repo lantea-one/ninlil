@@ -39,11 +39,17 @@ public class JwtTokenService(
         CancellationToken stoppingToken = default
     )
     {
-        // The same claims as API-token authentication, plus a unique token identifier.
+        // The same claims as API-token authentication, plus a unique token identifier and the
+        // digest of the account's security stamp, which AccessTokenRevalidator compares on every
+        // request so a password or two-factor change ends this token.
         List<Claim> claims =
         [
             .. await claimsBuilder.BuildClaimsAsync(user, stoppingToken),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(
+                NinlilDnsClaimTypes.SecurityStamp,
+                SecurityStampClaim.Hash(user.SecurityStamp)
+            ),
         ];
 
         DateTime nowUtc = DateTime.UtcNow;

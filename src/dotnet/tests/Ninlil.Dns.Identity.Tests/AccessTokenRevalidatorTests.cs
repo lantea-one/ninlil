@@ -12,6 +12,8 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Identity.Claims;
+using Ninlil.Dns.Identity.Options;
+using Ninlil.Dns.Identity.Token;
 using Xunit.Abstractions;
 
 // Define our namespace.
@@ -165,10 +167,22 @@ public sealed class AccessTokenRevalidatorTests : IDisposable
         });
 
     /// <summary>
-    ///     This method builds the principal a validated token gives: a subject and the
-    ///     permissions the token was issued with.
+    ///     This method builds the principal a validated token gives: a subject, the permissions
+    ///     the token was issued with, and the stamp claim of an account whose security stamp is
+    ///     still unset, as <see cref="SeedUserAsync" /> creates it.
     /// </summary>
     private static ClaimsPrincipal TokenFor(Guid id, params string[] permissions) =>
+        TokenWithStamp(id, SecurityStampClaim.Hash(null), permissions);
+
+    /// <summary>
+    ///     This method builds the principal of a token that carries the given stamp claim value,
+    ///     or no stamp claim when the value is <see langword="null" />.
+    /// </summary>
+    private static ClaimsPrincipal TokenWithStamp(
+        Guid id,
+        string stampClaim,
+        params string[] permissions
+    ) =>
         new(
             new ClaimsIdentity(
                 [
@@ -177,6 +191,9 @@ public sealed class AccessTokenRevalidatorTests : IDisposable
                         NinlilDnsClaimTypes.Permission,
                         permission
                     )),
+                    .. stampClaim is null
+                        ? Array.Empty<Claim>()
+                        : [new Claim(NinlilDnsClaimTypes.SecurityStamp, stampClaim)],
                 ],
                 "Bearer"
             )
@@ -200,6 +217,91 @@ public sealed class AccessTokenRevalidatorTests : IDisposable
 
         Assert.Equal(["zones:read"], PermissionsOf(principal));
         Assert.Equal(id.ToString(), principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value);
+    }
+
+    [Fact]
+    public async Task RevalidateAsync_ATokenIssuedBeforeTheStampChanged_IsRejected()
+    {
+        Guid id = await SeedUserAsync("zones:read");
+        ClaimsPrincipal issuedBefore = TokenFor(id, "zones:read");
+        Assert.True(await _revalidator.RevalidateAsync(issuedBefore));
+
+        await ChangeUserAsync(id, user => user.SecurityStamp = Guid.NewGuid().ToString("N"));
+        _revalidator.Invalidate();
+
+        Assert.False(await _revalidator.RevalidateAsync(TokenFor(id, "zones:read")));
+    }
+
+    [Fact]
+    public async Task RevalidateAsync_ATokenIssuedAfterTheStampChanged_IsAccepted()
+    {
+        Guid id = await SeedUserAsync("zones:read");
+        string stamp = Guid.NewGuid().ToString("N");
+        await ChangeUserAsync(id, user => user.SecurityStamp = stamp);
+
+        Assert.True(
+            await _revalidator.RevalidateAsync(
+                TokenWithStamp(id, SecurityStampClaim.Hash(stamp), "zones:read")
+            )
+        );
+    }
+
+    [Fact]
+    public async Task RevalidateAsync_ATokenWithoutAStampClaim_IsRejected()
+    {
+        Guid id = await SeedUserAsync("zones:read");
+
+        Assert.False(await _revalidator.RevalidateAsync(TokenWithStamp(id, null, "zones:read")));
+    }
+
+    [Fact]
+    public async Task RevalidateAsync_ATokenIssuedByTheTokenService_IsAcceptedForAnAccountWithAStamp()
+    {
+        Guid id = await SeedUserAsync("zones:read");
+        string stamp = Guid.NewGuid().ToString("N");
+        await ChangeUserAsync(id, user => user.SecurityStamp = stamp);
+
+        // Issuing a token only reads the claims builder; the session repository and the unit of
+        // work belong to refresh tokens.
+        await using AsyncServiceScope scope = _services.CreateAsyncScope();
+        UserEntity user = await scope
+            .ServiceProvider.GetRequiredService<IUserRepository>()
+            .GetByIdAsync(id);
+        JwtTokenService tokenService = new(
+            Microsoft.Extensions.Options.Options.Create(
+                new JwtOptions { SigningKey = "a-signing-key-of-at-least-32-bytes!!" }
+            ),
+            scope.ServiceProvider.GetRequiredService<IUserClaimsBuilder>(),
+            null,
+            null
+        );
+
+        AccessTokenResult issued = await tokenService.CreateAccessTokenAsync(user);
+        JwtSecurityToken parsed = new JwtSecurityTokenHandler().ReadJwtToken(issued.AccessToken);
+
+        Assert.Equal(
+            SecurityStampClaim.Hash(stamp),
+            parsed.Claims.Single(claim => claim.Type == NinlilDnsClaimTypes.SecurityStamp).Value
+        );
+        Assert.True(
+            await _revalidator.RevalidateAsync(
+                new ClaimsPrincipal(new ClaimsIdentity(parsed.Claims, "Bearer"))
+            )
+        );
+    }
+
+    [Fact]
+    public void SecurityStampClaim_Hash_IsADigestThatHidesTheStamp()
+    {
+        const string stamp = "VGVOZWVYRUNKT0JMWUVPSEdQUURVTE1DTA";
+
+        string hash = SecurityStampClaim.Hash(stamp);
+
+        Assert.Equal(64, hash.Length);
+        Assert.DoesNotContain(stamp, hash, StringComparison.Ordinal);
+        Assert.Equal(hash, SecurityStampClaim.Hash(stamp));
+        Assert.NotEqual(hash, SecurityStampClaim.Hash(stamp + "x"));
+        Assert.Equal(SecurityStampClaim.Hash(""), SecurityStampClaim.Hash(null));
     }
 
     [Fact]

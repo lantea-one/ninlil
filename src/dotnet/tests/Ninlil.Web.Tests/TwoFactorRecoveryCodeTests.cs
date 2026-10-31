@@ -10,7 +10,9 @@ namespace Ninlil.Web.Tests;
 ///     This class covers two-factor recovery codes over HTTP on the shared in-process host, each
 ///     test on a new user enrolled in TOTP with <see cref="TotpGenerator" />: generating a batch,
 ///     showing the codes only once, redeeming one to finish a challenged sign-in, and a redeemed
-///     code working only once.
+///     code working only once. Generating a batch ends every session of the account, so a test
+///     that needs a session afterwards signs in again with an authenticator code
+///     (<see cref="SignInWithTotpAsync" />).
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
@@ -18,14 +20,48 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     private HttpClient CreateClient() => factory.CreateClient();
 
     /// <summary>
+    ///     This method signs in with the password and an authenticator code and returns a client
+    ///     that sends the access token. Confirming the authenticator and generating recovery codes
+    ///     end every session of the account, so the tests call this to get one again.
+    /// </summary>
+    private async Task<HttpClient> SignInWithTotpAsync(
+        string userName,
+        string password,
+        string secret
+    )
+    {
+        HttpClient client = CreateClient();
+        LoginResponse challenged = await (
+            await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(userName, password))
+        ).Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.True(challenged.RequiresTwoFactor);
+        HttpResponseMessage completed = await client.PostAsJsonAsync(
+            "/api/auth/login/two-factor",
+            new TwoFactorLoginRequest(
+                challenged.MfaToken,
+                TotpGenerator.GenerateCode(secret),
+                "Authenticator"
+            )
+        );
+        completed.EnsureSuccessStatusCode();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            (await completed.Content.ReadFromJsonAsync<LoginResponse>()).AccessToken
+        );
+        return client;
+    }
+
+    /// <summary>
     ///     This method creates a new user and enrolls it in TOTP two-factor authentication, as
     ///     <c>AuthenticationFlowTests.TwoFactorEnrollmentAndLoginFlowWorksEndToEnd</c> does, so
-    ///     the tests never touch the bootstrap administrator.
+    ///     the tests never touch the bootstrap administrator. The returned client holds a session
+    ///     opened after the enrollment, because confirming the authenticator ends the earlier ones.
     /// </summary>
     private async Task<(
         HttpClient Client,
         string UserName,
-        string Password
+        string Password,
+        string Secret
     )> CreateTwoFactorEnrolledUserAsync(string userNameSuffix)
     {
         HttpClient adminClient = CreateClient();
@@ -85,7 +121,12 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         );
         enableResponse.EnsureSuccessStatusCode();
 
-        return (userClient, userName, password);
+        return (
+            await SignInWithTotpAsync(userName, password, setup.SharedKey),
+            userName,
+            password,
+            setup.SharedKey
+        );
     }
 
     [Fact]
@@ -142,9 +183,8 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task GeneratingRecoveryCodesReturnsExactlyTenAndTheyNeverReappearInAStatusCheck()
     {
-        (HttpClient client, _, _) = await CreateTwoFactorEnrolledUserAsync(
-            Guid.NewGuid().ToString("N")
-        );
+        (HttpClient client, string userName, string password, string secret) =
+            await CreateTwoFactorEnrolledUserAsync(Guid.NewGuid().ToString("N"));
 
         HttpResponseMessage generateResponse = await client.PostAsync(
             "/api/auth/two-factor/recovery-codes/generate",
@@ -159,6 +199,8 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         Assert.All(generated.Codes, code => Assert.False(string.IsNullOrWhiteSpace(code)));
 
         // The codes are shown only once: the status endpoint reports a count, never the codes.
+        // Generating ended the session, so the status check uses a new one.
+        client = await SignInWithTotpAsync(userName, password, secret);
         HttpResponseMessage statusResponse = await client.GetAsync("/api/auth/two-factor/status");
         statusResponse.EnsureSuccessStatusCode();
         string rawStatusBody = await statusResponse.Content.ReadAsStringAsync();
@@ -172,7 +214,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task RegeneratingRecoveryCodesInvalidatesEveryCodeFromThePreviousBatch()
     {
-        (HttpClient client, string userName, string password) =
+        (HttpClient client, string userName, string password, string secret) =
             await CreateTwoFactorEnrolledUserAsync(Guid.NewGuid().ToString("N"));
 
         HttpResponseMessage firstGenerateResponse = await client.PostAsync(
@@ -183,6 +225,8 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         RecoveryCodesResult firstBatch =
             await firstGenerateResponse.Content.ReadFromJsonAsync<RecoveryCodesResult>();
 
+        // The first batch ended the session; the second one needs a new session.
+        client = await SignInWithTotpAsync(userName, password, secret);
         HttpResponseMessage secondGenerateResponse = await client.PostAsync(
             "/api/auth/two-factor/recovery-codes/generate",
             null
@@ -193,6 +237,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
 
         Assert.Empty(firstBatch.Codes.Intersect(secondBatch.Codes));
 
+        client = await SignInWithTotpAsync(userName, password, secret);
         HttpResponseMessage statusResponse = await client.GetAsync("/api/auth/two-factor/status");
         statusResponse.EnsureSuccessStatusCode();
         TwoFactorStatus status = await statusResponse.Content.ReadFromJsonAsync<TwoFactorStatus>();
@@ -220,7 +265,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task AValidRecoveryCodeCompletesAChallengedLoginAndIsThenSingleUse()
     {
-        (HttpClient client, string userName, string password) =
+        (HttpClient client, string userName, string password, string secret) =
             await CreateTwoFactorEnrolledUserAsync(Guid.NewGuid().ToString("N"));
 
         HttpResponseMessage generateResponse = await client.PostAsync(
@@ -231,6 +276,10 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         RecoveryCodesResult generated =
             await generateResponse.Content.ReadFromJsonAsync<RecoveryCodesResult>();
         string recoveryCode = generated.Codes[0];
+
+        // Generating ended the session. This one is opened after it and is not touched by the
+        // redemption below, which does not replace the security stamp.
+        client = await SignInWithTotpAsync(userName, password, secret);
 
         // A client with no token plays the user locked out of their authenticator app.
         HttpClient loginClient = CreateClient();
@@ -279,7 +328,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task AnInvalidRecoveryCodeIsRejected()
     {
-        (HttpClient client, string userName, string password) =
+        (HttpClient client, string userName, string password, string secret) =
             await CreateTwoFactorEnrolledUserAsync(Guid.NewGuid().ToString("N"));
 
         HttpResponseMessage generateResponse = await client.PostAsync(
@@ -287,6 +336,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
             null
         );
         generateResponse.EnsureSuccessStatusCode();
+        client = await SignInWithTotpAsync(userName, password, secret);
 
         HttpClient loginClient = CreateClient();
         HttpResponseMessage challengedLoginResponse = await loginClient.PostAsJsonAsync(
@@ -314,7 +364,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task StatusReportsZeroRecoveryCodesRemainingBeforeAnyBatchIsGenerated()
     {
-        (HttpClient client, _, _) = await CreateTwoFactorEnrolledUserAsync(
+        (HttpClient client, _, _, _) = await CreateTwoFactorEnrolledUserAsync(
             Guid.NewGuid().ToString("N")
         );
 
