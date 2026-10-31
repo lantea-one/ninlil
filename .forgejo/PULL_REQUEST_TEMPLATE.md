@@ -17,4 +17,4 @@ The full list is [Before you finish](https://git.lantea.one/lantea-one/ninlil/sr
 - [ ] A schema change has one migration per relational provider and a MongoDB update.
 - [ ] A new or changed setting updated [ENVIRONMENT.md](https://git.lantea.one/lantea-one/ninlil/src/branch/main/ENVIRONMENT.md).
 - [ ] A change users see updated the [README](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md).
-- [ ] [CHANGELOG.md](https://git.lantea.one/lantea-one/ninlil/src/branch/main/CHANGELOG.md) has an `Unreleased` entry that links the issue.
+- [ ] A change users see has an `Unreleased` entry in [CHANGELOG.md](https://git.lantea.one/lantea-one/ninlil/src/branch/main/CHANGELOG.md) that links the issue.
