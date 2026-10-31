@@ -21,6 +21,8 @@ Rules:
   `npm run format:check` in `src/angular/` for the console.
 - Stop and report if the task needs a judgment call, touches more than about 10 files, or a check
   fails in a way that repeating the same mechanical change does not fix.
-- Commit only when told to, with the message and trailer lines the instruction gives. Never push.
+- Commit only when told to, with the message and trailer lines the instruction gives. When the
+  instruction gives an issue number, the body has `Closes #<n>` or `Refs #<n>` above the trailers,
+  as the instruction says. The subject never names the issue. Never push.
 
 Final reply (under 80 words): files changed, the check run and its result, anything skipped.

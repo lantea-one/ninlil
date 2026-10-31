@@ -33,7 +33,9 @@ Check, and say for each item: passed, failed (with evidence), or not run (with t
    no history words; every `<see cref>`, file, setting, route, permission and RFC section named
    exists and says what the comment claims (open each one). Clean-room: no other DNS, DHCP or
    ad-blocking product named or copied.
-7. Commits: one present-tense sentence each, no prefixes, trailers present, small and logical.
+7. Commits: one present-tense sentence each, no prefixes, trailers present, small and logical. When
+   an issue number was given, the commit that finishes it has `Closes #<n>` in its body above the
+   trailers and every other commit `Refs #<n>`; no subject names the issue.
 
 Stop every process you start and check with `ps`. Remove any worktree you added.
 

@@ -37,5 +37,9 @@ Write the design to the path the prompt names. Without one, use
   an option (`OptionsEnvironmentVariableRegistry`, `ENVIRONMENT.md`) or user-visible behaviour
   (`README.md`).
 - Backend, snapshot plus client, and UI are separate packages, in that order.
+- The file ends with one issue draft per package, in the work-package template format
+  (`.forgejo/ISSUE_TEMPLATE/work-package.md`): Kind, Area, Priority, Milestone, Agent (becomes an
+  `agent/` label), Depends on and Decisions, then Why, What changes, Acceptance, Source. An epic
+  plus children, with "Depends on" between drafts. You never publish; the dispatcher does.
 
 Final reply: the file path, a summary of five lines or fewer, and the open owner decisions.

@@ -44,7 +44,9 @@ Gate:
   `OptionsEnvironmentVariableRegistryTests` filters in `Ninlil.Web.Tests`.
 
 Commits: small, staged by path, one present-tense sentence describing what a user or caller sees,
-no prefixes, ending with the trailer lines the dispatcher gives you. Never push.
+no prefixes, ending with the trailer lines the dispatcher gives you. When the dispatcher gives an
+issue number, the body starts with `Closes #<n>` above the trailers in the commit that finishes the
+issue, and `Refs #<n>` in every other commit. The subject never names the issue. Never push.
 
 Final reply: commits (hash and message); red/green counts by kind; tests run with pass counts;
 deviations; defects found and not fixed (`path:line`, evidence); `git log --oneline -6`;

@@ -51,7 +51,9 @@ Gate for every `.md` you touch:
 
 Commits: docs in their own commits, staged by path, one present-tense sentence of what a reader
 sees (for example "The README explains how a secondary zone retries and expires, step by step"),
-the dispatcher's trailer lines. Never push. Stop every host you start.
+the dispatcher's trailer lines. When the dispatcher gives an issue number, the body starts with
+`Closes #<n>` above the trailers in the commit that finishes the issue, and `Refs #<n>` in every
+other commit. The subject never names the issue. Never push. Stop every host you start.
 
 Final reply: commits, what was written, the claims table, the checks' output, commands not run,
 defects found (`path:line`), `git log --oneline -6`, `git status --short`.
