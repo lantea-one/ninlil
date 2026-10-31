@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,6 +20,12 @@ namespace Ninlil.Dhcp.Server.Tftp;
 ///         transfer is left behind; stopping aborts transfers in progress (see
 ///         <see cref="TftpServer" />).
 ///     </para>
+///     <para>
+///         A bind failure at boot (a port another program holds, a missing permission) does
+///         not stop the host: <see cref="StartAsync" /> logs one Error and goes on, and
+///         <see cref="TftpServer.StartFailure" /> keeps the reason for the <c>dhcpServices</c> health
+///         check.
+///     </para>
 /// </summary>
 /// <param name="server">The server this wrapper starts and stops.</param>
 /// <param name="options">The TFTP options; only <c>Enable</c> is read, at boot.</param>
@@ -30,7 +37,7 @@ public sealed class TftpServerHostedService(
 ) : IHostedService
 {
     /// <inheritdoc />
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         if (!options.Value.Enable)
         {
@@ -40,10 +47,26 @@ public sealed class TftpServerHostedService(
                     + "during this process's lifetime.",
                 $"{TftpServerOptions.SectionName}:{nameof(TftpServerOptions.Enable)}"
             );
-            return Task.CompletedTask;
+            return;
         }
 
-        return server.StartAsync(cancellationToken);
+        try
+        {
+            await server.StartAsync(cancellationToken);
+        }
+        catch (SocketException exception)
+        {
+            // An exception out of a hosted service's StartAsync stops the whole host, taking DNS,
+            // the other DHCP services and the REST API with it, and the operator could not reach
+            // the settings to fix the cause. Report it once instead; the health check shows the
+            // service as not running with the reason, and the service can be started again from
+            // the service control API after the cause is gone.
+            logger.LogError(
+                exception,
+                "The TFTP server could not bind its socket: {Reason}. This service is not running; the rest of Ninlil is unaffected. Free the port or fix the permission, then restart Ninlil or start the service again from the DHCP service control.",
+                exception.Message
+            );
+        }
     }
 
     /// <inheritdoc />

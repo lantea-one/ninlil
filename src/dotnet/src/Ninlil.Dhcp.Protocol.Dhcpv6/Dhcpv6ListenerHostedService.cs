@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,6 +19,12 @@ namespace Ninlil.Dhcp.Protocol.Dhcpv6;
 ///         <see cref="StopAsync" /> always stops the listener at shutdown, so no socket or
 ///         multicast membership is left behind.
 ///     </para>
+///     <para>
+///         A bind failure at boot (a port another program holds, a missing permission) does
+///         not stop the host: <see cref="StartAsync" /> logs one Error and goes on, and
+///         <see cref="Dhcpv6UdpListener.StartFailure" /> keeps the reason for the <c>dhcpServices</c> health
+///         check.
+///     </para>
 /// </summary>
 /// <param name="listener">The listener this service starts and stops.</param>
 /// <param name="options">The transport options; only <c>Enable</c> is read, at boot.</param>
@@ -29,7 +36,7 @@ public sealed class Dhcpv6ListenerHostedService(
 ) : IHostedService
 {
     /// <inheritdoc />
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         if (!options.Value.Enable)
         {
@@ -39,10 +46,26 @@ public sealed class Dhcpv6ListenerHostedService(
                     + "during this process's lifetime.",
                 $"{Dhcpv6ProtocolOptions.SectionName}:{nameof(Dhcpv6ProtocolOptions.Enable)}"
             );
-            return Task.CompletedTask;
+            return;
         }
 
-        return listener.StartAsync(cancellationToken);
+        try
+        {
+            await listener.StartAsync(cancellationToken);
+        }
+        catch (SocketException exception)
+        {
+            // An exception out of a hosted service's StartAsync stops the whole host, taking DNS,
+            // the other DHCP services and the REST API with it, and the operator could not reach
+            // the settings to fix the cause. Report it once instead; the health check shows the
+            // service as not running with the reason, and the service can be started again from
+            // the service control API after the cause is gone.
+            logger.LogError(
+                exception,
+                "The DHCPv6 listener could not bind its socket: {Reason}. This service is not running; the rest of Ninlil is unaffected. Free the port or fix the permission, then restart Ninlil or start the service again from the DHCP service control.",
+                exception.Message
+            );
+        }
     }
 
     /// <inheritdoc />

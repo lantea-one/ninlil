@@ -21,10 +21,14 @@ namespace Ninlil.Web.HealthChecks;
 ///         <b>Unhealthy, not Degraded</b>, as in <see cref="TransportListenersHealthCheck" />: a
 ///         service enabled in the configuration but not running means clients are not getting
 ///         DHCP, Router Advertisement or PXE boot service. The cause may be a socket that failed
-///         to bind at startup (usually a port conflict, or for Router Advertisement a missing
+///         to bind (usually a port conflict, or for Router Advertisement a missing
 ///         <c>CAP_NET_RAW</c>), a TFTP server with no usable root directory, or a service stopped
-///         through <see cref="Controllers.DhcpServiceControlController" />; the check cannot tell
-///         these apart. The <c>Enable</c> flags come from the settings loaded at startup.
+///         through <see cref="Controllers.DhcpServiceControlController" />. A bind failure is
+///         named after the service in parentheses (for example "DHCPv4 (Address already in
+///         use)"), taken from the service's <c>StartFailure</c>; the other causes show the name
+///         alone. A bind failure at boot does not stop Ninlil: the hosted service logs one Error
+///         and the check reports it. The <c>Enable</c> flags come from the settings loaded at
+///         startup.
 ///     </para>
 /// </summary>
 /// <param name="services">Every registered <see cref="IDhcpProtocolService" />, matched by concrete type.</param>
@@ -50,7 +54,7 @@ public sealed class DhcpServiceHealthCheck(
         List<string> notRunning = [];
         List<string> running = [];
 
-        void Evaluate(string name, bool enabled, bool isRunning)
+        void Evaluate(string name, bool enabled, bool isRunning, string startFailure)
         {
             if (!enabled)
                 return;
@@ -58,29 +62,35 @@ public sealed class DhcpServiceHealthCheck(
             if (isRunning)
                 running.Add(name);
             else
-                notRunning.Add(name);
+                notRunning.Add(
+                    string.IsNullOrWhiteSpace(startFailure) ? name : $"{name} ({startFailure})"
+                );
         }
+
+        Dhcpv4UdpListener dhcpv4 = resolved.OfType<Dhcpv4UdpListener>().FirstOrDefault();
+        Dhcpv6UdpListener dhcpv6 = resolved.OfType<Dhcpv6UdpListener>().FirstOrDefault();
+        Icmpv6RaListener ra = resolved.OfType<Icmpv6RaListener>().FirstOrDefault();
+        TftpServer tftp = resolved.OfType<TftpServer>().FirstOrDefault();
 
         Evaluate(
             "DHCPv4",
             dhcpv4Options.Value.Enable,
-            resolved.OfType<Dhcpv4UdpListener>().FirstOrDefault()?.IsListening ?? false
+            dhcpv4?.IsListening ?? false,
+            dhcpv4?.StartFailure
         );
         Evaluate(
             "DHCPv6",
             dhcpv6Options.Value.Enable,
-            resolved.OfType<Dhcpv6UdpListener>().FirstOrDefault()?.IsListening ?? false
+            dhcpv6?.IsListening ?? false,
+            dhcpv6?.StartFailure
         );
         Evaluate(
             "Router Advertisement",
             raOptions.Value.Enable,
-            resolved.OfType<Icmpv6RaListener>().FirstOrDefault()?.IsListening ?? false
+            ra?.IsListening ?? false,
+            ra?.StartFailure
         );
-        Evaluate(
-            "TFTP",
-            tftpOptions.Value.Enable,
-            resolved.OfType<TftpServer>().FirstOrDefault()?.IsListening ?? false
-        );
+        Evaluate("TFTP", tftpOptions.Value.Enable, tftp?.IsListening ?? false, tftp?.StartFailure);
 
         if (notRunning.Count > 0)
             return Task.FromResult(

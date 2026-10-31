@@ -228,6 +228,15 @@ public sealed class Icmpv6RaListener(
     private string _lastBuildFailureMessage;
 
     /// <summary>
+    ///     This property contains why the last Router Advertisement start failed to bind its socket (the
+    ///     operating system's message, for example "Address already in use"), or
+    ///     <see langword="null" /> when the last start worked or none has run. The
+    ///     <c>dhcpServices</c> health check shows it, because the boot-time start logs the failure
+    ///     and goes on instead of stopping the host.
+    /// </summary>
+    public string StartFailure { get; private set; }
+
+    /// <summary>
     ///     This property reports whether the socket is open. It stays true if a loop ends
     ///     unexpectedly, so <see cref="StopAsync" /> can still release the socket; use
     ///     <see cref="IDhcpProtocolService.IsRunning" /> to learn whether the loops are running.
@@ -276,10 +285,15 @@ public sealed class Icmpv6RaListener(
                 IsListening = false;
             }
 
-            socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Raw, ProtocolType.IcmpV6);
+            socket = null;
 
             try
             {
+                socket = new Socket(
+                    AddressFamily.InterNetworkV6,
+                    SocketType.Raw,
+                    ProtocolType.IcmpV6
+                );
                 socket.SetSocketOption(
                     SocketOptionLevel.Socket,
                     SocketOptionName.ReuseAddress,
@@ -298,13 +312,14 @@ public sealed class Icmpv6RaListener(
                 socket.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
                 JoinAllRoutersGroupOnEveryUsableInterface(socket);
             }
-            catch
+            catch (Exception exception)
             {
-                // On failure (usually a permission error from an unprivileged process) leave
-                // IsListening false and let the caller see the exception, as
-                // IDhcpProtocolService.StartAsync describes. Creating the socket itself is outside
-                // this try, so that failure also propagates.
-                socket.Dispose();
+                // On failure (usually a permission error from an unprivileged process, which
+                // already fails when the raw socket is created) leave IsListening false, keep the
+                // reason for the health check and let the caller see the exception, as
+                // IDhcpProtocolService.StartAsync describes.
+                socket?.Dispose();
+                StartFailure = exception.Message;
                 throw;
             }
 
@@ -315,6 +330,7 @@ public sealed class Icmpv6RaListener(
             _socket = socket;
             _executionCts = executionCts;
             IsListening = true;
+            StartFailure = null;
 
             logger.LogInformation(
                 "The Router Advertisement listener started and is now bound to a raw ICMPv6 socket."

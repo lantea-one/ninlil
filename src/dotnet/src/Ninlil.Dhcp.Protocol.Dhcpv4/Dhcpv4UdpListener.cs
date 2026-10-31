@@ -68,6 +68,15 @@ public sealed class Dhcpv4UdpListener(
     private Task _receiveLoopTask;
 
     /// <summary>
+    ///     This property contains why the last DHCPv4 start failed to bind its socket (the
+    ///     operating system's message, for example "Address already in use"), or
+    ///     <see langword="null" /> when the last start worked or none has run. The
+    ///     <c>dhcpServices</c> health check shows it, because the boot-time start logs the failure
+    ///     and goes on instead of stopping the host.
+    /// </summary>
+    public string StartFailure { get; private set; }
+
+    /// <summary>
     ///     This property reports whether the socket is bound. It stays true if the receive loop
     ///     ends unexpectedly, so <see cref="StopAsync" /> can still release the socket; use
     ///     <see cref="IDhcpProtocolService.IsRunning" /> to learn whether datagrams are being
@@ -136,11 +145,12 @@ public sealed class Dhcpv4UdpListener(
                 );
                 socket.Bind(new IPEndPoint(IPAddress.Any, options.Value.ServerPort));
             }
-            catch
+            catch (Exception exception)
             {
-                // On a bind failure (port in use, for instance) leave IsListening false and let
-                // the caller see the exception.
+                // On a bind failure (port in use, for instance) leave IsListening false, keep the
+                // reason for the health check and let the caller see the exception.
                 socket.Dispose();
+                StartFailure = exception.Message;
                 throw;
             }
 
@@ -149,6 +159,7 @@ public sealed class Dhcpv4UdpListener(
             _socket = socket;
             _receiveLoopCts = receiveLoopCts;
             IsListening = true;
+            StartFailure = null;
 
             logger.LogInformation(
                 "The DHCPv4 listener started and is now bound to UDP port {ServerPort}.",

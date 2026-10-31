@@ -206,6 +206,15 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     internal int ActiveTransferCount => _activeTransferTasks.Count;
 
     /// <summary>
+    ///     This property contains why the last TFTP start failed to bind its socket (the
+    ///     operating system's message, for example "Address already in use"), or
+    ///     <see langword="null" /> when the last start worked or none has run. The
+    ///     <c>dhcpServices</c> health check shows it, because the boot-time start logs the failure
+    ///     and goes on instead of stopping the host.
+    /// </summary>
+    public string StartFailure { get; private set; }
+
+    /// <summary>
     ///     This property reports whether the listening socket is bound and accepting requests.
     /// </summary>
     public bool IsListening { get; private set; }
@@ -268,10 +277,12 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 );
                 socket.Bind(new IPEndPoint(IPAddress.Any, options.Value.Port));
             }
-            catch
+            catch (Exception exception)
             {
-                // Leave the service stopped, not half-started, and let the caller see the error.
+                // Leave the service stopped, not half-started, keep the reason for the health
+                // check and let the caller see the error.
                 socket.Dispose();
+                StartFailure = exception.Message;
                 throw;
             }
 
@@ -296,6 +307,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             _socket = socket;
             _receiveLoopCts = receiveLoopCts;
             IsListening = true;
+            StartFailure = null;
 
             logger.LogInformation(
                 "The TFTP server started and is now bound to UDP port {BoundPort}.",
