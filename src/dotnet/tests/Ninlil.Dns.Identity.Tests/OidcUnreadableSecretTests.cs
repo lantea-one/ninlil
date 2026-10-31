@@ -36,12 +36,12 @@ public sealed class OidcUnreadableSecretTests
     /// </summary>
     private sealed class CapturingLoggerProvider : ILoggerProvider
     {
-        private readonly List<(LogLevel Level, string Text)> _entries = [];
+        private readonly List<(LogLevel Level, string Text, string Category)> _entries = [];
 
         /// <summary>
         ///     This property returns a snapshot of the entries logged so far.
         /// </summary>
-        public (LogLevel Level, string Text)[] Entries
+        public (LogLevel Level, string Text, string Category)[] Entries
         {
             get
             {
@@ -50,11 +50,14 @@ public sealed class OidcUnreadableSecretTests
             }
         }
 
-        public ILogger CreateLogger(string categoryName) => new Capture(_entries);
+        public ILogger CreateLogger(string categoryName) => new Capture(_entries, categoryName);
 
         public void Dispose() { }
 
-        private sealed class Capture(List<(LogLevel Level, string Text)> entries) : ILogger
+        private sealed class Capture(
+            List<(LogLevel Level, string Text, string Category)> entries,
+            string category
+        ) : ILogger
         {
             public IDisposable BeginScope<TState>(TState state) => null;
 
@@ -69,7 +72,7 @@ public sealed class OidcUnreadableSecretTests
             )
             {
                 lock (entries)
-                    entries.Add((logLevel, formatter(state, exception) + exception));
+                    entries.Add((logLevel, formatter(state, exception) + exception, category));
             }
         }
     }
@@ -180,7 +183,15 @@ public sealed class OidcUnreadableSecretTests
                 .Get(ServiceCollectionAuthenticationExtension.OidcSchemeName);
 
             Assert.Equal(PlaintextSecret, options.ClientSecret);
-            Assert.DoesNotContain(logs.Entries, entry => entry.Level >= LogLevel.Warning);
+            // Data Protection warns on its own when its default key directory is not a user
+            // profile (HOME=/tmp in the CI toolchain container). That warning says nothing about
+            // the SSO secret, so only the other categories must stay quiet.
+            Assert.DoesNotContain(
+                logs.Entries,
+                entry =>
+                    entry.Level >= LogLevel.Warning
+                    && !entry.Category.StartsWith("Microsoft.AspNetCore.DataProtection")
+            );
             Assert.DoesNotContain(logs.Entries, entry => entry.Text.Contains(PlaintextSecret));
         }
     }
