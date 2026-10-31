@@ -30,7 +30,7 @@ jobs:
   ##
   cleanup:
     name: 'Expire Pre-Releases'
-    runs-on: 'archlinux'
+    runs-on: 'archlinux-multi-platform'
     steps:
       ##
       - name: 'Checkout Sources'

@@ -5896,7 +5896,7 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 ### The pipeline
 
 The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on the project's own
-`archlinux` Forgejo runners, which need only Docker with buildx, `git`, `curl`, and `jq`. Every
+Forgejo runners labelled `archlinux-multi-platform`, which need only Docker with buildx, `git`, `curl`, and `jq`. Every
 build and test step runs in a throwaway container of one of the toolchains in
 [`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and Chromium;
 `makepkg`; shellcheck and actionlint; nFPM) with just the checkout mounted, through

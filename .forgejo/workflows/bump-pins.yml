@@ -40,7 +40,7 @@ jobs:
   ##
   bump:
     name: 'Bump Pins'
-    runs-on: 'archlinux'
+    runs-on: 'archlinux-multi-platform'
     env:
       BASE_BRANCH: '${{ inputs.base || ''develop'' }}'
     steps:
