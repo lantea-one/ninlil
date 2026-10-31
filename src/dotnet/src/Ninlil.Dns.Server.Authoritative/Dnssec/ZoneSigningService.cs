@@ -25,6 +25,7 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///         stored records there (including a hand-entered DS) are skipped. Names below a
 ///         delegation point (glue included) are the child's data and are neither signed nor
 ///         part of the chain (RFC 4035 §2.2); the zone keeps and transfers them unsigned.
+///         A stored record whose data cannot be written as RDATA is left out with a Warning.
 ///     </para>
 /// </summary>
 /// <param name="zoneRepository">The repository this service reads zones from.</param>
@@ -144,8 +145,12 @@ public class ZoneSigningService(
             zoneId,
             stoppingToken
         );
+
+        // The signer reads every stored row, whatever wrote it. One record whose data cannot be
+        // written as RDATA is left out with a Warning: throwing here would stop the whole zone
+        // from signing, and it would serve its older signatures until they expire.
         Dictionary<DnsName, List<RecordEntity>> recordsByName = storedRecords
-            .Where(record => !record.IsDisabled)
+            .Where(record => !record.IsDisabled && CanWriteRdata(record, zone.Name))
             .GroupBy(record => DnsName.Parse(record.Name))
             .ToDictionary(group => group.Key, group => group.ToList());
 
@@ -803,6 +808,36 @@ public class ZoneSigningService(
         );
 
         return (records, nsec3ParamRecord);
+    }
+
+    /// <summary>
+    ///     This method reports whether a stored record can be written as RDATA, and logs a Warning
+    ///     naming the record when it cannot. A record with no registered codec passes: it is not
+    ///     served, so the signer has nothing to say about it.
+    /// </summary>
+    /// <param name="record">The stored record to try.</param>
+    /// <param name="zoneName">The zone's name, for the Warning.</param>
+    /// <returns>Whether signing may use <paramref name="record" />.</returns>
+    private bool CanWriteRdata(RecordEntity record, string zoneName)
+    {
+        try
+        {
+            DnsName ownerName = DnsName.Parse(record.Name);
+            RecordEntityCodec.ToWireRecord(record, ownerName);
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger?.LogWarning(
+                "Zone {Zone}: the {Type} record '{Name}' ({RecordId}) holds data that cannot be written as RDATA ({Reason}); it is left out of the signed zone. Edit or delete the record.",
+                zoneName,
+                record.Type,
+                record.Name,
+                record.Id,
+                exception.Message
+            );
+            return false;
+        }
     }
 
     /// <summary>
