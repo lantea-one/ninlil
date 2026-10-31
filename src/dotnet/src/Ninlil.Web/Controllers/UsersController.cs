@@ -187,7 +187,8 @@ public class UsersController(
 
     /// <summary>
     ///     This action updates an account's display name, e-mail address and disabled flag. A
-    ///     disabled account cannot sign in or refresh its session. Passwords are changed through
+    ///     disabled account cannot sign in or refresh its session, and its access tokens already
+    ///     issued are refused from the next request on. Passwords are changed through
     ///     <see cref="ResetPassword" /> or <see cref="ChangeMyPassword" />. Requires
     ///     <c>users:write</c>.
     /// </summary>
