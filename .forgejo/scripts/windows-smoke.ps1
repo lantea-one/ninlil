@@ -26,7 +26,9 @@ The package comes from one of two places:
     which the script expands and tests exactly as shipped.
 
 The package is placed in a fresh temporary folder first, because Ninlil keeps its data directory
-next to the executable. The process gets three free loopback ports, a fixed bootstrap password
+next to the executable. On Windows Ninlil also keeps the certificate it generates in the current
+user's certificate store (friendly name "Ninlil TLS ..."), so the script removes the store
+entries, and their keys, that appeared during the run. The process gets three free loopback ports, a fixed bootstrap password
 and its own native-library extraction folder. Both log files are printed when a check fails.
 
 Windows PowerShell 5.1 and PowerShell 7 are both supported: the pipeline uses 5.1 because it is
@@ -73,6 +75,14 @@ $ProgressPreference = 'SilentlyContinue'
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ninlil-smoke-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
 $process = $null
+# The Ninlil certificates the user's store holds before the run, so the clean-up removes only
+# what the run added. The store exists only on Windows.
+$onWindows = ($PSVersionTable.PSVersion.Major -lt 6) -or $IsWindows
+function Get-NinlilStoreEntries {
+    if (-not $onWindows) { return @() }
+    return @(Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -like 'Ninlil TLS *' })
+}
+$storeBefore = @(Get-NinlilStoreEntries | ForEach-Object { $_.Thumbprint })
 $stdoutFile = Join-Path $work 'stdout.log'
 $stderrFile = Join-Path $work 'stderr.log'
 
@@ -388,6 +398,14 @@ try {
         [void] $process.WaitForExit(15000)
     }
     if ($failed) { Show-Logs }
+    # Delete each new store entry's key first: removing the entry does not remove the key file.
+    foreach ($entry in @(Get-NinlilStoreEntries | Where-Object { $storeBefore -notcontains $_.Thumbprint })) {
+        try {
+            $key = [Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($entry)
+            if ($key) { $key.Key.Delete() }
+        } catch { Write-Host "Could not delete the key of $($entry.Thumbprint): $($_.Exception.Message)" }
+        Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($entry.Thumbprint)" -ErrorAction SilentlyContinue
+    }
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
 }
 if ($failed) { exit 1 }
