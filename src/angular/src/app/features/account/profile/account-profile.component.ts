@@ -6,6 +6,7 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
   AlertComponent,
@@ -19,6 +20,7 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 import { UserProfileDetail, UsersService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { buildGravatarInitials, buildGravatarUrl } from '../../../shared/gravatar/gravatar.util';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
@@ -49,7 +51,8 @@ function passwordsMatchValidator(control: AbstractControl): ValidationErrors | n
  *
  * <p>The change-password section needs the current password. An administrator can reset the
  * password of an account that does not know it from the Users page (`ResetPasswordDialogComponent`).
- * Two-factor settings are on the Security page (`AccountSecurityComponent`).
+ * A successful change ends every session of the account, so the page sends the user to the login
+ * page with a message. Two-factor settings are on the Security page (`AccountSecurityComponent`).
  */
 @Component({
   selector: 'app-account-profile',
@@ -70,6 +73,8 @@ function passwordsMatchValidator(control: AbstractControl): ValidationErrors | n
 })
 export class AccountProfileComponent {
   private readonly usersApi = inject(UsersService);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
@@ -164,8 +169,9 @@ export class AccountProfileComponent {
 
   /**
    * This method changes the signed-in user's password through
-   * `POST /api/users/me/change-password` and clears the form on success. Errors, such as a wrong
-   * current password, show the backend's message.
+   * `POST /api/users/me/change-password`. Errors, such as a wrong current password, show the
+   * backend's message. On success the server has ended every session of the account, this one
+   * included, so the page signs out and opens the login page with a message that says why.
    */
   async changePassword(): Promise<void> {
     if (this.changePasswordForm.invalid || this.changingPassword()) return;
@@ -186,7 +192,10 @@ export class AccountProfileComponent {
         newPassword: '',
         confirmNewPassword: '',
       });
-      this.notification.success('Password changed.');
+      await this.authService.endSessionAfterSecurityChange(
+        'Your password was changed and every session of your account was signed out. Sign in with the new password.',
+      );
+      await this.router.navigateByUrl('/login');
     } catch (error) {
       this.changePasswordErrorMessage.set(
         extractErrorMessage(error, 'Could not change your password.'),

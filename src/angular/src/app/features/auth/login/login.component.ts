@@ -82,6 +82,9 @@ function credentialsErrorMessage(error: unknown): string {
  * `/api/auth/sso/challenge`, because the server redirects to the identity provider. A completed
  * sign-in lands on `SsoCallbackComponent`; a failed or cancelled one returns here with
  * `?ssoError=1`, shown as a banner.
+ *
+ * <p>When the user changed their password or two-factor settings, the server ended their session
+ * and the page opens with a banner that says what changed ({@link signInNotice}).
  */
 @Component({
   selector: 'app-login',
@@ -134,11 +137,18 @@ export class LoginComponent implements OnInit {
   /** Whether the page loaded with `?ssoError=1` after a failed or cancelled SSO sign-in. */
   readonly ssoError = signal(false);
 
+  /**
+   * Why the user was signed out, when they changed their password or two-factor settings and the
+   * server ended their session (see `AuthService.endSessionAfterSecurityChange`), else `null`.
+   */
+  readonly signInNotice = signal<string | null>(null);
+
   /** The opaque token identifying a pending two-factor sign-in, once one exists. */
   private mfaToken: string | null = null;
 
   ngOnInit(): void {
     this.ssoError.set(this.route.snapshot.queryParamMap.get('ssoError') !== null);
+    this.signInNotice.set(this.authService.takeSignInNotice());
     void this.loadSsoStatus();
   }
 

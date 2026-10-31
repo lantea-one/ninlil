@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { UsersService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { buildGravatarUrl } from '../../../shared/gravatar/gravatar.util';
 import { AccountProfileComponent } from './account-profile.component';
@@ -12,8 +14,8 @@ function flushMicrotasks(): Promise<void> {
 
 /**
  * These tests cover the Profile page: loading, the Gravatar URL and initials fallback, saving
- * (trimming, `null` for cleared fields), and changing the password with its validation and errors.
- * TestBed with a spy-backed `UsersService` and `NotificationService`.
+ * (trimming, `null` for cleared fields), and changing the password with its validation and errors, and the sign-out that follows a successful
+ * change. TestBed with spy-backed `UsersService`, `NotificationService`, `AuthService` and `Router`.
  */
 describe('AccountProfileComponent', () => {
   let usersApiSpy: {
@@ -22,6 +24,8 @@ describe('AccountProfileComponent', () => {
     apiUsersMeChangePasswordPost: jasmine.Spy;
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
+  let authServiceSpy: { endSessionAfterSecurityChange: jasmine.Spy };
+  let routerSpy: { navigateByUrl: jasmine.Spy };
 
   const initialProfile = {
     id: '11111111-1111-1111-1111-111111111111',
@@ -38,6 +42,10 @@ describe('AccountProfileComponent', () => {
       'apiUsersMeChangePasswordPost',
     ]);
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
+    authServiceSpy = jasmine.createSpyObj('AuthService', ['endSessionAfterSecurityChange']);
+    authServiceSpy.endSessionAfterSecurityChange.and.resolveTo();
+    routerSpy = jasmine.createSpyObj('Router', ['navigateByUrl']);
+    routerSpy.navigateByUrl.and.resolveTo(true);
 
     usersApiSpy.apiUsersMeGet.and.returnValue(of(initialProfile));
 
@@ -48,6 +56,8 @@ describe('AccountProfileComponent', () => {
       providers: [
         { provide: UsersService, useValue: usersApiSpy },
         { provide: NotificationService, useValue: notificationSpy },
+        { provide: AuthService, useValue: authServiceSpy },
+        { provide: Router, useValue: routerSpy },
       ],
     }).compileComponents();
 
@@ -191,7 +201,28 @@ describe('AccountProfileComponent', () => {
       newPassword: '',
       confirmNewPassword: '',
     });
-    expect(notificationSpy.success).toHaveBeenCalled();
+    // The server ended every session of the account, this one included.
+    expect(authServiceSpy.endSessionAfterSecurityChange).toHaveBeenCalledWith(
+      jasmine.stringContaining('Your password was changed'),
+    );
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/login');
+  });
+
+  it('changePassword() stays on the page and keeps the session when the change fails', async () => {
+    const fixture = await createComponent();
+    usersApiSpy.apiUsersMeChangePasswordPost.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: 'Incorrect password.' })),
+    );
+    fixture.componentInstance.changePasswordForm.setValue({
+      currentPassword: 'Wrong-Password-1234!',
+      newPassword: 'New-Password-5678!',
+      confirmNewPassword: 'New-Password-5678!',
+    });
+
+    await fixture.componentInstance.changePassword();
+
+    expect(authServiceSpy.endSessionAfterSecurityChange).not.toHaveBeenCalled();
+    expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();
   });
 
   it('changePassword() surfaces the real backend error -- e.g. a wrong current password -- rather than a generic message', async () => {

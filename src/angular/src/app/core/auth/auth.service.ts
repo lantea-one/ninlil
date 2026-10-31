@@ -44,6 +44,12 @@ export class AuthService {
    */
   private pendingRememberMe = false;
 
+  /**
+   * The message {@link endSessionAfterSecurityChange} left for the login page, until
+   * {@link takeSignInNotice} reads it.
+   */
+  private signInNotice: string | null = null;
+
   /** Whether a completed sign-in currently holds a usable access token. */
   readonly isAuthenticated = computed(() => this.accessTokenSignal() !== null);
 
@@ -177,6 +183,31 @@ export class AuthService {
     } catch {
       // Best effort: the session is already cleared locally.
     }
+  }
+
+  /**
+   * This method ends the session after the signed-in user changed their own password or
+   * two-factor settings, and leaves a message for the login page to show. The server ends every
+   * session of the account on such a change, this one included: the access token answers 401 and
+   * the refresh cookie is revoked. Clearing the session here, instead of letting the next request
+   * fail, means the user sees why they are asked to sign in again. The logout call is best effort,
+   * as in {@link logout}.
+   *
+   * @param notice What changed and what to do next, for example "Your password was changed.".
+   */
+  async endSessionAfterSecurityChange(notice: string): Promise<void> {
+    await this.logout();
+    this.signInNotice = notice;
+  }
+
+  /**
+   * This method returns the message {@link endSessionAfterSecurityChange} left for the login page
+   * and forgets it, so the page shows it once. It returns `null` when there is none.
+   */
+  takeSignInNotice(): string | null {
+    const notice = this.signInNotice;
+    this.signInNotice = null;
+    return notice;
   }
 
   /**

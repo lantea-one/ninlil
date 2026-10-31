@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
   AlertComponent,
@@ -14,6 +15,7 @@ import {
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
 import { AuthenticatorSetupResult, TwoFactorService, TwoFactorStatus } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import {
@@ -32,6 +34,11 @@ import {
  *
  * <p>Generating recovery codes replaces any earlier batch. The 10 new codes are shown once in
  * {@link RevealSecretDialogComponent}; after that only the number left is available.
+ *
+ * <p>Confirming an authenticator, turning two-factor off and generating recovery codes each end
+ * every session of the account on the server, this one included. The page then signs out and
+ * opens the login page with a message ({@link endSession}). Starting a setup does not end the
+ * session, because the confirmation that follows needs it.
  */
 @Component({
   selector: 'app-account-security',
@@ -54,6 +61,8 @@ import {
 })
 export class AccountSecurityComponent {
   private readonly twoFactorApi = inject(TwoFactorService);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
@@ -120,8 +129,9 @@ export class AccountSecurityComponent {
       );
       this.pendingSetup.set(null);
       this.enableForm.reset();
-      this.notification.success('Two-factor authentication enabled.');
-      await this.loadStatus();
+      await this.endSession(
+        'Two-factor authentication is on and every session of your account was signed out. Sign in again with a code from your authenticator.',
+      );
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'That code was not accepted.'));
     } finally {
@@ -143,8 +153,9 @@ export class AccountSecurityComponent {
         }),
       );
       this.disableForm.reset();
-      this.notification.success('Two-factor authentication disabled.');
-      await this.loadStatus();
+      await this.endSession(
+        'Two-factor authentication is off and every session of your account was signed out. Sign in again with your password.',
+      );
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'That code was not accepted.'));
     } finally {
@@ -155,7 +166,8 @@ export class AccountSecurityComponent {
   /**
    * This method generates 10 new recovery codes (`POST .../recovery-codes/generate`), which
    * replace any earlier batch, and shows them once in {@link RevealSecretDialogComponent}. The
-   * status, with its count of codes left, reloads when the dialog closes.
+   * server ended the session with this call, so closing the dialog signs out
+   * ({@link onSecretDialogClosed}).
    */
   async generateRecoveryCodes(): Promise<void> {
     this.generatingRecoveryCodes.set(true);
@@ -181,10 +193,24 @@ export class AccountSecurityComponent {
     }
   }
 
-  /** This method hides the recovery-code dialog and reloads the status. */
+  /**
+   * This method hides the recovery-code dialog and signs out. The dialog stays open until the
+   * user has copied the codes, which is why the sign-out waits for it to close.
+   */
   async onSecretDialogClosed(): Promise<void> {
     this.revealDialogVisible.set(false);
-    await this.loadStatus();
+    await this.endSession(
+      'New recovery codes were generated and every session of your account was signed out. Sign in again.',
+    );
+  }
+
+  /**
+   * This method signs out after the server ended every session of the account and opens the login
+   * page with a message that says what changed.
+   */
+  private async endSession(notice: string): Promise<void> {
+    await this.authService.endSessionAfterSecurityChange(notice);
+    await this.router.navigateByUrl('/login');
   }
 
   /** This method e-mails the signed-in user a one-time code (`POST .../email/send`). */

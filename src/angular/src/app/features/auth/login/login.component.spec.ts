@@ -46,7 +46,11 @@ interface FakeBrandingApiService {
  * services, and a stubbed route.
  */
 describe('LoginComponent', () => {
-  let authServiceFake: { login: jasmine.Spy; completeTwoFactorLogin: jasmine.Spy };
+  let authServiceFake: {
+    login: jasmine.Spy;
+    completeTwoFactorLogin: jasmine.Spy;
+    takeSignInNotice: jasmine.Spy;
+  };
   let appearanceApiSpy: FakeAppearanceApiService;
   let brandingApiSpy: FakeBrandingApiService;
   let ssoApiSpy: FakeSsoApiService;
@@ -58,10 +62,12 @@ describe('LoginComponent', () => {
     returnUrl: string | null = null,
     queryParams: Record<string, string> = {},
     configureSso?: (spy: FakeSsoApiService) => void,
+    signInNotice: string | null = null,
   ) {
     authServiceFake = {
       login: jasmine.createSpy('login'),
       completeTwoFactorLogin: jasmine.createSpy('completeTwoFactorLogin'),
+      takeSignInNotice: jasmine.createSpy('takeSignInNotice').and.returnValue(signInNotice),
     };
     appearanceApiSpy = {
       apiAppearanceSettingsMeGet: jasmine
@@ -617,6 +623,26 @@ describe('LoginComponent', () => {
     const alert = root.querySelector('c-alert');
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('Single sign-on could not complete');
+  });
+
+  it('shows why the session ended after a password or two-factor change', async () => {
+    const fixture = await createComponent(
+      null,
+      {},
+      undefined,
+      'Your password was changed and every session of your account was signed out.',
+    );
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(fixture.componentInstance.signInNotice()).toContain('Your password was changed');
+    expect(root.querySelector('c-alert')?.textContent).toContain('Your password was changed');
+  });
+
+  it('shows no notice on an ordinary visit', async () => {
+    const fixture = await createComponent();
+
+    expect(fixture.componentInstance.signInNotice()).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('c-alert')).toBeNull();
   });
 
   it('does not show the ssoError banner on an ordinary visit with no query params', async () => {

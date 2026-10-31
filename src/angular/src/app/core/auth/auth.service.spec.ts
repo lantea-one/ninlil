@@ -320,6 +320,32 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBeFalse();
   });
 
+  it('endSessionAfterSecurityChange() signs out and leaves a notice the login page takes once', async () => {
+    await signIn();
+    authApiSpy.apiAuthLogoutPost.and.returnValue(of({}));
+
+    await service.endSessionAfterSecurityChange('Your password was changed.');
+
+    expect(service.isAuthenticated()).toBeFalse();
+    expect(authApiSpy.apiAuthLogoutPost).toHaveBeenCalledWith({ refreshRequest: {} });
+    expect(service.takeSignInNotice()).toBe('Your password was changed.');
+    expect(service.takeSignInNotice()).toBeNull();
+  });
+
+  it('endSessionAfterSecurityChange() still signs out and leaves the notice when the revoke call fails', async () => {
+    await signIn();
+    authApiSpy.apiAuthLogoutPost.and.returnValue(throwError(() => new Error('network error')));
+
+    await service.endSessionAfterSecurityChange('Two-factor authentication is on.');
+
+    expect(service.isAuthenticated()).toBeFalse();
+    expect(service.takeSignInNotice()).toBe('Two-factor authentication is on.');
+  });
+
+  it('takeSignInNotice() returns null when no security change ended the session', () => {
+    expect(service.takeSignInNotice()).toBeNull();
+  });
+
   it('applySsoAccessToken() signs in with the access token alone', () => {
     service.applySsoAccessToken(buildAccessToken(['zones:read']));
 

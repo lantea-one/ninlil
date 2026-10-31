@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { TwoFactorService } from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { AccountSecurityComponent } from './account-security.component';
 
@@ -12,7 +14,9 @@ function flushMicrotasks(): Promise<void> {
 /**
  * These tests cover the Security page: loading the status, authenticator setup and confirmation,
  * turning two-factor off, the e-mailed code, and recovery codes with the reveal-once dialog.
- * TestBed with a spy-backed `TwoFactorService` and `NotificationService`.
+ * The changes that end the session (confirming, turning off, new recovery codes) are checked
+ * through spy-backed `AuthService` and `Router`. TestBed with a spy-backed `TwoFactorService` and
+ * `NotificationService`.
  */
 describe('AccountSecurityComponent', () => {
   let twoFactorApiSpy: {
@@ -24,6 +28,8 @@ describe('AccountSecurityComponent', () => {
     apiAuthTwoFactorRecoveryCodesGeneratePost: jasmine.Spy;
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
+  let authServiceSpy: { endSessionAfterSecurityChange: jasmine.Spy };
+  let routerSpy: { navigateByUrl: jasmine.Spy };
 
   async function createComponent(configureApis?: () => void) {
     twoFactorApiSpy = jasmine.createSpyObj('TwoFactorService', [
@@ -35,6 +41,10 @@ describe('AccountSecurityComponent', () => {
       'apiAuthTwoFactorRecoveryCodesGeneratePost',
     ]);
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
+    authServiceSpy = jasmine.createSpyObj('AuthService', ['endSessionAfterSecurityChange']);
+    authServiceSpy.endSessionAfterSecurityChange.and.resolveTo();
+    routerSpy = jasmine.createSpyObj('Router', ['navigateByUrl']);
+    routerSpy.navigateByUrl.and.resolveTo(true);
 
     twoFactorApiSpy.apiAuthTwoFactorStatusGet.and.returnValue(
       of({
@@ -52,6 +62,8 @@ describe('AccountSecurityComponent', () => {
       providers: [
         { provide: TwoFactorService, useValue: twoFactorApiSpy },
         { provide: NotificationService, useValue: notificationSpy },
+        { provide: AuthService, useValue: authServiceSpy },
+        { provide: Router, useValue: routerSpy },
       ],
     }).compileComponents();
 
@@ -89,12 +101,9 @@ describe('AccountSecurityComponent', () => {
     });
   });
 
-  it('confirmAuthenticatorSetup() enables two-factor, clears the pending setup, and reloads status', async () => {
+  it('confirmAuthenticatorSetup() enables two-factor, clears the pending setup, and signs out with a notice', async () => {
     const fixture = await createComponent();
     twoFactorApiSpy.apiAuthTwoFactorAuthenticatorEnablePost.and.returnValue(of(undefined));
-    twoFactorApiSpy.apiAuthTwoFactorStatusGet.and.returnValue(
-      of({ isEnabled: true, hasAuthenticator: true, canReceiveEmailCode: true }),
-    );
     fixture.componentInstance.pendingSetup.set({
       sharedKey: 'ABC123',
       authenticatorUri: 'otpauth://totp/x',
@@ -107,8 +116,11 @@ describe('AccountSecurityComponent', () => {
       twoFactorCodeRequest: { code: '123456' },
     });
     expect(fixture.componentInstance.pendingSetup()).toBeNull();
-    expect(fixture.componentInstance.status()?.isEnabled).toBeTrue();
-    expect(notificationSpy.success).toHaveBeenCalled();
+    // The server ended every session of the account, this one included.
+    expect(authServiceSpy.endSessionAfterSecurityChange).toHaveBeenCalledWith(
+      jasmine.stringContaining('Two-factor authentication is on'),
+    );
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/login');
   });
 
   it('confirmAuthenticatorSetup() shows an error message when the code is rejected', async () => {
@@ -123,14 +135,12 @@ describe('AccountSecurityComponent', () => {
     await fixture.componentInstance.confirmAuthenticatorSetup();
 
     expect(fixture.componentInstance.errorMessage()).toBe('The provided code is not valid.');
+    expect(authServiceSpy.endSessionAfterSecurityChange).not.toHaveBeenCalled();
   });
 
-  it('disable() turns off two-factor and reloads status', async () => {
+  it('disable() turns off two-factor and signs out with a notice', async () => {
     const fixture = await createComponent();
     twoFactorApiSpy.apiAuthTwoFactorDisablePost.and.returnValue(of(undefined));
-    twoFactorApiSpy.apiAuthTwoFactorStatusGet.and.returnValue(
-      of({ isEnabled: false, hasAuthenticator: true, canReceiveEmailCode: true }),
-    );
     fixture.componentInstance.disableForm.controls.code.setValue('123456');
 
     await fixture.componentInstance.disable();
@@ -138,7 +148,10 @@ describe('AccountSecurityComponent', () => {
     expect(twoFactorApiSpy.apiAuthTwoFactorDisablePost).toHaveBeenCalledWith({
       twoFactorCodeRequest: { code: '123456' },
     });
-    expect(notificationSpy.success).toHaveBeenCalled();
+    expect(authServiceSpy.endSessionAfterSecurityChange).toHaveBeenCalledWith(
+      jasmine.stringContaining('Two-factor authentication is off'),
+    );
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/login');
   });
 
   it('disable() does nothing while its own form is invalid', async () => {
@@ -170,7 +183,7 @@ describe('AccountSecurityComponent', () => {
     expect(notificationSpy.error).toHaveBeenCalled();
   });
 
-  it('generateRecoveryCodes() shows the reveal-once dialog with all 10 codes, without reloading status yet', async () => {
+  it('generateRecoveryCodes() shows the reveal-once dialog with all 10 codes, without signing out yet', async () => {
     const fixture = await createComponent();
     const codes = Array.from({ length: 10 }, (_, index) => `CODE-${index}`);
     twoFactorApiSpy.apiAuthTwoFactorRecoveryCodesGeneratePost.and.returnValue(of({ codes }));
@@ -184,28 +197,23 @@ describe('AccountSecurityComponent', () => {
         secrets: codes.map((value, index) => ({ label: `Code ${index + 1}`, value })),
       }),
     );
-    // Only the initial load has happened; the reload waits for onSecretDialogClosed().
-    expect(twoFactorApiSpy.apiAuthTwoFactorStatusGet).toHaveBeenCalledTimes(1);
+    // The sign-out waits until the user has copied the codes and closed the dialog.
+    expect(authServiceSpy.endSessionAfterSecurityChange).not.toHaveBeenCalled();
   });
 
-  it('onSecretDialogClosed() hides the dialog and reloads status, once the recovery-codes dialog is dismissed', async () => {
+  it('onSecretDialogClosed() hides the dialog and signs out with a notice, once the recovery-codes dialog is dismissed', async () => {
     const fixture = await createComponent();
     const codes = Array.from({ length: 10 }, (_, index) => `CODE-${index}`);
     twoFactorApiSpy.apiAuthTwoFactorRecoveryCodesGeneratePost.and.returnValue(of({ codes }));
     await fixture.componentInstance.generateRecoveryCodes();
-    twoFactorApiSpy.apiAuthTwoFactorStatusGet.and.returnValue(
-      of({
-        isEnabled: true,
-        hasAuthenticator: true,
-        canReceiveEmailCode: true,
-        recoveryCodesRemaining: 10,
-      }),
-    );
 
     await fixture.componentInstance.onSecretDialogClosed();
 
     expect(fixture.componentInstance.revealDialogVisible()).toBeFalse();
-    expect(fixture.componentInstance.status()?.recoveryCodesRemaining).toBe(10);
+    expect(authServiceSpy.endSessionAfterSecurityChange).toHaveBeenCalledWith(
+      jasmine.stringContaining('New recovery codes were generated'),
+    );
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/login');
   });
 
   it('generateRecoveryCodes() shows an error notification on failure and never shows the dialog', async () => {

@@ -11,6 +11,10 @@
     </c-card-header>
 
     <c-card-body>
+      @if (signInNotice(); as notice) {
+        <c-alert color="info" [dismissible]="false" role="status">{{ notice }}</c-alert>
+      }
+
       @if (ssoError()) {
         <c-alert color="danger" [dismissible]="false" role="alert">
           Single sign-on could not complete. Try again, or sign in with your username and password
