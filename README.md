@@ -5973,7 +5973,9 @@ request: prerequisites with checks, build, test, format and lint, the browser sm
 common changes (REST API, entity, migration, setting, console page), branches, pull requests and
 releases. [`AGENTS.md`](./AGENTS.md) holds the rules for AI agents and a fast orientation for
 people, including the table of every folder in the repository.
-To report a vulnerability privately, follow [`SECURITY.md`](./SECURITY.md).
+To report a bug or propose a change, open an issue in the
+[issue tracker](https://git.lantea.one/lantea-one/ninlil/issues/new/choose). To report a
+vulnerability privately, follow [`SECURITY.md`](./SECURITY.md).
 
 The short version, from a clone with .NET 10 installed:
 
