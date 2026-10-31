@@ -450,9 +450,11 @@ To run it as a service that starts with Windows (all in an administrator PowerSh
    icacls C:\Ninlil\data /grant "NT SERVICE\Ninlil:(OI)(CI)M"
    ```
 
-4. Let Windows restart it after a crash, open the ports you use, and start it:
+4. Register the event source for the log, let Windows restart the service after a crash, open the
+   ports you use, and start it:
 
    ```powershell
+   New-EventLog -LogName Application -Source Ninlil.Web
    sc.exe failure Ninlil reset= 86400 actions= restart/5000/restart/5000/restart/60000
    New-NetFirewallRule -DisplayName "Ninlil DNS" -Direction Inbound -Protocol UDP -LocalPort 53 -Action Allow
    New-NetFirewallRule -DisplayName "Ninlil DNS (TCP)" -Direction Inbound -Protocol TCP -LocalPort 53 -Action Allow
@@ -472,13 +474,12 @@ any user profile (such as `C:\Ninlil` or `C:\ProgramData\Ninlil`): a service acc
 profile of the user who unzipped it.
 
 Windows has no console for a service, so Ninlil writes its warnings and errors to the Windows
-Application event log under the source `Ninlil.Web`. A virtual service account is not allowed to
-create that source, so until the source exists the service logs only one entry saying it cannot log
-(find it in Event Viewer under Windows Logs, Application). The source exists after Ninlil has run
-once as LocalSystem (`sc.exe config Ninlil obj= LocalSystem`, start and stop the service, then set the
-account back).
+Application event log under the source `Ninlil.Web`. Only an administrator can register that source,
+so the install steps do it (step 4). Read the entries in Event Viewer under Windows Logs, Application,
+or with `Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Ninlil.Web'}`.
+Under a virtual service account, a service without the registered source logs nothing.
 
-To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil`. Your `C:\Ninlil\data` folder stays. Windows
+To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil; Remove-EventLog -Source Ninlil.Web`. Your `C:\Ninlil\data` folder stays. Windows
 keeps the virtual account's profile folder `C:\Windows\ServiceProfiles\Ninlil` loaded until the next
 restart; delete it after that restart, together with the key and certificate files described below.
 Updating means stopping the service, replacing the `.exe` and `msquic.dll` with the files from the
