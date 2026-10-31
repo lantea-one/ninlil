@@ -18,7 +18,7 @@ public sealed class SqlServerEngineHost : EngineHost
     ///     <see cref="SqlServerReplicatedEngineHost" /> so one digest line serves both.
     /// </summary>
     internal const string Image =
-        "mcr.microsoft.com/mssql/server:2022-latest@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090";
+        "mcr.microsoft.com/mssql/server:2022-latest@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718";
 
     private readonly MsSqlContainer _container = new MsSqlBuilder(Image)
         .WithPortBinding(MsSqlBuilder.MsSqlPort, assignRandomHostPort: true)

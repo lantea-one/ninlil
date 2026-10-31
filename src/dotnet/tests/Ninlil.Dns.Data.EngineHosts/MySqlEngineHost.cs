@@ -17,7 +17,7 @@ public sealed class MySqlEngineHost : EngineHost
     ///     <see cref="MySqlReplicatedEngineHost" /> so one digest line serves both.
     /// </summary>
     internal const string Image =
-        "public.ecr.aws/docker/library/mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242";
+        "public.ecr.aws/docker/library/mysql:8.4@sha256:a0225d1ea6631c8bc2385dc4c2faba17bbf1834ecf369e1659a9a382bd8d5dd7";
 
     private readonly MySqlContainer _container = new MySqlBuilder(Image)
         .WithUsername("root")

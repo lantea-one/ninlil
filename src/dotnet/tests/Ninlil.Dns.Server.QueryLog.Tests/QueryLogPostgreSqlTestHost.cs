@@ -20,7 +20,7 @@ public sealed class QueryLogPostgreSqlTestHost : IAsyncDisposable
     // Published on a random free host port rather than 5432, which a local PostgreSQL server may
     // already be using.
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(
-        "postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
+        "postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab"
     )
         .WithPortBinding(PostgreSqlBuilder.PostgreSqlPort, assignRandomHostPort: true)
         .Build();

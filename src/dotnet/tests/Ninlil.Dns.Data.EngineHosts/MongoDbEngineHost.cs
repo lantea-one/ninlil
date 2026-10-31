@@ -19,7 +19,7 @@ public sealed class MongoDbEngineHost(bool replicaSet = true) : EngineHost
     ///     <see cref="MongoDbReplicaSetEngineHost" /> so one digest line serves both.
     /// </summary>
     internal const string Image =
-        "public.ecr.aws/docker/library/mongo:8@sha256:d731d77bfd7afd66bd487bdf627b5bf7ce4c3602ec461d635977021db529ebbc";
+        "public.ecr.aws/docker/library/mongo:8@sha256:e16e606f792ea89d2b4907b54e5e31eb86a7a23e27231dce3a982cc8f2d73cd2";
 
     private readonly MongoDbContainer _container = CreateContainer(replicaSet);
 
