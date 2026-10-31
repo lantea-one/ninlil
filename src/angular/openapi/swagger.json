@@ -914,7 +914,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth `POST /api/auth/forgot-password` and the `EmailLink` mode of\n`UsersController.ResetPassword`, called from the admin console's \"set new password\"\npage. The caller is not signed in, so it allows anonymous callers;\n`ConfirmPasswordResetRequest.Token` is the only proof of authorization, and\nM:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) rejects a wrong, expired or used\ntoken. An unknown account and an undecodable token return the same 400 message, so the\nresponse does not reveal whether an account exists. A successful reset revokes every\nrefresh token of the account.",
+        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth `POST /api/auth/forgot-password` and the `EmailLink` mode of\n`UsersController.ResetPassword`, called from the admin console's \"set new password\"\npage. The caller is not signed in, so it allows anonymous callers;\n`ConfirmPasswordResetRequest.Token` is the only proof of authorization, and\nM:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) rejects a wrong, expired or used\ntoken. An unknown account and an undecodable token return the same 400 message, so the\nresponse does not reveal whether an account exists. A successful reset replaces the\naccount's security stamp and revokes every refresh token of the account, so every\naccess token issued before it answers 401 on its next request.",
         "operationId": "apiAuthResetPasswordPost",
         "requestBody": {
           "content": {
@@ -21115,7 +21115,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action generates a new TOTP shared secret for the caller and returns it with an\n`otpauth://` URI for an authenticator app. `POST /api/auth/two-factor/authenticator/enable` must\nconfirm it before two-factor sign-in becomes required.\n\nWhile two-factor sign-in is on with an authenticator secret, the request must carry\n    a valid current authenticator code or an unused recovery code (which this call\n    uses up) in the body; otherwise this returns 400 and the secret is unchanged. After\n    5 wrong codes in 15 minutes (shared with the other code checks of this controller\n    and the sign-in) it returns 429 with a `Retry-After` header, without checking\n    the code. A\n    stolen access token alone then cannot swap in an attacker's secret. First-time\n    setup, or setup while two-factor sign-in is off, needs no body.",
+        "summary": "This action generates a new TOTP shared secret for the caller and returns it with an\n`otpauth://` URI for an authenticator app. `POST /api/auth/two-factor/authenticator/enable` must\nconfirm it before two-factor sign-in becomes required. This call does not end the\ncaller's session: the confirmation that follows needs it, and\n`POST /api/auth/two-factor/authenticator/enable` ends every session of the account.\n\nWhile two-factor sign-in is on with an authenticator secret, the request must carry\n    a valid current authenticator code or an unused recovery code (which this call\n    uses up) in the body; otherwise this returns 400 and the secret is unchanged. After\n    5 wrong codes in 15 minutes (shared with the other code checks of this controller\n    and the sign-in) it returns 429 with a `Retry-After` header, without checking\n    the code. A\n    stolen access token alone then cannot swap in an attacker's secret. First-time\n    setup, or setup while two-factor sign-in is off, needs no body.",
         "operationId": "apiAuthTwoFactorAuthenticatorSetupPost",
         "requestBody": {
           "content": {
@@ -21152,7 +21152,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action confirms authenticator setup by checking a code from the app, and only then\nmakes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a\n`Retry-After` header, after 5 wrong codes in 15 minutes.",
+        "summary": "This action confirms authenticator setup by checking a code from the app, and only then\nmakes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a\n`Retry-After` header, after 5 wrong codes in 15 minutes. A successful call\nreplaces the account's security stamp and revokes every refresh token of the account,\nincluding the caller's own session: every access token issued before it, the caller's\nincluded, answers 401 on its next request, and the caller signs in again with the\nsecond factor.",
         "operationId": "apiAuthTwoFactorAuthenticatorEnablePost",
         "requestBody": {
           "content": {
@@ -21178,7 +21178,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action stops requiring a second factor at sign-in. It needs a valid authenticator\ncode as well as the access token. Returns 400 for a wrong code and 429, with a\n`Retry-After` header, after 5 wrong codes in 15 minutes.",
+        "summary": "This action stops requiring a second factor at sign-in. It needs a valid authenticator\ncode as well as the access token. Returns 400 for a wrong code and 429, with a\n`Retry-After` header, after 5 wrong codes in 15 minutes. A successful call ends\nevery session of the account in the same way as `POST /api/auth/two-factor/authenticator/enable`.",
         "operationId": "apiAuthTwoFactorDisablePost",
         "requestBody": {
           "content": {
@@ -21218,7 +21218,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action generates a new batch of single-use recovery codes for the caller and\ninvalidates any earlier batch. A recovery code is a fallback for the second factor, so\ntwo-factor sign-in must already be enabled; otherwise this returns 400.",
+        "summary": "This action generates a new batch of single-use recovery codes for the caller and\ninvalidates any earlier batch. A recovery code is a fallback for the second factor, so\ntwo-factor sign-in must already be enabled; otherwise this returns 400. A new batch\nreplaces the account's security stamp and revokes every refresh token of the account,\nso the caller's own access token answers 401 on its next request: the caller reads the\ncodes from this response and signs in again.",
         "operationId": "apiAuthTwoFactorRecoveryCodesGeneratePost",
         "responses": {
           "200": {
@@ -21431,7 +21431,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action updates an account's display name, e-mail address and disabled flag. A\ndisabled account cannot sign in or refresh its session. Passwords are changed through\n`POST /api/users/{id}/reset-password` or `POST /api/users/me/change-password`. Requires\n`users:write`.",
+        "summary": "This action updates an account's display name, e-mail address and disabled flag. A\ndisabled account cannot sign in or refresh its session, and its access tokens already\nissued are refused from the next request on. Passwords are changed through\n`POST /api/users/{id}/reset-password` or `POST /api/users/me/change-password`. Requires\n`users:write`.",
         "operationId": "apiUsersIdPut",
         "parameters": [
           {
@@ -21700,7 +21700,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action changes the caller's password. It requires the current password; a wrong one\nreturns 400 with Identity's `PasswordMismatch` error. A successful change revokes\nevery refresh token of the account, including the caller's own session: the request\ndoes not say which session it belongs to, so the caller's access token works until it\nexpires and the caller then signs in again with the new password. Requires only a\nsigned-in caller.",
+        "summary": "This action changes the caller's password. It requires the current password; a wrong one\nreturns 400 with Identity's `PasswordMismatch` error. A successful change replaces\nthe account's security stamp and revokes every refresh token of the account, including\nthe caller's own session: every access token issued before the change, the caller's\nincluded, answers 401 on its next request, and the caller signs in again with the new\npassword. Requires only a signed-in caller.",
         "operationId": "apiUsersMeChangePasswordPost",
         "requestBody": {
           "content": {
@@ -21727,7 +21727,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as `POST /api/users/me/change-password` requires.\n`AdminResetPasswordRequest.Mode` picks one of two modes (see\n`AdminPasswordResetMode`). Requires `users:write`.\n<list type=\"bullet\"><item>`AdminPasswordResetMode.AutoGenerate` sets a generated strong\n        password at once, through a reset token and\n        M:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) so Identity's usual\n        validation and hashing apply, and returns it in this response only. It also revokes\n        every refresh token of the account.\n    </item><item>`AdminPasswordResetMode.EmailLink` e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        `POST /api/auth/reset-password`. The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        `ConfirmPasswordResetRequest`). The account must have an e-mail\n        address, and SMTP and the public base URL the link points at must be\n        configured (see `SmtpSettingsController`); otherwise this returns 400\n        with a clear message.\n    </item></list>",
+        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as `POST /api/users/me/change-password` requires.\n`AdminResetPasswordRequest.Mode` picks one of two modes (see\n`AdminPasswordResetMode`). Requires `users:write`.\n<list type=\"bullet\"><item>`AdminPasswordResetMode.AutoGenerate` sets a generated strong\n        password at once, through a reset token and\n        M:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) so Identity's usual\n        validation and hashing apply, and returns it in this response only. It also replaces\n        the account's security stamp and revokes every refresh token of the account, so\n        every access token issued before the reset answers 401 on its next request.\n    </item><item>`AdminPasswordResetMode.EmailLink` e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        `POST /api/auth/reset-password`. The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        `ConfirmPasswordResetRequest`). The account must have an e-mail\n        address, and SMTP and the public base URL the link points at must be\n        configured (see `SmtpSettingsController`); otherwise this returns 400\n        with a clear message.\n    </item></list>",
         "operationId": "apiUsersIdResetPasswordPost",
         "parameters": [
           {

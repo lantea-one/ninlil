@@ -48,7 +48,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action confirms authenticator setup by checking a code from the app, and only then makes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a &#x60;Retry-After&#x60; header, after 5 wrong codes in 15 minutes.
+     * This action confirms authenticator setup by checking a code from the app, and only then makes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a &#x60;Retry-After&#x60; header, after 5 wrong codes in 15 minutes. A successful call replaces the account\&#39;s security stamp and revokes every refresh token of the account, including the caller\&#39;s own session: every access token issued before it, the caller\&#39;s included, answers 401 on its next request, and the caller signs in again with the second factor.
      * @endpoint post /api/auth/two-factor/authenticator/enable
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -114,7 +114,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action generates a new TOTP shared secret for the caller and returns it with an &#x60;otpauth://&#x60; URI for an authenticator app. &#x60;POST /api/auth/two-factor/authenticator/enable&#x60; must confirm it before two-factor sign-in becomes required.  While two-factor sign-in is on with an authenticator secret, the request must carry     a valid current authenticator code or an unused recovery code (which this call     uses up) in the body; otherwise this returns 400 and the secret is unchanged. After     5 wrong codes in 15 minutes (shared with the other code checks of this controller     and the sign-in) it returns 429 with a &#x60;Retry-After&#x60; header, without checking     the code. A     stolen access token alone then cannot swap in an attacker\&#39;s secret. First-time     setup, or setup while two-factor sign-in is off, needs no body.
+     * This action generates a new TOTP shared secret for the caller and returns it with an &#x60;otpauth://&#x60; URI for an authenticator app. &#x60;POST /api/auth/two-factor/authenticator/enable&#x60; must confirm it before two-factor sign-in becomes required. This call does not end the caller\&#39;s session: the confirmation that follows needs it, and &#x60;POST /api/auth/two-factor/authenticator/enable&#x60; ends every session of the account.  While two-factor sign-in is on with an authenticator secret, the request must carry     a valid current authenticator code or an unused recovery code (which this call     uses up) in the body; otherwise this returns 400 and the secret is unchanged. After     5 wrong codes in 15 minutes (shared with the other code checks of this controller     and the sign-in) it returns 429 with a &#x60;Retry-After&#x60; header, without checking     the code. A     stolen access token alone then cannot swap in an attacker\&#39;s secret. First-time     setup, or setup while two-factor sign-in is off, needs no body.
      * @endpoint post /api/auth/two-factor/authenticator/setup
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -181,7 +181,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action stops requiring a second factor at sign-in. It needs a valid authenticator code as well as the access token. Returns 400 for a wrong code and 429, with a &#x60;Retry-After&#x60; header, after 5 wrong codes in 15 minutes.
+     * This action stops requiring a second factor at sign-in. It needs a valid authenticator code as well as the access token. Returns 400 for a wrong code and 429, with a &#x60;Retry-After&#x60; header, after 5 wrong codes in 15 minutes. A successful call ends every session of the account in the same way as &#x60;POST /api/auth/two-factor/authenticator/enable&#x60;.
      * @endpoint post /api/auth/two-factor/disable
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -301,7 +301,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action generates a new batch of single-use recovery codes for the caller and invalidates any earlier batch. A recovery code is a fallback for the second factor, so two-factor sign-in must already be enabled; otherwise this returns 400.
+     * This action generates a new batch of single-use recovery codes for the caller and invalidates any earlier batch. A recovery code is a fallback for the second factor, so two-factor sign-in must already be enabled; otherwise this returns 400. A new batch replaces the account\&#39;s security stamp and revokes every refresh token of the account, so the caller\&#39;s own access token answers 401 on its next request: the caller reads the codes from this response and signs in again.
      * @endpoint post /api/auth/two-factor/recovery-codes/generate
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
