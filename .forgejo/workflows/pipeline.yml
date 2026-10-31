@@ -276,7 +276,8 @@ jobs:
     runs-on: 'archlinux'
     strategy:
       matrix:
-        ## 'file' is the name publish-binary.sh writes (the Windows one ends in .exe).
+        ## 'file' is the name publish-binary.sh writes (the Windows one is a zip holding the .exe and
+        ## msquic.dll).
         include:
           - binary: 'linux-amd64'
             file: 'ninlil-linux-amd64'
@@ -287,7 +288,7 @@ jobs:
           - binary: 'macos-arm64'
             file: 'ninlil-macos-arm64'
           - binary: 'windows-amd64'
-            file: 'ninlil-windows-amd64.exe'
+            file: 'ninlil-windows-amd64.zip'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -583,7 +584,7 @@ jobs:
           FORGEJO_SERVER_URL: '${{ forgejo.server_url }}'
           FORGEJO_REPOSITORY: '${{ forgejo.repository }}'
         run: |-
-          .\.forgejo\scripts\windows-smoke.ps1 -ReleaseTag $env:RELEASE_TAG -Asset ninlil-windows-amd64.exe
+          .\.forgejo\scripts\windows-smoke.ps1 -ReleaseTag $env:RELEASE_TAG -Asset ninlil-windows-amd64.zip
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         shell: 'powershell'
   ##

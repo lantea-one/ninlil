@@ -108,10 +108,11 @@ platform, mark it executable, and run it. Its data directory is created next to 
 | Linux ARM64 | \`ninlil-linux-arm64\` |
 | macOS Intel | \`ninlil-macos-amd64\` |
 | macOS Apple Silicon | \`ninlil-macos-arm64\` |
-| Windows x86-64 | \`ninlil-windows-amd64.exe\` |
+| Windows x86-64 | \`ninlil-windows-amd64.zip\` (the executable and \`msquic.dll\`; unzip them into one folder) |
 
 Verify a download with \`sha256sum --check --ignore-missing SHA256SUMS\`. The Windows executable is
-unsigned, so SmartScreen warns on first start; the README explains how to run it as a service.
+unsigned, so SmartScreen warns on first start; the README explains how to unzip it and run it as a
+service.
 
 ### Arch Linux
 

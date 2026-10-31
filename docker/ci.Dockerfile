@@ -6,7 +6,7 @@
 # the runner needs only Docker, and every build and test stays off the host.
 #
 #   dotnet  The .NET SDK, plus libmsquic from Microsoft's Ubuntu 24.04 repository for the
-#           DNS-over-QUIC tests.
+#           DNS-over-QUIC tests, and zip for the Windows release archive.
 #   node    Node.js 24 with a Java runtime (`npm run build` regenerates the typed API client with
 #           openapi-generator-cli, a Java tool) and Chromium for the Karma suite.
 #   arch    makepkg, for the ninlil packages. Arch Linux publishes amd64 images only, so
@@ -48,7 +48,7 @@ RUN apt-get update \
     && dpkg -i /tmp/packages-microsoft-prod.deb \
     && rm /tmp/packages-microsoft-prod.deb \
     && apt-get update \
-    && apt-get install -y --no-install-recommends libmsquic \
+    && apt-get install -y --no-install-recommends libmsquic zip \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------------------------

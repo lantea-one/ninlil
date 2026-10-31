@@ -11,18 +11,21 @@ DNS query. It is a smoke test, not a test suite.
 The HTTPS, DNS-over-TLS and DNS-over-QUIC checks run against the self-signed certificate the
 executable generates on its first start. On Windows that key must be one Schannel can use for a
 server handshake, so a failure here means the first start is broken even though a restart would
-work. DNS-over-QUIC also needs msquic.dll to load. PowerShell 7 sends a real DoQ query through
+work. DNS-over-QUIC also needs msquic.dll, which System.Net.Quic loads only from the folder of the
+executable; the release ships it in the zip beside the executable. PowerShell 7 sends a real DoQ query through
 .NET's QuicConnection. Windows PowerShell 5.1 has no QUIC client, so there the script requires
 a healthy /status (it is unhealthy when an enabled transport is not listening) and no "QUIC is
 not supported" line in the executable's log.
 
-The executable comes from one of two places:
+The package comes from one of two places:
   - -ExecutablePath: a local file (how a developer runs this under pwsh on Linux, against
-    ninlil-linux-amd64).
+    ninlil-linux-amd64). A .zip is expanded like the release asset; a bare executable is copied
+    together with a msquic.dll that sits beside it, if there is one.
   - otherwise the attachment named -Asset on the draft release for -ReleaseTag, downloaded
-    through the Forgejo API.
+    through the Forgejo API. The Windows asset is a zip holding the executable and msquic.dll,
+    which the script expands and tests exactly as shipped.
 
-The file is copied into a fresh temporary folder first, because Ninlil keeps its data directory
+The package is placed in a fresh temporary folder first, because Ninlil keeps its data directory
 next to the executable. The process gets three free loopback ports, a fixed bootstrap password
 and its own native-library extraction folder. Both log files are printed when a check fails.
 
@@ -33,10 +36,11 @@ always present on the runner.
 The draft release's tag (the computed version). Required unless -ExecutablePath is given.
 
 .PARAMETER Asset
-The attachment to download, for example ninlil-windows-amd64.exe.
+The attachment to download, for example ninlil-windows-amd64.zip.
 
 .PARAMETER ExecutablePath
-A local executable to test instead of downloading one.
+A local executable, or a zip with the same layout as the release asset, to test instead of
+downloading one.
 
 .PARAMETER StartupTimeoutSeconds
 How long to wait for /status to answer 200. Default 120 (the first start extracts the bundle).
@@ -54,7 +58,7 @@ Exit status: 0 when every check passes, 1 otherwise.
 [CmdletBinding()]
 param(
     [string] $ReleaseTag,
-    [string] $Asset = 'ninlil-windows-amd64.exe',
+    [string] $Asset = 'ninlil-windows-amd64.zip',
     [string] $ExecutablePath,
     [int] $StartupTimeoutSeconds = 120,
     [int] $DnsQueryPortOverride = 0
@@ -268,11 +272,25 @@ function Send-DnsQuery([int] $port, [byte[]] $id) {
 
 $failed = $false
 try {
-    $executable = Join-Path $work 'ninlil-under-test.exe'
-    if ($ExecutablePath) {
-        Copy-Item -LiteralPath $ExecutablePath -Destination $executable
+    $package = Join-Path $work 'package'
+    New-Item -ItemType Directory -Path $package | Out-Null
+    $source = $ExecutablePath
+    if (-not $source) {
+        $source = Join-Path $work $Asset
+        Get-DraftAsset $source
+    }
+    if ($source -like '*.zip') {
+        # Expand-Archive is in Windows PowerShell 5.1 and PowerShell 7.
+        Expand-Archive -LiteralPath $source -DestinationPath $package
+        $found = @(Get-ChildItem -LiteralPath $package -Filter '*.exe' | Select-Object -First 1)
+        if ($found.Count -eq 0) { throw "The zip $Asset holds no executable." }
+        $executable = $found[0].FullName
+        if (-not (Test-Path (Join-Path $package 'msquic.dll'))) { throw 'The zip holds no msquic.dll next to the executable.' }
     } else {
-        Get-DraftAsset $executable
+        $executable = Join-Path $package 'ninlil-under-test.exe'
+        Copy-Item -LiteralPath $source -Destination $executable
+        $quicLibrary = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $source)) 'msquic.dll'
+        if (Test-Path $quicLibrary) { Copy-Item -LiteralPath $quicLibrary -Destination $package }
     }
     if ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) {
         # Local run on Linux or macOS against a non-Windows binary.
@@ -351,7 +369,7 @@ try {
     $health = ($status.Content | ConvertFrom-Json).status
     if ($health -ne 'Healthy') { throw "/status reports '$health', not Healthy: $($status.Content)" }
     if ((Get-Content $stdoutFile -Raw) -match 'QUIC is not supported') {
-        throw 'The executable reports that QUIC is not supported (msquic.dll did not load).'
+        throw 'The executable reports that QUIC is not supported (msquic.dll did not load beside it).'
     }
     if ($PSVersionTable.PSVersion.Major -ge 7 -and $IsWindows) {
         $doqReply = Send-DoqQuery $doqPort

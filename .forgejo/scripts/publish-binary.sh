@@ -11,13 +11,18 @@
 # (build-admin-console.sh puts it there).
 #
 # The Windows executable is unsigned and reads the Windows Service Control Manager's start
-# request (UseWindowsService in Program.cs), so it also runs as a service.
+# request (UseWindowsService in Program.cs), so it also runs as a service. Windows ships as a zip
+# holding the executable and msquic.dll side by side: System.Net.Quic loads msquic.dll only from
+# the folder of the executable, and the .NET runtime pack marks the file as one a single-file
+# publish leaves out of the bundle (DropFromSingleFile), so DNS-over-QUIC needs the second file.
 #
 # Usage: publish-binary.sh <linux-amd64|linux-arm64|macos-amd64|macos-arm64|windows-amd64>
 #        <output-directory>
 #
-# Output: <output-directory>/ninlil-<name>, or ninlil-windows-amd64.exe for windows-amd64. Exits non-zero for an unknown name, a missing admin
-# console build, or a failed publish.
+# Output: <output-directory>/ninlil-<name>; for windows-amd64 it is ninlil-windows-amd64.zip,
+# which holds ninlil-windows-amd64.exe and msquic.dll from the same publish (needs the zip tool;
+# the dotnet toolchain image has it). Exits non-zero for an unknown name, a missing admin
+# console build, a Windows publish without msquic.dll, or a failed publish.
 #
 # Environment (all optional; a local build is 0.0.0-local). These avoid the NINLIL_ prefix,
 # which the application reads as its configuration settings:
@@ -57,6 +62,10 @@ target="ninlil-${name}"
 if [[ "${rid}" == win-* ]]; then
     built='Ninlil.Web.exe'
     target="${target}.exe"
+    if ! command -v zip > /dev/null; then
+        echo "The zip tool is required for ${name}." >&2
+        exit 1
+    fi
 fi
 
 dotnet publish "${repository_root}/src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj" \
@@ -77,5 +86,26 @@ dotnet publish "${repository_root}/src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj" 
     --output "${publish}"
 
 mkdir -p "${output}"
-install -m 0755 "${publish}/${built}" "${output}/${target}"
-ls -l "${output}/${target}"
+
+if [[ "${rid}" == win-* ]]; then
+    # Without msquic.dll the zip would start but report QUIC as unsupported, so a publish that
+    # does not leave the file behind (a runtime pack change) must fail here, not at the smoke test.
+    if [[ ! -f "${publish}/msquic.dll" ]]; then
+        echo "The ${rid} publish has no msquic.dll next to the executable." >&2
+        exit 1
+    fi
+    # The zip holds the two files under their final names, with no folder; -X drops the extra
+    # file attributes so the archive does not depend on the build host.
+    stage="$(mktemp -d)"
+    trap 'rm -rf "${publish}" "${stage}"' EXIT
+    install -m 0755 "${publish}/${built}" "${stage}/${target}"
+    install -m 0644 "${publish}/msquic.dll" "${stage}/msquic.dll"
+    archive="${target%.exe}.zip"
+    output_directory="$(cd "${output}" && pwd)"
+    rm -f "${output_directory}/${archive}"
+    (cd "${stage}" && zip -q -X "${output_directory}/${archive}" "${target}" msquic.dll)
+    ls -l "${output}/${archive}"
+else
+    install -m 0755 "${publish}/${built}" "${output}/${target}"
+    ls -l "${output}/${target}"
+fi

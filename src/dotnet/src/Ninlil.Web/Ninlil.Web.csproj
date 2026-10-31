@@ -583,4 +583,21 @@
       />
     </ItemGroup>
   </Target>
+  <!--
+      A single-file Windows publish leaves msquic.dll out of the executable (the runtime pack marks
+      it DropFromSingleFile) and out of the publish folder. System.Net.Quic loads it only from the
+      folder of the executable, so DNS-over-QUIC needs the file beside the executable. This target
+      copies the runtime pack's own msquic.dll (the one RuntimePackAsset names) into the publish
+      folder; .forgejo/scripts/publish-binary.sh zips it with the executable.
+    -->
+  <Target
+    Name="NinlilCopyMsQuicBesideExecutable"
+    AfterTargets="Publish"
+    Condition="'$(PublishSingleFile)' == 'true' and $(RuntimeIdentifier.StartsWith('win-'))"
+  >
+    <ItemGroup>
+      <NinlilMsQuicAsset Include="@(RuntimePackAsset)" Condition="'%(Filename)%(Extension)' == 'msquic.dll'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(NinlilMsQuicAsset)" DestinationFolder="$(PublishDir)" />
+  </Target>
 </Project>
