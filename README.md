@@ -1325,6 +1325,10 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   ("Operators SHOULD NOT use a salt"). The API accepts at most 150 iterations
   (`nsec3Iterations`) and answers `400` above that. Ninlil's own validator treats a zone above 150
   as insecure, and any validator may treat a count above 0 as insecure (RFC 9276 §3.2).
+- **A record that cannot be signed.** Signing reads every stored record, whatever wrote it. A
+  record whose data cannot be written as RDATA is left out of the signed zone with one warning that
+  names it, and the rest of the zone is signed as usual, so the zone never keeps serving older
+  signatures until they expire.
 - **Key sizes.** Only RSA keys use `keySizeBits`: `0` for 2048 bits, or a multiple of 64 from 2048
   to 4096. The multiple of 64 comes from Windows, which creates RSA keys only in steps of 64 bits.
   Other algorithms ignore the field.
@@ -1394,9 +1398,9 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
 - *The parent hosted here shows no DS record for the child.* Change the parent in any way (step 8)
   and ask again. The child must be signed, and the delegation NS record must sit at the child's
   name.
-- *The zone stops being re-signed and the log shows `Failed to sign zone`.* A record with empty
-  data may sit in the zone. See [Zones and records](#zones-and-records) "When something goes
-  wrong".
+- *A record is missing from a signed zone's answers and the log warns that it "holds data that
+  cannot be written as RDATA".* Signing leaves that record out and signs the rest of the zone.
+  Edit or delete the record the warning names.
 
 ### Secondary zones and transfers
 
