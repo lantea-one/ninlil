@@ -3480,13 +3480,20 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   because the client identifier is longer than 85 bytes`.
 - **A reservation wins.** A device with a reservation can lease only its reserved address, and no
   other device gets that address. Ninlil does not check the reserved address against the scope's
-  range or its IP version, so the address may lie outside the pool (a fixed address often does).
-  Check the address: a reservation that holds an address of the other IP version (an IPv4
-  address in a DHCPv6 scope) makes the server fail that device's requests with an error in the log.
-  The reservation's `hostName` is a note for you. DNS registration uses the host name the device
-  sends.
-- **Ninlil does not check scopes against each other.** It does not check that a range lies inside
-  its subnet or that two scopes do not overlap. Read the numbers twice.
+  range, so the address may lie outside the pool (a fixed address often does). It does check the IP
+  version: the address of a reservation in a DHCPv4 scope must be IPv4 and in a DHCPv6 scope IPv6,
+  and the API answers `400` otherwise. If a restore or a database edit leaves a reservation of the
+  wrong version in a scope, Ninlil skips it, logs a Warning that names the reservation, and treats
+  the device as having none. The reservation's `hostName` is a note for you. DNS registration uses
+  the host name the device sends.
+- **Scope ranges are checked.** The API answers `400` when a range does not lie inside one subnet
+  of `subnetPrefixLength` (both ends must share the first `subnetPrefixLength` bits), and when an
+  enabled scope's range shares an address with another enabled scope of the same IP version and
+  kind. The message names the other scope. A disabled scope is not compared, so to move a range
+  between two scopes, disable the old one first. An address scope and a `PrefixDelegation` scope
+  never collide, because one hands out addresses and the other prefixes. A `PATCH` that touches
+  none of the range, the prefix length, the kind or the switch is not checked, so a scope stored
+  before these checks can still be renamed while you fix it.
 - **Lease length.** A DHCPv4 device may ask for a lease time. It gets that time, capped at
   `maxLeaseDuration`, or `defaultLeaseDuration` when it asks for none. DHCPv6 ignores the times a
   device suggests: the preferred and valid lifetimes are `defaultLeaseDuration` capped at
@@ -3640,19 +3647,30 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   4. The log has the reason when Ninlil refused the request: `Refused ... because the client
      identifier is longer than 85 bytes`, or `No address is currently available in scope '<name>'
      to offer client <identifier>.`
-- *Ninlil stops at start with `Hosting failed to start` and `System.Net.Sockets.SocketException
-  (13): Permission denied`, then `Unhandled exception`.* DHCPv4, DHCPv6 or Router Advertisement is
-  enabled and the process may not open its socket: ports below `1024` need root or
-  `CAP_NET_BIND_SERVICE`, and Router Advertisement needs `CAP_NET_RAW` (see "Before you start"
-  step 5). `SocketException (98): Address already in use` means another program holds the port.
-  An enabled DHCP service that cannot bind stops Ninlil. Fix the cause, or turn the service off
-  with its `Enable` setting. The start call of **DHCP Services** answers `500` and logs the same
-  exception.
+- *Ninlil runs but a DHCP service does not answer, and the log has an Error such as `The DHCPv4
+  listener could not bind its socket: Permission denied`.* An enabled DHCPv4, DHCPv6 or Router
+  Advertisement service could not open its socket when Ninlil started. `Permission denied` means
+  the process may not: ports below `1024` need root or `CAP_NET_BIND_SERVICE`, and Router
+  Advertisement needs `CAP_NET_RAW` (see "Before you start" step 5). `Address already in use` means
+  another program holds the port. Ninlil logs one Error, reports the `dhcpServices` check of
+  `GET /status` as `Unhealthy` with the service and the reason (for example `DHCPv4 (Address already
+  in use)`), and keeps running: DNS, the other services, the REST API and the admin console are not
+  affected. Fix it like this:
+  1. Read the reason in the log, or in the `dhcpServices` component of `GET /status` (it needs a
+     token with the `status:read` permission; without one it shows only `"status":"Unhealthy"`).
+  2. Free the port (`ss -lnup | grep ':67 '` shows the program that holds it) or give Ninlil the
+     right to bind it, or turn the service off with its `Enable` setting.
+  3. Start the service again without a restart: `POST /api/dhcp-services/Dhcpv4/start` (or
+     **DHCP Services** in the console). That call answers `500` and logs the exception while the
+     cause remains.
+  4. Check that it worked: `GET /status` reports `dhcpServices` as `Healthy`.
 - *A reservation is ignored.* The identifier does not match. Compare it with the one in the lease
   list, and remember the `01:` prefix of option `61`.
-- *The DHCPv6 log has `An IAADDR option's address must be an IPv6 address.`* A reservation of the
-  scope holds an IPv4 address. Correct or delete it. The same fault in a DHCPv4 scope logs
-  `A DHCPv4 message's address fields must each be an IPv4 address.`
+- *The log has `The reservation for <identifier> in scope '<name>' (<address>) is not an IPv6
+  address, so it is skipped`.* A reservation of the scope holds an address of the other IP
+  version (a restore or a database edit stored it; the API refuses it). The device gets an address
+  from the pool instead. Correct or delete the reservation. A DHCPv4 scope logs `is not an IPv4
+  address`.
 - *No DNS record for a device.* The scope needs a zone of type `Primary` or `CloudPrimary`, and
   the device must send a host name. The log shows `DHCP->DNS registration refused` when the name is
   taken.
@@ -3826,10 +3844,12 @@ mode, in 512-byte blocks. It is off by default and listens on UDP port `69`.
   If it shows `The TFTP server is enabled but no DhcpServer:Tftp:RootDirectory is configured; it
   will not bind a socket.` or `... root directory '<path>' does not exist; it will not bind a
   socket.`, fix the root directory and restart. `GET /api/dhcp-services` shows `isRunning`.
-- *Ninlil stops at start with `Hosting failed to start` and `SocketException (13): Permission
-  denied` or `(98): Address already in use`.* The process may not open port `69`, or another
-  program holds it. An enabled TFTP server that cannot bind stops Ninlil, as DHCP does (see "When
-  something goes wrong" in [DHCP, DHCPv6 and Router Advertisement](#dhcp-dhcpv6-and-router-advertisement)).
+- *The log has `The TFTP server could not bind its socket: Permission denied` or `Address already
+  in use`.* The process may not open port `69`, or another program holds it. Ninlil logs one Error,
+  reports `TFTP` with the reason in the `dhcpServices` check of `GET /status`, and keeps running. Fix
+  it as for DHCP (see "When something goes wrong" in
+  [DHCP, DHCPv6 and Router Advertisement](#dhcp-dhcpv6-and-router-advertisement)), then start the
+  server again with `POST /api/dhcp-services/Tftp/start`.
 
 ### Clustering, events and webhooks
 
