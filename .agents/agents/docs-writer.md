@@ -24,7 +24,7 @@ Every claim is checked:
 
 How a guide reads:
 - One heading scheme: `##` topic, `###` guide, `####` part. Do not rename or reorder headings
-  the package does not list; README anchors are linked from other files and from the console.
+  the package does not list; README anchors are linked from other Markdown files.
 - A procedure is a numbered list. "Before you start" (what you need and how to check it) comes
   first, and "Check that it worked" (a command and its expected output) comes last.
 - Commands are copy-paste ready: no `$` prompt, one per line, placeholders `<like-this>` explained

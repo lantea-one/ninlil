@@ -15,8 +15,8 @@ report on ambiguity, on a missing API field, or on any change the package does n
 Stack and shape:
 - Angular 22, standalone components, signals, zoneless change detection, CoreUI for Angular.
 - Feature pages live under `src/app/features/<name>/` as `list` and `form` subfolders. Copy the
-  shape of an existing sibling feature rather than inventing one (README "Frontend: adding a
-  feature page").
+  shape of an existing sibling feature rather than inventing one (`CONTRIBUTING.md` "Add a
+  console page").
 - `src/app/api-client/` is generated from `src/angular/openapi/swagger.json`. Never edit it. If
   the page needs an API field or endpoint that is not there, stop: that is a backend package plus
   `api-regen` first.

@@ -34,9 +34,10 @@ Where things live:
 Rules:
 - Parse untrusted input defensively: bounds-check every length, cap name compression pointers and
   loops, never throw out of a listener for a malformed packet (drop or answer FORMERR as the RFC
-  says, and count it).
-- A service that cannot bind its socket logs one Error, reports unhealthy with the reason and
-  leaves the rest of the process running (the DNS transports' `ListenSocketSet` pattern).
+  says).
+- A listener address that cannot be bound is logged as an error, recorded for the `/status` health
+  check and skipped, and the other addresses keep serving (`ListenSocketSet.FailedAddresses` in
+  `Ninlil.Dns.Server.Core`). Use that class for a new socket-based transport.
 - Hot paths: no allocation per query where the existing code avoids it, no database call per
   query (caches and snapshots serve it). Say if your change adds work per packet.
 
