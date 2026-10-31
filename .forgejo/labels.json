@@ -1,0 +1,224 @@
+[
+  {
+    "name": "kind/bug",
+    "color": "d73a4a",
+    "description": "Ninlil does something wrong",
+    "exclusive": true
+  },
+  {
+    "name": "kind/feature",
+    "color": "0e8a16",
+    "description": "New behaviour",
+    "exclusive": true
+  },
+  {
+    "name": "kind/epic",
+    "color": "5319e7",
+    "description": "Lists child issues; closed when they are",
+    "exclusive": true
+  },
+  {
+    "name": "kind/test",
+    "color": "c5def5",
+    "description": "Tests only",
+    "exclusive": true
+  },
+  {
+    "name": "kind/docs",
+    "color": "0075ca",
+    "description": "Documentation only",
+    "exclusive": true
+  },
+  {
+    "name": "kind/chore",
+    "color": "cfd3d7",
+    "description": "Build, CI, tooling, process",
+    "exclusive": true
+  },
+  {
+    "name": "kind/performance",
+    "color": "fbca04",
+    "description": "Speed or memory",
+    "exclusive": true
+  },
+  {
+    "name": "kind/security",
+    "color": "b60205",
+    "description": "Hardening (never an undisclosed vulnerability)",
+    "exclusive": true
+  },
+  {
+    "name": "area/dns",
+    "color": "bfdadc",
+    "description": "Part of the system touched: dns",
+    "exclusive": false
+  },
+  {
+    "name": "area/dhcp",
+    "color": "bfdadc",
+    "description": "Part of the system touched: dhcp",
+    "exclusive": false
+  },
+  {
+    "name": "area/console",
+    "color": "bfdadc",
+    "description": "Part of the system touched: console",
+    "exclusive": false
+  },
+  {
+    "name": "area/api",
+    "color": "bfdadc",
+    "description": "Part of the system touched: api",
+    "exclusive": false
+  },
+  {
+    "name": "area/storage",
+    "color": "bfdadc",
+    "description": "Part of the system touched: storage",
+    "exclusive": false
+  },
+  {
+    "name": "area/ci",
+    "color": "bfdadc",
+    "description": "Part of the system touched: ci",
+    "exclusive": false
+  },
+  {
+    "name": "area/packaging",
+    "color": "bfdadc",
+    "description": "Part of the system touched: packaging",
+    "exclusive": false
+  },
+  {
+    "name": "area/windows",
+    "color": "bfdadc",
+    "description": "Part of the system touched: windows",
+    "exclusive": false
+  },
+  {
+    "name": "area/docs",
+    "color": "bfdadc",
+    "description": "Part of the system touched: docs",
+    "exclusive": false
+  },
+  {
+    "name": "area/process",
+    "color": "bfdadc",
+    "description": "Part of the system touched: process",
+    "exclusive": false
+  },
+  {
+    "name": "priority/high",
+    "color": "e11d21",
+    "description": "Next up",
+    "exclusive": true
+  },
+  {
+    "name": "priority/medium",
+    "color": "fbca04",
+    "description": "Planned",
+    "exclusive": true
+  },
+  {
+    "name": "priority/low",
+    "color": "c2e0c6",
+    "description": "When there is room",
+    "exclusive": true
+  },
+  {
+    "name": "status/needs-design",
+    "color": "f9d0c4",
+    "description": "Waits for an architect design",
+    "exclusive": true
+  },
+  {
+    "name": "status/needs-decision",
+    "color": "d876e3",
+    "description": "Waits for the owner",
+    "exclusive": true
+  },
+  {
+    "name": "status/ready",
+    "color": "0e8a16",
+    "description": "Can be dispatched",
+    "exclusive": true
+  },
+  {
+    "name": "status/in-progress",
+    "color": "1d76db",
+    "description": "On a branch",
+    "exclusive": true
+  },
+  {
+    "name": "status/blocked",
+    "color": "5a5a5a",
+    "description": "Waits on something outside the tracker (an issue-to-issue wait uses a dependency)",
+    "exclusive": true
+  },
+  {
+    "name": "agent/coder",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "agent/storage-coder",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "agent/protocol-coder",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "agent/console-coder",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "agent/docs-writer",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "agent/mechanic",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "agent/api-regen",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "agent/architect",
+    "color": "ededed",
+    "description": "Repository agent role that implements it",
+    "exclusive": true
+  },
+  {
+    "name": "resolution/duplicate",
+    "color": "ffffff",
+    "description": "Closed as a duplicate",
+    "exclusive": true
+  },
+  {
+    "name": "resolution/wontfix",
+    "color": "ffffff",
+    "description": "Closed without a change by decision",
+    "exclusive": true
+  },
+  {
+    "name": "resolution/not-a-bug",
+    "color": "ffffff",
+    "description": "Closed: works as intended",
+    "exclusive": true
+  }
+]
