@@ -80,8 +80,9 @@ ENV DOTNET_BUNDLE_EXTRACT_BASE_DIR=/tmp
 # The base image's non-root "app" user (uid 1654). Docker lets an unprivileged process in a
 # container bind ports below 1024 on bridge networking (it sets ip_unprivileged_port_start=0 in
 # the container's network namespace), so the standard ports below work without root. With
-# host networking, and for DHCP (raw sockets, port 67/547), run the container as root and grant
-# NET_ADMIN/NET_RAW; see README.md and the ninlil-host-network service in docker-compose.yml.
+# host networking, and for DHCP (raw sockets, port 67/547), run the container as root; Docker's
+# default capabilities (NET_RAW, NET_BIND_SERVICE) are enough. See README.md and the
+# ninlil-host-network service in docker-compose.yml.
 USER 1654
 
 # The HTTP/HTTPS ports of the REST API and admin console, and plain DNS -- the one DNS transport

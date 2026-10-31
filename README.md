@@ -5754,16 +5754,22 @@ The log ends with `Now listening on: http://[::]:80`, `Now listening on: https:/
 ### DHCP and Router Advertisement
 
 A DHCP/RA server has to see raw broadcast and multicast traffic from the LAN, which Docker's
-bridge network does not forward. Run the container on the host's network instead, as root, with
-the raw-socket and interface capabilities DHCP/RA need:
+bridge network does not forward. Run the container on the host's network instead, as root:
 
 ```bash
 docker run -d --name ninlil --network host \
-  --user 0:0 --cap-add NET_ADMIN --cap-add NET_RAW \
+  --user 0:0 \
   -e NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE=true \
   -v ninlil-data:/app/data \
   git.lantea.one/lantea.one/ninlil:latest
 ```
+
+DHCP and Router Advertisement need two capabilities: `NET_RAW` (the Router Advertisement raw
+socket) and `NET_BIND_SERVICE` (ports 67 and 547 on the host's network). Docker gives both to
+a container by default, so the command above adds none, and `NET_ADMIN` is not needed. If you
+start the container with `--cap-drop ALL`, add `--cap-add NET_RAW --cap-add NET_BIND_SERVICE`
+back. Without `NET_RAW` the Router Advertisement service logs `could not bind its socket:
+Permission denied` and the other services keep running.
 
 ### A fuller example: `docker-compose.yml`
 

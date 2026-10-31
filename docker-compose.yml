@@ -50,9 +50,9 @@
 # The `ninlil-host-network` service, behind the `host-network` Compose profile, is the
 # alternative: it joins the host's network namespace (`network_mode: host`), so its listeners see
 # LAN traffic as a bare-metal install would. On the host's network the unprivileged-port
-# allowance above no longer applies, and DHCP/RA also need raw sockets, so it runs as root with
-# NET_ADMIN and NET_RAW. Run one service or the other, never both (they bind the same host
-# ports); the profile keeps it out of a plain `docker compose up`:
+# allowance above no longer applies, and DHCP/RA also need raw sockets, so it runs as root. The
+# capabilities it needs (NET_RAW, NET_BIND_SERVICE) are in Docker's default set. Run one service
+# or the other, never both (they bind the same host ports); the profile keeps it out of a plain `docker compose up`:
 #
 #   docker compose --profile host-network up --build ninlil-host-network postgres
 #
@@ -120,11 +120,9 @@ services:
     profiles:
       - host-network
     network_mode: host
-    # Root, plus raw-socket and interface capabilities, for DHCP/RA on the host's network.
+    # Root, for DHCP/RA on the host's network. Docker's default capabilities (NET_RAW for the
+    # Router Advertisement socket, NET_BIND_SERVICE for ports 67 and 547) are enough.
     user: "0:0"
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
     environment:
       NINLIL_STORAGE_ENGINE: PostgreSql
       # Host networking has no Compose service-name DNS, so the database is addressed through
