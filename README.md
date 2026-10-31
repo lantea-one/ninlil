@@ -64,12 +64,8 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   - [Building the image yourself](#building-the-image-yourself)
 - [Releases and versioning](#releases-and-versioning)
   - [Using the libraries from NuGet](#using-the-libraries-from-nuget)
-  - [Cutting a release](#cutting-a-release)
   - [The pipeline](#the-pipeline)
 - [Contributing](#contributing)
-  - [Branches](#branches)
-  - [Backend: adding a new entity end-to-end](#backend-adding-a-new-entity-end-to-end)
-  - [Frontend: adding a feature page](#frontend-adding-a-feature-page)
 - [License](#license)
 
 ## What's in the box
@@ -5826,6 +5822,9 @@ version is written into every output in the form each one accepts:
 Branch names are reduced to lower-case letters, digits, and hyphens for these labels
 (`feature/DoT-tuning` becomes `feature-dot-tuning`). A local build is always `0.0.0-local`.
 
+Maintainers cut a release from a release branch named for the date; the steps are in
+[Cutting a release](./CONTRIBUTING.md#cutting-a-release).
+
 ### Using the libraries from NuGet
 
 Every library project under `src/dotnet/src/` — the DNS wire-format layer, the DNS and DHCP
@@ -5842,11 +5841,6 @@ dotnet add package Ninlil.Dns.Common --version 2026.9.24.1
 
 Packages from one build depend on exactly that build's other packages. Branch builds publish
 pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; depend on a release.
-
-### Cutting a release
-
-Maintainers cut a release from a release branch named for the date. The steps are in
-[Cutting a release](./CONTRIBUTING.md#cutting-a-release).
 
 ### The pipeline
 
@@ -5939,20 +5933,6 @@ dotnet csharpier check .
 ```
 
 The build must report `0 Warning(s)`.
-
-### Branches
-
-The branch model (`feature/*`, `hotfix/*`, `develop`, `main` and the release branches) is in
-[Commit, branch and pull request](./CONTRIBUTING.md#commit-branch-and-pull-request).
-
-### Backend: adding a new entity end-to-end
-
-The steps, with the files of a complete example, are in
-[Add an entity end to end](./CONTRIBUTING.md#add-an-entity-end-to-end).
-
-### Frontend: adding a feature page
-
-The steps are in [Add a console page](./CONTRIBUTING.md#add-a-console-page).
 
 ## License
 

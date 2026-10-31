@@ -2,7 +2,8 @@
 
 The guide for AI agents (and a fast orientation for people) working in this repository. It covers
 how the code is laid out, how to build, test and format it, and the rules a change must follow.
-For installation, operation and the release pipeline, see [`README.md`](./README.md).
+For installation, operation and the release pipeline, see [`README.md`](./README.md). For the
+step-by-step commands a person follows, see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## What Ninlil is
 
@@ -10,8 +11,9 @@ For installation, operation and the release pipeline, see [`README.md`](./README
 - One process (`Ninlil.Web`) runs the DNS engine, the DHCP engine, the REST API (OpenAPI), a
   SignalR event hub and the Angular admin console, all on one port.
 - Clean-room is binding: never read or port another DNS/DHCP/ad-blocking project's source. Protocol
-  details come from IETF RFCs and IANA registries only. Match or exceed other products' features,
-  but never copy their UI. See [`NOTICE.md`](./NOTICE.md).
+  details come from IETF RFCs and IANA registries; a protocol without an RFC uses its own published
+  specification or the vendor's documentation. Match or exceed other products' features, but never
+  copy their UI. See [`NOTICE.md`](./NOTICE.md).
 
 ## Repository layout
 
@@ -28,7 +30,8 @@ For installation, operation and the release pipeline, see [`README.md`](./README
 | `src/angular/src/app/api-client/` | Generated TypeScript client. Never edit by hand |
 | `src/archlinux/` | Arch Linux packages ([README](./src/archlinux/README.md)) |
 | `src/linux-packages/` | Deb and RPM package definition for nFPM and its install scripts (README: [Debian, Ubuntu, Fedora, RHEL and Rocky Linux](./README.md#debian-ubuntu-fedora-rhel-and-rocky-linux)) |
-| `src/script/` | Operational scripts: per-engine database helpers, a systemd unit and installer |
+| `src/script/` | Operational scripts: per-engine database helpers, a systemd unit and installer; `development/` holds the console smoke harness, the relay test, the namespace converter and the agent-definition script |
+| `src/agents/` | Agent roles for any assistant. Edit a role here, run `python3 src/script/development/sync-agent-definitions.py` and commit the generated `.claude/agents/`, `.gemini/agents/`, `.agents/agents/` and `.codex/agents/` with it; never edit those by hand (lint runs `--check`) |
 | `Dockerfile`, `docker/`, `docker-compose.yml` | Container image, CI toolchain images, example deployment |
 | `.forgejo/workflows/`, `.forgejo/scripts/` | CI/CD pipeline and the scripts it runs ([README](./README.md#the-pipeline)) |
 | `ENVIRONMENT.md` | Registry of every `NINLIL_*` environment variable |
@@ -176,8 +179,9 @@ npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox   # set CHROME_BIN 
 ```
 
 Standalone components, signals, zoneless, CoreUI. Feature pages live under
-`src/app/features/<name>/` as list + form subfolders. See [README: adding a feature
-page](./README.md#frontend-adding-a-feature-page).
+`src/app/features/<name>/` as list + form subfolders ([adding a console
+page](./CONTRIBUTING.md#add-a-console-page)). Browser check of a built console: the
+[smoke harness](./CONTRIBUTING.md#check-the-admin-console-in-a-browser).
 
 ## Changing the REST API
 
@@ -245,8 +249,8 @@ page](./README.md#frontend-adding-a-feature-page).
   the replica only for the `TimeToLive` reason. Operator view:
   [README: read replicas](./README.md#read-replicas-and-database-clusters).
 - Lists that can grow use a database-side `SearchAsync`/`CountAsync` pair, never `ListAsync()`
-  sliced in memory. Worked end-to-end example: [README: adding a new
-  entity](./README.md#backend-adding-a-new-entity-end-to-end).
+  sliced in memory. Worked end-to-end example: [adding an
+  entity](./CONTRIBUTING.md#add-an-entity-end-to-end).
 
 ## Configuration
 
@@ -280,6 +284,10 @@ page](./README.md#frontend-adding-a-feature-page).
   (`/** */`). The build has `CS1591` muted, so this is enforced by review, not the compiler.
 - Test names read as sentences: `Method_Condition_ExpectedResult`, e.g.
   `Fallback_ForADeepLinkClientRoute_ServesIndexHtml`.
+- Pick the agent role by the work: `architect` designs; `coder` implements a backend package;
+  `storage-coder` schema, migrations and repositories; `protocol-coder` DNS and DHCP wire and
+  transport code; `console-coder` the Angular console; `docs-writer` Markdown; `mechanic` mechanical
+  edits; `api-regen` the snapshot and client; `verifier` read-only review.
 
 ## Comment standard
 
@@ -314,8 +322,8 @@ Every comment is for a reader opening the file cold, today.
   - `The OpenAPI snapshot and Angular API client now include maxConcurrentQueries`
 - Small logical commits: backend change, snapshot + client, and UI change are separate commits.
 - Branches: `feature/*` from `develop` → PR into `develop` → PR into `main` → release branch
-  `v<yyyy>.<mm>.<dd>.<increment>`, per sub-phase; `hotfix/*` from `main`. Details: [README:
-  branches](./README.md#branches) and [cutting a release](./README.md#cutting-a-release).
+  `v<yyyy>.<mm>.<dd>.<increment>`, per sub-phase; `hotfix/*` from `main`. Details: [branches](./CONTRIBUTING.md#commit-branch-and-pull-request)
+  and [cutting a release](./CONTRIBUTING.md#cutting-a-release).
 - Never push, and never commit secrets, unless the user explicitly asks.
 
 ## Before you finish
