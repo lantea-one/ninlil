@@ -405,7 +405,10 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
                 {
                     Enable = true,
                     Port = port,
-                    IdleTimeout = TimeSpan.FromMilliseconds(400),
+                    // The listener bounds the TLS handshake by the idle timeout, so a short one
+                    // aborts the first handshake of a busy machine (certificate load, JIT) before
+                    // it ends. These tests prove the PROXY header handling, not the timeout.
+                    IdleTimeout = TimeSpan.FromSeconds(10),
                     ProxyProtocol = proxyProtocolOptions,
                 }
             ),
