@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Backup;
 using Ninlil.Dns.Server.Backup.Model;
@@ -32,10 +33,17 @@ namespace Ninlil.Web.Controllers;
 /// </summary>
 /// <param name="backupService">Creates and restores archives.</param>
 /// <param name="logger">Records rejected restore attempts.</param>
+/// <param name="accessTokenRevalidator">
+///     Told after a restore, so access tokens already issued are checked against the restored
+///     accounts, roles and security stamps on their next request and not after the cache lifetime.
+/// </param>
 [ApiController]
 [Route("api/backup")]
-public class BackupController(IBackupService backupService, ILogger<BackupController> logger)
-    : ControllerBase
+public class BackupController(
+    IBackupService backupService,
+    ILogger<BackupController> logger,
+    IAccessTokenRevalidator accessTokenRevalidator
+) : ControllerBase
 {
     /// <summary>
     ///     This constant contains the largest request body, in bytes, either action accepts: 2 GiB,
@@ -145,6 +153,12 @@ public class BackupController(IBackupService backupService, ILogger<BackupContro
         {
             logger.LogWarning("Rejected a restore attempt: {Reason}", exception.Message);
             throw new ValidationException(exception.Message);
+        }
+        finally
+        {
+            // The restore replaces the user, role and security-stamp rows under the cache, and
+            // a failure part-way may have replaced some of them.
+            accessTokenRevalidator.Invalidate();
         }
     }
 }
