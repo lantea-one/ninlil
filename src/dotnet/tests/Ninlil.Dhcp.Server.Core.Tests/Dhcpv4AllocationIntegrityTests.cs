@@ -122,6 +122,36 @@ public sealed class Dhcpv4AllocationIntegrityTests : IAsyncLifetime
         Assert.Equal(LeaseStateEnum.Offered, b.State);
     }
 
+    /// <summary>
+    ///     This test checks that a stored reservation holding an IPv6 address (the API refuses
+    ///     one, but a restore or a database edit can store it) is skipped with a Warning: the
+    ///     device gets a pool address and an ACK instead of an encoding failure and no reply.
+    /// </summary>
+    [Fact]
+    public async Task Discover_ForAReservationHoldingAnIPv6Address_SkipsItWithAWarningAndOffersAPoolAddress()
+    {
+        DhcpScopeEntity scope = await _host.SeedScopeAsync(
+            "integrity-wrong-family",
+            "192.0.2.60",
+            "192.0.2.65"
+        );
+        await _host.SeedReservationAsync(scope.Id, "a5:00:00:00:00:01", "2001:db8::1");
+        byte[] client = [0xa5, 0, 0, 0, 0, 1];
+
+        Dhcpv4Message offer = await DiscoverAsync(client);
+
+        Assert.NotNull(offer);
+        Assert.Equal(IPAddress.Parse("192.0.2.60"), offer.YourIpAddress);
+        Dhcpv4Message ack = await RequestSelectingAsync(client, offer);
+        Assert.NotNull(ack);
+        Assert.True(ack.TryGetMessageType(out Dhcpv4MessageTypeEnum type));
+        Assert.Equal(Dhcpv4MessageTypeEnum.Ack, type);
+        Assert.Contains(
+            _host.Logs.Warnings,
+            warning => warning.Contains("2001:db8::1") && warning.Contains("is not an IPv4 address")
+        );
+    }
+
     [Fact]
     public async Task Discover_ForAClientWithALeaseAndANewReservation_OffersAndAcksTheReservation()
     {

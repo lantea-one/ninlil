@@ -1,8 +1,10 @@
 using System.Net;
+using System.Net.Sockets;
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Enum;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
+using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -100,15 +102,15 @@ public class DhcpReservationsController(
 
     /// <summary>
     ///     This action adds a static reservation to a scope. Returns 400 for a prefix-delegation
-    ///     scope, a missing or malformed client identifier or an invalid IP address; 404 for an
-    ///     unknown scope; and 409 when the client identifier or the address is already reserved
+    ///     scope, a missing or malformed client identifier, an invalid IP address or one of the
+    ///     wrong family; 404 for an unknown scope; and 409 when the client identifier or the address is already reserved
     ///     in this scope (both are unique per scope, as for leases; see
     ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity" />). The
     ///     identifier is accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>,
     ///     <c>aabb.ccdd.eeff</c> or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and
     ///     returned as <c>aa:bb:cc:dd:ee:ff</c>; the address is stored and returned in canonical
-    ///     form, so duplicates are found whatever the spelling. The address is not checked
-    ///     against the scope's range or protocol. Requires <c>dhcpscopes:write</c>.
+    ///     form, so duplicates are found whatever the spelling. The address must be of the
+    ///     scope's family (400 otherwise); it is not checked against the scope's range. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -136,6 +138,7 @@ public class DhcpReservationsController(
         if (
             !TryValidate(
                 request,
+                scope,
                 out string clientIdentifier,
                 out string ipAddress,
                 out string error
@@ -219,6 +222,7 @@ public class DhcpReservationsController(
         if (
             !TryValidate(
                 request,
+                scope,
                 out string clientIdentifier,
                 out string ipAddress,
                 out string error
@@ -283,13 +287,15 @@ public class DhcpReservationsController(
 
     /// <summary>
     ///     This method checks that a reservation request has a client identifier that
-    ///     <see cref="ClientIdentifierFormat.TryNormalize" /> accepts and a valid IP address, and
+    ///     <see cref="ClientIdentifierFormat.TryNormalize" /> accepts and a valid IP address of the
+    ///     scope's family (IPv4 for a DHCPv4 scope, IPv6 for a DHCPv6 scope), and
     ///     returns both in the form stored: the identifier in normal form and the address as
     ///     <see cref="IPAddress.ToString()" /> writes it, which is the form the DHCP engine
     ///     compares.
     /// </summary>
     private static bool TryValidate(
         DhcpReservationWriteRequest request,
+        DhcpScopeEntity scope,
         out string clientIdentifier,
         out string ipAddress,
         out string error
@@ -317,6 +323,26 @@ public class DhcpReservationsController(
         )
         {
             error = $"'{request.IpAddress}' is not a valid IP address.";
+            return false;
+        }
+
+        // A reservation of the wrong family cannot be put in a reply, so the device would get no
+        // answer; refuse it here instead.
+        if (
+            scope is not null
+            && parsed.AddressFamily
+                != (
+                    scope.ProtocolVersion == InternetProtocolVersionEnum.IPv6
+                        ? AddressFamily.InterNetworkV6
+                        : AddressFamily.InterNetwork
+                )
+        )
+        {
+            bool scopeIsIPv6 = scope.ProtocolVersion == InternetProtocolVersionEnum.IPv6;
+            error =
+                $"'{request.IpAddress}' is an {(scopeIsIPv6 ? "IPv4" : "IPv6")} address, but scope "
+                + $"'{scope.Name}' is a DHCPv{(scopeIsIPv6 ? "6" : "4")} scope and needs an "
+                + $"{(scopeIsIPv6 ? "IPv6" : "IPv4")} address.";
             return false;
         }
 
