@@ -239,8 +239,11 @@ public static class RelationalStartupMigrator
         try
         {
             // MigrateAsync probes the database and the history table before it creates them,
-            // and each failed probe logs an Error (ConnectionError for the database, a failed
-            // command for the table). Creating both first leaves it nothing to probe.
+            // and each failed probe logs an Error: on PostgreSQL, ConnectionError for a missing
+            // database and a failed SELECT for a missing history table. Creating both first
+            // leaves it nothing to probe. The history table is created outside the migration
+            // lock that MigrateAsync takes; two instances racing on one missing database end
+            // the same way as without this step (one may be refused with exit code 78).
             if (databaseMissing)
             {
                 await context.GetService<IRelationalDatabaseCreator>().CreateAsync(stoppingToken);
@@ -270,11 +273,11 @@ public static class RelationalStartupMigrator
 
     /// <summary>
     ///     This method returns the migration ids in the history table, with an empty list and
-    ///     <c>true</c> when the database does not exist yet. On a server engine the first start finds no database, and
-    ///     opening a connection to a missing database makes EF Core log
+    ///     <c>true</c> when the database does not exist yet. On a server engine the first start
+    ///     finds no database, and opening a connection to a missing database makes EF Core log
     ///     <c>RelationalEventId.ConnectionError</c> at Error before the provider turns the failure
     ///     into "no history". The event is not lowered globally because at runtime it reports a
-    ///     real failure. <c>IRelationalDatabaseCreator.ExistsAsync</c> opens its connection with
+    ///     failure. <c>IRelationalDatabaseCreator.ExistsAsync</c> opens its connection with
     ///     errors expected (EF Core logs at Debug), so asking it first avoids the Error lines.
     ///     Any other failure, such as an unreachable server, still throws from here. SQLite
     ///     creates its file on the first open and never logs an error for it, so it is read
