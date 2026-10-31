@@ -8,6 +8,8 @@ ships. Installation, operation and every setting are in the [README](./README.md
 
 ## Unreleased
 
+## v2026.10.31.1
+
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with
 a REST API and an admin console.
 
