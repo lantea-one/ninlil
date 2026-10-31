@@ -10,7 +10,7 @@
 # browser warns about it) and sign in with the bootstrap administrator credentials set below.
 #
 # To run a published image instead of building one, replace each `build:` block below with
-# `image: git.lantea.one/lantea.one/ninlil:latest` (or a specific version tag). For a deployment
+# `image: git.lantea.one/lantea-one/ninlil:latest` (or a specific version tag). For a deployment
 # of your own, copy this file and adjust the `environment:` blocks: every secret-shaped value
 # (passwords, the JWT signing key) is a placeholder that must be changed before anything but a
 # local trial.

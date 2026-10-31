@@ -63,8 +63,8 @@
     <Authors>Ninlil Contributors</Authors>
     <Copyright>Copyright (c) Ninlil Contributors</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://git.lantea.one/Lantea.One/ninlil</PackageProjectUrl>
-    <RepositoryUrl>https://git.lantea.one/Lantea.One/ninlil.git</RepositoryUrl>
+    <PackageProjectUrl>https://git.lantea.one/lantea-one/ninlil</PackageProjectUrl>
+    <RepositoryUrl>https://git.lantea.one/lantea-one/ninlil.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
 
     <!-- Deterministic builds let anyone verify a published artifact against its source,

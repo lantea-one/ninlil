@@ -307,7 +307,7 @@ Every release, and every build of every branch, is published from the project's 
 
 ### Download a binary
 
-Each [release](https://git.lantea.one/Lantea.One/ninlil/releases) carries a self-contained,
+Each [release](https://git.lantea.one/lantea-one/ninlil/releases) carries a self-contained,
 single-file executable per platform. No .NET installation is needed: the runtime, every native
 library and the admin console are inside the one file.
 
@@ -341,8 +341,8 @@ library and the admin console are inside the one file.
 1. Download the executable and the checksum list. Replace `<version>` with the release's version:
 
    ```bash
-   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<version>/ninlil-linux-amd64
-   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<version>/SHA256SUMS
+   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<version>/ninlil-linux-amd64
+   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<version>/SHA256SUMS
    ```
 
 2. Check the download. The command must print `OK` for your file:
@@ -472,7 +472,7 @@ Every release carries installable `ninlil` packages for `x86_64` and `aarch64`.
    tag and version:
 
    ```bash
-   sudo pacman -U https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
+   sudo pacman -U https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
    sudo systemctl enable --now ninlil
    ```
 
@@ -514,7 +514,7 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
 
 #### Steps
 
-1. Open the [releases page](https://git.lantea.one/Lantea.One/ninlil/releases), pick a release
+1. Open the [releases page](https://git.lantea.one/lantea-one/ninlil/releases), pick a release
    and copy the link of the package for your distribution and CPU (`uname -m` prints `x86_64` or
    `aarch64`). The file names are:
 
@@ -533,8 +533,8 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
    release's tag and the file name with yours:
 
    ```bash
-   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil_<version>_amd64.deb
-   curl -LO https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/SHA256SUMS
+   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil_<version>_amd64.deb
+   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/SHA256SUMS
    sha256sum --check --ignore-missing SHA256SUMS
    ```
 
@@ -613,7 +613,7 @@ engine is SQLite, and the database file is created and migrated automatically on
 1. Clone the repository:
 
    ```bash
-   git clone https://git.lantea.one/Lantea.One/ninlil.git
+   git clone https://git.lantea.one/lantea-one/ninlil.git
    cd ninlil
    ```
 
@@ -5688,7 +5688,7 @@ Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize**, paste
 
 ## Running with Docker
 
-The published image (`git.lantea.one/lantea.one/ninlil`) is the same single combined host
+The published image (`git.lantea.one/lantea-one/ninlil`) is the same single combined host
 described above (the DNS and DHCP engines, the REST API and the admin console in one process),
 built for a small attack surface:
 
@@ -5723,7 +5723,7 @@ built for a small attack surface:
 docker run -d --name ninlil \
   -p 80:80 -p 443:443 -p 53:53/udp -p 53:53/tcp \
   -v ninlil-data:/app/data \
-  git.lantea.one/lantea.one/ninlil:latest
+  git.lantea.one/lantea-one/ninlil:latest
 ```
 
 This starts a fully working instance on the zero-config SQLite default — open `https://<host>/`
@@ -5761,7 +5761,7 @@ docker run -d --name ninlil --network host \
   --user 0:0 \
   -e NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE=true \
   -v ninlil-data:/app/data \
-  git.lantea.one/lantea.one/ninlil:latest
+  git.lantea.one/lantea-one/ninlil:latest
 ```
 
 DHCP and Router Advertisement need two capabilities: `NET_RAW` (the Router Advertisement raw
@@ -5840,7 +5840,7 @@ and so on) to the Forgejo package registry, with its XML documentation and embed
 Add the feed once:
 
 ```bash
-dotnet nuget add source https://git.lantea.one/api/packages/Lantea.One/nuget/index.json \
+dotnet nuget add source https://git.lantea.one/api/packages/lantea-one/nuget/index.json \
   --name ninlil --username <user> --password <access-token> --store-password-in-clear-text
 dotnet add package Ninlil.Dns.Common --version 2026.9.24.1
 ```

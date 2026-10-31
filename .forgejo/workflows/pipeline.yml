@@ -50,7 +50,7 @@ on:
         type: string
 env:
   REGISTRY: 'git.lantea.one'
-  IMAGE: 'git.lantea.one/lantea.one/ninlil'
+  IMAGE: 'git.lantea.one/lantea-one/ninlil'
   PLATFORMS: 'linux/amd64,linux/arm64'
   DOTNET_CLI_TELEMETRY_OPTOUT: '1'
   DOTNET_NOLOGO: '1'

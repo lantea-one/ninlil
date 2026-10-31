@@ -22,7 +22,7 @@ Every pipeline build attaches ready-built `ninlil` packages to its release, for 
 `aarch64`, so installing a release is one command:
 
 ```bash
-sudo pacman -U https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
+sudo pacman -U https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
 ```
 
 `ninlil/PKGBUILD.in` is the template they are built from: `.forgejo/scripts/arch-packages.sh`

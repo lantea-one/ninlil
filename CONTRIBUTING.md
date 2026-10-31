@@ -96,7 +96,7 @@ Docker is only needed for tests marked `RequiresDocker` and for the lint contain
 1. Clone the repository and enter it:
 
    ```bash
-   git clone https://git.lantea.one/Lantea.One/ninlil.git
+   git clone https://git.lantea.one/lantea-one/ninlil.git
    cd ninlil
    ```
 

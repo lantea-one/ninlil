@@ -52,7 +52,7 @@ FROM ${RUNTIME_IMAGE} AS runtime
 ARG TARGETARCH
 ARG BUILD_VERSION=0.0.0-local
 ARG BUILD_REVISION=unknown
-ARG BUILD_SOURCE=https://git.lantea.one/Lantea.One/ninlil
+ARG BUILD_SOURCE=https://git.lantea.one/lantea-one/ninlil
 
 LABEL org.opencontainers.image.title="Ninlil" \
       org.opencontainers.image.description="DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console" \

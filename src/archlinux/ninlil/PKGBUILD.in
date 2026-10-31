@@ -11,7 +11,7 @@ pkgver=@PKGVER@
 pkgrel=1
 pkgdesc='DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console'
 arch=('x86_64' 'aarch64')
-url='https://git.lantea.one/Lantea.One/ninlil'
+url='https://git.lantea.one/lantea-one/ninlil'
 license=('MIT')
 depends=('glibc' 'gcc-libs' 'icu' 'openssl')
 optdepends=('msquic>=2.4.20: DNS-over-QUIC transport (older releases abort on some peers)')

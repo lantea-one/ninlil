@@ -2,7 +2,7 @@ pkgbase = ninlil-git-next
 	pkgdesc = DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console (develop branch)
 	pkgver = 2026.09.24.19.develop.c0ba18f
 	pkgrel = 1
-	url = https://git.lantea.one/Lantea.One/ninlil
+	url = https://git.lantea.one/lantea-one/ninlil
 	arch = x86_64
 	arch = aarch64
 	license = MIT
@@ -21,7 +21,7 @@ pkgbase = ninlil-git-next
 	options = !strip
 	options = !debug
 	backup = etc/ninlil/ninlil.env
-	source = ninlil-git-next::git+https://git.lantea.one/Lantea.One/ninlil.git#branch=develop
+	source = ninlil-git-next::git+https://git.lantea.one/lantea-one/ninlil.git#branch=develop
 	sha256sums = SKIP
 
 pkgname = ninlil-git-next

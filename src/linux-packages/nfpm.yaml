@@ -36,7 +36,7 @@ description: |-
   environment file. The service is not enabled or started on install: run
   "systemctl enable --now ninlil".
 vendor: Ninlil
-homepage: https://git.lantea.one/Lantea.One/ninlil
+homepage: https://git.lantea.one/lantea-one/ninlil
 license: MIT
 
 # The executable is self-contained; it needs only the C and C++ runtime libraries, OpenSSL and

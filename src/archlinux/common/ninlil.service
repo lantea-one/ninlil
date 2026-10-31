@@ -4,7 +4,7 @@
 # optional environment file in /etc/ninlil.
 [Unit]
 Description=Ninlil DNS, DHCP and Router Advertisement server
-Documentation=https://git.lantea.one/Lantea.One/ninlil
+Documentation=https://git.lantea.one/lantea-one/ninlil
 After=network-online.target
 Wants=network-online.target
 
