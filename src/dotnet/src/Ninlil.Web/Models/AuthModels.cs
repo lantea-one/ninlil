@@ -125,6 +125,20 @@ public record RefreshRequest(string RefreshToken = null);
 public record ConfirmPasswordResetRequest(Guid UserId, string Token, string NewPassword);
 
 /// <summary>
+///     This class carries what the admin console's "confirm e-mail change" page submits to
+///     <see cref="Controllers.AuthController.ConfirmEmailChange" />, taken from the link
+///     <c>EmailChangeLinkSender</c> e-mails to the new address. The action is anonymous because the
+///     link may be opened in a browser that is not signed in; <see cref="Token" /> is the proof.
+/// </summary>
+/// <param name="UserId">The account whose address changes, carried in the link.</param>
+/// <param name="Email">The new address, carried in the link. The token is bound to it.</param>
+/// <param name="Token">
+///     The change-email token from <c>UserManager&lt;TUser&gt;.GenerateChangeEmailTokenAsync</c>,
+///     Base64Url-encoded for the link, as <see cref="ConfirmPasswordResetRequest.Token" /> is.
+/// </param>
+public record ConfirmEmailChangeRequest(Guid UserId, string Email, string Token);
+
+/// <summary>
 ///     This class carries the e-mail address an anonymous, self-service Forgot Password request
 ///     submits to <see cref="Controllers.AuthController.ForgotPassword" />.
 /// </summary>

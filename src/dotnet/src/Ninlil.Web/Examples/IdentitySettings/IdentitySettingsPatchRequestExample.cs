@@ -14,7 +14,7 @@ public class IdentitySettingsPatchRequestExample : IExamplesProvider<JsonElement
 {
     /// <summary>
     ///     This method returns a patch that raises the minimum password length and shortens the
-    ///     lockout, leaving every other field as it is.
+    ///     lockout and keeps e-mail change confirmation on, leaving every other field as it is.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument
@@ -22,7 +22,8 @@ public class IdentitySettingsPatchRequestExample : IExamplesProvider<JsonElement
                 """
                 {
                   "requiredLength": 16,
-                  "defaultLockoutTimeSpan": "00:10:00"
+                  "defaultLockoutTimeSpan": "00:10:00",
+                  "requireEmailChangeConfirmation": true
                 }
                 """
             )

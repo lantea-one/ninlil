@@ -17,8 +17,11 @@ namespace Ninlil.Web.Services;
 ///     <see cref="UserManager{TUser}.GenerateChangeEmailTokenAsync" />, encodes it into a link
 ///     under <see cref="EmailSenderOptions.PublicBaseUrl" /> and sends through
 ///     <see cref="IEmailSender" />. The link targets the admin console route
-///     <c>/confirm-email-change</c>, which is expected to submit the values back so
-///     <see cref="UserManager{TUser}.ChangeEmailAsync" /> can apply the change.
+///     <c>/confirm-email-change</c>, which submits the values back to
+///     <see cref="Controllers.AuthController.ConfirmEmailChange" />. That action calls
+///     <see cref="UserManager{TUser}.ChangeEmailAsync" /> to apply the change.
+///     <see cref="Controllers.UsersController.ChangeMyEmail" /> sends the confirmation link, and
+///     both actions send the notice to the old address.
 ///     <para>
 ///         The link never uses the request's Host header or scheme. A caller can forge Host, and a
 ///         link built from it would hand the token to the forger's server. Without a configured

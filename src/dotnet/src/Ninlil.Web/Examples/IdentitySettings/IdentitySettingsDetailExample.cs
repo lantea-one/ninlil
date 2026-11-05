@@ -14,8 +14,9 @@ public class IdentitySettingsDetailExample : IExamplesProvider<IdentitySettingsD
     ///     This method returns the policy
     ///     <c>ServiceCollectionIdentityExtension.AddNinlilDnsIdentity</c> sets: 12 characters with
     ///     every character class, one unique character (the ASP.NET Core default), and a 15-minute
-    ///     lockout after 5 failures, new accounts included.
+    ///     lockout after 5 failures, new accounts included, and a confirmation link for a
+    ///     changed e-mail address.
     /// </summary>
     public IdentitySettingsDetail GetExamples() =>
-        new(12, 1, true, true, true, true, TimeSpan.FromMinutes(15), 5, true);
+        new(12, 1, true, true, true, true, TimeSpan.FromMinutes(15), 5, true, true);
 }

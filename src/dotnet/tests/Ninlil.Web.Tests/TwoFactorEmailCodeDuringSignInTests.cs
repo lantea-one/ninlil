@@ -200,6 +200,7 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
             emailOptions,
             services.GetRequiredService<IDnsServerEventPublisher>(),
             services.GetRequiredService<IOptionsMonitor<ClusterOptions>>(),
+            new EmailChangeLinkSender(userManager, emailSender, emailOptions),
             services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<AuthController>.Instance
         )
@@ -345,6 +346,7 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
             emailOptions,
             services.GetRequiredService<IDnsServerEventPublisher>(),
             services.GetRequiredService<IOptionsMonitor<ClusterOptions>>(),
+            new EmailChangeLinkSender(userManager, emailSender, emailOptions),
             services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<AuthController>.Instance
         )
