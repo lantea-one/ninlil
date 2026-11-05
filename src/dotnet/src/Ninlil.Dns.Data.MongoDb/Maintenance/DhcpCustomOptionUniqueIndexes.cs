@@ -44,18 +44,28 @@ public static class DhcpCustomOptionUniqueIndexes
     /// </summary>
     /// <param name="context">The MongoDB context whose database should be checked.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <param name="afterDuplicateScan">
-    ///     A test seam: runs between the duplicate scan and the index build, so a test can write a
-    ///     duplicate in that window. Production passes nothing.
-    /// </param>
     /// <returns>The number of indexes this call replaced or created.</returns>
     /// <exception cref="DatabaseStartupRefusedException">
     ///     Either collection holds two documents with the same owner and tag. Nothing is deleted.
     /// </exception>
-    public static async Task<int> RunAsync(
+    public static Task<int> RunAsync(
         NinlilDnsMongoContext context,
-        CancellationToken stoppingToken = default,
-        Func<CancellationToken, Task> afterDuplicateScan = null
+        CancellationToken stoppingToken = default
+    ) => RunAsync(context, stoppingToken, afterDuplicateScan: null);
+
+    /// <summary>
+    ///     This method does what the public overload does, and runs
+    ///     <paramref name="afterDuplicateScan" /> between the duplicate scan and the index build,
+    ///     so a test can write a duplicate in that window.
+    /// </summary>
+    /// <param name="context">The MongoDB context whose database should be checked.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <param name="afterDuplicateScan">Runs after the scan; <see langword="null" /> skips it.</param>
+    /// <returns>The number of indexes this call replaced or created.</returns>
+    internal static async Task<int> RunAsync(
+        NinlilDnsMongoContext context,
+        CancellationToken stoppingToken,
+        Func<CancellationToken, Task> afterDuplicateScan
     )
     {
         await ThrowIfDuplicatesAsync(context, stoppingToken);

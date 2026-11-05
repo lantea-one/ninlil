@@ -305,6 +305,7 @@ public sealed class MongoDhcpCustomOptionUniquenessTests(MongoDbEngineFixture fi
             await Assert.ThrowsAsync<DatabaseStartupRefusedException>(() =>
                 DhcpCustomOptionUniqueIndexes.RunAsync(
                     context,
+                    CancellationToken.None,
                     afterDuplicateScan: async token =>
                         await scopeOptions.InsertManyAsync(
                             [

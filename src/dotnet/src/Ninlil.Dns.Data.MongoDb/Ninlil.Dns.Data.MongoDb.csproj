@@ -40,4 +40,8 @@
     <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <!-- The integration tests drive the DHCP custom option index step between its scan and build. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Data.Integration.Tests" />
+  </ItemGroup>
 </Project>
