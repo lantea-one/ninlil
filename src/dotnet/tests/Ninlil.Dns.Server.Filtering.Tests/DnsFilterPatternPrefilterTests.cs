@@ -717,9 +717,9 @@ public class DnsFilterPatternPrefilterTests
 
     /// <summary>
     ///     This test checks that a catastrophic pattern runs in linear time: the first branch of
-    ///     <c>^(a+)+$|b\.test$</c> would backtrack exponentially on this name and time out under
-    ///     the old rule (allowing the name); the linear engine reaches the second branch and
-    ///     blocks the name, with no timeout warning.
+    ///     <c>^(a+)+$|b\.test$</c> backtracks exponentially on this name on the backtracking
+    ///     engine, which times out and allows the name; the linear engine reaches the second
+    ///     branch and blocks the name, with no timeout warning.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_ForACatastrophicRegex_BlocksTheNameWithoutATimeout()
@@ -748,7 +748,7 @@ public class DnsFilterPatternPrefilterTests
     }
 
     /// <summary>
-    ///     This test checks the plain case from the issue: <c>^(a+)+$</c> against 40 letters
+    ///     This test checks the plain nested-quantifier case: <c>^(a+)+$</c> against 40 letters
     ///     blocks the name with no warning. It passes on a backtracking engine too, because a
     ///     successful match is quick there; it guards the result, not the speed.
     /// </summary>
