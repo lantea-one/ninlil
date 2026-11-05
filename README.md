@@ -1237,12 +1237,11 @@ child zone's `id`; copy it as `<child-zone-id>`.
    curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"child.example.test","type":"NS","timeToLiveSeconds":300,"data":{"nameServer":"ns.child.example.test"}}'
    ```
 
-8. The parent adds the DS record the next time it is signed. A key added to the child does not start
-   that, so change the parent in any way, for example its comment:
-
-   ```bash
-   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"comments":"signed child"}'
-   ```
+8. The parent adds the DS record by itself; there is nothing to call. Ninlil re-signs the parent
+   whenever the child's set of `Active` KSKs changes: when you add a KSK, remove or retire one,
+   switch the child's signing on or off, delete the child, or when a rollover promotes the new
+   KSK. A change to a ZSK leaves the parent alone, because a DS record names a KSK. Step 4 of
+   "Check that it worked" below shows the parent's DS answer.
 
 **Roll a key (optional).** A rollover replaces a key without breaking validation. Ninlil follows
 the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signature for a KSK
@@ -1402,7 +1401,8 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
 - **A parent hosted here, at any distance.** To find a parent that Ninlil hosts, Ninlil asks which
   zone answers the child's DS question, however many labels lie between them. The zone counts when
   it is a signed `Primary` or `CloudPrimary` zone and the child's name is the topmost zone cut
-  below it. Ninlil then re-signs that parent when the child's new KSK takes over.
+  below it. Ninlil then re-signs that parent whenever the child's set of `Active` KSKs changes,
+  including when a rollover's new KSK takes over.
 - **Forcing a key state.** `PUT` or `PATCH` on a key with `isRetired` sets the state by hand:
   `true` moves the key to `Removed` at once and `false` moves it to `Active`, whatever state it
   was in, which also cancels a rollover. A `PUT` that leaves out `isRetired` sets it to `false`, which moves the key to `Active`.
@@ -1441,9 +1441,9 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   the DS record. Publish the DS record and call `confirm-parent-ds-updated` (step 10).
 - *Validators call the zone bogus after a change at the registrar.* The parent's DS record does
   not match a published KSK. Compare the registrar's DS with the `dsRecord` of the `Active` KSK.
-- *The parent hosted here shows no DS record for the child.* Change the parent in any way (step 8)
-  and ask again. The child must be signed, and the delegation NS record must sit at the child's
-  name.
+- *The parent hosted here shows no DS record for the child.* The child must be signed and have an
+  `Active` KSK (a KSK in `DoubleSignature` has none), and the delegation NS record must sit at the
+  child's name in the parent.
 - *A record is missing from a signed zone's answers and the log warns that it "holds data that
   cannot be written as RDATA".* Signing leaves that record out and signs the rest of the zone.
   Edit or delete the record the warning names.
