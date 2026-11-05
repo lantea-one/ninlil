@@ -213,7 +213,7 @@ certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_MAX_CONCURRENT_CONNECTIONS` | Max simultaneous DoT connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_IDLE_TIMEOUT` | Idle timeout before an inactive DoT connection is closed. | `00:00:30` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH` | Path to a PFX certificate file for DoT. Leave empty to use the self-signed certificate saved at the state path below. To use an ACME certificate, set this to its file in the ACME certificate directory. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PASSWORD` | The password of the PFX file named by `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH`. Leave it empty for a file without a password. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override (`None` = OS/runtime default negotiation). | `None` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | How often the certificate file's mtime is polled for an ACME-renewed replacement. | `00:05:00` |
@@ -234,7 +234,7 @@ certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_BIDIRECTIONAL_STREAMS` | Max concurrent bidirectional QUIC streams per connection. | `100` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_CONNECTIONS` | Max concurrent QUIC connections; one over the limit is closed with `DOQ_EXCESSIVE_LOAD`. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for DoQ. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PASSWORD` | The password of the PFX file named by `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PATH`. Leave it empty for a file without a password. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override. | `None` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
