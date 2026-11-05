@@ -297,10 +297,10 @@ public sealed class DnsOverHttpsRequestBytesTests
                     new DnsOverHttpsOptions
                     {
                         Enable = true,
-                        Port = port,
                         MaxMessageSizeBytes = maxMessageSizeBytes,
                     }
                 ),
+                Options.Create(new DnsOverHttpsListenerOptions { Port = port }),
                 NullLogger<DnsOverHttpsHostedService>.Instance
             );
             await host._service.StartAsync(CancellationToken.None);

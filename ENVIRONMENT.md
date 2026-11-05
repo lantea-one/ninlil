@@ -61,10 +61,10 @@ mapping, not from hand arithmetic.
 
 <!-- EnvironmentVariableDocumentationTests matches the "Total:" sentence with a regular expression
 (TotalsPattern). Keep its wording and change only the numbers. -->
-Total: **333 individual settings** across 59 bound configuration classes, plus **3 standalone**
+Total: **325 individual settings** across 59 bound configuration classes, plus **3 standalone**
 variables read directly by configuration key (the two bootstrap administrator credentials and
 `NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's unprefixed
-equivalents, giving **343 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
+equivalents, giving **335 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
 in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not part of that
 total.
 
@@ -198,10 +198,10 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 ## DNS transports
 
 Each transport beyond plain UDP/TCP is off by default. `Certificate*` settings appear once per
-TLS-based transport (DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC). DNS-over-TLS and DNS-over-QUIC
-each have an independent listener configuration. The DNS-over-HTTPS `Port` and `Certificate*`
-settings have no effect: it is served by the web listener, on its port and certificate. While
-their PFX paths are empty, DNS-over-TLS and DNS-over-QUIC load the self-signed certificate Ninlil
+TLS-based transport (DNS-over-TLS and DNS-over-QUIC), each with an independent listener
+configuration. DNS-over-HTTPS has no port or certificate setting: it is served by the web listener,
+on its port and certificate. While their PFX paths are empty, DNS-over-TLS and DNS-over-QUIC load
+the self-signed certificate Ninlil
 generates on first run and saves at the default state path, so they share one file. An ACME
 certificate reaches a transport only when you set its PFX path to that
 certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
@@ -224,14 +224,8 @@ certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | How often the certificate file's mtime is polled for an ACME-renewed replacement. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_PROXY_PROTOCOL_ENABLE` | Whether this DoT listener accepts a PROXY protocol (v1/v2) preamble from a trusted upstream load balancer. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_ENABLE` | Whether DNS-over-HTTPS (RFC 8484) is enabled. | `false` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT` | No effect in Ninlil: DNS-over-HTTPS is served by the web listener, on its port and certificate (`NINLIL_DNS_SERVER_WEB_HTTPS_PORT`). | `443` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PATH` | The URL path DoH queries are served from. | `/dns-query` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_MAX_MESSAGE_SIZE_BYTES` | Maximum accepted DoH request/response message size. | `65535` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `data/protocol-tls-certificate.pfx` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `None` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_ENABLE` | Whether DNS-over-QUIC (RFC 9250) is enabled. Needs `libmsquic` — included in the Docker image; install it yourself on a bare-metal host. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_PORT` | The DoQ listen port. | `853` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
@@ -475,9 +469,7 @@ self-update service, and multi-node clustering.
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_MAX_RETRY_DELAY` | Maximum backoff delay between retries. | `00:00:30` |
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_SWEEP_INTERVAL` | How often the persisted retry-sweep background service looks for deliveries due for another attempt. | `00:00:05` |
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_ATTEMPT_RETENTION_PERIOD` | How long a completed delivery attempt's history is retained before it's aged out. | `30.00:00:00` |
-| `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY` | The directory a backup reads the Data Protection key ring (`key-*.xml`) from. A backup bundles these files because every encrypted secret in the database can be decrypted only with them. Startup sets this to the `data/` directory and replaces any value you configure, so changing it has no effect. | `data/` |
 | `NINLIL_DNS_SERVER_BACKUP_MINIMUM_PASSPHRASE_LENGTH` | Minimum required length for a backup archive's own encryption passphrase. | `12` |
-| `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH` | The runtime settings JSON file a backup bundles and a restore writes back. Startup sets this to the file named by `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` and replaces any value you configure, so changing it has no effect. | *(empty — set at startup)* |
 | `NINLIL_DNS_SERVER_BACKUP_MAXIMUM_RESTORED_PAYLOAD_BYTES` | The most decompressed bytes a restore reads from one archive, summed over all entries. It stops a zip bomb; there is no reason to change it in production. | `4294967296` (4 GiB) |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_ENABLE_AUTOMATIC_CHECK` | Whether the self-update checker runs automatically, at startup and then on the interval below. It only checks and shows a notice; it never applies an update. With no feed URL (the row after next) each check records an "unconfigured" status and fetches nothing. A manual check (`POST /api/self-update/check`) runs whatever this says. | `true` |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_CHECK_INTERVAL` | How long to wait after a successful check before the next automatic one. The checker wakes every 15 minutes, so the wait rounds up to the next 15-minute tick. A failed check is retried at the next tick, not after the full interval. | `1.00:00:00` |

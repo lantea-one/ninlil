@@ -11,6 +11,29 @@ outside Forgejo.
 
 ## Unreleased
 
+### Removed
+
+- **Settings that had no effect are gone.** These variables never changed anything, because
+  DNS-over-HTTPS is served by the web listener and startup sets the two backup paths itself:
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL`
+  - `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY`
+  - `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH`
+
+  An environment that still sets one starts as before and logs a warning that the variable
+  matches no known setting and was ignored; the same keys in a configuration file are ignored
+  silently. Remove them to silence the warning
+  ([#27](https://git.lantea.one/lantea-one/ninlil/issues/27)).
+- **Library API (NuGet).** `DnsOverHttpsOptions.Port` and `Certificate` moved to the new
+  `DnsOverHttpsListenerOptions`, which `DnsOverHttpsHostedService` now also takes in its
+  constructor; Ninlil itself does not bind it. `BackupOptions.DataProtectionKeyRingDirectory` and
+  `RuntimeConfigurationFilePath` moved to the new `BackupPathSettings`, which `SystemBackupService`
+  takes in its constructor. Code that builds these types itself needs the new argument.
+
 ### Behaviour worth knowing
 
 - **Renaming a DHCP scope keeps its leases.** A lease refers to its scope by id, so a renamed

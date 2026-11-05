@@ -13,7 +13,8 @@ namespace Ninlil.Dns.Protocol.DnsOverHttps.Extension;
 public static class ServiceCollectionProtocolDnsOverHttpsExtension
 {
     /// <summary>
-    ///     This method registers <see cref="DnsOverHttpsHostedService" />. The composition root
+    ///     This method binds <see cref="DnsOverHttpsOptions" /> and <see cref="DnsOverHttpsListenerOptions" /> and
+    ///     registers <see cref="DnsOverHttpsHostedService" />. The composition root
     ///     must also call
     ///     <c>Ninlil.Dns.Server.Core.Extension.ServiceCollectionServerCoreExtension.AddNinlilDnsServerCore</c>,
     ///     since this transport depends on <c>DnsQueryProcessingPipeline</c>.
@@ -28,6 +29,10 @@ public static class ServiceCollectionProtocolDnsOverHttpsExtension
     {
         instance.Configure<DnsOverHttpsOptions>(
             configuration.GetSection(DnsOverHttpsOptions.SectionName)
+        );
+
+        instance.Configure<DnsOverHttpsListenerOptions>(
+            configuration.GetSection(DnsOverHttpsListenerOptions.ConfigurationPath)
         );
 
         instance.AddHostedService<DnsOverHttpsHostedService>();

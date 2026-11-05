@@ -52,13 +52,15 @@ namespace Ninlil.Dns.Server.Backup;
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">Used to open one dependency injection scope per backup/restore.</param>
-/// <param name="backupOptions">The key ring directory, runtime configuration file and minimum passphrase length.</param>
+/// <param name="backupOptions">The minimum passphrase length and restore size limit.</param>
+/// <param name="backupPaths">The key ring directory and the runtime configuration file.</param>
 /// <param name="tlsCertificateOptions">Where the shared TLS certificate lives.</param>
 /// <param name="storageOptions">The active storage engine, recorded in the manifest for reference.</param>
 /// <param name="logger">The logger this service records progress and failures to.</param>
 public sealed partial class SystemBackupService(
     IServiceScopeFactory scopeFactory,
     IOptions<BackupOptions> backupOptions,
+    BackupPathSettings backupPaths,
     TlsCertificateOptions tlsCertificateOptions,
     StorageOptions storageOptions,
     ILogger<SystemBackupService> logger
@@ -153,7 +155,7 @@ public sealed partial class SystemBackupService(
                     certificatePath
                 );
 
-            string configurationPath = backupOptions.Value.RuntimeConfigurationFilePath;
+            string configurationPath = backupPaths.RuntimeConfigurationFilePath;
             if (!string.IsNullOrWhiteSpace(configurationPath) && File.Exists(configurationPath))
                 WriteFileEntry(
                     archive,
@@ -349,7 +351,7 @@ public sealed partial class SystemBackupService(
         // first, so a full disk or a permission error aborts here with nothing changed; the
         // database is changed next, in one transaction where the engine supports it; the files
         // are renamed into place last, only after that transaction commits.
-        string configurationPath = backupOptions.Value.RuntimeConfigurationFilePath;
+        string configurationPath = backupPaths.RuntimeConfigurationFilePath;
         bool restoresConfiguration =
             files.Configuration is not null && !string.IsNullOrWhiteSpace(configurationPath);
         SemaphoreSlim configurationLock = restoresConfiguration
@@ -527,14 +529,14 @@ public sealed partial class SystemBackupService(
 
     /// <summary>
     ///     This method lists every Data Protection key ring file in
-    ///     <see cref="BackupOptions.DataProtectionKeyRingDirectory" />, matched by the ASP.NET Core
+    ///     <see cref="BackupPathSettings.DataProtectionKeyRingDirectory" />, matched by the ASP.NET Core
     ///     <c>key-&lt;guid&gt;.xml</c> naming pattern, the same pattern a restore requires. The same
     ///     directory also holds, by default, the SQLite database and the JWT signing key, which
     ///     must not be picked up.
     /// </summary>
     private IReadOnlyList<string> ListKeyRingFiles()
     {
-        string directory = backupOptions.Value.DataProtectionKeyRingDirectory;
+        string directory = backupPaths.DataProtectionKeyRingDirectory;
         return Directory.Exists(directory)
             ?
             [
@@ -850,7 +852,7 @@ public sealed partial class SystemBackupService(
         List<(string Path, StagedFile File)> stagedFiles
     )
     {
-        string keyRingDirectory = backupOptions.Value.DataProtectionKeyRingDirectory;
+        string keyRingDirectory = backupPaths.DataProtectionKeyRingDirectory;
         foreach ((string fileName, byte[] bytes) in files.KeyRing)
         {
             string path = Path.Combine(keyRingDirectory, fileName);
@@ -867,7 +869,7 @@ public sealed partial class SystemBackupService(
 
         if (restoresConfiguration)
         {
-            string path = backupOptions.Value.RuntimeConfigurationFilePath;
+            string path = backupPaths.RuntimeConfigurationFilePath;
             stagedFiles.Add(
                 (
                     path,
