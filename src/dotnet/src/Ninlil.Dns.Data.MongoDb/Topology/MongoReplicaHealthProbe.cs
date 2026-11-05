@@ -11,7 +11,7 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 ///     <list type="bullet">
 ///         <item>
 ///             Lag: <c>replSetGetStatus</c> lists the last applied operation of every member, and
-///             <see cref="MongoReplicaLag" /> turns it into the time since the most delayed healthy
+///             <see cref="MongoReplicaLag" /> turns it into the lag of the most delayed healthy
 ///             secondary was last current, because the read preference may pick any of them. An
 ///             idle set advances its optimes only on a write or on the primary's periodic no-op
 ///             write, so an old optime that equals the primary's is not lag. No healthy secondary
@@ -32,8 +32,6 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 public sealed class MongoReplicaHealthProbe(IMongoClient client, NinlilDnsMongoContext replicaView)
     : IReplicaHealthProbe
 {
-    private readonly MongoReplicaLag _lag = new();
-
     /// <inheritdoc />
     public async Task<ReplicaProbeResult> ProbeAsync(CancellationToken stoppingToken)
     {
@@ -45,7 +43,7 @@ public sealed class MongoReplicaHealthProbe(IMongoClient client, NinlilDnsMongoC
                 stoppingToken
             );
 
-        (double? lag, string detail) = _lag.Measure(status);
+        (double? lag, string detail) = MongoReplicaLag.Measure(status);
 
         List<string> stored = (
             await replicaView

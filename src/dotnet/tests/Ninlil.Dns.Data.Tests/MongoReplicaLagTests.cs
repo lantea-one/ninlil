@@ -42,9 +42,7 @@ public sealed class MongoReplicaLagTests
     [Fact]
     public void Measure_WithEqualOptimesAndAnOldOperation_IsZero()
     {
-        MongoReplicaLag lag = new();
-
-        (double? seconds, _) = lag.Measure(
+        (double? seconds, _) = MongoReplicaLag.Measure(
             Status(600, Member("p", "PRIMARY", 100, 100.2), Member("s", "SECONDARY", 100, 100.2))
         );
 
@@ -58,9 +56,7 @@ public sealed class MongoReplicaLagTests
     [Fact]
     public void Measure_WithEqualWallTimesAndAStaleOptime_IsZero()
     {
-        MongoReplicaLag lag = new();
-
-        (double? seconds, _) = lag.Measure(
+        (double? seconds, _) = MongoReplicaLag.Measure(
             Status(30, Member("p", "PRIMARY", 120, 20.1), Member("s", "SECONDARY", 100, 20.1))
         );
 
@@ -68,58 +64,71 @@ public sealed class MongoReplicaLagTests
     }
 
     /// <summary>
-    ///     A secondary that lacks the newest operation of an idle set is not credited with the
-    ///     20-second gap between the two operations; the clock starts at the newest operation.
+    ///     A secondary a few milliseconds late after an idle no-op write is reported behind by the
+    ///     wall-time gap at that one check and current at the next.
     /// </summary>
     [Fact]
-    public void Measure_WhenAnIdleSecondaryIsAMomentLate_IsTheTimeSinceTheNewestOperation()
+    public void Measure_WhenAnIdleSecondaryIsAMomentLate_IsBehindOnceThenCurrent()
     {
-        MongoReplicaLag lag = new();
+        BsonDocument primary = Member("p", "PRIMARY", 120, 20.1);
 
-        (double? seconds, _) = lag.Measure(
-            Status(20.3, Member("p", "PRIMARY", 120, 20.1), Member("s", "SECONDARY", 100, 0.1))
+        (double? first, _) = MongoReplicaLag.Measure(
+            Status(20.2, primary, Member("s", "SECONDARY", 100, 0.1))
+        );
+        (double? next, _) = MongoReplicaLag.Measure(
+            Status(22.2, primary, Member("s", "SECONDARY", 120, 20.1))
         );
 
-        Assert.Equal(0.2, seconds.Value, 3);
+        Assert.Equal(20, first.Value, 3);
+        Assert.Equal(0, next);
     }
 
     /// <summary>
-    ///     A stuck secondary falls further behind on every check, measured from when it was first
-    ///     seen behind, and a catch-up resets the clock.
+    ///     A secondary far behind at the first check is never reported below its lag, and it
+    ///     stays that way at later checks.
     /// </summary>
     [Fact]
-    public void Measure_WhenASecondaryStaysBehind_GrowsUntilItIsCurrentAgain()
+    public void Measure_WhenASecondaryIsFarBehindAtTheFirstCheck_ReportsTheFullGap()
     {
-        MongoReplicaLag lag = new();
-        BsonDocument stuck = Member("s", "SECONDARY", 100, 0.1);
+        BsonDocument secondary = Member("s", "SECONDARY", 1000, 1000);
 
-        (double? first, _) = lag.Measure(Status(20.3, Member("p", "PRIMARY", 120, 20.1), stuck));
-        (double? second, _) = lag.Measure(Status(26, Member("p", "PRIMARY", 120, 20.1), stuck));
-        (double? current, _) = lag.Measure(
-            Status(27, Member("p", "PRIMARY", 120, 20.1), Member("s", "SECONDARY", 120, 20.1))
+        (double? first, _) = MongoReplicaLag.Measure(
+            Status(1600.1, Member("p", "PRIMARY", 1600, 1600), secondary)
         );
-        (double? behindAgain, _) = lag.Measure(
-            Status(41, Member("p", "PRIMARY", 140, 40.1), stuck)
+        (double? second, _) = MongoReplicaLag.Measure(
+            Status(1605.1, Member("p", "PRIMARY", 1605, 1605), secondary)
         );
 
-        Assert.Equal(0.2, first.Value, 3);
-        Assert.Equal(5.9, second.Value, 3);
+        Assert.Equal(600, first.Value, 3);
+        Assert.Equal(605, second.Value, 3);
+    }
+
+    /// <summary>
+    ///     A catch-up brings the lag back to 0.
+    /// </summary>
+    [Fact]
+    public void Measure_WhenASecondaryCatchesUp_IsZeroAgain()
+    {
+        BsonDocument primary = Member("p", "PRIMARY", 120, 20.1);
+
+        (double? behind, _) = MongoReplicaLag.Measure(
+            Status(26, primary, Member("s", "SECONDARY", 100, 0.1))
+        );
+        (double? current, _) = MongoReplicaLag.Measure(
+            Status(27, primary, Member("s", "SECONDARY", 120, 20.1))
+        );
+
+        Assert.Equal(20, behind.Value, 3);
         Assert.Equal(0, current);
-        Assert.Equal(0.9, behindAgain.Value, 3);
     }
 
     /// <summary>
-    ///     Under steady writes the gap between the two operations is the lag, and it is not more
-    ///     than that even when the secondary has been behind for longer.
+    ///     Under steady writes the gap between the two operations is the lag.
     /// </summary>
     [Fact]
     public void Measure_UnderSteadyWrites_IsTheGapBetweenTheOperations()
     {
-        MongoReplicaLag lag = new();
-        BsonDocument secondary = Member("s", "SECONDARY", 100, 99.5);
-
-        lag.Measure(Status(100.1, Member("p", "PRIMARY", 101, 100.0), secondary));
-        (double? seconds, _) = lag.Measure(
+        (double? seconds, _) = MongoReplicaLag.Measure(
             Status(110.1, Member("p", "PRIMARY", 111, 110.0), Member("s", "SECONDARY", 105, 104.0))
         );
 
@@ -132,17 +141,7 @@ public sealed class MongoReplicaLagTests
     [Fact]
     public void Measure_WithSeveralSecondaries_IsTheWorstHealthyOne()
     {
-        MongoReplicaLag lag = new();
-        lag.Measure(
-            Status(
-                100,
-                Member("p", "PRIMARY", 100, 99.9),
-                Member("a", "SECONDARY", 90, 90),
-                Member("b", "SECONDARY", 90, 80)
-            )
-        );
-
-        (double? seconds, _) = lag.Measure(
+        (double? seconds, _) = MongoReplicaLag.Measure(
             Status(
                 104,
                 Member("p", "PRIMARY", 100, 99.9),
@@ -152,7 +151,7 @@ public sealed class MongoReplicaLagTests
             )
         );
 
-        Assert.Equal(4.1, seconds.Value, 3);
+        Assert.Equal(19.9, seconds.Value, 3);
     }
 
     /// <summary>
@@ -161,12 +160,10 @@ public sealed class MongoReplicaLagTests
     [Fact]
     public void Measure_WithoutAPrimaryOrAHealthySecondary_IsUnknown()
     {
-        MongoReplicaLag lag = new();
-
-        (double? noPrimary, string noPrimaryDetail) = lag.Measure(
+        (double? noPrimary, string noPrimaryDetail) = MongoReplicaLag.Measure(
             Status(10, Member("s", "SECONDARY", 100, 1))
         );
-        (double? noSecondary, string noSecondaryDetail) = lag.Measure(
+        (double? noSecondary, string noSecondaryDetail) = MongoReplicaLag.Measure(
             Status(10, Member("p", "PRIMARY", 100, 1), Member("s", "SECONDARY", 100, 1, health: 0))
         );
 
