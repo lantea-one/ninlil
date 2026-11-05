@@ -2704,8 +2704,12 @@ lists, schedules and rewrites.
   service switched on without a target is, is added for every client.
 - **Entry kinds.** A plain domain entry blocks the name and every name below it, so
   `example.com` also blocks `www.example.com`. A rewrite is different and matches one exact name.
-  A wildcard or regex match that takes longer than 250 milliseconds counts as no match and is
-  logged, so a bad pattern cannot stall queries.
+  Wildcard and regex entries run on the .NET linear-time regex engine
+  (`RegexOptions.NonBacktracking`), so a pattern such as `^(a+)+$` cannot stall a query and never
+  times out. A pattern that engine cannot run (a backreference, lookaround, atomic group or
+  conditional) still saves and runs on the backtracking engine instead; there a match that takes
+  longer than 250 milliseconds counts as no match and is logged, so a bad pattern cannot stall
+  queries, but it does not block (or, in an allow list, allow) that name.
 - **List kinds.** `Domain` lists match the queried name. `ResponseIp` lists hold addresses or
   networks and match the A and AAAA addresses in the answer. `ClientSource` lists hold addresses
   or networks and match the client's source address; a `Block` match denies the client and gets
