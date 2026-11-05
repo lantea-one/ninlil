@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Options;
+using Ninlil.Dns.Data.EntityFrameworkCore.Maintenance;
 using Ninlil.Dns.Data.EntityFrameworkCore.Sqlite;
 
 // Define our namespace.
@@ -47,16 +48,18 @@ public static class DbContextOptionsBuilderExtension
         this DbContextOptionsBuilder instance,
         string connectionString
     ) =>
-        QuietCommandLogging(
-            instance
-                .UseSqlite(
-                    connectionString,
-                    options =>
-                        options.MigrationsAssembly(
-                            "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite"
-                        )
-                )
-                .AddInterceptors(SqliteConnectionPragmaInterceptor.Instance)
+        QuietNonTransactionalMigrationWarnings(
+            QuietCommandLogging(
+                instance
+                    .UseSqlite(
+                        connectionString,
+                        options =>
+                            options.MigrationsAssembly(
+                                "Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite"
+                            )
+                    )
+                    .AddInterceptors(SqliteConnectionPragmaInterceptor.Instance)
+            )
         );
 
     /// <summary>
@@ -184,5 +187,25 @@ public static class DbContextOptionsBuilderExtension
     private static DbContextOptionsBuilder QuietCommandLogging(DbContextOptionsBuilder instance) =>
         instance.ConfigureWarnings(warnings =>
             warnings.Log((RelationalEventId.CommandExecuted, LogLevel.Debug))
+        );
+
+    /// <summary>
+    ///     This method lowers EF Core's "cannot be executed in a transaction" migration warning
+    ///     (<see cref="RelationalEventId.NonTransactionalMigrationOperationWarning" />) from
+    ///     Warning to Debug. SQLite table-rebuild migrations start with
+    ///     <c>PRAGMA foreign_keys = 0</c>, which SQLite cannot run inside a transaction, so EF
+    ///     Core runs it outside one and warns on every fresh install. The warning describes EF
+    ///     Core's behaviour, not a problem with the database. It is safe to hide because
+    ///     <see cref="RelationalStartupMigrator" /> snapshots an existing database before it
+    ///     applies pending migrations (<c>Storage:MigrationSafety</c>), and a fresh database has
+    ///     nothing to lose.
+    /// </summary>
+    private static DbContextOptionsBuilder QuietNonTransactionalMigrationWarnings(
+        DbContextOptionsBuilder instance
+    ) =>
+        instance.ConfigureWarnings(warnings =>
+            warnings.Log(
+                (RelationalEventId.NonTransactionalMigrationOperationWarning, LogLevel.Debug)
+            )
         );
 }
