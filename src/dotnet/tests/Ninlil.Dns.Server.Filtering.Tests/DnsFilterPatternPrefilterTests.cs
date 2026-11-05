@@ -360,7 +360,7 @@ public class DnsFilterPatternPrefilterTests
                 }
 
                 Assert.True(
-                    expected == entry.Compiled.IsMatch(normalized),
+                    expected == entry.MatchRegex.IsMatch(normalized),
                     $"{kind} entry '{pattern}' and name '{normalized}'"
                 );
             }

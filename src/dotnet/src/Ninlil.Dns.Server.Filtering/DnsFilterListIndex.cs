@@ -138,27 +138,41 @@ public sealed class DnsFilterListIndex
         HashSet<string> rules = new(StringComparer.Ordinal);
         HashSet<string> exceptions = new(StringComparer.Ordinal);
         List<DnsFilterPatternEntry> patterns = [];
-        Dictionary<(DnsFilterEntryKindEnum, string), Regex> reusable = [];
+        Dictionary<(DnsFilterEntryKindEnum, string), DnsFilterPatternEntry> reusable = [];
 
         foreach (DnsFilterPatternEntry old in previous?.Patterns ?? [])
         {
             if (old.Compiled is not null)
-                reusable[(old.Kind, old.Value)] = old.Compiled;
+                reusable[(old.Kind, old.Value)] = old;
         }
 
         foreach (DnsFilterListEntryEntity entry in entries)
         {
             if (entry.Kind is DnsFilterEntryKindEnum.Wildcard or DnsFilterEntryKindEnum.Regex)
             {
+                // A reload keeps the old regex and its linear matcher, so a large list does not
+                // validate or rebuild its patterns again.
+                bool known = reusable.TryGetValue(
+                    (entry.Kind, entry.Value),
+                    out DnsFilterPatternEntry old
+                );
                 patterns.Add(
-                    new DnsFilterPatternEntry(
-                        entry.Kind,
-                        entry.Value,
-                        entry.IsException,
-                        reusable.TryGetValue((entry.Kind, entry.Value), out Regex known)
-                            ? known
-                            : CompilePattern(entry.Kind, entry.Value)
-                    )
+                    known
+                        ? new DnsFilterPatternEntry(
+                            entry.Kind,
+                            entry.Value,
+                            entry.IsException,
+                            old.Compiled
+                        )
+                        {
+                            Linear = old.Linear,
+                        }
+                        : new DnsFilterPatternEntry(
+                            entry.Kind,
+                            entry.Value,
+                            entry.IsException,
+                            CompilePattern(entry.Kind, entry.Value)
+                        )
                 );
                 continue;
             }
@@ -173,13 +187,14 @@ public sealed class DnsFilterListIndex
     }
 
     /// <summary>
-    ///     This method compiles one wildcard or regex entry the way the engine matches it, or
+    ///     This method validates one wildcard or regex entry by compiling it on the backtracking
+    ///     engine, which decides validity, or
     ///     returns <see langword="null" /> for a blank pattern or one that does not compile.
     /// </summary>
     private static Regex CompilePattern(DnsFilterEntryKindEnum kind, string value) =>
         string.IsNullOrWhiteSpace(value)
             ? null
-            : DnsFilterEngine.CompileOrNull(
+            : DnsFilterEngine.CompileBacktrackingOrNull(
                 kind == DnsFilterEntryKindEnum.Wildcard
                     ? DnsFilterEngine.BuildWildcardRegexPattern(value)
                     : value
@@ -273,10 +288,11 @@ public sealed class DnsFilterListIndex
 /// <param name="Value">The pattern text as stored.</param>
 /// <param name="IsException">Whether the entry is an adblock exception.</param>
 /// <param name="Compiled">
-///     The compiled, case-insensitive regex (linear-time unless the pattern needs the
-///     backtracking fallback, see <see cref="DnsFilterPatternEntry.UsesBacktrackingFallback" />), or
+///     The case-insensitive regex on the backtracking engine with the engine's match timeout, or
 ///     <see langword="null" /> when the pattern is blank or does not compile (such an entry never
-///     matches).
+///     matches). It proves the pattern valid and is what a pattern that
+///     <see cref="RegexOptions.NonBacktracking" /> refuses runs on. The linear-time regex, which
+///     most entries match with, is <see cref="MatchRegex" />.
 /// </param>
 public sealed record DnsFilterPatternEntry(
     DnsFilterEntryKindEnum Kind,
@@ -286,12 +302,28 @@ public sealed record DnsFilterPatternEntry(
 )
 {
     /// <summary>
+    ///     This property is the lazily built linear-time matcher of the pattern, or
+    ///     <see langword="null" /> when the pattern did not compile. A reload of the list hands
+    ///     the same matcher to the new entry, so it is built at most once per distinct pattern.
+    /// </summary>
+    public DnsFilterLinearMatcher Linear { get; init; } =
+        Compiled is null ? null : new DnsFilterLinearMatcher(Compiled.ToString());
+
+    /// <summary>
+    ///     This property is the regex that decides a match: the linear-time one, or
+    ///     <see cref="Compiled" /> when the pattern needs the backtracking fallback, or
+    ///     <see langword="null" /> for an entry that did not compile. The first call builds the
+    ///     linear regex.
+    /// </summary>
+    public Regex MatchRegex => Linear?.Regex ?? Compiled;
+
+    /// <summary>
     ///     This property says whether the pattern runs on the backtracking engine, with the match
     ///     timeout, because <see cref="RegexOptions.NonBacktracking" /> refuses it. It is
-    ///     <see langword="false" /> for an entry that did not compile.
+    ///     <see langword="false" /> for an entry that did not compile. Reading it builds the
+    ///     linear regex, so it belongs to diagnostics and tests, not the query path.
     /// </summary>
-    public bool UsesBacktrackingFallback =>
-        Compiled is not null && (Compiled.Options & RegexOptions.NonBacktracking) == 0;
+    public bool UsesBacktrackingFallback => Compiled is not null && Linear.Regex is null;
 
     /// <summary>
     ///     This property is a lowercase ASCII text that every name the pattern matches must
@@ -316,6 +348,47 @@ public sealed record DnsFilterPatternEntry(
         RequiredLiteral is null
         || !nameIsAscii
         || normalizedName.Contains(RequiredLiteral, StringComparison.Ordinal);
+}
+
+/// <summary>
+///     This class builds the linear-time regex of one wildcard or regex entry the first time a
+///     query needs it, and keeps it. A <see cref="RegexOptions.NonBacktracking" /> regex retains
+///     on the order of 100 KB or more when built, against well under 1 KB for a backtracking
+///     regex, so building one per entry when a list loads would multiply the memory of a list of
+///     100,000 patterns by hundreds. The trigram prefilter (<see cref="DnsFilterPatternSet" />)
+///     keeps most entries from ever reaching the regex, and only those pay.
+/// </summary>
+/// <param name="pattern">The regex pattern text, as <see cref="Regex.ToString" /> reports it.</param>
+public sealed class DnsFilterLinearMatcher(string pattern)
+{
+    private readonly object gate = new();
+    private Regex regex;
+    private bool built;
+
+    /// <summary>
+    ///     This property is the linear-time regex, built on first read, or
+    ///     <see langword="null" /> when <see cref="RegexOptions.NonBacktracking" /> refuses the
+    ///     pattern. Concurrent queries build it once.
+    /// </summary>
+    public Regex Regex
+    {
+        get
+        {
+            if (Volatile.Read(ref built))
+                return regex;
+
+            lock (gate)
+            {
+                if (!built)
+                {
+                    regex = DnsFilterEngine.CompileLinearOrNull(pattern);
+                    Volatile.Write(ref built, true);
+                }
+            }
+
+            return regex;
+        }
+    }
 }
 
 /// <summary>
