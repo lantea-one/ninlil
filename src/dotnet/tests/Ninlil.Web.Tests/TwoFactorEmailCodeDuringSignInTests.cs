@@ -280,7 +280,7 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
                 CancellationToken.None
             )
         );
-        IActionResult result = await signedIn.SendEmailCode();
+        IActionResult result = await signedIn.SendEmailCode(CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status429TooManyRequests, ((ObjectResult)result).StatusCode);
         Assert.False(string.IsNullOrEmpty(signedIn.Response.Headers.RetryAfter.ToString()));
@@ -294,8 +294,8 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
         (_, RecordingEmailSender sender, _, _, TwoFactorController signedIn) =
             await BuildDirectAsync();
 
-        Assert.IsType<AcceptedResult>(await signedIn.SendEmailCode());
-        IActionResult second = await signedIn.SendEmailCode();
+        Assert.IsType<AcceptedResult>(await signedIn.SendEmailCode(CancellationToken.None));
+        IActionResult second = await signedIn.SendEmailCode(CancellationToken.None);
 
         Assert.Equal(StatusCodes.Status429TooManyRequests, ((ObjectResult)second).StatusCode);
         Assert.Single(sender.Sent);
