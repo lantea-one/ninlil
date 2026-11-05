@@ -14617,7 +14617,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\n`IZoneUpdateService.BootstrapZoneAsync`, and later records go through\n`IZoneUpdateService.ApplyChangesAsync`. Returns 400 when the first record\nis not an SOA, is an SOA that is not at the zone's own name, or the data does not fit the\nrecord type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown\nzone, and 409 for a second SOA or a zone that has records but no SOA at its apex. The\nowner name \"@\" means the zone's own name (RFC 1035 §5.1) and is stored as that name.\nRequires `zones:write`.",
+        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\n`IZoneUpdateService.BootstrapZoneAsync`, and later records go through\n`IZoneUpdateService.ApplyChangesAsync`. Returns 400 when the first record\nis not an SOA, is an SOA that is not at the zone's own name, the name is not a valid DNS\nname or is neither the zone's name nor below it, or the data does not fit the record\ntype (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and\n409 for a second SOA or a zone that has records but no SOA at its apex. The\nowner name \"@\" means the zone's own name (RFC 1035 §5.1) and is stored as that name.\nRequires `zones:write`.",
         "operationId": "apiZonesZoneIdRecordsPost",
         "parameters": [
           {
@@ -17012,7 +17012,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action replaces a record's fields, keeping its id. Returns 400 when the data does\nnot fit the record type (an APL item must be in canonical form, RFC 3123 §4) and 404 when the record does not exist or belongs to another\nzone, and 409 when the edit would change the type to or from SOA or rename\nthe SOA record (a zone has exactly one SOA). Requires `zones:write`.",
+        "summary": "This action replaces a record's fields, keeping its id. Returns 400 when the name is not\na valid DNS name or is neither the zone's name nor below it, or the data does not fit\nthe record type (an APL item must be in canonical form, RFC 3123 §4), 404 when the\nrecord does not exist or belongs to another zone, and 409 when the edit would change the\ntype to or from SOA or rename the SOA record (a zone has exactly one SOA). Requires\n`zones:write`.",
         "operationId": "apiZonesZoneIdRecordsIdPut",
         "parameters": [
           {
@@ -17726,7 +17726,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a\nJSON `null` clears a nullable field, and any other value replaces it. Changing\n`type` without new `data` re-checks the existing data against the new type and\nreturns 400 if it does not fit (as does new APL data that is not in canonical form, RFC\n3123 §4), and 409 when the patch would change the type to or\nfrom SOA or rename the SOA record. Requires `zones:write`.",
+        "summary": "This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a\nJSON `null` clears a nullable field, and any other value replaces it. Returns 400 for\na `name` that is not a valid DNS name or is neither the zone's name nor below it.\nChanging `type` without new `data` re-checks the existing data against the new\ntype and returns 400 if it does not fit (as does new APL data that is not in canonical\nform, RFC 3123 §4), and 409 when the patch would change the type to or from SOA or\nrename the SOA record. Requires `zones:write`.",
         "operationId": "apiZonesZoneIdRecordsIdPatch",
         "parameters": [
           {
@@ -29613,7 +29613,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The record's owner name. \"@\" means the zone's own name (RFC 1035 §5.1) and is stored as that\nname; any other name is stored as given.",
+            "description": "The record's owner name, a full name without a trailing dot. \"@\" means the zone's own name\n(RFC 1035 §5.1) and is stored as that name. Any other name must be the zone's name or below\nit, compared label by label and case-insensitively (RFC 4343); otherwise the API answers\n400 with a suggestion. \"www\" is refused in zone \"example.test\" (use \"www.example.test\"), and\nso is \"wwwexample.test\".",
             "nullable": true
           },
           "type": {

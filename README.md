@@ -892,8 +892,9 @@ records under `/api/zones/<zone-id>/records`. The console does the same under **
 
    A record's `name` is its full owner name, such as `www.example.test`. The name `@` stands for
    the zone's own name (RFC 1035 §5.1) and is stored as that name, so `@` works for the SOA and for
-   every other type. A name without the zone suffix, such as `www`, is stored as written and does
-   not become `www.example.test`.
+   every other type. The API refuses (400) a name that is not the zone's name or below it,
+   such as `www` or `wwwexample.test` in zone `example.test`, and suggests the full name
+   (`www.example.test`).
 
    ```bash
    curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"example.test","type":"MX","timeToLiveSeconds":300,"data":{"preference":10,"exchange":"mail.example.test"}}'
