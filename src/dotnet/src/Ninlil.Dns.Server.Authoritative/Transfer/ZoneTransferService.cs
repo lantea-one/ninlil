@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -28,7 +29,10 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     waiting for the connection to close. An incremental IXFR answer opens each difference
 ///     sequence with the SOA the step replaced and the SOA it wrote, as the journal recorded them
 ///     (<see cref="ZoneChangeJournalEntryEntity.OldSoaRecordJson" />); a window whose history is
-///     missing or inconsistent gets a full transfer.
+///     missing or inconsistent gets a full transfer. A stored record whose data cannot be written
+///     as RDATA is not in the cache (<see cref="CachedZone" /> leaves it out and logs it), so it is
+///     absent from every transfer, as it is from the signed content. A zone whose SOA cannot be
+///     written gets a signed SERVFAIL, because no transfer can start or end without it.
 /// </summary>
 /// <param name="zoneCache">The cache this service transfers zones out of.</param>
 /// <param name="signedZoneCache">
@@ -45,13 +49,18 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     SERVFAIL, so a downstream secondary does not copy an expired zone. <see langword="null" />
 ///     means no zone expires.
 /// </param>
+/// <param name="logger">
+///     The logger that reports an unwritable SOA and a journal that cannot be sent incrementally.
+///     <see langword="null" /> logs nothing.
+/// </param>
 public class ZoneTransferService(
     AuthoritativeZoneCache zoneCache,
     SignedZoneCache signedZoneCache,
     IZoneChangeJournalRepository journalRepository,
     ITsigService tsigService,
     IOptionsMonitor<ZoneTransferOptions> options,
-    SecondaryZoneExpiryTracker expiryTracker = null
+    SecondaryZoneExpiryTracker expiryTracker = null,
+    ILogger<ZoneTransferService> logger = null
 ) : IZoneTransferService
 {
     /// <inheritdoc />
@@ -96,10 +105,16 @@ public class ZoneTransferService(
             yield break;
         }
 
-        DnsResourceRecord soaWireRecord = RecordEntityCodec.ToWireRecord(
-            soaRecords[0],
-            zone.ApexName
-        );
+        if (!TryWriteSoa(soaRecords[0], zone, out DnsResourceRecord soaWireRecord))
+        {
+            yield return await SignedErrorResponseAsync(
+                request,
+                DnsResponseCodeEnum.ServerFailure,
+                tsigResult.Key.Name,
+                stoppingToken
+            );
+            yield break;
+        }
 
         List<DnsResourceRecord> otherRecords =
         [
@@ -213,9 +228,15 @@ public class ZoneTransferService(
             DnsResourceRecordTypeEnum.Soa
         );
 
+        // TryWriteSoa runs before the decode: it catches a row that cannot be read or written, so
+        // the decode below sees only a readable one.
+        DnsResourceRecord currentSoaWireRecord = null;
+        RecordEntity currentSoaRecord = currentSoaRecords.Count > 0 ? currentSoaRecords[0] : null;
+
         if (
-            currentSoaRecords.Count == 0
-            || RecordEntityCodec.DecodeTypedData(currentSoaRecords[0])
+            currentSoaRecord is null
+            || !TryWriteSoa(currentSoaRecord, zone, out currentSoaWireRecord)
+            || RecordEntityCodec.DecodeTypedData(currentSoaRecord)
                 is not SoaRecordData currentSoaData
         )
         {
@@ -227,12 +248,6 @@ public class ZoneTransferService(
             );
             yield break;
         }
-
-        RecordEntity currentSoaRecord = currentSoaRecords[0];
-        DnsResourceRecord currentSoaWireRecord = RecordEntityCodec.ToWireRecord(
-            currentSoaRecord,
-            zone.ApexName
-        );
 
         long clientSerial = clientSoaData.Serial;
         long serverSerial = currentSoaData.Serial;
@@ -273,30 +288,21 @@ public class ZoneTransferService(
         // signed diff is journaled. Otherwise the journal must cover the client's serial to the
         // current one without gaps, and every step must carry the SOA it replaced and the SOA it
         // wrote, ending at the current SOA.
-        List<(DnsResourceRecord OldSoa, DnsResourceRecord NewSoa)> soaHistory = null;
-        bool journalCoversRequestedRange =
-            signedData is null
-            && journalEntries.Count > 0
-            && journalEntries[0].OldSerial == clientSerial
-            && journalEntries[^1].NewSerial == serverSerial
-            && IsContiguousChain(journalEntries)
-            && TryBuildSoaHistory(journalEntries, zone.ApexName, currentSoaRecord, out soaHistory);
-
         List<DnsResourceRecord> recordSequence = [currentSoaWireRecord];
 
-        if (journalCoversRequestedRange)
+        if (
+            signedData is null
+            && TryBuildIncrementalSequence(
+                journalEntries,
+                zone,
+                currentSoaRecord,
+                clientSerial,
+                serverSerial,
+                out List<DnsResourceRecord> incrementalRecords
+            )
+        )
         {
-            for (int i = 0; i < journalEntries.Count; i++)
-            {
-                ZoneChangeJournalEntryEntity entry = journalEntries[i];
-
-                // RFC 1995 §4: each difference sequence opens with the SOA it replaces, then the
-                // deleted records, then the SOA it creates, then the added records.
-                recordSequence.Add(soaHistory[i].OldSoa);
-                recordSequence.AddRange(DecodeRecordSnapshot(entry.RemovedRecordsJson));
-                recordSequence.Add(soaHistory[i].NewSoa);
-                recordSequence.AddRange(DecodeRecordSnapshot(entry.AddedRecordsJson));
-            }
+            recordSequence.AddRange(incrementalRecords);
         }
         else
         {
@@ -633,6 +639,116 @@ public class ZoneTransferService(
             RecordEntityCodec.DecodeTypedData(first),
             RecordEntityCodec.DecodeTypedData(second)
         );
+
+    /// <summary>
+    ///     This method builds the difference sequences of an incremental IXFR answer from the
+    ///     journal, without the leading and closing current SOA.
+    ///     <para>
+    ///         A snapshot in the journal that cannot be read or written as RDATA does not fail the
+    ///         transfer: the method logs a Warning and returns <see langword="false" />, and the
+    ///         caller sends a full transfer, which RFC 1995 §4 allows. Leaving the record out of
+    ///         one step instead would give the client a diff that deletes or adds a record the full
+    ///         view never had.
+    ///     </para>
+    /// </summary>
+    /// <param name="journalEntries">The journal entries since the client's serial, oldest first.</param>
+    /// <param name="zone">The cached zone.</param>
+    /// <param name="currentSoaRecord">The zone's stored SOA.</param>
+    /// <param name="clientSerial">The serial the client holds.</param>
+    /// <param name="serverSerial">The zone's current serial.</param>
+    /// <param name="records">On success, the sequences; otherwise <see langword="null" />.</param>
+    /// <returns>Whether the journal covers the range and every snapshot was usable.</returns>
+    private bool TryBuildIncrementalSequence(
+        IReadOnlyList<ZoneChangeJournalEntryEntity> journalEntries,
+        CachedZone zone,
+        RecordEntity currentSoaRecord,
+        long clientSerial,
+        long serverSerial,
+        out List<DnsResourceRecord> records
+    )
+    {
+        records = null;
+
+        if (
+            journalEntries.Count == 0
+            || journalEntries[0].OldSerial != clientSerial
+            || journalEntries[^1].NewSerial != serverSerial
+            || !IsContiguousChain(journalEntries)
+        )
+            return false;
+
+        try
+        {
+            if (
+                !TryBuildSoaHistory(
+                    journalEntries,
+                    zone.ApexName,
+                    currentSoaRecord,
+                    out List<(DnsResourceRecord OldSoa, DnsResourceRecord NewSoa)> soaHistory
+                )
+            )
+                return false;
+
+            List<DnsResourceRecord> sequence = [];
+
+            for (int i = 0; i < journalEntries.Count; i++)
+            {
+                ZoneChangeJournalEntryEntity entry = journalEntries[i];
+
+                // RFC 1995 §4: each difference sequence opens with the SOA it replaces, then the
+                // deleted records, then the SOA it creates, then the added records.
+                sequence.Add(soaHistory[i].OldSoa);
+                sequence.AddRange(DecodeRecordSnapshot(entry.RemovedRecordsJson));
+                sequence.Add(soaHistory[i].NewSoa);
+                sequence.AddRange(DecodeRecordSnapshot(entry.AddedRecordsJson));
+            }
+
+            records = sequence;
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The exception is logged whole: the catch also covers SOA history and JSON
+            // decoding, so a fault other than unwritable RDATA must stay traceable.
+            logger?.LogWarning(
+                exception,
+                "Zone {Zone}: the change journal cannot be sent as an incremental transfer ({Reason}); a full transfer is sent instead.",
+                zone.Zone.Name,
+                exception.Message
+            );
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     This method writes the zone's SOA record as RDATA, for a transfer to start and end
+    ///     with. The apex SOA is never left out of the cache even when its data is unwritable,
+    ///     because the zone cannot be served without it; the transfer fails instead.
+    /// </summary>
+    /// <param name="soaRecord">The stored SOA.</param>
+    /// <param name="zone">The cached zone, for the owner name and the Warning.</param>
+    /// <param name="wire">On success, the SOA in wire form; otherwise <see langword="null" />.</param>
+    /// <returns><see langword="false" /> after logging a Warning if the SOA cannot be written.</returns>
+    private bool TryWriteSoa(RecordEntity soaRecord, CachedZone zone, out DnsResourceRecord wire)
+    {
+        wire = null;
+
+        try
+        {
+            wire = RecordEntityCodec.ToWireRecord(soaRecord, zone.ApexName);
+            return wire is not null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger?.LogWarning(
+                "Zone {Zone}: the SOA record ({RecordId}) cannot be written as RDATA ({Reason}); the transfer is refused with SERVFAIL.",
+                zone.Zone.Name,
+                soaRecord.Id,
+                exception.Message
+            );
+            return false;
+        }
+    }
 
     /// <summary>
     ///     This method decodes a journal entry's stored JSON snapshot of the records it added or

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -55,6 +56,49 @@ public static class RecordEntityCodec
             record.TimeToLiveSeconds,
             codec.Write(DecodeTypedData(record))
         );
+    }
+
+    /// <summary>
+    ///     This method reports whether a stored record can be written as RDATA, and logs a Warning
+    ///     naming the record when it cannot. A stored row can hold data the REST API would refuse
+    ///     (a restore, a storage switch, a cluster sync or a hand edit put it there), and the
+    ///     caller leaves such a row out instead of letting one row stop every query or transfer
+    ///     for its zone. A record with no registered codec passes: it is not served, so there is
+    ///     nothing to say about it.
+    /// </summary>
+    /// <param name="record">The stored record to try.</param>
+    /// <param name="zoneName">The zone's name, for the Warning.</param>
+    /// <param name="leftOutOf">
+    ///     What the record is left out of, completing the Warning's "it is left out of ..."
+    ///     (for example "the served zone").
+    /// </param>
+    /// <param name="logger">The logger for the Warning; <see langword="null" /> logs nothing.</param>
+    /// <returns>Whether the caller may use <paramref name="record" />.</returns>
+    public static bool CanWriteRdata(
+        RecordEntity record,
+        string zoneName,
+        string leftOutOf,
+        ILogger logger
+    )
+    {
+        try
+        {
+            ToWireRecord(record, DnsName.Parse(record.Name));
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger?.LogWarning(
+                "Zone {Zone}: the {Type} record '{Name}' ({RecordId}) holds data that cannot be written as RDATA ({Reason}); it is left out of {LeftOutOf}. Edit or delete the record.",
+                zoneName,
+                record.Type,
+                record.Name,
+                record.Id,
+                exception.Message,
+                leftOutOf
+            );
+            return false;
+        }
     }
 
     /// <summary>
