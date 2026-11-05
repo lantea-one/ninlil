@@ -59,9 +59,11 @@ outside Forgejo.
   apply at start, and a saved change applies at once where the page says so. Values already saved
   in that file, which Ninlil ignored until now, take effect after the upgrade. They override
   `appsettings.json` and `appsettings.{Environment}.json`; `NINLIL_*` variables and command-line
-  arguments still override them. Review or clear the file before you upgrade. See
+  arguments still override them. Review or clear the file before you upgrade. Ninlil creates
+  the file's folder at start when it is missing, so a mistyped path leaves an empty folder. See
   [Configuration](./README.md#configuration)
-  ([#314](https://git.lantea.one/lantea-one/ninlil/issues/314)).
+  ([#314](https://git.lantea.one/lantea-one/ninlil/issues/314),
+  [#321](https://git.lantea.one/lantea-one/ninlil/issues/321)).
 
 ## v2026.10.31.1
 
