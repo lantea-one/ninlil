@@ -17866,12 +17866,16 @@
                   "prefetchRecentAccessWindow": "00:05:00",
                   "insecureDomains": [
                     "home.arpa",
+                    "resolver.arpa",
+                    "service.arpa",
                     "internal",
                     "10.in-addr.arpa"
                   ],
                   "useCustomInsecureDomains": false,
                   "builtInInsecureDomains": [
                     "home.arpa",
+                    "resolver.arpa",
+                    "service.arpa",
                     "internal",
                     "10.in-addr.arpa"
                   ]
@@ -29926,7 +29930,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the recursive resolver settings\n(`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A\n`PATCH` to the same endpoint accepts the same fields. The two override lists are read\nonce at startup or first seed, so the GET shows the saved lists, which may not be the ones\nin use; every other field takes effect at once. `RecursiveServerOptions` documents\neach field and its default.\n\n`InsecureDomains` is the list of Insecure domains (negative trust anchors) in\n    force: a query for a name at or below one skips DNSSEC validation and is never answered\n    with AD. It is the built-in list while `UseCustomInsecureDomains` is\n    false. A `PATCH` with an array replaces the whole list and makes\n    it custom; a `PATCH` with null restores the built-in list.\n    `BuiltInInsecureDomains` is that built-in list (`home.arpa`, `internal`\n    and the locally-served reverse zones of RFC 6303), for comparison and for a \"restore\n    defaults\" action; it is read-only.\n`EnableRecursion` turns on recursive service for every client, by iterating from\n    the root and by forwarding to the configured forwarders (forwarding also needs its own\n    switch). While it is off, an access rule granting recursion access still lets\n    particular clients use both."
+        "description": "This record is the REST shape of the recursive resolver settings\n(`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A\n`PATCH` to the same endpoint accepts the same fields. The two override lists are read\nonce at startup or first seed, so the GET shows the saved lists, which may not be the ones\nin use; every other field takes effect at once. `RecursiveServerOptions` documents\neach field and its default.\n\n`InsecureDomains` is the list of Insecure domains (negative trust anchors) in\n    force: a query for a name at or below one skips DNSSEC validation and is never answered\n    with AD. It is the built-in list while `UseCustomInsecureDomains` is\n    false. A `PATCH` with an array replaces the whole list and makes\n    it custom; a `PATCH` with null restores the built-in list.\n    `BuiltInInsecureDomains` is that built-in list (`home.arpa`,\n    `resolver.arpa`, `service.arpa`, `internal` and the locally-served\n    reverse zones of RFC 6303), for comparison and for a \"restore defaults\" action; it is\n    read-only.\n`EnableRecursion` turns on recursive service for every client, by iterating from\n    the root and by forwarding to the configured forwarders (forwarding also needs its own\n    switch). While it is off, an access rule granting recursion access still lets\n    particular clients use both."
       },
       "RecursiveTrustAnchorDetail": {
         "type": "object",
