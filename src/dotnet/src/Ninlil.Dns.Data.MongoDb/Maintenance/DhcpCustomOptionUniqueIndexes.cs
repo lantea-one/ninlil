@@ -22,7 +22,7 @@ namespace Ninlil.Dns.Data.MongoDb.Maintenance;
 ///         next start.
 ///     </para>
 ///     <para>
-///         A plain index with the same keys (an earlier build created one) cannot be turned into a
+///         A plain index with the same keys (a database that holds the plain, non-unique index) cannot be turned into a
 ///         unique one: MongoDB refuses to create an index with the same keys and different
 ///         options. The step drops such a plain index and creates the unique one. Both parts are
 ///         idempotent, so the step runs on every start and does nothing once the unique index
@@ -34,18 +34,54 @@ namespace Ninlil.Dns.Data.MongoDb.Maintenance;
 public static class DhcpCustomOptionUniqueIndexes
 {
     /// <summary>
+    ///     This constant is the server error code for a duplicate key.
+    /// </summary>
+    private const int DuplicateKeyCode = 11000;
+
+    /// <summary>
     ///     This method refuses to continue when a duplicate exists, then ensures both unique
     ///     indexes.
     /// </summary>
     /// <param name="context">The MongoDB context whose database should be checked.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <param name="afterDuplicateScan">
+    ///     A test seam: runs between the duplicate scan and the index build, so a test can write a
+    ///     duplicate in that window. Production passes nothing.
+    /// </param>
     /// <returns>The number of indexes this call replaced or created.</returns>
     /// <exception cref="DatabaseStartupRefusedException">
     ///     Either collection holds two documents with the same owner and tag. Nothing is deleted.
     /// </exception>
     public static async Task<int> RunAsync(
         NinlilDnsMongoContext context,
-        CancellationToken stoppingToken = default
+        CancellationToken stoppingToken = default,
+        Func<CancellationToken, Task> afterDuplicateScan = null
+    )
+    {
+        await ThrowIfDuplicatesAsync(context, stoppingToken);
+        if (afterDuplicateScan != null)
+            await afterDuplicateScan(stoppingToken);
+
+        try
+        {
+            return await EnsureBothAsync(context, stoppingToken);
+        }
+        catch (MongoCommandException exception) when (exception.Code == DuplicateKeyCode)
+        {
+            // A duplicate arrived between the scan and the index build (a node on an older
+            // build, or a second start). Scan again so the operator gets the listing, not a
+            // bare driver error.
+            await ThrowIfDuplicatesAsync(context, stoppingToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     This method scans both collections and throws the refusal that lists every duplicate.
+    /// </summary>
+    private static async Task ThrowIfDuplicatesAsync(
+        NinlilDnsMongoContext context,
+        CancellationToken stoppingToken
     )
     {
         string scopeCollection = context.DhcpScopeCustomOptions.CollectionNamespace.CollectionName;
@@ -78,7 +114,16 @@ public static class DhcpCustomOptionUniqueIndexes
                     + "start again:"
                     + duplicates
             );
+    }
 
+    /// <summary>
+    ///     This method ensures the unique index on both collections.
+    /// </summary>
+    private static async Task<int> EnsureBothAsync(
+        NinlilDnsMongoContext context,
+        CancellationToken stoppingToken
+    )
+    {
         int changed = 0;
         changed += await EnsureUniqueAsync(
             context.DhcpScopeCustomOptions,
@@ -192,8 +237,16 @@ public static class DhcpCustomOptionUniqueIndexes
         );
         if (plain != null)
         {
-            await collection.Indexes.DropOneAsync(plain["name"].AsString, stoppingToken);
-            changed++;
+            try
+            {
+                await collection.Indexes.DropOneAsync(plain["name"].AsString, stoppingToken);
+                changed++;
+            }
+            catch (MongoCommandException exception)
+                when (exception.CodeName is "IndexNotFound" or "NamespaceNotFound")
+            {
+                // Another node starting at the same time dropped it first.
+            }
         }
 
         bool uniqueExists = existing.Any(index =>
@@ -202,13 +255,38 @@ public static class DhcpCustomOptionUniqueIndexes
         );
         if (!uniqueExists)
         {
-            await collection.Indexes.CreateOneAsync(
-                new CreateIndexModel<T>(keys, new CreateIndexOptions { Unique = true }),
-                cancellationToken: stoppingToken
-            );
-            changed++;
+            try
+            {
+                await collection.Indexes.CreateOneAsync(
+                    new CreateIndexModel<T>(keys, new CreateIndexOptions { Unique = true }),
+                    cancellationToken: stoppingToken
+                );
+                changed++;
+            }
+            catch (MongoCommandException exception) when (exception.Code != DuplicateKeyCode)
+            {
+                // Another node starting at the same time may have built the identical index
+                // (the server reports a conflicting or aborted build). Accept it when the
+                // unique index is there now; otherwise the failure is real.
+                if (!await UniqueIndexExistsAsync(collection, fieldNames, stoppingToken))
+                    throw;
+            }
         }
 
         return changed;
     }
+
+    /// <summary>
+    ///     This method tells whether a unique index with exactly these key fields exists now.
+    /// </summary>
+    private static async Task<bool> UniqueIndexExistsAsync<T>(
+        IMongoCollection<T> collection,
+        string[] fieldNames,
+        CancellationToken stoppingToken
+    ) =>
+        (await (await collection.Indexes.ListAsync(stoppingToken)).ToListAsync(stoppingToken)).Any(
+            index =>
+                index["key"].AsBsonDocument.Names.SequenceEqual(fieldNames)
+                && index.GetValue("unique", false).ToBoolean()
+        );
 }

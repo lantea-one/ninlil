@@ -217,8 +217,8 @@ public sealed class MongoDhcpCustomOptionUniquenessTests(MongoDbEngineFixture fi
     }
 
     /// <summary>
-    ///     A database with the old non-unique compound indexes (an earlier build) gets them
-    ///     replaced by unique ones, and a second start changes nothing.
+    ///     A database that holds the plain, non-unique compound indexes gets them replaced by
+    ///     unique ones (no plain index with those keys remains), and a second start changes nothing.
     /// </summary>
     [Fact]
     public async Task RunAsync_WithTheOldPlainIndexes_ReplacesThemWithUniqueOnesIdempotently()
@@ -245,5 +245,94 @@ public sealed class MongoDhcpCustomOptionUniquenessTests(MongoDbEngineFixture fi
 
         Assert.True(await HasUniqueIndexAsync(context, ScopeOptions, "ScopeId,OptionTag"));
         Assert.True(await HasUniqueIndexAsync(context, TagRuleOptions, "TagRuleId,OptionTag"));
+        Assert.Equal(1, await CountIndexesAsync(context, ScopeOptions, "ScopeId,OptionTag"));
+        Assert.Equal(1, await CountIndexesAsync(context, TagRuleOptions, "TagRuleId,OptionTag"));
+    }
+
+    /// <summary>
+    ///     Several nodes starting together on a database with the plain indexes all succeed: the
+    ///     one that loses the drop or the create race accepts the unique index that is there.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_StartedConcurrentlyOnThePlainIndexes_AllSucceed()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        NinlilDnsMongoContext context = GetContext(database);
+        await context
+            .Database.GetCollection<BsonDocument>(ScopeOptions)
+            .Indexes.CreateOneAsync(
+                new CreateIndexModel<BsonDocument>(
+                    new BsonDocument { { "ScopeId", 1 }, { "OptionTag", 1 } }
+                )
+            );
+        await context
+            .Database.GetCollection<BsonDocument>(TagRuleOptions)
+            .Indexes.CreateOneAsync(
+                new CreateIndexModel<BsonDocument>(
+                    new BsonDocument { { "TagRuleId", 1 }, { "OptionTag", 1 } }
+                )
+            );
+
+        await Task.WhenAll(
+            Enumerable
+                .Range(0, 6)
+                .Select(_ => Task.Run(() => DhcpCustomOptionUniqueIndexes.RunAsync(context)))
+        );
+
+        Assert.Equal(1, await CountIndexesAsync(context, ScopeOptions, "ScopeId,OptionTag"));
+        Assert.True(await HasUniqueIndexAsync(context, ScopeOptions, "ScopeId,OptionTag"));
+        Assert.True(await HasUniqueIndexAsync(context, TagRuleOptions, "TagRuleId,OptionTag"));
+    }
+
+    /// <summary>
+    ///     A duplicate that lands between the duplicate scan and the index build (written here
+    ///     through the step's test seam) makes the build fail with a duplicate-key error; the
+    ///     step scans again and refuses with the listing instead.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithADuplicateArrivingAfterTheScan_RefusesWithTheListing()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        NinlilDnsMongoContext context = GetContext(database);
+        IMongoCollection<BsonDocument> scopeOptions = context.Database.GetCollection<BsonDocument>(
+            ScopeOptions
+        );
+        Guid scopeId = Guid.NewGuid();
+        Guid first = Guid.NewGuid();
+        Guid second = Guid.NewGuid();
+
+        DatabaseStartupRefusedException refusal =
+            await Assert.ThrowsAsync<DatabaseStartupRefusedException>(() =>
+                DhcpCustomOptionUniqueIndexes.RunAsync(
+                    context,
+                    afterDuplicateScan: async token =>
+                        await scopeOptions.InsertManyAsync(
+                            [
+                                OptionDocument("ScopeId", scopeId, 7, first),
+                                OptionDocument("ScopeId", scopeId, 7, second),
+                            ],
+                            cancellationToken: token
+                        )
+                )
+            );
+
+        Assert.Contains(scopeId.ToString(), refusal.Message);
+        Assert.Contains(first.ToString(), refusal.Message);
+        Assert.Contains(second.ToString(), refusal.Message);
+        Assert.Equal(2, await scopeOptions.CountDocumentsAsync(_ => true));
+    }
+
+    private static async Task<int> CountIndexesAsync(
+        NinlilDnsMongoContext context,
+        string collection,
+        string key
+    )
+    {
+        List<BsonDocument> indexes = await (
+            await context.Database.GetCollection<BsonDocument>(collection).Indexes.ListAsync()
+        ).ToListAsync();
+        return indexes.Count(index =>
+            index["key"].AsBsonDocument.Elements.Select(e => e.Name).SequenceEqual(key.Split(','))
+        );
     }
 }

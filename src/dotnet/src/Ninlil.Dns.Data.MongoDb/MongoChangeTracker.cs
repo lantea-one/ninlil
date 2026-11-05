@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -36,12 +37,17 @@ namespace Ninlil.Dns.Data.MongoDb;
 ///     next reads on the primary (read-your-own-writes). Null outside a dependency-injection
 ///     scope that registers it.
 /// </param>
+/// <param name="logger">
+///     The logger that records the driver error behind a unique-index conflict. Null outside a
+///     dependency-injection scope that registers it.
+/// </param>
 public class MongoChangeTracker(
     IMongoClient client,
     NinlilDnsMongoContext context,
     MongoTransactionSupport transactionSupport,
     IEntityChangeNotifier notifier,
-    StoragePrincipal principal = null
+    StoragePrincipal principal = null,
+    ILogger<MongoChangeTracker> logger = null
 )
 {
     /// <summary>
@@ -175,6 +181,12 @@ public class MongoChangeTracker(
             // A unique index rejected a write (code 11000). The relational engines have the same
             // constraints; the controllers answer 409 for a duplicate they see first, and this
             // is the same answer for the concurrent write that slipped past their check.
+            // The 409 text stays generic; the driver error names the collection and index.
+            logger?.LogWarning(
+                exception,
+                "A write was rejected by a unique index: {Detail}",
+                (exception as MongoWriteException)?.WriteError.Message ?? exception.Message
+            );
             throw new ConflictException(
                 "A value that must be unique is already in use by another entry."
             );
