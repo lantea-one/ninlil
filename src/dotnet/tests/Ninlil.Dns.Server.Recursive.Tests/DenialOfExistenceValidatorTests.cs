@@ -1009,6 +1009,143 @@ public class DenialOfExistenceValidatorTests
         );
     }
 
+    /// <summary>
+    ///     This method builds one extra NSEC3 record with its own Flags, salt and iteration count,
+    ///     owned by a hash that lies outside the names of the chain it joins.
+    /// </summary>
+    private static DnsResourceRecord BuildExtraNsec3(byte flags, byte[] salt, ushort iterations) =>
+        new(
+            Nsec3Hasher.ToOwnerName(Hash("extra.example.com"), Apex),
+            DnsResourceRecordTypeEnum.Nsec3,
+            DnsClassEnum.Internet,
+            3600,
+            DnsRecordDataCodecRegistry.Encode(
+                DnsResourceRecordTypeEnum.Nsec3,
+                new Nsec3RecordData(
+                    1,
+                    false,
+                    iterations,
+                    salt,
+                    Hash("example.com"),
+                    [DnsResourceRecordTypeEnum.A]
+                )
+                {
+                    Flags = flags,
+                }
+            )
+        );
+
+    // The ignored record is simply absent (RFC 5155 §8.2), whatever it holds.
+    [Fact]
+    public void VerifyNxDomainNsec3_ValidChainPlusAFlagsTwoRecord_IsStillProven()
+    {
+        List<DnsResourceRecord> chain = BuildChain(
+            false,
+            0,
+            ("example.com", ApexTypes),
+            ("mail.example.com", [DnsResourceRecordTypeEnum.A])
+        );
+        chain.Add(BuildExtraNsec3(2, [], 0));
+
+        Assert.Equal(
+            Proven,
+            DenialOfExistenceValidator.VerifyNxDomainNsec3(
+                DnsName.Parse("a.b.example.com"),
+                Apex,
+                chain
+            )
+        );
+    }
+
+    // The flag skip runs before the check that all records share salt and iterations, so an
+    // ignored record cannot make a valid proof look inconsistent.
+    [Theory]
+    [InlineData(0, 5)]
+    [InlineData(9, 0)]
+    public void VerifyNxDomainNsec3_FlagsTwoRecordWithOtherSaltOrIterations_DoesNotBreakTheProof(
+        byte saltByte,
+        ushort iterations
+    )
+    {
+        List<DnsResourceRecord> chain = BuildChain(
+            false,
+            0,
+            ("example.com", ApexTypes),
+            ("mail.example.com", [DnsResourceRecordTypeEnum.A])
+        );
+        chain.Add(BuildExtraNsec3(2, saltByte == 0 ? [] : [saltByte], iterations));
+
+        Assert.Equal(
+            Proven,
+            DenialOfExistenceValidator.VerifyNxDomainNsec3(
+                DnsName.Parse("a.b.example.com"),
+                Apex,
+                chain
+            )
+        );
+    }
+
+    [Fact]
+    public void VerifyWildcardAnswerNsec3_FlagsTwoRecordsAreIgnored_ValidRecordsDecide()
+    {
+        List<DnsResourceRecord> chain = BuildChain(
+            false,
+            0,
+            ("example.com", ApexTypes),
+            ("*.example.com", [DnsResourceRecordTypeEnum.A])
+        );
+
+        Assert.Equal(
+            Proven,
+            DenialOfExistenceValidator.VerifyWildcardAnswerNsec3(
+                DnsName.Parse("a.b.example.com"),
+                2,
+                Apex,
+                [.. chain, BuildExtraNsec3(2, [7], 3)]
+            )
+        );
+        Assert.Equal(
+            NotProven,
+            DenialOfExistenceValidator.VerifyWildcardAnswerNsec3(
+                DnsName.Parse("a.b.example.com"),
+                2,
+                Apex,
+                WithFlags(chain, 2)
+            )
+        );
+    }
+
+    [Fact]
+    public void VerifyNoDataNsec3_OptOutChainWithFlagsTwoRecords_IgnoresThemForTheDsProof()
+    {
+        List<DnsResourceRecord> chain = BuildChain(
+            true,
+            0,
+            ("example.com", ApexTypes),
+            ("ent.example.com", []),
+            ("leaf.other.example.com", [DnsResourceRecordTypeEnum.A])
+        );
+
+        Assert.Equal(
+            ProvenInsecure,
+            DenialOfExistenceValidator.VerifyNoDataNsec3(
+                DnsName.Parse("child.ent.example.com"),
+                DnsResourceRecordTypeEnum.DS,
+                Apex,
+                [.. chain, BuildExtraNsec3(2, [7], 3)]
+            )
+        );
+        Assert.Equal(
+            NotProven,
+            DenialOfExistenceValidator.VerifyNoDataNsec3(
+                DnsName.Parse("child.ent.example.com"),
+                DnsResourceRecordTypeEnum.DS,
+                Apex,
+                WithFlags(chain, 3)
+            )
+        );
+    }
+
     [Fact]
     public void VerifyNxDomainNsec3_OnlyTheRecordsWithFlagsAboveOneAreIgnored_ProofNeedsTheRest()
     {

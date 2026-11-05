@@ -85,8 +85,8 @@ public sealed class SignedZoneData(
 
     /// <summary>
     ///     This property tells which kind of chain <see cref="DenialOfExistenceRecords" /> holds:
-    ///     NSEC3 when <see cref="Nsec3ParamRecord" /> is set and its Flags are zero (RFC 5155 §4.1.2) or the first chain record is an
-    ///     NSEC3, otherwise NSEC.
+    ///     NSEC3 when <see cref="Nsec3ParamRecord" /> is set and its Flags are zero (RFC 5155
+    ///     §4.1.2) or the first chain record is an NSEC3, otherwise NSEC.
     /// </summary>
     public DnssecDenialOfExistenceModeEnum DenialOfExistenceMode { get; } =
         DetermineMode(UsableNsec3Param(nsec3ParamRecord), denialOfExistenceRecords);

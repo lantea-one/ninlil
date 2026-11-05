@@ -1375,6 +1375,10 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   ("Operators SHOULD NOT use a salt"). The API accepts at most 150 iterations
   (`nsec3Iterations`) and answers `400` above that. Ninlil's own validator treats a zone above 150
   as insecure, and any validator may treat a count above 0 as insecure (RFC 9276 §3.2).
+  The `data` of an NSEC3 or NSEC3PARAM record accepts an optional `flags` number (0 to 255) that
+  takes precedence over `isOptOut` when both are sent. The validator ignores NSEC3 records with Flags
+  above 1 (RFC 5155 §8.2), and an NSEC3PARAM record with nonzero Flags is ignored when choosing a
+  zone's NSEC3 parameters (RFC 5155 §4.1.2).
 - **A record that cannot be signed.** Signing reads every stored record, whatever wrote it. A
   record whose data cannot be written as RDATA, or whose type has no RDATA codec, is left out of
   the signed zone with one warning that names it, and the rest of the zone is signed as usual, so
