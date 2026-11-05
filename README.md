@@ -4185,10 +4185,11 @@ Each command below runs on node A unless it says otherwise.
   exists and returns `409` if one has it. A peer that cannot be reached is skipped.
 - **A change on another node reaches DNS answers after a delay.** On the node where you make a
   change, the answer changes at once. On the other nodes, filter and client settings, rewrites,
-  client schedules and forwarder zones show up after at most 60 seconds, and the entries of a
-  filter list after at most 5 minutes. With a [read replica](#read-replicas-and-database-clusters),
-  add the replica's lag limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by
-  default).
+  client schedules, forwarder zones, hosted zones and their records (also the DNSSEC signatures of
+  a signed zone) and access rules show up after at most 60 seconds, and the entries of a filter
+  list after at most 5 minutes. With a [read replica](#read-replicas-and-database-clusters), add
+  the replica's lag limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by default);
+  access rules always read the primary and need no such addition.
 - **Static address mappings and DHCP leases refresh every 30 seconds.** Ninlil keeps them in memory
   for client identification. A change another process makes in the same database (a second
   instance, a direct edit) reaches the in-memory copy within 30 seconds. A change made in this
@@ -4202,7 +4203,8 @@ Each command below runs on node A unless it says otherwise.
   events the broker sends back to it. An instance acts only on events it made, with one
   exception: the console's live feed also shows events from every instance that shares the
   broker. A `DnsZoneChanged` from another instance, for example, does not trigger this
-  instance's webhooks, NOTIFY or cache reloads.
+  instance's webhooks, NOTIFY or cache reloads; the one-minute cache check described under DNS
+  caches picks the change up instead.
 - **The broker carries every event except settings sync.** The settings-sync event holds settings
   values, secrets included, so it never leaves the process. Cluster sync uses the cluster channel.
 - **Under load, per-query events are dropped first.** Per-query events (`DnsQueryReceived`,
@@ -5095,8 +5097,13 @@ change made on this node read the **primary**, so a change you make shows up in 
 once. A reload that is only due to age (60 seconds for the client directory, filter configuration,
 rewrites, client schedules and forwarder zones, 5 minutes for the entries of a filter list, 30
 seconds for static address mappings) reads an eligible replica. A change made on **another**
-cluster node therefore reaches this node after at most the refresh interval plus the lag limit. The
-zone, signed-zone and access-rule caches have no timer and always read the primary.
+cluster node therefore reaches this node after at most the refresh interval plus the lag limit.
+
+The zone and signed-zone caches check once a minute whether another node changed a zone or one of
+its records. The check reads an eligible replica, compares it with the cached zones and reloads
+only a zone that differs, from the **primary**. A zone that did not change is not signed again.
+This reload sends no zone-changed event, so it starts no NOTIFY, PTR sync or webhook on this node.
+The access-rule cache reloads its whole rule set from the primary once a minute.
 
 **Other limits and warnings**
 

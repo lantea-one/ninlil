@@ -20,7 +20,8 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 ///     <see cref="TransferredSignedZoneDataBuilder" />). The resolver and zone transfer read it
 ///     through <see cref="GetSignedData" />. It loads every zone at startup, and reloads a zone on
 ///     <see cref="DnsZoneChangedEvent" /> (<see cref="SignedZoneChangedEventSubscriber" />), on
-///     the re-signing schedule and on key rollover steps.
+///     the re-signing schedule, on key rollover steps and when
+///     <see cref="Cache.ZoneCacheBackstopService" /> finds that another instance changed it.
 /// </summary>
 /// <param name="scopeFactory">
 ///     The factory used to reach the repositories and signing service, one scope per load so no
@@ -68,8 +69,9 @@ public sealed class SignedZoneCache(
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        // A plain scope reads the primary. This cache is loaded at startup and after a zone or
-        // key change, never on a timer, so a replica may not have the data yet. Do not use
+        // A plain scope reads the primary. This cache is loaded at startup, after a zone or key
+        // change and when ZoneCacheBackstopService finds a zone another instance changed. Each
+        // of those follows a write that a replica may not have yet. Do not use
         // CreateReplicaReadScope here.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneRepository zoneRepository =
