@@ -96,6 +96,12 @@ public static class ServiceCollectionIdentityExtension
         );
         instance.Configure<OidcSsoOptions>(configuration.GetSection(OidcSsoOptions.SectionName));
 
+        // Configure (not a one-time bind), so an IOptionsMonitor reader sees a change without a
+        // restart.
+        instance.Configure<EmailChangeOptions>(
+            configuration.GetSection(EmailChangeOptions.SectionName)
+        );
+
         // One cache for the whole process: the stores flush it and the JWT bearer scheme reads it
         // (see AccessTokenRevalidator).
         instance.TryAddSingleton(TimeProvider.System);
