@@ -4,6 +4,7 @@ using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.Dnssec;
 using Ninlil.Dns.Server.Authoritative.Tests.Resolution;
 using Ninlil.Dns.Server.Core.Events;
@@ -78,7 +79,8 @@ public sealed class ParentDsFollowsChildKeyChangeTests
     private static async Task<List<ushort>> WaitForDsKeyTagsAsync(
         AuthoritativeTestZoneHost host,
         Guid parentId,
-        Func<List<ushort>, bool> condition
+        Func<List<ushort>, bool> condition,
+        string childName = ChildName
     )
     {
         SignedZoneCache cache = host.Services.GetRequiredService<SignedZoneCache>();
@@ -87,7 +89,7 @@ public sealed class ParentDsFollowsChildKeyChangeTests
 
         while (DateTimeOffset.UtcNow < deadline)
         {
-            keyTags = DsKeyTags(cache.GetSignedData(parentId));
+            keyTags = DsKeyTags(cache.GetSignedData(parentId), childName);
 
             if (condition(keyTags))
                 return keyTags;
@@ -104,9 +106,9 @@ public sealed class ParentDsFollowsChildKeyChangeTests
     /// <summary>
     ///     This method returns the key tags of the DS RRset the parent serves for the child.
     /// </summary>
-    private static List<ushort> DsKeyTags(SignedZoneData signed) =>
+    private static List<ushort> DsKeyTags(SignedZoneData signed, string childName = ChildName) =>
         signed.DsRecordsByDelegationName.TryGetValue(
-            DnsName.Parse(ChildName),
+            DnsName.Parse(childName),
             out IReadOnlyList<DnsResourceRecord> ds
         )
             ?
@@ -265,5 +267,139 @@ public sealed class ParentDsFollowsChildKeyChangeTests
 
         Assert.NotSame(childBefore, cache.GetSignedData(childId));
         Assert.Same(parentBefore, cache.GetSignedData(parentId));
+    }
+
+    /// <summary>
+    ///     This method reads the SOA serial stored for a zone.
+    /// </summary>
+    private static async Task<uint> ReadSerialAsync(AuthoritativeTestZoneHost host, Guid zoneId)
+    {
+        await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
+        IReadOnlyList<RecordEntity> records = await scope
+            .ServiceProvider.GetRequiredService<IRecordRepository>()
+            .ListByZoneIdAsync(zoneId);
+
+        return (
+            (SoaRecordData)
+                RecordEntityCodec.DecodeTypedData(
+                    records.Single(record => record.Type == DnsResourceRecordTypeEnum.Soa)
+                )
+        ).Serial;
+    }
+
+    /// <summary>
+    ///     A secondary follows the parent by SOA serial (RFC 1982 serial arithmetic, RFC 1996
+    ///     NOTIFY), so a new DS RRset needs a new serial.
+    /// </summary>
+    [Fact]
+    public async Task CreatingAKskInTheChild_AdvancesTheParentsSoaSerial()
+    {
+        (AuthoritativeTestZoneHost host, Guid parentId, Guid childId) = await StartHostAsync();
+        await using AuthoritativeTestZoneHost _ = host;
+        uint before = await ReadSerialAsync(host, parentId);
+
+        await CreateKeyAsync(host, childId, DnssecKeyRoleEnum.Ksk);
+        await WaitForDsKeyTagsAsync(host, parentId, list => list.Count == 2);
+
+        Assert.True(await ReadSerialAsync(host, parentId) > before);
+    }
+
+    [Fact]
+    public async Task DeletingTheSignedChild_RemovesItsDsFromTheSignedParent()
+    {
+        (AuthoritativeTestZoneHost host, Guid parentId, Guid childId) = await StartHostAsync();
+        await using AuthoritativeTestZoneHost _ = host;
+
+        // The order the zone delete endpoint uses: keys, then records and zone.
+        await using (AsyncServiceScope scope = host.Services.CreateAsyncScope())
+        {
+            IDnssecKeyRepository keyRepository =
+                scope.ServiceProvider.GetRequiredService<IDnssecKeyRepository>();
+            foreach (DnssecKeyEntity key in await keyRepository.ListByZoneIdAsync(childId))
+                keyRepository.Remove(key);
+
+            IZoneRepository zoneRepository =
+                scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+            zoneRepository.Remove(await zoneRepository.GetByIdAsync(childId));
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+        host.Services.GetRequiredService<IDnsServerEventPublisher>()
+            .Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, childId, ChildName));
+
+        await WaitForDsKeyTagsAsync(host, parentId, list => list.Count == 0);
+    }
+
+    /// <summary>
+    ///     Renaming a signed child moves its DS: the parent of the new name gains one and the
+    ///     parent of the old name drops it. The parent holds delegations for both names.
+    /// </summary>
+    [Fact]
+    public async Task RenamingTheSignedChild_MovesItsDsInTheParent()
+    {
+        await using AuthoritativeTestZoneHost host = await AuthoritativeTestZoneHost.CreateAsync();
+        Guid parentId = await host.AddZoneAsync(
+            ParentName,
+            [
+                TestRecord.Ns(ChildName, $"ns.{ChildName}."),
+                TestRecord.Ns("other.example.test", "ns.other.example.test."),
+            ],
+            TestZoneSigning.Nsec
+        );
+        Guid childId = await host.AddZoneAsync(ChildName, [], TestZoneSigning.Nsec);
+        await host.StartAsync();
+
+        await using (AsyncServiceScope scope = host.Services.CreateAsyncScope())
+        {
+            IZoneRepository zoneRepository =
+                scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+            ZoneEntity child = await zoneRepository.GetByIdAsync(childId);
+            child.Name = "other.example.test";
+            zoneRepository.Update(child);
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+        host.Services.GetRequiredService<IDnsServerEventPublisher>()
+            .Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, childId, "other.example.test"));
+
+        await WaitForDsKeyTagsAsync(host, parentId, list => list.Count == 1, "other.example.test");
+        await WaitForDsKeyTagsAsync(host, parentId, list => list.Count == 0);
+    }
+
+    /// <summary>
+    ///     With example.test, a.example.test and b.a.example.test all hosted, a KSK change in
+    ///     b.a.example.test re-signs its closest parent a.example.test, not example.test.
+    /// </summary>
+    [Fact]
+    public async Task CreatingAKskInAGrandchild_ResignsOnlyTheClosestParent()
+    {
+        await using AuthoritativeTestZoneHost host = await AuthoritativeTestZoneHost.CreateAsync();
+        Guid grandparentId = await host.AddZoneAsync(
+            ParentName,
+            [TestRecord.Ns("a.example.test", "ns.a.example.test.")],
+            TestZoneSigning.Nsec
+        );
+        Guid middleId = await host.AddZoneAsync(
+            "a.example.test",
+            [TestRecord.Ns("b.a.example.test", "ns.b.a.example.test.")],
+            TestZoneSigning.Nsec
+        );
+        Guid leafId = await host.AddZoneAsync("b.a.example.test", [], TestZoneSigning.Nsec);
+        await host.StartAsync();
+        SignedZoneCache cache = host.Services.GetRequiredService<SignedZoneCache>();
+        SignedZoneData grandparentBefore = cache.GetSignedData(grandparentId);
+
+        await using (AsyncServiceScope scope = host.Services.CreateAsyncScope())
+        {
+            await scope
+                .ServiceProvider.GetRequiredService<IDnssecKeyManagementService>()
+                .GenerateKeyAsync(leafId, DnssecKeyRoleEnum.Ksk, DnssecAlgorithmEnum.Ed25519);
+        }
+        host.Services.GetRequiredService<IDnsServerEventPublisher>()
+            .Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, leafId, "b.a.example.test"));
+
+        await WaitForDsKeyTagsAsync(host, middleId, list => list.Count == 2, "b.a.example.test");
+
+        // Give a wrongly triggered grandparent re-sign time to happen.
+        await Task.Delay(500);
+        Assert.Same(grandparentBefore, cache.GetSignedData(grandparentId));
     }
 }

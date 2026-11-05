@@ -358,7 +358,7 @@ public class ZoneSigningService(
                 await zoneRepository.ListAsync(zone => zone.Name == delegationName, stoppingToken)
             ).FirstOrDefault();
 
-            if (childZone is not { IsDnssecSigned: true })
+            if (!DelegationDsKeys.ContributesDs(childZone))
                 continue;
 
             IReadOnlyList<DnssecKeyEntity> childKeys = await keyRepository.ListByZoneIdAsync(

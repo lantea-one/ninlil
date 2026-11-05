@@ -1240,7 +1240,8 @@ child zone's `id`; copy it as `<child-zone-id>`.
 8. The parent adds the DS record by itself; there is nothing to call. Ninlil re-signs the parent
    whenever the child's set of `Active` KSKs changes: when you add a KSK, remove or retire one,
    switch the child's signing on or off, delete the child, or when a rollover promotes the new
-   KSK. A change to a ZSK leaves the parent alone, because a DS record names a KSK. Step 4 of
+   KSK. The parent's SOA serial goes up with each such re-sign, so a secondary of the parent
+   transfers the new DS record. A change to a ZSK leaves the parent alone, because a DS record names a KSK. Step 4 of
    "Check that it worked" below shows the parent's DS answer.
 
 **Roll a key (optional).** A rollover replaces a key without breaking validation. Ninlil follows

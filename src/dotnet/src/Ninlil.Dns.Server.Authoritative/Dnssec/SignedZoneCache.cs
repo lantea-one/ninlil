@@ -79,10 +79,13 @@ public sealed class SignedZoneCache(
         new();
 
     /// <summary>
-    ///     This field contains, for each zone signed here, its name and the
-    ///     <see cref="DelegationDsKeys.Fingerprint" /> of its keys at the last reload. A reload
-    ///     that finds a different fingerprint re-signs the local parent. The name is kept because
-    ///     a deleted zone can no longer be read when its parent must be found.
+    ///     This field contains, for each zone that gives its parent DS records
+    ///     (<see cref="DelegationDsKeys.ContributesDs" />), its name and the
+    ///     <see cref="DelegationDsKeys.Fingerprint" /> of its keys as of the last reload whose
+    ///     parent re-sign succeeded. A zone that stops contributing (unsigned, deleted) loses its
+    ///     entry once its parent has been re-signed; until then the entry stays, so a failed
+    ///     parent re-sign is retried at the next reload. The name is kept because a deleted or
+    ///     renamed zone can no longer be read under its old name.
     /// </summary>
     private readonly ConcurrentDictionary<
         Guid,
@@ -119,7 +122,10 @@ public sealed class SignedZoneCache(
 
             // Record the starting point only. Each parent signs from the database, which already
             // holds every child's keys.
-            await UpdateDelegationDsStateAsync(zone.Id, zone.Name, true, cancellationToken);
+            CommitDelegationDsState(
+                zone.Id,
+                await ComputeDelegationDsStateAsync(zone, cancellationToken)
+            );
         }
 
         // Load signed secondary zones already in storage, or they would serve no RRSIGs until
@@ -175,16 +181,68 @@ public sealed class SignedZoneCache(
     ///     This method reloads one zone: it re-signs a Primary or CloudPrimary zone, or re-reads a
     ///     secondary's transferred DNSSEC records (as after a completed AXFR/IXFR). A zone that no
     ///     longer qualifies (deleted, disabled, another type, or not signed) is removed.
+    ///     <para>
+    ///         When the set of DS records the zone gives its parent changed (a KSK added, removed
+    ///         or promoted, signing switched on or off, the zone renamed or deleted), the closest
+    ///         parent hosted here is re-signed too (<see cref="LocalParentLocator" />), after
+    ///         <see cref="IZoneUpdateService.BumpSerialForDnssecResignAsync" /> advances its SOA
+    ///         serial, since its DS RRset is new content a secondary must transfer. For a rename
+    ///         the parent of the old name is re-signed as well. A failure of the parent step is
+    ///         logged and does not fail this reload; it is retried at the next reload of the zone.
+    ///     </para>
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to reload.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task ReloadZoneAsync(Guid zoneId, CancellationToken stoppingToken = default)
     {
-        Guid? parentZoneId = await ReloadSingleZoneAsync(zoneId, stoppingToken);
+        DelegationDsState pending = await ReloadSingleZoneAsync(zoneId, stoppingToken);
 
-        // One level is enough: re-signing the parent does not change the parent's own keys.
-        if (parentZoneId.HasValue)
-            await ReloadSingleZoneAsync(parentZoneId.Value, stoppingToken);
+        if (pending is null)
+            return;
+
+        _delegationDsStateByZoneId.TryGetValue(
+            zoneId,
+            out (DnsName Name, string Fingerprint) previous
+        );
+        string previousFingerprint = previous.Fingerprint ?? string.Empty;
+        DnsName currentName = pending.Name ?? previous.Name;
+        bool renamed = previous.Name is not null && currentName != previous.Name;
+        bool changed =
+            pending.Fingerprint != previousFingerprint
+            || (renamed && (pending.Fingerprint.Length > 0 || previousFingerprint.Length > 0));
+
+        if (changed && zoneCache is not null)
+        {
+            try
+            {
+                HashSet<Guid> parentIds = [];
+
+                // The old name's parent drops a DS that no longer has a zone behind it, and the
+                // new name's parent gains one.
+                foreach (DnsName name in new[] { previous.Name, currentName })
+                    if (
+                        name is not null
+                        && LocalParentLocator.Find(zoneCache, name, zoneId).ParentZoneId
+                            is Guid parentId
+                    )
+                        parentIds.Add(parentId);
+
+                foreach (Guid parentId in parentIds)
+                    await ResignForScheduledExpiryAsync(parentId, stoppingToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // The state is not stored, so the next reload of this zone tries again.
+                logger.LogWarning(
+                    exception,
+                    "Could not re-sign the parent of zone '{ZoneId}' after its DS-relevant keys changed; it is retried at the next reload of the zone.",
+                    zoneId
+                );
+                return;
+            }
+        }
+
+        CommitDelegationDsState(zoneId, pending);
     }
 
     /// <summary>
@@ -192,17 +250,19 @@ public sealed class SignedZoneCache(
     ///     <see cref="ReloadZoneAsync" /> describes.
     /// </summary>
     /// <returns>
-    ///     The identifier of the local parent to re-sign because the zone's DS-relevant keys
-    ///     changed, or <see langword="null" /> when they did not or no parent is hosted here.
+    ///     The state the zone's DS-relevant keys are in now, or <see langword="null" /> when
+    ///     reading the keys failed (logged).
     /// </returns>
-    private async Task<Guid?> ReloadSingleZoneAsync(Guid zoneId, CancellationToken stoppingToken)
+    private async Task<DelegationDsState> ReloadSingleZoneAsync(
+        Guid zoneId,
+        CancellationToken stoppingToken
+    )
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
 
         ZoneEntity zone = await zoneRepository.GetByIdAsync(zoneId, stoppingToken);
-        DnsName changedName;
 
         if (
             zone is
@@ -216,12 +276,6 @@ public sealed class SignedZoneCache(
             // The zone's type may have changed, so drop any entry in the other dictionary.
             _transferredSignedZonesByZoneId.TryRemove(zoneId, out _);
             await TrySignAndStoreAsync(zoneId, zone.Name, stoppingToken);
-            changedName = await UpdateDelegationDsStateAsync(
-                zoneId,
-                zone.Name,
-                true,
-                stoppingToken
-            );
         }
         else if (
             zone is not null
@@ -233,29 +287,15 @@ public sealed class SignedZoneCache(
             _signedZonesByZoneId.TryRemove(zoneId, out _);
             _unsignableZoneIds.TryRemove(zoneId, out _);
             await TryLoadTransferredSignedDataAsync(zoneId, zone.Name, stoppingToken);
-            changedName = await UpdateDelegationDsStateAsync(
-                zoneId,
-                zone.Name,
-                false,
-                stoppingToken
-            );
         }
         else
         {
             _signedZonesByZoneId.TryRemove(zoneId, out _);
             _unsignableZoneIds.TryRemove(zoneId, out _);
             _transferredSignedZonesByZoneId.TryRemove(zoneId, out _);
-            changedName = await UpdateDelegationDsStateAsync(
-                zoneId,
-                zone?.Name,
-                false,
-                stoppingToken
-            );
         }
 
-        return changedName is null || zoneCache is null
-            ? null
-            : LocalParentLocator.Find(zoneCache, changedName, zoneId).ParentZoneId;
+        return await ComputeDelegationDsStateAsync(zone, stoppingToken);
     }
 
     /// <summary>
@@ -357,66 +397,65 @@ public sealed class SignedZoneCache(
     }
 
     /// <summary>
-    ///     This method stores the zone's current <see cref="DelegationDsKeys.Fingerprint" /> and
-    ///     reports whether it differs from the stored one, which means the DS RRset its parent
-    ///     publishes is stale. A zone that is not signed here (unsigned, disabled, deleted, a
-    ///     secondary) has an empty fingerprint, so it loses its DS in the parent. It reads the
-    ///     keys from storage, which is one query per reload of a zone signed here. A storage
-    ///     failure is logged and counts as no change.
+    ///     This record is the DS-relevant state of one zone: whether it gives its parent DS
+    ///     records, its name (null for a zone that no longer exists) and the key fingerprint.
     /// </summary>
-    /// <param name="zoneId">The identifier of the zone.</param>
-    /// <param name="zoneName">The zone's name, or <see langword="null" /> when it no longer exists.</param>
-    /// <param name="signedHere">Whether this server signs the zone (Primary or CloudPrimary).</param>
+    private sealed record DelegationDsState(bool Contributes, DnsName Name, string Fingerprint);
+
+    /// <summary>
+    ///     This method reads the zone's current DS-relevant state: the
+    ///     <see cref="DelegationDsKeys.Fingerprint" /> of its keys when it gives its parent DS
+    ///     records (<see cref="DelegationDsKeys.ContributesDs" />, the rule the signer follows),
+    ///     otherwise an empty one. It is one key query per reload of such a zone. It does not
+    ///     store the state.
+    /// </summary>
+    /// <param name="zone">The zone, or <see langword="null" /> when it no longer exists.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The zone's name when its fingerprint changed, otherwise <see langword="null" />.</returns>
-    private async Task<DnsName> UpdateDelegationDsStateAsync(
-        Guid zoneId,
-        string zoneName,
-        bool signedHere,
+    /// <returns>The state, or <see langword="null" /> when reading the keys failed (logged).</returns>
+    private async Task<DelegationDsState> ComputeDelegationDsStateAsync(
+        ZoneEntity zone,
         CancellationToken stoppingToken
     )
     {
+        if (!DelegationDsKeys.ContributesDs(zone))
+            return new DelegationDsState(false, zone is null ? null : DnsName.Parse(zone.Name), "");
+
         try
         {
-            string fingerprint = string.Empty;
-
-            if (signedHere)
-            {
-                await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-                fingerprint = DelegationDsKeys.Fingerprint(
-                    await scope
-                        .ServiceProvider.GetRequiredService<IDnssecKeyRepository>()
-                        .ListByZoneIdAsync(zoneId, stoppingToken)
-                );
-            }
-
-            _delegationDsStateByZoneId.TryGetValue(
-                zoneId,
-                out (DnsName Name, string Fingerprint) previous
+            await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+            string fingerprint = DelegationDsKeys.Fingerprint(
+                await scope
+                    .ServiceProvider.GetRequiredService<IDnssecKeyRepository>()
+                    .ListByZoneIdAsync(zone.Id, stoppingToken)
             );
-            string previousFingerprint = previous.Fingerprint ?? string.Empty;
 
-            // Only a zone signed here keeps an entry; the name of a zone that was removed comes
-            // from the entry it leaves behind.
-            DnsName name = zoneName is null ? previous.Name : DnsName.Parse(zoneName);
-
-            if (signedHere)
-                _delegationDsStateByZoneId[zoneId] = (name, fingerprint);
-            else
-                _delegationDsStateByZoneId.TryRemove(zoneId, out _);
-
-            return name is not null && fingerprint != previousFingerprint ? name : null;
+            return new DelegationDsState(true, DnsName.Parse(zone.Name), fingerprint);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogError(
                 exception,
-                "Failed to compare the DS-relevant keys of zone '{ZoneId}'; its parent is not re-signed.",
-                zoneId
+                "Failed to read the DS-relevant keys of zone '{ZoneId}'; its parent is not re-signed.",
+                zone.Id
             );
 
             return null;
         }
+    }
+
+    /// <summary>
+    ///     This method stores a zone's state once its parent is up to date, or removes the entry
+    ///     of a zone that no longer gives its parent DS records.
+    /// </summary>
+    private void CommitDelegationDsState(Guid zoneId, DelegationDsState state)
+    {
+        if (state is null)
+            return;
+
+        if (state.Contributes)
+            _delegationDsStateByZoneId[zoneId] = (state.Name, state.Fingerprint);
+        else
+            _delegationDsStateByZoneId.TryRemove(zoneId, out _);
     }
 
     /// <summary>

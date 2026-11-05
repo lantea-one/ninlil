@@ -14,6 +14,15 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 internal static class DelegationDsKeys
 {
     /// <summary>
+    ///     This method reports whether a zone is a source of DS records for its parent: it is
+    ///     marked DNSSEC-signed. The generator does not look at the zone's type or at
+    ///     <c>IsDisabled</c>, so neither does this rule.
+    /// </summary>
+    /// <param name="zone">The zone found at the delegation name, or <see langword="null" />.</param>
+    /// <returns>Whether the zone's keys give the parent DS records.</returns>
+    internal static bool ContributesDs(ZoneEntity zone) => zone is { IsDnssecSigned: true };
+
+    /// <summary>
     ///     This method reports whether a key gets a DS record in the parent: an Active KSK with a
     ///     permitted signing algorithm. In a Double-Signature KSK rollover (RFC 6781 §4.1.2) the
     ///     parent swaps the DS at the "DS change" stage rather than publishing both, so a KSK in
