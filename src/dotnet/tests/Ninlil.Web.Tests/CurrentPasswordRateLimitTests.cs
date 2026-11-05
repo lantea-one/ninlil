@@ -71,10 +71,10 @@ public class CurrentPasswordRateLimitTests(NinlilDnsWebApplicationFactory factor
             NinlilDnsWebApplicationFactory.AdminUserName,
             NinlilDnsWebApplicationFactory.AdminPassword
         );
-        string userName = $"lockout-{Guid.NewGuid():N}";
+        string userName = $"pwlimit-{Guid.NewGuid():N}";
         HttpResponseMessage created = await admin.PostAsJsonAsync(
             "/api/users",
-            new CreateUserRequest(userName, Password, $"{userName}@localhost.local", "Lockout Test")
+            new CreateUserRequest(userName, Password, $"{userName}@localhost.local", "Limit Test")
         );
         created.EnsureSuccessStatusCode();
         return new Account(userName, await SignInAsync(host, userName, Password));
