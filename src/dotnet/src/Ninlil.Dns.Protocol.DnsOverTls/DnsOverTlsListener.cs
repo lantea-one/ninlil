@@ -104,6 +104,15 @@ public sealed class DnsOverTlsListener(
     public bool IsListening { get; private set; }
 
     /// <summary>
+    ///     This property contains the port of the first bound listen socket, or 0 while nothing is
+    ///     bound. It equals <see cref="DnsOverTlsOptions.Port" /> unless that is 0, which tests
+    ///     use to get an ephemeral port. With port 0 and several listen addresses each socket
+    ///     gets its own port, so only a single-address listener has one meaningful value. It is
+    ///     set before <see cref="IsListening" /> turns true.
+    /// </summary>
+    public int BoundPort { get; private set; }
+
+    /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
     ///     as "address (reason)", for the health check.
     /// </summary>
@@ -168,6 +177,7 @@ public sealed class DnsOverTlsListener(
         if (_listenSockets.Sockets.Count == 0)
             return;
 
+        BoundPort = ((IPEndPoint)_listenSockets.Sockets[0].LocalEndPoint).Port;
         IsListening = true;
 
         await Task.WhenAll(
@@ -520,6 +530,7 @@ public sealed class DnsOverTlsListener(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         IsListening = false;
+        BoundPort = 0;
         _listenSockets.Close();
         await base.StopAsync(cancellationToken);
 
