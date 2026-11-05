@@ -30,7 +30,7 @@ export interface AcmeCertificateInventoryEntry {
      */
     expiresAtUtc?: string | null;
     /**
-     * true when the domain has no certificate yet, or its certificate expires                 within `AcmeOptions.RenewBeforeExpiration`. It is computed by                 `AcmeCertificateRenewalService.IsDomainDue`, the check the renewal loop itself uses.
+     * true when the domain has no certificate yet, or its certificate expires                 within the configured `RenewBeforeExpiration` setting. The certificate                 renewal job uses the same check.
      */
     isDueForRenewal?: boolean;
     /**

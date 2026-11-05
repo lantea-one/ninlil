@@ -139,10 +139,9 @@ public record WebhookSubscriptionCreateResponse(
 
 /// <summary>
 ///     This class carries one webhook delivery and its attempts so far, as returned by
-///     <c>GET /api/webhooks/{id}/delivery-attempts</c> from the stored
-///     <c>WebhookDeliveryAttemptEntity</c> history. It is read-only: only
-///     <c>WebhookDeliveryService</c> and <c>WebhookDeliveryRetrySweepService</c> write deliveries,
-///     as they make attempts.
+///     <c>GET /api/webhooks/{id}/delivery-attempts</c> from the stored attempt history. It is
+///     read-only: only the webhook delivery and its retry job write deliveries, as they make
+///     attempts.
 /// </summary>
 /// <param name="Id">The delivery's identifier.</param>
 /// <param name="SubscriptionId">The identifier of the subscription the delivery is for.</param>

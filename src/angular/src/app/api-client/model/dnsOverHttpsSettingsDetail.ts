@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the DNS-over-HTTPS settings (`DnsOverHttpsOptions`) that `GET /api/transport-settings/dns-over-https` returns, limited to the fields the server uses. `EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps` maps the RFC 8484 GET and POST forms onto the shared Kestrel listener, so the shared web listener\'s port, certificate and addresses (`DnsServer:Web`) apply. `Port` and `Certificate` belong to the self-hosted `DnsOverHttpsHostedService`, which this server never starts, so they are left out rather than shown as if they had an effect; for the same reason there is no `ListenAddresses`.
+ * This record is the DNS-over-HTTPS settings that `GET /api/transport-settings/dns-over-https` returns, limited to the fields the server uses. The server serves the RFC 8484 GET and POST forms on the shared web listener, so that listener\'s port, certificate and addresses (`DnsServer:Web`) apply. `Port` and `Certificate` belong to a self-hosted DNS-over-HTTPS listener, which this server never starts, so they are left out rather than shown as if they had an effect; for the same reason there is no `ListenAddresses`.
  */
 export interface DnsOverHttpsSettingsDetail { 
     /**

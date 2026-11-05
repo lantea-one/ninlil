@@ -322,7 +322,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action creates a cluster invite and returns its code and expiry time (see &#x60;ClusterInviteService&#x60;). Requires &#x60;clusternodes:write&#x60;.
+     * This action creates a cluster invite and returns its code and expiry time. Requires &#x60;clusternodes:write&#x60;.
      * @endpoint post /api/cluster/nodes/invite
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -377,7 +377,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action uses an invite code from another node to complete the join handshake with that node, and returns the new peer (see &#x60;ClusterJoinService&#x60;). Requires &#x60;clusternodes:write&#x60;.
+     * This action uses an invite code from another node to complete the join handshake with that node, and returns the new peer. Requires &#x60;clusternodes:write&#x60;.
      * @endpoint post /api/cluster/nodes/join
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

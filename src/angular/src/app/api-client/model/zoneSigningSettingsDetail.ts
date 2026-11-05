@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the zone signing timing (`ZoneSigningOptions`) that `GET /api/zone-signing-settings` returns: what `ZoneSigningService` signs with and `DnssecResigningBackgroundService` re-signs by. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the zone signing timing that `GET /api/zone-signing-settings` returns: what zone signing uses and the background re-signing job re-signs by. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface ZoneSigningSettingsDetail { 
     /**

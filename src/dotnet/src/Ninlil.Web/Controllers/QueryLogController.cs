@@ -136,9 +136,8 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
 
     /// <summary>
     ///     This action deletes every entry in the query log and returns how many were removed. It
-    ///     is separate from the retention-based pruning of
-    ///     <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService" />. Requires
-    ///     <c>querylog:write</c>.
+    ///     is separate from the retention-based pruning that the query log cleanup job does.
+    ///     Requires <c>querylog:write</c>.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpDelete]

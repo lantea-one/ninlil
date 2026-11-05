@@ -2,9 +2,8 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the zone signing timing (<c>ZoneSigningOptions</c>) that
-///     <c>GET /api/zone-signing-settings</c> returns: what <c>ZoneSigningService</c> signs with
-///     and <c>DnssecResigningBackgroundService</c> re-signs by. A <c>PATCH</c> to the same
+///     This record is the zone signing timing that <c>GET /api/zone-signing-settings</c>
+///     returns: what zone signing uses and the background re-signing job re-signs by. A <c>PATCH</c> to the same
 ///     endpoint accepts the same fields.
 /// </summary>
 /// <param name="SignatureValidityPeriod">How long a new signature stays valid. Defaults to 30 days.</param>

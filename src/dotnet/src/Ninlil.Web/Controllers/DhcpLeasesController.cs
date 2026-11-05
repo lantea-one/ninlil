@@ -119,9 +119,8 @@ public class DhcpLeasesController(
 
     /// <summary>
     ///     This action force-releases a lease so an operator can reclaim a stuck or stale address
-    ///     without waiting for the client's RELEASE or the expiry sweep. It calls
-    ///     <see cref="IDhcpLeaseAdministrationService.ForceReleaseAsync" />, which makes the same
-    ///     change and raises the same <c>DhcpLeaseChangedEvent</c> as a client release, so the
+    ///     without waiting for the client's RELEASE or the expiry sweep. It makes the same
+    ///     change and raises the same lease-changed event as a client release, so the
     ///     address can be handed out again at once and any DNS record the lease registered is
     ///     removed. Releasing a lease that is already released succeeds and changes nothing.
     ///     Returns 404 for an unknown id. Requires <c>dhcpleases:manage</c>.

@@ -586,10 +586,9 @@ public record DhcpRaInterfaceOverrideDetail(
 
 /// <summary>
 ///     This enumeration names the four DHCP-family services that
-///     <see cref="Controllers.DhcpServiceControlController" /> reports on and controls, one per
-///     registered <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c> implementation. The
-///     <c>{kind}</c> route segment of <see cref="Controllers.DhcpServiceControlController.Start" />
-///     and <see cref="Controllers.DhcpServiceControlController.Stop" /> binds to it
+///     <c>/api/dhcp-services</c> reports on and controls, one per service. The
+///     <c>{kind}</c> route segment of <c>POST /api/dhcp-services/{kind}/start</c>
+///     and <c>POST /api/dhcp-services/{kind}/stop</c> binds to it
 ///     case-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model
 ///     binding before the action runs.
 /// </summary>
@@ -619,8 +618,7 @@ public enum DhcpServiceKindEnum
 ///     configured off can be running because it was started through this controller, and one
 ///     configured on can be stopped, either through this controller or, for
 ///     <see cref="DhcpServiceKindEnum.Tftp" /> only, because it declined to bind (for example when
-///     its root directory is missing; see <c>TftpServer</c>).
-///     <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c> explains the distinction.
+///     its root directory is missing).
 /// </summary>
 /// <param name="Kind">Which of the four DHCP-family services this status describes.</param>
 /// <param name="Enabled">

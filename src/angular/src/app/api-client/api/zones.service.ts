@@ -260,7 +260,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action makes a &#x60;ZoneTypeEnum.Primary&#x60; or &#x60;ZoneTypeEnum.CloudPrimary&#x60; zone that this server originates a member of a &#x60;ZoneTypeEnum.Catalog&#x60; zone it also originates. It writes the member\&#39;s RFC 9432 PTR record into the catalog zone and adds every healthy cluster peer\&#39;s address to both zones\&#39; &#x60;NotifyAddresses&#x60;, so the change reaches the cluster without manual configuration (see &#x60;CatalogZoneMembershipService.JoinAsync&#x60;). Requires &#x60;zones:write&#x60;.
+     * This action makes a &#x60;ZoneTypeEnum.Primary&#x60; or &#x60;ZoneTypeEnum.CloudPrimary&#x60; zone that this server originates a member of a &#x60;ZoneTypeEnum.Catalog&#x60; zone it also originates. It writes the member\&#39;s RFC 9432 PTR record into the catalog zone and adds every healthy cluster peer\&#39;s address to both zones\&#39; &#x60;NotifyAddresses&#x60;, so the change reaches the cluster without manual configuration. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/catalog-membership
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -589,7 +589,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action runs one CAA reconciliation pass for the zone now and returns how many records were added or removed, or why the pass was skipped. The same pass runs automatically on each &#x60;DnsZoneChangedEvent&#x60;; running it by hand is useful after changing the server-wide CAA default. It calls &#x60;CaaRecordReconciliationService.ReconcileZoneAsync&#x60;, like the automatic path. Returns 404 for an unknown id. Requires &#x60;zones:write&#x60;.
+     * This action runs one CAA reconciliation pass for the zone now and returns how many records were added or removed, or why the pass was skipped. The same pass runs automatically on each zone change; running it by hand is useful after changing the server-wide CAA default. It uses the same logic as the automatic path. Returns 404 for an unknown id. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/reconcile-caa
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -649,7 +649,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action runs one PTR (reverse-zone) sync pass for the zone now, through &#x60;PtrSyncService.ReconcileZoneAsync&#x60;, the same logic the automatic &#x60;DnsZoneChangedEvent&#x60; path uses, including RFC 2317 classless-delegation records when the zone\&#39;s &#x60;PtrIpv4PrefixLength&#x60; (or the server-wide default) calls for them. Returns the records added and removed and the reverse zones touched, or why the pass was skipped, and 404 for an unknown id. Requires &#x60;zones:write&#x60;.
+     * This action runs one PTR (reverse-zone) sync pass for the zone now, with the same logic the automatic path runs on each zone change, including RFC 2317 classless-delegation records when the zone\&#39;s &#x60;PtrIpv4PrefixLength&#x60; (or the server-wide default) calls for them. Returns the records added and removed and the reverse zones touched, or why the pass was skipped, and 404 for an unknown id. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/reconcile-ptr
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

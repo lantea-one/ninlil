@@ -259,7 +259,7 @@
         "tags": [
           "AcmeSettings"
         ],
-        "summary": "This action issues or renews one configured domain's certificate now, outside the\nrenewal service's schedule, through\n`AcmeCertificateRenewalService.RenewOneDomainAsync`, the same method the\nbackground loop uses. A failed attempt (a certificate authority outage, a challenge that\ndid not validate) is not an HTTP error: it is logged and recorded, and the returned\nentry shows it. Returns 404 when the domain is not configured. Requires\n`acmesettings:manage`.",
+        "summary": "This action issues or renews one configured domain's certificate now, outside the\ncertificate renewal job's schedule, with the same logic the job uses. A failed attempt (a certificate authority outage, a challenge that\ndid not validate) is not an HTTP error: it is logged and recorded, and the returned\nentry shows it. Returns 404 when the domain is not configured. Requires\n`acmesettings:manage`.",
         "operationId": "apiAcmeSettingsCertificatesDomainIssuePost",
         "parameters": [
           {
@@ -1591,7 +1591,7 @@
         "tags": [
           "ClientAddresses"
         ],
-        "summary": "This action adds an address to a device. Returns 400 for a missing or malformed identifier,\n404 for an unknown client, and 409 when the identifier and protocol pair already belongs to any\ndevice, this one included (the pair the address table's unique index covers, checked\nfirst through `IDnsClientAddressRepository.GetByIdentifierAsync`). The\nidentifier is accepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` or `aabbccddeeff` (up to 85 bytes) and is stored and\nreturned as `aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling.\nRequires `clients:write`.",
+        "summary": "This action adds an address to a device. Returns 400 for a missing or malformed identifier,\n404 for an unknown client, and 409 when the identifier and protocol pair already belongs to any\ndevice, this one included (the pair the address table's unique index covers, which the\naction checks first). The\nidentifier is accepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` or `aabbccddeeff` (up to 85 bytes) and is stored and\nreturned as `aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling.\nRequires `clients:write`.",
         "operationId": "apiClientsClientIdAddressesPost",
         "parameters": [
           {
@@ -3500,7 +3500,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nor malformed identifier, an unknown client group or an unknown icon name, and 409 when\na device already has the same `ClientCreateRequest.ClientIdentifier` and\n`ClientCreateRequest.ProtocolVersion` (the pair the address table's unique\nindex covers, checked first through\n`IDnsClientRepository.GetByClientIdentifierAsync`). The identifier is\naccepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff`\nor `aabbccddeeff` (up to 85 bytes) and is stored and returned as\n`aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling. Requires\n`clients:write`.",
+        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nor malformed identifier, an unknown client group or an unknown icon name, and 409 when\na device already has the same `ClientCreateRequest.ClientIdentifier` and\n`ClientCreateRequest.ProtocolVersion` (the pair the address table's unique\nindex covers, which the action checks first). The identifier is\naccepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff`\nor `aabbccddeeff` (up to 85 bytes) and is stored and returned as\n`aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling. Requires\n`clients:write`.",
         "operationId": "apiClientsPost",
         "requestBody": {
           "content": {
@@ -5051,7 +5051,7 @@
         "tags": [
           "Cluster"
         ],
-        "summary": "This action creates a cluster invite and returns its code and expiry time (see\n`ClusterInviteService`). Requires `clusternodes:write`.",
+        "summary": "This action creates a cluster invite and returns its code and expiry time. Requires\n`clusternodes:write`.",
         "operationId": "apiClusterNodesInvitePost",
         "responses": {
           "200": {
@@ -5076,7 +5076,7 @@
         "tags": [
           "Cluster"
         ],
-        "summary": "This action uses an invite code from another node to complete the join handshake with\nthat node, and returns the new peer (see `ClusterJoinService`). Requires\n`clusternodes:write`.",
+        "summary": "This action uses an invite code from another node to complete the join handshake with\nthat node, and returns the new peer. Requires `clusternodes:write`.",
         "operationId": "apiClusterNodesJoinPost",
         "requestBody": {
           "content": {
@@ -5178,7 +5178,7 @@
         "tags": [
           "ClusterChannel"
         ],
-        "summary": "This action answers a peer's heartbeat with 200, after checking that the body names the\npeer the key belongs to and storing a newly announced certificate thumbprint (see\n`ClusterHeartbeatReceiver`). Each node's `ClusterHeartbeatBackgroundService`\nsets a peer's `ClusterNodeEntity.Status` from whether its own probe of that\npeer succeeded, so each node trusts its own view of a peer's health rather than\nanything the peer reports. An invite key cannot reach this action.",
+        "summary": "This action answers a peer's heartbeat with 200, after checking that the body names the\npeer the key belongs to and storing a newly announced certificate thumbprint. Each\nnode's cluster heartbeat job sets a peer's status from whether its own probe of that\npeer succeeded, so each node trusts its own view of a peer's health rather than\nanything the peer reports. An invite key cannot reach this action.",
         "operationId": "apiClusterChannelHeartbeatPost",
         "requestBody": {
           "content": {
@@ -5201,7 +5201,7 @@
         "tags": [
           "ClusterChannel"
         ],
-        "summary": "This action receives the joining node's callback, the second half of the join handshake\n(see `ClusterJoinService.HandleJoinCompleteAsync`). The TSIG key name comes\nfrom the identity `ClusterTsigAuthenticationHandler` authenticated, never\nfrom the request body. It is the one action an unused, unexpired invite key may sign;\nthe route must stay `ClusterTsigAuthenticationDefaults.JoinCompletePath`.",
+        "summary": "This action receives the joining node's callback, the second half of the join handshake\n(the join itself is `POST /api/cluster/nodes/join`). The TSIG key name comes from the\nidentity the cluster channel's TSIG authentication established, never from the request\nbody. It is the one action an unused, unexpired invite key may sign.",
         "operationId": "apiClusterChannelJoinCompletePost",
         "requestBody": {
           "content": {
@@ -5600,7 +5600,7 @@
         "tags": [
           "DhcpLeases"
         ],
-        "summary": "This action force-releases a lease so an operator can reclaim a stuck or stale address\nwithout waiting for the client's RELEASE or the expiry sweep. It calls\n`IDhcpLeaseAdministrationService.ForceReleaseAsync`, which makes the same\nchange and raises the same `DhcpLeaseChangedEvent` as a client release, so the\naddress can be handed out again at once and any DNS record the lease registered is\nremoved. Releasing a lease that is already released succeeds and changes nothing.\nReturns 404 for an unknown id. Requires `dhcpleases:manage`.",
+        "summary": "This action force-releases a lease so an operator can reclaim a stuck or stale address\nwithout waiting for the client's RELEASE or the expiry sweep. It makes the same\nchange and raises the same lease-changed event as a client release, so the\naddress can be handed out again at once and any DNS record the lease registered is\nremoved. Releasing a lease that is already released succeeds and changes nothing.\nReturns 404 for an unknown id. Requires `dhcpleases:manage`.",
         "operationId": "apiDhcpLeasesIdReleasePost",
         "parameters": [
           {
@@ -6540,7 +6540,7 @@
         "tags": [
           "DhcpScopes"
         ],
-        "summary": "This action reports a scope's current utilization: the total addresses or prefixes in\nits range, how many are leased or offered, how many its reservations account for, and\nhow many remain available. It is computed from the scope's settings and its recorded\nleases and reservations on every call (see `IDhcpScopeStatisticsService`).\nThe two slot counts are strings because an IPv6 range can exceed a 64-bit integer.\nReturns 404 for an unknown id. Requires `dhcpscopes:read`.",
+        "summary": "This action reports a scope's current utilization: the total addresses or prefixes in\nits range, how many are leased or offered, how many its reservations account for, and\nhow many remain available. It is computed from the scope's settings and its recorded\nleases and reservations on every call.\nThe two slot counts are strings because an IPv6 range can exceed a 64-bit integer.\nReturns 404 for an unknown id. Requires `dhcpscopes:read`.",
         "operationId": "apiDhcpScopesIdStatisticsGet",
         "parameters": [
           {
@@ -6629,7 +6629,7 @@
         "tags": [
           "DhcpServiceControl"
         ],
-        "summary": "This action starts one DHCP-family service now, binding its socket, whatever its\n`Enable` flag says. Starting a running service changes nothing (see\n`IDhcpProtocolService.StartAsync`). Returns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
+        "summary": "This action starts one DHCP-family service now, binding its socket, whatever its\n`Enable` flag says. Starting a running service changes nothing.\nReturns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
         "operationId": "apiDhcpServicesKindStartPost",
         "parameters": [
           {
@@ -6666,7 +6666,7 @@
         "tags": [
           "DhcpServiceControl"
         ],
-        "summary": "This action stops one DHCP-family service now, releasing its socket and leaving every\nother service running. Stopping a stopped service changes nothing (see\n`IDhcpProtocolService.StopAsync`). Returns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
+        "summary": "This action stops one DHCP-family service now, releasing its socket and leaving every\nother service running. Stopping a stopped service changes nothing.\nReturns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
         "operationId": "apiDhcpServicesKindStopPost",
         "parameters": [
           {
@@ -10655,7 +10655,7 @@
         "tags": [
           "DnssecKeys"
         ],
-        "summary": "This action starts an automated RFC 6781 rollover of an active key and returns the new\nkey. The scheme (Pre-Publish or Double-Signature) follows from the key's role; see\n`IDnssecKeyManagementService.StartRolloverAsync` for the steps. Returns\n400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a\nmultiple of 64 between 2048 and 4096 bits. Requires `zones:write`.",
+        "summary": "This action starts an automated RFC 6781 rollover of an active key and returns the new\nkey. The scheme (Pre-Publish or Double-Signature) follows from the key's role. The\nbackground rollover job carries out the later steps. Returns 400, 404 or 409; 400\nincludes an RSA key size that is not 0 or a\nmultiple of 64 between 2048 and 4096 bits. Requires `zones:write`.",
         "operationId": "apiZonesZoneIdDnssecKeysIdRollPost",
         "parameters": [
           {
@@ -10755,7 +10755,7 @@
         "tags": [
           "DnssecKeys"
         ],
-        "summary": "This action records that the operator has published a Key-Signing Key rollover's new DS\nrecord at an externally hosted parent zone, so the rollover can continue (see\n`IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync`). Returns 400\nwhen the key is not a KSK in the middle of a rollover and 404 when it does not exist in\nthis zone. Requires `zones:write`.",
+        "summary": "This action records that the operator has published a Key-Signing Key rollover's new DS\nrecord at an externally hosted parent zone, so the rollover can continue.\nReturns 400\nwhen the key is not a KSK in the middle of a rollover and 404 when it does not exist in\nthis zone. Requires `zones:write`.",
         "operationId": "apiZonesZoneIdDnssecKeysIdConfirmParentDsUpdatedPost",
         "parameters": [
           {
@@ -14154,7 +14154,7 @@
         "tags": [
           "QueryLog"
         ],
-        "summary": "This action deletes every entry in the query log and returns how many were removed. It\nis separate from the retention-based pruning of\n`DnsQueryLogCleanupService`. Requires\n`querylog:write`.",
+        "summary": "This action deletes every entry in the query log and returns how many were removed. It\nis separate from the retention-based pruning that the query log cleanup job does.\nRequires `querylog:write`.",
         "operationId": "apiQueryLogDelete",
         "responses": {
           "200": {
@@ -14647,7 +14647,7 @@
         "tags": [
           "Records"
         ],
-        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone through\n`IZoneUpdateService.BootstrapZoneAsync`, and later records go through\n`IZoneUpdateService.ApplyChangesAsync`. Returns 400 when the first record\nis not an SOA, is an SOA that is not at the zone's own name, the name is not a valid DNS\nname or is neither the zone's name nor below it, or the data does not fit the record\ntype (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and\n409 for a second SOA or a zone that has records but no SOA at its apex. The\nowner name \"@\" means the zone's own name (RFC 1035 §5.1) and is stored as that name.\nRequires `zones:write`.",
+        "summary": "This action adds a record to the zone. A zone's first record must be its SOA, since\nwithout it there is no serial to advance; that first record bootstraps the zone, and later\nrecords go through the same change path as DNS dynamic updates. Returns 400 when the first record\nis not an SOA, is an SOA that is not at the zone's own name, the name is not a valid DNS\nname or is neither the zone's name nor below it, or the data does not fit the record\ntype (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and\n409 for a second SOA or a zone that has records but no SOA at its apex. The\nowner name \"@\" means the zone's own name (RFC 1035 §5.1) and is stored as that name.\nRequires `zones:write`.",
         "operationId": "apiZonesZoneIdRecordsPost",
         "parameters": [
           {
@@ -19057,7 +19057,7 @@
         "tags": [
           "SelfUpdate"
         ],
-        "summary": "This action checks the configured release feed now, waits for the result and returns\nit. It runs the same check as the periodic loop in\n`SelfUpdateCheckService`. Requires `selfupdate:manage`.",
+        "summary": "This action checks the configured release feed now, waits for the result and returns\nit. It runs the same check as the periodic self-update check job. Requires `selfupdate:manage`.",
         "operationId": "apiSelfUpdateCheckPost",
         "responses": {
           "200": {
@@ -22337,7 +22337,7 @@
         "tags": [
           "Webhooks"
         ],
-        "summary": "This action lists one subscription's delivery attempts, newest first, one page at a\ntime: every delivery `WebhookDeliveryService` and\n`WebhookDeliveryRetrySweepService` have recorded for it, from the first try to its\nfinal outcome or pending retry. It is read only; the API has no way to create, edit or\nretry an attempt. Returns 404 for an unknown subscription. Requires\n`webhooks:read`.",
+        "summary": "This action lists one subscription's delivery attempts, newest first, one page at a\ntime: every delivery that the webhook delivery and its retry job have recorded for it,\nfrom the first try to its final outcome or pending retry. It is read only; the API has no way to create, edit or\nretry an attempt. Returns 404 for an unknown subscription. Requires\n`webhooks:read`.",
         "operationId": "apiWebhooksIdDeliveryAttemptsGet",
         "parameters": [
           {
@@ -23301,7 +23301,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action makes a `ZoneTypeEnum.Primary` or\n`ZoneTypeEnum.CloudPrimary` zone that this server originates a member of a\n`ZoneTypeEnum.Catalog` zone it also originates. It writes the member's RFC\n9432 PTR record into the catalog zone and adds every healthy cluster peer's address to\nboth zones' `NotifyAddresses`, so the change reaches the cluster without manual\nconfiguration (see `CatalogZoneMembershipService.JoinAsync`). Requires\n`zones:write`.",
+        "summary": "This action makes a `ZoneTypeEnum.Primary` or\n`ZoneTypeEnum.CloudPrimary` zone that this server originates a member of a\n`ZoneTypeEnum.Catalog` zone it also originates. It writes the member's RFC\n9432 PTR record into the catalog zone and adds every healthy cluster peer's address to\nboth zones' `NotifyAddresses`, so the change reaches the cluster without manual\nconfiguration. Requires `zones:write`.",
         "operationId": "apiZonesIdCatalogMembershipPost",
         "parameters": [
           {
@@ -23361,7 +23361,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action runs one CAA reconciliation pass for the zone now and returns how many\nrecords were added or removed, or why the pass was skipped. The same pass runs\nautomatically on each `DnsZoneChangedEvent`; running it by hand is useful after\nchanging the server-wide CAA default. It calls\n`CaaRecordReconciliationService.ReconcileZoneAsync`,\nlike the automatic path. Returns 404 for an unknown id. Requires `zones:write`.",
+        "summary": "This action runs one CAA reconciliation pass for the zone now and returns how many\nrecords were added or removed, or why the pass was skipped. The same pass runs\nautomatically on each zone change; running it by hand is useful after changing the\nserver-wide CAA default. It uses the same logic as the automatic path. Returns 404 for an unknown id. Requires `zones:write`.",
         "operationId": "apiZonesIdReconcileCaaPost",
         "parameters": [
           {
@@ -23399,7 +23399,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action runs one PTR (reverse-zone) sync pass for the zone now, through\n`PtrSyncService.ReconcileZoneAsync`, the same logic the automatic\n`DnsZoneChangedEvent` path uses, including RFC 2317 classless-delegation records\nwhen the zone's `PtrIpv4PrefixLength` (or the server-wide default) calls for them.\nReturns the records added and removed and the reverse zones touched, or why the pass was\nskipped, and 404 for an unknown id. Requires `zones:write`.",
+        "summary": "This action runs one PTR (reverse-zone) sync pass for the zone now, with the same\nlogic the automatic path runs on each zone change, including RFC 2317 classless-delegation records\nwhen the zone's `PtrIpv4PrefixLength` (or the server-wide default) calls for them.\nReturns the records added and removed and the reverse zones touched, or why the pass was\nskipped, and 404 for an unknown id. Requires `zones:write`.",
         "operationId": "apiZonesIdReconcilePtrPost",
         "parameters": [
           {
@@ -23975,7 +23975,7 @@
           },
           "isDueForRenewal": {
             "type": "boolean",
-            "description": "true when the domain has no certificate yet, or its certificate expires\n                within `AcmeOptions.RenewBeforeExpiration`. It is computed by\n                `AcmeCertificateRenewalService.IsDomainDue`, the check the renewal loop itself uses."
+            "description": "true when the domain has no certificate yet, or its certificate expires\n                within the configured `RenewBeforeExpiration` setting. The certificate\n                renewal job uses the same check."
           },
           "lastFailureAtUtc": {
             "type": "string",
@@ -25829,7 +25829,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries this node's cluster settings (`GET /api/cluster-settings`), from\n`ClusterOptions`. `ClusterSettingsDetail.NodeId` is read-only and shown for diagnostics;\n`ClusterSettingsController.Patch` cannot change it. `ClusterSettingsDetail.AddressReconcileInterval`\ncomes from `CatalogSyncOptions` instead. It shares this page because it only exists to\nkeep the NOTIFY and primary address lists of catalog-managed zones in step with cluster\nmembership (see `CatalogClusterAddressSyncService`)."
+        "description": "This class carries this node's cluster settings (`GET /api/cluster-settings`).\n`ClusterSettingsDetail.NodeId` is read-only and shown for diagnostics; a `PATCH` cannot change\nit. `ClusterSettingsDetail.AddressReconcileInterval` belongs to the catalog zone settings instead.\nIt shares this page because it only exists to keep the NOTIFY and primary address lists\nof catalog-managed zones in step with cluster membership."
       },
       "ClusterUsernameCheckRequest": {
         "type": "object",
@@ -26892,7 +26892,7 @@
           "Tftp"
         ],
         "type": "string",
-        "description": "This enumeration names the four DHCP-family services that\n`DhcpServiceControlController` reports on and controls, one per\nregistered `IDhcpProtocolService` implementation. The\n`{kind}` route segment of `POST /api/dhcp-services/{kind}/start`\nand `POST /api/dhcp-services/{kind}/stop` binds to it\ncase-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model\nbinding before the action runs."
+        "description": "This enumeration names the four DHCP-family services that\n`/api/dhcp-services` reports on and controls, one per service. The\n`{kind}` route segment of `POST /api/dhcp-services/{kind}/start`\nand `POST /api/dhcp-services/{kind}/stop` binds to it\ncase-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model\nbinding before the action runs."
       },
       "DhcpServiceStatus": {
         "type": "object",
@@ -26910,7 +26910,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is one DHCP-family service's state, as returned by\n`/api/dhcp-services`: its configured `DhcpServiceStatus.Enabled` flag (whether it starts at\nboot) and whether it `DhcpServiceStatus.IsRunning`. The two can differ either way. A service\nconfigured off can be running because it was started through this controller, and one\nconfigured on can be stopped, either through this controller or, for\n`DhcpServiceKindEnum.Tftp` only, because it declined to bind (for example when\nits root directory is missing; see `TftpServer`).\n`IDhcpProtocolService` explains the distinction."
+        "description": "This record is one DHCP-family service's state, as returned by\n`/api/dhcp-services`: its configured `DhcpServiceStatus.Enabled` flag (whether it starts at\nboot) and whether it `DhcpServiceStatus.IsRunning`. The two can differ either way. A service\nconfigured off can be running because it was started through this controller, and one\nconfigured on can be stopped, either through this controller or, for\n`DhcpServiceKindEnum.Tftp` only, because it declined to bind (for example when\nits root directory is missing)."
       },
       "DhcpTagRuleDetail": {
         "type": "object",
@@ -27662,7 +27662,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example\n`[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). `DnsCryptCertificateRotationService`\nreads it when it starts, so a change applies once that loop restarts, for example by\nturning the transport off and on.",
+            "description": "The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example\n`[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). The DNSCrypt certificate\nrotation job reads it when it starts, so a change applies once that job restarts, for\nexample by turning the transport off and on.",
             "nullable": true
           },
           "certificateRotationInterval": {
@@ -27747,7 +27747,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the DNS-over-HTTPS settings (`DnsOverHttpsOptions`) that\n`GET /api/transport-settings/dns-over-https` returns, limited to the fields the server\nuses. `EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps`\nmaps the RFC 8484 GET and POST forms onto the shared Kestrel listener, so the shared web\nlistener's port, certificate and addresses (`DnsServer:Web`) apply. `Port` and\n`Certificate` belong to the self-hosted `DnsOverHttpsHostedService`, which this\nserver never starts, so they are left out rather than shown as if they had an effect; for\nthe same reason there is no `ListenAddresses`."
+        "description": "This record is the DNS-over-HTTPS settings that\n`GET /api/transport-settings/dns-over-https` returns, limited to the fields the server\nuses. The server serves the RFC 8484 GET and POST forms on the shared web listener, so\nthat listener's port, certificate and addresses (`DnsServer:Web`) apply. `Port`\nand `Certificate` belong to a self-hosted DNS-over-HTTPS listener, which this\nserver never starts, so they are left out rather than shown as if they had an effect; for\nthe same reason there is no `ListenAddresses`."
       },
       "DnsOverQuicSettingsDetail": {
         "type": "object",
@@ -28421,7 +28421,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the key rollover timing (`DnssecKeyRolloverOptions`)\nthat `GET /api/dnssec-key-rollover-settings` returns. `DnssecKeyRolloverBackgroundService`\nuses it to step the keys of every locally signed zone through the RFC 6781 §4.1.1.1 and\n§4.1.2 rollovers. A `PATCH` to the same endpoint accepts the same fields."
+        "description": "This record is the key rollover timing that `GET /api/dnssec-key-rollover-settings`\nreturns. The background key rollover job uses it to step the keys of every locally signed zone through the RFC 6781 §4.1.1.1 and\n§4.1.2 rollovers. A `PATCH` to the same endpoint accepts the same fields."
       },
       "DnssecKeyWriteRequest": {
         "type": "object",
@@ -28452,7 +28452,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the DNSSEC algorithm policy\n(`DnssecAlgorithmPolicyOptions`) that `GET /api/dnssec-policy-settings` returns:\nwhich algorithms `IDnssecKeyManagementService.GenerateKeyAsync` may generate a new key\nfor. A `PATCH` to the same endpoint accepts the same field."
+        "description": "This record is the DNSSEC algorithm policy that `GET /api/dnssec-policy-settings`\nreturns: which algorithms the server may generate a new key for. A `PATCH` to the same endpoint accepts the same field."
       },
       "EventBrokerSettingsDetail": {
         "type": "object",
@@ -31272,7 +31272,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries one webhook delivery and its attempts so far, as returned by\n`GET /api/webhooks/{id}/delivery-attempts` from the stored\n`WebhookDeliveryAttemptEntity` history. It is read-only: only\n`WebhookDeliveryService` and `WebhookDeliveryRetrySweepService` write deliveries,\nas they make attempts."
+        "description": "This class carries one webhook delivery and its attempts so far, as returned by\n`GET /api/webhooks/{id}/delivery-attempts` from the stored attempt history. It is\nread-only: only the webhook delivery and its retry job write deliveries, as they make\nattempts."
       },
       "WebhookDeliveryAttemptDetailPagedResult": {
         "type": "object",
@@ -31869,7 +31869,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the zone signing timing (`ZoneSigningOptions`) that\n`GET /api/zone-signing-settings` returns: what `ZoneSigningService` signs with\nand `DnssecResigningBackgroundService` re-signs by. A `PATCH` to the same\nendpoint accepts the same fields."
+        "description": "This record is the zone signing timing that `GET /api/zone-signing-settings`\nreturns: what zone signing uses and the background re-signing job re-signs by. A `PATCH` to the same\nendpoint accepts the same fields."
       },
       "ZoneTransferClientSettingsDetail": {
         "type": "object",

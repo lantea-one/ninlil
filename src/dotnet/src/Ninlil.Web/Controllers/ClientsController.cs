@@ -233,8 +233,7 @@ public class ClientsController(
     ///     or malformed identifier, an unknown client group or an unknown icon name, and 409 when
     ///     a device already has the same <see cref="ClientCreateRequest.ClientIdentifier" /> and
     ///     <see cref="ClientCreateRequest.ProtocolVersion" /> (the pair the address table's unique
-    ///     index covers, checked first through
-    ///     <see cref="IDnsClientRepository.GetByClientIdentifierAsync" />). The identifier is
+    ///     index covers, which the action checks first). The identifier is
     ///     accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c>
     ///     or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and returned as
     ///     <c>aa:bb:cc:dd:ee:ff</c>, so the duplicate check ignores the spelling. Requires

@@ -57,7 +57,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelConfigSyncPost(requestParameters: ApiClusterChannelConfigSyncPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action answers a peer\&#39;s heartbeat with 200, after checking that the body names the peer the key belongs to and storing a newly announced certificate thumbprint (see &#x60;ClusterHeartbeatReceiver&#x60;). Each node\&#39;s &#x60;ClusterHeartbeatBackgroundService&#x60; sets a peer\&#39;s &#x60;ClusterNodeEntity.Status&#x60; from whether its own probe of that peer succeeded, so each node trusts its own view of a peer\&#39;s health rather than anything the peer reports. An invite key cannot reach this action.
+     * This action answers a peer\&#39;s heartbeat with 200, after checking that the body names the peer the key belongs to and storing a newly announced certificate thumbprint. Each node\&#39;s cluster heartbeat job sets a peer\&#39;s status from whether its own probe of that peer succeeded, so each node trusts its own view of a peer\&#39;s health rather than anything the peer reports. An invite key cannot reach this action.
      * 
      * @endpoint post /api/cluster/channel/heartbeat
 * @param requestParameters
@@ -65,7 +65,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelHeartbeatPost(requestParameters: ApiClusterChannelHeartbeatPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action receives the joining node\&#39;s callback, the second half of the join handshake (see &#x60;ClusterJoinService.HandleJoinCompleteAsync&#x60;). The TSIG key name comes from the identity &#x60;ClusterTsigAuthenticationHandler&#x60; authenticated, never from the request body. It is the one action an unused, unexpired invite key may sign; the route must stay &#x60;ClusterTsigAuthenticationDefaults.JoinCompletePath&#x60;.
+     * This action receives the joining node\&#39;s callback, the second half of the join handshake (the join itself is &#x60;POST /api/cluster/nodes/join&#x60;). The TSIG key name comes from the identity the cluster channel\&#39;s TSIG authentication established, never from the request body. It is the one action an unused, unexpired invite key may sign.
      * 
      * @endpoint post /api/cluster/channel/join-complete
 * @param requestParameters

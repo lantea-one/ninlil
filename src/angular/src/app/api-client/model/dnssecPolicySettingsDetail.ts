@@ -11,7 +11,7 @@ import { DnssecAlgorithmEnum } from './dnssecAlgorithmEnum';
 
 
 /**
- * This record is the REST shape of the DNSSEC algorithm policy (`DnssecAlgorithmPolicyOptions`) that `GET /api/dnssec-policy-settings` returns: which algorithms `IDnssecKeyManagementService.GenerateKeyAsync` may generate a new key for. A `PATCH` to the same endpoint accepts the same field.
+ * This record is the DNSSEC algorithm policy that `GET /api/dnssec-policy-settings` returns: which algorithms the server may generate a new key for. A `PATCH` to the same endpoint accepts the same field.
  */
 export interface DnssecPolicySettingsDetail { 
     /**

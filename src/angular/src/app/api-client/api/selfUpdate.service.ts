@@ -39,7 +39,7 @@ export class SelfUpdateService extends BaseService implements SelfUpdateServiceI
     }
 
     /**
-     * This action checks the configured release feed now, waits for the result and returns it. It runs the same check as the periodic loop in &#x60;SelfUpdateCheckService&#x60;. Requires &#x60;selfupdate:manage&#x60;.
+     * This action checks the configured release feed now, waits for the result and returns it. It runs the same check as the periodic self-update check job. Requires &#x60;selfupdate:manage&#x60;.
      * @endpoint post /api/self-update/check
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

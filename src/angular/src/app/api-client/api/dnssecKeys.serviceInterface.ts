@@ -79,7 +79,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, extraHttpRequestParams?: any): Observable<DnssecKeyDetailPagedResult>;
 
     /**
-     * This action records that the operator has published a Key-Signing Key rollover\&#39;s new DS record at an externally hosted parent zone, so the rollover can continue (see &#x60;IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync&#x60;). Returns 400 when the key is not a KSK in the middle of a rollover and 404 when it does not exist in this zone. Requires &#x60;zones:write&#x60;.
+     * This action records that the operator has published a Key-Signing Key rollover\&#39;s new DS record at an externally hosted parent zone, so the rollover can continue. Returns 400 when the key is not a KSK in the middle of a rollover and 404 when it does not exist in this zone. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones/{zoneId}/dnssec-keys/{id}/confirm-parent-ds-updated
 * @param requestParameters
@@ -119,7 +119,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdPut(requestParameters: ApiZonesZoneIdDnssecKeysIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action starts an automated RFC 6781 rollover of an active key and returns the new key. The scheme (Pre-Publish or Double-Signature) follows from the key\&#39;s role; see &#x60;IDnssecKeyManagementService.StartRolloverAsync&#x60; for the steps. Returns 400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits. Requires &#x60;zones:write&#x60;.
+     * This action starts an automated RFC 6781 rollover of an active key and returns the new key. The scheme (Pre-Publish or Double-Signature) follows from the key\&#39;s role. The background rollover job carries out the later steps. Returns 400, 404 or 409; 400 includes an RSA key size that is not 0 or a multiple of 64 between 2048 and 4096 bits. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones/{zoneId}/dnssec-keys/{id}/roll
 * @param requestParameters

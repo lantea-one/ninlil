@@ -130,7 +130,7 @@ export interface ClientsServiceInterface {
     apiClientsIdResumePost(requestParameters: ApiClientsIdResumePostRequestParams, extraHttpRequestParams?: any): Observable<ClientDetail>;
 
     /**
-     * This action registers a client device with its first address. Returns 400 for a missing or malformed identifier, an unknown client group or an unknown icon name, and 409 when a device already has the same &#x60;ClientCreateRequest.ClientIdentifier&#x60; and &#x60;ClientCreateRequest.ProtocolVersion&#x60; (the pair the address table\&#39;s unique index covers, checked first through &#x60;IDnsClientRepository.GetByClientIdentifierAsync&#x60;). The identifier is accepted as &#x60;aa:bb:cc:dd:ee:ff&#x60;, &#x60;aa-bb-cc-dd-ee-ff&#x60;, &#x60;aabb.ccdd.eeff&#x60; or &#x60;aabbccddeeff&#x60; (up to 85 bytes) and is stored and returned as &#x60;aa:bb:cc:dd:ee:ff&#x60;, so the duplicate check ignores the spelling. Requires &#x60;clients:write&#x60;.
+     * This action registers a client device with its first address. Returns 400 for a missing or malformed identifier, an unknown client group or an unknown icon name, and 409 when a device already has the same &#x60;ClientCreateRequest.ClientIdentifier&#x60; and &#x60;ClientCreateRequest.ProtocolVersion&#x60; (the pair the address table\&#39;s unique index covers, which the action checks first). The identifier is accepted as &#x60;aa:bb:cc:dd:ee:ff&#x60;, &#x60;aa-bb-cc-dd-ee-ff&#x60;, &#x60;aabb.ccdd.eeff&#x60; or &#x60;aabbccddeeff&#x60; (up to 85 bytes) and is stored and returned as &#x60;aa:bb:cc:dd:ee:ff&#x60;, so the duplicate check ignores the spelling. Requires &#x60;clients:write&#x60;.
      * 
      * @endpoint post /api/clients
 * @param requestParameters
