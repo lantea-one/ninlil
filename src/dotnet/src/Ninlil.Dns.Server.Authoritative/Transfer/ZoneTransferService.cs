@@ -736,7 +736,18 @@ public class ZoneTransferService(
         try
         {
             wire = RecordEntityCodec.ToWireRecord(soaRecord, zone.ApexName);
-            return wire is not null;
+
+            if (wire is null)
+            {
+                logger?.LogWarning(
+                    "Zone {Zone}: the SOA record ({RecordId}) cannot be written as RDATA (no RDATA codec for the type); the transfer is refused with SERVFAIL.",
+                    zone.Zone.Name,
+                    soaRecord.Id
+                );
+                return false;
+            }
+
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -762,7 +773,10 @@ public class ZoneTransferService(
                 .Where(record => !record.ExcludeFromSync)
                 .Select(record =>
                     RecordEntityCodec.ToWireRecord(record, DnsName.Parse(record.Name))
-                ),
+                )
+                // A snapshot can hold a type with no codec; the cached zone leaves it out, so the
+                // increment does too.
+                .Where(record => record is not null),
         ];
 
     /// <summary>

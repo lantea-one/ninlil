@@ -23,6 +23,12 @@ public sealed class ZoneTransferServiceUnwritableRecordTests
     private const string BadName = "bad." + TsigTransferHost.ZoneName;
 
     /// <summary>
+    ///     This field is a record type with no RDATA codec (AXFR is a query type, never stored
+    ///     data), standing for a row that arrived by a restore, a cluster sync or a hand edit.
+    /// </summary>
+    private const DnsResourceRecordTypeEnum NoCodecType = DnsResourceRecordTypeEnum.Axfr;
+
+    /// <summary>
     ///     This class is a logger provider that keeps the Warning messages written under the
     ///     categories of the zone cache and the transfer service.
     /// </summary>
@@ -200,6 +206,62 @@ public sealed class ZoneTransferServiceUnwritableRecordTests
         Assert.Equal(7, records.Count);
         Assert.DoesNotContain(records, record => record.Name == DnsName.Parse(BadName));
         Assert.Single(warnings.Warnings);
+    }
+
+    [Fact]
+    public async Task Query_ForAZoneWithARecordOfATypeWithNoCodec_IsAnsweredWithOneWarning()
+    {
+        WarningCollector warnings = new();
+        await using TsigTransferHost host = await TsigTransferHost.CreateAsync(
+            loggerProvider: warnings
+        );
+        await host.AddRecordAsync(BadName, NoCodecType, "{}");
+
+        AuthoritativeQueryResolver resolver = host
+            .Services.GetServices<IDnsQueryResolver>()
+            .OfType<AuthoritativeQueryResolver>()
+            .Single();
+
+        DnsQueryResolution good = await resolver.TryResolveAsync(
+            Query($"host1.{TsigTransferHost.ZoneName}")
+        );
+        DnsQueryResolution bad = await resolver.TryResolveAsync(Query(BadName));
+
+        Assert.Equal(DnsResponseCodeEnum.NoError, good.Response.ResponseCode);
+        Assert.Single(good.Response.Answers);
+        Assert.Equal(DnsResponseCodeEnum.NxDomain, bad.Response.ResponseCode);
+        Assert.Single(warnings.Warnings);
+        Assert.Contains(BadName, warnings.Warnings[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateAxfrResponseAsync_ForAZoneWithARecordOfATypeWithNoCodec_CompletesWithoutThatRecord()
+    {
+        WarningCollector warnings = new();
+        await using TsigTransferHost host = await TsigTransferHost.CreateAsync(
+            loggerProvider: warnings
+        );
+
+        // The key is added first: adding it reloads the zone, and each load logs its own Warning.
+        string key = await host.AddKeyAsync();
+        await host.AddRecordAsync(BadName, NoCodecType, "{}");
+
+        (DnsMessage request, byte[] raw, int offset) = await host.SignedQueryAsync(
+            TsigTransferHost.ZoneName,
+            DnsResourceRecordTypeEnum.Axfr,
+            key
+        );
+        List<DnsMessage> messages = await host.TransferAsync(request, raw, offset);
+
+        Assert.All(
+            messages,
+            message => Assert.Equal(DnsResponseCodeEnum.NoError, message.ResponseCode)
+        );
+        List<DnsResourceRecord> records = [.. messages.SelectMany(message => message.Answers)];
+        Assert.Equal(7, records.Count);
+        Assert.DoesNotContain(records, record => record.Name == DnsName.Parse(BadName));
+        Assert.Single(warnings.Warnings);
+        Assert.Contains(BadName, warnings.Warnings[0], StringComparison.Ordinal);
     }
 
     /// <summary>
