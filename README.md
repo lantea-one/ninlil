@@ -4545,7 +4545,10 @@ you out of every session, yours included; sign in again with a code from the app
   under Settings, Identity, or `requireEmailChangeConfirmation` on
   `PATCH /api/identity-settings`. `GET /api/users/me` shows the current value as
   `emailChangeRequiresConfirmation`, and the form tells the user which of the two cases applies
-  before they submit.
+  before they submit. Wrong current passwords on this form and on a password change share one count
+  per account: after 5 within 15 minutes both answer `429 Too Many Requests` with a `Retry-After`
+  header, even for the correct password, until the window ends. The count is per node, so a stolen
+  access token cannot guess the password, and it never locks the account.
   - **With confirmation (the default)**, SMTP and the public base URL must be configured (see
     [Single sign-on and e-mail secrets](#single-sign-on-and-e-mail-secrets)); otherwise the request
     answers `400` and names what is missing. Ninlil e-mails a link to the new address and answers
