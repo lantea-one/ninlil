@@ -19,6 +19,8 @@ import { OpenApiHttpParams, QueryParamStyle } from '../query.params';
 // @ts-ignore
 import { AuthenticationResult } from '../model/authenticationResult';
 // @ts-ignore
+import { ConfirmEmailChangeRequest } from '../model/confirmEmailChangeRequest';
+// @ts-ignore
 import { ConfirmPasswordResetRequest } from '../model/confirmPasswordResetRequest';
 // @ts-ignore
 import { ForgotPasswordRequest } from '../model/forgotPasswordRequest';
@@ -41,6 +43,7 @@ import { Configuration }                                     from '../configurat
 import { BaseService } from '../api.base.service';
 import {
     AuthServiceInterface,
+    ApiAuthConfirmEmailChangePostRequestParams,
     ApiAuthForgotPasswordPostRequestParams,
     ApiAuthLoginPostRequestParams,
     ApiAuthLoginTwoFactorEmailCodePostRequestParams,
@@ -59,6 +62,72 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
     constructor(protected httpClient: HttpClient, @Optional() @Inject(BASE_PATH) basePath: string|string[], @Optional() configuration?: Configuration) {
         super(basePath, configuration);
+    }
+
+    /**
+     * This action applies a self-service e-mail change from the link &#x60;POST /api/users/me/email&#x60; e-mailed to the new address, called from the admin console\&#39;s \&quot;confirm e-mail change\&quot; page. The link may be opened in a browser that is not signed in, so it allows anonymous callers; &#x60;ConfirmEmailChangeRequest.Token&#x60; is the only proof, and M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ChangeEmailAsync(&#x60;0,System.String,System.String) rejects a wrong, expired, reused or tampered token, and one issued for another address. An unknown, disabled or mismatched account and a bad token return the same 400 message, so the response does not reveal whether an account exists. A successful change sets the address, marks it confirmed, replaces the account\&#39;s security stamp and revokes every refresh token, so every session of the account must sign in again. A notice goes to the old address when SMTP is configured; a failed send is logged and does not undo the change.
+     * @endpoint post /api/auth/confirm-email-change
+     * @param requestParameters
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any>;
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<any>>;
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<any>>;
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        const confirmEmailChangeRequest = requestParameters?.confirmEmailChangeRequest;
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (Bearer) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        // to determine the Content-Type header
+        const consumes: string[] = [
+            'application/json'
+        ];
+        const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
+        if (httpContentTypeSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Content-Type', httpContentTypeSelected);
+        }
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/auth/confirm-email-change`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<any>('post', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                body: confirmEmailChangeRequest,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
     }
 
     /**

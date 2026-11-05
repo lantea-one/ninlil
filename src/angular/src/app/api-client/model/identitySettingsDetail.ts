@@ -49,5 +49,9 @@ export interface IdentitySettingsDetail {
      * Whether lockout applies to a newly created account too.
      */
     allowedForNewUsers?: boolean;
+    /**
+     * Whether a user who changes their own e-mail address must first confirm the new one through an e-mailed link (`Identity:EmailChange:RequireConfirmation`).
+     */
+    requireEmailChangeConfirmation?: boolean;
 }
 
