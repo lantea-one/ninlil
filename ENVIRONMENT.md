@@ -44,9 +44,13 @@ reachable through `appsettings.json`, the REST API and the admin console.
 `EnvironmentVariableDocumentationTests` (in `Ninlil.Web.Tests`) fails when a row is missing, when a
 row names a variable that does not exist, when a variable has two rows, or when a number in the
 totals sentence below is wrong. It builds the expected list from the same mapping code that
-`Program.cs` runs at startup (`OptionsEnvironmentVariableMap.BuildMappings`). The test does not
-check the Default column or the descriptions. When you change an option's default or behavior,
-update its row by hand, then run:
+`Program.cs` runs at startup (`OptionsEnvironmentVariableMap.BuildMappings`). It also compares the
+Default column with the value a new instance of the options class has: a plain default (a number,
+a boolean, an enum, a `TimeSpan`, a non-empty string) must be the first value in code font in the
+cell, and an empty or missing default must be a cell that starts with `*(empty` or `*(none`. A few
+rows whose default is set at startup or differs per host are listed, with a reason, in the test.
+It does not check the descriptions. When you change an option's default or behavior, update its
+row by hand, then run:
 
 ```bash
 dotnet test src/dotnet/tests/Ninlil.Web.Tests --filter "FullyQualifiedName~EnvironmentVariableDocumentationTests|FullyQualifiedName~OptionsEnvironmentVariableRegistryTests"
