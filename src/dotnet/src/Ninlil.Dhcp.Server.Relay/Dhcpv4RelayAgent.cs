@@ -48,10 +48,10 @@ namespace Ninlil.Dhcp.Server.Relay;
 public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
 {
     /// <summary>
-    ///     This constant is the "hops" value (RFC 2131 Section 2, RFC 1542 Section 4.1.1) at which a request is no longer
-    ///     forwarded, a guard against relay loops. RFC 1542 Section 4.1.1 has a relay discard a
-    ///     request whose "hops" exceeds 16 and suggests a lower, configurable default of 4; this
-    ///     relay stops at 16 and offers no setting.
+    ///     This constant is the highest "hops" value (RFC 2131 Section 2, RFC 1542 Section 4.1.1) a
+    ///     request may carry and still be forwarded, a guard against relay loops. RFC 1542
+    ///     Section 4.1.1 has a relay discard a request whose "hops" exceeds 16 and suggests a
+    ///     lower, configurable default of 4; this relay discards above 16 and offers no setting.
     /// </summary>
     private const byte MaxHops = 16;
 
@@ -197,7 +197,7 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
     /// <summary>
     ///     This method forwards a request, from a client or from another relay, by unicast to
     ///     every configured upstream server (RFC 1542 Section 4.1.1). It drops the request when no
-    ///     upstream is configured, the hop count has reached <see cref="MaxHops" />, a client sent
+    ///     upstream is configured, the hop count exceeds <see cref="MaxHops" />, a client sent
     ///     Relay Agent Information, or a relay configured to add the option sees its own address
     ///     as <c>giaddr</c> (RFC 3046 Section 2.1.1). A request that already has a <c>giaddr</c>
     ///     is forwarded with that <c>giaddr</c> and its relay agent options unchanged.
@@ -218,11 +218,12 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
             return;
         }
 
-        // Guard against relay loops (see MaxHops).
-        if (request.Hops >= MaxHops)
+        // RFC 1542 Section 4.1.1: "The relay agent MUST silently discard BOOTREQUEST messages
+        // whose 'hops' field exceeds the value 16." A request with exactly 16 is forwarded.
+        if (request.Hops > MaxHops)
         {
             _logger.LogWarning(
-                "Dropping a DHCPv4 request whose own Hops count ({Hops}) has already reached this relay's defensive limit ({MaxHops}).",
+                "Dropping a DHCPv4 request whose own Hops count ({Hops}) exceeds this relay's limit ({MaxHops}).",
                 request.Hops,
                 MaxHops
             );
