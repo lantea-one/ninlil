@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
@@ -342,16 +343,19 @@ public class DhcpTagRulesController(
     /// </summary>
     private static Dhcpv4TagMatchModeEnum ParseMatchMode(JsonElement element, string fieldName)
     {
+        // A digit string such as "5" is no member name; Enum.TryParse would take it.
+        string text = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+
         if (
-            !Enum.TryParse(
-                element.GetString(),
+            !EnumNameParser.TryParseName(
+                text,
                 ignoreCase: true,
                 out Dhcpv4TagMatchModeEnum matchMode
             )
         )
             throw new ValidationException(
                 $"'{fieldName}' must be one of: "
-                    + string.Join(", ", Enum.GetNames<Dhcpv4TagMatchModeEnum>())
+                    + EnumNameParser.GetNames<Dhcpv4TagMatchModeEnum>()
             );
 
         return matchMode;

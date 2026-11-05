@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Common.Wire;
@@ -634,7 +635,7 @@ public class RecursiveSettingsController(
             if (
                 !item.TryGetProperty("algorithm", out JsonElement algorithmElement)
                 || algorithmElement.ValueKind != JsonValueKind.String
-                || !Enum.TryParse(
+                || !EnumNameParser.TryParseName(
                     algorithmElement.GetString(),
                     ignoreCase: true,
                     out DnssecAlgorithmEnum algorithm
@@ -642,7 +643,7 @@ public class RecursiveSettingsController(
             )
                 throw new ValidationException(
                     "Each 'trustAnchorsOverride' entry needs a valid 'algorithm'. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<DnssecAlgorithmEnum>())}."
+                        + $"{EnumNameParser.GetNames<DnssecAlgorithmEnum>()}."
                 );
 
             if (

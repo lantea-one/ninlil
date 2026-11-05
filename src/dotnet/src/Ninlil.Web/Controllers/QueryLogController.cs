@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.Serialization;
 using Microsoft.AspNetCore.Mvc;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -157,7 +158,8 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
     ///     <see cref="DnsResponseCodeEnum" /> members the two differ by more than case
     ///     (<c>FormatError</c>/<c>"FORMERR"</c>, <c>ServerFailure</c>/<c>"SERVFAIL"</c>), and a
     ///     caller should be able to send back a value it just read. A value matching neither is
-    ///     rejected rather than taken as the enum's default member.
+    ///     rejected rather than taken as the enum's default member; a digit string is refused
+    ///     because the API takes enums by name only.
     /// </summary>
     private static bool TryParseOptionalEnum<TEnum>(
         string value,
@@ -172,7 +174,7 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
         if (string.IsNullOrWhiteSpace(value))
             return true;
 
-        if (Enum.TryParse(value, true, out TEnum byMemberName))
+        if (EnumNameParser.TryParseName(value, true, out TEnum byMemberName))
         {
             parsed = byMemberName;
             return true;
@@ -193,7 +195,10 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
             return true;
         }
 
-        error = $"'{value}' is not a valid {typeof(TEnum).Name} value.";
+        error =
+            $"'{value}' is not a valid {typeof(TEnum).Name} value. Valid values: "
+            + EnumNameParser.GetNames<TEnum>()
+            + ".";
         return false;
     }
 
