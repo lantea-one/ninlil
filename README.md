@@ -2333,10 +2333,10 @@ Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour wort
   the public DNS's answer, `NXDOMAIN`, when validation is on and the name is not on the Insecure
   domains list. The log shows `returned a Bogus (DNSSEC-invalid) answer`.
 - **The Insecure domains list.** It starts with the built-in list: `home.arpa` (RFC 8375),
-  `internal` and the locally served reverse zones of RFC 6303 and RFC 7793 (the RFC 1918 ranges,
+  `resolver.arpa` (RFC 9462), `service.arpa` (RFC 9665), `internal` and the locally served reverse zones of RFC 6303 and RFC 7793 (the RFC 1918 ranges,
   `127.in-addr.arpa`, `254.169.in-addr.arpa`, the documentation ranges and the shared address
   space, and the `ip6.arpa` zones for `::`, `::1`, `fd00::/8`, `fe80::/10` and `2001:db8::/32`).
-  It does not include `resolver.arpa` and `service.arpa`. A change applies to the next query, and the
+  A change applies to the next query, and the
   forwarded cache is flushed, because it remembers whether an answer was validated. Only the
   queried name counts, so a CNAME from a public name into a listed domain is still validated.
   In the configuration file, the list (`DnsServer:Recursive:InsecureDomains`) needs

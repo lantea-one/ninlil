@@ -16,9 +16,10 @@ namespace Ninlil.Web.Models;
 ///         with AD. It is the built-in list while <c>UseCustomInsecureDomains</c> is
 ///         <see langword="false" />. A <c>PATCH</c> with an array replaces the whole list and makes
 ///         it custom; a <c>PATCH</c> with <see langword="null" /> restores the built-in list.
-///         <c>BuiltInInsecureDomains</c> is that built-in list (<c>home.arpa</c>, <c>internal</c>
-///         and the locally-served reverse zones of RFC 6303), for comparison and for a "restore
-///         defaults" action; it is read-only.
+///         <c>BuiltInInsecureDomains</c> is that built-in list (<c>home.arpa</c>,
+///         <c>resolver.arpa</c>, <c>service.arpa</c>, <c>internal</c> and the locally-served
+///         reverse zones of RFC 6303), for comparison and for a "restore defaults" action; it is
+///         read-only.
 ///     </para>
 ///     <para>
 ///         <c>EnableRecursion</c> turns on recursive service for every client, by iterating from
