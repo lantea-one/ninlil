@@ -29023,17 +29023,20 @@
           },
           "defaultLockoutTimeSpan": {
             "type": "string",
-            "description": "How long an account is locked out once `IdentitySettingsDetail.MaxFailedAccessAttempts` is reached.",
-            "format": "date-span"
+            "description": "Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited\nper client address by `AdminLoginRateLimitOptions` instead. A later release removes\nthis field.",
+            "format": "date-span",
+            "deprecated": true
           },
           "maxFailedAccessAttempts": {
             "type": "integer",
-            "description": "How many consecutive failed sign-in attempts trigger a lockout.",
-            "format": "int32"
+            "description": "Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited\nper client address by `AdminLoginRateLimitOptions` instead. A later release removes\nthis field.",
+            "format": "int32",
+            "deprecated": true
           },
           "allowedForNewUsers": {
             "type": "boolean",
-            "description": "Whether lockout applies to a newly created account too."
+            "description": "Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited\nper client address by `AdminLoginRateLimitOptions` instead. A later release removes\nthis field.",
+            "deprecated": true
           },
           "requireEmailChangeConfirmation": {
             "type": "boolean",
@@ -29041,7 +29044,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the password complexity and account lockout policy that\n`GET /api/identity-settings` returns: ASP.NET Core Identity's\nMicrosoft.AspNetCore.Identity.IdentityOptions.Password and Microsoft.AspNetCore.Identity.IdentityOptions.Lockout. Nothing\nin it is secret, so a `PATCH` to the same endpoint accepts the same fields.\nMicrosoft.AspNetCore.Identity.IdentityOptions.User, Microsoft.AspNetCore.Identity.IdentityOptions.SignIn,\nMicrosoft.AspNetCore.Identity.IdentityOptions.Tokens, Microsoft.AspNetCore.Identity.IdentityOptions.ClaimsIdentity and\nMicrosoft.AspNetCore.Identity.IdentityOptions.Stores are left out: they are structural choices the\nidentity wiring depends on (unique e-mail enforcement, for example, which rejects an\naccount with no e-mail), not policy to tune."
+        "description": "This record is the password complexity policy that `GET /api/identity-settings`\nreturns, from ASP.NET Core Identity's Microsoft.AspNetCore.Identity.IdentityOptions.Password, plus three\ndeprecated lockout fields from Microsoft.AspNetCore.Identity.IdentityOptions.Lockout that have no effect\nand stay only so existing callers keep working. Swashbuckle marks them\n`deprecated` in the OpenAPI document because of their\nSystem.ObsoleteAttribute. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.\nMicrosoft.AspNetCore.Identity.IdentityOptions.User, Microsoft.AspNetCore.Identity.IdentityOptions.SignIn,\nMicrosoft.AspNetCore.Identity.IdentityOptions.Tokens, Microsoft.AspNetCore.Identity.IdentityOptions.ClaimsIdentity and\nMicrosoft.AspNetCore.Identity.IdentityOptions.Stores are left out: they are structural choices the\nidentity wiring depends on (unique e-mail enforcement, for example, which rejects an\naccount with no e-mail), not policy to tune."
       },
       "InstantPauseRequest": {
         "type": "object",

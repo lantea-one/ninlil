@@ -70,9 +70,12 @@ public class IdentitySettingsControllerTests(NinlilDnsWebApplicationFactory fact
         Assert.True(detail.RequireLowercase);
         Assert.True(detail.RequireUppercase);
         Assert.True(detail.RequireNonAlphanumeric);
+        // The lockout fields are deprecated but must keep returning their values until removed.
+#pragma warning disable CS0618
         Assert.Equal(TimeSpan.FromMinutes(15), detail.DefaultLockoutTimeSpan);
         Assert.Equal(5, detail.MaxFailedAccessAttempts);
         Assert.True(detail.AllowedForNewUsers);
+#pragma warning restore CS0618
     }
 
     [Fact]

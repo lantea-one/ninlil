@@ -4,10 +4,12 @@ using Microsoft.AspNetCore.Identity;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the password complexity and account lockout policy that
-///     <c>GET /api/identity-settings</c> returns: ASP.NET Core Identity's
-///     <see cref="IdentityOptions.Password" /> and <see cref="IdentityOptions.Lockout" />. Nothing
-///     in it is secret, so a <c>PATCH</c> to the same endpoint accepts the same fields.
+///     This record is the password complexity policy that <c>GET /api/identity-settings</c>
+///     returns, from ASP.NET Core Identity's <see cref="IdentityOptions.Password" />, plus three
+///     deprecated lockout fields from <see cref="IdentityOptions.Lockout" /> that have no effect
+///     and stay only so existing callers keep working. Swashbuckle marks them
+///     <c>deprecated</c> in the OpenAPI document because of their
+///     <see cref="ObsoleteAttribute" />. Nothing in it is secret, so a <c>PATCH</c> to the same endpoint accepts the same fields.
 ///     <see cref="IdentityOptions.User" />, <see cref="IdentityOptions.SignIn" />,
 ///     <see cref="IdentityOptions.Tokens" />, <see cref="IdentityOptions.ClaimsIdentity" /> and
 ///     <see cref="IdentityOptions.Stores" /> are left out: they are structural choices the
@@ -20,9 +22,21 @@ namespace Ninlil.Web.Models;
 /// <param name="RequireLowercase">Whether a new password must contain at least one lowercase letter.</param>
 /// <param name="RequireUppercase">Whether a new password must contain at least one uppercase letter.</param>
 /// <param name="RequireNonAlphanumeric">Whether a new password must contain at least one non-alphanumeric character.</param>
-/// <param name="DefaultLockoutTimeSpan">How long an account is locked out once <see cref="MaxFailedAccessAttempts" /> is reached.</param>
-/// <param name="MaxFailedAccessAttempts">How many consecutive failed sign-in attempts trigger a lockout.</param>
-/// <param name="AllowedForNewUsers">Whether lockout applies to a newly created account too.</param>
+/// <param name="DefaultLockoutTimeSpan">
+///     Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited
+///     per client address by <c>AdminLoginRateLimitOptions</c> instead. A later release removes
+///     this field.
+/// </param>
+/// <param name="MaxFailedAccessAttempts">
+///     Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited
+///     per client address by <c>AdminLoginRateLimitOptions</c> instead. A later release removes
+///     this field.
+/// </param>
+/// <param name="AllowedForNewUsers">
+///     Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited
+///     per client address by <c>AdminLoginRateLimitOptions</c> instead. A later release removes
+///     this field.
+/// </param>
 /// <param name="RequireEmailChangeConfirmation">
 ///     Whether a user who changes their own e-mail address must first confirm the new one through
 ///     an e-mailed link (<c>Identity:EmailChange:RequireConfirmation</c>).
@@ -34,8 +48,11 @@ public record IdentitySettingsDetail(
     bool RequireLowercase,
     bool RequireUppercase,
     bool RequireNonAlphanumeric,
-    TimeSpan DefaultLockoutTimeSpan,
-    int MaxFailedAccessAttempts,
-    bool AllowedForNewUsers,
+    [property: Obsolete("Has no effect. A later release removes this field.")]
+        TimeSpan DefaultLockoutTimeSpan,
+    [property: Obsolete("Has no effect. A later release removes this field.")]
+        int MaxFailedAccessAttempts,
+    [property: Obsolete("Has no effect. A later release removes this field.")]
+        bool AllowedForNewUsers,
     bool RequireEmailChangeConfirmation
 );
