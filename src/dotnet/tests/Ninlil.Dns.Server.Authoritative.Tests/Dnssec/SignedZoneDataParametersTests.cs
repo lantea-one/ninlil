@@ -110,6 +110,23 @@ public sealed class SignedZoneDataParametersTests
         Assert.Null(data.Nsec3Parameters);
     }
 
+    // RFC 5155 §4.1.2: "NSEC3PARAM RRs with a Flags field value other than zero MUST be ignored."
+    [Fact]
+    public void Build_WithAnNsec3ParamWhoseFlagsAreNotZero_IgnoresTheRecord()
+    {
+        SignedZoneData data = Build(
+            [],
+            Record(
+                Apex,
+                DnsResourceRecordTypeEnum.Nsec3Param,
+                new Nsec3ParamRecordData(1, 7, [0xAA]) { Flags = 1 }
+            )
+        );
+
+        Assert.Equal(DnssecDenialOfExistenceModeEnum.Nsec, data.DenialOfExistenceMode);
+        Assert.Null(data.Nsec3Parameters);
+    }
+
     [Fact]
     public void BuildNxDomainProof_WithAnUnsupportedHashAlgorithm_ReturnsAnEmptyProof()
     {
