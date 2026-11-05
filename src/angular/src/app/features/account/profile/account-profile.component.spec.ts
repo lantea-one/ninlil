@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { UsersService } from '../../../api-client';
@@ -22,6 +22,7 @@ describe('AccountProfileComponent', () => {
     apiUsersMeGet: jasmine.Spy;
     apiUsersMePatch: jasmine.Spy;
     apiUsersMeChangePasswordPost: jasmine.Spy;
+    apiUsersMeEmailPost: jasmine.Spy;
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
   let authServiceSpy: { endSessionAfterSecurityChange: jasmine.Spy };
@@ -40,6 +41,7 @@ describe('AccountProfileComponent', () => {
       'apiUsersMeGet',
       'apiUsersMePatch',
       'apiUsersMeChangePasswordPost',
+      'apiUsersMeEmailPost',
     ]);
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
     authServiceSpy = jasmine.createSpyObj('AuthService', ['endSessionAfterSecurityChange']);
@@ -177,6 +179,115 @@ describe('AccountProfileComponent', () => {
     await fixture.componentInstance.save();
 
     expect(usersApiSpy.apiUsersMePatch).not.toHaveBeenCalled();
+  });
+
+  it('changeEmail() posts the new address and the current password', async () => {
+    const fixture = await createComponent();
+    usersApiSpy.apiUsersMeEmailPost.and.returnValue(
+      of(new HttpResponse({ status: 202, body: { confirmationSent: true } })),
+    );
+    fixture.componentInstance.changeEmailForm.setValue({
+      newEmail: 'new@example.com',
+      currentPassword: 'Old-Password-1234!',
+    });
+
+    await fixture.componentInstance.changeEmail();
+
+    expect(usersApiSpy.apiUsersMeEmailPost).toHaveBeenCalledWith(
+      {
+        changeEmailRequest: { newEmail: 'new@example.com', currentPassword: 'Old-Password-1234!' },
+      },
+      'response',
+    );
+  });
+
+  it('changeEmail() on a 202 asks the user to check the inbox and keeps the session', async () => {
+    const fixture = await createComponent();
+    usersApiSpy.apiUsersMeEmailPost.and.returnValue(
+      of(new HttpResponse({ status: 202, body: { confirmationSent: true } })),
+    );
+    fixture.componentInstance.changeEmailForm.setValue({
+      newEmail: 'new@example.com',
+      currentPassword: 'Old-Password-1234!',
+    });
+
+    await fixture.componentInstance.changeEmail();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Check the inbox of new@example.com',
+    );
+    expect(authServiceSpy.endSessionAfterSecurityChange).not.toHaveBeenCalled();
+    expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('changeEmail() on a 200 signs out with a message and opens the login page', async () => {
+    const fixture = await createComponent();
+    usersApiSpy.apiUsersMeEmailPost.and.returnValue(
+      of(new HttpResponse({ status: 200, body: { ...initialProfile, email: 'new@example.com' } })),
+    );
+    fixture.componentInstance.changeEmailForm.setValue({
+      newEmail: 'new@example.com',
+      currentPassword: 'Old-Password-1234!',
+    });
+
+    await fixture.componentInstance.changeEmail();
+
+    expect(authServiceSpy.endSessionAfterSecurityChange).toHaveBeenCalledWith(
+      jasmine.stringContaining('Your e-mail address was changed'),
+    );
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/login');
+  });
+
+  it('changeEmail() shows the problem detail of a 400 and stays signed in', async () => {
+    const fixture = await createComponent();
+    usersApiSpy.apiUsersMeEmailPost.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 400, error: { detail: 'The password is wrong.' } }),
+      ),
+    );
+    fixture.componentInstance.changeEmailForm.setValue({
+      newEmail: 'new@example.com',
+      currentPassword: 'nope',
+    });
+
+    await fixture.componentInstance.changeEmail();
+
+    expect(fixture.componentInstance.changeEmailErrorMessage()).toBe('The password is wrong.');
+    expect(authServiceSpy.endSessionAfterSecurityChange).not.toHaveBeenCalled();
+  });
+
+  it('changeEmail() does nothing while the address is not an e-mail address', async () => {
+    const fixture = await createComponent();
+    fixture.componentInstance.changeEmailForm.setValue({
+      newEmail: 'not-an-address',
+      currentPassword: 'x',
+    });
+
+    await fixture.componentInstance.changeEmail();
+
+    expect(usersApiSpy.apiUsersMeEmailPost).not.toHaveBeenCalled();
+  });
+
+  it('says a link will be sent when the server requires confirmation, and that the change is immediate otherwise', async () => {
+    const withLink = await createComponent(() =>
+      usersApiSpy.apiUsersMeGet.and.returnValue(
+        of({ ...initialProfile, emailChangeRequiresConfirmation: true }),
+      ),
+    );
+    expect(
+      (withLink.nativeElement as HTMLElement).querySelector('#email-change-mode')?.textContent,
+    ).toContain('We send a link');
+    TestBed.resetTestingModule();
+
+    const immediate = await createComponent(() =>
+      usersApiSpy.apiUsersMeGet.and.returnValue(
+        of({ ...initialProfile, emailChangeRequiresConfirmation: false }),
+      ),
+    );
+    expect(
+      (immediate.nativeElement as HTMLElement).querySelector('#email-change-mode')?.textContent,
+    ).toContain('changes as soon as you submit');
   });
 
   it('changePassword() sends the current/new password and resets the form on success', async () => {
