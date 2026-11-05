@@ -129,6 +129,65 @@ public class RuntimeConfigurationFileSourceTests(NinlilDnsWebApplicationFactory 
     }
 
     [Fact]
+    public void AddIfMissing_ForAFileInAMissingFolder_CreatesTheFolder()
+    {
+        string directory = Directory.CreateTempSubdirectory("ninlil-runtime-file-source-").FullName;
+        try
+        {
+            string folder = Path.Combine(directory, "not-yet", "nested");
+            ConfigurationBuilder builder = new();
+
+            RuntimeConfigurationFileSource.AddIfMissing(
+                builder.Sources,
+                Path.Combine(folder, "custom.json"),
+                0
+            );
+
+            Assert.True(Directory.Exists(folder));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ACustomFileInAMissingFolder_ReloadsTheFirstSettingsPatchWithoutARestart()
+    {
+        string directory = Directory.CreateTempSubdirectory("ninlil-runtime-file-source-").FullName;
+        try
+        {
+            // The folder does not exist when the host starts; the first save creates the file.
+            string path = Path.Combine(directory, "missing-folder", "settings.json");
+            using EnvironmentScope scope = new((FilePathVariable, path));
+            using WebApplicationFactory<Program> host = factory.CreateSecondHost(_ => { });
+            IOptionsMonitor<AppearanceOptions> monitor = host.Services.GetRequiredService<
+                IOptionsMonitor<AppearanceOptions>
+            >();
+
+            HttpClient client = await SignInAsAdminAsync(host);
+            using HttpRequestMessage request = new(HttpMethod.Patch, "/api/appearance-settings")
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new { palette = "Amber", mode = "Dark" }),
+                    Encoding.UTF8,
+                    "application/json"
+                ),
+            };
+            HttpResponseMessage response = await client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            await WaitForAsync(() => monitor.CurrentValue.Palette == UiThemePaletteEnum.Amber);
+            Assert.Equal(UiThemePaletteEnum.Amber, monitor.CurrentValue.Palette);
+            Assert.Equal(UiThemeModeEnum.Dark, monitor.CurrentValue.Mode);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ACustomFile_IsOverriddenByAnEnvironmentVariable()
     {
         using TempSettingsFile file = new();

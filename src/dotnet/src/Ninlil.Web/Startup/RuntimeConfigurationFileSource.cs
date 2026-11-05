@@ -60,6 +60,8 @@ public static class RuntimeConfigurationFileSource
                 return false;
         }
 
+        EnsureDirectory(fullPath);
+
         JsonConfigurationSource source = new()
         {
             Path = fullPath,
@@ -72,6 +74,30 @@ public static class RuntimeConfigurationFileSource
         source.ResolveFileProvider();
         sources.Insert(Math.Clamp(insertIndex, 0, sources.Count), source);
         return true;
+    }
+
+    /// <summary>
+    ///     This method creates the file's folder when it is missing. A file watcher rooted at a
+    ///     folder that does not exist can miss the creation of the folder and of the first file in
+    ///     it, so the first saved setting would not reach a live reader. A folder that cannot be
+    ///     created does not stop the start: the file is optional, a read-only location is a
+    ///     legitimate setup, and the first save reports its own error.
+    /// </summary>
+    private static void EnsureDirectory(string fullPath)
+    {
+        string directory = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrEmpty(directory) || Directory.Exists(directory))
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+        }
+        catch (Exception exception)
+            when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            // Left missing on purpose; see the summary.
+        }
     }
 
     /// <summary>
