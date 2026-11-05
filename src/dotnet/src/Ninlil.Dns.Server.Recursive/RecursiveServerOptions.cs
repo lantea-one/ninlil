@@ -50,8 +50,8 @@ public class RecursiveServerOptions
     ///     documentation ranges, the broadcast address), the IPv6 zones of RFC 6303 §4.3 to §4.6
     ///     (unspecified address, loopback, unique local <c>fd00::/8</c>, link local
     ///     <c>fe80::/10</c>, documentation <c>2001:db8::/32</c>) and the shared address space
-    ///     <c>100.64.0.0/10</c> (RFC 7793). The registry also lists <c>resolver.arpa</c>
-    ///     (RFC 9462) and <c>service.arpa</c> (RFC 9665), which this list does not include.
+    ///     <c>100.64.0.0/10</c> (RFC 7793), plus <c>resolver.arpa</c> (RFC 9462) and
+    ///     <c>service.arpa</c> (RFC 9665).
     /// </summary>
     public static IReadOnlyList<string> BuiltInInsecureDomains { get; } =
         BuildBuiltInInsecureDomains();
@@ -87,7 +87,14 @@ public class RecursiveServerOptions
 
     private static List<string> BuildBuiltInInsecureDomains()
     {
-        List<string> domains = ["home.arpa", "internal", "10.in-addr.arpa"];
+        List<string> domains =
+        [
+            "home.arpa",
+            "resolver.arpa",
+            "service.arpa",
+            "internal",
+            "10.in-addr.arpa",
+        ];
 
         // RFC 6303 §4.1: RFC 1918 172.16.0.0/12.
         domains.AddRange(Enumerable.Range(16, 16).Select(octet => $"{octet}.172.in-addr.arpa"));

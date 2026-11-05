@@ -305,6 +305,8 @@ public class RecursiveSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         Assert.False(detail.UseCustomInsecureDomains);
         Assert.Contains("home.arpa", detail.InsecureDomains);
         Assert.Contains("internal", detail.InsecureDomains);
+        Assert.Contains("resolver.arpa", detail.InsecureDomains);
+        Assert.Contains("service.arpa", detail.InsecureDomains);
         Assert.Contains("10.in-addr.arpa", detail.InsecureDomains);
         Assert.Contains("168.192.in-addr.arpa", detail.InsecureDomains);
         Assert.Equal(detail.BuiltInInsecureDomains, detail.InsecureDomains);
