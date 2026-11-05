@@ -3610,8 +3610,8 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   advertisement, and the sweep interval from the next sweep. The start and stop calls of the
   **DHCP Services** page change the running state without saving anything.
 - **A scope is removed with its settings, not its history.** Deleting a scope deletes its
-  reservations and custom options. Its leases stay as records, and nothing renews them. A tag rule that names the scope
-  stays and never matches.
+  reservations and custom options. Its leases stay as records, and nothing renews them. A tag
+  rule that names the scope stays and never matches.
 - **A cluster does not copy DHCP data** (see [Clustering, events and webhooks](#clustering-events-and-webhooks)).
   Each Ninlil instance that serves DHCP needs separate scopes, and two instances must not serve the
   same range. On MongoDB, do not point two instances at one database (see
@@ -5172,6 +5172,10 @@ cluster sync tombstones. It also leaves out the JWT signing key, the cluster nod
 anchor file and the ACME certificate files. A restore replaces all stored data with the content
 of the file. There is no partial or merged restore. Ninlil takes no backups by itself; run the
 backup when you want one.
+
+A backup taken before DHCP leases referred to their scope by id still restores. The restore
+relinks each lease to the scope in the file with the same name and drops the leases whose scope
+is not in the file, as the upgrade does for a live database.
 
 #### Before you start
 
