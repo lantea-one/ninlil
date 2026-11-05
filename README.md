@@ -1369,8 +1369,8 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   as insecure, and any validator may treat a count above 0 as insecure (RFC 9276 §3.2).
 - **A record that cannot be signed.** Signing reads every stored record, whatever wrote it. A
   record whose data cannot be written as RDATA, or whose type has no RDATA codec, is left out of
-  the signed zone with one warning that names it, and the rest of the zone is signed as usual, so the zone never keeps serving older
-  signatures until they expire.
+  the signed zone with one warning that names it, and the rest of the zone is signed as usual, so
+  the zone never keeps serving older signatures until they expire.
 - **Key sizes.** Only RSA keys use `keySizeBits`: `0` for 2048 bits, or a multiple of 64 from 2048
   to 4096. The multiple of 64 comes from Windows, which creates RSA keys only in steps of 64 bits.
   Other algorithms ignore the field.
