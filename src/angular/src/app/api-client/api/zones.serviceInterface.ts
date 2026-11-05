@@ -157,7 +157,7 @@ export interface ZonesServiceInterface {
     apiZonesIdReconcilePtrPost(requestParameters: ApiZonesIdReconcilePtrPostRequestParams, extraHttpRequestParams?: any): Observable<ZonePtrReconciliationResponse>;
 
     /**
-     * This action creates a zone with no records, not even an SOA; add them through &#x60;RecordsController&#x60;. Returns 400 for an invalid zone name, a PTR prefix length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
+     * This action creates a zone with no records, not even an SOA; add them through &#x60;/api/zones/{zoneId}/records&#x60;. Returns 400 for an invalid zone name, a PTR prefix length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones
 * @param requestParameters

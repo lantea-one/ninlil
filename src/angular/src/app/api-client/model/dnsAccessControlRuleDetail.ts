@@ -30,7 +30,7 @@ export interface DnsAccessControlRuleDetail {
      */
     capabilities?: Array<string> | null;
     /**
-     * Whether the rule is disabled. The enforcement engine ignores a disabled rule (see `DnsAccessControlRuleEntity.IsDisabled`).
+     * Whether the rule is disabled. The enforcement engine ignores a disabled rule.
      */
     isDisabled?: boolean;
     /**

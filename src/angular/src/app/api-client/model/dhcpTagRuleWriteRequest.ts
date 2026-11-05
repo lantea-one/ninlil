@@ -11,7 +11,7 @@ import { Dhcpv4TagMatchModeEnum } from './dhcpv4TagMatchModeEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a tag-based conditional option delivery rule (`POST /api/dhcp-tag-rules`, `PUT /api/dhcp-tag-rules/{id}`). `DhcpTagRuleEntity` documents how rules match, the order they apply in and how conflicts resolve. Every match field is optional; the set ones must all match.
+ * This class carries the fields used to create or fully replace a tag-based conditional option delivery rule (`POST /api/dhcp-tag-rules`, `PUT /api/dhcp-tag-rules/{id}`). Matching rules apply in ascending priority, then creation time, and each rule\'s options replace earlier values for the same tag, so the last rule applied wins. Every match field is optional; the set ones must all match.
  */
 export interface DhcpTagRuleWriteRequest { 
     /**

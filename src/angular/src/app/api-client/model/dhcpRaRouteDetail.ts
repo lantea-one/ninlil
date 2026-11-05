@@ -11,7 +11,7 @@ import { RaRoutePreferenceEnum } from './raRoutePreferenceEnum';
 
 
 /**
- * This record is the REST shape of one `RaAdvertisedRouteOptions` entry: a route advertised in an RFC 4191 Section 2.3 Route Information option. It appears in `DhcpRaSettingsDetail.Routes` and in the `routes` array of `PATCH /api/dhcp-settings/ra`.
+ * This record is the REST shape of one entry of `DhcpServer:Ra:Routes`: a route advertised in an RFC 4191 Section 2.3 Route Information option. It appears in `DhcpRaSettingsDetail.Routes` and in the `routes` array of `PATCH /api/dhcp-settings/ra`.
  */
 export interface DhcpRaRouteDetail { 
     /**

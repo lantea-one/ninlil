@@ -15,7 +15,7 @@ import { FilterPatternPreviewMatch } from './filterPatternPreviewMatch';
  */
 export interface FilterPatternPreviewResult { 
     /**
-     * Whether `FilterPatternPreviewRequest.Value` compiles as the requested `FilterPatternPreviewRequest.Kind`, using the same check `FilterListEntriesController` applies before saving a `DnsFilterEntryKindEnum.Wildcard` or `DnsFilterEntryKindEnum.Regex` entry.
+     * Whether `FilterPatternPreviewRequest.Value` compiles as the requested `FilterPatternPreviewRequest.Kind`, using the same check that `POST /api/filter-lists/{listId}/entries` applies before saving a `DnsFilterEntryKindEnum.Wildcard` or `DnsFilterEntryKindEnum.Regex` entry.
      */
     isValid?: boolean;
     /**

@@ -76,7 +76,7 @@ export interface TwoFactorServiceInterface {
     apiAuthTwoFactorRecoveryCodesGeneratePost(extraHttpRequestParams?: any): Observable<RecoveryCodesResult>;
 
     /**
-     * This action reports the caller\&#39;s two-factor state: whether two-factor sign-in is required, whether an authenticator key exists, whether the account has a confirmed e-mail address, and how many recovery codes remain. The account-security page needs this endpoint because access tokens carry no two-factor claim (it would go stale as soon as the setting changed), and &#x60;UsersController&#x60; exposes the state only to holders of &#x60;users:read&#x60;.
+     * This action reports the caller\&#39;s two-factor state: whether two-factor sign-in is required, whether an authenticator key exists, whether the account has a confirmed e-mail address, and how many recovery codes remain. The account-security page needs this endpoint because access tokens carry no two-factor claim (it would go stale as soon as the setting changed), and the &#x60;/api/users&#x60; routes expose the state only to holders of &#x60;users:read&#x60;.
      * 
      * @endpoint get /api/auth/two-factor/status
 */

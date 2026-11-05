@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the server-wide CAA auto-management defaults (`CaaAutoManagementOptions`), nested in `AcmeSettingsDetail.CaaAutoManagement`.
+ * This record is the REST shape of the server-wide CAA auto-management defaults (configuration section `DnsServer:Acme:CaaAutoManagement`), nested in `AcmeSettingsDetail.CaaAutoManagement`.
  */
 export interface CaaAutoManagementSettingsDetail { 
     defaultEnabled?: boolean;

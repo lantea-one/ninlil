@@ -11,7 +11,7 @@ import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
 /**
- * This class carries the fields used to create or replace an entry in a `DnsFilterListSourceEnum.Local` list (`POST` and `PUT` under `/api/filter-lists/{listId}/entries`). Every write to the entries of a `DnsFilterListSourceEnum.Subscribed` list is rejected with 409 (see `FilterListEntriesController`).
+ * This class carries the fields used to create or replace an entry in a `DnsFilterListSourceEnum.Local` list (`POST` and `PUT` under `/api/filter-lists/{listId}/entries`). Every write to the entries of a `DnsFilterListSourceEnum.Subscribed` list is rejected with 409.
  */
 export interface FilterListEntryWriteRequest { 
     /**

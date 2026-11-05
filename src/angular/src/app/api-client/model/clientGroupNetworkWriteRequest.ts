@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the fields used to create or fully replace a network belonging to a client group (`POST` and `PUT` under `/api/client-groups/{groupId}/networks`). Exactly one of Cidr and ClientId must be set (see `DnsClientGroupNetworkEntity`).
+ * This class carries the fields used to create or fully replace a network belonging to a client group (`POST` and `PUT` under `/api/client-groups/{groupId}/networks`). Exactly one of Cidr and ClientId must be set.
  */
 export interface ClientGroupNetworkWriteRequest { 
     /**
@@ -18,7 +18,7 @@ export interface ClientGroupNetworkWriteRequest {
      */
     cidr?: string | null;
     /**
-     * A DNS-over-HTTPS ClientID label this row matches (see `DnsClientGroupNetworkEntity.ClientId`). null when Cidr is set instead.
+     * A DNS-over-HTTPS ClientID label this row matches. null when Cidr is set instead.
      */
     clientId?: string | null;
 }

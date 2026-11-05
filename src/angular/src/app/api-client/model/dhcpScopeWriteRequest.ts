@@ -61,16 +61,16 @@ export interface DhcpScopeWriteRequest {
      */
     dnsZoneId?: string | null;
     /**
-     * The boot file a PXE client leasing from this scope should request, or null to offer none (see `DhcpScopeEntity.BootFileName`).
+     * The boot file a PXE client leasing from this scope should request, or null to offer none.
      */
     bootFileName?: string | null;
     /**
-     * The TFTP (or other boot) server a PXE client should contact for BootFileName, or null to use this server\'s Server Identifier address (see `DhcpScopeEntity.NextServerAddress`).
+     * The TFTP (or other boot) server a PXE client should contact for BootFileName, or null to use this server\'s Server Identifier address.
      */
     nextServerAddress?: string | null;
     kind?: DhcpScopeKindEnum;
     /**
-     * The length, in bits, of each prefix the scope delegates. Required when Kind is `DhcpScopeKindEnum.PrefixDelegation`, and must be null otherwise (see `DhcpScopeEntity.DelegatedPrefixLength`).
+     * The length, in bits, of each prefix the scope delegates. Required when Kind is `DhcpScopeKindEnum.PrefixDelegation`, and must be null otherwise.
      */
     delegatedPrefixLength?: number | null;
 }

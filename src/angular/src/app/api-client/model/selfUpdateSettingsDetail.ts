@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the update check settings (`SelfUpdateOptions`) that `GET /api/self-update-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the update check settings (configuration section `DnsServer:SelfUpdate`) that `GET /api/self-update-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface SelfUpdateSettingsDetail { 
     /**

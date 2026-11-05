@@ -11,11 +11,11 @@ import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
 /**
- * This record is the DNS-over-TLS settings (`DnsOverTlsOptions`) that `GET /api/transport-settings/dns-over-tls` returns. `ProxyProtocol` is left out: it is exposed once, as the `dnsOverTls` field of `ReverseProxySettingsController`, next to the HTTP reverse proxy trust settings it belongs with.
+ * This record is the DNS-over-TLS settings (configuration section `DnsServer:Protocol:DnsOverTls`) that `GET /api/transport-settings/dns-over-tls` returns. `ProxyProtocol` is left out: it is exposed once, as the `dnsOverTls` field of `GET /api/reverse-proxy-settings`, next to the HTTP reverse proxy trust settings it belongs with.
  */
 export interface DnsOverTlsSettingsDetail { 
     /**
-     * Whether the transport listens. A change applies at once: `PATCH /api/transport-settings/dns-over-tls` starts or stops the `dns-over-tls` listener through `IManagedServiceRegistry`.
+     * Whether the transport listens. A change applies at once: `PATCH /api/transport-settings/dns-over-tls` starts or stops the `dns-over-tls` service listed by `GET /api/services`.
      */
     enable?: boolean;
     /**

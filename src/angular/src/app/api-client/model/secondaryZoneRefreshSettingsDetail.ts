@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the secondary zone refresh settings (`SecondaryZoneRefreshOptions`) that `GET /api/secondary-zone-refresh-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the secondary zone refresh settings (configuration section `DnsServer:Authoritative:SecondaryZoneRefresh`) that `GET /api/secondary-zone-refresh-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface SecondaryZoneRefreshSettingsDetail { 
     /**

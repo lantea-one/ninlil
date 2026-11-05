@@ -128,7 +128,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
     }
 
     /**
-     * This action deletes a list together with its entries and every assignment that refers to it: client-group assignments (see &#x60;ClientGroupListAssignmentsController&#x60;) and direct client assignments (see &#x60;ClientListAssignmentsController&#x60;). Nothing is left behind. The removal runs in one transaction on the relational engines. Returns 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
+     * This action deletes a list together with its entries and every assignment that refers to it: client-group assignments (&#x60;/api/client-groups/{groupId}/list-assignments&#x60;) and direct client assignments (&#x60;/api/clients/{clientId}/list-assignments&#x60;). Nothing is left behind. The removal runs in one transaction on the relational engines. Returns 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
      * @endpoint delete /api/filter-lists/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

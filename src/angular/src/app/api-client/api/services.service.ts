@@ -97,7 +97,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
     }
 
     /**
-     * This action stops one service and starts it again. Services that reload their state on every start pick up changes this way: &#x60;AuthoritativeZoneCache&#x60; and &#x60;SignedZoneCache&#x60; reload their whole in-memory snapshot from storage, and their stop leaves the loaded snapshot answering, so for them only a restart has a visible effect. A transport listener re-reads its port, certificate and tuning settings. Returns 404 for an unknown name. Requires &#x60;services:manage&#x60;.
+     * This action stops one service and starts it again. Services that reload their state on every start pick up changes this way: the authoritative zone cache and the signed zone cache reload their whole in-memory snapshot from storage, and their stop leaves the loaded snapshot answering, so for them only a restart has a visible effect. A transport listener re-reads its port, certificate and tuning settings. Returns 404 for an unknown name. Requires &#x60;services:manage&#x60;.
      * @endpoint post /api/services/{name}/restart
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -14,7 +14,7 @@
  */
 export interface DnsOverHttpsSettingsDetail { 
     /**
-     * Whether a request on the DNS-over-HTTPS route is answered. A change applies at once: it opens or closes the `dns-over-https` transport gate through `IManagedServiceRegistry`. The route is mapped whatever this flag was at startup (see the extension method above).
+     * Whether a request on the DNS-over-HTTPS route is answered. A change applies at once: it opens or closes the `dns-over-https` transport gate, a service listed by `GET /api/services`. The route is mapped whatever this flag was at startup (see the extension method above).
      */
     enable?: boolean;
     /**

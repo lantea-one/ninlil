@@ -12,7 +12,7 @@ import { DnsClassEnum } from './dnsClassEnum';
 
 
 /**
- * This class carries every writable field of a `RecordEntity`, used to create a record (`POST /api/zones/{zoneId}/records`) and to fully replace one (`PUT /api/zones/{zoneId}/records/{id}`).
+ * This class carries every writable field of a record, used to create a record (`POST /api/zones/{zoneId}/records`) and to fully replace one (`PUT /api/zones/{zoneId}/records/{id}`).
  */
 export interface RecordWriteRequest { 
     /**

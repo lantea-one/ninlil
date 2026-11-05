@@ -108,7 +108,7 @@ export class SsoService extends BaseService implements SsoServiceInterface {
     }
 
     /**
-     * This action reports whether this server can start an SSO sign-in and, if so, the label for the button that starts one. Allows anonymous callers.  &lt;b&gt;It checks whether the OpenID Connect scheme is registered, not     &#x60;OidcSsoOptions.Enable&#x60;.&lt;/b&gt;&#x60;OidcSsoSettingsController.Patch&#x60; can     change that setting without a restart, but the scheme is registered once at startup     (see     &#x60;ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication&#x60;),     so checking the setting could show a button that returns 404 when clicked.
+     * This action reports whether this server can start an SSO sign-in and, if so, the label for the button that starts one. Allows anonymous callers.  &lt;b&gt;It checks whether the OpenID Connect scheme is registered, not the     &#x60;Identity:Sso:Enable&#x60; setting.&lt;/b&gt;&#x60;PATCH /api/sso-settings&#x60; can change     that setting without a restart, but the scheme is registered once at startup (see     &#x60;ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication&#x60;),     so checking the setting could show a button that returns 404 when clicked.
      * @endpoint get /api/auth/sso
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the admin sign-in rate limiter settings (`AdminLoginRateLimitOptions`) that `GET /api/admin-login-rate-limit-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the admin sign-in rate limiter settings (configuration section `DnsServer:AdminLoginRateLimit`) that `GET /api/admin-login-rate-limit-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface AdminLoginRateLimitSettingsDetail { 
     /**

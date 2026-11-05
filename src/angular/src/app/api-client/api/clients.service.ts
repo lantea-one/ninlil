@@ -511,7 +511,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action ends a client\&#39;s pause now by clearing &#x60;DnsClientEntity.PausedUntilUtc&#x60;. Resuming a client that is not paused is not an error. Returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
+     * This action ends a client\&#39;s pause now by clearing the client\&#39;s pause time. Resuming a client that is not paused is not an error. Returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/clients/{id}/resume
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -50,7 +50,7 @@ export interface UserSummary {
      */
     originatingNodeId?: string | null;
     /**
-     * An explanation of a cluster username collision this account lost, so an administrator can see it was renamed or overwritten rather than silently dropped or merged (see `UserEntity.ClusterConflictNote`). null when there was none (almost always).
+     * An explanation of a cluster username collision this account lost, so an administrator can see it was renamed or overwritten rather than silently dropped or merged. null when there was none (almost always).
      */
     clusterConflictNote?: string | null;
     /**

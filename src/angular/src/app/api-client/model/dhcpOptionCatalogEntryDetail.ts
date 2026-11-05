@@ -11,7 +11,7 @@ import { DhcpOptionValueTypeEnum } from './dhcpOptionValueTypeEnum';
 
 
 /**
- * This record is the REST shape of one `DhcpOptionCatalogEntry`, as returned by `GET /api/dhcp-option-catalog`. It copies the catalog record field by field so the API does not change when the record does (see `DhcpOptionCatalogController`).
+ * This record is the REST shape of one `DhcpOptionCatalogEntry`, as returned by `GET /api/dhcp-option-catalog`. It copies the catalog record field by field so the API does not change when the record does.
  */
 export interface DhcpOptionCatalogEntryDetail { 
     /**

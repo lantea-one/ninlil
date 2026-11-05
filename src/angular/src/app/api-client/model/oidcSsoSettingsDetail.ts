@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the OpenID Connect single sign-on settings (`OidcSsoOptions`) that `GET /api/sso-settings` returns. The client secret is never returned, as with every other secret; `OidcSsoSettingsDetail.ClientSecretConfigured` says whether one is set. A `PATCH` accepts these fields with `clientSecret` in place of `OidcSsoSettingsDetail.ClientSecretConfigured`.
+ * This record is the OpenID Connect single sign-on settings (configuration section `Identity:Sso`) that `GET /api/sso-settings` returns. The client secret is never returned, as with every other secret; `OidcSsoSettingsDetail.ClientSecretConfigured` says whether one is set. A `PATCH` accepts these fields with `clientSecret` in place of `OidcSsoSettingsDetail.ClientSecretConfigured`.
  */
 export interface OidcSsoSettingsDetail { 
     /**
@@ -30,7 +30,7 @@ export interface OidcSsoSettingsDetail {
      */
     clientId?: string | null;
     /**
-     * Whether a client secret is set from either source: `OidcSsoOptions.ClientSecretEncrypted` or the plaintext `OidcSsoOptions.ClientSecret`. The secret itself is never returned.
+     * Whether a client secret is set from either source: `Identity:Sso:ClientSecretEncrypted` or the plaintext `Identity:Sso:ClientSecret`. The secret itself is never returned.
      */
     clientSecretConfigured?: boolean;
     /**

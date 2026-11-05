@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the webhook delivery settings (`WebhookDeliveryOptions`) that `GET /api/webhook-delivery-settings` returns: the retry backoff and HTTP timeout every subscription\'s deliveries use. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the webhook delivery settings (configuration section `DnsServer:Webhooks:Delivery`) that `GET /api/webhook-delivery-settings` returns: the retry backoff and HTTP timeout every subscription\'s deliveries use. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface WebhookDeliverySettingsDetail { 
     /**

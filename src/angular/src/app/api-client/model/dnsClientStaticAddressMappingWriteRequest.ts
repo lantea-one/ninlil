@@ -15,7 +15,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
  */
 export interface DnsClientStaticAddressMappingWriteRequest { 
     /**
-     * The source address or network mapped to ClientIdentifier: a bare IP address (exact match) or a CIDR network with a `/` (matches every address in it). A value with a `/` must parse with `System.Net.IPNetwork.TryParse` and one without with `System.Net.IPAddress.TryParse`, the same two forms `StaticAddressMappingClientIdentityResolver` matches at query time.
+     * The source address or network mapped to ClientIdentifier: a bare IP address (exact match) or a CIDR network with a `/` (matches every address in it). A value with a `/` must parse with `System.Net.IPNetwork.TryParse` and one without with `System.Net.IPAddress.TryParse`, the same two forms the server matches at query time.
      */
     cidr?: string | null;
     /**

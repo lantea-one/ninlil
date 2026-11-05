@@ -35,7 +35,7 @@ export interface OidcSsoSettingsServiceInterface {
     apiSsoSettingsGet(extraHttpRequestParams?: any): Observable<OidcSsoSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;Identity:Sso&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. A field absent from patch keeps its value, including &#x60;clientSecret&#x60;, so an operator can change only &#x60;displayName&#x60; without resupplying a secret &#x60;GET /api/sso-settings&#x60; never shows. A blank &#x60;clientSecret&#x60; clears it. Returns 400 for a blank display name or client id, an authority that is not an absolute http(s) URL, or scopes without &#x60;openid&#x60;. Requires &#x60;ssosettings:write&#x60;.
+     * This action merges a partial update into &#x60;Identity:Sso&#x60; as an RFC 7396 merge patch. A field absent from patch keeps its value, including &#x60;clientSecret&#x60;, so an operator can change only &#x60;displayName&#x60; without resupplying a secret &#x60;GET /api/sso-settings&#x60; never shows. A blank &#x60;clientSecret&#x60; clears it. Returns 400 for a blank display name or client id, an authority that is not an absolute http(s) URL, or scopes without &#x60;openid&#x60;. Requires &#x60;ssosettings:write&#x60;.
      * 
      * @endpoint patch /api/sso-settings
 * @param requestParameters

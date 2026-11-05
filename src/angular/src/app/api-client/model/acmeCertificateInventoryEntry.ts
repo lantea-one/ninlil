@@ -10,11 +10,11 @@
 
 
 /**
- * This record is one row of the certificate inventory that `AcmeSettingsController.Certificates` returns: one per domain in `AcmeOptions.Domains`, with what `IAcmeAccountStore` knows about it. `AcmeCertificateInventoryEntry.HasCertificate` separates a domain that has never been issued a certificate from one that simply is not due for renewal yet, whatever `AcmeCertificateInventoryEntry.IsDueForRenewal` says.
+ * This record is one row of the certificate inventory that `GET /api/acme-settings/certificates` returns: one per domain in `DnsServer:Acme:Domains`, with what the server has recorded about it. `AcmeCertificateInventoryEntry.HasCertificate` separates a domain that has never been issued a certificate from one that simply is not due for renewal yet, whatever `AcmeCertificateInventoryEntry.IsDueForRenewal` says.
  */
 export interface AcmeCertificateInventoryEntry { 
     /**
-     * The domain as configured in `AcmeOptions.Domains`.
+     * The domain as configured in `DnsServer:Acme:Domains`.
      */
     domain?: string | null;
     /**

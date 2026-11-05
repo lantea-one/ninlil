@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the TSIG settings (`TsigServiceOptions`) that `GET /api/tsig-settings` returns: the clock skew tolerance (fudge) written into every message the server signs. A `PATCH` to the same endpoint accepts the same field.
+ * This record is the TSIG settings (configuration section `DnsServer:Tsig`) that `GET /api/tsig-settings` returns: the clock skew tolerance (fudge) written into every message the server signs. A `PATCH` to the same endpoint accepts the same field.
  */
 export interface TsigSettingsDetail { 
     /**

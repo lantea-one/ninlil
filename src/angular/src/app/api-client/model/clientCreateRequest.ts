@@ -11,7 +11,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries the fields used to register a known client device (`POST /api/clients`) with its first address. `ClientCreateRequest.ClientIdentifier` and `ClientCreateRequest.ProtocolVersion` become that address\'s identity, which cannot change later (see `ClientsController`). Further addresses are added through `POST /api/clients/{clientId}/addresses`. The device fields that stay editable are in `ClientWriteRequest`, used by `PUT` and `PATCH`.
+ * This class carries the fields used to register a known client device (`POST /api/clients`) with its first address. `ClientCreateRequest.ClientIdentifier` and `ClientCreateRequest.ProtocolVersion` become that address\'s identity, which cannot change later. Further addresses are added through `POST /api/clients/{clientId}/addresses`. The device fields that stay editable are in `ClientWriteRequest`, used by `PUT` and `PATCH`.
  */
 export interface ClientCreateRequest { 
     /**
@@ -24,7 +24,7 @@ export interface ClientCreateRequest {
      */
     displayName?: string | null;
     /**
-     * The `DnsClientGroupEntity` the client is explicitly assigned to, or null for none.
+     * The client group the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**

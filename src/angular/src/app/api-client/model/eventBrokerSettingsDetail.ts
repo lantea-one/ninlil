@@ -13,7 +13,7 @@ import { RabbitMqBrokerSettingsDetail } from './rabbitMqBrokerSettingsDetail';
 
 
 /**
- * This record is the event transport configuration that `GET /api/event-broker-settings` returns. Only the section matching `EventBrokerSettingsDetail.Transport` is filled in; the other is null. A broker that was not selected never had its options configured, so reading them through Microsoft.Extensions.Options.IOptions`1 would return compiled-in defaults that look like live configuration.
+ * This record is the event transport configuration that `GET /api/event-broker-settings` returns. Only the section matching `EventBrokerSettingsDetail.Transport` is filled in; the other is null. A broker that was not selected never had its options configured, so reporting its settings would return compiled-in defaults that look like live configuration.
  */
 export interface EventBrokerSettingsDetail { 
     transport?: EventTransportEnum;

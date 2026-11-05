@@ -29,7 +29,7 @@ export interface ClientDetail {
      */
     displayName?: string | null;
     /**
-     * The `DnsClientGroupEntity` the client is explicitly assigned to, or null for none.
+     * The client group the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**
@@ -50,7 +50,7 @@ export interface ClientDetail {
      */
     updatedAtUtc?: string | null;
     /**
-     * The UTC instant until which the client\'s pause blocks all of its DNS resolution (see `DnsClientEntity.PausedUntilUtc`), or null when no pause has been set.
+     * The UTC instant until which the client\'s pause blocks all of its DNS resolution, or null when no pause has been set.
      */
     pausedUntilUtc?: string | null;
     /**

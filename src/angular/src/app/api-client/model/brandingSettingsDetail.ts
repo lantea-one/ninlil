@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the branding that `GET /api/branding-settings` returns: the site title and logo from `BrandingOptions`, plus the `AuthoritativeServerOptions` fields that answer the CHAOS-class `version.bind` and `hostname.bind` TXT queries. Both live on one settings page because both decide how the server presents itself.
+ * This record is the branding that `GET /api/branding-settings` returns: the site title and logo, plus the `DnsServer:Authoritative` settings that answer the CHAOS-class `version.bind` and `hostname.bind` TXT queries. Both live on one settings page because both decide how the server presents itself.
  */
 export interface BrandingSettingsDetail { 
     /**

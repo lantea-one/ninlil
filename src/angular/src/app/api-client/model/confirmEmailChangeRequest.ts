@@ -22,7 +22,7 @@ export interface ConfirmEmailChangeRequest {
      */
     email?: string | null;
     /**
-     * The change-email token from `UserManager<TUser>.GenerateChangeEmailTokenAsync`, Base64Url-encoded for the link, as `ConfirmPasswordResetRequest.Token` is.
+     * The change-email token ASP.NET Core Identity issued, Base64Url-encoded for the link, as `ConfirmPasswordResetRequest.Token` is.
      */
     token?: string | null;
 }
