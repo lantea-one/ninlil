@@ -21,7 +21,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
     <ProjectReference Include="..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
     <PackageReference Include="Ninlil.Common.Serializer" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Common.Serializer -->
