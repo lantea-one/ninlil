@@ -420,13 +420,16 @@ builder.Services.Configure<BrandingOptions>(
 
 // A full-system backup covers the data directory (the Data Protection key ring) and the runtime
 // configuration file. Their paths are set here after binding rather than configured separately,
-// so each has one source of truth.
+// so each has one source of truth. The settings object is registered first so the extension's
+// default does not replace it.
+builder.Services.AddSingleton(
+    new BackupPathSettings
+    {
+        DataProtectionKeyRingDirectory = dataDirectory,
+        RuntimeConfigurationFilePath = runtimeConfigurationOptions.ConfigurationFilePath,
+    }
+);
 builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
-builder.Services.PostConfigure<BackupOptions>(options =>
-{
-    options.DataProtectionKeyRingDirectory = dataDirectory;
-    options.RuntimeConfigurationFilePath = runtimeConfigurationOptions.ConfigurationFilePath;
-});
 
 // A storage switch is saved by the request side (StorageEngineSwitchService) and applied by
 // PendingStorageSwitchApplier at the next start, before any background service runs. The

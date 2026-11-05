@@ -589,12 +589,9 @@ public abstract class ServerMigrationSnapshotTestsBase(EngineFixtureBase fixture
             SystemBackupService backup = new(
                 database.Services.GetRequiredService<IServiceScopeFactory>(),
                 Microsoft.Extensions.Options.Options.Create(
-                    new BackupOptions
-                    {
-                        DataProtectionKeyRingDirectory = keyRing,
-                        MinimumPassphraseLength = 8,
-                    }
+                    new BackupOptions { MinimumPassphraseLength = 8 }
                 ),
+                new BackupPathSettings { DataProtectionKeyRingDirectory = keyRing },
                 new TlsCertificateOptions
                 {
                     PfxPath = "",

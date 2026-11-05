@@ -69,11 +69,16 @@ public sealed class SystemBackupServiceArchiveValidationTests : IAsyncLifetime
                 SelfSignedCertificateStatePath = Path.Combine(_rootDirectory, "unused.pfx"),
             }
         );
+        builder.Services.AddSingleton(
+            new BackupPathSettings
+            {
+                DataProtectionKeyRingDirectory = _keyRingDirectory,
+                RuntimeConfigurationFilePath = _configurationPath,
+            }
+        );
         builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
         builder.Services.PostConfigure<BackupOptions>(options =>
         {
-            options.DataProtectionKeyRingDirectory = _keyRingDirectory;
-            options.RuntimeConfigurationFilePath = _configurationPath;
             options.MinimumPassphraseLength = 8;
         });
 
@@ -375,16 +380,12 @@ public sealed class SystemBackupServiceArchiveValidationTests : IAsyncLifetime
 
     private SystemBackupService CreateService(long maximumRestoredPayloadBytes)
     {
-        BackupOptions options = new()
-        {
-            DataProtectionKeyRingDirectory = _keyRingDirectory,
-            RuntimeConfigurationFilePath = _configurationPath,
-            MaximumRestoredPayloadBytes = maximumRestoredPayloadBytes,
-        };
+        BackupOptions options = new() { MaximumRestoredPayloadBytes = maximumRestoredPayloadBytes };
 
         return new SystemBackupService(
             _host.Services.GetRequiredService<IServiceScopeFactory>(),
             Microsoft.Extensions.Options.Options.Create(options),
+            _host.Services.GetRequiredService<BackupPathSettings>(),
             _host.Services.GetRequiredService<TlsCertificateOptions>(),
             _host.Services.GetRequiredService<StorageOptions>(),
             NullLogger<SystemBackupService>.Instance

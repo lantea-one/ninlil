@@ -32,8 +32,8 @@ public static class EndpointRouteBuilderDnsOverHttpsExtension
     ///     <para>
     ///         Only <see cref="DnsOverHttpsOptions.Enable" />, <see cref="DnsOverHttpsOptions.Path" />
     ///         and <see cref="DnsOverHttpsOptions.MaxMessageSizeBytes" /> apply here, and the last
-    ///         two are read once, when the route is mapped. <see cref="DnsOverHttpsOptions.Port" />
-    ///         and <see cref="DnsOverHttpsOptions.Certificate" /> are ignored; the web host's
+    ///         two are read once, when the route is mapped. <see cref="DnsOverHttpsListenerOptions.Port" />
+    ///         and <see cref="DnsOverHttpsListenerOptions.Certificate" /> are ignored; the web host's
     ///         Kestrel configuration sets the port and certificate.
     ///     </para>
     ///     <para>

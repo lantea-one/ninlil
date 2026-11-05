@@ -48,11 +48,12 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
         );
         await _pipeline.StartAsync(CancellationToken.None);
 
-        DnsOverHttpsOptions options = new() { Enable = true, Port = TestPort };
+        DnsOverHttpsOptions options = new() { Enable = true };
 
         _service = new DnsOverHttpsHostedService(
             _pipeline,
             Options.Create(options),
+            Options.Create(new DnsOverHttpsListenerOptions { Port = TestPort }),
             NullLogger<DnsOverHttpsHostedService>.Instance
         );
         await _service.StartAsync(CancellationToken.None);
@@ -181,10 +182,10 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
 
         DnsOverHttpsHostedService service = new(
             pipeline,
+            Options.Create(new DnsOverHttpsOptions { Enable = true }),
             Options.Create(
-                new DnsOverHttpsOptions
+                new DnsOverHttpsListenerOptions
                 {
-                    Enable = true,
                     Port = restrictedPort,
                     Certificate = new TlsCertificateOptions
                     {

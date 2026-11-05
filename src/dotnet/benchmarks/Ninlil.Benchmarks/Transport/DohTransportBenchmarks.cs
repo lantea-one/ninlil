@@ -85,9 +85,9 @@ public class DohTransportBenchmarks
         _stateDirectory = Path.Combine(Path.GetTempPath(), $"ninlil-bench-doh-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_stateDirectory);
 
-        DnsOverHttpsOptions options = new()
+        DnsOverHttpsOptions options = new() { Enable = true };
+        DnsOverHttpsListenerOptions listenerOptions = new()
         {
-            Enable = true,
             Port = port,
             Certificate = new TlsCertificateOptions
             {
@@ -102,6 +102,7 @@ public class DohTransportBenchmarks
         _service = new DnsOverHttpsHostedService(
             _host.Pipeline,
             Options.Create(options),
+            Options.Create(listenerOptions),
             _host.Services.GetRequiredService<ILogger<DnsOverHttpsHostedService>>()
         );
         await _service.StartAsync(CancellationToken.None);
