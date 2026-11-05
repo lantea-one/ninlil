@@ -36,7 +36,11 @@ namespace Ninlil.Web.Controllers;
 ///         <see cref="Dhcpv6ProtocolOptions" />, <see cref="Dhcpv6RelayOptions" />,
 ///         <see cref="TftpServerOptions" /> and <see cref="RaProtocolOptions" /> are read through
 ///         <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />, so the GET actions
-///         show the values loaded at startup until the server restarts.
+///         show the values loaded at startup until the server restarts. A PATCH that checks one
+///         field against another (the relay circuit and remote IDs, the Router Advertisement
+///         intervals) reads the unpatched field through
+///         <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so it sees a
+///         value an earlier patch saved.
 ///         <see cref="Dhcpv4RelayOptions.Enable" /> and <see cref="Dhcpv6RelayOptions.Enable" />
 ///         each decide, once in <c>Program.cs</c> before dependency injection is built, whether the
 ///         local engine or the relay agent answers that protocol (the two protocols decide
@@ -78,10 +82,12 @@ namespace Ninlil.Web.Controllers;
 /// <param name="liveCoreOptions">The shared DHCP engine settings as they are now; only the lease expiry sweep interval is read from it.</param>
 /// <param name="protocolOptions">The DHCPv4 transport settings loaded at startup.</param>
 /// <param name="relayOptions">The DHCPv4 relay agent settings loaded at startup.</param>
+/// <param name="liveRelayOptions">The DHCPv4 relay agent settings as they are now; a PATCH checks a patched field against the unpatched ones read from it.</param>
 /// <param name="dhcpv6ProtocolOptions">The DHCPv6 transport settings loaded at startup.</param>
 /// <param name="dhcpv6RelayOptions">The DHCPv6 relay agent settings loaded at startup.</param>
 /// <param name="tftpOptions">The TFTP server settings loaded at startup.</param>
 /// <param name="raProtocolOptions">The Router Advertisement transport and timing settings loaded at startup.</param>
+/// <param name="liveRaProtocolOptions">The Router Advertisement transport and timing settings as they are now; a PATCH checks a patched interval against the unpatched one read from it.</param>
 /// <param name="raOptions">The Router Advertisement content settings as they are now.</param>
 /// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
@@ -91,10 +97,12 @@ public class DhcpSettingsController(
     IOptionsMonitor<DhcpServerOptions> liveCoreOptions,
     IOptions<Dhcpv4ProtocolOptions> protocolOptions,
     IOptions<Dhcpv4RelayOptions> relayOptions,
+    IOptionsMonitor<Dhcpv4RelayOptions> liveRelayOptions,
     IOptions<Dhcpv6ProtocolOptions> dhcpv6ProtocolOptions,
     IOptions<Dhcpv6RelayOptions> dhcpv6RelayOptions,
     IOptions<TftpServerOptions> tftpOptions,
     IOptions<RaProtocolOptions> raProtocolOptions,
+    IOptionsMonitor<RaProtocolOptions> liveRaProtocolOptions,
     IOptionsMonitor<RaOptions> raOptions,
     RuntimeConfigurationOptions runtimeConfigurationOptions
 ) : ControllerBase
@@ -474,12 +482,11 @@ public class DhcpSettingsController(
 
         if (circuitIdPatched || remoteIdPatched)
         {
-            string circuitId = circuitIdPatched
-                ? patchedCircuitId
-                : relayOptions.Value.RelayAgentCircuitId;
-            string remoteId = remoteIdPatched
-                ? patchedRemoteId
-                : relayOptions.Value.RelayAgentRemoteId;
+            // The startup options would miss an ID saved by an earlier patch before the restart,
+            // so the unpatched field comes from the monitor, one read for both.
+            Dhcpv4RelayOptions current = liveRelayOptions.CurrentValue;
+            string circuitId = circuitIdPatched ? patchedCircuitId : current.RelayAgentCircuitId;
+            string remoteId = remoteIdPatched ? patchedRemoteId : current.RelayAgentRemoteId;
 
             if (
                 !Dhcpv4RelayOptions.TryValidateRelayAgentIds(
@@ -771,8 +778,12 @@ public class DhcpSettingsController(
     )
     {
         List<PresetConfigurationSetting> settings = [];
-        TimeSpan effectiveMin = raProtocolOptions.Value.MinRouterAdvertisementInterval;
-        TimeSpan effectiveMax = raProtocolOptions.Value.MaxRouterAdvertisementInterval;
+
+        // One read, so a reload between the two fields cannot mix two versions. The startup
+        // options would miss an interval saved by an earlier patch before the restart.
+        RaProtocolOptions current = liveRaProtocolOptions.CurrentValue;
+        TimeSpan effectiveMin = current.MinRouterAdvertisementInterval;
+        TimeSpan effectiveMax = current.MaxRouterAdvertisementInterval;
         bool intervalPatched = false;
 
         if (patch.TryGetMergePatchBoolean("enable", out bool enable))
@@ -826,7 +837,7 @@ public class DhcpSettingsController(
             );
         }
 
-        // A field left out of the patch is compared at its current value.
+        // A field left out of the patch is compared at its stored value.
         if (
             intervalPatched
             && RaContentRules.CheckIntervals(effectiveMin, effectiveMax) is { } intervalError

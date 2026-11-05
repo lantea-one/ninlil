@@ -55,7 +55,15 @@ public static class DhcpServiceRegistration
         if (dhcpv4RelayEnabled)
             services.AddNinlilDhcpv4Relay(configuration);
         else
+        {
             services.AddNinlilDhcpServerCore(configuration);
+
+            // The relay card still reads and validates these settings while the local engine
+            // answers, and its monitor sees a saved value only when the options are bound.
+            services.Configure<Dhcpv4RelayOptions>(
+                configuration.GetSection(Dhcpv4RelayOptions.SectionName)
+            );
+        }
 
         // The DHCPv6 UDP transport is registered always, independently of the DHCPv4 choice above.
         // Dhcpv6ListenerHostedService checks Dhcpv6ProtocolOptions.Enable once at boot, off by default

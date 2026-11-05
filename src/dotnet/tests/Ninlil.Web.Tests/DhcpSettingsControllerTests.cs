@@ -949,10 +949,12 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
             new FixedMonitor<DhcpServerOptions>(new DhcpServerOptions()),
             Microsoft.Extensions.Options.Options.Create(new Dhcpv4ProtocolOptions()),
             Microsoft.Extensions.Options.Options.Create(new Dhcpv4RelayOptions()),
+            new FixedMonitor<Dhcpv4RelayOptions>(new Dhcpv4RelayOptions()),
             Microsoft.Extensions.Options.Options.Create(new Dhcpv6ProtocolOptions()),
             Microsoft.Extensions.Options.Options.Create(new Dhcpv6RelayOptions()),
             Microsoft.Extensions.Options.Options.Create(new TftpServerOptions()),
             Microsoft.Extensions.Options.Options.Create(new RaProtocolOptions()),
+            new FixedMonitor<RaProtocolOptions>(new RaProtocolOptions()),
             new FixedMonitor<RaOptions>(live),
             new RuntimeConfigurationOptions()
         );
