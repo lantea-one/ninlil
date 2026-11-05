@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
@@ -60,13 +61,18 @@ public sealed class TsigTransferHost : IAsyncDisposable
     ///     configuration source after its own settings, so a test can change options while the host
     ///     runs; <see langword="null" /> adds none.
     /// </param>
+    /// <param name="loggerProvider">
+    ///     A logger provider added to the host, so a test can read what the services log;
+    ///     <see langword="null" /> adds none.
+    /// </param>
     public static async Task<TsigTransferHost> CreateAsync(
         int recordsPerMessage = 2,
-        string reloadableConfigurationPath = null
+        string reloadableConfigurationPath = null,
+        ILoggerProvider loggerProvider = null
     )
     {
         TsigTransferHost result = new();
-        await result.StartAsync(recordsPerMessage, reloadableConfigurationPath);
+        await result.StartAsync(recordsPerMessage, reloadableConfigurationPath, loggerProvider);
         return result;
     }
 
@@ -75,9 +81,17 @@ public sealed class TsigTransferHost : IAsyncDisposable
     /// </summary>
     public IServiceProvider Services => _host.Services;
 
-    private async Task StartAsync(int recordsPerMessage, string reloadableConfigurationPath)
+    private async Task StartAsync(
+        int recordsPerMessage,
+        string reloadableConfigurationPath,
+        ILoggerProvider loggerProvider
+    )
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+
+        if (loggerProvider is not null)
+            builder.Logging.AddProvider(loggerProvider);
+
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
         builder.Configuration["DnsServer:Authoritative:ZoneTransfer:RecordsPerMessage"] =
             recordsPerMessage.ToString();
@@ -202,6 +216,60 @@ public sealed class TsigTransferHost : IAsyncDisposable
             DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(dataType, data),
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
+
+    /// <summary>
+    ///     This method stores a record in the hosted zone straight through the repository, so the
+    ///     REST API's data checks do not apply, and reloads the zone cache. A test uses it to
+    ///     plant a row whose data cannot be written as RDATA.
+    /// </summary>
+    /// <param name="name">The record's owner name.</param>
+    /// <param name="type">The record type.</param>
+    /// <param name="dataJson">The record's stored JSON data, as is.</param>
+    public async Task AddRecordAsync(string name, DnsResourceRecordTypeEnum type, string dataJson)
+    {
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IZoneRepository zoneRepository =
+            scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        ZoneEntity zone = await zoneRepository.FindByNameAsync(ZoneName);
+
+        RecordEntity record = NewRecord(
+            zone.Id,
+            name,
+            type,
+            typeof(ARecordData),
+            new ARecordData(IPAddress.Loopback)
+        );
+        record.DataJson = dataJson;
+        await recordRepository.AddAsync(record);
+        await unitOfWork.SaveChangesAsync();
+        await _host.Services.GetRequiredService<AuthoritativeZoneCache>().ReloadZoneAsync(zone.Id);
+    }
+
+    /// <summary>
+    ///     This method overwrites the hosted zone's SOA data with <paramref name="dataJson" />
+    ///     straight through the repository and reloads the zone cache.
+    /// </summary>
+    public async Task SetSoaDataAsync(string dataJson)
+    {
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        IZoneRepository zoneRepository =
+            scope.ServiceProvider.GetRequiredService<IZoneRepository>();
+        IRecordRepository recordRepository =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        ZoneEntity zone = await zoneRepository.FindByNameAsync(ZoneName);
+
+        RecordEntity soa = (
+            await recordRepository.FindByNameAsync(zone.Id, ZoneName, DnsResourceRecordTypeEnum.Soa)
+        ).Single();
+        soa.DataJson = dataJson;
+        recordRepository.Update(soa);
+        await unitOfWork.SaveChangesAsync();
+        await _host.Services.GetRequiredService<AuthoritativeZoneCache>().ReloadZoneAsync(zone.Id);
+    }
 
     /// <summary>
     ///     This method stores a new enabled hmac-sha256 key and returns its name. Names are unique
@@ -411,11 +479,16 @@ public sealed class TsigTransferHost : IAsyncDisposable
     ///     When set, both snapshots carry this refresh interval instead of the current SOA's, so a
     ///     test can make a step's SOA differ from its neighbours or from the stored SOA.
     /// </param>
+    /// <param name="addedRecordsJson">
+    ///     The entry's added-records snapshot, as is; a test passes one that holds an unwritable
+    ///     record.
+    /// </param>
     public async Task AddJournalEntryAsync(
         long oldSerial,
         long newSerial,
         bool withSoaHistory = true,
-        uint? soaRefreshSeconds = null
+        uint? soaRefreshSeconds = null,
+        string addedRecordsJson = "[]"
     )
     {
         await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
@@ -462,7 +535,7 @@ public sealed class TsigTransferHost : IAsyncDisposable
                 OldSerial = oldSerial,
                 NewSerial = newSerial,
                 RemovedRecordsJson = "[]",
-                AddedRecordsJson = "[]",
+                AddedRecordsJson = addedRecordsJson,
                 OldSoaRecordJson = oldSoaJson,
                 NewSoaRecordJson = newSoaJson,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
