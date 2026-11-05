@@ -358,7 +358,7 @@ public class ZoneSigningService(
                 await zoneRepository.ListAsync(zone => zone.Name == delegationName, stoppingToken)
             ).FirstOrDefault();
 
-            if (childZone is not { IsDnssecSigned: true })
+            if (!DelegationDsKeys.ContributesDs(childZone))
                 continue;
 
             IReadOnlyList<DnssecKeyEntity> childKeys = await keyRepository.ListByZoneIdAsync(
@@ -366,21 +366,15 @@ public class ZoneSigningService(
                 stoppingToken
             );
 
-            // One DS per Active KSK of the child with a permitted algorithm; a child whose keys
-            // are all prohibited is served unsigned, so its parent publishes an insecure
-            // delegation. In a Double-Signature KSK rollover (RFC 6781
-            // §4.1.2) the parent swaps the DS at the "DS change" stage rather than publishing
-            // both, so a KSK in DoubleSignature (incoming or outgoing) gets no DS here.
-            // DnssecKeyRolloverBackgroundService promotes the incoming KSK to Active, which moves
-            // the DS to it.
+            // One DS per key DelegationDsKeys.GetsDs accepts (an Active KSK with a permitted
+            // algorithm); a child whose keys are all prohibited is served unsigned, so its parent
+            // publishes an insecure delegation. A KSK in DoubleSignature gets no DS here (RFC 6781
+            // §4.1.2). DnssecKeyRolloverBackgroundService promotes the incoming KSK to Active,
+            // which moves the DS to it. SignedZoneCache re-signs this zone when that set changes.
             List<DnsResourceRecord> dsRecords =
             [
                 .. childKeys
-                    .Where(key =>
-                        key.LifecycleState == DnssecKeyLifecycleStateEnum.Active
-                        && key.Role == DnssecKeyRoleEnum.Ksk
-                        && !DnssecAlgorithmRegistry.IsSigningProhibited(key.Algorithm)
-                    )
+                    .Where(DelegationDsKeys.GetsDs)
                     .Select(childKsk =>
                     {
                         byte[] childDnsKeyRdata = EncodeDnsKeyRdata(childKsk);
