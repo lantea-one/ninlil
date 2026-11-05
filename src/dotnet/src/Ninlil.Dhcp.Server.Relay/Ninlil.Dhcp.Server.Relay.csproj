@@ -9,7 +9,7 @@
             servers -- incrementing "hops", setting its own "giaddr" if not already set, and
             optionally adding its own Relay Agent Information (Circuit ID/Remote ID) -- and relays
             whatever reply comes back down to the original client. The DHCPv6 relay agent (RFC
-            8415, scoped to a single relay hop) wraps a client's message in a RELAY-FORW envelope,
+            9915, scoped to a single relay hop) wraps a client's message in a RELAY-FORW envelope,
             forwards it to one or more configured upstream DHCPv6 servers, and unwraps whatever
             RELAY-REPL comes back to relay the inner reply down to the original client.
         </Description>

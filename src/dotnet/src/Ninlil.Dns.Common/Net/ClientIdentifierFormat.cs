@@ -5,7 +5,7 @@ namespace Ninlil.Dns.Common.Net;
 
 /// <summary>
 ///     This static class gives every part of Ninlil one normal form of a client identifier: a MAC
-///     address, a DHCPv4 Client-identifier (RFC 2132 Section 9.14) or a DUID (RFC 8415
+///     address, a DHCPv4 Client-identifier (RFC 2132 Section 9.14) or a DUID (RFC 9915
 ///     Section 11). All three are opaque byte strings to the matchers, so one rule serves them.
 ///     <para>
 ///         The normal form is lowercase hex, two digits per byte, joined by colons

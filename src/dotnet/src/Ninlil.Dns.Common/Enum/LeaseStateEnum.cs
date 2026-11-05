@@ -7,7 +7,7 @@ namespace Ninlil.Dns.Common.Enum;
 /// <summary>
 ///     This enumeration describes where a DHCP lease is in its lifecycle, from the moment an
 ///     address is offered to a client until it goes back to the pool. The states follow the
-///     exchanges in RFC 2131 (DHCPv4) and RFC 8415 (DHCPv6), which move a lease through the same
+///     exchanges in RFC 2131 (DHCPv4) and RFC 9915 (DHCPv6), which move a lease through the same
 ///     stages even though their messages differ.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<LeaseStateEnum>>]

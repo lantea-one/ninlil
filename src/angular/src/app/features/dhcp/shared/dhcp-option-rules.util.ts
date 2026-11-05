@@ -65,7 +65,7 @@ export const DHCPV6_SERVER_OWNED_CODES: Readonly<Record<number, string>> = {
   39: 'Client FQDN',
 };
 
-/** The largest DHCPv6 option value in bytes: the length field is two bytes (RFC 8415 §21.1). */
+/** The largest DHCPv6 option value in bytes: the length field is two bytes (RFC 9915 §21.1). */
 export const DHCPV6_MAX_OPTION_VALUE_BYTES = 65535;
 
 /**

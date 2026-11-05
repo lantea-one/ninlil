@@ -136,7 +136,7 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   INFORMATION-REQUEST with stateful addresses (IA_NA) and prefix delegation (IA_PD) side by side,
   and with optional Rapid Commit.
 - **A relay-agent mode** for each protocol, which replaces the local server for that protocol
-  (RFC 1542 and RFC 2131 §4.1 with the RFC 3046 option for DHCPv4, RFC 8415 §9 and §19
+  (RFC 1542 and RFC 2131 §4.1 with the RFC 3046 option for DHCPv4, RFC 9915 §9 and §19
   RELAY-FORW/RELAY-REPL for DHCPv6).
 - **Router Advertisement** (RFC 4861) for SLAAC, with the RFC 8106 DNS servers and search domains,
   RFC 4191 routes, and different content per interface.
@@ -3179,7 +3179,7 @@ out. Four services take part, and each one is off until you turn it on:
 | Service | Answers | Standard | Default port |
 |---|---|---|---|
 | DHCPv4 | A device that asks for an IPv4 address, router and DNS server | RFC 2131 | UDP `67` (server), `68` (client) |
-| DHCPv6 | A device that asks for an IPv6 address, or for a block of addresses to hand out on a network behind it | RFC 8415 | UDP `547` (server), `546` (client) |
+| DHCPv6 | A device that asks for an IPv6 address, or for a block of addresses to hand out on a network behind it | RFC 9915 | UDP `547` (server), `546` (client) |
 | Router Advertisement (RA) | A device that builds an IPv6 address itself (SLAAC) and needs the network's prefix, router and DNS server | RFC 4861, RFC 8106 | none, it uses raw ICMPv6 |
 | TFTP | A device that fetches a boot file | RFC 1350 | UDP `69`, see [TFTP and PXE](#tftp-and-pxe) |
 
@@ -3591,7 +3591,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   ignores temporary addresses (`IA_TA`).
 - **Rapid Commit.** DHCPv6 Rapid Commit (a two-message exchange) is off. Turn it on with
   `NINLIL_DHCP_SERVER_CORE_ENABLE_DHCPV6_RAPID_COMMIT=true` only when the network has one DHCPv6
-  server: with several, all but one commit a lease that the device does not use (RFC 8415
+  server: with several, all but one commit a lease that the device does not use (RFC 9915
   Section 21.14).
 - **DNS registration.** Ninlil registers the host name a device sends: the Host Name option for
   DHCPv4, the Client FQDN option for DHCPv6. The name becomes a label of the scope's zone: letters

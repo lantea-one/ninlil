@@ -7,7 +7,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class encodes a <see cref="Dhcpv6RelayMessage" /> into bytes (RFC 8415 Sections 9.1,
+///     This class encodes a <see cref="Dhcpv6RelayMessage" /> into bytes (RFC 9915 Sections 9.1,
 ///     9.2 and 21). It writes the relay header itself and the options with
 ///     <see cref="Dhcpv6MessageWriter.WriteOptions" />. Like <see cref="Dhcpv6MessageWriter" />, it
 ///     encodes messages Ninlil builds, so it throws <see cref="ArgumentException" /> on an invalid

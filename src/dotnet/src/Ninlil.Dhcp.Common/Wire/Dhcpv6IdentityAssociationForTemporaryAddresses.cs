@@ -6,7 +6,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 8415 Section 21.5's Identity Association for Temporary
+///     This class represents RFC 9915 Section 21.5's Identity Association for Temporary
 ///     Addresses (IA_TA) option. It nests <see cref="Dhcpv6IdentityAssociationAddress" /> options
 ///     like <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />, but has no T1/T2
 ///     timers, since temporary addresses are not renewed.

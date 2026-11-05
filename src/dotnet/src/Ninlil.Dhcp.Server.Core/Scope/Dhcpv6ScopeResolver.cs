@@ -17,11 +17,11 @@ namespace Ninlil.Dhcp.Server.Core.Scope;
 ///     request without a Client Identifier gets no scope.
 ///     <para>
 ///         <b>Relayed address requests.</b> When a request for an address-assignment scope
-///         carries a usable RELAY-FORW <c>link-address</c> (not <c>::</c>, which RFC 8415
+///         carries a usable RELAY-FORW <c>link-address</c> (not <c>::</c>, which RFC 9915
 ///         Section 13.1 has a server ignore),
 ///         <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c> copies it to
 ///         <see cref="Dhcpv6Message.RelayLinkAddress" /> and the request is served from the scope
-///         whose subnet contains it, and from no other (RFC 8415 Section 13.1). When no enabled
+///         whose subnet contains it, and from no other (RFC 9915 Section 13.1). When no enabled
 ///         scope contains it the resolver returns <see langword="null" /> (no reply) and logs at
 ///         Debug.
 ///     </para>
@@ -84,7 +84,7 @@ public sealed class Dhcpv6ScopeResolver(
             request.RelayLinkAddress is not null
             && !request.RelayLinkAddress.Equals(IPAddress.IPv6Any);
 
-        // A relayed address request belongs to the relay's link and to no other scope (RFC 8415
+        // A relayed address request belongs to the relay's link and to no other scope (RFC 9915
         // Section 13.1). A delegated pool is not on the requesting router's link, so prefix
         // delegation keeps the fallbacks below.
         if (hasLinkAddress && kind == DhcpScopeKindEnum.AddressAssignment)

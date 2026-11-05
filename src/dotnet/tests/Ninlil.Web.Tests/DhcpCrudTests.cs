@@ -321,7 +321,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // A 'PrefixDelegation' scope is IPv6-only; RFC 8415 Prefix Delegation has no DHCPv4
+        // A 'PrefixDelegation' scope is IPv6-only; RFC 9915 Prefix Delegation has no DHCPv4
         // equivalent.
         HttpResponseMessage ipv4PdResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",

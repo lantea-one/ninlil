@@ -13,7 +13,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Name">An operator-chosen, human-readable, unique name for the scope.</param>
 /// <param name="ProtocolVersion">Whether this is a DHCPv4 or a DHCPv6 scope.</param>
 /// <param name="Kind">
-///     What the scope hands out: addresses, or (DHCPv6 only) RFC 8415 delegated prefixes.
+///     What the scope hands out: addresses, or (DHCPv6 only) RFC 9915 delegated prefixes.
 ///     Defaults to <see cref="DhcpScopeKindEnum.AddressAssignment" />, the only valid value for a
 ///     DHCPv4 scope (see <c>DhcpScopeEntity.Kind</c>).
 /// </param>
@@ -170,7 +170,7 @@ public record DhcpReservationDetail(
 ///     The option's numeric tag (on a DHCPv6 scope, its option code). On a DHCPv6 scope use 1 to
 ///     255 except the codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19,
 ///     20, 25, 26, 37 and 39), with a value of at most 65 535 bytes; code 24 (Domain Search List)
-///     must be domain names in uncompressed wire form (RFC 3646 Section 4, which points to RFC 8415 Section 10). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)
+///     must be domain names in uncompressed wire form (RFC 3646 Section 4, which points to RFC 9915 Section 10). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)
 ///     and 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and
 ///     255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name)
 ///     and 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in
@@ -285,7 +285,7 @@ public record DhcpTagRuleDetail(
 ///     scope rejects tag 0, values over 65 535 bytes and the option codes the server writes
 ///     itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24
 ///     (Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4, which
-///     points to RFC 8415 Section 10).
+///     points to RFC 9915 Section 10).
 /// </param>
 /// <param name="ValueHex">
 ///     The option's raw value bytes as hexadecimal, as in
@@ -415,7 +415,7 @@ public record Dhcpv6ProtocolSettingsDetail(bool Enable, int ServerPort, int Clie
 
 /// <summary>
 ///     This record is the REST shape of <c>Ninlil.Dhcp.Server.Relay.Dhcpv6RelayOptions</c>
-///     (<c>GET /api/dhcp-settings/dhcpv6-relay</c>): whether the server acts as an RFC 8415
+///     (<c>GET /api/dhcp-settings/dhcpv6-relay</c>): whether the server acts as an RFC 9915
 ///     DHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart
 ///     of <see cref="DhcpRelaySettingsDetail" />.
 /// </summary>
@@ -426,7 +426,7 @@ public record Dhcpv6ProtocolSettingsDetail(bool Enable, int ServerPort, int Clie
 ///     The IPv6 address the relay puts in the RELAY-FORW "link-address" field, or
 ///     <see langword="null" /> to detect it at startup.
 /// </param>
-/// <param name="InterfaceId">The RFC 8415 Section 21.18 Interface-ID text added to every RELAY-FORW, or <see langword="null" /> for none.</param>
+/// <param name="InterfaceId">The RFC 9915 Section 21.18 Interface-ID text added to every RELAY-FORW, or <see langword="null" /> for none.</param>
 public record Dhcpv6RelaySettingsDetail(
     bool Enable,
     IReadOnlyList<string> UpstreamServerAddresses,

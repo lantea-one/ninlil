@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dhcp.Server.Relay.Identity;
 
 /// <summary>
-///     This class resolves the relay's RFC 8415 "link-address" once, when the singleton is
+///     This class resolves the relay's RFC 9915 "link-address" once, when the singleton is
 ///     created (see <see cref="Extension.ServiceCollectionDhcpv6RelayExtension.AddNinlilDhcpv6Relay" />).
 ///     It uses <see cref="Dhcpv6RelayOptions.RelayLinkAddress" /> when that is a valid
 ///     non-link-local IPv6 address, and otherwise the first IPv6 address that is neither loopback

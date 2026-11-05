@@ -38,7 +38,7 @@ const DEFAULT_PAGE_SIZE = 25;
  * `GET /api/dhcp-scopes/{scopeId}/reservations` and, with `dhcpscopes:write`, links to add and
  * edit and deletes one (`DELETE .../reservations/{id}`).
  *
- * <p>RFC 8415 has no reservation for a delegated prefix, and the backend refuses one for a Prefix
+ * <p>RFC 9915 has no reservation for a delegated prefix, and the backend refuses one for a Prefix
  * Delegation scope. The page loads the scope's `kind` with its name ({@link loadScope}) and, for
  * such a scope, hides "Add reservation" and shows a notice instead.
  */

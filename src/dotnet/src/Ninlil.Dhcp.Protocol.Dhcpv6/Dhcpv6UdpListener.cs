@@ -14,7 +14,7 @@ namespace Ninlil.Dhcp.Protocol.Dhcpv6;
 /// <summary>
 ///     This class is the DHCPv6 UDP transport, the counterpart of
 ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4UdpListener</c>. It binds the server port, joins the
-///     RFC 8415 Section 7.1 All_DHCP_Relay_Agents_and_Servers group on every interface, decodes
+///     RFC 9915 Section 7.1 All_DHCP_Relay_Agents_and_Servers group on every interface, decodes
 ///     client datagrams with <see cref="Dhcpv6MessageReader" />, passes them to the
 ///     <see cref="IDhcpv6RequestHandler" /> and unicasts the reply back. Address assignment,
 ///     prefix delegation and every other server decision belong to the handler.

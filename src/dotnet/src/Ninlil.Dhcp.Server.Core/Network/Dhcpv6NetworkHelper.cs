@@ -177,7 +177,7 @@ internal static class Dhcpv6NetworkHelper
     /// <summary>
     ///     This method reports whether a prefix is aligned: none of the bits beyond
     ///     <paramref name="prefixLength" /> are set, so the address is the base of its block. A
-    ///     delegated prefix must be aligned: RFC 8415 §21.22 carries a prefix and its length, and
+    ///     delegated prefix must be aligned: RFC 9915 §21.22 carries a prefix and its length, and
     ///     Ninlil accepts only a base address.
     /// </summary>
     /// <param name="prefix">The prefix base address to check.</param>
