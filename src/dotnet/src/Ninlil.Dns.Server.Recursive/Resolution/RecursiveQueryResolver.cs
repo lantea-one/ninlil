@@ -163,13 +163,25 @@ public class RecursiveQueryResolver(
             }
         }
 
-        // RFC 6147 DNS64: synthesis only for an AAAA query that came back NoData (or whose AAAA
-        // records were all excluded above), never for NXDOMAIN, SERVFAIL or an enforced Bogus
-        // result, since only NoData means the name may have an A record to synthesize from.
+        // RFC 6147 §5.1.2: an AAAA lookup that ends in NXDOMAIN is returned as it is. Any other
+        // RCODE is treated as RCODE 0 with an empty answer, and §5.1.3 treats a timeout as
+        // SERVFAIL, so NoData (including an answer whose AAAA records were all excluded above)
+        // and a failed lookup both lead to synthesis. A failed lookup here is
+        // RecursiveResolutionStatusEnum.ServFail: every upstream or transport error, which the
+        // engine does not tell apart by RCODE. A bogus result never reaches this branch as
+        // ServFail: validation only runs on Success, NxDomain and NoData, and an enforced Bogus
+        // result clears dns64Applies above (RFC 6147 §5.5).
         IReadOnlyList<DnsResourceRecord> synthesizedAaaa = [];
         bool dns64SourceBogus = false;
 
-        if (dns64Applies && result.Status == RecursiveResolutionStatusEnum.NoData)
+        bool aaaaLookupFailed = result.Status == RecursiveResolutionStatusEnum.ServFail;
+
+        if (
+            dns64Applies
+            && result.Status
+                is RecursiveResolutionStatusEnum.NoData
+                    or RecursiveResolutionStatusEnum.ServFail
+        )
         {
             IterativeResolutionResult aResult = await engine.ResolveAsync(
                 question.Name,
@@ -212,6 +224,18 @@ public class RecursiveQueryResolver(
         enforceBogus |= dns64Servfail;
 
         bool didSynthesizeDns64Answer = synthesizedAaaa.Count > 0;
+
+        // RFC 6147 §5.1.2: a synthesized answer after a failed AAAA lookup is a NOERROR answer.
+        // Without a synthesized answer (the A lookup failed or found nothing) the client sees the
+        // AAAA error it would have seen without DNS64.
+        if (aaaaLookupFailed && didSynthesizeDns64Answer)
+            result = new IterativeResolutionResult(
+                RecursiveResolutionStatusEnum.NoData,
+                [],
+                [],
+                null,
+                result.ZoneCutsTraversed
+            );
 
         DnsMessage response = new()
         {
