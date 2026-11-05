@@ -13,6 +13,7 @@ public sealed class MongoReplicaLagTests
 {
     private static readonly DateTime Base = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
+    // BSON dates keep whole milliseconds, so lag expectations compare to two decimals.
     private static BsonDocument Member(
         string name,
         string state,
@@ -65,7 +66,7 @@ public sealed class MongoReplicaLagTests
 
     /// <summary>
     ///     A secondary a few milliseconds late after an idle no-op write is reported behind by the
-    ///     wall-time gap at that one check and current at the next.
+    ///     time since its previous operation at that one check and current at the next.
     /// </summary>
     [Fact]
     public void Measure_WhenAnIdleSecondaryIsAMomentLate_IsBehindOnceThenCurrent()
@@ -79,7 +80,7 @@ public sealed class MongoReplicaLagTests
             Status(22.2, primary, Member("s", "SECONDARY", 120, 20.1))
         );
 
-        Assert.Equal(20, first.Value, 3);
+        Assert.Equal(20.1, first.Value, 2);
         Assert.Equal(0, next);
     }
 
@@ -88,7 +89,7 @@ public sealed class MongoReplicaLagTests
     ///     stays that way at later checks.
     /// </summary>
     [Fact]
-    public void Measure_WhenASecondaryIsFarBehindAtTheFirstCheck_ReportsTheFullGap()
+    public void Measure_WhenASecondaryIsFarBehindAtTheFirstCheck_ReportsItsWholeLag()
     {
         BsonDocument secondary = Member("s", "SECONDARY", 1000, 1000);
 
@@ -99,8 +100,8 @@ public sealed class MongoReplicaLagTests
             Status(1605.1, Member("p", "PRIMARY", 1605, 1605), secondary)
         );
 
-        Assert.Equal(600, first.Value, 3);
-        Assert.Equal(605, second.Value, 3);
+        Assert.Equal(600.1, first.Value, 2);
+        Assert.Equal(605.1, second.Value, 2);
     }
 
     /// <summary>
@@ -118,21 +119,35 @@ public sealed class MongoReplicaLagTests
             Status(27, primary, Member("s", "SECONDARY", 120, 20.1))
         );
 
-        Assert.Equal(20, behind.Value, 3);
+        Assert.Equal(25.9, behind.Value, 2);
         Assert.Equal(0, current);
     }
 
     /// <summary>
-    ///     Under steady writes the gap between the two operations is the lag.
+    ///     Under steady writes the lag is the time since the secondary's last operation.
     /// </summary>
     [Fact]
-    public void Measure_UnderSteadyWrites_IsTheGapBetweenTheOperations()
+    public void Measure_UnderSteadyWrites_IsTheTimeSinceTheSecondarysLastOperation()
     {
         (double? seconds, _) = MongoReplicaLag.Measure(
             Status(110.1, Member("p", "PRIMARY", 111, 110.0), Member("s", "SECONDARY", 105, 104.0))
         );
 
-        Assert.Equal(6, seconds.Value, 3);
+        Assert.Equal(6.1, seconds.Value, 2);
+    }
+
+    /// <summary>
+    ///     A secondary that misses one write after which the primary idles is behind by the time
+    ///     since its own last operation, not by the few milliseconds between the two operations.
+    /// </summary>
+    [Fact]
+    public void Measure_WhenASecondaryMissesOneWriteBeforeAnIdlePause_IsBehindByTheTimeSinceItsLastOperation()
+    {
+        (double? seconds, _) = MongoReplicaLag.Measure(
+            Status(45, Member("p", "PRIMARY", 130, 30.0), Member("s", "SECONDARY", 129, 29.99))
+        );
+
+        Assert.Equal(15.01, seconds.Value, 2);
     }
 
     /// <summary>
@@ -151,7 +166,7 @@ public sealed class MongoReplicaLagTests
             )
         );
 
-        Assert.Equal(19.9, seconds.Value, 3);
+        Assert.Equal(24, seconds.Value, 3);
     }
 
     /// <summary>

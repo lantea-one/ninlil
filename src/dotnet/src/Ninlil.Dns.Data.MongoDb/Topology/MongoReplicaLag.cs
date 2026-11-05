@@ -5,8 +5,8 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 
 /// <summary>
 ///     This class computes the replication lag from a <c>replSetGetStatus</c> reply for
-///     <see cref="MongoReplicaHealthProbe" />. The lag of a secondary is how far its last applied
-///     operation trails the primary's, and the result is the lag of the most delayed healthy secondary, because the
+///     <see cref="MongoReplicaHealthProbe" />. The lag of a secondary is how long it may have been
+///     missing data, and the result is the lag of the most delayed healthy secondary, because the
 ///     read preference may pick any of them.
 ///     <list type="bullet">
 ///         <item>
@@ -22,17 +22,20 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 ///             wall-clock time of that operation.)
 ///         </item>
 ///         <item>
-///             Behind: the secondary lacks the primary's newest operation. Its lag is the wall-time
-///             gap between the primary's last applied operation and the secondary's (the
-///             <c>optimeDate</c> gap when a status has no wall times). That is an upper bound of
-///             the true lag: the secondary has been behind since the primary wrote the first
-///             operation the secondary lacks, which is no earlier than the secondary's own last
-///             operation. The probe keeps no state between checks, so a secondary that is far
-///             behind at the first check, a new member or a restarted monitor is never reported
-///             below its lag; a stale replica serving reads is worse than a brief fallback to the
-///             primary. The cost: a secondary a few milliseconds late right after the primary's
-///             idle no-op write reads as behind by the gap between two no-op writes (20 seconds
-///             on the pinned MongoDB 8 image) for that one check, and is current at the next.
+///             Behind: the secondary lacks the primary's newest operation. Its lag is the status
+///             <c>date</c> (the primary's clock now) minus the secondary's last applied wall time
+///             (its <c>optimeDate</c> when a status has no wall times). That is an upper bound of
+///             the true lag: the first operation the secondary lacks was written after the
+///             secondary's own last operation, so it has been missing data for less than that.
+///             The gap between the two members' last operations is not a bound: when the primary
+///             writes once and then idles, the secondary misses that write while the gap stays a
+///             few milliseconds. The probe keeps no state between checks, so a secondary that is
+///             far behind at the first check, a new member or a restarted monitor is never
+///             reported below its lag; a stale replica serving reads is worse than a brief
+///             fallback to the primary. The cost: a secondary a few milliseconds late right after
+///             the primary's idle no-op write reads as behind by the time since its previous
+///             operation (up to the 20 seconds between no-op writes on the pinned MongoDB 8
+///             image) for that one check, and is current at the next.
 ///         </item>
 ///     </list>
 ///     The wall times are the primary's clock, so the arithmetic needs no clock synchronization
@@ -58,7 +61,10 @@ public static class MongoReplicaLag
         if (primary is null)
             return (null, "The replica set has no primary, so the lag is unknown.");
 
-        DateTime primaryApplied = AppliedTime(primary);
+        // The primary's clock, so the arithmetic needs no clock synchronization with this host.
+        DateTime now = status.Contains("date")
+            ? status["date"].ToUniversalTime()
+            : AppliedTime(primary);
         double? worst = null;
         foreach (
             BsonDocument member in members.Where(member =>
@@ -68,7 +74,7 @@ public static class MongoReplicaLag
         {
             double lag = IsCurrent(primary, member)
                 ? 0
-                : Math.Max(0, (primaryApplied - AppliedTime(member)).TotalSeconds);
+                : Math.Max(0, (now - AppliedTime(member)).TotalSeconds);
             worst = Math.Max(worst ?? 0, lag);
         }
 
