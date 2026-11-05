@@ -140,6 +140,175 @@ public sealed class DnsRewriteEngine(
         return BuildResponse(request, question, match);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         RFC 2308 §2.1 and §2.2: NXDOMAIN says the name does not exist, NODATA says it exists
+    ///         without data of the queried type. A name that has an A or AAAA rewrite exists, so
+    ///         a query for a type the rewrite does not answer is NODATA. The conversion needs an
+    ///         NXDOMAIN with an empty answer section (an answer section means a real CNAME chain
+    ///         whose target is missing, so the queried name exists on its own), and a rewrite
+    ///         that applies to the client. A CNAME rewrite does not count: it answers A, AAAA and
+    ///         CNAME questions itself.
+    ///     </para>
+    ///     <para>
+    ///         The authority section keeps the zone's SOA (RFC 2308 §3: a NODATA answer carries
+    ///         it) with a TTL of no more than the SOA's MINIMUM field and its own TTL (§3: the
+    ///         negative TTL is the lesser of the two) and no more than the rewrite TTL, so the
+    ///         client asks again no later than it would for a rewrite answer. The RRSIG over the
+    ///         SOA gets the same TTL (§3). The SOA is the closest enclosing zone's, which is valid
+    ///         for NODATA at any name in that zone. Without a SOA none is sent, and the answer is
+    ///         not cacheable (§5: negative responses without a SOA should not be cached). The AA
+    ///         and AD flags are cleared: this server is no authority for the rewritten name, and
+    ///         a signed denial of the name's existence no longer describes the answer (RFC 4035
+    ///         §3.2.3). NSEC and NSEC3 records and the RRSIGs over them (RFC 4034 §3.1, §4;
+    ///         RFC 5155 §7.2) are dropped for the same reason, whether or not the client set DO.
+    ///     </para>
+    /// </remarks>
+    public async ValueTask<DnsMessage> TryBuildNoDataForNxDomainAsync(
+        DnsMessage request,
+        DnsMessage resolved,
+        IPAddress remoteAddress = null,
+        CancellationToken stoppingToken = default
+    )
+    {
+        if (!options.CurrentValue.Enable)
+            return null;
+
+        if (
+            resolved.ResponseCode != DnsResponseCodeEnum.NxDomain
+            || resolved.Answers.Count != 0
+            || request.Questions.Count == 0
+        )
+            return null;
+
+        DnsQuestion question = request.Questions[0];
+
+        if (question.Class != DnsClassEnum.Internet)
+            return null;
+
+        DnsRewriteSet rewrites = await cache.GetAsync(stoppingToken);
+
+        if (rewrites.IsEmpty)
+            return null;
+
+        string queriedPresentation = NormalizeDomain(question.Name.ToString());
+        DnsClientInfo resolvedClient = await ResolveClientAsync(remoteAddress, stoppingToken);
+
+        // A rewrite that answers this type is the pipeline's business, not a NODATA case.
+        if (FindBestMatch(rewrites, queriedPresentation, question.Type, resolvedClient) is not null)
+            return null;
+
+        if (!HasAddressRewrite(rewrites, queriedPresentation, resolvedClient))
+            return null;
+
+        uint rewriteTimeToLive = options.CurrentValue.TimeToLiveSeconds;
+        DnsMessage noData = new()
+        {
+            Id = request.Id,
+            IsResponse = true,
+            Opcode = request.Opcode,
+            IsAuthoritativeAnswer = false,
+            RecursionDesired = request.RecursionDesired,
+            RecursionAvailable = resolved.RecursionAvailable,
+            AuthenticData = false,
+            CheckingDisabled = request.CheckingDisabled,
+            ResponseCode = DnsResponseCodeEnum.NoError,
+            Questions = [.. request.Questions],
+            Edns = resolved.Edns,
+        };
+
+        uint? soaTimeToLive = null;
+
+        foreach (DnsResourceRecord record in resolved.AuthorityRecords)
+        {
+            if (record.Type != DnsResourceRecordTypeEnum.Soa)
+                continue;
+
+            if (
+                DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Soa, record.Data)
+                is not SoaRecordData soa
+            )
+                continue;
+
+            soaTimeToLive = Math.Min(
+                Math.Min(record.TimeToLive, soa.MinimumTtlSeconds),
+                rewriteTimeToLive
+            );
+            noData.AuthorityRecords.Add(
+                new DnsResourceRecord(
+                    record.Name,
+                    record.Type,
+                    record.Class,
+                    soaTimeToLive.Value,
+                    record.Data
+                )
+            );
+        }
+
+        // The RRSIG over the SOA stays with it, trimmed to the SOA's TTL (RFC 2308 §3);
+        // signatures over the denial proof go.
+        if (soaTimeToLive is { } trimmedTimeToLive)
+        {
+            foreach (DnsResourceRecord record in resolved.AuthorityRecords)
+            {
+                if (
+                    record.Type == DnsResourceRecordTypeEnum.RrSig
+                    && record.Data.Length >= 2
+                    && (record.Data[0] << 8 | record.Data[1]) == (int)DnsResourceRecordTypeEnum.Soa
+                )
+                {
+                    noData.AuthorityRecords.Add(
+                        new DnsResourceRecord(
+                            record.Name,
+                            record.Type,
+                            record.Class,
+                            Math.Min(record.TimeToLive, trimmedTimeToLive),
+                            record.Data
+                        )
+                    );
+                }
+            }
+        }
+
+        return noData;
+    }
+
+    /// <summary>
+    ///     This method checks whether an enabled A or AAAA rewrite that applies to the client
+    ///     matches the queried name, exactly or by wildcard.
+    /// </summary>
+    private bool HasAddressRewrite(
+        DnsRewriteSet rewrites,
+        string queriedPresentation,
+        DnsClientInfo resolvedClient
+    )
+    {
+        if (rewrites.Exact.TryGetValue(queriedPresentation, out var candidates))
+        {
+            foreach (DnsCompiledRewrite rewrite in candidates)
+            {
+                if (IsAddressRewrite(rewrite) && AppliesToClient(rewrite, resolvedClient))
+                    return true;
+            }
+        }
+
+        foreach (DnsCompiledRewrite rewrite in rewrites.Wildcards)
+        {
+            if (
+                IsAddressRewrite(rewrite)
+                && AppliesToClient(rewrite, resolvedClient)
+                && MatchesWildcard(queriedPresentation, rewrite)
+            )
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsAddressRewrite(DnsCompiledRewrite rewrite) =>
+        rewrite.Kind is DnsRewriteTargetKindEnum.A or DnsRewriteTargetKindEnum.Aaaa;
+
     /// <summary>
     ///     This method picks the rewrite, if any, that answers a query. An exact match beats a
     ///     wildcard match. The set is already in tie-break order (narrower audience, then the

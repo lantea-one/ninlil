@@ -2735,8 +2735,13 @@ lists, schedules and rewrites.
   rewrite domain needs at least a label there: `*.dev.home.test` does not match `dev.home.test`.
   The record types differ by target. An A rewrite answers only A queries, an AAAA rewrite only
   AAAA queries, and a CNAME rewrite answers A, AAAA and CNAME queries. Any other type is
-  answered as if no rewrite existed, so a name that exists only through a rewrite can answer
-  `NXDOMAIN` to a query of another type. The TTL of every rewrite answer is
+  answered as if no rewrite existed, except that a name with an A or AAAA rewrite always exists:
+  when normal resolution would answer `NXDOMAIN` to a query of another type, the reply is
+  `NOERROR` with no answer records (NODATA, RFC 2308 §2.2). An answer that resolution does give
+  (the real name has AAAA data) is sent as it is. The NODATA reply keeps the zone's SOA from the
+  `NXDOMAIN`, with its TTL cut to the SOA minimum and to the rewrite TTL, and it drops any
+  DNSSEC proof that the name does not exist and the AD flag. A CNAME rewrite is not part of this
+  rule. The TTL of every rewrite answer is
   `NINLIL_DNS_SERVER_REWRITES_TIME_TO_LIVE_SECONDS` (300 by default). Of two rewrites for the same
   name, an exact one beats a wildcard, then a client's beats a group's, which beats a global one.
 - **A CNAME rewrite returns the target's addresses** when the client may use forwarding or
