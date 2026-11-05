@@ -27,7 +27,8 @@ public static class MongoStartupGuard
     /// <param name="logger">The logger for the backfill results.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <exception cref="DatabaseStartupRefusedException">
-    ///     A recorded step is unknown to this build, or a backfill failed.
+    ///     A recorded step is unknown to this build, a backfill failed, or the data blocks a
+    ///     step (see <see cref="DhcpCustomOptionUniqueIndexes" />).
     /// </exception>
     /// <exception cref="Abstractions.Routing.StorageReadOnlyException">
     ///     <paramref name="context" /> is the read-only replica view.
@@ -70,6 +71,8 @@ public static class MongoStartupGuard
                         await ClusterKeyLinkLegacyBackfill.RunAsync(context, stoppingToken),
                     MongoSchemaSteps.DhcpLeaseScopeIdBackfill =>
                         await DhcpLeaseScopeIdBackfill.RunAsync(context, stoppingToken),
+                    MongoSchemaSteps.DhcpCustomOptionUniqueIndexes =>
+                        await DhcpCustomOptionUniqueIndexes.RunAsync(context, stoppingToken),
                     _ => 0,
                 };
 
@@ -80,8 +83,14 @@ public static class MongoStartupGuard
                         changed
                     );
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception)
+                when (exception
+                        is not OperationCanceledException
+                            and not DatabaseStartupRefusedException
+                )
             {
+                // A refusal a step throws itself (existing duplicates) already tells the
+                // operator what to do, so it passes through unwrapped and the step stays unrecorded.
                 throw new DatabaseStartupRefusedException(
                     $"The MongoDB schema step {step} failed: {exception.Message} It is safe to "
                         + "retry: fix the cause and start again.",

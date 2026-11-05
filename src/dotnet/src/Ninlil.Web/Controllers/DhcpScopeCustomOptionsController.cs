@@ -203,9 +203,10 @@ public class DhcpScopeCustomOptionsController(
 
     /// <summary>
     ///     This method throws <see cref="ConflictException" /> (409) when the scope already has
-    ///     an option with <paramref name="optionTag" />. The check runs before the save because
-    ///     the relational unique index on (scope, tag) would otherwise surface as a 500, and the
-    ///     MongoDB index is not unique. Two concurrent writes can still both pass the check.
+    ///     an option with <paramref name="optionTag" />. The check runs before the save to give a
+    ///     precise message. Two concurrent writes can both pass it: the unique index on (scope, tag)
+    ///     then rejects the second at save, which MongoDB maps to the same 409 and the
+    ///     relational engines surface as a 500.
     /// </summary>
     /// <param name="scopeId">The scope the option belongs to.</param>
     /// <param name="optionTag">The tag (or DHCPv6 option code) being written.</param>

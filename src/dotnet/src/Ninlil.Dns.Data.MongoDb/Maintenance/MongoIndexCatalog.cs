@@ -17,11 +17,15 @@ namespace Ninlil.Dns.Data.MongoDb.Maintenance;
 ///     filter or sort of the repository method named next to it.
 /// </summary>
 /// <remarks>
-///     Every index is non-unique except the one on <c>SecondaryZoneRefreshStates.ZoneId</c>: the
-///     other relational unique constraints are not mirrored (a database that already holds
-///     duplicates must still start). Index creation is idempotent, so every start runs it. An
-///     older build ignores the extra indexes, and a failure to create one, the unique index
-///     included, is logged and does not stop the start.
+///     Every index is non-unique except three. The one on
+///     <c>SecondaryZoneRefreshStates.ZoneId</c> and the two compound indexes on the DHCP custom
+///     options (scope and tag, tag rule and tag) are unique. For the custom options,
+///     <see cref="DhcpCustomOptionUniqueIndexes" /> checks the data and creates the indexes
+///     first, so this catalog only finds them in place. The other relational unique constraints
+///     are not mirrored (a database that already holds duplicates must still start). Index
+///     creation is idempotent, so every start runs it. An older build ignores the extra
+///     indexes, and a failure to create one, the unique index included, is logged and does not
+///     stop the start.
 /// </remarks>
 public static class MongoIndexCatalog
 {
@@ -310,7 +314,7 @@ public static class MongoIndexCatalog
         );
         created += await EnsureCollectionAsync(
             context.DhcpScopeCustomOptions,
-            new IndexSet<DhcpScopeCustomOptionEntity>().Asc(
+            new IndexSet<DhcpScopeCustomOptionEntity>().Unique(
                 option => option.ScopeId,
                 option => option.OptionTag
             ),
@@ -319,7 +323,7 @@ public static class MongoIndexCatalog
         );
         created += await EnsureCollectionAsync(
             context.DhcpTagRuleOptions,
-            new IndexSet<DhcpTagRuleOptionEntity>().Asc(
+            new IndexSet<DhcpTagRuleOptionEntity>().Unique(
                 option => option.TagRuleId,
                 option => option.OptionTag
             ),
@@ -440,14 +444,17 @@ public static class MongoIndexCatalog
         }
 
         /// <summary>
-        ///     This method adds a unique index on one field in ascending order. The server
-        ///     rejects a second document with the same value.
+        ///     This method adds a unique index on one or more fields in ascending order. The
+        ///     server rejects a second document with the same value (the same combination of
+        ///     values, for several fields).
         /// </summary>
-        public IndexSet<T> Unique(Expression<Func<T, object>> field)
+        public IndexSet<T> Unique(params Expression<Func<T, object>>[] fields)
         {
             Models.Add(
                 new CreateIndexModel<T>(
-                    Builders<T>.IndexKeys.Ascending(field),
+                    Builders<T>.IndexKeys.Combine(
+                        fields.Select(field => Builders<T>.IndexKeys.Ascending(field))
+                    ),
                     new CreateIndexOptions { Unique = true }
                 )
             );
