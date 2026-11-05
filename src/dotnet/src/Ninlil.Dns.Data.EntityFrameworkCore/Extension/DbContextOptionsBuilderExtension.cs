@@ -197,8 +197,9 @@ public static class DbContextOptionsBuilderExtension
     ///     Core runs it outside one and warns on every fresh install. The warning describes EF
     ///     Core's behaviour, not a problem with the database. It is safe to hide because
     ///     <see cref="RelationalStartupMigrator" /> snapshots an existing database before it
-    ///     applies pending migrations (<c>Storage:MigrationSafety</c>), and a fresh database has
-    ///     nothing to lose.
+    ///     applies pending migrations, or logs its own warning when
+    ///     <c>Storage:MigrationSafety:TakeSnapshot</c> is off, and a fresh database has nothing to
+    ///     lose.
     /// </summary>
     private static DbContextOptionsBuilder QuietNonTransactionalMigrationWarnings(
         DbContextOptionsBuilder instance
