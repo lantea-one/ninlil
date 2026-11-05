@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using Ninlil.Common.Extension.Enum;
+using Ninlil.Common.Extension.Type;
 using Ninlil.Dns.Common.Enum;
 
 // Define our namespace.
@@ -108,7 +110,8 @@ public static class DnssecAlgorithmRegistry
     ///     with an algorithm, or <see langword="null" /> when signing with it is allowed. The
     ///     four algorithms RFC 9904 §3 marks MUST NOT (1, 3, 6, 12) are "prohibited for signing".
     ///     RSASHA1 (5) and RSASHA1-NSEC3-SHA1 (7) are only NOT RECOMMENDED there, so the sentence
-    ///     says that refusing them is this server's own rule. Every rejection site (REST API,
+    ///     says that refusing them is this server's own rule. The algorithm is named by its IANA
+    ///     mnemonic, as in the REST API. Every rejection site (REST API,
     ///     key management, signing log) uses it so the wording stays in one place.
     /// </summary>
     /// <param name="algorithm">The algorithm to describe.</param>
@@ -121,8 +124,14 @@ public static class DnssecAlgorithmRegistry
         if (!IsSigningProhibited(algorithm))
             return null;
 
+        // Name the algorithm by its IANA mnemonic (RSASHA1), the form the REST API accepts,
+        // not the C# member name (RsaSha1).
+        string name = algorithm.ToDescription(
+            GetEnumDescriptionsTypeExtension.DefaultAttributeChecks
+        );
+
         return algorithm is DnssecAlgorithmEnum.RsaSha1 or DnssecAlgorithmEnum.RsaSha1Nsec3Sha1
-            ? $"Ninlil does not sign with '{algorithm}' (RFC 9904 §3 marks it NOT RECOMMENDED for signing)."
-            : $"DNSSEC algorithm '{algorithm}' is prohibited for signing (RFC 9904 §3).";
+            ? $"Ninlil does not sign with '{name}' (RFC 9904 §3 marks it NOT RECOMMENDED for signing)."
+            : $"DNSSEC algorithm '{name}' is prohibited for signing (RFC 9904 §3).";
     }
 }
