@@ -187,18 +187,29 @@ public sealed class SignedZoneCache(
     ///         parent hosted here is re-signed too (<see cref="LocalParentLocator" />), after
     ///         <see cref="IZoneUpdateService.BumpSerialForDnssecResignAsync" /> advances its SOA
     ///         serial, since its DS RRset is new content a secondary must transfer. For a rename
-    ///         the parent of the old name is re-signed as well. A failure of the parent step is
-    ///         logged and does not fail this reload; it is retried at the next reload of the zone.
+    ///         the parent of the old name is re-signed as well. The parent step succeeds only when
+    ///         the bump and the signing both succeed. A failure is logged and does not fail this
+    ///         reload, but the zone's DS state is then not stored, so the next reload of the zone
+    ///         tries the parent again.
     ///     </para>
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to reload.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    public async Task ReloadZoneAsync(Guid zoneId, CancellationToken stoppingToken = default)
+    public async Task ReloadZoneAsync(Guid zoneId, CancellationToken stoppingToken = default) =>
+        await ReloadZoneCoreAsync(zoneId, stoppingToken);
+
+    /// <summary>
+    ///     This method does the work of <see cref="ReloadZoneAsync" /> and reports whether it
+    ///     fully succeeded: the zone was signed (or loaded) and, when its DS records changed, its
+    ///     local parent was bumped and signed. Failures are logged here, never thrown (except
+    ///     cancellation).
+    /// </summary>
+    private async Task<bool> ReloadZoneCoreAsync(Guid zoneId, CancellationToken stoppingToken)
     {
         DelegationDsState pending = await ReloadSingleZoneAsync(zoneId, stoppingToken);
 
         if (pending is null)
-            return;
+            return false;
 
         _delegationDsStateByZoneId.TryGetValue(
             zoneId,
@@ -210,6 +221,8 @@ public sealed class SignedZoneCache(
         bool changed =
             pending.Fingerprint != previousFingerprint
             || (renamed && (pending.Fingerprint.Length > 0 || previousFingerprint.Length > 0));
+
+        bool parentsUpToDate = true;
 
         if (changed && zoneCache is not null)
         {
@@ -228,21 +241,35 @@ public sealed class SignedZoneCache(
                         parentIds.Add(parentId);
 
                 foreach (Guid parentId in parentIds)
-                    await ResignForScheduledExpiryAsync(parentId, stoppingToken);
+                    parentsUpToDate &= await BumpSerialAndResignAsync(
+                        parentId,
+                        exception =>
+                            logger.LogWarning(
+                                exception,
+                                "Could not bump the SOA serial of the parent zone '{ParentZoneId}' after the DS-relevant keys of zone '{ZoneId}' changed; it is retried at the next reload of that zone.",
+                                parentId,
+                                zoneId
+                            ),
+                        stoppingToken
+                    );
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // The state is not stored, so the next reload of this zone tries again.
                 logger.LogWarning(
                     exception,
                     "Could not re-sign the parent of zone '{ZoneId}' after its DS-relevant keys changed; it is retried at the next reload of the zone.",
                     zoneId
                 );
-                return;
+                parentsUpToDate = false;
             }
         }
 
-        CommitDelegationDsState(zoneId, pending);
+        // Store the state only when the parent now serves the new DS set. Otherwise the next
+        // reload of this zone sees the same change again and retries.
+        if (parentsUpToDate)
+            CommitDelegationDsState(zoneId, pending);
+
+        return parentsUpToDate && pending.Reloaded;
     }
 
     /// <summary>
@@ -263,6 +290,7 @@ public sealed class SignedZoneCache(
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
 
         ZoneEntity zone = await zoneRepository.GetByIdAsync(zoneId, stoppingToken);
+        bool reloaded = true;
 
         if (
             zone is
@@ -275,7 +303,7 @@ public sealed class SignedZoneCache(
         {
             // The zone's type may have changed, so drop any entry in the other dictionary.
             _transferredSignedZonesByZoneId.TryRemove(zoneId, out _);
-            await TrySignAndStoreAsync(zoneId, zone.Name, stoppingToken);
+            reloaded = await TrySignAndStoreAsync(zoneId, zone.Name, stoppingToken);
         }
         else if (
             zone is not null
@@ -295,7 +323,9 @@ public sealed class SignedZoneCache(
             _transferredSignedZonesByZoneId.TryRemove(zoneId, out _);
         }
 
-        return await ComputeDelegationDsStateAsync(zone, stoppingToken);
+        DelegationDsState state = await ComputeDelegationDsStateAsync(zone, stoppingToken);
+
+        return state is null ? null : state with { Reloaded = reloaded };
     }
 
     /// <summary>
@@ -311,8 +341,50 @@ public sealed class SignedZoneCache(
     public async Task ResignForScheduledExpiryAsync(
         Guid zoneId,
         CancellationToken stoppingToken = default
+    ) =>
+        await BumpSerialAndResignAsync(
+            zoneId,
+            // The zone may have been deleted, disabled or unsigned since it was cached. The
+            // reload still runs and removes it if so.
+            exception =>
+                logger.LogWarning(
+                    exception,
+                    "Could not bump the SOA serial while proactively re-signing zone '{ZoneId}'; re-checking its eligibility instead.",
+                    zoneId
+                ),
+            stoppingToken
+        );
+
+    /// <summary>
+    ///     This method advances a zone's SOA serial and then signs the zone, for the two causes
+    ///     that change signed content without a record change: signatures close to expiry
+    ///     (<see cref="ResignForScheduledExpiryAsync" />) and a new DS record set for a parent
+    ///     (<see cref="ReloadZoneAsync" />). A failed bump is passed to
+    ///     <paramref name="logBumpFailure" />, which logs the cause the caller knows; the zone is
+    ///     still reloaded, which also drops a zone that no longer qualifies.
+    ///     <para>
+    ///         The zone is signed here and now, not left to the <see cref="DnsZoneChangedEvent" />
+    ///         the bump publishes. That event is delivered later in the background, so until then
+    ///         the new serial would be served with old signatures, and a signing failure would
+    ///         reach no caller. The event still triggers a second sign of the same input. Skipping
+    ///         it would also skip a real change that arrives in between, so the second sign stays.
+    ///     </para>
+    /// </summary>
+    /// <param name="zoneId">The identifier of the zone to bump and sign.</param>
+    /// <param name="logBumpFailure">Logs why the bump failed.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>
+    ///     Whether the bump and the signing both succeeded. A storage failure while reloading is
+    ///     thrown, as before; the DS path catches it.
+    /// </returns>
+    private async Task<bool> BumpSerialAndResignAsync(
+        Guid zoneId,
+        Action<Exception> logBumpFailure,
+        CancellationToken stoppingToken
     )
     {
+        bool bumped = true;
+
         await using (AsyncServiceScope scope = scopeFactory.CreateAsyncScope())
         {
             IZoneUpdateService zoneUpdateService =
@@ -324,20 +396,12 @@ public sealed class SignedZoneCache(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // The zone may have been deleted, disabled or unsigned since it was cached.
-                // ReloadZoneAsync below still runs and removes it if so.
-                logger.LogWarning(
-                    exception,
-                    "Could not bump the SOA serial while proactively re-signing zone '{ZoneId}'; re-checking its eligibility instead.",
-                    zoneId
-                );
+                logBumpFailure(exception);
+                bumped = false;
             }
         }
 
-        // Re-sign now instead of waiting for the DnsZoneChangedEvent the bump published, which
-        // is delivered later in the background; until then the new serial would be served with
-        // old signatures. The event still triggers a second, harmless re-sign.
-        await ReloadZoneAsync(zoneId, stoppingToken);
+        return await ReloadZoneCoreAsync(zoneId, stoppingToken) && bumped;
     }
 
     /// <summary>
@@ -348,7 +412,12 @@ public sealed class SignedZoneCache(
     ///     removed, the zone ID is kept in <see cref="_unsignableZoneIds" />, one Warning is
     ///     logged and no event is published.
     /// </summary>
-    private async Task TrySignAndStoreAsync(
+    /// <returns>
+    ///     <see langword="false" /> when signing failed and the previous data was kept. A zone
+    ///     with no key that can sign counts as <see langword="true" />: that outcome is
+    ///     deterministic and retrying cannot change it.
+    /// </returns>
+    private async Task<bool> TrySignAndStoreAsync(
         Guid zoneId,
         string zoneName,
         CancellationToken stoppingToken
@@ -374,7 +443,7 @@ public sealed class SignedZoneCache(
                     zoneName,
                     zoneId
                 );
-                return;
+                return true;
             }
 
             _signedZonesByZoneId[zoneId] = signedData;
@@ -389,18 +458,28 @@ public sealed class SignedZoneCache(
                     signedData.SignatureExpiresAtUtc
                 )
             );
+
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogError(exception, "Failed to sign zone '{ZoneId}'.", zoneId);
+
+            return false;
         }
     }
 
     /// <summary>
     ///     This record is the DS-relevant state of one zone: whether it gives its parent DS
-    ///     records, its name (null for a zone that no longer exists) and the key fingerprint.
+    ///     records, its name (null for a zone that no longer exists), the key fingerprint and
+    ///     whether the zone's own signing succeeded in this reload.
     /// </summary>
-    private sealed record DelegationDsState(bool Contributes, DnsName Name, string Fingerprint);
+    private sealed record DelegationDsState(
+        bool Contributes,
+        DnsName Name,
+        string Fingerprint,
+        bool Reloaded = true
+    );
 
     /// <summary>
     ///     This method reads the zone's current DS-relevant state: the

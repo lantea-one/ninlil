@@ -6,6 +6,7 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.Dnssec;
+using Ninlil.Dns.Server.Authoritative.Journal;
 using Ninlil.Dns.Server.Authoritative.Tests.Resolution;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Dnssec;
@@ -401,5 +402,123 @@ public sealed class ParentDsFollowsChildKeyChangeTests
         // Give a wrongly triggered grandparent re-sign time to happen.
         await Task.Delay(500);
         Assert.Same(grandparentBefore, cache.GetSignedData(grandparentId));
+    }
+
+    /// <summary>
+    ///     This class wraps the real <see cref="ZoneUpdateService" /> and makes the first
+    ///     <c>BumpSerialForDnssecResignAsync</c> call fail, so a test can check that a failed
+    ///     parent re-sign is retried. Every other call goes to the real service.
+    /// </summary>
+    /// <param name="inner">The real service.</param>
+    /// <param name="failures">The shared counter of bump calls still to fail.</param>
+    private sealed class FailingBumpZoneUpdateService(
+        IZoneUpdateService inner,
+        FailureCounter failures
+    ) : IZoneUpdateService
+    {
+        /// <inheritdoc />
+        public Task ApplyChangesAsync(
+            Guid zoneId,
+            IReadOnlyList<RecordEntity> recordsToAdd,
+            IReadOnlyList<RecordEntity> recordsToRemove,
+            uint? explicitNewSerial = null,
+            CancellationToken stoppingToken = default,
+            DnsResourceRecord replacementSoa = null
+        ) =>
+            inner.ApplyChangesAsync(
+                zoneId,
+                recordsToAdd,
+                recordsToRemove,
+                explicitNewSerial,
+                stoppingToken,
+                replacementSoa
+            );
+
+        /// <inheritdoc />
+        public Task BootstrapZoneAsync(
+            Guid zoneId,
+            IReadOnlyList<RecordEntity> records,
+            CancellationToken stoppingToken = default
+        ) => inner.BootstrapZoneAsync(zoneId, records, stoppingToken);
+
+        /// <inheritdoc />
+        public Task ApplyRecordEditAsync(
+            Guid zoneId,
+            Guid recordId,
+            Action<RecordEntity> applyEdit,
+            CancellationToken stoppingToken = default
+        ) => inner.ApplyRecordEditAsync(zoneId, recordId, applyEdit, stoppingToken);
+
+        /// <inheritdoc />
+        public Task BumpSerialForDnssecResignAsync(
+            Guid zoneId,
+            CancellationToken stoppingToken = default
+        )
+        {
+            if (failures.TryTake())
+                throw new InvalidOperationException("Injected bump failure.");
+
+            return inner.BumpSerialForDnssecResignAsync(zoneId, stoppingToken);
+        }
+    }
+
+    /// <summary>
+    ///     This class counts the failures left to inject; every scope shares one instance.
+    /// </summary>
+    private sealed class FailureCounter
+    {
+        private int _remaining = 1;
+
+        /// <summary>
+        ///     This method takes one failure if any is left.
+        /// </summary>
+        public bool TryTake() => Interlocked.Decrement(ref _remaining) >= 0;
+    }
+
+    /// <summary>
+    ///     When the serial bump of the parent fails, the child's DS state is not stored, so the
+    ///     next reload of the child (an event with no key change) bumps the parent's serial
+    ///     again.
+    /// </summary>
+    [Fact]
+    public async Task AFailedParentResign_IsRetriedAtTheChildsNextReload()
+    {
+        FailureCounter failures = new();
+        await using AuthoritativeTestZoneHost host = await AuthoritativeTestZoneHost.CreateAsync(
+            configureServices: services =>
+            {
+                services.AddScoped<ZoneUpdateService>();
+                services.AddScoped<IZoneUpdateService>(provider => new FailingBumpZoneUpdateService(
+                    provider.GetRequiredService<ZoneUpdateService>(),
+                    failures
+                ));
+            }
+        );
+        Guid parentId = await host.AddZoneAsync(
+            ParentName,
+            [TestRecord.Ns(ChildName, $"ns.{ChildName}.")],
+            TestZoneSigning.Nsec
+        );
+        Guid childId = await host.AddZoneAsync(ChildName, [], TestZoneSigning.Nsec);
+        await host.StartAsync();
+        uint before = await ReadSerialAsync(host, parentId);
+
+        await CreateKeyAsync(host, childId, DnssecKeyRoleEnum.Ksk);
+
+        // The parent is still signed with the new DS (signing does not depend on the bump), but
+        // its serial did not advance, so a secondary would not transfer it.
+        await WaitForDsKeyTagsAsync(host, parentId, list => list.Count == 2);
+        await Task.Delay(300);
+        Assert.Equal(before, await ReadSerialAsync(host, parentId));
+
+        // A reload of the child with no key change retries the parent step.
+        host.Services.GetRequiredService<IDnsServerEventPublisher>()
+            .Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, childId, ChildName));
+
+        DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        while (await ReadSerialAsync(host, parentId) == before && DateTimeOffset.UtcNow < deadline)
+            await Task.Delay(50);
+
+        Assert.True(await ReadSerialAsync(host, parentId) > before);
     }
 }
