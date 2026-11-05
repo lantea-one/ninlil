@@ -22,7 +22,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
     <PackageReference Include="Ninlil.Dns.Data.EntityFrameworkCore" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->

@@ -36,7 +36,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
     <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
     <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
@@ -45,7 +45,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
     <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
     <PackageReference Include="Ninlil.Dhcp.Protocol.Dhcpv4" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv4 -->
@@ -54,7 +54,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj')">
     <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj')">
     <PackageReference Include="Ninlil.Dhcp.Protocol.Dhcpv6" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv6 -->
@@ -63,7 +63,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
     <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
@@ -72,7 +72,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
     <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->

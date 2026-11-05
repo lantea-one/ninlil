@@ -27,7 +27,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <PackageReference Include="Ninlil.Dns.Common" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
@@ -36,7 +36,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
     <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
@@ -45,7 +45,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
     <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
@@ -63,7 +63,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj')">
     <PackageReference Include="Ninlil.Dns.Identity" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Identity -->
@@ -80,7 +80,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj')">
     <PackageReference Include="Ninlil.Dns.Server.Cluster" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Cluster -->
