@@ -4332,6 +4332,56 @@ TLS certificate with its private key.
    folder to mode 0700 itself. Keep the volume's folder on the host readable only by the people
    who administer the host.
 
+**Encrypt the key ring.** The key ring in the data directory unlocks every secret Ninlil stores. How
+Ninlil encrypts it depends on the settings in [`ENVIRONMENT.md`](./ENVIRONMENT.md#data-protection-key-ring):
+
+| Case | What happens | Where the ring can be read |
+|---|---|---|
+| A certificate is set (`NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`), on any platform | New key ring entries are encrypted with the certificate | On any machine that has the certificate |
+| No certificate, on Windows | New entries are encrypted with Windows DPAPI for the account the service runs as | Only on the same machine and the same account |
+| No certificate, on Linux and macOS | New entries are not encrypted; the data directory is owner only | Anywhere the files are copied to |
+
+1. Decide where a copy of the data directory (a backup, a disk image) may be read. If it may be
+   restored on another machine, or you do not want a Windows account to be the only way in, use a
+   certificate, on Windows too. A DPAPI-protected key ring cannot be read on another Windows machine
+   or under another account.
+2. Create an RSA certificate and export it with its private key as a PKCS#12 (`.pfx`) file. It
+   does not need to be trusted by anyone, and an expired certificate still works: it only wraps
+   the keys. Keep the file outside the data directory, and keep a copy of it apart from your
+   backups of the data directory. Without the certificate the key ring, and so every stored
+   secret, cannot be read.
+3. Set the path and, if the file has a password, the password as a secret (see
+   [`ENVIRONMENT.md`](./ENVIRONMENT.md#data-protection-key-ring)), then restart:
+
+   ```bash
+   NINLIL_DATA_PROTECTION_CERTIFICATE_PATH=/etc/ninlil/keyring.pfx
+   NINLIL_DATA_PROTECTION_CERTIFICATE_PASSWORD=<the password>
+   ```
+
+   A path that does not exist, a wrong password, a file without a private key or an ECDSA
+   certificate stops the start with exit code 78 and a message that names the setting. Ninlil
+   never falls back to an unencrypted key ring.
+4. Check the key files. A key file that Ninlil wrote after the restart holds an `encryptedSecret`
+   element and no `masterKey` element. This lists the key files with no `masterKey` element, so
+   the newest file must appear in it:
+
+   ```bash
+   grep -L masterKey <data-directory>/key-*.xml
+   ```
+
+   Keys written before you set the certificate stay readable, and stay unencrypted until Data
+   Protection creates a new key (they last 90 days). On Windows, entries written with DPAPI stay
+   readable on the same machine and account after you add a certificate.
+5. To change the certificate, set the new one as `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH` and the
+   old one as `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PATH` (with its password), then restart.
+   Entries written under the old certificate keep opening. Remove the previous setting only after
+   every key written under it has expired and you have taken a new backup.
+6. On a cluster whose nodes share one key ring directory, give every node the same certificate
+   settings.
+
+The JWT signing key stays a plain file in the data directory; the folder permissions above protect
+it.
+
 **Replace the bootstrap administrator.** The bootstrap account `admin` holds `*`. Ninlil creates it
 only while no account exists, and never deletes it.
 
@@ -4526,15 +4576,19 @@ you out of every session, yours included; sign in again with a code from the app
 - **The JWT signing key proves a token is Ninlil's.** Whoever holds `data/jwt-signing-key.txt` can
   make a token for any enabled account, the bootstrap administrator's included, and the token then
   gets that account's permissions. Treat the file like a root password.
-- **The key ring and the JWT signing key are not encrypted on disk.** Ninlil stores the Data
-  Protection key ring in the data directory, and ASP.NET Core Data Protection warns about it in the log:
+- **The key ring is encrypted with a certificate or, on Windows, with DPAPI; the JWT signing key is
+  not encrypted.** With a certificate set, or on Windows, the key ring is encrypted at rest (see
+  Encrypt the key ring above). On Linux and macOS with no certificate, Ninlil stores the Data
+  Protection key ring in the data directory unencrypted, and ASP.NET Core Data Protection warns
+  about it in the log:
   `No XML encryptor configured. Key {...} may be persisted to storage in unencrypted form.` The
   database holds the TSIG secrets, DNSSEC private keys, cloud credentials, TOTP keys and the ACME
   account key encrypted with that key ring, so a reader of the whole data directory can decrypt
-  them. This is an accepted risk, listed under Accepted risks in the
-  [release notes](./CHANGELOG.md). The controls are the folder permissions above and the
-  encrypted backups in [Backup and restore](#backup-and-restore). On Windows the files are
-  also plain files and not tied to a Windows account.
+  them. The JWT signing key is always a plain file. That part is an accepted risk, listed under
+  Accepted risks in the [release notes](./CHANGELOG.md). The controls are the folder permissions
+  above and the encrypted backups in [Backup and restore](#backup-and-restore). A key ring
+  protected with DPAPI cannot be read on another Windows machine or under another account, so
+  anyone who may restore a backup on another machine should set a certificate.
 - **A cluster sends some secrets in the clear on the cluster channel.** User two-factor secrets and
   settings that hold a secret travel inside the TLS connection that is also signed with a TSIG key.
   The receiving node encrypts them with the node's key ring. They never go through the event broker. An
@@ -5257,6 +5311,12 @@ backup when you want one.
   logs a warning): an error after the wipe can leave a partly restored database.
 - **The key ring is merged.** The keys from the file are added, and no key on the machine
   is deleted.
+- **A restore refuses a key ring this server cannot read.** If the file's keys are encrypted with
+  DPAPI from another machine or account, or with a certificate that is not
+  `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH` or `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PATH`,
+  the restore returns `400` before it changes anything. The message names the cause and the
+  setting. Set the certificate the backup's key ring was encrypted with as the previous
+  certificate, restart and restore again. Back the certificate up separately from the backup file.
 - **Only one restore runs at a time.** A second request returns `409` and changes nothing.
 - **Tokens after a restore.** Refresh tokens and API tokens are database rows, so they come back.
   Access tokens are signed with the JWT key, which a backup does not hold. On a machine with
