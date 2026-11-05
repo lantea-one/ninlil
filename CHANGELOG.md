@@ -13,18 +13,26 @@ outside Forgejo.
 
 ### Removed
 
-- **Settings that had no effect are gone.** The DNS-over-HTTPS listener settings
-  (`NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT` and
-  `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH`, `..._PFX_PASSWORD`,
-  `..._SELF_SIGNED_CERTIFICATE_STATE_PATH`, `..._ALLOWED_PROTOCOLS` and
-  `..._CERTIFICATE_RELOAD_POLL_INTERVAL`) and the backup path settings
-  (`NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY` and
-  `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH`) never changed anything: DNS-over-HTTPS
-  is served by the web listener, and startup sets the two backup paths itself. A configuration
-  file or environment that still sets them is ignored, so nothing breaks. The
-  `Ninlil.Dns.Protocol.DnsOverHttps` library keeps its own listener port and certificate in the new
-  `DnsOverHttpsListenerOptions`, which Ninlil does not bind
+- **Settings that had no effect are gone.** These variables never changed anything, because
+  DNS-over-HTTPS is served by the web listener and startup sets the two backup paths itself:
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL`
+  - `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY`
+  - `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH`
+
+  An environment that still sets one starts as before and logs a warning that the variable
+  matches no known setting and was ignored; the same keys in a configuration file are ignored
+  silently. Remove them to silence the warning
   ([#27](https://git.lantea.one/lantea-one/ninlil/issues/27)).
+- **Library API (NuGet).** `DnsOverHttpsOptions.Port` and `Certificate` moved to the new
+  `DnsOverHttpsListenerOptions`, which `DnsOverHttpsHostedService` now also takes in its
+  constructor; Ninlil itself does not bind it. `BackupOptions.DataProtectionKeyRingDirectory` and
+  `RuntimeConfigurationFilePath` moved to the new `BackupPathSettings`, which `SystemBackupService`
+  takes in its constructor. Code that builds these types itself needs the new argument.
 
 ### Behaviour worth knowing
 
