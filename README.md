@@ -5118,8 +5118,10 @@ NINLIL_STORAGE_MONGODB_READ_PREFERENCE=SecondaryPreferred
   db.getSiblingDB("ninlil").grantRolesToUser("ninlil", [{ role: "clusterMonitor", db: "admin" }])
   ```
 
-  Without it the lag is unknown and the replica is never used. The optimes have a resolution of
-  one second, so a current secondary can read as 1 second behind.
+  Without it the lag is unknown and the replica is never used. The lag is the time since the
+  secondary was last current. A secondary that has the primary's newest operation has a lag of 0,
+  however old that operation is, so an idle replica set (which writes only a no-op about every
+  10 to 20 seconds) is not reported as behind.
 
 **When a replica gets reads**
 

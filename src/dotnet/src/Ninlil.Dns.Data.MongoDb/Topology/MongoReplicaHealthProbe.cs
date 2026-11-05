@@ -10,12 +10,12 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 ///     This class measures the MongoDB secondaries for the <see cref="ReplicaHealthMonitor" />.
 ///     <list type="bullet">
 ///         <item>
-///             Lag: <c>replSetGetStatus</c> lists the optime of every member. The lag is the
-///             primary's optime minus the optime of its most delayed healthy secondary, because the
-///             read preference may pick any of them. Optimes have whole-second resolution, so a
-///             current secondary can read as 1 second behind. An idle primary still writes a no-op entry to
-///             its oplog about every 10 seconds, so a stuck secondary falls behind on the next one
-///             and the detection takes up to that long. No healthy secondary is "unknown".
+///             Lag: <c>replSetGetStatus</c> lists the last applied operation of every member, and
+///             <see cref="MongoReplicaLag" /> turns it into the time since the most delayed healthy
+///             secondary was last current, because the read preference may pick any of them. An
+///             idle set advances its optimes only on a write or on the primary's periodic no-op
+///             write, so an old optime that equals the primary's is not lag. No healthy secondary
+///             is "unknown".
 ///         </item>
 ///         <item>
 ///             Schema: the replica view (reading with the configured read preference) holds a
@@ -32,6 +32,8 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 public sealed class MongoReplicaHealthProbe(IMongoClient client, NinlilDnsMongoContext replicaView)
     : IReplicaHealthProbe
 {
+    private readonly MongoReplicaLag _lag = new();
+
     /// <inheritdoc />
     public async Task<ReplicaProbeResult> ProbeAsync(CancellationToken stoppingToken)
     {
@@ -43,7 +45,7 @@ public sealed class MongoReplicaHealthProbe(IMongoClient client, NinlilDnsMongoC
                 stoppingToken
             );
 
-        (double? lag, string detail) = Lag(status);
+        (double? lag, string detail) = _lag.Measure(status);
 
         List<string> stored = (
             await replicaView
@@ -60,38 +62,5 @@ public sealed class MongoReplicaHealthProbe(IMongoClient client, NinlilDnsMongoC
                 + $"{string.Join(", ", missing)}.";
 
         return new ReplicaProbeResult(lag, schemaCurrent, detail);
-    }
-
-    /// <summary>
-    ///     This method computes the worst lag from a <c>replSetGetStatus</c> reply.
-    /// </summary>
-    private static (double? Lag, string Detail) Lag(BsonDocument status)
-    {
-        BsonDocument[] members =
-        [
-            .. status["members"].AsBsonArray.Select(member => member.AsBsonDocument),
-        ];
-        BsonDocument primary = members.FirstOrDefault(member => member["stateStr"] == "PRIMARY");
-        if (primary is null)
-            return (null, "The replica set has no primary, so the lag is unknown.");
-
-        DateTime primaryOptime = primary["optimeDate"].ToUniversalTime();
-        double? worst = null;
-        foreach (
-            BsonDocument member in members.Where(member =>
-                member["stateStr"] == "SECONDARY" && member["health"].ToDouble() >= 1
-            )
-        )
-        {
-            double lag = Math.Max(
-                0,
-                (primaryOptime - member["optimeDate"].ToUniversalTime()).TotalSeconds
-            );
-            worst = Math.Max(worst ?? 0, lag);
-        }
-
-        return worst is null
-            ? (null, "The replica set has no healthy secondary, so the lag is unknown.")
-            : (worst, "");
     }
 }
