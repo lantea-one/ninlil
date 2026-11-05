@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the key rollover timing (`DnssecKeyRolloverOptions`) that `GET /api/dnssec-key-rollover-settings` returns. `DnssecKeyRolloverBackgroundService` uses it to step the keys of every locally signed zone through the RFC 6781 §4.1.1.1 and §4.1.2 rollovers. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the key rollover timing that `GET /api/dnssec-key-rollover-settings` returns. The background key rollover job uses it to step the keys of every locally signed zone through the RFC 6781 §4.1.1.1 and §4.1.2 rollovers. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface DnssecKeyRolloverSettingsDetail { 
     /**

@@ -97,7 +97,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdPut(requestParameters: ApiDhcpScopesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action reports a scope\&#39;s current utilization: the total addresses or prefixes in its range, how many are leased or offered, how many its reservations account for, and how many remain available. It is computed from the scope\&#39;s settings and its recorded leases and reservations on every call (see &#x60;IDhcpScopeStatisticsService&#x60;). The two slot counts are strings because an IPv6 range can exceed a 64-bit integer. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:read&#x60;.
+     * This action reports a scope\&#39;s current utilization: the total addresses or prefixes in its range, how many are leased or offered, how many its reservations account for, and how many remain available. It is computed from the scope\&#39;s settings and its recorded leases and reservations on every call. The two slot counts are strings because an IPv6 range can exceed a 64-bit integer. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:read&#x60;.
      * 
      * @endpoint get /api/dhcp-scopes/{id}/statistics
 * @param requestParameters

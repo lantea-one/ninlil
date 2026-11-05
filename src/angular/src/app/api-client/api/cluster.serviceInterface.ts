@@ -82,14 +82,14 @@ export interface ClusterServiceInterface {
     apiClusterNodesIdPatch(requestParameters: ApiClusterNodesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a cluster invite and returns its code and expiry time (see &#x60;ClusterInviteService&#x60;). Requires &#x60;clusternodes:write&#x60;.
+     * This action creates a cluster invite and returns its code and expiry time. Requires &#x60;clusternodes:write&#x60;.
      * 
      * @endpoint post /api/cluster/nodes/invite
 */
     apiClusterNodesInvitePost(extraHttpRequestParams?: any): Observable<ClusterInviteCreateResponse>;
 
     /**
-     * This action uses an invite code from another node to complete the join handshake with that node, and returns the new peer (see &#x60;ClusterJoinService&#x60;). Requires &#x60;clusternodes:write&#x60;.
+     * This action uses an invite code from another node to complete the join handshake with that node, and returns the new peer. Requires &#x60;clusternodes:write&#x60;.
      * 
      * @endpoint post /api/cluster/nodes/join
 * @param requestParameters

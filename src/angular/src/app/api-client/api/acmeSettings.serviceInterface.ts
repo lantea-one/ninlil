@@ -33,7 +33,7 @@ export interface AcmeSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action issues or renews one configured domain\&#39;s certificate now, outside the renewal service\&#39;s schedule, through &#x60;AcmeCertificateRenewalService.RenewOneDomainAsync&#x60;, the same method the background loop uses. A failed attempt (a certificate authority outage, a challenge that did not validate) is not an HTTP error: it is logged and recorded, and the returned entry shows it. Returns 404 when the domain is not configured. Requires &#x60;acmesettings:manage&#x60;.
+     * This action issues or renews one configured domain\&#39;s certificate now, outside the certificate renewal job\&#39;s schedule, with the same logic the job uses. A failed attempt (a certificate authority outage, a challenge that did not validate) is not an HTTP error: it is logged and recorded, and the returned entry shows it. Returns 404 when the domain is not configured. Requires &#x60;acmesettings:manage&#x60;.
      * 
      * @endpoint post /api/acme-settings/certificates/{domain}/issue
 * @param requestParameters

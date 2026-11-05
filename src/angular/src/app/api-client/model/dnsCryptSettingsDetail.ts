@@ -38,7 +38,7 @@ export interface DnsCryptSettingsDetail {
      */
     maxConcurrentTcpConnections?: number;
     /**
-     * The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example `[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). `DnsCryptCertificateRotationService` reads it when it starts, so a change applies once that loop restarts, for example by turning the transport off and on.
+     * The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example `[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). The DNSCrypt certificate rotation job reads it when it starts, so a change applies once that job restarts, for example by turning the transport off and on.
      */
     enabledEsVersions?: Array<string> | null;
     /**
