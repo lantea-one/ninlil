@@ -157,10 +157,7 @@ public sealed class DnsOverTlsZoneTransferRateLimitTests
         private int _port;
 
         /// <summary>
-        ///     This method starts the host. <see cref="DnsOverTlsListener" /> does not expose the
-        ///     port it bound, so a port 0 bind cannot be read back. Instead the test asks the OS
-        ///     for a free port and retries, at most five times, with a new port when another
-        ///     process took it in between (the listener records that as a failed address).
+        ///     This method starts the host on port 0 and reads the port the listener bound.
         /// </summary>
         public static async Task<TransferHost> StartAsync(
             IZoneTransferService service,
@@ -178,46 +175,34 @@ public sealed class DnsOverTlsZoneTransferRateLimitTests
             );
             await host._pipeline.StartAsync(CancellationToken.None);
 
-            IServiceScopeFactory scopeFactory = new ServiceCollection()
-                .AddSingleton(service)
-                .BuildServiceProvider()
-                .GetRequiredService<IServiceScopeFactory>();
+            host._listener = new DnsOverTlsListener(
+                host._pipeline,
+                new ServiceCollection()
+                    .AddSingleton(service)
+                    .BuildServiceProvider()
+                    .GetRequiredService<IServiceScopeFactory>(),
+                new StaticOptionsMonitor<DnsOverTlsOptions>(
+                    new DnsOverTlsOptions
+                    {
+                        Enable = true,
+                        Port = 0,
+                        ListenAddresses = "127.0.0.1",
+                        IdleTimeout = TimeSpan.FromSeconds(30),
+                    }
+                ),
+                NullLogger<DnsOverTlsListener>.Instance,
+                limiter,
+                publisher
+            );
+            await host._listener.StartAsync(CancellationToken.None);
 
-            for (int attempt = 0; attempt < 5; attempt++)
-            {
-                host._port = LocalAddresses.GetFreePort();
-                host._listener = new DnsOverTlsListener(
-                    host._pipeline,
-                    scopeFactory,
-                    new StaticOptionsMonitor<DnsOverTlsOptions>(
-                        new DnsOverTlsOptions
-                        {
-                            Enable = true,
-                            Port = host._port,
-                            ListenAddresses = "127.0.0.1",
-                            IdleTimeout = TimeSpan.FromSeconds(30),
-                        }
-                    ),
-                    NullLogger<DnsOverTlsListener>.Instance,
-                    limiter,
-                    publisher
-                );
-                await host._listener.StartAsync(CancellationToken.None);
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
-                using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            while (!host._listener.IsListening)
+                await Task.Delay(10, timeout.Token);
 
-                while (
-                    !host._listener.IsListening && host._listener.FailedListenAddresses.Count == 0
-                )
-                    await Task.Delay(10, timeout.Token);
-
-                if (host._listener.IsListening)
-                    return host;
-
-                await host._listener.StopAsync(CancellationToken.None);
-            }
-
-            throw new InvalidOperationException("No free port could be bound after five tries.");
+            host._port = host._listener.BoundPort;
+            return host;
         }
 
         public async Task<SslStream> ConnectAsync()
