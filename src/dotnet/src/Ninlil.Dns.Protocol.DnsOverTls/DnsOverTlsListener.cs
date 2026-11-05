@@ -72,7 +72,8 @@ public sealed class DnsOverTlsListener(
     private readonly ZoneTransferRequestRunner _transferRunner = new(
         scopeFactory,
         rateLimiter,
-        eventPublisher
+        eventPublisher,
+        logger
     );
 
     /// <summary>

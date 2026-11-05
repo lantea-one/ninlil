@@ -4,6 +4,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -53,6 +54,31 @@ public sealed class DnsOverTlsZoneTransferRateLimitTests
 
         Assert.Equal(1, service.Calls);
         Assert.Single(publisher.Events);
+    }
+
+    [Fact]
+    public async Task ADeniedAxfr_IsLoggedAtDebugWithTheClientTheZoneAndTheDecision()
+    {
+        CapturingLogger<DnsOverTlsListener> logger = new();
+        await using TransferHost host = await TransferHost.StartAsync(
+            new CountingTransferService(),
+            new RecordingPublisher(),
+            new BudgetLimiter(permitted: 0, DnsSubnetRateLimitDecisionEnum.Allow),
+            logger
+        );
+
+        using SslStream stream = await host.ConnectAsync();
+        await WriteAxfrAsync(stream, 5);
+        Assert.Null(await ReadMessageOrEndAsync(stream));
+
+        (LogLevel level, string message) = Assert.Single(
+            logger.Entries,
+            entry => entry.Message.Contains("Rate-limiting a zone transfer")
+        );
+        Assert.Equal(LogLevel.Debug, level);
+        Assert.Contains("zone.example", message);
+        Assert.Contains("127.0.0.1", message);
+        Assert.Contains("token budget exhausted", message);
     }
 
     [Fact]
@@ -162,7 +188,8 @@ public sealed class DnsOverTlsZoneTransferRateLimitTests
         public static async Task<TransferHost> StartAsync(
             IZoneTransferService service,
             IDnsServerEventPublisher publisher,
-            IDnsRateLimiter limiter
+            IDnsRateLimiter limiter,
+            ILogger<DnsOverTlsListener> logger = null
         )
         {
             TransferHost host = new();
@@ -190,7 +217,7 @@ public sealed class DnsOverTlsZoneTransferRateLimitTests
                         IdleTimeout = TimeSpan.FromSeconds(30),
                     }
                 ),
-                NullLogger<DnsOverTlsListener>.Instance,
+                logger ?? NullLogger<DnsOverTlsListener>.Instance,
                 limiter,
                 publisher
             );

@@ -90,7 +90,8 @@ public sealed class DnsOverQuicListener(
     private readonly ZoneTransferRequestRunner _transferRunner = new(
         scopeFactory,
         rateLimiter,
-        eventPublisher
+        eventPublisher,
+        logger
     );
 
     /// <summary>
