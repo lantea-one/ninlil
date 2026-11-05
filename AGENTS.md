@@ -88,6 +88,12 @@ dotnet test Ninlil.slnx                                               # everythi
   there. Its SQLite tests need no Docker and carry no trait. Replication tests start primary and
   replica containers from `Ninlil.Dns.Data.EngineHosts`.
 - Tests use OS-assigned free ports, never fixed ones, and need no root.
+- A change that touches a test project converts that project's reserve-and-release calls
+  (`GetFreeUdpPort`, `GetFreeTcpPort`, `GetFreePort`): start the server on port 0 and read the port
+  it bound. Where the server cannot expose that port, retry a bounded number of times on
+  `AddressInUse` and say why in a comment. Example: `Ninlil.Dhcp.Server.Tftp.Tests` uses
+  `TftpServer.BoundPort`. The environment-variable ports in `NinlilDnsWebApplicationFactory` stay,
+  because the host needs them before it starts.
 - `Ninlil.Web.Tests`:
   - Every class joins `[Collection(WebTestCollection.Name)]` and shares one
     `NinlilDnsWebApplicationFactory` host. A test that needs a second host calls

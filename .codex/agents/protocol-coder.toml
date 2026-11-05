@@ -39,6 +39,8 @@ Rules:
 Tests:
 - Real sockets on loopback with OS-assigned free ports; no root, no fixed ports, no internet (use
   a fake upstream on loopback).
+- In a test project you touch, convert reserve-and-release port calls (AGENTS.md "Test", the
+  bullet after "OS-assigned free ports").
 - IPv6: guard with `if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback)) return;` (the
   `Fakes/LocalAddresses.cs` helper in each transport test project). QUIC: return early when
   `QuicListener.IsSupported` or `QuicConnection.IsSupported` is false.
