@@ -2808,7 +2808,9 @@ Ninlil can also use these transports towards an upstream. See "Forward to global
 
 **DNS64** helps a client that has only IPv6. For a name with an A record and no AAAA record, Ninlil
 invents an AAAA record by placing the IPv4 address inside an IPv6 prefix that a NAT64 gateway
-translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway.
+translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway. An NXDOMAIN answer to the
+AAAA question is returned as it is; any other AAAA error, or a timeout, still synthesizes from the
+A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never does (§5.5).
 
 **Certificates.** DoT, DoH and DoQ use a TLS certificate.
 
