@@ -57,10 +57,10 @@ mapping, not from hand arithmetic.
 
 <!-- EnvironmentVariableDocumentationTests matches the "Total:" sentence with a regular expression
 (TotalsPattern). Keep its wording and change only the numbers. -->
-Total: **332 individual settings** across 58 bound configuration classes, plus **3 standalone**
+Total: **333 individual settings** across 59 bound configuration classes, plus **3 standalone**
 variables read directly by configuration key (the two bootstrap administrator credentials and
 `NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's unprefixed
-equivalents, giving **342 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
+equivalents, giving **343 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
 in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not part of that
 total.
 
@@ -189,6 +189,7 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 | `NINLIL_IDENTITY_SSO_CLIENT_SECRET` | The OIDC client secret in plaintext, for container and secret-store deployments. When set, it overrides a secret saved in the admin console, which then shows that it is overridden. The admin console never writes it. A value typed into the configuration file is encrypted at startup; a value from the environment is never written to disk. | *(empty)* |
 | `NINLIL_IDENTITY_SSO_CLIENT_SECRET_ENCRYPTED` | The OIDC client secret encrypted with this installation's Data Protection key ring. Written by the admin console; do not set it by hand, use `NINLIL_IDENTITY_SSO_CLIENT_SECRET` instead. A plaintext value here cannot be decrypted: SSO sign-in then fails and the server logs an Error, but the rest of the server keeps working. | *(empty)* |
 | `NINLIL_IDENTITY_SSO_DISPLAY_NAME` | The label shown on the "sign in with SSO" button. | `Single Sign-On` |
+| `NINLIL_IDENTITY_EMAIL_CHANGE_REQUIRE_CONFIRMATION` | Whether a user who changes their own e-mail address must first confirm it: a link goes to the new address and the change applies when the link is opened. When `false`, the change applies at once. Applies without a restart. | `true` |
 
 ## DNS transports
 
