@@ -28,10 +28,10 @@ public sealed class CachedZone
 
     /// <summary>
     ///     This property contains every stored row this zone was built from, including the
-    ///     disabled ones and the ones <see cref="IsServable" /> left out. <see cref="ZoneCacheBackstopService" />
-    ///     compares it with the stored rows to find a zone another instance changed: comparing
-    ///     with the served records alone would see a permanently unwritable row as a change on
-    ///     every pass.
+    ///     disabled ones and the ones <see cref="IsServable" /> left out.
+    ///     <see cref="ZoneCacheBackstopService" /> compares it with the stored rows to find a zone
+    ///     another instance changed: comparing with the served records alone would see a
+    ///     permanently unwritable row as a change on every pass.
     /// </summary>
     public IReadOnlyList<RecordEntity> StoredRecords { get; }
 

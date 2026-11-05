@@ -18,9 +18,10 @@ namespace Ninlil.Dns.Server.AccessControl;
 ///         it loads in <see cref="StartAsync" /> and is invalidated through the event bus
 ///         (<see cref="DnsAccessControlRuleChangedEventSubscriber" />, fed by
 ///         <c>DnsAccessControlRulesController</c>). A change made on another instance that
-///         shares the database is picked up by <see cref="DnsAccessControlRuleBackstopService" />. Unlike the zone cache, which reloads one
-///         changed zone, it always reloads the whole rule set: the table is small and flat, so a
-///         full reload is simple and cheap.
+///         shares the database is picked up by
+///         <see cref="DnsAccessControlRuleBackstopService" />. Unlike the zone cache, which
+///         reloads one changed zone, it always reloads the whole rule set: the table is small and
+///         flat, so a full reload is simple and cheap.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">

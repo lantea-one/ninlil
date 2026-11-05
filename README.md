@@ -4203,7 +4203,8 @@ Each command below runs on node A unless it says otherwise.
   events the broker sends back to it. An instance acts only on events it made, with one
   exception: the console's live feed also shows events from every instance that shares the
   broker. A `DnsZoneChanged` from another instance, for example, does not trigger this
-  instance's webhooks, NOTIFY or cache reloads.
+  instance's webhooks, NOTIFY or cache reloads; the one-minute cache check described under DNS
+  caches picks the change up instead.
 - **The broker carries every event except settings sync.** The settings-sync event holds settings
   values, secrets included, so it never leaves the process. Cluster sync uses the cluster channel.
 - **Under load, per-query events are dropped first.** Per-query events (`DnsQueryReceived`,
