@@ -789,7 +789,13 @@ Ninlil reads its settings from three sources. A later source overrides an earlie
 3. Command-line arguments, such as `--Storage:MigrationSafety:RestoreSnapshot=<id>`.
 
 The admin console's settings pages write your changes to `appsettings.json` and show a note that
-says whether the change applies at once or after a restart. Environment variables are read once, at
+says whether the change applies at once or after a restart. If you set
+[`NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH`](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding)
+to another file, Ninlil loads and watches that file like `appsettings.json`: its values apply at
+start and a saved change applies at once where the page says so. It sits between
+`appsettings.{Environment}.json` and the environment variables in the list above, so a
+`NINLIL_*` variable still overrides it. The path itself comes from an environment variable or from
+`appsettings.json`, never from the custom file. Environment variables are read once, at
 start, so restart Ninlil after you change one. A value set by an environment variable overrides
 the same value saved on a page.
 

@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.FileProviders;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -19,7 +21,9 @@ namespace Ninlil.Web.Tests;
 ///         which is generated and saved when missing) before <c>WebApplicationBuilder.Build()</c>
 ///         merges such overrides, so authenticated requests then fail with "the signature key was
 ///         not found". <c>WebApplicationBuilder.CreateBuilder(args)</c> reads environment variables
-///         up front, so they have no ordering problem.
+///         up front, so they have no ordering problem. <see cref="ConfigureWebHost" /> still uses
+///         <c>ConfigureAppConfiguration</c>, but only to remove a source, never to add a value that
+///         <c>Program.cs</c> reads, so its late run does not matter.
 ///     </para>
 ///     <para>
 ///         Environment variables are process-wide, so this only works because every test class
@@ -49,12 +53,17 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     ///     This field contains a temporary JSON file that the runtime settings controllers and
     ///     <c>PresetsController</c> merge their writes into for this test run. Without it, a test
     ///     that patches a setting or applies a preset would change the shared configuration file
-    ///     in the build output.
+    ///     in the build output. It sits in a directory of its own, not the busy temp
+    ///     directory, so a second host that loads it as a reload-on-change source (the file watcher
+    ///     reports every change in a directory) is not disturbed by unrelated files.
     /// </summary>
-    private readonly string _runtimeConfigurationFilePath = Path.Combine(
-        Path.GetTempPath(),
-        $"ninlil-dns-web-tests-runtime-settings-{Guid.NewGuid():N}.json"
-    );
+    private readonly string _runtimeConfigurationDirectory = Directory
+        .CreateTempSubdirectory("ninlil-dns-web-tests-runtime-settings-")
+        .FullName;
+
+    /// <summary>This property contains the temporary settings file inside its own directory.</summary>
+    private string _runtimeConfigurationFilePath =>
+        Path.Combine(_runtimeConfigurationDirectory, "settings.json");
 
     /// <summary>
     ///     This field contains a temporary path for saved MAC vendor data, so a test that triggers
@@ -200,8 +209,36 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     public int DnsCryptPort { get; }
 
     /// <inheritdoc />
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
         builder.UseEnvironment("Development");
+
+        // Program.cs loads the runtime settings file as a reload-on-change source, so a settings
+        // PATCH would change what every later test in the shared host reads (recursion on, a DHCP
+        // port, a filter flag) and the tests would depend on their order. The shared host drops
+        // that one source, so its writes only land in the file. A second host that points the
+        // setting at a file of its own keeps it, which is what the tests of that source use.
+        builder.ConfigureAppConfiguration(
+            (_, configuration) =>
+            {
+                string sharedFile = Path.GetFullPath(_runtimeConfigurationFilePath);
+                foreach (
+                    JsonConfigurationSource source in configuration
+                        .Sources.OfType<JsonConfigurationSource>()
+                        .Where(source =>
+                            source.FileProvider is PhysicalFileProvider physical
+                            && string.Equals(
+                                Path.GetFullPath(Path.Combine(physical.Root, source.Path)),
+                                sharedFile,
+                                StringComparison.Ordinal
+                            )
+                        )
+                        .ToList()
+                )
+                    configuration.Sources.Remove(source);
+            }
+        );
+    }
 
     /// <inheritdoc />
     protected override void Dispose(bool disposing)
@@ -219,7 +256,7 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
 
         try
         {
-            File.Delete(_runtimeConfigurationFilePath);
+            Directory.Delete(_runtimeConfigurationDirectory, recursive: true);
             File.Delete(_macVendorDataFilePath);
             File.Delete(_macVendorDataFilePath + ".state.json");
         }

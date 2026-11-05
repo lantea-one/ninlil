@@ -553,7 +553,7 @@ appearance/branding.
 | `NINLIL_DNS_SERVER_APPEARANCE_PALETTE` | The admin console's default color palette: `Teal`, `Indigo`, `Amber`, `Rose`, or `Emerald`. | `Teal` |
 | `NINLIL_DNS_SERVER_BRANDING_SITE_TITLE` | A custom browser-tab/header title overriding the default "Ninlil". | *(none)* |
 | `NINLIL_DNS_SERVER_BRANDING_LOGO_DATA_URI` | A custom logo, as a `data:` URI, overriding the default. | *(none)* |
-| `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` | Path of the JSON file that the settings pages merge their changes into at runtime, so a change survives a restart without editing the file by hand. | *(empty — startup uses `appsettings.json` in the content root)* |
+| `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` | Path of the JSON file that the settings pages merge their changes into at runtime, so a change survives a restart without editing the file by hand. A path other than `appsettings.json` is loaded and watched as a configuration source too, below `NINLIL_*` variables in precedence. | *(empty — startup uses `appsettings.json` in the content root)* |
 
 ## Framework-level variables
 
