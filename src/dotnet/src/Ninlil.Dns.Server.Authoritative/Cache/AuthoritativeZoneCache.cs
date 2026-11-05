@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -20,7 +21,14 @@ namespace Ninlil.Dns.Server.Authoritative.Cache;
 ///     The factory used to reach the repositories, one scope per load so no database context is
 ///     held longer than needed.
 /// </param>
-public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : IHostedService
+/// <param name="logger">
+///     The logger for the Warning about each stored record a load leaves out because its data
+///     cannot be written as RDATA (<see cref="CachedZone" />). <see langword="null" /> logs nothing.
+/// </param>
+public sealed class AuthoritativeZoneCache(
+    IServiceScopeFactory scopeFactory,
+    ILogger<AuthoritativeZoneCache> logger = null
+) : IHostedService
 {
     /// <summary>
     ///     This field contains every cached zone, keyed by name.
@@ -63,7 +71,8 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
         foreach (ZoneEntity zone in answerableZones)
             _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(
                 zone,
-                [.. recordsByZoneId[zone.Id]]
+                [.. recordsByZoneId[zone.Id]],
+                logger
             );
     }
 
@@ -194,7 +203,7 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
             stoppingToken
         );
 
-        _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(zone, records);
+        _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(zone, records, logger);
     }
 
     /// <summary>
