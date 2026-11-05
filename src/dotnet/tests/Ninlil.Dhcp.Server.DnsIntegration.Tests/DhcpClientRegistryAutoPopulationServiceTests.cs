@@ -97,7 +97,7 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
     {
         Guid leaseId = Guid.NewGuid();
 
-        // Each seeded lease gets its own address, because of the (ScopeName, IpAddress) unique
+        // Each seeded lease gets its own address, because of the (ScopeId, IpAddress) unique
         // index.
         string ipAddress = $"192.0.2.{_nextLeaseAddressOctet++}";
 
@@ -106,6 +106,7 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
             {
                 Id = leaseId,
                 ProtocolVersion = protocolVersion,
+                ScopeId = Guid.NewGuid(),
                 ScopeName = "lan",
                 ClientIdentifier = clientIdentifier,
                 IpAddress = ipAddress,
@@ -381,6 +382,7 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
             {
                 Id = leaseId,
                 ProtocolVersion = InternetProtocolVersionEnum.IPv6,
+                ScopeId = Guid.NewGuid(),
                 ScopeName = "lan",
                 ClientIdentifier = "00:03:00:01:aa:bb:cc:dd:ee:21",
                 IpAddress = "2001:db8:100::",

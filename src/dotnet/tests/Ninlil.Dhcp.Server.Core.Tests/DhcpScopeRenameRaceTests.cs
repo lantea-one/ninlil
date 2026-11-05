@@ -17,10 +17,11 @@ namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
 ///     This test class covers the engine half of the scope rename race: a lease the allocation
-///     services write under a stale scope name ends up under the scope's current name. Each test
+///     services write with a stale copy of the scope name ends up with the scope's current name
+///     (the lease stays with its scope throughout, because it refers to it by id). Each test
 ///     builds the service by hand over a <see cref="ILeaseRepository" /> proxy whose first
-///     <c>ListByScopeNameAsync</c> for the old name returns the stale result and then commits a
-///     rename (scope and leases) through a separate dependency injection scope, as
+///     <c>ListByScopeIdAsync</c> for the scope returns the stale result and then commits a
+///     rename (scope and lease name copies) through a separate dependency injection scope, as
 ///     <c>DhcpScopesController</c> does. The real repositories run on the SQLite file of the
 ///     engine test hosts, with the unique indexes enforced.
 /// </summary>
@@ -46,7 +47,7 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task OfferV4_WhenTheScopeIsRenamedDuringTheRequest_StoresTheRowUnderTheNewName()
+    public async Task OfferV4_WhenTheScopeIsRenamedDuringTheRequest_StoresTheNewNameOnTheRow()
     {
         DhcpScopeEntity scope = await _v4Host.SeedScopeAsync(
             "rename-race-v4-offer",
@@ -60,7 +61,7 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
         Dhcpv4LeaseAllocationService service = BuildV4Service(
             di.ServiceProvider,
             _v4Host.Host.Services,
-            scope.Name,
+            scope.Id,
             "rename-race-v4-offer-new",
             () => fired = true
         );
@@ -69,16 +70,16 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
 
         Assert.True(fired);
         Assert.NotNull(lease);
-        await AssertOnlyUnderAsync(
+        await AssertNameCopyIsCurrentAsync(
             _v4Host.Host.Services,
+            scope.Id,
             "rename-race-v4-offer-new",
-            scope.Name,
             lease.ClientIdentifier
         );
     }
 
     [Fact]
-    public async Task ConfirmV4_WhenTheScopeIsRenamedDuringTheRequest_DoesNotWriteTheOldNameBack()
+    public async Task ConfirmV4_WhenTheScopeIsRenamedDuringTheRequest_DoesNotWriteTheOldNameCopyBack()
     {
         DhcpScopeEntity scope = await _v4Host.SeedScopeAsync(
             "rename-race-v4-confirm",
@@ -93,7 +94,7 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
             Dhcpv4LeaseAllocationService offerService = BuildV4Service(
                 offerScope.ServiceProvider,
                 _v4Host.Host.Services,
-                scope.Name,
+                scope.Id,
                 null,
                 () => { }
             );
@@ -105,7 +106,7 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
         Dhcpv4LeaseAllocationService service = BuildV4Service(
             di.ServiceProvider,
             _v4Host.Host.Services,
-            scope.Name,
+            scope.Id,
             "rename-race-v4-confirm-new",
             () => fired = true
         );
@@ -120,16 +121,16 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
 
         Assert.True(fired);
         Assert.NotNull(lease);
-        await AssertOnlyUnderAsync(
+        await AssertNameCopyIsCurrentAsync(
             _v4Host.Host.Services,
+            scope.Id,
             "rename-race-v4-confirm-new",
-            scope.Name,
             lease.ClientIdentifier
         );
     }
 
     [Fact]
-    public async Task OfferV6_WhenTheScopeIsRenamedDuringTheRequest_StoresTheRowUnderTheNewName()
+    public async Task OfferV6_WhenTheScopeIsRenamedDuringTheRequest_StoresTheNewNameOnTheRow()
     {
         DhcpScopeEntity scope = await _v6Host.SeedAddressScopeAsync(
             "rename-race-v6-offer",
@@ -142,7 +143,7 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
         Dhcpv6LeaseAllocationService service = BuildV6Service(
             di.ServiceProvider,
             _v6Host.Host.Services,
-            scope.Name,
+            scope.Id,
             "rename-race-v6-offer-new",
             () => fired = true
         );
@@ -155,10 +156,10 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
 
         Assert.True(fired);
         Assert.NotNull(lease);
-        await AssertOnlyUnderAsync(
+        await AssertNameCopyIsCurrentAsync(
             _v6Host.Host.Services,
+            scope.Id,
             "rename-race-v6-offer-new",
-            scope.Name,
             lease.ClientIdentifier
         );
     }
@@ -171,12 +172,12 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
     private static Dhcpv4LeaseAllocationService BuildV4Service(
         IServiceProvider provider,
         IServiceProvider hostServices,
-        string oldName,
+        Guid scopeId,
         string newName,
         Action onFired
     ) =>
         new(
-            WrapLeaseRepository(provider, hostServices, oldName, newName, onFired),
+            WrapLeaseRepository(provider, hostServices, scopeId, newName, onFired),
             provider.GetRequiredService<IDhcpReservationRepository>(),
             provider.GetRequiredService<IDhcpScopeRepository>(),
             provider.GetRequiredService<IUnitOfWork>(),
@@ -192,12 +193,12 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
     private static Dhcpv6LeaseAllocationService BuildV6Service(
         IServiceProvider provider,
         IServiceProvider hostServices,
-        string oldName,
+        Guid scopeId,
         string newName,
         Action onFired
     ) =>
         new(
-            WrapLeaseRepository(provider, hostServices, oldName, newName, onFired),
+            WrapLeaseRepository(provider, hostServices, scopeId, newName, onFired),
             provider.GetRequiredService<IDhcpReservationRepository>(),
             provider.GetRequiredService<IDhcpScopeRepository>(),
             provider.GetRequiredService<IUnitOfWork>(),
@@ -208,14 +209,14 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
 
     /// <summary>
     ///     This method wraps the real lease repository. The first
-    ///     <c>ListByScopeNameAsync(oldName)</c> reads the rows under the old name, then commits
-    ///     the rename in a separate scope and returns the stale rows, so the service goes on with
-    ///     rows that carry the old name.
+    ///     <c>ListByScopeIdAsync(scopeId)</c> reads the scope's rows, then commits the rename in a
+    ///     separate scope and returns the stale rows, so the service goes on with rows whose name
+    ///     copy is the old name.
     /// </summary>
     private static ILeaseRepository WrapLeaseRepository(
         IServiceProvider provider,
         IServiceProvider hostServices,
-        string oldName,
+        Guid scopeId,
         string newName,
         Action onFired
     )
@@ -240,8 +241,8 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
 
             if (
                 done
-                || method.Name != nameof(ILeaseRepository.ListByScopeNameAsync)
-                || !string.Equals((string)args[0], oldName, StringComparison.Ordinal)
+                || method.Name != nameof(ILeaseRepository.ListByScopeIdAsync)
+                || (Guid)args[0] != scopeId
             )
                 return result;
 
@@ -249,7 +250,7 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
             return RenameAfterAsync(
                 (Task<IReadOnlyList<LeaseEntity>>)result,
                 hostServices,
-                oldName,
+                scopeId,
                 newName,
                 onFired
             );
@@ -260,7 +261,7 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
     private static async Task<IReadOnlyList<LeaseEntity>> RenameAfterAsync(
         Task<IReadOnlyList<LeaseEntity>> read,
         IServiceProvider hostServices,
-        string oldName,
+        Guid scopeId,
         string newName,
         Action onFired
     )
@@ -272,10 +273,10 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
         IDhcpScopeRepository scopes =
             scope.ServiceProvider.GetRequiredService<IDhcpScopeRepository>();
         ILeaseRepository leases = scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
-        DhcpScopeEntity entity = await scopes.FindByNameAsync(oldName);
+        DhcpScopeEntity entity = await scopes.GetByIdAsync(scopeId);
         entity.Name = newName;
         scopes.Update(entity);
-        foreach (LeaseEntity lease in await leases.ListByScopeNameAsync(oldName))
+        foreach (LeaseEntity lease in await leases.ListByScopeIdAsync(scopeId))
         {
             lease.ScopeName = newName;
             leases.Update(lease);
@@ -286,18 +287,24 @@ public sealed class DhcpScopeRenameRaceTests : IAsyncLifetime
         return stale;
     }
 
-    private static async Task AssertOnlyUnderAsync(
+    /// <summary>
+    ///     This method checks that the client's lease is found by the scope id and that it and
+    ///     every other lease of the scope carry the new name as their display copy.
+    /// </summary>
+    private static async Task AssertNameCopyIsCurrentAsync(
         IServiceProvider hostServices,
+        Guid scopeId,
         string newName,
-        string oldName,
         string clientIdentifier
     )
     {
         await using AsyncServiceScope scope = hostServices.CreateAsyncScope();
         ILeaseRepository leases = scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
-        Assert.NotNull(await leases.FindByClientIdentifierAsync(newName, clientIdentifier));
-        Assert.Null(await leases.FindByClientIdentifierAsync(oldName, clientIdentifier));
-        Assert.Empty(await leases.ListByScopeNameAsync(oldName));
+        Assert.NotNull(await leases.FindByClientIdentifierAsync(scopeId, clientIdentifier));
+        Assert.All(
+            await leases.ListByScopeIdAsync(scopeId),
+            lease => Assert.Equal(newName, lease.ScopeName)
+        );
     }
 
     private static Dhcpv4Message NewV4Message(byte[] clientHardwareAddress)

@@ -68,6 +68,8 @@ public static class MongoStartupGuard
                         await DnsClientAddressLegacyBackfill.RunAsync(context, stoppingToken),
                     MongoSchemaSteps.ClusterKeyLinkLegacyBackfill =>
                         await ClusterKeyLinkLegacyBackfill.RunAsync(context, stoppingToken),
+                    MongoSchemaSteps.DhcpLeaseScopeIdBackfill =>
+                        await DhcpLeaseScopeIdBackfill.RunAsync(context, stoppingToken),
                     _ => 0,
                 };
 

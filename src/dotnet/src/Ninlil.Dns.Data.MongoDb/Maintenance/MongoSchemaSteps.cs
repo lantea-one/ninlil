@@ -42,6 +42,16 @@ public static class MongoSchemaSteps
     public const string FilterListAppliesToAllClients = nameof(FilterListAppliesToAllClients);
 
     /// <summary>
+    ///     This constant names the step that gives each DHCP lease document the identifier of its
+    ///     scope and deletes the leases of scopes that no longer exist (see
+    ///     <see cref="DhcpLeaseScopeIdBackfill" />). An older build writes leases without a scope
+    ///     identifier, which this version could not find. Recording the step makes an older build
+    ///     refuse a database this version has used, as the relational engines do after the
+    ///     migration.
+    /// </summary>
+    public const string DhcpLeaseScopeIdBackfill = nameof(DhcpLeaseScopeIdBackfill);
+
+    /// <summary>
     ///     This property contains every step this build knows, in the order they run.
     /// </summary>
     public static IReadOnlyList<string> Known { get; } =
@@ -50,5 +60,6 @@ public static class MongoSchemaSteps
         ClusterKeyLinkLegacyBackfill,
         ZoneJournalSoaHistory,
         FilterListAppliesToAllClients,
+        DhcpLeaseScopeIdBackfill,
     ];
 }

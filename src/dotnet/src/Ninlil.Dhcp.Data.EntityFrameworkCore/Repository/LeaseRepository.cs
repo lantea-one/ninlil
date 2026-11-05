@@ -19,29 +19,29 @@ public class LeaseRepository(NinlilDnsContext context)
 {
     /// <inheritdoc />
     public Task<LeaseEntity> FindByClientIdentifierAsync(
-        string scopeName,
+        Guid scopeId,
         string clientIdentifier,
         CancellationToken stoppingToken = default
     ) =>
         Set.FirstOrDefaultAsync(
-            lease => lease.ScopeName == scopeName && lease.ClientIdentifier == clientIdentifier,
+            lease => lease.ScopeId == scopeId && lease.ClientIdentifier == clientIdentifier,
             stoppingToken
         );
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<LeaseEntity>> ListByScopeNameAsync(
-        string scopeName,
+    public async Task<IReadOnlyList<LeaseEntity>> ListByScopeIdAsync(
+        Guid scopeId,
         CancellationToken stoppingToken = default
-    ) => await Set.Where(lease => lease.ScopeName == scopeName).ToListAsync(stoppingToken);
+    ) => await Set.Where(lease => lease.ScopeId == scopeId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public Task<LeaseEntity> FindByIpAddressAsync(
-        string scopeName,
+        Guid scopeId,
         string ipAddress,
         CancellationToken stoppingToken = default
     ) =>
         Set.FirstOrDefaultAsync(
-            lease => lease.ScopeName == scopeName && lease.IpAddress == ipAddress,
+            lease => lease.ScopeId == scopeId && lease.IpAddress == ipAddress,
             stoppingToken
         );
 
@@ -89,24 +89,24 @@ public class LeaseRepository(NinlilDnsContext context)
         await Set.CountAsync(stoppingToken);
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<LeaseEntity>> SearchByScopeNameAsync(
-        string scopeName,
+    public async Task<IReadOnlyList<LeaseEntity>> SearchByScopeIdAsync(
+        Guid scopeId,
         int skip,
         int take,
         CancellationToken stoppingToken = default
     ) =>
         await Set.AsNoTracking()
-            .Where(lease => lease.ScopeName == scopeName)
+            .Where(lease => lease.ScopeId == scopeId)
             .OrderBy(lease => lease.ClientIdentifier)
             .Skip(skip)
             .Take(take)
             .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
-    public async Task<int> CountByScopeNameAsync(
-        string scopeName,
+    public async Task<int> CountByScopeIdAsync(
+        Guid scopeId,
         CancellationToken stoppingToken = default
-    ) => await Set.CountAsync(lease => lease.ScopeName == scopeName, stoppingToken);
+    ) => await Set.CountAsync(lease => lease.ScopeId == scopeId, stoppingToken);
 
     /// <inheritdoc />
     public async Task<bool> TryExpireAsync(

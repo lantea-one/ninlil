@@ -71,7 +71,8 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
         DhcpScopeDetail scopeA = await scopeResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
 
         // Save two leases through the repository: one in scope A and one in scope B, which is
-        // never created. A lease refers to its scope by name, so no scope row is needed for it.
+        // never created. A lease refers to its scope by id and no query joins the scope table, so no scope row
+        // is needed for it.
         Guid leaseInScopeAId = Guid.NewGuid();
         Guid leaseInScopeBId = Guid.NewGuid();
         using (IServiceScope scope = factory.Services.CreateScope())
@@ -86,6 +87,7 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
                     Id = leaseInScopeAId,
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = scopeA.Id,
                     ScopeName = scopeAName,
                     ClientIdentifier = "aa:bb:cc:dd:ee:10",
                     IpAddress = "192.168.60.101",
@@ -101,6 +103,7 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
                     Id = leaseInScopeBId,
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = Guid.NewGuid(),
                     ScopeName = scopeBName,
                     ClientIdentifier = "aa:bb:cc:dd:ee:20",
                     IpAddress = "192.168.61.101",
@@ -170,6 +173,7 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
                     Id = pdLeaseId,
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv6,
+                    ScopeId = Guid.NewGuid(),
                     ScopeName = scopeName,
                     ClientIdentifier = "00:01:00:01:2c:8b:9c:3d:aa:bb:cc:dd:ee:ff",
                     IpAddress = "2001:db8:1234::",

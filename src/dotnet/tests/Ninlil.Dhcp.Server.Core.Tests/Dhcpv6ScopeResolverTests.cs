@@ -129,7 +129,7 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
         );
 
         byte[] duid = [0x00, 0x01, 0x00, 0x01, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
-        await SeedLeaseAsync(scopeA.Name, duid, "2001:db8:a1a1::10");
+        await SeedLeaseAsync(scopeA, duid, "2001:db8:a1a1::10");
 
         Dhcpv6Message request = new();
         request.SetClientIdentifier(duid);
@@ -151,7 +151,7 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
         await _host.SeedAddressScopeAsync("relay-any-b", "2001:db8:b2b2::10", "2001:db8:b2b2::20");
 
         byte[] duid = [0x00, 0x01, 0x00, 0x01, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26];
-        await SeedLeaseAsync(scopeA.Name, duid, "2001:db8:a2a2::10");
+        await SeedLeaseAsync(scopeA, duid, "2001:db8:a2a2::10");
 
         Dhcpv6Message request = new();
         request.SetClientIdentifier(duid);
@@ -204,7 +204,7 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
     /// <summary>
     ///     This method saves a lease row for a DUID through the repository in a separate scope.
     /// </summary>
-    private async Task SeedLeaseAsync(string scopeName, byte[] duid, string ipAddress)
+    private async Task SeedLeaseAsync(DhcpScopeEntity scopeEntity, byte[] duid, string ipAddress)
     {
         await using AsyncServiceScope scope = _host.Host.Services.CreateAsyncScope();
         await scope
@@ -215,7 +215,8 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv6,
-                    ScopeName = scopeName,
+                    ScopeId = scopeEntity.Id,
+                    ScopeName = scopeEntity.Name,
                     ClientIdentifier = string.Join(':', duid.Select(b => b.ToString("x2"))),
                     IpAddress = ipAddress,
                     State = LeaseStateEnum.Active,

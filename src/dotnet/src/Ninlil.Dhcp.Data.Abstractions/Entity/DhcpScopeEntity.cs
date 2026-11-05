@@ -17,9 +17,10 @@ namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 public class DhcpScopeEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains the scope's operator-chosen, unique name. Leases refer to their
-    ///     scope by this name (<see cref="LeaseEntity.ScopeName" />); reservations and options
-    ///     refer to it by identifier (<see cref="DhcpReservationEntity.ScopeId" />).
+    ///     This property contains the scope's operator-chosen, unique name. Leases, reservations
+    ///     and options refer to the scope by identifier (<see cref="LeaseEntity.ScopeId" />,
+    ///     <see cref="DhcpReservationEntity.ScopeId" />), so the name can change; a lease keeps a
+    ///     copy of it for display (<see cref="LeaseEntity.ScopeName" />).
     /// </summary>
     public string Name { get; set; }
 

@@ -120,7 +120,7 @@ public sealed class Dhcpv6ScopeResolver(
         foreach (DhcpScopeEntity scope in scopes)
         {
             LeaseEntity lease = await leaseRepository.FindByClientIdentifierAsync(
-                scope.Name,
+                scope.Id,
                 clientKey,
                 cancellationToken
             );

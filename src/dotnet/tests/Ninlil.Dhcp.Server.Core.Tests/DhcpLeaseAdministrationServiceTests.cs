@@ -131,6 +131,7 @@ public sealed class DhcpLeaseAdministrationServiceTests : IAsyncLifetime
                     Id = leaseId,
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = scope.Id,
                     ScopeName = scope.Name,
                     ClientIdentifier = "cc:cc:cc:cc:cc:cc",
                     IpAddress = "192.0.2.210",
