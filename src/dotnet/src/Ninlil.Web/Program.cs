@@ -665,6 +665,9 @@ builder.Services.AddSingleton<TwoFactorEmailCodeCooldown>();
 // UsersController.ResetPassword and by AuthController.ForgotPassword.
 builder.Services.AddScoped<PasswordResetLinkSender>();
 
+// Scoped for the same reason. Builds and sends the self-service e-mail change messages.
+builder.Services.AddScoped<EmailChangeLinkSender>();
+
 // DnsEventsHubBroadcaster is one singleton, registered under its concrete type and under each
 // IDnsServerEventSubscriber<TEvent> it implements, all resolving to the same instance, as
 // DnsServerEventPublisher is.
