@@ -51,9 +51,11 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         entry. Globs are turned into anchored regexes, so one engine with one
 ///         timeout handles both. The index compiles each pattern once, when the list is loaded
 ///         (see <see cref="DnsFilterListIndex.Build" />), and every query reuses the compiled
-///         <see cref="Regex" />. Every match runs with <see cref="RegexMatchTimeout" />, so a
-///         pathological pattern cannot stall query answering; a timeout counts as no match and is
-///         logged.
+///         <see cref="Regex" />. Patterns compile with <see cref="RegexOptions.NonBacktracking" />, which
+///         runs in linear time, so a pathological pattern such as <c>^(a+)+$</c> cannot stall
+///         query answering and never times out. A pattern that engine cannot run (backreferences,
+///         lookarounds, atomic groups) falls back to the backtracking engine and
+///         <see cref="RegexMatchTimeout" />; a timeout there counts as no match and is logged.
 ///     </para>
 ///     <para>
 ///         <strong>Exceptions and precedence.</strong> An adblock <c>@@</c> exception only cancels
@@ -87,7 +89,7 @@ public sealed class DnsFilterEngine(
 ) : IDnsFilterEngine
 {
     /// <summary>
-    ///     This field bounds how long one wildcard or regex match may run (see the class summary).
+    ///     This field bounds how long one match may run on the backtracking fallback (see the class summary). The linear engine needs no bound.
     /// </summary>
     private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
 
@@ -618,13 +620,39 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method compiles a pattern case-insensitively with the engine's match timeout and
-    ///     returns <see langword="null" /> instead of throwing when the pattern is malformed.
-    ///     <c>FilterListEntriesController</c> and <c>FilterPatternPreviewController</c> also call
-    ///     it to validate patterns.
+    ///     This method compiles a pattern case-insensitively and returns <see langword="null" />
+    ///     instead of throwing when the pattern is malformed. It tries
+    ///     <see cref="RegexOptions.NonBacktracking" /> first, which matches in time linear in the
+    ///     name, so a catastrophic pattern such as <c>^(a+)+$</c> neither stalls a query nor
+    ///     times out. A pattern that engine refuses (backreferences, lookarounds, atomic groups,
+    ///     conditionals) compiles on the backtracking engine with <see cref="RegexMatchTimeout" />;
+    ///     <see cref="MatchesPatternEntry" /> treats a timeout there as no match. A pattern is
+    ///     valid exactly when the backtracking engine accepts it, so this choice never changes
+    ///     what <c>FilterListEntriesController</c> and <c>FilterPatternPreviewController</c>,
+    ///     which also call this method, accept.
     /// </summary>
     public static Regex CompileOrNull(string pattern)
     {
+        try
+        {
+            return new Regex(
+                pattern,
+                RegexOptions.IgnoreCase
+                    | RegexOptions.CultureInvariant
+                    | RegexOptions.NonBacktracking
+            );
+        }
+        catch (NotSupportedException)
+        {
+            // The pattern is valid but needs backtracking, so it keeps the timeout and the rule
+            // that a timeout is no match.
+        }
+        catch (ArgumentException)
+        {
+            // Malformed for the linear engine. The backtracking engine below is the arbiter of
+            // validity, so the set of accepted patterns stays what it always was.
+        }
+
         try
         {
             return new Regex(

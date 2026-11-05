@@ -273,7 +273,8 @@ public sealed class DnsFilterListIndex
 /// <param name="Value">The pattern text as stored.</param>
 /// <param name="IsException">Whether the entry is an adblock exception.</param>
 /// <param name="Compiled">
-///     The compiled, case-insensitive regex with the engine's match timeout, or
+///     The compiled, case-insensitive regex (linear-time unless the pattern needs the
+///     backtracking fallback, see <see cref="DnsFilterPatternEntry.UsesBacktrackingFallback" />), or
 ///     <see langword="null" /> when the pattern is blank or does not compile (such an entry never
 ///     matches).
 /// </param>
@@ -284,6 +285,14 @@ public sealed record DnsFilterPatternEntry(
     Regex Compiled
 )
 {
+    /// <summary>
+    ///     This property says whether the pattern runs on the backtracking engine, with the match
+    ///     timeout, because <see cref="RegexOptions.NonBacktracking" /> refuses it. It is
+    ///     <see langword="false" /> for an entry that did not compile.
+    /// </summary>
+    public bool UsesBacktrackingFallback =>
+        Compiled is not null && (Compiled.Options & RegexOptions.NonBacktracking) == 0;
+
     /// <summary>
     ///     This property is a lowercase ASCII text that every name the pattern matches must
     ///     contain, or <see langword="null" /> when none can be read off the pattern safely. It
