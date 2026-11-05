@@ -4561,8 +4561,8 @@ you out of every session, yours included; sign in again with a code from the app
     send reset links to someone else.** Leave confirmation on unless SMTP is unavailable.
   - **Either way**, when the address changes, every session of the account ends, the caller's own
     included (the console signs you out and the sign-in page says why; the confirmation page also
-    clears a session in the browser that opens the link), and the old address gets a notice if SMTP is configured. The change reaches the
-    other nodes of a cluster like any account change.
+    clears a session in the browser that opens the link), and the old address gets a notice if
+    SMTP is configured. The change reaches the other nodes of a cluster like any account change.
 - **The JWT signing key proves a token is Ninlil's.** Whoever holds `data/jwt-signing-key.txt` can
   make a token for any enabled account, the bootstrap administrator's included, and the token then
   gets that account's permissions. Treat the file like a root password.

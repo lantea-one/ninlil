@@ -8,8 +8,9 @@ import { ForbiddenComponent } from './layout/forbidden/forbidden.component';
 
 /**
  * This constant is the app's route table. The public pages (login, forgot and reset password,
- * e-mail change confirmation, SSO callback) sit at the top level. Every other page renders inside {@link AppShellComponent},
- * whose route has {@link authGuard}, so they all need a session.
+ * e-mail change confirmation, SSO callback) sit at the top level. Every other page renders
+ * inside {@link AppShellComponent}, whose route has {@link authGuard}, so they all need a
+ * session.
  *
  * <p>Most areas also have a {@link permissionGuard} for the backend's read permission on the
  * parent route and for the write permission on each create and edit route. The guard blocks a
