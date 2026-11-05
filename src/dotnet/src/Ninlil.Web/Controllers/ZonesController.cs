@@ -34,7 +34,7 @@ namespace Ninlil.Web.Controllers;
 /// <param name="dnssecKeyRepository">
 ///     Removes a deleted zone's DNSSEC keys (see <see cref="DnssecKeysController" />).
 ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity" /> refers to its zone by
-///     <c>zoneId</c> only, and MongoDB has no cascade delete, so the keys are removed explicitly,
+///     the zone id only, and MongoDB has no cascade delete, so the keys are removed explicitly,
 ///     like the records.
 /// </param>
 /// <param name="tsigKeyRepository">

@@ -2,7 +2,7 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the SMTP settings (configuration section <c>email</c>) that
+///     This record is the SMTP settings (configuration section <c>Email</c>) that
 ///     <c>GET /api/smtp-settings</c> returns: the server e-mail is sent through, for two-factor
 ///     codes and password reset links. A <c>PATCH</c> accepts these fields with <c>password</c>
 ///     in place of <c>passwordConfigured</c>.

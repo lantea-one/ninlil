@@ -37,7 +37,7 @@ public record EventBrokerSettingsDetail(
 
 /// <summary>
 ///     This record carries the RabbitMQ event broker settings (configuration section
-///     <c>DnsServer:Events:RabbitMq</c>) without <c>password</c>. A <c>GET</c> never returns the
+///     <c>DnsServer:Events:RabbitMq</c>) without <c>Password</c>. A <c>GET</c> never returns the
 ///     password, as with every other secret, even though this one is stored in the plaintext
 ///     configuration file rather than encrypted like the SMTP password.
 /// </summary>
@@ -53,7 +53,7 @@ public record RabbitMqBrokerSettingsDetail(
 
 /// <summary>
 ///     This record carries the ActiveMQ event broker settings (configuration section
-///     <c>DnsServer:Events:ActiveMq</c>) without <c>password</c>, for the reason given on
+///     <c>DnsServer:Events:ActiveMq</c>) without <c>Password</c>, for the reason given on
 ///     <see cref="RabbitMqBrokerSettingsDetail" />.
 /// </summary>
 public record ActiveMqBrokerSettingsDetail(

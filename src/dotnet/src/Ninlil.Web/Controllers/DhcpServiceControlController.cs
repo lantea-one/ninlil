@@ -21,7 +21,7 @@ namespace Ninlil.Web.Controllers;
 ///     once and starting it rebinds it, with no process restart.
 ///     <para>
 ///         <b>Why it is separate from <see cref="ServicesController" />.</b> Its responses always
-///         show a service's configured <c>enable</c> flag (whether it starts at boot, which needs
+///         show a service's configured <c>Enable</c> setting (whether it starts at boot, which needs
 ///         a restart to change) and its live <c>DhcpServiceStatus.isRunning</c> state side
 ///         by side. <c>ManagedServiceSummary</c>, the <c>/api/services</c> response, carries only
 ///         the running state, and the other services there have no "configured but not started"
@@ -33,7 +33,7 @@ namespace Ninlil.Web.Controllers;
 ///         four fixed services, and an unknown <c>{kind}</c> fails model binding with 400.
 ///     </para>
 ///     <para>
-///         <see cref="List" /> reveals only each service's <c>enable</c> flag and running state,
+///         <see cref="List" /> reveals only each service's <c>Enable</c> setting and running state,
 ///         so it needs <c>dhcpservices:read</c>. <see cref="Start" /> and <see cref="Stop" />
 ///         change what the server does on the network (stopping DHCPv4 or DHCPv6 cuts off lease
 ///         traffic at once), so they need the separate <c>dhcpservices:manage</c>, as with
@@ -44,10 +44,10 @@ namespace Ninlil.Web.Controllers;
 ///     Every registered <see cref="IDhcpProtocolService" />, matched by concrete type, as
 ///     <c>TransportListenersHealthCheck</c> does for the DNS transports.
 /// </param>
-/// <param name="dhcpv4Options">The DHCPv4 settings loaded at startup, for its <c>enable</c> flag.</param>
-/// <param name="dhcpv6Options">The DHCPv6 settings loaded at startup, for its <c>enable</c> flag.</param>
-/// <param name="raOptions">The Router Advertisement settings loaded at startup, for its <c>enable</c> flag.</param>
-/// <param name="tftpOptions">The TFTP settings loaded at startup, for its <c>enable</c> flag.</param>
+/// <param name="dhcpv4Options">The DHCPv4 settings loaded at startup, for its <c>Enable</c> setting.</param>
+/// <param name="dhcpv6Options">The DHCPv6 settings loaded at startup, for its <c>Enable</c> setting.</param>
+/// <param name="raOptions">The Router Advertisement settings loaded at startup, for its <c>Enable</c> setting.</param>
+/// <param name="tftpOptions">The TFTP settings loaded at startup, for its <c>Enable</c> setting.</param>
 [ApiController]
 [Route("api/dhcp-services")]
 public class DhcpServiceControlController(
@@ -59,7 +59,7 @@ public class DhcpServiceControlController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reports each DHCP-family service's configured <c>enable</c> flag and its
+    ///     This action reports each DHCP-family service's configured <c>Enable</c> setting and its
     ///     live running state. Requires <c>dhcpservices:read</c>.
     /// </summary>
     [HttpGet]
@@ -98,7 +98,7 @@ public class DhcpServiceControlController(
 
     /// <summary>
     ///     This action starts one DHCP-family service now, binding its socket, whatever its
-    ///     <c>enable</c> flag says. Starting a running service changes nothing.
+    ///     <c>Enable</c> setting says. Starting a running service changes nothing.
     ///     Returns 400 for an unknown kind.
     ///     Requires <c>dhcpservices:manage</c>.
     /// </summary>
@@ -160,7 +160,7 @@ public class DhcpServiceControlController(
     }
 
     /// <summary>
-    ///     This method returns the configured <c>enable</c> flag for <paramref name="kind" />.
+    ///     This method returns the configured <c>Enable</c> setting for <paramref name="kind" />.
     /// </summary>
     private bool IsEnabled(DhcpServiceKindEnum kind) =>
         kind switch

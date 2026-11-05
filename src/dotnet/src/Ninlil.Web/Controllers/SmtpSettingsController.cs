@@ -59,7 +59,7 @@ public class SmtpSettingsController(
     public ActionResult<SmtpSettingsDetail> Get() => Ok(ToDetail(emailOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into the <c>email</c> section as an RFC 7396 merge
+    ///     This action merges a partial update into the <c>Email</c> section as an RFC 7396 merge
     ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value, including <c>password</c>, so an operator can
     ///     change only <c>smtpHost</c> without resupplying a password <see cref="Get" /> never
@@ -226,7 +226,7 @@ public class SmtpSettingsController(
     ///     password from any source, because every e-mail send would then fail
     ///     (<see cref="SmtpEmailSender" /> throws before connecting). The result is the current
     ///     settings with the patch applied. A password counts when the patch sets a non-blank one,
-    ///     or when the current settings hold a plaintext <c>password</c> (the environment variable,
+    ///     or when the current settings hold a plaintext <c>Password</c> (the environment variable,
     ///     which survives a cleared password) or, when the patch leaves <c>password</c> out, a
     ///     stored <c>PasswordEncrypted</c>. The admin console never sends a blank password, so
     ///     saving other fields while a password is stored stays valid.

@@ -544,11 +544,11 @@ public record DhcpRaRouteDetail(
 ///     <c>dnsSearchListDomains</c> inherits the global list; any other value, even an empty
 ///     list, replaces it.
 ///     <para>
-///         <b>The override's <c>Prefixes</c> and <c>routes</c> lists are not included.</b>
+///         <b>The override's <c>Prefixes</c> and <c>Routes</c> lists are not included.</b>
 ///         Prefixes are file-only globally too (see <see cref="DhcpRaSettingsDetail" />), and a
 ///         route list nested inside this list would make the API and UI much more complex. Both
 ///         can be set in the JSON configuration file
-///         (the <c>Prefixes</c> and <c>routes</c> of each <c>DhcpServer:Ra:InterfaceOverrides</c>
+///         (the <c>Prefixes</c> and <c>Routes</c> of each <c>DhcpServer:Ra:InterfaceOverrides</c>
 ///         entry).
 ///     </para>
 /// </summary>
@@ -619,7 +619,7 @@ public enum DhcpServiceKindEnum
 /// </summary>
 /// <param name="Kind">Which of the four DHCP-family services this status describes.</param>
 /// <param name="Enabled">
-///     Whether the service's <c>enable</c> option says it starts at boot. It is read from the
+///     Whether the service's <c>Enable</c> setting says it starts at boot. It is read from the
 ///     settings loaded at startup, so a saved change shows only after a restart.
 /// </param>
 /// <param name="IsRunning">Whether the service's listener is bound and serving traffic now.</param>

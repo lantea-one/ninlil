@@ -45,7 +45,7 @@ namespace Ninlil.Web.Controllers;
 ///         each decide, once in <c>Program.cs</c> before dependency injection is built, whether the
 ///         local engine or the relay agent answers that protocol (the two protocols decide
 ///         independently), as the message-broker and OIDC scheme choices are made. The
-///         <c>enable</c> flags of DHCPv4, DHCPv6 and Router Advertisement are read once at boot by
+///         <c>Enable</c> settings of DHCPv4, DHCPv6 and Router Advertisement are read once at boot by
 ///         each listener's hosted-service wrapper. <see cref="DhcpServiceControlController" /> can
 ///         stop and start the listeners, but they keep the settings they started with. These
 ///         PATCH actions therefore return
