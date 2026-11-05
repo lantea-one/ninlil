@@ -16,7 +16,7 @@ import { DhcpServiceKindEnum } from './dhcpServiceKindEnum';
 export interface DhcpServiceStatus { 
     kind?: DhcpServiceKindEnum;
     /**
-     * Whether the service\'s `enable` option says it starts at boot. It is read from the settings loaded at startup, so a saved change shows only after a restart.
+     * Whether the service\'s `Enable` setting says it starts at boot. It is read from the settings loaded at startup, so a saved change shows only after a restart.
      */
     enabled?: boolean;
     /**

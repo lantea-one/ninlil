@@ -6583,7 +6583,7 @@
         "tags": [
           "DhcpServiceControl"
         ],
-        "summary": "This action reports each DHCP-family service's configured `enable` flag and its\nlive running state. Requires `dhcpservices:read`.",
+        "summary": "This action reports each DHCP-family service's configured `Enable` setting and its\nlive running state. Requires `dhcpservices:read`.",
         "operationId": "apiDhcpServicesGet",
         "responses": {
           "200": {
@@ -6629,7 +6629,7 @@
         "tags": [
           "DhcpServiceControl"
         ],
-        "summary": "This action starts one DHCP-family service now, binding its socket, whatever its\n`enable` flag says. Starting a running service changes nothing.\nReturns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
+        "summary": "This action starts one DHCP-family service now, binding its socket, whatever its\n`Enable` setting says. Starting a running service changes nothing.\nReturns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
         "operationId": "apiDhcpServicesKindStartPost",
         "parameters": [
           {
@@ -19468,7 +19468,7 @@
         "tags": [
           "SmtpSettings"
         ],
-        "summary": "This action merges a partial update into the `email` section as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password `GET /api/smtp-settings` never\nshows. A password is encrypted before it is written to the configuration file, and a blank\none clears it. Every field takes effect at once. Returns 400 for a blank host or\ndisplay name, a port outside 1-65535, a `username` left with no password from any\nsource, a malformed from-address or a `publicBaseUrl` that is not an absolute http\nor https URL. Requires `smtpsettings:write`.",
+        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password `GET /api/smtp-settings` never\nshows. A password is encrypted before it is written to the configuration file, and a blank\none clears it. Every field takes effect at once. Returns 400 for a blank host or\ndisplay name, a port outside 1-65535, a `username` left with no password from any\nsource, a malformed from-address or a `publicBaseUrl` that is not an absolute http\nor https URL. Requires `smtpsettings:write`.",
         "operationId": "apiSmtpSettingsPatch",
         "requestBody": {
           "content": {
@@ -24077,7 +24077,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record carries the ActiveMQ event broker settings (configuration section\n`DnsServer:Events:ActiveMq`) without `password`, for the reason given on\n`RabbitMqBrokerSettingsDetail`."
+        "description": "This record carries the ActiveMQ event broker settings (configuration section\n`DnsServer:Events:ActiveMq`) without `Password`, for the reason given on\n`RabbitMqBrokerSettingsDetail`."
       },
       "AdminLoginRateLimitSettingsDetail": {
         "type": "object",
@@ -26245,7 +26245,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`:\ndifferent Router Advertisement content for one network interface. It appears in\n`DhcpRaSettingsDetail.interfaceOverrides` and in the `interfaceOverrides`\narray of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits\nthe matching global field. A null`recursiveDnsServers` or\n`dnsSearchListDomains` inherits the global list; any other value, even an empty\nlist, replaces it.\n\n<b>The override's `Prefixes` and `routes` lists are not included.</b>\n    Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a\n    route list nested inside this list would make the API and UI much more complex. Both\n    can be set in the JSON configuration file\n    (the `Prefixes` and `routes` of each `DhcpServer:Ra:InterfaceOverrides`\n    entry)."
+        "description": "This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`:\ndifferent Router Advertisement content for one network interface. It appears in\n`DhcpRaSettingsDetail.interfaceOverrides` and in the `interfaceOverrides`\narray of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits\nthe matching global field. A null`recursiveDnsServers` or\n`dnsSearchListDomains` inherits the global list; any other value, even an empty\nlist, replaces it.\n\n<b>The override's `Prefixes` and `Routes` lists are not included.</b>\n    Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a\n    route list nested inside this list would make the API and UI much more complex. Both\n    can be set in the JSON configuration file\n    (the `Prefixes` and `Routes` of each `DhcpServer:Ra:InterfaceOverrides`\n    entry)."
       },
       "DhcpRaProtocolSettingsDetail": {
         "type": "object",
@@ -26902,7 +26902,7 @@
           },
           "enabled": {
             "type": "boolean",
-            "description": "Whether the service's `enable` option says it starts at boot. It is read from the\nsettings loaded at startup, so a saved change shows only after a restart."
+            "description": "Whether the service's `Enable` setting says it starts at boot. It is read from the\nsettings loaded at startup, so a saved change shows only after a restart."
           },
           "isRunning": {
             "type": "boolean",
@@ -29589,7 +29589,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record carries the RabbitMQ event broker settings (configuration section\n`DnsServer:Events:RabbitMq`) without `password`. A `GET` never returns the\npassword, as with every other secret, even though this one is stored in the plaintext\nconfiguration file rather than encrypted like the SMTP password."
+        "description": "This record carries the RabbitMQ event broker settings (configuration section\n`DnsServer:Events:RabbitMq`) without `Password`. A `GET` never returns the\npassword, as with every other secret, even though this one is stored in the plaintext\nconfiguration file rather than encrypted like the SMTP password."
       },
       "RateLimitingSettingsDetail": {
         "type": "object",
@@ -30366,7 +30366,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the SMTP settings (configuration section `email`) that\n`GET /api/smtp-settings` returns: the server e-mail is sent through, for two-factor\ncodes and password reset links. A `PATCH` accepts these fields with `password`\nin place of `passwordConfigured`."
+        "description": "This record is the SMTP settings (configuration section `Email`) that\n`GET /api/smtp-settings` returns: the server e-mail is sent through, for two-factor\ncodes and password reset links. A `PATCH` accepts these fields with `password`\nin place of `passwordConfigured`."
       },
       "SqliteStorageConnectionFields": {
         "type": "object",

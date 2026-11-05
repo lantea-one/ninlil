@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`: different Router Advertisement content for one network interface. It appears in `DhcpRaSettingsDetail.interfaceOverrides` and in the `interfaceOverrides` array of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits the matching global field. A null`recursiveDnsServers` or `dnsSearchListDomains` inherits the global list; any other value, even an empty list, replaces it.  <b>The override\'s `Prefixes` and `routes` lists are not included.</b>     Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a     route list nested inside this list would make the API and UI much more complex. Both     can be set in the JSON configuration file     (the `Prefixes` and `routes` of each `DhcpServer:Ra:InterfaceOverrides`     entry).
+ * This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`: different Router Advertisement content for one network interface. It appears in `DhcpRaSettingsDetail.interfaceOverrides` and in the `interfaceOverrides` array of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits the matching global field. A null`recursiveDnsServers` or `dnsSearchListDomains` inherits the global list; any other value, even an empty list, replaces it.  <b>The override\'s `Prefixes` and `Routes` lists are not included.</b>     Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a     route list nested inside this list would make the API and UI much more complex. Both     can be set in the JSON configuration file     (the `Prefixes` and `Routes` of each `DhcpServer:Ra:InterfaceOverrides`     entry).
  */
 export interface DhcpRaInterfaceOverrideDetail { 
     /**
