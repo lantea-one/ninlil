@@ -11,6 +11,21 @@ outside Forgejo.
 
 ## Unreleased
 
+### Removed
+
+- **Settings that had no effect are gone.** The DNS-over-HTTPS listener settings
+  (`NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT` and
+  `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH`, `..._PFX_PASSWORD`,
+  `..._SELF_SIGNED_CERTIFICATE_STATE_PATH`, `..._ALLOWED_PROTOCOLS` and
+  `..._CERTIFICATE_RELOAD_POLL_INTERVAL`) and the backup path settings
+  (`NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY` and
+  `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH`) never changed anything: DNS-over-HTTPS
+  is served by the web listener, and startup sets the two backup paths itself. A configuration
+  file or environment that still sets them is ignored, so nothing breaks. The
+  `Ninlil.Dns.Protocol.DnsOverHttps` library keeps its own listener port and certificate in the new
+  `DnsOverHttpsListenerOptions`, which Ninlil does not bind
+  ([#27](https://git.lantea.one/lantea-one/ninlil/issues/27)).
+
 ### Behaviour worth knowing
 
 - **Renaming a DHCP scope keeps its leases.** A lease refers to its scope by id, so a renamed
