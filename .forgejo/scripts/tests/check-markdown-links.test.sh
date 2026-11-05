@@ -3,8 +3,9 @@
 #
 # The fixture holds one good file link, one good anchor, one anchor on a duplicate heading
 # (GitHub slugs the second one with "-1"), one broken file link, one broken anchor, a reference
-# definition, and broken-looking links inside a code fence and an inline code span that the
-# checker must ignore.
+# definition, links whose paths hold a space (<angle brackets>) or parentheses, a heading with
+# __bold__ emphasis, and broken-looking links inside a code fence, an inline code span and
+# HTML comments (one line and several lines) that the checker must ignore.
 #
 # Usage: .forgejo/scripts/tests/check-markdown-links.test.sh
 # Needs: bash, git, python3. Writes only to a temporary directory it removes on exit.
@@ -26,6 +27,7 @@ export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 repo="${work_root}/repo"
 git init --quiet "${repo}"
 mkdir -p "${repo}/docs"
+touch "${repo}/docs/a b.md" "${repo}/docs/c(1).md"
 
 cat > "${repo}/README.md" <<'MARKDOWN'
 # Title
@@ -49,6 +51,12 @@ Broken same-file anchor: [bad](#nowhere).
 ```
 
 An inline `[ignored span](docs/span-missing.md)` is skipped too.
+<!-- [ignored comment](docs/comment-missing.md) -->
+<!--
+[ignored long comment](docs/long-comment-missing.md)
+-->
+Space and parentheses: [spaced](<docs/a b.md>) and [paren](docs/c(1).md).
+Bold heading: [bold](docs/guide.md#a_b_c-and-bold-name).
 
 [r1]: docs/guide.md
 MARKDOWN
@@ -59,6 +67,8 @@ cat > "${repo}/docs/guide.md" <<'MARKDOWN'
 ## The Section
 
 ## The Section!
+
+## A_b_c and __bold__ name
 
 Back to [readme](../README.md#title).
 MARKDOWN

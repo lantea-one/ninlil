@@ -13,7 +13,9 @@ For each tracked *.md file (git ls-files, minus anything under node_modules) it 
     heading slugs (GitHub and Forgejo rules: lowercase, punctuation dropped except `-` and `_`,
     spaces become `-`, a repeated slug gets `-1`, `-2`, ...) and against explicit
     `<a id="x">` / `<a name="x">` anchors. Anchors on non-Markdown targets are not checked.
-Fenced code blocks (``` and ~~~) and inline code spans are ignored when finding links.
+Fenced code blocks (``` and ~~~), inline code spans and HTML comments are ignored when finding
+links. Indented code blocks are not: nested list content uses the same indentation, and telling
+the two apart needs a full CommonMark parser, so a link-like text there is checked like a link.
 Links with a scheme (https:, mailto:, ...) are skipped unless external checking is on.
 
 Usage: python3 -I .forgejo/scripts/check-markdown-links.py [--external]
@@ -36,7 +38,10 @@ FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 ATX_HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
 SETEXT_UNDERLINE = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
 CODE_SPAN = re.compile(r"(`+)(.+?)\1")
-INLINE_LINK = re.compile(r"\]\(\s*<?([^)\s>]*)")
+# A destination is either <anything but angle brackets> or text without spaces in which
+# parentheses may nest one level, as CommonMark allows.
+INLINE_LINK = re.compile(r"\]\(\s*(?:<([^<>\n]*)>|((?:[^()\s]|\([^()\s]*\))*))")
+HTML_COMMENT = re.compile(r"<!--.*?-->")
 REFERENCE_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?(\S+?)>?(?:\s|$)")
 HTML_LINK = re.compile(r"""\b(?:href|src)\s*=\s*["']([^"']+)["']""")
 HTML_ANCHOR = re.compile(r"""<a\s[^>]*?\b(?:id|name)\s*=\s*["']([^"']+)["']""")
@@ -48,6 +53,7 @@ def slugify(heading):
     text = CODE_SPAN.sub(r"\2", text)
     text = re.sub(r"<[^>]+>", "", text)
     text = text.replace("*", "")
+    text = re.sub(r"(?<!\w)__(.+?)__(?!\w)", r"\1", text)
     # Underscores around a word are emphasis, so they are not part of the rendered text.
     text = re.sub(r"(?<!\w)_(.+?)_(?!\w)", r"\1", text)
     text = text.strip().lower()
@@ -69,6 +75,7 @@ class MarkdownFile:
             lines = handle.read().splitlines()
         slug_counts = {}
         fence = None
+        in_comment = False
         previous = ""
         for number, line in enumerate(lines, start=1):
             marker = FENCE.match(line)
@@ -84,7 +91,11 @@ class MarkdownFile:
             atx = ATX_HEADING.match(line)
             if atx:
                 heading = atx.group(2)
-            elif SETEXT_UNDERLINE.match(line) and previous.strip() and not previous.lstrip().startswith(("-", "*", "+", ">", "#")):
+            elif (
+                SETEXT_UNDERLINE.match(line)
+                and previous.strip()
+                and not previous.lstrip().startswith(("-", "*", "+", ">", "#"))
+            ):
                 heading = previous.strip()
             previous = line
             if heading is not None:
@@ -92,13 +103,26 @@ class MarkdownFile:
                 count = slug_counts.get(slug, 0)
                 slug_counts[slug] = count + 1
                 self.anchors.add(slug if count == 0 else f"{slug}-{count}")
-            # Spaces keep the columns while hiding code spans from the link patterns.
+            # Spaces keep the columns while hiding code spans and HTML comments, which the
+            # renderer does not turn into links, from the link patterns.
             visible = CODE_SPAN.sub(lambda match: " " * len(match.group(0)), line)
+            if in_comment:
+                end = visible.find("-->")
+                if end < 0:
+                    continue
+                visible = " " * (end + 3) + visible[end + 3 :]
+                in_comment = False
+            visible = HTML_COMMENT.sub(lambda match: " " * len(match.group(0)), visible)
+            start = visible.find("<!--")
+            if start >= 0:
+                visible = visible[:start]
+                in_comment = True
             for match in HTML_ANCHOR.finditer(visible):
                 self.anchors.add(match.group(1).lower())
-            for pattern in (INLINE_LINK, HTML_LINK):
-                for match in pattern.finditer(visible):
-                    self.links.append((number, match.group(1)))
+            for match in INLINE_LINK.finditer(visible):
+                self.links.append((number, match.group(1) or match.group(2)))
+            for match in HTML_LINK.finditer(visible):
+                self.links.append((number, match.group(1)))
             definition = REFERENCE_DEFINITION.match(visible)
             if definition:
                 self.links.append((number, definition.group(1)))
@@ -183,7 +207,10 @@ def main(arguments):
             if not os.path.exists(os.path.join(root, resolved)):
                 problems.append((name, number, f"file not found: {target}"))
                 continue
-            if fragment and resolved.endswith(".md") and os.path.isfile(os.path.join(root, resolved)):
+            is_markdown_file = resolved.endswith(".md") and os.path.isfile(
+                os.path.join(root, resolved)
+            )
+            if fragment and is_markdown_file:
                 anchor_count += 1
                 if fragment.lower() not in load(resolved).anchors:
                     problems.append((name, number, f"anchor not found in {resolved}: #{fragment}"))
