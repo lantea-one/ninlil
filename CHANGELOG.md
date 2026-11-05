@@ -53,6 +53,15 @@ outside Forgejo.
   dropped. See [DHCP, DHCPv6 and Router
   Advertisement](./README.md#dhcp-dhcpv6-and-router-advertisement)
   ([#58](https://git.lantea.one/lantea-one/ninlil/issues/58)).
+- **Settings saved to a custom runtime configuration file now take effect.** If
+  `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` points at a file other than
+  `appsettings.json`, Ninlil now loads and watches that file as a configuration source: its values
+  apply at start, and a saved change applies at once where the page says so. Values already saved
+  in that file, which Ninlil ignored until now, take effect after the upgrade. They override
+  `appsettings.json` and `appsettings.{Environment}.json`; `NINLIL_*` variables and command-line
+  arguments still override them. Review or clear the file before you upgrade. See
+  [Configuration](./README.md#configuration)
+  ([#314](https://git.lantea.one/lantea-one/ninlil/issues/314)).
 
 ## v2026.10.31.1
 

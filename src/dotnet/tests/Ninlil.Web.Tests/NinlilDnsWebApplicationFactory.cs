@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.FileProviders;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -19,7 +21,9 @@ namespace Ninlil.Web.Tests;
 ///         which is generated and saved when missing) before <c>WebApplicationBuilder.Build()</c>
 ///         merges such overrides, so authenticated requests then fail with "the signature key was
 ///         not found". <c>WebApplicationBuilder.CreateBuilder(args)</c> reads environment variables
-///         up front, so they have no ordering problem.
+///         up front, so they have no ordering problem. <see cref="ConfigureWebHost" /> still uses
+///         <c>ConfigureAppConfiguration</c>, but only to remove a source, never to add a value that
+///         <c>Program.cs</c> reads, so its late run does not matter.
 ///     </para>
 ///     <para>
 ///         Environment variables are process-wide, so this only works because every test class
@@ -219,11 +223,10 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
             {
                 string sharedFile = Path.GetFullPath(_runtimeConfigurationFilePath);
                 foreach (
-                    Microsoft.Extensions.Configuration.Json.JsonConfigurationSource source in configuration
-                        .Sources.OfType<Microsoft.Extensions.Configuration.Json.JsonConfigurationSource>()
+                    JsonConfigurationSource source in configuration
+                        .Sources.OfType<JsonConfigurationSource>()
                         .Where(source =>
-                            source.FileProvider
-                                is Microsoft.Extensions.FileProviders.PhysicalFileProvider physical
+                            source.FileProvider is PhysicalFileProvider physical
                             && string.Equals(
                                 Path.GetFullPath(Path.Combine(physical.Root, source.Path)),
                                 sharedFile,
