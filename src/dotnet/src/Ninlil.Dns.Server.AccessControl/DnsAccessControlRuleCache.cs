@@ -17,7 +17,8 @@ namespace Ninlil.Dns.Server.AccessControl;
 ///         It follows the pattern of <c>Ninlil.Dns.Server.Authoritative.Cache.AuthoritativeZoneCache</c>:
 ///         it loads in <see cref="StartAsync" /> and is invalidated through the event bus
 ///         (<see cref="DnsAccessControlRuleChangedEventSubscriber" />, fed by
-///         <c>DnsAccessControlRulesController</c>). Unlike the zone cache, which reloads one
+///         <c>DnsAccessControlRulesController</c>). A change made on another instance that
+///         shares the database is picked up by <see cref="DnsAccessControlRuleBackstopService" />. Unlike the zone cache, which reloads one
 ///         changed zone, it always reloads the whole rule set: the table is small and flat, so a
 ///         full reload is simple and cheap.
 ///     </para>
@@ -74,8 +75,10 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task ReloadAsync(CancellationToken stoppingToken = default)
     {
-        // A plain scope reads the primary. The snapshot is reloaded at startup and after a rule
-        // change event, never on a timer, so a replica may not have the change yet. Do not use
+        // A plain scope reads the primary. The snapshot is reloaded at startup, after a rule
+        // change event and every minute by DnsAccessControlRuleBackstopService. The first two
+        // follow a write a replica may not have yet, and a replica read on the timer could
+        // undo that reload. The table is small, so the primary read costs little. Do not use
         // CreateReplicaReadScope here.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IDnsAccessControlRuleRepository repository =
