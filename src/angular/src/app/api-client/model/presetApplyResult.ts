@@ -22,7 +22,7 @@ export interface PresetApplyResult {
      */
     appliedAtUtc?: string;
     /**
-     * A reminder that settings read through Microsoft.Extensions.Options.IOptionsMonitor`1 take effect at once, while the others the preset touched need a restart.
+     * A reminder that settings the server reads live take effect at once, while the others the preset touched need a restart.
      */
     note?: string | null;
 }

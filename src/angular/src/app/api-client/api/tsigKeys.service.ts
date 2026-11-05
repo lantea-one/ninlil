@@ -391,7 +391,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
     }
 
     /**
-     * This action creates a TSIG key. Without &#x60;TsigKeyCreateRequest.Secret&#x60;, a random secret as long as the algorithm\&#39;s MAC (32 bytes for the default) is generated; without an algorithm, &#x60;hmac-sha256&#x60; is used. The name is stored in lowercase. The base64 secret is returned in this response only. Returns 400 for an invalid name, an unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
+     * This action creates a TSIG key. Without &#x60;TsigKeyCreateRequest.secret&#x60;, a random secret as long as the algorithm\&#39;s MAC (32 bytes for the default) is generated; without an algorithm, &#x60;hmac-sha256&#x60; is used. The name is stored in lowercase. The base64 secret is returned in this response only. Returns 400 for an invalid name, an unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
      * @endpoint post /api/tsig-keys
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

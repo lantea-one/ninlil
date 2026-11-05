@@ -5,7 +5,7 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries every writable field of a <c>RecordEntity</c>, used to create a record
+///     This class carries every writable field of a record, used to create a record
 ///     (<c>POST /api/zones/{zoneId}/records</c>) and to fully replace one
 ///     (<c>PUT /api/zones/{zoneId}/records/{id}</c>).
 /// </summary>

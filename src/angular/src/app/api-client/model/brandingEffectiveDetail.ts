@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the part of the branding any signed-in caller may read, with no specific permission, from `GET /api/branding-settings/effective` (the same bar as `AppearanceSettingsController.GetMine`). Every session needs the title and logo to render the admin console, and they are not sensitive. The CHAOS-query fields stay behind `branding:read`.
+ * This record is the part of the branding any signed-in caller may read, with no specific permission, from `GET /api/branding-settings/effective` (the same bar as `GET /api/appearance-settings/me`). Every session needs the title and logo to render the admin console, and they are not sensitive. The CHAOS-query fields stay behind `branding:read`.
  */
 export interface BrandingEffectiveDetail { 
     /**

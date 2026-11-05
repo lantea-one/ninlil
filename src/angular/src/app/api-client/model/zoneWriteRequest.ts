@@ -14,7 +14,7 @@ import { DnssecDenialOfExistenceModeEnum } from './dnssecDenialOfExistenceModeEn
 
 
 /**
- * This class carries every writable field of a `ZoneEntity`, used to create a zone (`POST /api/zones`) and to fully replace one (`PUT /api/zones/{id}`). Creating a zone adds no records, not even an SOA; records are managed through `/api/zones/{zoneId}/records`.
+ * This class carries every writable field of a zone, used to create a zone (`POST /api/zones`) and to fully replace one (`PUT /api/zones/{id}`). Creating a zone adds no records, not even an SOA; records are managed through `/api/zones/{zoneId}/records`.
  */
 export interface ZoneWriteRequest { 
     /**
@@ -77,23 +77,23 @@ export interface ZoneWriteRequest {
      */
     cloudSyncInterval?: string | null;
     /**
-     * Whether CAA auto-management keeps the zone\'s CAA records in step. null inherits `CaaAutoManagementOptions.DefaultEnabled`.
+     * Whether CAA auto-management keeps the zone\'s CAA records in step. null inherits `DnsServer:Acme:CaaAutoManagement:DefaultEnabled`.
      */
     autoManageCaaRecords?: boolean | null;
     /**
-     * The CA issuer domain CAA auto-management writes into the zone\'s CAA records. null inherits `CaaAutoManagementOptions.DefaultIssuerDomain`.
+     * The CA issuer domain CAA auto-management writes into the zone\'s CAA records. null inherits `DnsServer:Acme:CaaAutoManagement:DefaultIssuerDomain`.
      */
     caaIssuerDomain?: string | null;
     /**
-     * Whether PTR sync mirrors the zone\'s A and AAAA records into the matching reverse zone. null inherits `PtrSyncOptions.DefaultEnabled`, which defaults to false: unlike CAA auto-management, PTR sync is opt-in.
+     * Whether PTR sync mirrors the zone\'s A and AAAA records into the matching reverse zone. null inherits `DnsServer:Authoritative:PtrSync:DefaultEnabled`, which defaults to false: unlike CAA auto-management, PTR sync is opt-in.
      */
     autoManagePtrRecords?: boolean | null;
     /**
-     * The zone\'s IPv4 reverse zone size, in prefix bits, or null to inherit `PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits`. 24 means one zone per octet boundary; 25 to 30 use RFC 2317 classless delegation. Only `null` or 24 to 30 is accepted.
+     * The zone\'s IPv4 reverse zone size, in prefix bits, or null to inherit `DnsServer:Authoritative:PtrSync:DefaultIpv4ReverseZonePrefixBits`. 24 means one zone per octet boundary; 25 to 30 use RFC 2317 classless delegation. Only `null` or 24 to 30 is accepted.
      */
     ptrIpv4PrefixLength?: number | null;
     /**
-     * The zone\'s IPv6 reverse zone size, in prefix bits, or null to inherit `PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits`. Only `null` or a multiple of 4 from 16 to 124 is accepted.
+     * The zone\'s IPv6 reverse zone size, in prefix bits, or null to inherit `DnsServer:Authoritative:PtrSync:DefaultIpv6ReverseZonePrefixBits`. Only `null` or a multiple of 4 from 16 to 124 is accepted.
      */
     ptrIpv6PrefixLength?: number | null;
     transferTransport?: ZoneTransferTransportEnum;

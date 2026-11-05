@@ -81,7 +81,7 @@ public class PresetsController(
             new PresetApplyResult(
                 preset.Name,
                 DateTimeOffset.UtcNow,
-                "Applied. Settings bound via IOptionsMonitor take effect immediately; every "
+                "Applied. Settings the server reads live take effect immediately; every "
                     + "other setting this preset touched needs a restart to take effect."
             )
         );

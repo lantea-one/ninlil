@@ -27,9 +27,8 @@ namespace Ninlil.Web.Controllers;
 public class PermissionsController : ControllerBase
 {
     /// <summary>
-    ///     This action returns the sorted, distinct permission strings named by every
-    ///     <see cref="RequirePermissionAttribute" /> on a controller class or action. Requires only
-    ///     a signed-in caller.
+    ///     This action returns the sorted, distinct permission strings required by any action of
+    ///     the API. Requires only a signed-in caller.
     /// </summary>
     [HttpGet]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(PermissionListExample))]

@@ -402,7 +402,7 @@ public class DhcpTagRulesController(
     /// <summary>
     ///     This method checks every field of a tag rule write request before anything is saved, so
     ///     a POST or PUT either succeeds fully or changes nothing. A
-    ///     <see cref="DhcpTagRuleWriteRequest.ScopeId" /> that names no scope is an invalid value
+    ///     <c>DhcpTagRuleWriteRequest.scopeId</c> that names no scope is an invalid value
     ///     in the request (400), not a missing resource, as in
     ///     <see cref="ClientGroupListAssignmentsController.Create" />.
     /// </summary>

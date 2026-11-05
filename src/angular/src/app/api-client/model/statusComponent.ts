@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries one health check\'s result, as listed in `StatusResponse.Components`.
+ * This class carries one health check\'s result, as listed in `StatusResponse.components`.
  */
 export interface StatusComponent { 
     /**

@@ -62,7 +62,7 @@ export interface CloudProviderCredentialsServiceInterface {
     apiCloudProviderCredentialsGet(requestParameters: ApiCloudProviderCredentialsGetRequestParams, extraHttpRequestParams?: any): Observable<CloudProviderCredentialDetailPagedResult>;
 
     /**
-     * This action deletes a credential set. Zones that still refer to it by &#x60;CloudProviderCredentialId&#x60; are not checked or blocked; they simply can no longer sync, as with a deleted TSIG key (see &#x60;DELETE /api/tsig-keys/{id}&#x60;). Requires &#x60;cloudprovidercredentials:write&#x60;.
+     * This action deletes a credential set. Zones that still refer to it by &#x60;cloudProviderCredentialId&#x60; are not checked or blocked; they simply can no longer sync, as with a deleted TSIG key (see &#x60;DELETE /api/tsig-keys/{id}&#x60;). Requires &#x60;cloudprovidercredentials:write&#x60;.
      * 
      * @endpoint delete /api/cloud-provider-credentials/{id}
 * @param requestParameters

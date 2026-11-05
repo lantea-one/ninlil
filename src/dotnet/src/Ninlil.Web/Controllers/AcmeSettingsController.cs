@@ -29,7 +29,7 @@ namespace Ninlil.Web.Controllers;
 ///         authority, and broad settings-write access should not include that.
 ///     </para>
 ///     <para>
-///         <b>Every field except <see cref="AcmeSettingsDetail.AccountStateFilePath" /> takes
+///         <b>Every field except <c>AcmeSettingsDetail.accountStateFilePath</c> takes
 ///         effect without a restart.</b> <c>AcmeCertificateRenewalService</c> and
 ///         <c>AcmeCertificateIssuer</c> read <see cref="AcmeOptions" /> through
 ///         <see cref="IOptionsMonitor{TOptions}" />, and <c>CaaRecordReconciliationService</c>
@@ -66,13 +66,12 @@ public class AcmeSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Acme</c> and
-    ///     <c>DnsServer:Acme:CaaAutoManagement</c> as an RFC 7396 merge patch, through
-    ///     <see cref="PresetConfigurationFileApplier" />. A field absent from
-    ///     <paramref name="patch" /> keeps its value. The response note says whether a restart is
-    ///     needed. A domain must be a host name of letters, digits and hyphens with at least two
-    ///     labels, optionally with a leading <c>*.</c> for a wildcard certificate. Returns 400 for
-    ///     an invalid directory URL, domain, contact address or duration, a
-    ///     non-positive interval, or an empty path or organization. Requires
+    ///     <c>DnsServer:Acme:CaaAutoManagement</c> as an RFC 7396 merge patch, written to the
+    ///     configuration file. A field absent from <paramref name="patch" /> keeps its value. The
+    ///     response note says whether a restart is needed. A domain must be a host name of letters,
+    ///     digits and hyphens with at least two labels, optionally with a leading <c>*.</c> for a
+    ///     wildcard certificate. Returns 400 for an invalid directory URL, domain, contact address
+    ///     or duration, a non-positive interval, or an empty path or organization. Requires
     ///     <c>acmesettings:write</c>.
     /// </summary>
     [HttpPatch]
@@ -321,8 +320,8 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This action lists every domain in <see cref="AcmeOptions.Domains" />, in configured
-    ///     order, with what <see cref="IAcmeAccountStore" /> knows about it: whether a certificate
+    ///     This action lists every domain in <c>DnsServer:Acme:Domains</c>, in configured
+    ///     order, with what the server has recorded about it: whether a certificate
     ///     has ever been issued, its issue and expiry dates, whether it is due for renewal, and its
     ///     latest renewal failure, if any. Requires <c>acmesettings:read</c>.
     /// </summary>
@@ -430,7 +429,7 @@ public class AcmeSettingsController(
 
     /// <summary>
     ///     This method builds one domain's <see cref="AcmeCertificateInventoryEntry" /> from what
-    ///     <see cref="IAcmeAccountStore" /> currently knows.
+    ///     the server has recorded for it.
     /// </summary>
     private AcmeCertificateInventoryEntry ToInventoryEntry(
         string domain,

@@ -47,7 +47,7 @@ public class TsigSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Tsig</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change takes effect at
+    ///     patch, written to the configuration file. The change takes effect at
     ///     once. Returns 400 when <c>defaultFudgeSeconds</c> is outside 0-65535. Requires
     ///     <c>tsigsettings:write</c>.
     /// </summary>

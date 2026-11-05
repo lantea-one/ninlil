@@ -55,9 +55,9 @@ namespace Ninlil.Web.Controllers;
 /// <param name="scheduleRepository">Removes a deleted client's schedules (see <see cref="Delete" />).</param>
 /// <param name="listAssignmentRepository">Removes a deleted client's filter-list assignments (see <see cref="Delete" />).</param>
 /// <param name="rewriteRepository">Removes the rewrites scoped to a deleted client (see <see cref="Delete" />).</param>
-/// <param name="clientGroupRepository">Confirms a client's <see cref="ClientCreateRequest.ClientGroupId" /> names an existing group.</param>
+/// <param name="clientGroupRepository">Confirms a client's <c>ClientCreateRequest.clientGroupId</c> names an existing group.</param>
 /// <param name="unitOfWork">Commits staged changes.</param>
-/// <param name="presenceOptions">The current presence options, whose online window decides <see cref="ClientDetail.IsOnline" />.</param>
+/// <param name="presenceOptions">The current presence options, whose online window decides <c>ClientDetail.isOnline</c>.</param>
 /// <param name="vendorLookup">Looks up the vendor of each address's MAC address.</param>
 [ApiController]
 [Route("api/clients")]
@@ -78,7 +78,7 @@ public class ClientsController(
     ///     star (<c>isFavorite</c>), online or offline (<c>presence</c>) and registration time
     ///     (<c>createdSinceUtc</c>), in the requested order (<c>sort</c>; creation order by
     ///     default). Presence uses the online window at the moment of the request, the same cutoff
-    ///     each device's <see cref="ClientDetail.IsOnline" /> uses. Filtering, ordering and paging
+    ///     each device's <c>ClientDetail.isOnline</c> uses. Filtering, ordering and paging
     ///     run in the storage engine; each listed client's addresses are then loaded one client at a
     ///     time. Requires <c>clients:read</c>.
     /// </summary>
@@ -231,8 +231,8 @@ public class ClientsController(
     /// <summary>
     ///     This action registers a client device with its first address. Returns 400 for a missing
     ///     or malformed identifier, an unknown client group or an unknown icon name, and 409 when
-    ///     a device already has the same <see cref="ClientCreateRequest.ClientIdentifier" /> and
-    ///     <see cref="ClientCreateRequest.ProtocolVersion" /> (the pair the address table's unique
+    ///     a device already has the same <c>ClientCreateRequest.clientIdentifier</c> and
+    ///     <c>ClientCreateRequest.protocolVersion</c> (the pair the address table's unique
     ///     index covers, which the action checks first). The identifier is
     ///     accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c>
     ///     or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and returned as
@@ -494,7 +494,7 @@ public class ClientsController(
     /// <summary>
     ///     This action pauses one client now: all its DNS queries are blocked, whatever schedules,
     ///     filter lists or rewrites would apply, for
-    ///     <see cref="InstantPauseRequest.DurationMinutes" /> minutes. Calling it during a pause
+    ///     <c>InstantPauseRequest.durationMinutes</c> minutes. Calling it during a pause
     ///     replaces the pause rather than extending it. Returns 400 for a duration that is not
     ///     positive and 404 for an unknown id. Requires <c>clients:write</c>.
     /// </summary>
@@ -528,7 +528,7 @@ public class ClientsController(
 
     /// <summary>
     ///     This action ends a client's pause now by clearing
-    ///     <see cref="DnsClientEntity.PausedUntilUtc" />. Resuming a client that is not paused is
+    ///     the client's pause time. Resuming a client that is not paused is
     ///     not an error. Returns 404 for an unknown id. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/resume")]

@@ -34,8 +34,8 @@ namespace Ninlil.Web.Controllers;
 /// </param>
 /// <param name="stateRepository">
 ///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
-///     <see cref="RateLimitingSettingsDetail.LastModifiedUtc" /> and
-///     <see cref="RateLimitingSettingsDetail.OriginatingNodeId" />.
+///     <c>RateLimitingSettingsDetail.lastModifiedUtc</c> and
+///     <c>RateLimitingSettingsDetail.originatingNodeId</c>.
 /// </param>
 [ApiController]
 [Route("api/rate-limiting-settings")]
@@ -83,7 +83,7 @@ public class RateLimitingSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:RateLimiting</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value; <c>subnetBypassCidrs</c> replaces the whole
     ///     list. The change needs a restart. Returns 400 for a field of the wrong JSON type, a rate,
     ///     bucket size, tracked-client ceiling or subnet query limit below 1, a duration that is

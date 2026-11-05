@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries the fields used to start an instant pause (`POST /api/clients/{id}/pause` and `POST /api/client-groups/{id}/pause`). It takes a duration rather than a timestamp because the UI offers one-click choices such as \"15 minutes\" or \"1 hour\", and a duration needs no reasoning about the caller\'s time zone or clock. The server sets `PausedUntilUtc` to its current time plus the duration.
+ * This class carries the fields used to start an instant pause (`POST /api/clients/{id}/pause` and `POST /api/client-groups/{id}/pause`). It takes a duration rather than a timestamp because the UI offers one-click choices such as \"15 minutes\" or \"1 hour\", and a duration needs no reasoning about the caller\'s time zone or clock. The server sets `pausedUntilUtc` to its current time plus the duration.
  */
 export interface InstantPauseRequest { 
     /**
-     * How many minutes from now to pause for. Zero or a negative number is rejected with a `400` (`ValidationException`).
+     * How many minutes from now to pause for. Zero or a negative number is rejected with a `400`.
      */
     durationMinutes?: number;
 }

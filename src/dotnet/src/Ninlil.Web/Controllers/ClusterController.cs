@@ -204,11 +204,10 @@ public class ClusterController(
     /// <summary>
     ///     This action serves the cluster dashboard: a row with this node's query counts (last
     ///     hour, last 24 hours, all retained), then one row per known peer, collected live over the
-    ///     TSIG-authenticated, TLS-encrypted cluster channel by
-    ///     <see cref="IClusterQueryStatsAggregator" />. A peer that cannot be reached is still
-    ///     listed, marked unreachable with null counts, so "no traffic" and "unreachable" look
-    ///     different. With clustering disabled or no known peers, only this node's row is returned.
-    ///     Requires <c>clusternodes:read</c>.
+    ///     TSIG-authenticated, TLS-encrypted cluster channel by this node. A peer that cannot be
+    ///     reached is still listed, marked unreachable with null counts, so "no traffic" and
+    ///     "unreachable" look different. With clustering disabled or no known peers, only this
+    ///     node's row is returned. Requires <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet("stats")]
     [ReadFromReplica]

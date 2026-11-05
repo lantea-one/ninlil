@@ -10,7 +10,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Description">A short description of what enabling this entry blocks.</param>
 /// <param name="SubscriptionUrl">
 ///     The third-party domain list this entry subscribes to when enabled.
-///     <c>BlockedServiceCatalog</c> documents its source and license.
+///     The catalog entry records its source and license.
 /// </param>
 /// <param name="IsEnabled">
 ///     Whether the service is blocked for every client: the entry's managed filter list is
@@ -18,7 +18,7 @@ namespace Ninlil.Web.Models;
 ///     whether that target has an assignment of the enabled list instead.
 /// </param>
 /// <param name="FilterListId">
-///     The identifier of the entry's managed <c>DnsFilterListEntity</c> when one exists, so the UI
+///     The identifier of the entry's managed filter list when one exists, so the UI
 ///     can link to it on the Filter Lists page; otherwise <see langword="null" />.
 /// </param>
 public record BlockedServiceDetail(

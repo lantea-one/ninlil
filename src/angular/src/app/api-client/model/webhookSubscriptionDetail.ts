@@ -11,7 +11,7 @@ import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
 /**
- * This class carries a webhook subscription without its secrets, as returned by the list and get endpoints and nested in `WebhookSubscriptionCreateResponse`, the one response that includes `WebhookSubscriptionCreateResponse.AuthCredentials` and `WebhookSubscriptionCreateResponse.HmacSigningSecret`.
+ * This class carries a webhook subscription without its secrets, as returned by the list and get endpoints and nested in `WebhookSubscriptionCreateResponse`, the one response that includes `WebhookSubscriptionCreateResponse.authCredentials` and `WebhookSubscriptionCreateResponse.hmacSigningSecret`.
  */
 export interface WebhookSubscriptionDetail { 
     /**

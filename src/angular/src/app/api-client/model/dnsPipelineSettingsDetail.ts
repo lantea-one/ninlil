@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the query pipeline settings (`DnsQueryProcessingPipelineOptions`) that `GET /api/dns-pipeline-settings` returns: queue readers, concurrency cap and queue sizing, and the UDP amplification guard. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the query pipeline settings (configuration section `DnsServer:Pipeline`) that `GET /api/dns-pipeline-settings` returns: queue readers, concurrency cap and queue sizing, and the UDP amplification guard. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface DnsPipelineSettingsDetail { 
     /**

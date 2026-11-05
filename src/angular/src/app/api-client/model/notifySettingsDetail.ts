@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the NOTIFY settings (`NotifyOptions`) that `GET /api/notify-settings` returns: how the server sends RFC 1996 NOTIFY messages to a zone\'s secondaries. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the NOTIFY settings (configuration section `DnsServer:Authoritative:Notify`) that `GET /api/notify-settings` returns: how the server sends RFC 1996 NOTIFY messages to a zone\'s secondaries. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface NotifySettingsDetail { 
     /**

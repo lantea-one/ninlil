@@ -20,7 +20,7 @@ namespace Ninlil.Web.Models;
 /// <param name="SwitchSupportedEngines">
 ///     The engines <c>POST /api/storage/switch</c> accepts as a target: the four relational
 ///     engines Entity Framework Core serves with one model.
-///     <see cref="StorageEngineEnum.MongoDb" /> is not among them. It uses a separate repository
+///     <c>MongoDb</c> is not among them. It uses a separate repository
 ///     implementation chosen at startup.
 /// </param>
 /// <param name="Primary">The servers the process writes to, by host name and port only.</param>
@@ -88,7 +88,7 @@ public record StoragePrimaryStatus(IReadOnlyList<string> Hosts);
 /// </param>
 /// <param name="Hosts">
 ///     The <c>host:port</c> entries of the read connection. Empty on MongoDB, where the replica
-///     set members are the primary's hosts and <paramref name="ReadPreference" /> chooses among
+///     set members are the primary's hosts and <c>readPreference</c> chooses among
 ///     them.
 /// </param>
 /// <param name="ReadPreference">
@@ -150,9 +150,8 @@ public record StorageSwitchOutcome(
 ///     schedules a switch from: a target engine and an assembled ADO.NET connection string. It is not the REST
 ///     body. <c>POST /api/storage/switch</c> takes the structured fields of
 ///     <see cref="StorageEngineSwitchApiRequest" />, and
-///     <see cref="Controllers.StorageController.Switch" /> builds this record from them with
-///     <see cref="Services.Storage.StorageConnectionStringAssembler" />, so the service never
-///     deals with the structured fields.
+///     <see cref="Controllers.StorageController.Switch" /> builds this record from them, so the
+///     service never deals with the structured fields.
 /// </summary>
 /// <param name="TargetEngine">The database engine to switch to.</param>
 /// <param name="TargetConnectionString">
@@ -175,9 +174,8 @@ public record SqliteStorageConnectionFields(string FilePath);
 /// <summary>
 ///     This record carries the connection fields <c>POST /api/storage/switch</c> accepts for a
 ///     PostgreSQL, MySQL or SQL Server target; the three server engines share this shape. The
-///     accepted <see cref="EncryptionMode" /> values differ by engine: each is checked against
-///     that engine's driver enum by
-///     <see cref="Services.Storage.StorageConnectionStringAssembler" />, which lists them.
+///     accepted <c>encryptionMode</c> values differ by engine: each is checked against
+///     that engine's driver enum, and the error for a wrong value lists them.
 /// </summary>
 /// <param name="Host">The database server's host name or IP address.</param>
 /// <param name="Port">The database server's port, 1 to 65535.</param>
@@ -188,8 +186,7 @@ public record SqliteStorageConnectionFields(string FilePath);
 ///     stored by the REST layer or returned by any <c>GET</c>.
 /// </param>
 /// <param name="EncryptionMode">
-///     The engine's connection encryption mode, as the name of one of its driver's values (see
-///     <see cref="Services.Storage.StorageConnectionStringAssembler" />).
+///     The engine's connection encryption mode, as the name of one of its driver's values.
 /// </param>
 public record RelationalStorageConnectionFields(
     string Host,
@@ -203,15 +200,14 @@ public record RelationalStorageConnectionFields(
 /// <summary>
 ///     This record is the request body of <c>POST /api/storage/switch</c>: structured connection
 ///     fields per engine rather than a free-text connection string. Only the section matching
-///     <see cref="TargetEngine" /> needs to be filled in;
-///     <see cref="Services.Storage.StorageConnectionStringAssembler" /> reads that section and
-///     ignores the others.
+///     <c>targetEngine</c> needs to be filled in; the server reads that section and ignores the
+///     others.
 /// </summary>
 /// <param name="TargetEngine">The database engine to switch to.</param>
-/// <param name="Sqlite">Required when <see cref="TargetEngine" /> is <see cref="StorageEngineEnum.Sqlite" />.</param>
-/// <param name="PostgreSql">Required when <see cref="TargetEngine" /> is <see cref="StorageEngineEnum.PostgreSql" />.</param>
-/// <param name="MySql">Required when <see cref="TargetEngine" /> is <see cref="StorageEngineEnum.MySql" />.</param>
-/// <param name="SqlServer">Required when <see cref="TargetEngine" /> is <see cref="StorageEngineEnum.SqlServer" />.</param>
+/// <param name="Sqlite">Required when <c>targetEngine</c> is <c>Sqlite</c>.</param>
+/// <param name="PostgreSql">Required when <c>targetEngine</c> is <c>PostgreSql</c>.</param>
+/// <param name="MySql">Required when <c>targetEngine</c> is <c>MySql</c>.</param>
+/// <param name="SqlServer">Required when <c>targetEngine</c> is <c>SqlServer</c>.</param>
 public record StorageEngineSwitchApiRequest(
     StorageEngineEnum TargetEngine,
     SqliteStorageConnectionFields Sqlite,
@@ -229,7 +225,7 @@ public record StorageEngineSwitchApiRequest(
 /// <param name="AppliesAutomatically">
 ///     True when the runtime configuration file decides the storage settings, so Ninlil points it
 ///     at the target itself during the copy. False when an environment variable or another
-///     configuration source decides; <paramref name="Note" /> then names what to set.
+///     configuration source decides; <c>note</c> then names what to set.
 /// </param>
 /// <param name="TargetHasData">
 ///     Whether the target database already holds Ninlil data. The copy replaces that data.

@@ -49,7 +49,7 @@ export interface ClusterChannelServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action receives one config-sync envelope from a peer and passes it to the &#x60;IClusterConfigSyncApplier&#x60; whose &#x60;IClusterConfigSyncApplier.EntityType&#x60; matches &#x60;ClusterConfigSyncEnvelope.EntityType&#x60;. Every synced kind of data (filter lists and entries, access-control rules, rewrites, forwarders, users, roles, settings sections) comes through this one endpoint.  It always returns 200, even for an entity type this node does not know (logged and     ignored), so a newer peer sending a kind an older node cannot handle does not look     like a channel failure. Accepting, rejecting and last-write-wins are decided by the     applier (see &#x60;IClusterConfigSyncApplier&#x60;).
+     * This action receives one config-sync envelope from a peer and passes it to the config-sync handler registered for the envelope\&#39;s entity type. Every synced kind of data (filter lists and entries, access-control rules, rewrites, forwarders, users, roles, settings sections) comes through this one endpoint.  It always returns 200, even for an entity type this node does not know (logged and     ignored), so a newer peer sending a kind an older node cannot handle does not look     like a channel failure. Accepting, rejecting and last-write-wins are decided by that     handler.
      * 
      * @endpoint post /api/cluster/channel/config-sync
 * @param requestParameters
@@ -73,7 +73,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelJoinCompletePost(requestParameters: ApiClusterChannelJoinCompletePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action returns this node\&#39;s query counts (last hour, last 24 hours, all retained) for the cluster dashboard. A peer\&#39;s &#x60;ClusterQueryStatsAggregator&#x60; calls it when an operator opens that peer\&#39;s Cluster page. The counts are computed from the query log on every call and not cached; a dashboard load can afford that. They are read through a scope of their own that uses a read replica when one is eligible: a count that is a few seconds old is invisible next to a query log the writer batches for up to a second. The request scope cannot choose a replica because the peer authentication has already read the registry there.
+     * This action returns this node\&#39;s query counts (last hour, last 24 hours, all retained) for the cluster dashboard. A peer\&#39;s cluster query statistics collection calls it when an operator opens that peer\&#39;s Cluster page. The counts are computed from the query log on every call and not cached; a dashboard load can afford that. They are read through a scope of their own that uses a read replica when one is eligible: a count that is a few seconds old is invisible next to a query log the writer batches for up to a second. The request scope cannot choose a replica because the peer authentication has already read the registry there.
      * 
      * @endpoint post /api/cluster/channel/query-stats
 * @param requestParameters
@@ -81,7 +81,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelQueryStatsPost(requestParameters: ApiClusterChannelQueryStatsPostRequestParams, extraHttpRequestParams?: any): Observable<ClusterQueryStatsSnapshot>;
 
     /**
-     * This action tells a peer whether a username exists on this node. A peer\&#39;s &#x60;ClusterUsernameUniquenessChecker&#x60; calls it when creating a user. It is a plain lookup with no lock or reservation, so two nodes creating the same name within moments of each other can both succeed; &#x60;ClusterSyncConflictResolver&#x60;, applied by &#x60;UserClusterConfigSyncApplier&#x60;, resolves and flags that collision once the nodes sync.
+     * This action tells a peer whether a username exists on this node. A peer calls it when it creates a user. It is a plain lookup with no lock or reservation, so two nodes creating the same name within moments of each other can both succeed; the cluster user sync resolves and flags that collision once the nodes sync.
      * 
      * @endpoint post /api/cluster/channel/username-check
 * @param requestParameters

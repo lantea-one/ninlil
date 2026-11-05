@@ -1921,7 +1921,7 @@ certificate, which Ninlil stores as a PKCS#12 file (`.pfx`).
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    The change shows in a read within a few seconds. In the console: **Presets & Settings**,
@@ -2145,7 +2145,7 @@ Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour wort
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    In the console: **Presets & Settings**, **Recursive Resolver**, tick **Recurse for a query this
@@ -2173,7 +2173,7 @@ Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour wort
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    In the console: **Presets & Settings**, **Forwarding**.
@@ -2442,7 +2442,7 @@ lists, schedules and rewrites.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    In the console: **Presets & Settings**, **Filtering**.
@@ -3279,7 +3279,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   {"note":"Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect."}
    ```
 
    In the console: **Presets & Settings**, **DHCP**, the **DHCPv4 Protocol** card.
@@ -3412,7 +3412,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
     ```
 
     ```text
-    {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+    {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
     ```
 
     In the console: **Presets & Settings**, **DHCP**, the **Router Advertisement Content** card.
@@ -3800,7 +3800,7 @@ mode, in 512-byte blocks. It is off by default and listens on UDP port `69`.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   {"note":"Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect."}
    ```
 
    The environment variables are `NINLIL_DHCP_SERVER_TFTP_ENABLE` and
@@ -4009,7 +4009,7 @@ key.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    If the HTTPS port is not 443, add `"advertisedPort":<port>`. The default `0` means the
@@ -4448,7 +4448,7 @@ you out of every session, yours included; sign in again with a code from the app
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   {"note":"Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect."}
    ```
 
    The console page is **Settings**, **Reverse proxy**. A shared secret header and network ranges
@@ -5425,7 +5425,7 @@ Host a feed yourself, on any web server, when you want the notice.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    The console page is **Settings**, **Self-Update**.

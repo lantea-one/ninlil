@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the response of `POST /api/zones/{id}/reconcile-caa`: what one on-demand CAA reconciliation did, or why it did nothing. It copies `Server.Acme.Caa.CaaReconciliationResult` so the internal service type is not exposed over REST, as `ZoneCatalogMembersResponse` does for the catalog service.
+ * This record is the response of `POST /api/zones/{id}/reconcile-caa`: what one on-demand CAA reconciliation did, or why it did nothing. It copies the result of the reconciliation so the internal service type is not exposed over REST.
  */
 export interface ZoneCaaReconciliationResponse { 
     /**
@@ -22,11 +22,11 @@ export interface ZoneCaaReconciliationResponse {
      */
     recordsRemoved?: number;
     /**
-     * Whether the pass did nothing (see SkipReason). A pass that ran but found nothing to change reports false with zero counts.
+     * Whether the pass did nothing (see `skipReason`). A pass that ran but found nothing to change reports false with zero counts.
      */
     skipped?: boolean;
     /**
-     * Why the pass was skipped, set only when Skipped is true.
+     * Why the pass was skipped, set only when `skipped` is true.
      */
     skipReason?: string | null;
 }

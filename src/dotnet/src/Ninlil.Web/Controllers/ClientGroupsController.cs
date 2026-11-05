@@ -87,10 +87,9 @@ public class ClientGroupsController(
 
     /// <summary>
     ///     This action creates a client group. When
-    ///     <see cref="ClientGroupWriteRequest.IsDefault" /> is <see langword="true" />, the group
-    ///     that currently holds <see cref="DnsClientGroupEntity.IsDefault" /> loses it (see
-    ///     <see cref="DemoteExistingDefaultAsync" />). Returns 400 for a missing name and 409 when
-    ///     the name is taken. Requires <c>clientgroups:write</c>.
+    ///     <c>ClientGroupWriteRequest.isDefault</c> is <see langword="true" />, the group
+    ///     that currently is the default loses that flag. Returns 400 for a missing name and 409
+    ///     when the name is taken. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clientgroups:write")]
@@ -307,9 +306,9 @@ public class ClientGroupsController(
 
     /// <summary>
     ///     This action pauses a client group now: the DNS queries of every known client whose
-    ///     <c>ClientGroupId</c> is this group are blocked, whatever schedules, filter lists or
+    ///     <c>clientGroupId</c> is this group are blocked, whatever schedules, filter lists or
     ///     rewrites would apply, for
-    ///     <see cref="InstantPauseRequest.DurationMinutes" /> minutes, as
+    ///     <c>InstantPauseRequest.durationMinutes</c> minutes, as
     ///     <see cref="ClientsController.Pause" /> does for one client. Calling it during a pause
     ///     replaces the pause. Returns 400 for a duration that is not positive and 404 for an
     ///     unknown id. Requires <c>clientgroups:write</c>.
@@ -343,9 +342,9 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action ends a client group's pause now by clearing
-    ///     <see cref="DnsClientGroupEntity.PausedUntilUtc" />. Resuming a group that is not paused
-    ///     is not an error. Returns 404 for an unknown id. Requires <c>clientgroups:write</c>.
+    ///     This action ends a client group's pause now by clearing the group's pause time. Resuming
+    ///     a group that is not paused is not an error. Returns 404 for an unknown id. Requires
+    ///     <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/resume")]
     [RequirePermission("clientgroups:write")]

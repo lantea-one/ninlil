@@ -138,7 +138,7 @@ describe('TransportSettingsComponent', () => {
     const fixture = await createComponent(() => {
       apiSpy.apiTransportSettingsPlainPatch.and.returnValue(
         of({
-          note: 'Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect.',
+          note: 'Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect.',
         }),
       );
     });

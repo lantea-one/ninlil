@@ -3,8 +3,8 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This class carries this node's cluster settings (<c>GET /api/cluster-settings</c>).
-///     <see cref="NodeId" /> is read-only and shown for diagnostics; a <c>PATCH</c> cannot change
-///     it. <see cref="AddressReconcileInterval" /> belongs to the catalog zone settings instead.
+///     <c>nodeId</c> is read-only and shown for diagnostics; a <c>PATCH</c> cannot change
+///     it. <c>addressReconcileInterval</c> belongs to the catalog zone settings instead.
 ///     It shares this page because it only exists to keep the NOTIFY and primary address lists
 ///     of catalog-managed zones in step with cluster membership.
 /// </summary>

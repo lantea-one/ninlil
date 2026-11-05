@@ -10,7 +10,7 @@
 
 
 /**
- * This record is what the update checker knows, as returned by `GET /api/self-update` and `POST /api/self-update/check`: whether an update is available, with enough context to act on it. `Controllers.SelfUpdateController` explains how an update is applied.
+ * This record is what the update checker knows, as returned by `GET /api/self-update` and `POST /api/self-update/check`: whether an update is available, with enough context to act on it. The server does not update itself; the operator applies an update by hand.
  */
 export interface SelfUpdateStatusDetail { 
     /**
@@ -26,7 +26,7 @@ export interface SelfUpdateStatusDetail {
      */
     latestKnownVersion?: string | null;
     /**
-     * Whether a release newer than CurrentVersion is known.
+     * Whether a release newer than `currentVersion` is known.
      */
     updateAvailable?: boolean;
     /**
@@ -46,7 +46,7 @@ export interface SelfUpdateStatusDetail {
      */
     lastCheckError?: string | null;
     /**
-     * Plain-language guidance on how to update. The server does not update itself, so the UI shows these instructions rather than an update button (see `Controllers.SelfUpdateController`).
+     * Plain-language guidance on how to update. The server does not update itself, so the UI shows these instructions rather than an update button.
      */
     updateInstructions?: string | null;
 }

@@ -141,7 +141,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action lists the member zone names of an RFC 9432 catalog zone (a &#x60;ZoneTypeEnum.Catalog&#x60; zone or a &#x60;ZoneTypeEnum.SecondaryCatalog&#x60; copy), read from its stored PTR records. Requires &#x60;zones:read&#x60;.
+     * This action lists the member zone names of an RFC 9432 catalog zone (a &#x60;Catalog&#x60; zone or a &#x60;SecondaryCatalog&#x60; copy), read from its stored PTR records. Requires &#x60;zones:read&#x60;.
      * @endpoint get /api/zones/{id}/catalog-members
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -260,7 +260,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action makes a &#x60;ZoneTypeEnum.Primary&#x60; or &#x60;ZoneTypeEnum.CloudPrimary&#x60; zone that this server originates a member of a &#x60;ZoneTypeEnum.Catalog&#x60; zone it also originates. It writes the member\&#39;s RFC 9432 PTR record into the catalog zone and adds every healthy cluster peer\&#39;s address to both zones\&#39; &#x60;NotifyAddresses&#x60;, so the change reaches the cluster without manual configuration. Requires &#x60;zones:write&#x60;.
+     * This action makes a &#x60;Primary&#x60; or &#x60;CloudPrimary&#x60; zone that this server originates a member of a &#x60;Catalog&#x60; zone it also originates. It writes the member\&#39;s RFC 9432 PTR record into the catalog zone and adds every healthy cluster peer\&#39;s address to both zones\&#39; &#x60;notifyAddresses&#x60;, so the change reaches the cluster without manual configuration. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/catalog-membership
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -649,7 +649,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action runs one PTR (reverse-zone) sync pass for the zone now, with the same logic the automatic path runs on each zone change, including RFC 2317 classless-delegation records when the zone\&#39;s &#x60;PtrIpv4PrefixLength&#x60; (or the server-wide default) calls for them. Returns the records added and removed and the reverse zones touched, or why the pass was skipped, and 404 for an unknown id. Requires &#x60;zones:write&#x60;.
+     * This action runs one PTR (reverse-zone) sync pass for the zone now, with the same logic the automatic path runs on each zone change, including RFC 2317 classless-delegation records when the zone\&#39;s &#x60;ptrIpv4PrefixLength&#x60; (or the server-wide default) calls for them. Returns the records added and removed and the reverse zones touched, or why the pass was skipped, and 404 for an unknown id. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{id}/reconcile-ptr
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -709,7 +709,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action creates a zone with no records, not even an SOA; add them through &#x60;RecordsController&#x60;. Returns 400 for an invalid zone name, a PTR prefix length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
+     * This action creates a zone with no records, not even an SOA; add them through &#x60;/api/zones/{zoneId}/records&#x60;. Returns 400 for an invalid zone name, a PTR prefix length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

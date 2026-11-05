@@ -11,7 +11,7 @@ import { QueryLogPrivacyLevelEnum } from './queryLogPrivacyLevelEnum';
 
 
 /**
- * This record is the REST shape of the query logging settings (`QueryLoggingOptions`) that `GET /api/query-logging-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the query logging settings (configuration section `DnsServer:QueryLogging`) that `GET /api/query-logging-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface QueryLoggingSettingsDetail { 
     /**

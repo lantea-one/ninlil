@@ -51,7 +51,7 @@ public class DnssecPolicySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Dnssec</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change takes effect at
+    ///     patch, written to the configuration file. The change takes effect at
     ///     once. Returns 400 for an unknown algorithm name. Requires
     ///     <c>dnssecpolicysettings:write</c>.
     /// </summary>

@@ -19,7 +19,7 @@ export interface DhcpScopeCustomOptionWriteRequest {
      */
     optionTag?: number;
     /**
-     * The option\'s raw value bytes as a hexadecimal string with an even number of digits; it is stored in uppercase. It is not used, and may be blank, when ValueSource is `DhcpOptionValueSourceEnum.ServerAddress`.
+     * The option\'s raw value bytes as a hexadecimal string with an even number of digits; it is stored in uppercase. It is not used, and may be blank, when `valueSource` is `ServerAddress`.
      */
     valueHex?: string | null;
     /**

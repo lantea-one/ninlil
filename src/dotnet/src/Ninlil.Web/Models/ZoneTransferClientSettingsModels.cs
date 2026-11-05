@@ -2,10 +2,11 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the zone transfer client settings (<c>ZoneTransferClientOptions</c>) that
-///     <c>GET /api/zone-transfer-client-settings</c> returns: how the server, as a secondary,
-///     pulls AXFR and IXFR transfers from a primary. A <c>PATCH</c> to the same endpoint accepts
-///     the same fields.
+///     This record is the zone transfer client settings (configuration section
+///     <c>DnsServer:Authoritative:ZoneTransferClient</c>) that
+///     <c>GET /api/zone-transfer-client-settings</c> returns: how the server, as a secondary, pulls
+///     AXFR and IXFR transfers from a primary. A <c>PATCH</c> to the same endpoint accepts the same
+///     fields.
 /// </summary>
 /// <param name="PrimaryPort">The port plain transfers and SOA checks connect to on a primary. Defaults to 53.</param>
 /// <param name="ConnectTimeout">How long connecting to a primary may take. Defaults to 5 seconds.</param>

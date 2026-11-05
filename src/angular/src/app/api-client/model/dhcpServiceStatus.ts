@@ -11,12 +11,12 @@ import { DhcpServiceKindEnum } from './dhcpServiceKindEnum';
 
 
 /**
- * This record is one DHCP-family service\'s state, as returned by `/api/dhcp-services`: its configured `DhcpServiceStatus.Enabled` flag (whether it starts at boot) and whether it `DhcpServiceStatus.IsRunning`. The two can differ either way. A service configured off can be running because it was started through this controller, and one configured on can be stopped, either through this controller or, for `DhcpServiceKindEnum.Tftp` only, because it declined to bind (for example when its root directory is missing).
+ * This record is one DHCP-family service\'s state, as returned by `/api/dhcp-services`: its configured `enabled` flag (whether it starts at boot) and whether it `isRunning`. The two can differ either way. A service configured off can be running because it was started through this controller, and one configured on can be stopped, either through this controller or, for `Tftp` only, because it declined to bind (for example when its root directory is missing).
  */
 export interface DhcpServiceStatus { 
     kind?: DhcpServiceKindEnum;
     /**
-     * Whether the service\'s `Enable` option says it starts at boot. It is read from the settings loaded at startup, so a saved change shows only after a restart.
+     * Whether the service\'s `Enable` setting says it starts at boot. It is read from the settings loaded at startup, so a saved change shows only after a restart.
      */
     enabled?: boolean;
     /**

@@ -8,7 +8,7 @@ namespace Ninlil.Web.Models;
 /// </summary>
 /// <param name="Enabled">
 ///     Whether the OpenID Connect authentication scheme is registered in the running process.
-///     This can differ from <c>OidcSsoOptions.Enable</c> until a restart (see
+///     This can differ from <c>Identity:Sso:Enable</c> until a restart (see
 ///     <see cref="Controllers.SsoController.Get" />).
 /// </param>
 /// <param name="DisplayName">The label for the single sign-on button.</param>

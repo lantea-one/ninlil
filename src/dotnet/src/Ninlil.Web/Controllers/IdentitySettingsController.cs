@@ -115,10 +115,11 @@ public class IdentitySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>Identity:Password</c>,
-    ///     <c>Identity:Lockout</c> and <c>Identity:EmailChange</c> as an RFC 7396 merge patch, through
-    ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect on the next
-    ///     request. Returns 400 for a field of the wrong JSON type, a length or attempt count below
-    ///     1, a length above 128, a unique-character count above 64 or above the length, or a lockout duration that is negative or longer than 100 years. Requires <c>identitysettings:write</c>.
+    ///     <c>Identity:Lockout</c> and <c>Identity:EmailChange</c> as an RFC 7396 merge patch,
+    ///     written to the configuration file. Every field takes effect on the next request. Returns
+    ///     400 for a field of the wrong JSON type, a length or attempt count below 1, a length
+    ///     above 128, a unique-character count above 64 or above the length, or a lockout duration
+    ///     that is negative or longer than 100 years. Requires <c>identitysettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("identitysettings:write")]

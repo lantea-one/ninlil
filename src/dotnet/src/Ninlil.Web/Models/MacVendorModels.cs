@@ -4,11 +4,11 @@ using Ninlil.Dns.Server.ClientIdentity.Vendor;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the MAC vendor lookup settings (<c>MacVendorLookupOptions</c>) that
-///     <c>GET /api/mac-vendor-settings</c> returns, with a read-only report of the vendor data
-///     loaded. A <c>PATCH</c> to the same endpoint accepts every settings field except
-///     <paramref name="DataFilePath" />, a path read once at startup that, like other state paths,
-///     is set only in the configuration file.
+///     This record is the MAC vendor lookup settings (configuration section
+///     <c>DnsServer:MacVendorLookup</c>) that <c>GET /api/mac-vendor-settings</c> returns, with a
+///     read-only report of the vendor data loaded. A <c>PATCH</c> to the same endpoint accepts
+///     every settings field except <c>dataFilePath</c>, a path read once at startup
+///     that, like other state paths, is set only in the configuration file.
 /// </summary>
 /// <param name="EnableAutomaticRefresh">Whether the IEEE registries are downloaded again periodically. Defaults to <see langword="true" />.</param>
 /// <param name="RefreshInterval">How long to wait after a successful check before checking again. Defaults to 14 days.</param>

@@ -65,8 +65,8 @@ public class TwoFactorController(
     ///     required, whether an authenticator key exists, whether the account has a confirmed
     ///     e-mail address, and how many recovery codes remain. The account-security page needs this
     ///     endpoint because access tokens carry no two-factor claim (it would go stale as soon as
-    ///     the setting changed), and <c>UsersController</c> exposes the state only to holders of
-    ///     <c>users:read</c>.
+    ///     the setting changed), and the <c>/api/users</c> routes expose the state only to holders
+    ///     of <c>users:read</c>.
     /// </summary>
     [HttpGet("status")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(TwoFactorStatusExample))]

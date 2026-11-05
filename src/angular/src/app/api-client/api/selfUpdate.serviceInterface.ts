@@ -30,7 +30,7 @@ export interface SelfUpdateServiceInterface {
     apiSelfUpdateCheckPost(extraHttpRequestParams?: any): Observable<SelfUpdateStatusDetail>;
 
     /**
-     * This action returns the result of the latest check, automatic or manual, without checking again; &#x60;POST /api/self-update/check&#x60; runs a new one. Requires &#x60;selfupdate:read&#x60;.  &lt;b&gt;Why there is no \&quot;apply now\&quot; action.&lt;/b&gt; The server does not replace its own     running binary: it is installed from a package, container or install script, and a     failed in-place update could leave a home DNS server broken with nobody watching.     Instead, &#x60;SelfUpdateStatusDetail.UpdateInstructions&#x60; tells the operator     what to do by hand.
+     * This action returns the result of the latest check, automatic or manual, without checking again; &#x60;POST /api/self-update/check&#x60; runs a new one. Requires &#x60;selfupdate:read&#x60;.  &lt;b&gt;Why there is no \&quot;apply now\&quot; action.&lt;/b&gt; The server does not replace its own     running binary: it is installed from a package, container or install script, and a     failed in-place update could leave a home DNS server broken with nobody watching.     Instead, &#x60;SelfUpdateStatusDetail.updateInstructions&#x60; tells the operator     what to do by hand.
      * 
      * @endpoint get /api/self-update
 */

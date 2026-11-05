@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the DNS rate limiting settings (`DnsRateLimitOptions`) that `GET /api/rate-limiting-settings` returns. It covers the per-client token bucket and the per-subnet response limits. A `PATCH` to the same endpoint accepts every field except the last two, which are read-only cluster sync bookkeeping.
+ * This record is the REST shape of the DNS rate limiting settings (configuration section `DnsServer:RateLimiting`) that `GET /api/rate-limiting-settings` returns. It covers the per-client token bucket and the per-subnet response limits. A `PATCH` to the same endpoint accepts every field except the last two, which are read-only cluster sync bookkeeping.
  */
 export interface RateLimitingSettingsDetail { 
     /**

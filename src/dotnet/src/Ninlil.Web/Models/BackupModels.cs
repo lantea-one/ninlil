@@ -27,7 +27,7 @@ public sealed class BackupRestoreRequest
     public IFormFile Archive { get; set; }
 
     /// <summary>
-    ///     This property contains the passphrase <see cref="Archive" /> was encrypted with, or null
+    ///     This property contains the passphrase the <c>archive</c> was encrypted with, or null
     ///     or blank for an unencrypted archive. Whether the archive is encrypted is read from its
     ///     header, not inferred from this field.
     /// </summary>
@@ -43,8 +43,8 @@ public sealed class BackupRestoreRequest
 /// <param name="TotalEntitiesImported">The total number of rows imported across every entity type.</param>
 /// <param name="EntityCounts">How many rows of each entity type were imported, by name.</param>
 /// <param name="Note">
-///     Always <see cref="RestartRequiredNote" />: the restored database connection, Data
-///     Protection key ring and TLS certificate take effect only after a restart.
+///     Always a note telling the operator to restart the process, because the restored database
+///     connection, Data Protection key ring and TLS certificate take effect only after a restart.
 /// </param>
 public sealed record BackupRestoreResponse(
     int TotalEntitiesImported,

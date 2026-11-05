@@ -18,7 +18,7 @@ public class PresetApplyResultExample : IExamplesProvider<PresetApplyResult>
         new(
             "Baseline",
             DateTimeOffset.Parse("2026-09-01T09:00:00+00:00"),
-            "Applied. Settings bound via IOptionsMonitor take effect immediately; every other "
+            "Applied. Settings the server reads live take effect immediately; every other "
                 + "setting this preset touched needs a restart to take effect."
         );
 }

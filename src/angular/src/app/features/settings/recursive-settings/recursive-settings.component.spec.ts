@@ -115,7 +115,7 @@ describe('RecursiveSettingsComponent', () => {
     const fixture = await createComponent(() => {
       apiSpy.apiRecursiveSettingsPatch.and.returnValue(
         of({
-          note: 'Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required.',
+          note: 'Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required.',
         }),
       );
     });

@@ -2,9 +2,8 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record summarizes one built-in <see cref="Ninlil.Dns.Server.Presets.PresetDefinition" />
-///     for <c>GET /api/presets</c>. It leaves out the individual settings, since a preset is
-///     applied as a whole, not inspected field by field.
+///     This record summarizes one built-in preset for <c>GET /api/presets</c>. It leaves out the
+///     individual settings, since a preset is applied as a whole, not inspected field by field.
 /// </summary>
 /// <param name="Name">The preset's stable name, for example <c>"Baseline"</c>.</param>
 /// <param name="Description">A short summary of what the preset changes and why.</param>
@@ -23,8 +22,7 @@ public record PresetSummary(
 /// <param name="Name">The preset that was applied.</param>
 /// <param name="AppliedAtUtc">When the preset was applied.</param>
 /// <param name="Note">
-///     A reminder that settings read through
-///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> take effect at once,
+///     A reminder that settings the server reads live take effect at once,
 ///     while the others the preset touched need a restart.
 /// </param>
 public record PresetApplyResult(string Name, DateTimeOffset AppliedAtUtc, string Note);

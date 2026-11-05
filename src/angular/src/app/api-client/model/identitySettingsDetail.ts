@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the password complexity policy that `GET /api/identity-settings` returns, from ASP.NET Core Identity\'s Microsoft.AspNetCore.Identity.IdentityOptions.Password, plus three deprecated lockout fields from Microsoft.AspNetCore.Identity.IdentityOptions.Lockout that have no effect and stay only so existing callers keep working. Swashbuckle marks them `deprecated` in the OpenAPI document because of their System.ObsoleteAttribute. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. Microsoft.AspNetCore.Identity.IdentityOptions.User, Microsoft.AspNetCore.Identity.IdentityOptions.SignIn, Microsoft.AspNetCore.Identity.IdentityOptions.Tokens, Microsoft.AspNetCore.Identity.IdentityOptions.ClaimsIdentity and Microsoft.AspNetCore.Identity.IdentityOptions.Stores are left out: they are structural choices the identity wiring depends on (unique e-mail enforcement, for example, which rejects an account with no e-mail), not policy to tune.
+ * This record is the password complexity policy that `GET /api/identity-settings` returns, from ASP.NET Core Identity\'s `Identity:Password` settings, plus three deprecated lockout fields from `Identity:Lockout` that have no effect and stay only so existing callers keep working. Swashbuckle marks them `deprecated` in the OpenAPI document because they are obsolete. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The `Identity:User`, `Identity:SignIn`, `Identity:Tokens`, `Identity:ClaimsIdentity` and `Identity:Stores` settings are left out: they are structural choices the identity wiring depends on (unique e-mail enforcement, for example, which rejects an account with no e-mail), not policy to tune.
  */
 export interface IdentitySettingsDetail { 
     /**
@@ -38,17 +38,17 @@ export interface IdentitySettingsDetail {
      */
     requireNonAlphanumeric?: boolean;
     /**
-     * Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited per client address by `AdminLoginRateLimitOptions` instead. A later release removes this field.
+     * Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited per client address by the admin sign-in rate limiter (`/api/admin-login-rate-limit-settings`) instead. A later release removes this field.
      * @deprecated
      */
     defaultLockoutTimeSpan?: string;
     /**
-     * Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited per client address by `AdminLoginRateLimitOptions` instead. A later release removes this field.
+     * Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited per client address by the admin sign-in rate limiter (`/api/admin-login-rate-limit-settings`) instead. A later release removes this field.
      * @deprecated
      */
     maxFailedAccessAttempts?: number;
     /**
-     * Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited per client address by `AdminLoginRateLimitOptions` instead. A later release removes this field.
+     * Deprecated, and it has no effect: Ninlil has no account lockout. Sign-in is rate limited per client address by the admin sign-in rate limiter (`/api/admin-login-rate-limit-settings`) instead. A later release removes this field.
      * @deprecated
      */
     allowedForNewUsers?: boolean;

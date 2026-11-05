@@ -264,12 +264,12 @@ public class DhcpTagRuleOptionsController(
 
     /// <summary>
     ///     This method checks an option request and converts
-    ///     <see cref="DhcpTagRuleOptionWriteRequest.ValueHex" /> to the uppercase, even-length hex
+    ///     <c>DhcpTagRuleOptionWriteRequest.valueHex</c> to the uppercase, even-length hex
     ///     that
     ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleOptionEntity.ValueHex" />
     ///     stores, with the same rule as <see cref="DhcpScopeCustomOptionsController" />: a blank
-    ///     value is an error only for <see cref="DhcpOptionValueSourceEnum.Custom" />, since for
-    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the value is never read. The tag
+    ///     value is an error only for <c>Custom</c>, since for
+    ///     <c>ServerAddress</c> the value is never read. The tag
     ///     and value length must also pass <see cref="DhcpRawOptionRules.TryValidateDhcpv6" /> for
     ///     a DHCPv6 rule (<paramref name="isDhcpv6" />) and
     ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> otherwise (the DHCPv6 rule refuses

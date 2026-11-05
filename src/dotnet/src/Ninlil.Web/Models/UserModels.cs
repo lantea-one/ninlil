@@ -34,23 +34,21 @@ public record UpdateUserRequest(string DisplayName, string Email, bool IsDisable
 /// <param name="Roles">The names of every role the account holds.</param>
 /// <param name="DirectPermissions">
 ///     The permissions granted to the account directly, not through a role (the counterpart of
-///     <see cref="RoleSummary.Permissions" />).
+///     <c>RoleSummary.permissions</c>).
 /// </param>
 /// <param name="OriginatingNodeId">
 ///     The cluster node the account was last created or modified on, or <see langword="null" />
 ///     if it was never written with clustering enabled. The admin console shows it with
-///     <see cref="LastModifiedUtc" /> in <c>ClusterSyncInfoComponent</c>, as for other synced
-///     entities.
+///     <c>lastModifiedUtc</c>, as for other synced entities.
 /// </param>
 /// <param name="ClusterConflictNote">
 ///     An explanation of a cluster username collision this account lost, so an administrator can
-///     see it was renamed or overwritten rather than silently dropped or merged (see
-///     <c>UserEntity.ClusterConflictNote</c>). <see langword="null" /> when there was none
-///     (almost always).
+///     see it was renamed or overwritten rather than silently dropped or merged.
+///     <see langword="null" /> when there was none (almost always).
 /// </param>
 /// <param name="LastModifiedUtc">
 ///     When the account was last created or modified
-///     (<c>AuditableEntityBaseExtensions.GetLastModifiedUtc()</c>).
+///     (the later of its creation and update times).
 /// </param>
 public record UserSummary(
     Guid Id,
@@ -83,7 +81,7 @@ public record UserPermissionRequest(string Permission);
 ///     This class carries the caller's self-service profile, read through
 ///     <see cref="Controllers.UsersController.GetMine" /> and changed through
 ///     <see cref="Controllers.UsersController.PatchMine" />, which accepts only the display name
-///     and phone number. <see cref="Email" /> is shown, and lets the Profile page compute the
+///     and phone number. <c>email</c> is shown, and lets the Profile page compute the
 ///     Gravatar hash, but <see cref="Controllers.UsersController.PatchMine" /> ignores it: the
 ///     address changes only through <see cref="Controllers.UsersController.ChangeMyEmail" />,
 ///     which needs the current password. An administrator can change it through
@@ -110,8 +108,8 @@ public record UserProfileDetail(
 
 /// <summary>
 ///     This class carries the caller's self-service password change
-///     (<see cref="Controllers.UsersController.ChangeMyPassword" />). <see cref="CurrentPassword" />
-///     is required and checked by <c>UserManager&lt;TUser&gt;.ChangePasswordAsync</c>: unlike an
+///     (<see cref="Controllers.UsersController.ChangeMyPassword" />). <c>currentPassword</c>
+///     is required and checked by ASP.NET Core Identity: unlike an
 ///     administrator's reset, a caller changing their own password must prove they know it.
 /// </summary>
 /// <param name="CurrentPassword">The account's current password.</param>
@@ -140,10 +138,10 @@ public record ChangeEmailPendingResult(bool ConfirmationSent);
 /// <summary>
 ///     This enumeration names the two ways an administrator's password reset (see
 ///     <see cref="Controllers.UsersController.ResetPassword" />) delivers a new credential to a
-///     locked-out account. Both are needed: <see cref="AutoGenerate" /> works without any SMTP
-///     server, which suits a homelab, while <see cref="EmailLink" /> lets the account holder pick
+///     locked-out account. Both are needed: <c>AutoGenerate</c> works without any SMTP
+///     server, which suits a homelab, while <c>EmailLink</c> lets the account holder pick
 ///     a password the administrator never sees, but needs a configured SMTP server (see
-///     <c>EmailSenderOptions</c> and <c>SmtpSettingsController</c>).
+///     <c>GET /api/smtp-settings</c>).
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<AdminPasswordResetMode>))]
 public enum AdminPasswordResetMode
@@ -176,9 +174,9 @@ public record AdminResetPasswordRequest(AdminPasswordResetMode Mode);
 /// </summary>
 /// <param name="Mode">Which delivery mode was used.</param>
 /// <param name="GeneratedPassword">
-///     The generated password, shown only here. Set only when <paramref name="Mode" /> is
-///     <see cref="AdminPasswordResetMode.AutoGenerate" />; <see langword="null" /> for
-///     <see cref="AdminPasswordResetMode.EmailLink" />, where the server never learns the new
+///     The generated password, shown only here. Set only when <c>mode</c> is
+///     <c>AutoGenerate</c>; <see langword="null" /> for
+///     <c>EmailLink</c>, where the server never learns the new
 ///     password.
 /// </param>
 public record AdminResetPasswordResult(AdminPasswordResetMode Mode, string GeneratedPassword);

@@ -25,7 +25,7 @@ namespace Ninlil.Web.Controllers;
 ///         <b>Address scopes only.</b> RFC 9915 has no form for reserving a delegated prefix; a
 ///         reservation is always one fixed address. <see cref="Create" /> and
 ///         <see cref="Replace" /> therefore return 400 for a
-///         <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope rather than accept a
+///         <c>PrefixDelegation</c> scope rather than accept a
 ///         reservation the server could not honor.
 ///     </para>
 /// </summary>
@@ -104,8 +104,7 @@ public class DhcpReservationsController(
     ///     This action adds a static reservation to a scope. Returns 400 for a prefix-delegation
     ///     scope, a missing or malformed client identifier, an invalid IP address or one of the
     ///     wrong family; 404 for an unknown scope; and 409 when the client identifier or the address is already reserved
-    ///     in this scope (both are unique per scope, as for leases; see
-    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity" />). The
+    ///     in this scope (both are unique per scope, as for leases). The
     ///     identifier is accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>,
     ///     <c>aabb.ccdd.eeff</c> or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and
     ///     returned as <c>aa:bb:cc:dd:ee:ff</c>; the address is stored and returned in canonical

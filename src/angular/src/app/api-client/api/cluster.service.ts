@@ -444,7 +444,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action serves the cluster dashboard: a row with this node\&#39;s query counts (last hour, last 24 hours, all retained), then one row per known peer, collected live over the TSIG-authenticated, TLS-encrypted cluster channel by &#x60;IClusterQueryStatsAggregator&#x60;. A peer that cannot be reached is still listed, marked unreachable with null counts, so \&quot;no traffic\&quot; and \&quot;unreachable\&quot; look different. With clustering disabled or no known peers, only this node\&#39;s row is returned. Requires &#x60;clusternodes:read&#x60;.
+     * This action serves the cluster dashboard: a row with this node\&#39;s query counts (last hour, last 24 hours, all retained), then one row per known peer, collected live over the TSIG-authenticated, TLS-encrypted cluster channel by this node. A peer that cannot be reached is still listed, marked unreachable with null counts, so \&quot;no traffic\&quot; and \&quot;unreachable\&quot; look different. With clustering disabled or no known peers, only this node\&#39;s row is returned. Requires &#x60;clusternodes:read&#x60;.
      * @endpoint get /api/cluster/nodes/stats
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
