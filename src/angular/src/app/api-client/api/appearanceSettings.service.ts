@@ -222,7 +222,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Appearance&#x60; as an RFC 7396 merge patch. A field absent from patch keeps its value. The change takes effect at once. Returns 400 for an unknown palette or mode name. Requires &#x60;appearance:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Appearance&#x60; as an RFC 7396 merge patch, written to the configuration file. A field absent from patch keeps its value. The change takes effect at once. Returns 400 for an unknown palette or mode name. Requires &#x60;appearance:write&#x60;.
      * @endpoint patch /api/appearance-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -26,7 +26,7 @@ export interface SelfUpdateStatusDetail {
      */
     latestKnownVersion?: string | null;
     /**
-     * Whether a release newer than CurrentVersion is known.
+     * Whether a release newer than `currentVersion` is known.
      */
     updateAvailable?: boolean;
     /**

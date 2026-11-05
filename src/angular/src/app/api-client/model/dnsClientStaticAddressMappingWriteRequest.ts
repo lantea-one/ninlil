@@ -15,11 +15,11 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
  */
 export interface DnsClientStaticAddressMappingWriteRequest { 
     /**
-     * The source address or network mapped to ClientIdentifier: a bare IP address (exact match) or a CIDR network with a `/` (matches every address in it). A value with a `/` must parse with `System.Net.IPNetwork.TryParse` and one without with `System.Net.IPAddress.TryParse`, the same two forms the server matches at query time.
+     * The source address or network mapped to `clientIdentifier`: a bare IP address (exact match) or a CIDR network with a `/` (matches every address in it). A value with a `/` must be a valid IPv4 or IPv6 CIDR prefix and one without must be a valid IPv4 or IPv6 address, the same two forms the server matches at query time.
      */
     cidr?: string | null;
     /**
-     * The persistent client identifier a query from Cidr resolves to: a MAC address for an `InternetProtocolVersionEnum.IPv4` mapping, or a DHCP Unique Identifier (DUID) for an `InternetProtocolVersionEnum.IPv6` one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.
+     * The persistent client identifier a query from `cidr` resolves to: a MAC address for an `IPv4` mapping, or a DHCP Unique Identifier (DUID) for an `IPv6` one, in hex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned as `aa:bb:cc:dd:ee:ff`.
      */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;

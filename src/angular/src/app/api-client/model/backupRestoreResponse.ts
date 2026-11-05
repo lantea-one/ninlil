@@ -22,7 +22,7 @@ export interface BackupRestoreResponse {
      */
     entityCounts?: { [key: string]: number; } | null;
     /**
-     * Always `BackupRestoreResponse.RestartRequiredNote`: the restored database connection, Data Protection key ring and TLS certificate take effect only after a restart.
+     * Always a note telling the operator to restart the process, because the restored database connection, Data Protection key ring and TLS certificate take effect only after a restart.
      */
     note?: string | null;
 }

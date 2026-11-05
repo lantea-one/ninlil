@@ -26,7 +26,7 @@ export interface DnsAccessControlRuleDetail {
      */
     cidr?: string | null;
     /**
-     * The capabilities the rule grants, as an array of `DnsAccessControlCapabilityEnum` member names (see `DnsAccessControlRuleWriteRequest.Capabilities`).
+     * The capabilities the rule grants, as an array of `DnsAccessControlCapabilityEnum` member names (see `DnsAccessControlRuleWriteRequest.capabilities`).
      */
     capabilities?: Array<string> | null;
     /**

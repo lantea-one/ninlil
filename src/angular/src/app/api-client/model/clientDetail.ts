@@ -13,7 +13,7 @@ import { DnsClientDeviceIconEnum } from './dnsClientDeviceIconEnum';
 
 
 /**
- * This class carries a known client device, as returned by the list, get and create endpoints of `/api/clients`. `ClientDetail.Addresses` lists every identifier the device answers to, since one device can have several (a dual-stack device\'s IPv4 MAC address and IPv6 DUID, for instance).
+ * This class carries a known client device, as returned by the list, get and create endpoints of `/api/clients`. `addresses` lists every identifier the device answers to, since one device can have several (a dual-stack device\'s IPv4 MAC address and IPv6 DUID, for instance).
  */
 export interface ClientDetail { 
     /**
@@ -54,7 +54,7 @@ export interface ClientDetail {
      */
     pausedUntilUtc?: string | null;
     /**
-     * Whether PausedUntilUtc is still in the future, computed when the response is built. An expired pause is never cleared from storage, so this flag, not the timestamp, says whether the client is paused.
+     * Whether `pausedUntilUtc` is still in the future, computed when the response is built. An expired pause is never cleared from storage, so this flag, not the timestamp, says whether the client is paused.
      */
     isCurrentlyPaused?: boolean;
     /**
@@ -62,7 +62,7 @@ export interface ClientDetail {
      */
     lastSeenUtc?: string | null;
     /**
-     * Whether LastSeenUtc falls within the configured online window. It is computed when the response is built, so it turns false once a device goes quiet.
+     * Whether `lastSeenUtc` falls within the configured online window. It is computed when the response is built, so it turns false once a device goes quiet.
      */
     isOnline?: boolean;
     deviceIconKey?: DnsClientDeviceIconEnum;

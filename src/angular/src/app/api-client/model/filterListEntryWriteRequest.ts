@@ -11,11 +11,11 @@ import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
 /**
- * This class carries the fields used to create or replace an entry in a `DnsFilterListSourceEnum.Local` list (`POST` and `PUT` under `/api/filter-lists/{listId}/entries`). Every write to the entries of a `DnsFilterListSourceEnum.Subscribed` list is rejected with 409.
+ * This class carries the fields used to create or replace an entry in a `Local` list (`POST` and `PUT` under `/api/filter-lists/{listId}/entries`). Every write to the entries of a `Subscribed` list is rejected with 409.
  */
 export interface FilterListEntryWriteRequest { 
     /**
-     * The entry\'s value: a domain name, wildcard or regular expression (by `FilterListEntryWriteRequest.Kind`) in a `DnsFilterListKindEnum.Domain` list, or an IP address or CIDR network in a `DnsFilterListKindEnum.ResponseIp` or `DnsFilterListKindEnum.ClientSource` list, where `FilterListEntryWriteRequest.Kind` must be `DnsFilterEntryKindEnum.Domain` (the default).
+     * The entry\'s value: a domain name, wildcard or regular expression (by `kind`) in a `Domain` list, or an IP address or CIDR network in a `ResponseIp` or `ClientSource` list, where `kind` must be `Domain` (the default).
      */
     value?: string | null;
     /**

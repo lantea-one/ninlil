@@ -18,11 +18,11 @@ export interface AdminLoginRateLimitSettingsDetail {
      */
     enable?: boolean;
     /**
-     * How many sign-in attempts one client address may make within one `AdminLoginRateLimitSettingsDetail.Window`. Defaults to 5.
+     * How many sign-in attempts one client address may make within one `window`. Defaults to 5.
      */
     permitLimit?: number;
     /**
-     * The fixed window `AdminLoginRateLimitSettingsDetail.PermitLimit` is counted over, which is also the lockout length. Defaults to five minutes.
+     * The fixed window `permitLimit` is counted over, which is also the lockout length. Defaults to five minutes.
      */
     window?: string;
 }

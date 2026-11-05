@@ -11,7 +11,7 @@ import { MacVendorDataStatusDetail } from './macVendorDataStatusDetail';
 
 
 /**
- * This record is the MAC vendor lookup settings (configuration section `DnsServer:MacVendorLookup`) that `GET /api/mac-vendor-settings` returns, with a read-only report of the vendor data loaded. A `PATCH` to the same endpoint accepts every settings field except DataFilePath, a path read once at startup that, like other state paths, is set only in the configuration file.
+ * This record is the MAC vendor lookup settings (configuration section `DnsServer:MacVendorLookup`) that `GET /api/mac-vendor-settings` returns, with a read-only report of the vendor data loaded. A `PATCH` to the same endpoint accepts every settings field except `dataFilePath`, a path read once at startup that, like other state paths, is set only in the configuration file.
  */
 export interface MacVendorSettingsDetail { 
     /**

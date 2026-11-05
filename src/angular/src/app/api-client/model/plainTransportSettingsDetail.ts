@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the plain DNS transport settings (configuration section `DnsServer:Protocol:Plain`) that `GET /api/transport-settings/plain` returns. It has no `Enable` field because plain DNS has none: it is the baseline transport and always starts. Every field needs a listener restart.
+ * This record is the plain DNS transport settings (configuration section `DnsServer:Protocol:Plain`) that `GET /api/transport-settings/plain` returns. It has no `enable` field because plain DNS has none: it is the baseline transport and always starts. Every field needs a listener restart.
  */
 export interface PlainTransportSettingsDetail { 
     /**

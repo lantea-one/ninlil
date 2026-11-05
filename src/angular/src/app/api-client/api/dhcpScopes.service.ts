@@ -131,7 +131,7 @@ export class DhcpScopesService extends BaseService implements DhcpScopesServiceI
     }
 
     /**
-     * This action deletes a DHCP scope with its reservations and custom options, removed explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases recorded for the scope (which refer to it by &#x60;ScopeId&#x60;) are left alone as operational data, as &#x60;BackupEntityCatalog&#x60; treats them. A tag rule that names the scope (a DHCP tag rule\&#39;s scope) is also left alone and simply never matches again. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action deletes a DHCP scope with its reservations and custom options, removed explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases recorded for the scope (which refer to it by &#x60;scopeId&#x60;) are left alone as operational data. A tag rule that names the scope (a DHCP tag rule\&#39;s scope) is also left alone and simply never matches again. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint delete /api/dhcp-scopes/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

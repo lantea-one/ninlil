@@ -65,12 +65,12 @@ export interface DhcpScopeWriteRequest {
      */
     bootFileName?: string | null;
     /**
-     * The TFTP (or other boot) server a PXE client should contact for BootFileName, or null to use this server\'s Server Identifier address.
+     * The TFTP (or other boot) server a PXE client should contact for `bootFileName`, or null to use this server\'s Server Identifier address.
      */
     nextServerAddress?: string | null;
     kind?: DhcpScopeKindEnum;
     /**
-     * The length, in bits, of each prefix the scope delegates. Required when Kind is `DhcpScopeKindEnum.PrefixDelegation`, and must be null otherwise.
+     * The length, in bits, of each prefix the scope delegates. Required when `kind` is `PrefixDelegation`, and must be null otherwise.
      */
     delegatedPrefixLength?: number | null;
 }

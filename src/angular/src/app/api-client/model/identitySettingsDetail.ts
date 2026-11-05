@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the password complexity policy that `GET /api/identity-settings` returns, from ASP.NET Core Identity\'s `Identity:Password` settings, plus three deprecated lockout fields from `Identity:Lockout` that have no effect and stay only so existing callers keep working. Swashbuckle marks them `deprecated` in the OpenAPI document because of their System.ObsoleteAttribute. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The `Identity:User`, `Identity:SignIn`, `Identity:Tokens`, `Identity:ClaimsIdentity` and `Identity:Stores` settings are left out: they are structural choices the identity wiring depends on (unique e-mail enforcement, for example, which rejects an account with no e-mail), not policy to tune.
+ * This record is the password complexity policy that `GET /api/identity-settings` returns, from ASP.NET Core Identity\'s `Identity:Password` settings, plus three deprecated lockout fields from `Identity:Lockout` that have no effect and stay only so existing callers keep working. Swashbuckle marks them `deprecated` in the OpenAPI document because they are obsolete. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The `Identity:User`, `Identity:SignIn`, `Identity:Tokens`, `Identity:ClaimsIdentity` and `Identity:Stores` settings are left out: they are structural choices the identity wiring depends on (unique e-mail enforcement, for example, which rejects an account with no e-mail), not policy to tune.
  */
 export interface IdentitySettingsDetail { 
     /**

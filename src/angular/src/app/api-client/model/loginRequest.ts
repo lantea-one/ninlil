@@ -23,7 +23,7 @@ export interface LoginRequest {
      */
     password?: string | null;
     /**
-     * With `RefreshTokenDeliveryEnum.Cookie` delivery, whether the session should outlive the browser: a persistent cookie and the long refresh lifetime when true, otherwise a browser-session cookie and the short browser-session lifetime. Ignored for `RefreshTokenDeliveryEnum.Body` delivery, whose sessions are always long-lived.
+     * With `Cookie` delivery, whether the session should outlive the browser: a persistent cookie and the long refresh lifetime when true, otherwise a browser-session cookie and the short browser-session lifetime. Ignored for `Body` delivery, whose sessions are always long-lived.
      */
     rememberMe?: boolean;
     refreshTokenDelivery?: RefreshTokenDeliveryEnum;

@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries this node\'s cluster settings (`GET /api/cluster-settings`). `ClusterSettingsDetail.NodeId` is read-only and shown for diagnostics; a `PATCH` cannot change it. `ClusterSettingsDetail.AddressReconcileInterval` belongs to the catalog zone settings instead. It shares this page because it only exists to keep the NOTIFY and primary address lists of catalog-managed zones in step with cluster membership.
+ * This class carries this node\'s cluster settings (`GET /api/cluster-settings`). `nodeId` is read-only and shown for diagnostics; a `PATCH` cannot change it. `addressReconcileInterval` belongs to the catalog zone settings instead. It shares this page because it only exists to keep the NOTIFY and primary address lists of catalog-managed zones in step with cluster membership.
  */
 export interface ClusterSettingsDetail { 
     /**

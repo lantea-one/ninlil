@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the editable fields of a known client, replaced in full by `PUT /api/clients/{id}`. It has no `ClientCreateRequest.ClientIdentifier` or `ClientCreateRequest.ProtocolVersion`, because an address\'s identity never changes. To change one, add a new address and delete the old one, as with the shared secret of a TSIG key.
+ * This class carries the editable fields of a known client, replaced in full by `PUT /api/clients/{id}`. It has no `ClientCreateRequest.clientIdentifier` or `ClientCreateRequest.protocolVersion`, because an address\'s identity never changes. To change one, add a new address and delete the old one, as with the shared secret of a TSIG key.
  */
 export interface ClientWriteRequest { 
     /**

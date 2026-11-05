@@ -11,15 +11,15 @@ import { RaRoutePreferenceEnum } from './raRoutePreferenceEnum';
 
 
 /**
- * This record is the REST shape of one entry of `DhcpServer:Ra:Routes`: a route advertised in an RFC 4191 Section 2.3 Route Information option. It appears in `DhcpRaSettingsDetail.Routes` and in the `routes` array of `PATCH /api/dhcp-settings/ra`.
+ * This record is the REST shape of one entry of `DhcpServer:Ra:Routes`: a route advertised in an RFC 4191 Section 2.3 Route Information option. It appears in `DhcpRaSettingsDetail.routes` and in the `routes` array of `PATCH /api/dhcp-settings/ra`.
  */
 export interface DhcpRaRouteDetail { 
     /**
-     * The route\'s prefix, or null or empty when PrefixLength is `0` (an entry that only sets the default route\'s preference).
+     * The route\'s prefix, or null or empty when `prefixLength` is `0` (an entry that only sets the default route\'s preference).
      */
     prefix?: string | null;
     /**
-     * The number of significant leading bits of Prefix, 0 to 128. Defaults to 64.
+     * The number of significant leading bits of `prefix`, 0 to 128. Defaults to 64.
      */
     prefixLength?: number;
     preference?: RaRoutePreferenceEnum;

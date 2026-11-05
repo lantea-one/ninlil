@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the caller\'s self-service profile, read through `GET /api/users/me` and changed through `PATCH /api/users/me`, which accepts only the display name and phone number. `UserProfileDetail.Email` is shown, and lets the Profile page compute the Gravatar hash, but `PATCH /api/users/me` ignores it: the address changes only through `POST /api/users/me/email`, which needs the current password. An administrator can change it through `UpdateUserRequest`.
+ * This class carries the caller\'s self-service profile, read through `GET /api/users/me` and changed through `PATCH /api/users/me`, which accepts only the display name and phone number. `email` is shown, and lets the Profile page compute the Gravatar hash, but `PATCH /api/users/me` ignores it: the address changes only through `POST /api/users/me/email`, which needs the current password. An administrator can change it through `UpdateUserRequest`.
  */
 export interface UserProfileDetail { 
     /**

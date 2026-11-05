@@ -16,11 +16,11 @@ import { DnsScheduleDayOfWeekEnum } from './dnsScheduleDayOfWeekEnum';
 export interface ClientScheduleWriteRequest { 
     daysOfWeek?: DnsScheduleDayOfWeekEnum;
     /**
-     * The local time the blocking window begins, in TimeZoneId.
+     * The local time the blocking window begins, in `timeZoneId`.
      */
     startTime?: string;
     /**
-     * The local time the blocking window ends. A time earlier than StartTime makes a window that crosses midnight (e.g. a 21:00 to 07:00 bedtime); a time equal to it is rejected.
+     * The local time the blocking window ends. A time earlier than `startTime` makes a window that crosses midnight (e.g. a 21:00 to 07:00 bedtime); a time equal to it is rejected.
      */
     endTime?: string;
     /**

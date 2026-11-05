@@ -317,7 +317,7 @@ export class FilterListsService extends BaseService implements FilterListsServic
     }
 
     /**
-     * This action replaces a list\&#39;s settings. Changing &#x60;FilterListWriteRequest.Source&#x60; from &#x60;DnsFilterListSourceEnum.Local&#x60; to &#x60;DnsFilterListSourceEnum.Subscribed&#x60; leaves the existing entries alone until the next refresh replaces them all. Validation and errors are as for &#x60;POST /api/filter-lists&#x60;, plus 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
+     * This action replaces a list\&#39;s settings. Changing &#x60;FilterListWriteRequest.source&#x60; from &#x60;Local&#x60; to &#x60;Subscribed&#x60; leaves the existing entries alone until the next refresh replaces them all. Validation and errors are as for &#x60;POST /api/filter-lists&#x60;, plus 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
      * @endpoint put /api/filter-lists/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

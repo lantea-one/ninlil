@@ -14,7 +14,7 @@
  */
 export interface TwoFactorEmailCodeRequest { 
     /**
-     * The opaque token `LoginResponse.MfaToken` returned.
+     * The opaque token `LoginResponse.mfaToken` returned.
      */
     mfaToken?: string | null;
 }

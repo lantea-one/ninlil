@@ -14,7 +14,7 @@
  */
 export interface TsigSettingsDetail { 
     /**
-     * The fudge, in seconds. The options property is a System.UInt16, but it is shown as an System.Int32 because JSON has no unsigned 16-bit type; a `PATCH` rejects values outside 0 to 65535.
+     * The fudge, in seconds, from 0 to 65535. A `PATCH` rejects values outside that range.
      */
     defaultFudgeSeconds?: number;
 }

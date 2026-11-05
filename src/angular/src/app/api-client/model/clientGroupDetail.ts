@@ -42,7 +42,7 @@ export interface ClientGroupDetail {
      */
     pausedUntilUtc?: string | null;
     /**
-     * Whether PausedUntilUtc is still in the future, computed when the response is built, as for `ClientDetail.IsCurrentlyPaused`.
+     * Whether `pausedUntilUtc` is still in the future, computed when the response is built, as for `ClientDetail.isCurrentlyPaused`.
      */
     isCurrentlyPaused?: boolean;
 }

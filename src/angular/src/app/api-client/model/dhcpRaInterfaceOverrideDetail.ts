@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`: different Router Advertisement content for one network interface. It appears in `DhcpRaSettingsDetail.InterfaceOverrides` and in the `interfaceOverrides` array of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits the matching global field. A null`DhcpRaInterfaceOverrideDetail.RecursiveDnsServers` or `DhcpRaInterfaceOverrideDetail.DnsSearchListDomains` inherits the global list; any other value, even an empty list, replaces it.  <b>The override\'s `Prefixes` and `Routes` lists are not included.</b>     Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a     route list nested inside this list would make the API and UI much more complex. Both     can be set in the JSON configuration file     (the `Prefixes` and `Routes` of each `DhcpServer:Ra:InterfaceOverrides`     entry).
+ * This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`: different Router Advertisement content for one network interface. It appears in `DhcpRaSettingsDetail.interfaceOverrides` and in the `interfaceOverrides` array of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits the matching global field. A null`recursiveDnsServers` or `dnsSearchListDomains` inherits the global list; any other value, even an empty list, replaces it.  <b>The override\'s `Prefixes` and `routes` lists are not included.</b>     Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a     route list nested inside this list would make the API and UI much more complex. Both     can be set in the JSON configuration file     (the `Prefixes` and `routes` of each `DhcpServer:Ra:InterfaceOverrides`     entry).
  */
 export interface DhcpRaInterfaceOverrideDetail { 
     /**
@@ -22,47 +22,47 @@ export interface DhcpRaInterfaceOverrideDetail {
      */
     exclude?: boolean;
     /**
-     * Overrides `DhcpRaSettingsDetail.ManagedAddressConfiguration` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.managedAddressConfiguration` for this interface, or inherits it when null.
      */
     managedAddressConfiguration?: boolean | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.OtherConfiguration` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.otherConfiguration` for this interface, or inherits it when null.
      */
     otherConfiguration?: boolean | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.RouterLifetime` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.routerLifetime` for this interface, or inherits it when null.
      */
     routerLifetime?: string | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.CurrentHopLimit` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.currentHopLimit` for this interface, or inherits it when null.
      */
     currentHopLimit?: number | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.ReachableTime` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.reachableTime` for this interface, or inherits it when null.
      */
     reachableTime?: string | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.RetransTimer` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.retransTimer` for this interface, or inherits it when null.
      */
     retransTimer?: string | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.LinkMtu` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.linkMtu` for this interface, or inherits it when null.
      */
     linkMtu?: number | null;
     /**
-     * Wholesale-replaces `DhcpRaSettingsDetail.RecursiveDnsServers` for this interface when non-null, or inherits the global list when null.
+     * Wholesale-replaces `DhcpRaSettingsDetail.recursiveDnsServers` for this interface when non-null, or inherits the global list when null.
      */
     recursiveDnsServers?: Array<string> | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.RecursiveDnsServerLifetime` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.recursiveDnsServerLifetime` for this interface, or inherits it when null.
      */
     recursiveDnsServerLifetime?: string | null;
     /**
-     * Wholesale-replaces `DhcpRaSettingsDetail.DnsSearchListDomains` for this interface when non-null, or inherits the global list when null.
+     * Wholesale-replaces `DhcpRaSettingsDetail.dnsSearchListDomains` for this interface when non-null, or inherits the global list when null.
      */
     dnsSearchListDomains?: Array<string> | null;
     /**
-     * Overrides `DhcpRaSettingsDetail.DnsSearchListLifetime` for this interface, or inherits it when null.
+     * Overrides `DhcpRaSettingsDetail.dnsSearchListLifetime` for this interface, or inherits it when null.
      */
     dnsSearchListLifetime?: string | null;
 }

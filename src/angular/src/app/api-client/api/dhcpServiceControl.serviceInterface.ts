@@ -32,14 +32,14 @@ export interface DhcpServiceControlServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reports each DHCP-family service\&#39;s configured &#x60;Enable&#x60; flag and its live running state. Requires &#x60;dhcpservices:read&#x60;.
+     * This action reports each DHCP-family service\&#39;s configured &#x60;enable&#x60; flag and its live running state. Requires &#x60;dhcpservices:read&#x60;.
      * 
      * @endpoint get /api/dhcp-services
 */
     apiDhcpServicesGet(extraHttpRequestParams?: any): Observable<Array<DhcpServiceStatus>>;
 
     /**
-     * This action starts one DHCP-family service now, binding its socket, whatever its &#x60;Enable&#x60; flag says. Starting a running service changes nothing. Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
+     * This action starts one DHCP-family service now, binding its socket, whatever its &#x60;enable&#x60; flag says. Starting a running service changes nothing. Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
      * 
      * @endpoint post /api/dhcp-services/{kind}/start
 * @param requestParameters

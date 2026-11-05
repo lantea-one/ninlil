@@ -10,15 +10,15 @@
 
 
 /**
- * This class carries the fields used to create or fully replace a network belonging to a client group (`POST` and `PUT` under `/api/client-groups/{groupId}/networks`). Exactly one of Cidr and ClientId must be set.
+ * This class carries the fields used to create or fully replace a network belonging to a client group (`POST` and `PUT` under `/api/client-groups/{groupId}/networks`). Exactly one of `cidr` and `clientId` must be set.
  */
 export interface ClientGroupNetworkWriteRequest { 
     /**
-     * An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a bare IPv6 address one host (/128). A zone index (`fe80::1%2`) and an out-of-range prefix length are rejected with a 400. null when ClientId is set instead.
+     * An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a bare IPv6 address one host (/128). A zone index (`fe80::1%2`) and an out-of-range prefix length are rejected with a 400. null when `clientId` is set instead.
      */
     cidr?: string | null;
     /**
-     * A DNS-over-HTTPS ClientID label this row matches. null when Cidr is set instead.
+     * A DNS-over-HTTPS ClientID label this row matches. null when `cidr` is set instead.
      */
     clientId?: string | null;
 }

@@ -52,7 +52,7 @@ export interface DnsRewriteDetail {
      */
     clientId?: string | null;
     /**
-     * The one client group the rewrite applies to, or null if it is global or scoped to a client. Read-only, like `DnsRewriteDetail.ClientId`.
+     * The one client group the rewrite applies to, or null if it is global or scoped to a client. Read-only, like `clientId`.
      */
     clientGroupId?: string | null;
 }

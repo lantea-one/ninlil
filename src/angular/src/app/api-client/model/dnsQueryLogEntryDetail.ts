@@ -41,7 +41,7 @@ export interface DnsQueryLogEntryDetail {
      */
     answerCount?: number;
     /**
-     * The client\'s persistent identifier (a MAC address or DUID), resolved when the entry was written, or null when it was not resolved or the privacy level hides it (see `DnsQueryLogSubscriber`).
+     * The client\'s persistent identifier (a MAC address or DUID), resolved when the entry was written, or null when it was not resolved or the privacy level hides it.
      */
     clientIdentifier?: string | null;
     clientProtocolVersion?: InternetProtocolVersionEnum;

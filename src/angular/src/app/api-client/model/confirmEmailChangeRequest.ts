@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries what the admin console\'s \"confirm e-mail change\" page submits to `POST /api/auth/confirm-email-change`, taken from the link `EmailChangeLinkSender` e-mails to the new address. The action is anonymous because the link may be opened in a browser that is not signed in; `ConfirmEmailChangeRequest.Token` is the proof.
+ * This class carries what the admin console\'s \"confirm e-mail change\" page submits to `POST /api/auth/confirm-email-change`, taken from the link e-mailed to the new address. The action is anonymous because the link may be opened in a browser that is not signed in; `token` is the proof.
  */
 export interface ConfirmEmailChangeRequest { 
     /**
@@ -22,7 +22,7 @@ export interface ConfirmEmailChangeRequest {
      */
     email?: string | null;
     /**
-     * The change-email token ASP.NET Core Identity issued, Base64Url-encoded for the link, as `ConfirmPasswordResetRequest.Token` is.
+     * The change-email token ASP.NET Core Identity issued, Base64Url-encoded for the link, as `ConfirmPasswordResetRequest.token` is.
      */
     token?: string | null;
 }

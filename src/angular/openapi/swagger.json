@@ -49,7 +49,7 @@
         "tags": [
           "AcmeSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Acme` and\n`DnsServer:Acme:CaaAutoManagement` as an RFC 7396 merge patch. A field absent from\npatch keeps its value. The response note says whether a restart is\nneeded. A domain must be a host name of letters, digits and hyphens with at least two\nlabels, optionally with a leading `*.` for a wildcard certificate. Returns 400 for\nan invalid directory URL, domain, contact address or duration, a\nnon-positive interval, or an empty path or organization. Requires\n`acmesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Acme` and\n`DnsServer:Acme:CaaAutoManagement` as an RFC 7396 merge patch, written to the\nconfiguration file. A field absent from patch keeps its value. The\nresponse note says whether a restart is needed. A domain must be a host name of letters,\ndigits and hyphens with at least two labels, optionally with a leading `*.` for a\nwildcard certificate. Returns 400 for an invalid directory URL, domain, contact address\nor duration, a non-positive interval, or an empty path or organization. Requires\n`acmesettings:write`.",
         "operationId": "apiAcmeSettingsPatch",
         "requestBody": {
           "content": {
@@ -324,7 +324,7 @@
         "tags": [
           "AdminLoginRateLimitSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:AdminLoginRateLimit` as an RFC\n7396 merge patch. A field absent\nfrom patch keeps its value. Returns 400 when `permitLimit` is\nbelow 1 or `window` is not a positive TimeSpan. The change needs a restart.\nRequires `adminloginratelimit:write`.",
+        "summary": "This action merges a partial update into `DnsServer:AdminLoginRateLimit` as an RFC\n7396 merge patch, written to the configuration file. A field absent\nfrom patch keeps its value. Returns 400 when `permitLimit` is\nbelow 1 or `window` is not a positive TimeSpan. The change needs a restart.\nRequires `adminloginratelimit:write`.",
         "operationId": "apiAdminLoginRateLimitSettingsPatch",
         "requestBody": {
           "content": {
@@ -608,7 +608,7 @@
         "tags": [
           "AppearanceSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Appearance` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value. The change takes effect at once. Returns 400\nfor an unknown palette or mode name. Requires `appearance:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Appearance` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value. The change takes effect at once. Returns 400\nfor an unknown palette or mode name. Requires `appearance:write`.",
         "operationId": "apiAppearanceSettingsPatch",
         "requestBody": {
           "content": {
@@ -704,7 +704,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action starts a self-service password reset. Given an e-mail address and no\nsign-in, it sends a reset-link e-mail through `PasswordResetLinkSender`\nwhen a matching account exists, is not disabled, has an e-mail address, and SMTP and\nthe public base URL are configured. Allows anonymous callers and is rate limited.\n\n<b>The response never varies.</b> It is always 200 with the same\n    `ForgotPasswordResult`, whichever condition failed, including \"no\n    account has this address\". An administrator using\n    `POST /api/users/{id}/reset-password` may learn whether an account has an\n    e-mail address or whether SMTP is configured, but an anonymous caller must not be\n    able to tell from the response which addresses have accounts. A delivery failure\n    (the SMTP server rejects the message, say) is logged rather than returned as a 500\n    for the same reason.\n<b>Neither does its timing, as far as is practical.</b> The e-mail is sent in the\n    background after the response, so a slow SMTP conversation cannot reveal that an\n    account exists. Only the account lookup and the token generation run inline.",
+        "summary": "This action starts a self-service password reset. Given an e-mail address and no\nsign-in, it sends a reset-link e-mail when a matching account exists, is not disabled,\nhas an e-mail address, and SMTP and the public base URL are configured. Allows anonymous\ncallers and is rate limited.\n\n<b>The response never varies.</b> It is always 200 with the same message, whichever\n    condition failed, including \"no account has this address\". An administrator using\n    `POST /api/users/{id}/reset-password` may learn whether an account has an\n    e-mail address or whether SMTP is configured, but an anonymous caller must not be\n    able to tell from the response which addresses have accounts. A delivery failure\n    (the SMTP server rejects the message, say) is logged rather than returned as a 500\n    for the same reason.\n<b>Neither does its timing, as far as is practical.</b> The e-mail is sent in the\n    background after the response, so a slow SMTP conversation cannot reveal that an\n    account exists. Only the account lookup and the token generation run inline.",
         "operationId": "apiAuthForgotPasswordPost",
         "requestBody": {
           "content": {
@@ -914,7 +914,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth `POST /api/auth/forgot-password` and the `EmailLink` mode of\n`POST /api/users/{id}/reset-password`, called from the admin console's \"set new\npassword\" page. The caller is not signed in, so it allows anonymous callers;\n`ConfirmPasswordResetRequest.Token` is the only proof of authorization, and\nASP.NET Core Identity rejects a wrong, expired or used token. An unknown account and an\nundecodable token return the same 400 message, so the response does not reveal whether\nan account exists. A successful reset replaces the account's security stamp and revokes\nevery refresh token of the account, so every access token issued before it answers 401\non its next request.",
+        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth `POST /api/auth/forgot-password` and the `EmailLink` mode of\n`POST /api/users/{id}/reset-password`, called from the admin console's \"set new\npassword\" page. The caller is not signed in, so it allows anonymous callers;\n`ConfirmPasswordResetRequest.token` is the only proof of authorization, and\nASP.NET Core Identity rejects a wrong, expired or used token. An unknown account and an\nundecodable token return the same 400 message, so the response does not reveal whether\nan account exists. A successful reset replaces the account's security stamp and revokes\nevery refresh token of the account, so every access token issued before it answers 401\non its next request.",
         "operationId": "apiAuthResetPasswordPost",
         "requestBody": {
           "content": {
@@ -942,7 +942,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action applies a self-service e-mail change from the link\n`POST /api/users/me/email` e-mailed to the new address, called from the\nadmin console's \"confirm e-mail change\" page. The link may be opened in a browser that\nis not signed in, so it allows anonymous callers; `ConfirmEmailChangeRequest.Token`\nis the only proof, and ASP.NET Core Identity rejects a wrong, expired, reused or\ntampered token, and one issued for another address. An unknown, disabled or mismatched\naccount and a bad token return the same 400 message, so the response does not reveal\nwhether an account exists. A successful change sets the address, marks it confirmed,\nreplaces the account's security stamp and revokes every refresh token, so every session\nof the account must sign in again. A notice goes to the old address when SMTP is\nconfigured; a failed send is logged and does not undo the change.",
+        "summary": "This action applies a self-service e-mail change from the link\n`POST /api/users/me/email` e-mailed to the new address, called from the\nadmin console's \"confirm e-mail change\" page. The link may be opened in a browser that\nis not signed in, so it allows anonymous callers; `ConfirmEmailChangeRequest.token`\nis the only proof, and ASP.NET Core Identity rejects a wrong, expired, reused or\ntampered token, and one issued for another address. An unknown, disabled or mismatched\naccount and a bad token return the same 400 message, so the response does not reveal\nwhether an account exists. A successful change sets the address, marks it confirmed,\nreplaces the account's security stamp and revokes every refresh token, so every session\nof the account must sign in again. A notice goes to the old address when SMTP is\nconfigured; a failed send is logged and does not undo the change.",
         "operationId": "apiAuthConfirmEmailChangePost",
         "requestBody": {
           "content": {
@@ -970,7 +970,7 @@
         "tags": [
           "Backup"
         ],
-        "summary": "This action builds a complete backup archive and returns it as a file download\n(`application/octet-stream`, `ninlil-backup-*.ltbk`), not JSON. With\n`BackupCreateRequest.Passphrase` the archive is encrypted with AES-256-GCM;\nwithout one it is unencrypted and marked as such in its header. Returns 400 when the\npassphrase is only whitespace or too short. Requires `backup:read`.",
+        "summary": "This action builds a complete backup archive and returns it as a file download\n(`application/octet-stream`, `ninlil-backup-*.ltbk`), not JSON. With\n`BackupCreateRequest.passphrase` the archive is encrypted with AES-256-GCM;\nwithout one it is unencrypted and marked as such in its header. Returns 400 when the\npassphrase is only whitespace or too short. Requires `backup:read`.",
         "operationId": "apiBackupPost",
         "requestBody": {
           "description": "The passphrase to encrypt the archive with; omit it for no encryption.",
@@ -1012,7 +1012,7 @@
                   },
                   "passphrase": {
                     "type": "string",
-                    "description": "This property contains the passphrase `BackupRestoreRequest.Archive` was encrypted with, or null\nor blank for an unencrypted archive. Whether the archive is encrypted is read from its\nheader, not inferred from this field."
+                    "description": "This property contains the passphrase the `archive` was encrypted with, or null\nor blank for an unencrypted archive. Whether the archive is encrypted is read from its\nheader, not inferred from this field."
                   }
                 }
               },
@@ -1267,7 +1267,7 @@
         "tags": [
           "BrandingSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Branding` (`siteTitle`,\n`logoDataUri`) and `DnsServer:Authoritative` (`hostnameString`,\n`versionString`, `enableChaosVersionQueries`) as an RFC 7396 merge patch. One\nwrite may touch either section or both. An absent field keeps its value; a JSON\n`null` clears `siteTitle` or `logoDataUri`. Every field takes effect at\nonce. Returns 400 for a blank hostname or version string or an invalid logo. Requires\n`branding:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Branding` (`siteTitle`,\n`logoDataUri`) and `DnsServer:Authoritative` (`hostnameString`,\n`versionString`, `enableChaosVersionQueries`) as an RFC 7396 merge patch,\nwritten to the configuration file. One write may touch either section or both. An absent\nfield keeps its value; a JSON `null` clears `siteTitle` or `logoDataUri`.\nEvery field takes effect at once. Returns 400 for a blank hostname or version string or\nan invalid logo. Requires `branding:write`.",
         "operationId": "apiBrandingSettingsPatch",
         "requestBody": {
           "content": {
@@ -1802,7 +1802,7 @@
         "tags": [
           "ClientGroupListAssignments"
         ],
-        "summary": "This action assigns a block or allow list to the group. Returns 400 when the list does\nnot exist (an invalid value in the request, not a missing resource), 404 for an unknown\ngroup, and 409 when the list is already assigned. A duplicate would not change\nfiltering, since `DnsFilterEngine.ResolveApplicableListsAsync` collects list ids\ninto a System.Collections.Generic.HashSet`1, but it is refused to keep rows meaningful. Requires\n`clientgroups:write`.",
+        "summary": "This action assigns a block or allow list to the group. Returns 400 when the list does\nnot exist (an invalid value in the request, not a missing resource), 404 for an unknown\ngroup, and 409 when the list is already assigned. A duplicate would not change\nfiltering, since the filter engine collects list ids into a set, but it is refused to\nkeep rows meaningful. Requires `clientgroups:write`.",
         "operationId": "apiClientGroupsGroupIdListAssignmentsPost",
         "parameters": [
           {
@@ -2331,7 +2331,7 @@
         "tags": [
           "ClientGroups"
         ],
-        "summary": "This action creates a client group. When\n`ClientGroupWriteRequest.IsDefault` is true, the group\nthat currently is the default loses that flag. Returns 400 for a missing name and 409\nwhen the name is taken. Requires `clientgroups:write`.",
+        "summary": "This action creates a client group. When\n`ClientGroupWriteRequest.isDefault` is true, the group\nthat currently is the default loses that flag. Returns 400 for a missing name and 409\nwhen the name is taken. Requires `clientgroups:write`.",
         "operationId": "apiClientGroupsPost",
         "requestBody": {
           "content": {
@@ -2573,7 +2573,7 @@
         "tags": [
           "ClientGroups"
         ],
-        "summary": "This action pauses a client group now: the DNS queries of every known client whose\n`ClientGroupId` is this group are blocked, whatever schedules, filter lists or\nrewrites would apply, for\n`InstantPauseRequest.DurationMinutes` minutes, as\n`POST /api/clients/{id}/pause` does for one client. Calling it during a pause\nreplaces the pause. Returns 400 for a duration that is not positive and 404 for an\nunknown id. Requires `clientgroups:write`.",
+        "summary": "This action pauses a client group now: the DNS queries of every known client whose\n`clientGroupId` is this group are blocked, whatever schedules, filter lists or\nrewrites would apply, for\n`InstantPauseRequest.durationMinutes` minutes, as\n`POST /api/clients/{id}/pause` does for one client. Calling it during a pause\nreplaces the pause. Returns 400 for a duration that is not positive and 404 for an\nunknown id. Requires `clientgroups:write`.",
         "operationId": "apiClientGroupsIdPausePost",
         "parameters": [
           {
@@ -3353,7 +3353,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action lists known clients, one page at a time, optionally narrowed by favorite\nstar (`isFavorite`), online or offline (`presence`) and registration time\n(`createdSinceUtc`), in the requested order (`sort`; creation order by\ndefault). Presence uses the online window at the moment of the request, the same cutoff\neach device's `ClientDetail.IsOnline` uses. Filtering, ordering and paging\nrun in the storage engine; each listed client's addresses are then loaded one client at a\ntime. Requires `clients:read`.",
+        "summary": "This action lists known clients, one page at a time, optionally narrowed by favorite\nstar (`isFavorite`), online or offline (`presence`) and registration time\n(`createdSinceUtc`), in the requested order (`sort`; creation order by\ndefault). Presence uses the online window at the moment of the request, the same cutoff\neach device's `ClientDetail.isOnline` uses. Filtering, ordering and paging\nrun in the storage engine; each listed client's addresses are then loaded one client at a\ntime. Requires `clients:read`.",
         "operationId": "apiClientsGet",
         "parameters": [
           {
@@ -3500,7 +3500,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nor malformed identifier, an unknown client group or an unknown icon name, and 409 when\na device already has the same `ClientCreateRequest.ClientIdentifier` and\n`ClientCreateRequest.ProtocolVersion` (the pair the address table's unique\nindex covers, which the action checks first). The identifier is\naccepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff`\nor `aabbccddeeff` (up to 85 bytes) and is stored and returned as\n`aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling. Requires\n`clients:write`.",
+        "summary": "This action registers a client device with its first address. Returns 400 for a missing\nor malformed identifier, an unknown client group or an unknown icon name, and 409 when\na device already has the same `ClientCreateRequest.clientIdentifier` and\n`ClientCreateRequest.protocolVersion` (the pair the address table's unique\nindex covers, which the action checks first). The identifier is\naccepted as `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`, `aabb.ccdd.eeff`\nor `aabbccddeeff` (up to 85 bytes) and is stored and returned as\n`aa:bb:cc:dd:ee:ff`, so the duplicate check ignores the spelling. Requires\n`clients:write`.",
         "operationId": "apiClientsPost",
         "requestBody": {
           "content": {
@@ -3862,7 +3862,7 @@
         "tags": [
           "Clients"
         ],
-        "summary": "This action pauses one client now: all its DNS queries are blocked, whatever schedules,\nfilter lists or rewrites would apply, for\n`InstantPauseRequest.DurationMinutes` minutes. Calling it during a pause\nreplaces the pause rather than extending it. Returns 400 for a duration that is not\npositive and 404 for an unknown id. Requires `clients:write`.",
+        "summary": "This action pauses one client now: all its DNS queries are blocked, whatever schedules,\nfilter lists or rewrites would apply, for\n`InstantPauseRequest.durationMinutes` minutes. Calling it during a pause\nreplaces the pause rather than extending it. Returns 400 for a duration that is not\npositive and 404 for an unknown id. Requires `clients:write`.",
         "operationId": "apiClientsIdPausePost",
         "parameters": [
           {
@@ -4406,7 +4406,7 @@
         "tags": [
           "ClientSubnetSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:ClientSubnet` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value; a null or blank `overrideAddress` clears\nit. Returns 400 for a field of the wrong JSON type, a source prefix length outside 0-32\n(IPv4) or 0-128 (IPv6), or an override address that is not an IP address. Requires\n`clientsubnetsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:ClientSubnet` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value; a null or blank `overrideAddress` clears\nit. Returns 400 for a field of the wrong JSON type, a source prefix length outside 0-32\n(IPv4) or 0-128 (IPv6), or an override address that is not an IP address. Requires\n`clientsubnetsettings:write`.",
         "operationId": "apiClientSubnetSettingsPatch",
         "requestBody": {
           "content": {
@@ -4842,7 +4842,7 @@
         "tags": [
           "CloudProviderCredentials"
         ],
-        "summary": "This action deletes a credential set. Zones that still refer to it by\n`CloudProviderCredentialId` are not checked or blocked; they simply can no longer\nsync, as with a deleted TSIG key (see `DELETE /api/tsig-keys/{id}`).\nRequires `cloudprovidercredentials:write`.",
+        "summary": "This action deletes a credential set. Zones that still refer to it by\n`cloudProviderCredentialId` are not checked or blocked; they simply can no longer\nsync, as with a deleted TSIG key (see `DELETE /api/tsig-keys/{id}`).\nRequires `cloudprovidercredentials:write`.",
         "operationId": "apiCloudProviderCredentialsIdDelete",
         "parameters": [
           {
@@ -5336,7 +5336,7 @@
         "tags": [
           "ClusterSettings"
         ],
-        "summary": "This action merges a partial update into the `Cluster` section (and, for\n`addressReconcileInterval`, the `CatalogSync` section) as an RFC 7396 merge\npatch. There is no `nodeId`\nfield. The response note says whether the change applies at once or needs a restart.\nReturns 400 for a field of the wrong JSON type, a port outside 0-65535 (0 means the\nshared HTTPS port), a missed-heartbeat threshold below 1, a `heartbeatInterval`\noutside 1 second to 1 day, a `heartbeatTimeout` outside 1 second to 5 minutes, or\nan `addressReconcileInterval` that is not positive or exceeds the timer limit.\nRequires `clustersettings:write`.",
+        "summary": "This action merges a partial update into the `Cluster` section (and, for\n`addressReconcileInterval`, the `CatalogSync` section) as an RFC 7396 merge\npatch, written to the configuration file. There is no `nodeId`\nfield. The response note says whether the change applies at once or needs a restart.\nReturns 400 for a field of the wrong JSON type, a port outside 0-65535 (0 means the\nshared HTTPS port), a missed-heartbeat threshold below 1, a `heartbeatInterval`\noutside 1 second to 1 day, a `heartbeatTimeout` outside 1 second to 5 minutes, or\nan `addressReconcileInterval` that is not positive or exceeds the timer limit.\nRequires `clustersettings:write`.",
         "operationId": "apiClusterSettingsPatch",
         "requestBody": {
           "content": {
@@ -6515,7 +6515,7 @@
         "tags": [
           "DhcpScopes"
         ],
-        "summary": "This action deletes a DHCP scope with its reservations and custom options, removed\nexplicitly rather than by a relational cascade delete, which MongoDB lacks. Leases\nrecorded for the scope (which refer to it by `ScopeId`) are left alone as\noperational data, as `BackupEntityCatalog` treats them. A tag rule\nthat names the scope (a DHCP tag rule's scope) is also left alone and simply\nnever matches again. Returns 404 for an unknown id. Requires `dhcpscopes:write`.",
+        "summary": "This action deletes a DHCP scope with its reservations and custom options, removed\nexplicitly rather than by a relational cascade delete, which MongoDB lacks. Leases\nrecorded for the scope (which refer to it by `scopeId`) are left alone as\noperational data. A tag rule\nthat names the scope (a DHCP tag rule's scope) is also left alone and simply\nnever matches again. Returns 404 for an unknown id. Requires `dhcpscopes:write`.",
         "operationId": "apiDhcpScopesIdDelete",
         "parameters": [
           {
@@ -6583,7 +6583,7 @@
         "tags": [
           "DhcpServiceControl"
         ],
-        "summary": "This action reports each DHCP-family service's configured `Enable` flag and its\nlive running state. Requires `dhcpservices:read`.",
+        "summary": "This action reports each DHCP-family service's configured `enable` flag and its\nlive running state. Requires `dhcpservices:read`.",
         "operationId": "apiDhcpServicesGet",
         "responses": {
           "200": {
@@ -6629,7 +6629,7 @@
         "tags": [
           "DhcpServiceControl"
         ],
-        "summary": "This action starts one DHCP-family service now, binding its socket, whatever its\n`Enable` flag says. Starting a running service changes nothing.\nReturns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
+        "summary": "This action starts one DHCP-family service now, binding its socket, whatever its\n`enable` flag says. Starting a running service changes nothing.\nReturns 400 for an unknown kind.\nRequires `dhcpservices:manage`.",
         "operationId": "apiDhcpServicesKindStartPost",
         "parameters": [
           {
@@ -6728,7 +6728,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Core` as an RFC 7396 merge\npatch. A field absent from\npatch keeps its value. A change to `leaseExpirySweepInterval`\napplies at the next sweep; every other field needs a restart, and the returned note\nsays which applies (see the class summary). Returns 400 for an invalid value. Requires\n`dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Core` as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value. A change to `leaseExpirySweepInterval`\napplies at the next sweep; every other field needs a restart, and the returned note\nsays which applies (see the class summary). Returns 400 for an invalid value. Requires\n`dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsCorePatch",
         "requestBody": {
           "content": {
@@ -6899,7 +6899,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Protocol:Dhcpv4` as an\nRFC 7396 merge patch. The change\nneeds a restart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Protocol:Dhcpv4` as an\nRFC 7396 merge patch, written to the configuration file. The change\nneeds a restart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsProtocolPatch",
         "requestBody": {
           "content": {
@@ -7070,7 +7070,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Protocol:Dhcpv6` as an\nRFC 7396 merge patch. The change\nneeds a restart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Protocol:Dhcpv6` as an\nRFC 7396 merge patch, written to the configuration file. The change\nneeds a restart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsDhcpv6ProtocolPatch",
         "requestBody": {
           "content": {
@@ -7244,7 +7244,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Relay:Dhcpv4` as an RFC 7396\nmerge patch. Turning the relay on\nreplaces the local DHCPv4 engine only after a restart (see the class summary). Returns\n400 for an invalid value. Requires `dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Relay:Dhcpv4` as an RFC 7396\nmerge patch, written to the configuration file. Turning the relay on\nreplaces the local DHCPv4 engine only after a restart (see the class summary). Returns\n400 for an invalid value. Requires `dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsRelayPatch",
         "requestBody": {
           "content": {
@@ -7420,7 +7420,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Relay:Dhcpv6` as an RFC 7396\nmerge patch. Turning the relay on\nreplaces the local DHCPv6 engine only after a restart (see the class summary). Returns\n400 for an invalid value. Requires `dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Relay:Dhcpv6` as an RFC 7396\nmerge patch, written to the configuration file. Turning the relay on\nreplaces the local DHCPv6 engine only after a restart (see the class summary). Returns\n400 for an invalid value. Requires `dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsDhcpv6RelayPatch",
         "requestBody": {
           "content": {
@@ -7597,7 +7597,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Tftp` as an RFC 7396 merge\npatch. The change needs a\nrestart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Tftp` as an RFC 7396 merge\npatch, written to the configuration file. The change needs a\nrestart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsTftpPatch",
         "requestBody": {
           "content": {
@@ -7769,7 +7769,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Protocol:Ra` as an RFC 7396\nmerge patch. The change needs a\nrestart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Protocol:Ra` as an RFC 7396\nmerge patch, written to the configuration file. The change needs a\nrestart. Returns 400 for an invalid value. Requires `dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsRaProtocolPatch",
         "requestBody": {
           "content": {
@@ -7977,7 +7977,7 @@
         "tags": [
           "DhcpSettings"
         ],
-        "summary": "This action merges a partial update into `DhcpServer:Ra` as an RFC 7396 merge\npatch; `routes` and\n`interfaceOverrides` each replace the whole list. The change applies at the next\nadvertisement, with no restart. Returns 400 for an invalid value, including more than\n`RaContentRules.MaxRecursiveDnsServers` RDNSS addresses or a search list\nthat encodes to more than `RaContentRules.MaxDnsSearchListOctets` octets,\nthe sizes that fit one advertisement. Requires `dhcpsettings:write`.",
+        "summary": "This action merges a partial update into `DhcpServer:Ra` as an RFC 7396 merge\npatch, written to the configuration file; `routes` and\n`interfaceOverrides` each replace the whole list. The change applies at the next\nadvertisement, with no restart. Returns 400 for an invalid value, including more than 75\nRDNSS addresses or a search list that encodes to more than 1208 octets, the sizes that\nfit one advertisement. Requires `dhcpsettings:write`.",
         "operationId": "apiDhcpSettingsRaPatch",
         "requestBody": {
           "content": {
@@ -8691,7 +8691,7 @@
         "tags": [
           "Dns64Settings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Dns64` as an RFC 7396 merge\npatch. A field absent from\npatch keeps its value. `Dns64Options.SynthesisPrefix`\nis checked against the same rule\n`Dns64SynthesisService.TryParsePrefix` applies (an IPv6 prefix of /32, /40, /48,\n/56, /64 or /96 with a zero \"u\" octet, outside `::ffff:0:0/96` and not\nmulticast; RFC 6052 §2.2, RFC 6147 §5.1.4), so a bad prefix returns 400 here instead of\nquietly disabling synthesis later. Requires `dns64settings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Dns64` as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value. `synthesisPrefix` is checked against the\nsame rule the DNS64 synthesis applies (an IPv6 prefix of /32, /40, /48, /56, /64 or /96\nwith a zero \"u\" octet, outside `::ffff:0:0/96` and not multicast; RFC 6052 §2.2,\nRFC 6147 §5.1.4), so a bad prefix returns 400 here instead of quietly disabling\nsynthesis later. Requires `dns64settings:write`.",
         "operationId": "apiDns64SettingsPatch",
         "requestBody": {
           "content": {
@@ -9497,7 +9497,7 @@
         "tags": [
           "DnsCookieSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Cookies` as an RFC 7396 merge\npatch. A field absent from\npatch keeps its value. The change needs a restart. Returns 400 for a\nfield of the wrong JSON type or a rotation interval outside 1 minute to the timer\nlimit (about 49 days). Requires `dnscookies:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Cookies` as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value. The change needs a restart. Returns 400 for a\nfield of the wrong JSON type or a rotation interval outside 1 minute to the timer\nlimit (about 49 days). Requires `dnscookies:write`.",
         "operationId": "apiDnsCookieSettingsPatch",
         "requestBody": {
           "content": {
@@ -9671,7 +9671,7 @@
         "tags": [
           "DnsPipelineSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Pipeline` as an RFC 7396 merge\npatch. The response note depends\non whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns\n400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor\nthat is not above 0. Requires `dnspipelinesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Pipeline` as an RFC 7396 merge\npatch, written to the configuration file. The response note depends\non whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns\n400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor\nthat is not above 0. Requires `dnspipelinesettings:write`.",
         "operationId": "apiDnsPipelineSettingsPatch",
         "requestBody": {
           "content": {
@@ -10102,7 +10102,7 @@
         "tags": [
           "DnssecKeyRolloverSettings"
         ],
-        "summary": "This action merges a partial update into\n`DnsServer:Authoritative:DnssecKeyRollover` as an RFC 7396 merge patch. Every field\ntakes effect at once. Returns 400 for a malformed duration, a negative propagation\ndelay, or a non-positive parent DS TTL or poll interval. Requires\n`dnsseckeyrolloversettings:write`.",
+        "summary": "This action merges a partial update into\n`DnsServer:Authoritative:DnssecKeyRollover` as an RFC 7396 merge patch, written to\nthe configuration file. Every field takes effect at once. Returns 400 for a malformed\nduration, a negative propagation delay, or a non-positive parent DS TTL or poll\ninterval. Requires `dnsseckeyrolloversettings:write`.",
         "operationId": "apiDnssecKeyRolloverSettingsPatch",
         "requestBody": {
           "content": {
@@ -10815,7 +10815,7 @@
         "tags": [
           "DnssecPolicySettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Dnssec` as an RFC 7396 merge\npatch. The change takes effect at\nonce. Returns 400 for an unknown algorithm name. Requires\n`dnssecpolicysettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Dnssec` as an RFC 7396 merge\npatch, written to the configuration file. The change takes effect at\nonce. Returns 400 for an unknown algorithm name. Requires\n`dnssecpolicysettings:write`.",
         "operationId": "apiDnssecPolicySettingsPatch",
         "requestBody": {
           "content": {
@@ -11001,7 +11001,7 @@
         "tags": [
           "EventBrokerSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Events`,\n`DnsServer:Events:RabbitMq` and `DnsServer:Events:ActiveMq` as an RFC 7396\nmerge patch at every level. A\nfield absent at the top level or within `rabbitMq` or `activeMq` keeps its\nvalue, including `password`, so an operator can change only `hostName` without\nresupplying a password `GET /api/event-broker-settings` never shows. A password is stored encrypted\nwith this node's key ring (as `passwordEncrypted` in the file) and sent as entered\nto the other cluster nodes, which encrypt it with their own key ring. The change needs\na restart.\nReturns 400 for a field of the wrong JSON type (nested fields are named like\n`rabbitMq.port`), an unknown transport, a port outside 1-65535, a reconnect delay\nor publish timeout that is not positive or exceeds the timer limit, or a maximum\nreconnect delay below the initial delay in the same patch. Requires\n`eventbroker:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Events`,\n`DnsServer:Events:RabbitMq` and `DnsServer:Events:ActiveMq` as an RFC 7396\nmerge patch at every level, written to the configuration file. A\nfield absent at the top level or within `rabbitMq` or `activeMq` keeps its\nvalue, including `password`, so an operator can change only `hostName` without\nresupplying a password `GET /api/event-broker-settings` never shows. A password is stored encrypted\nwith this node's key ring (as `passwordEncrypted` in the file) and sent as entered\nto the other cluster nodes, which encrypt it with their own key ring. The change needs\na restart.\nReturns 400 for a field of the wrong JSON type (nested fields are named like\n`rabbitMq.port`), an unknown transport, a port outside 1-65535, a reconnect delay\nor publish timeout that is not positive or exceeds the timer limit, or a maximum\nreconnect delay below the initial delay in the same patch. Requires\n`eventbroker:write`.",
         "operationId": "apiEventBrokerSettingsPatch",
         "requestBody": {
           "content": {
@@ -11183,7 +11183,7 @@
         "tags": [
           "FilteringSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Filtering` as an RFC 7396 merge\npatch. A field absent from\npatch keeps its value. Every field takes effect at once. Returns 400\nfor an unknown block response mode or precedence, or a sinkhole address of the wrong\nfamily. Requires `filteringsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Filtering` as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value. Every field takes effect at once. Returns 400\nfor an unknown block response mode or precedence, or a sinkhole address of the wrong\nfamily. Requires `filteringsettings:write`.",
         "operationId": "apiFilteringSettingsPatch",
         "requestBody": {
           "content": {
@@ -11418,7 +11418,7 @@
         "tags": [
           "FilterListEntries"
         ],
-        "summary": "This action adds an entry to a `DnsFilterListSourceEnum.Local` list.\nReturns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a\npattern that does not compile; 404 for an unknown list; and 409 for a subscribed list.\nRequires `filterlists:write`.",
+        "summary": "This action adds an entry to a `Local` list.\nReturns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a\npattern that does not compile; 404 for an unknown list; and 409 for a subscribed list.\nRequires `filterlists:write`.",
         "operationId": "apiFilterListsListIdEntriesPost",
         "parameters": [
           {
@@ -11981,7 +11981,7 @@
         "tags": [
           "FilterLists"
         ],
-        "summary": "This action replaces a list's settings. Changing\n`FilterListWriteRequest.Source` from\n`DnsFilterListSourceEnum.Local` to\n`DnsFilterListSourceEnum.Subscribed` leaves the existing entries alone\nuntil the next refresh replaces them all. Validation and errors are as for\n`POST /api/filter-lists`, plus 404 for an unknown id. Requires `filterlists:write`.",
+        "summary": "This action replaces a list's settings. Changing\n`FilterListWriteRequest.source` from\n`Local` to\n`Subscribed` leaves the existing entries alone\nuntil the next refresh replaces them all. Validation and errors are as for\n`POST /api/filter-lists`, plus 404 for an unknown id. Requires `filterlists:write`.",
         "operationId": "apiFilterListsIdPut",
         "parameters": [
           {
@@ -12599,7 +12599,7 @@
         "tags": [
           "ForwardingSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Forwarding` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value. Every field takes effect at once. Returns 400\nfor a field of the wrong JSON type, an unknown failover strategy, a\n`healthCheckInterval` outside 1 second to 1 day, a `perForwarderTimeout`\noutside 100 milliseconds to 1 minute, or a `maxCacheEntries` below 1. Requires `forwardingsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Forwarding` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value. Every field takes effect at once. Returns 400\nfor a field of the wrong JSON type, an unknown failover strategy, a\n`healthCheckInterval` outside 1 second to 1 day, a `perForwarderTimeout`\noutside 100 milliseconds to 1 minute, or a `maxCacheEntries` below 1. Requires `forwardingsettings:write`.",
         "operationId": "apiForwardingSettingsPatch",
         "requestBody": {
           "content": {
@@ -12777,7 +12777,7 @@
         "tags": [
           "IdentitySettings"
         ],
-        "summary": "This action merges a partial update into `Identity:Password`,\n`Identity:Lockout` and `Identity:EmailChange` as an RFC 7396 merge patch.\nEvery field takes effect on the next request. Returns 400 for a field of the wrong JSON\ntype, a length or attempt count below 1, a length above 128, a unique-character count\nabove 64 or above the length, or a lockout duration that is negative or longer than 100\nyears. Requires `identitysettings:write`.",
+        "summary": "This action merges a partial update into `Identity:Password`,\n`Identity:Lockout` and `Identity:EmailChange` as an RFC 7396 merge patch,\nwritten to the configuration file. Every field takes effect on the next request. Returns\n400 for a field of the wrong JSON type, a length or attempt count below 1, a length\nabove 128, a unique-character count above 64 or above the length, or a lockout duration\nthat is negative or longer than 100 years. Requires `identitysettings:write`.",
         "operationId": "apiIdentitySettingsPatch",
         "requestBody": {
           "content": {
@@ -13206,7 +13206,7 @@
         "tags": [
           "NotifySettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Authoritative:Notify` as an RFC\n7396 merge patch. Every field\ntakes effect at once. Returns 400 when `maxAttempts` is below 1, the port is\noutside 1-65535, or a timeout or delay is not a positive TimeSpan. Requires\n`notifysettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Authoritative:Notify` as an RFC\n7396 merge patch, written to the configuration file. Every field\ntakes effect at once. Returns 400 when `maxAttempts` is below 1, the port is\noutside 1-65535, or a timeout or delay is not a positive TimeSpan. Requires\n`notifysettings:write`.",
         "operationId": "apiNotifySettingsPatch",
         "requestBody": {
           "content": {
@@ -13353,7 +13353,7 @@
         "tags": [
           "OidcSsoSettings"
         ],
-        "summary": "This action returns the current SSO settings. The client secret is never returned, only\nwhether one is set (see `OidcSsoSettingsDetail.ClientSecretConfigured`),\nwhether the plaintext variable overrides it and whether the stored one is unreadable.\nRequires `ssosettings:read`.",
+        "summary": "This action returns the current SSO settings. The client secret is never returned, only\nwhether one is set (see `OidcSsoSettingsDetail.clientSecretConfigured`),\nwhether the plaintext variable overrides it and whether the stored one is unreadable.\nRequires `ssosettings:read`.",
         "operationId": "apiSsoSettingsGet",
         "responses": {
           "200": {
@@ -13386,7 +13386,7 @@
         "tags": [
           "OidcSsoSettings"
         ],
-        "summary": "This action merges a partial update into `Identity:Sso` as an RFC 7396 merge patch.\nA field absent from patch keeps its value, including\n`clientSecret`, so an operator can change only `displayName` without\nresupplying a secret `GET /api/sso-settings` never shows. A blank `clientSecret` clears\nit. Returns 400 for a blank display name or client id, an authority that is not an\nabsolute http(s) URL, or scopes without `openid`. Requires\n`ssosettings:write`.",
+        "summary": "This action merges a partial update into `Identity:Sso` as an RFC 7396 merge patch,\nwritten to the configuration file. A field absent from patch keeps\nits value, including `clientSecret`, so an operator can change only\n`displayName` without resupplying a secret `GET /api/sso-settings` never shows. A blank\n`clientSecret` clears it. Returns 400 for a blank display name or client id, an\nauthority that is not an absolute http(s) URL, or scopes without `openid`. Requires\n`ssosettings:write`.",
         "operationId": "apiSsoSettingsPatch",
         "requestBody": {
           "content": {
@@ -13566,7 +13566,7 @@
         "tags": [
           "OutboundQuerySettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:OutboundQuery` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value; `excludedSourcePorts` replaces the whole\nlist. No range checks are applied. Requires `outboundquerysettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:OutboundQuery` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value; `excludedSourcePorts` replaces the whole\nlist. No range checks are applied. Requires `outboundquerysettings:write`.",
         "operationId": "apiOutboundQuerySettingsPatch",
         "requestBody": {
           "content": {
@@ -13715,7 +13715,7 @@
         "tags": [
           "Permissions"
         ],
-        "summary": "This action returns the sorted, distinct permission strings named by every\n`RequirePermissionAttribute` on a controller class or action. Requires only\na signed-in caller.",
+        "summary": "This action returns the sorted, distinct permission strings required by any action of\nthe API. Requires only a signed-in caller.",
         "operationId": "apiPermissionsGet",
         "responses": {
           "200": {
@@ -13870,7 +13870,7 @@
         "tags": [
           "PtrSyncSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Authoritative:PtrSync` as an\nRFC 7396 merge patch. Every field\ntakes effect at once. Returns 400 for an IPv4 prefix outside 24-30 or an IPv6 prefix\nthat is not a multiple of 4 from 16 to 124 (the zone fields use the same limits).\nRequires `ptrsyncsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Authoritative:PtrSync` as an\nRFC 7396 merge patch, written to the configuration file. Every field\ntakes effect at once. Returns 400 for an IPv4 prefix outside 24-30 or an IPv6 prefix\nthat is not a multiple of 4 from 16 to 124 (the zone fields use the same limits).\nRequires `ptrsyncsettings:write`.",
         "operationId": "apiPtrSyncSettingsPatch",
         "requestBody": {
           "content": {
@@ -14204,7 +14204,7 @@
         "tags": [
           "QueryLoggingSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:QueryLogging` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value. The response note says whether a restart is\nneeded. Returns 400 for a field of the wrong JSON type, a negative `retentionPeriod`\nor `maxRetainedEntries` (zero turns the bound off), a `cleanupInterval` that\nis not positive or exceeds the timer limit, or an unknown privacy level. Requires\n`querylog:write`.",
+        "summary": "This action merges a partial update into `DnsServer:QueryLogging` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value. The response note says whether a restart is\nneeded. Returns 400 for a field of the wrong JSON type, a negative `retentionPeriod`\nor `maxRetainedEntries` (zero turns the bound off), a `cleanupInterval` that\nis not positive or exceeds the timer limit, or an unknown privacy level. Requires\n`querylog:write`.",
         "operationId": "apiQueryLoggingSettingsPatch",
         "requestBody": {
           "content": {
@@ -14388,7 +14388,7 @@
         "tags": [
           "RateLimitingSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:RateLimiting` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value; `subnetBypassCidrs` replaces the whole\nlist. The change needs a restart. Returns 400 for a field of the wrong JSON type, a rate,\nbucket size, tracked-client ceiling or subnet query limit below 1, a duration that is\nnot positive or exceeds the timer limit, a subnet prefix length outside 1-32 (IPv4) or\n1-128 (IPv6), a truncation percentage outside 0-100, or a bypass entry that is not a\nCIDR network address (for example `10.0.0.1/8`). Requires `ratelimiting:write`.",
+        "summary": "This action merges a partial update into `DnsServer:RateLimiting` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value; `subnetBypassCidrs` replaces the whole\nlist. The change needs a restart. Returns 400 for a field of the wrong JSON type, a rate,\nbucket size, tracked-client ceiling or subnet query limit below 1, a duration that is\nnot positive or exceeds the timer limit, a subnet prefix length outside 1-32 (IPv4) or\n1-128 (IPv6), a truncation percentage outside 0-100, or a bypass entry that is not a\nCIDR network address (for example `10.0.0.1/8`). Requires `ratelimiting:write`.",
         "operationId": "apiRateLimitingSettingsPatch",
         "requestBody": {
           "content": {
@@ -17889,7 +17889,7 @@
         "tags": [
           "RecursiveSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Recursive` as an RFC 7396 merge\npatch. A field absent from\npatch keeps its value; an override list, when present, replaces the\nwhole list. `insecureDomains` is the same, and also accepts `null` to restore the\nbuilt-in list. The response note says whether a restart is needed. Returns 400 for a\nfield of the wrong JSON type, an `upstreamQueryTimeout` outside 100 milliseconds\nto 1 minute, an `overallQueryTimeout` outside 1 second to 5 minutes or shorter\nthan the upstream timeout (the stored value stands in for an absent field), a count\nbelow 1, a refresh interval or window that is not positive, a hold-down or stale age\nthat is negative, a duration beyond the timer limit or 100 years, an invalid root-hint\naddress, a malformed trust anchor or an invalid domain name in\n`insecureDomains`. Requires\n`recursivesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Recursive` as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value; an override list, when present, replaces the\nwhole list. `insecureDomains` is the same, and also accepts `null` to restore the\nbuilt-in list. The response note says whether a restart is needed. Returns 400 for a\nfield of the wrong JSON type, an `upstreamQueryTimeout` outside 100 milliseconds\nto 1 minute, an `overallQueryTimeout` outside 1 second to 5 minutes or shorter\nthan the upstream timeout (the stored value stands in for an absent field), a count\nbelow 1, a refresh interval or window that is not positive, a hold-down or stale age\nthat is negative, a duration beyond the timer limit or 100 years, an invalid root-hint\naddress, a malformed trust anchor or an invalid domain name in\n`insecureDomains`. Requires\n`recursivesettings:write`.",
         "operationId": "apiRecursiveSettingsPatch",
         "requestBody": {
           "content": {
@@ -18036,7 +18036,7 @@
         "tags": [
           "ReverseProxySettings"
         ],
-        "summary": "This action returns the reverse-proxy trust settings for the HTTP listener and\nDNS-over-TLS as loaded at startup, plus which node last changed them. The shared secret\nis never returned, only whether one is set\n(`ReverseProxySettingsDetail.SharedSecretConfigured`). Requires\n`reverseproxy:read`.",
+        "summary": "This action returns the reverse-proxy trust settings for the HTTP listener and\nDNS-over-TLS as loaded at startup, plus which node last changed them. The shared secret\nis never returned, only whether one is set\n(`ReverseProxySettingsDetail.sharedSecretConfigured`). Requires\n`reverseproxy:read`.",
         "operationId": "apiReverseProxySettingsGet",
         "responses": {
           "200": {
@@ -18073,7 +18073,7 @@
         "tags": [
           "ReverseProxySettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:ReverseProxy` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value, including `sharedSecret`, which is\nalways operator-supplied and so can be replaced in place. The secret is stored\nencrypted with this node's key ring (`sharedSecretEncrypted` in the file) and is\nsent as entered to the other cluster nodes, which encrypt it with their own key ring.\n`knownProxies` and `knownNetworks` are each replaced as a whole array when present. An optional\n`dnsOverTls` sub-object is merged the same way into\n`DnsServer:Protocol:DnsOverTls:ProxyProtocol`; it has no shared secret (see\n`DnsOverTlsProxyProtocolSettingsDetail`). Returns 400 for an invalid IP address or\nCIDR network. Requires `reverseproxy:write`.",
+        "summary": "This action merges a partial update into `DnsServer:ReverseProxy` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value, including `sharedSecret`, which is\nalways operator-supplied and so can be replaced in place. The secret is stored\nencrypted with this node's key ring (`sharedSecretEncrypted` in the file) and is\nsent as entered to the other cluster nodes, which encrypt it with their own key ring.\n`knownProxies` and `knownNetworks` are each replaced as a whole array when present. An optional\n`dnsOverTls` sub-object is merged the same way into\n`DnsServer:Protocol:DnsOverTls:ProxyProtocol`; it has no shared secret (see\n`DnsOverTlsProxyProtocolSettingsDetail`). Returns 400 for an invalid IP address or\nCIDR network. Requires `reverseproxy:write`.",
         "operationId": "apiReverseProxySettingsPatch",
         "requestBody": {
           "content": {
@@ -18258,7 +18258,7 @@
         "tags": [
           "RewriteSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Rewrites` as an RFC 7396 merge\npatch. A field absent from\npatch keeps its value. Every field takes effect at once, and the\nchange is also replicated to the other cluster nodes, which apply it live as well.\nRequires `rewritesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Rewrites` as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value. Every field takes effect at once, and the\nchange is also replicated to the other cluster nodes, which apply it live as well.\nRequires `rewritesettings:write`.",
         "operationId": "apiRewriteSettingsPatch",
         "requestBody": {
           "content": {
@@ -18878,7 +18878,7 @@
         "tags": [
           "SecondaryZoneRefreshSettings"
         ],
-        "summary": "This action merges a partial update into\n`DnsServer:Authoritative:SecondaryZoneRefresh` as an RFC 7396 merge patch. Every\nfield takes effect without a restart. Returns 400 for a value that is not a positive\nTimeSpan. Requires `secondaryzonerefreshsettings:write`.",
+        "summary": "This action merges a partial update into\n`DnsServer:Authoritative:SecondaryZoneRefresh` as an RFC 7396 merge patch, written\nto the configuration file. Every field takes effect without a restart. Returns 400 for a\nvalue that is not a positive TimeSpan. Requires\n`secondaryzonerefreshsettings:write`.",
         "operationId": "apiSecondaryZoneRefreshSettingsPatch",
         "requestBody": {
           "content": {
@@ -19025,7 +19025,7 @@
         "tags": [
           "SelfUpdate"
         ],
-        "summary": "This action returns the result of the latest check, automatic or manual, without\nchecking again; `POST /api/self-update/check` runs a new one. Requires `selfupdate:read`.\n\n<b>Why there is no \"apply now\" action.</b> The server does not replace its own\n    running binary: it is installed from a package, container or install script, and a\n    failed in-place update could leave a home DNS server broken with nobody watching.\n    Instead, `SelfUpdateStatusDetail.UpdateInstructions` tells the operator\n    what to do by hand.",
+        "summary": "This action returns the result of the latest check, automatic or manual, without\nchecking again; `POST /api/self-update/check` runs a new one. Requires `selfupdate:read`.\n\n<b>Why there is no \"apply now\" action.</b> The server does not replace its own\n    running binary: it is installed from a package, container or install script, and a\n    failed in-place update could leave a home DNS server broken with nobody watching.\n    Instead, `SelfUpdateStatusDetail.updateInstructions` tells the operator\n    what to do by hand.",
         "operationId": "apiSelfUpdateGet",
         "responses": {
           "200": {
@@ -19113,7 +19113,7 @@
         "tags": [
           "SelfUpdateSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:SelfUpdate` as an RFC 7396\nmerge patch. A field absent from\npatch keeps its value. `releaseFeedUrl` must be blank (no feed)\nor an absolute http(s) URL; it is only checked for shape, not fetched, so a typo is\ncaught here rather than as a failing background check. Returns 400 for a bad URL or a\nnon-positive `checkInterval`. Requires `selfupdatesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:SelfUpdate` as an RFC 7396\nmerge patch, written to the configuration file. A field absent from\npatch keeps its value. `releaseFeedUrl` must be blank (no feed)\nor an absolute http(s) URL; it is only checked for shape, not fetched, so a typo is\ncaught here rather than as a failing background check. Returns 400 for a bad URL or a\nnon-positive `checkInterval`. Requires `selfupdatesettings:write`.",
         "operationId": "apiSelfUpdateSettingsPatch",
         "requestBody": {
           "content": {
@@ -19437,7 +19437,7 @@
         "tags": [
           "SmtpSettings"
         ],
-        "summary": "This action returns the current SMTP settings. The password is never returned, only\nwhether one is set (see `SmtpSettingsDetail.PasswordConfigured`), whether\n`NINLIL_EMAIL_PASSWORD` overrides it and whether the stored one is unreadable.\nRequires `smtpsettings:read`.",
+        "summary": "This action returns the current SMTP settings. The password is never returned, only\nwhether one is set (see `SmtpSettingsDetail.passwordConfigured`), whether\n`NINLIL_EMAIL_PASSWORD` overrides it and whether the stored one is unreadable.\nRequires `smtpsettings:read`.",
         "operationId": "apiSmtpSettingsGet",
         "responses": {
           "200": {
@@ -19468,7 +19468,7 @@
         "tags": [
           "SmtpSettings"
         ],
-        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password `GET /api/smtp-settings` never\nshows. A password is encrypted before it is written to the configuration file, and a blank\none clears it. Every field takes effect at once. Returns 400 for a blank host or\ndisplay name, a port outside 1-65535, a `username` left with no password from any\nsource, a malformed from-address or a `publicBaseUrl` that is not an absolute http\nor https URL. Requires `smtpsettings:write`.",
+        "summary": "This action merges a partial update into the `email` section as an RFC 7396 merge\npatch, written to the configuration file. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password `GET /api/smtp-settings` never\nshows. A password is encrypted before it is written to the configuration file, and a blank\none clears it. Every field takes effect at once. Returns 400 for a blank host or\ndisplay name, a port outside 1-65535, a `username` left with no password from any\nsource, a malformed from-address or a `publicBaseUrl` that is not an absolute http\nor https URL. Requires `smtpsettings:write`.",
         "operationId": "apiSmtpSettingsPatch",
         "requestBody": {
           "content": {
@@ -19622,7 +19622,7 @@
         "tags": [
           "Sso"
         ],
-        "summary": "This action reports whether this server can start an SSO sign-in and, if so, the label\nfor the button that starts one. Allows anonymous callers.\n\n<b>It checks whether the OpenID Connect scheme is registered, not the\n    `Identity:Sso:Enable` setting.</b>`PATCH /api/sso-settings` can change\n    that setting without a restart, but the scheme is registered once at startup (see\n    `ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication`),\n    so checking the setting could show a button that returns 404 when clicked.",
+        "summary": "This action reports whether this server can start an SSO sign-in and, if so, the label\nfor the button that starts one. Allows anonymous callers.\n\n<b>It checks whether the OpenID Connect scheme is registered, not the\n    `Identity:Sso:Enable` setting.</b>`PATCH /api/sso-settings` can change\n    that setting without a restart, but the scheme is registered once at startup, so\n    checking the setting could show a button that returns 404 when clicked.",
         "operationId": "apiAuthSsoGet",
         "responses": {
           "200": {
@@ -19647,7 +19647,7 @@
         "tags": [
           "Sso"
         ],
-        "summary": "This action is a browser navigation target, not an API call for `fetch()`. It\nreturns 404 when the OpenID Connect scheme is not registered (as `GET /api/auth/sso`\nreports with `enabled: false`), and otherwise redirects (302) to the identity\nprovider's authorization endpoint. The browser ends up, several redirects later,\nwherever `OnTokenValidated` or `OnRemoteFailure` sends it. Allows anonymous\ncallers.\n\nIt is named `GET /api/auth/sso/challenge` rather than `Challenge` so it does\n    not hide the protected `ControllerBase.Challenge(...)` helper it calls.",
+        "summary": "This action is a browser navigation target, not an API call for `fetch()`. It\nreturns 404 when the OpenID Connect scheme is not registered (as `GET /api/auth/sso`\nreports with `enabled: false`), and otherwise redirects (302) to the identity\nprovider's authorization endpoint. The browser ends up, several redirects later,\nwherever the sign-in outcome sends it. Allows anonymous\ncallers.",
         "operationId": "apiAuthSsoChallengeGet",
         "parameters": [
           {
@@ -19732,7 +19732,7 @@
         "tags": [
           "Storage"
         ],
-        "summary": "This action checks the target database and saves a switch to it, which the next start\napplies. It returns 202 at once: nothing is copied and the server keeps its engine.\nRequires `storage:manage`.\n\nThe request carries per-engine connection fields (a file path for SQLite; host,\n    port, database, username, password and encryption mode for the others) rather than a\n    free-text connection string. The server builds the connection string with each\n    engine's `*ConnectionStringBuilder`. An unreachable target, a target that a\n    newer Ninlil upgraded, a request naming MongoDB, or a request made while a read replica\n    or cluster setting of the engine in use is configured returns 400 and saves nothing. A\n    second request replaces the first. The answer says whether Ninlil points the\n    runtime configuration file at the target itself, or the operator must first set\n    the storage environment variables.",
+        "summary": "This action checks the target database and saves a switch to it, which the next start\napplies. It returns 202 at once: nothing is copied and the server keeps its engine.\nRequires `storage:manage`.\n\nThe request carries per-engine connection fields (a file path for SQLite; host,\n    port, database, username, password and encryption mode for the others) rather than a\n    free-text connection string. The server builds the connection string with the\n    engine's own connection string syntax. An unreachable target, a target that a newer\n    Ninlil upgraded, a request naming MongoDB, or a request made while a read replica or\n    cluster setting of the engine in use is configured returns 400 and saves nothing. A\n    second request replaces the first. The answer says whether Ninlil points the runtime\n    configuration file at the target itself, or the operator must first set the storage\n    environment variables.",
         "operationId": "apiStorageSwitchPost",
         "requestBody": {
           "description": "The engine to switch to and its connection fields.",
@@ -20767,7 +20767,7 @@
         "tags": [
           "TsigKeys"
         ],
-        "summary": "This action creates a TSIG key. Without `TsigKeyCreateRequest.Secret`, a\nrandom secret as long as the algorithm's MAC (32 bytes for the default) is generated; without an\nalgorithm, `hmac-sha256` is used. The name is stored in lowercase.\nThe base64 secret is returned in this response only. Returns 400 for an invalid name, an\nunsupported algorithm or a secret that is not non-empty base64, and 409 when the name is\ntaken. Requires `tsigkeys:write`.",
+        "summary": "This action creates a TSIG key. Without `TsigKeyCreateRequest.secret`, a\nrandom secret as long as the algorithm's MAC (32 bytes for the default) is generated; without an\nalgorithm, `hmac-sha256` is used. The name is stored in lowercase.\nThe base64 secret is returned in this response only. Returns 400 for an invalid name, an\nunsupported algorithm or a secret that is not non-empty base64, and 409 when the name is\ntaken. Requires `tsigkeys:write`.",
         "operationId": "apiTsigKeysPost",
         "requestBody": {
           "content": {
@@ -20975,7 +20975,7 @@
         "tags": [
           "TsigSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Tsig` as an RFC 7396 merge\npatch. The change takes effect at\nonce. Returns 400 when `defaultFudgeSeconds` is outside 0-65535. Requires\n`tsigsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Tsig` as an RFC 7396 merge\npatch, written to the configuration file. The change takes effect at\nonce. Returns 400 when `defaultFudgeSeconds` is outside 0-65535. Requires\n`tsigsettings:write`.",
         "operationId": "apiTsigSettingsPatch",
         "requestBody": {
           "content": {
@@ -21696,7 +21696,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action updates the caller's display name and phone number as an RFC 7396 merge\npatch (see `JsonElementMergePatchExtension`): an absent field is unchanged,\na JSON `null` clears it, and a string sets it. An `email` field is ignored: the\naddress changes only through `POST /api/users/me/email`. Requires only a signed-in caller.",
+        "summary": "This action updates the caller's display name and phone number as an RFC 7396 merge\npatch: an absent field is unchanged, a JSON `null` clears it, and a string sets it.\nAn `email` field is ignored: the address changes only through\n`POST /api/users/me/email`. Requires only a signed-in caller.",
         "operationId": "apiUsersMePatch",
         "requestBody": {
           "content": {
@@ -21763,7 +21763,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action changes the caller's own e-mail address. It requires the current password; a\nwrong one returns 400 with Identity's `PasswordMismatch` error. Wrong passwords are\ncounted per account, together with those of the password change: once 5 have been\nsubmitted within 15 minutes, this returns 429 with a `Retry-After` header, even\nfor the correct password, until the window ends. An invalid address\nor one another account uses returns 400 with Identity's error. Requires only a\nsigned-in caller.\n<list type=\"bullet\"><item><b>Confirmation required</b> (the\n        `Identity:EmailChange:RequireConfirmation` setting, the default): SMTP and\n        the public base URL must be configured, otherwise this returns 400 naming what\n        is missing. It e-mails a link to the new address and returns 202 with\n        `ChangeEmailPendingResult`. Nothing on the account changes until\n        the link is submitted to `POST /api/auth/confirm-email-change`, which\n        also marks the address confirmed.\n    </item><item><b>Not required</b>: the address changes at once and the response is 200 with\n        the profile. The account's confirmed state stays as it was, as after an\n        administrator's change in `PUT /api/users/{id}`, so a mistyped address can cut\n        off e-mailed two-factor codes, which go only to a confirmed address.\n    </item></list>\nWhen the address changes, the security stamp is replaced and every refresh token is\nrevoked, so every session of the account, the caller's own included, must sign in\nagain, and a notice goes to the old address if SMTP is configured.",
+        "summary": "This action changes the caller's own e-mail address. It requires the current password; a\nwrong one returns 400 with Identity's `PasswordMismatch` error. Wrong passwords are\ncounted per account, together with those of the password change: once 5 have been\nsubmitted within 15 minutes, this returns 429 with a `Retry-After` header, even\nfor the correct password, until the window ends. An invalid address\nor one another account uses returns 400 with Identity's error. Requires only a\nsigned-in caller.\n<list type=\"bullet\"><item><b>Confirmation required</b> (the\n        `Identity:EmailChange:RequireConfirmation` setting, the default): SMTP and\n        the public base URL must be configured, otherwise this returns 400 naming what\n        is missing. It e-mails a link to the new address and returns 202 with a body\n        whose `confirmationSent` is true. Nothing on the account changes until the\n        link is submitted to `POST /api/auth/confirm-email-change`, which\n        also marks the address confirmed.\n    </item><item><b>Not required</b>: the address changes at once and the response is 200 with\n        the profile. The account's confirmed state stays as it was, as after an\n        administrator's change in `PUT /api/users/{id}`, so a mistyped address can cut\n        off e-mailed two-factor codes, which go only to a confirmed address.\n    </item></list>\nWhen the address changes, the security stamp is replaced and every refresh token is\nrevoked, so every session of the account, the caller's own included, must sign in\nagain, and a notice goes to the old address if SMTP is configured.",
         "operationId": "apiUsersMeEmailPost",
         "requestBody": {
           "content": {
@@ -21818,7 +21818,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as `POST /api/users/me/change-password` requires.\n`AdminResetPasswordRequest.Mode` picks one of two modes (see\n`AdminPasswordResetMode`). Requires `users:write`.\n<list type=\"bullet\"><item>`AdminPasswordResetMode.AutoGenerate` sets a generated strong\n        password at once, through a reset token, so Identity's usual validation and\n        hashing apply, and returns it in this response only. It also replaces the\n        account's security stamp and revokes every refresh token of the account, so\n        every access token issued before the reset answers 401 on its next request.\n    </item><item>`AdminPasswordResetMode.EmailLink` e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        `POST /api/auth/reset-password`. The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        `ConfirmPasswordResetRequest`). The account must have an e-mail\n        address, and SMTP and the public base URL the link points at must be\n        configured (see `/api/smtp-settings`); otherwise this returns 400\n        with a clear message.\n    </item></list>",
+        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as `POST /api/users/me/change-password` requires.\n`AdminResetPasswordRequest.mode` picks one of two modes (see\n`AdminPasswordResetMode`). Requires `users:write`.\n<list type=\"bullet\"><item>`AutoGenerate` sets a generated strong\n        password at once, through a reset token, so Identity's usual validation and\n        hashing apply, and returns it in this response only. It also replaces the\n        account's security stamp and revokes every refresh token of the account, so\n        every access token issued before the reset answers 401 on its next request.\n    </item><item>`EmailLink` e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        `POST /api/auth/reset-password`. The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        `ConfirmPasswordResetRequest`). The account must have an e-mail\n        address, and SMTP and the public base URL the link points at must be\n        configured (see `/api/smtp-settings`); otherwise this returns 400\n        with a clear message.\n    </item></list>",
         "operationId": "apiUsersIdResetPasswordPost",
         "parameters": [
           {
@@ -21890,7 +21890,7 @@
         "tags": [
           "WebhookDeliverySettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Webhooks:Delivery` as an RFC\n7396 merge patch. The response\nnote depends on whether `requestTimeout` was changed alone, with another field, or\nnot at all. Returns 400 for a value that is not a positive TimeSpan. Requires\n`webhookdeliverysettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Webhooks:Delivery` as an RFC\n7396 merge patch, written to the configuration file. The response\nnote depends on whether `requestTimeout` was changed alone, with another field, or\nnot at all. Returns 400 for a value that is not a positive TimeSpan. Requires\n`webhookdeliverysettings:write`.",
         "operationId": "apiWebhookDeliverySettingsPatch",
         "requestBody": {
           "content": {
@@ -22459,7 +22459,7 @@
         "tags": [
           "WebListenSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Web` as an RFC 7396 merge\npatch. The change is written to\nthe file and applied only after a full restart. Returns 400 for a field of the wrong JSON\ntype, a port outside 1-65535, an invalid listen address, a certificate poll interval\nthat is not positive or exceeds the timer limit, or an unknown TLS protocol name.\nRequires `weblistensettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Web` as an RFC 7396 merge\npatch, written to the configuration file. The change is written to\nthe file and applied only after a full restart. Returns 400 for a field of the wrong JSON\ntype, a port outside 1-65535, an invalid listen address, a certificate poll interval\nthat is not positive or exceeds the timer limit, or an unknown TLS protocol name.\nRequires `weblistensettings:write`.",
         "operationId": "apiWebListenSettingsPatch",
         "requestBody": {
           "content": {
@@ -23263,7 +23263,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action lists the member zone names of an RFC 9432 catalog zone (a\n`ZoneTypeEnum.Catalog` zone or a\n`ZoneTypeEnum.SecondaryCatalog` copy), read from its stored PTR records.\nRequires `zones:read`.",
+        "summary": "This action lists the member zone names of an RFC 9432 catalog zone (a\n`Catalog` zone or a\n`SecondaryCatalog` copy), read from its stored PTR records.\nRequires `zones:read`.",
         "operationId": "apiZonesIdCatalogMembersGet",
         "parameters": [
           {
@@ -23301,7 +23301,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action makes a `ZoneTypeEnum.Primary` or\n`ZoneTypeEnum.CloudPrimary` zone that this server originates a member of a\n`ZoneTypeEnum.Catalog` zone it also originates. It writes the member's RFC\n9432 PTR record into the catalog zone and adds every healthy cluster peer's address to\nboth zones' `NotifyAddresses`, so the change reaches the cluster without manual\nconfiguration. Requires `zones:write`.",
+        "summary": "This action makes a `Primary` or\n`CloudPrimary` zone that this server originates a member of a\n`Catalog` zone it also originates. It writes the member's RFC\n9432 PTR record into the catalog zone and adds every healthy cluster peer's address to\nboth zones' `notifyAddresses`, so the change reaches the cluster without manual\nconfiguration. Requires `zones:write`.",
         "operationId": "apiZonesIdCatalogMembershipPost",
         "parameters": [
           {
@@ -23399,7 +23399,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action runs one PTR (reverse-zone) sync pass for the zone now, with the same\nlogic the automatic path runs on each zone change, including RFC 2317 classless-delegation records\nwhen the zone's `PtrIpv4PrefixLength` (or the server-wide default) calls for them.\nReturns the records added and removed and the reverse zones touched, or why the pass was\nskipped, and 404 for an unknown id. Requires `zones:write`.",
+        "summary": "This action runs one PTR (reverse-zone) sync pass for the zone now, with the same\nlogic the automatic path runs on each zone change, including RFC 2317 classless-delegation records\nwhen the zone's `ptrIpv4PrefixLength` (or the server-wide default) calls for them.\nReturns the records added and removed and the reverse zones touched, or why the pass was\nskipped, and 404 for an unknown id. Requires `zones:write`.",
         "operationId": "apiZonesIdReconcilePtrPost",
         "parameters": [
           {
@@ -23463,7 +23463,7 @@
         "tags": [
           "ZoneSigningSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Authoritative:ZoneSigning` as\nan RFC 7396 merge patch. Every\nfield takes effect at once. Returns 400 for a malformed duration, a negative inception\noffset, or a non-positive validity period, refresh margin or poll interval. Requires\n`zonesigningsettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Authoritative:ZoneSigning` as\nan RFC 7396 merge patch, written to the configuration file. Every\nfield takes effect at once. Returns 400 for a malformed duration, a negative inception\noffset, or a non-positive validity period, refresh margin or poll interval. Requires\n`zonesigningsettings:write`.",
         "operationId": "apiZoneSigningSettingsPatch",
         "requestBody": {
           "content": {
@@ -23635,7 +23635,7 @@
         "tags": [
           "ZoneTransferClientSettings"
         ],
-        "summary": "This action merges a partial update into\n`DnsServer:Authoritative:ZoneTransferClient` as an RFC 7396 merge patch. Every\nfield takes effect at once. Returns 400 for a port outside 1-65535 or a timeout that is\nnot a positive TimeSpan. Requires `zonetransferclientsettings:write`.",
+        "summary": "This action merges a partial update into\n`DnsServer:Authoritative:ZoneTransferClient` as an RFC 7396 merge patch, written to\nthe configuration file. Every field takes effect at once. Returns 400 for a port outside\n1-65535 or a timeout that is not a positive TimeSpan. Requires\n`zonetransferclientsettings:write`.",
         "operationId": "apiZoneTransferClientSettingsPatch",
         "requestBody": {
           "content": {
@@ -23804,7 +23804,7 @@
         "tags": [
           "ZoneTransferSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Authoritative:ZoneTransfer` as\nan RFC 7396 merge patch. The\nchange takes effect at once. Returns 400 when `recordsPerMessage` is below 1.\nRequires `zonetransfersettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Authoritative:ZoneTransfer` as\nan RFC 7396 merge patch, written to the configuration file. The\nchange takes effect at once. Returns 400 when `recordsPerMessage` is below 1.\nRequires `zonetransfersettings:write`.",
         "operationId": "apiZoneTransferSettingsPatch",
         "requestBody": {
           "content": {
@@ -23963,19 +23963,19 @@
           },
           "issuedAtUtc": {
             "type": "string",
-            "description": "When the current certificate was issued, or null if `AcmeCertificateInventoryEntry.HasCertificate` is false.",
+            "description": "When the current certificate was issued, or null if `hasCertificate` is false.",
             "format": "date-time",
             "nullable": true
           },
           "expiresAtUtc": {
             "type": "string",
-            "description": "When the current certificate expires, or null if `AcmeCertificateInventoryEntry.HasCertificate` is false.",
+            "description": "When the current certificate expires, or null if `hasCertificate` is false.",
             "format": "date-time",
             "nullable": true
           },
           "isDueForRenewal": {
             "type": "boolean",
-            "description": "true when the domain has no certificate yet, or its certificate expires\n                within the configured `RenewBeforeExpiration` setting. The certificate\n                renewal job uses the same check."
+            "description": "true when the domain has no certificate yet, or its certificate expires\n                within the configured `renewBeforeExpiration` setting. The certificate\n                renewal job uses the same check."
           },
           "lastFailureAtUtc": {
             "type": "string",
@@ -23985,12 +23985,12 @@
           },
           "lastFailureMessage": {
             "type": "string",
-            "description": "A short description of why the most recent attempt failed, or null\ntogether with `AcmeCertificateInventoryEntry.LastFailureAtUtc`.",
+            "description": "A short description of why the most recent attempt failed, or null\ntogether with `lastFailureAtUtc`.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is one row of the certificate inventory that\n`GET /api/acme-settings/certificates` returns: one per domain in\n`DnsServer:Acme:Domains`, with what the server has recorded about it.\n`AcmeCertificateInventoryEntry.HasCertificate` separates a domain that has never been issued a certificate\nfrom one that simply is not due for renewal yet, whatever `AcmeCertificateInventoryEntry.IsDueForRenewal`\nsays."
+        "description": "This record is one row of the certificate inventory that\n`GET /api/acme-settings/certificates` returns: one per domain in\n`DnsServer:Acme:Domains`, with what the server has recorded about it.\n`hasCertificate` separates a domain that has never been issued a certificate\nfrom one that simply is not due for renewal yet, whatever `isDueForRenewal`\nsays."
       },
       "AcmeSettingsDetail": {
         "type": "object",
@@ -24042,7 +24042,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the ACME certificate settings (configuration section\n`DnsServer:Acme`) that `GET /api/acme-settings` returns. The server-wide CAA\ndefaults (configuration section `DnsServer:Acme:CaaAutoManagement`) are nested under\n`AcmeSettingsDetail.CaaAutoManagement`; the per-zone override lives on the zone itself\n(`/api/zones`). The ACME account's private key is never exposed over REST, so a\n`PATCH` to the same endpoint accepts the same fields this record has."
+        "description": "This record is the REST shape of the ACME certificate settings (configuration section\n`DnsServer:Acme`) that `GET /api/acme-settings` returns. The server-wide CAA\ndefaults (configuration section `DnsServer:Acme:CaaAutoManagement`) are nested under\n`caaAutoManagement`; the per-zone override lives on the zone itself\n(`/api/zones`). The ACME account's private key is never exposed over REST, so a\n`PATCH` to the same endpoint accepts the same fields this record has."
       },
       "ActiveMqBrokerSettingsDetail": {
         "type": "object",
@@ -24077,7 +24077,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record carries the ActiveMQ event broker settings (configuration section\n`DnsServer:Events:ActiveMq`) without `Password`, for the reason given on\n`RabbitMqBrokerSettingsDetail`."
+        "description": "This record carries the ActiveMQ event broker settings (configuration section\n`DnsServer:Events:ActiveMq`) without `password`, for the reason given on\n`RabbitMqBrokerSettingsDetail`."
       },
       "AdminLoginRateLimitSettingsDetail": {
         "type": "object",
@@ -24088,12 +24088,12 @@
           },
           "permitLimit": {
             "type": "integer",
-            "description": "How many sign-in attempts one client address may make within one `AdminLoginRateLimitSettingsDetail.Window`. Defaults to 5.",
+            "description": "How many sign-in attempts one client address may make within one `window`. Defaults to 5.",
             "format": "int32"
           },
           "window": {
             "type": "string",
-            "description": "The fixed window `AdminLoginRateLimitSettingsDetail.PermitLimit` is counted over, which is also the lockout length. Defaults to five minutes.",
+            "description": "The fixed window `permitLimit` is counted over, which is also the lockout length. Defaults to five minutes.",
             "format": "date-span"
           }
         },
@@ -24106,7 +24106,7 @@
           "EmailLink"
         ],
         "type": "string",
-        "description": "This enumeration names the two ways an administrator's password reset (see\n`POST /api/users/{id}/reset-password`) delivers a new credential to a\nlocked-out account. Both are needed: `AdminPasswordResetMode.AutoGenerate` works without any SMTP\nserver, which suits a homelab, while `AdminPasswordResetMode.EmailLink` lets the account holder pick\na password the administrator never sees, but needs a configured SMTP server (see\n`GET /api/smtp-settings`)."
+        "description": "This enumeration names the two ways an administrator's password reset (see\n`POST /api/users/{id}/reset-password`) delivers a new credential to a\nlocked-out account. Both are needed: `AutoGenerate` works without any SMTP\nserver, which suits a homelab, while `EmailLink` lets the account holder pick\na password the administrator never sees, but needs a configured SMTP server (see\n`GET /api/smtp-settings`)."
       },
       "AdminResetPasswordRequest": {
         "type": "object",
@@ -24126,7 +24126,7 @@
           },
           "generatedPassword": {
             "type": "string",
-            "description": "The generated password, shown only here. Set only when Mode is\n`AdminPasswordResetMode.AutoGenerate`; null for\n`AdminPasswordResetMode.EmailLink`, where the server never learns the new\npassword.",
+            "description": "The generated password, shown only here. Set only when `mode` is\n`AutoGenerate`; null for\n`EmailLink`, where the server never learns the new\npassword.",
             "nullable": true
           }
         },
@@ -24206,7 +24206,7 @@
           },
           "expiresAtUtc": {
             "type": "string",
-            "description": "The UTC date and time `AuthenticationResult.AccessToken` expires.",
+            "description": "The UTC date and time `accessToken` expires.",
             "format": "date-time"
           },
           "refreshToken": {
@@ -24266,7 +24266,7 @@
           },
           "note": {
             "type": "string",
-            "description": "Always `BackupRestoreResponse.RestartRequiredNote`: the restored database connection, Data\nProtection key ring and TLS certificate take effect only after a restart.",
+            "description": "Always a note telling the operator to restart the process, because the restored database\nconnection, Data Protection key ring and TLS certificate take effect only after a restart.",
             "nullable": true
           }
         },
@@ -24293,7 +24293,7 @@
           },
           "subscriptionUrl": {
             "type": "string",
-            "description": "The third-party domain list this entry subscribes to when enabled.\n`BlockedServiceCatalog` documents its source and license.",
+            "description": "The third-party domain list this entry subscribes to when enabled.\nThe catalog entry records its source and license.",
             "nullable": true
           },
           "isEnabled": {
@@ -24342,12 +24342,12 @@
           },
           "hostnameString": {
             "type": "string",
-            "description": "The value the server answers a `hostname.bind` or `id.server` CHAOS query with,\nwhen EnableChaosVersionQueries is enabled.",
+            "description": "The value the server answers a `hostname.bind` or `id.server` CHAOS query with,\nwhen `enableChaosVersionQueries` is enabled.",
             "nullable": true
           },
           "versionString": {
             "type": "string",
-            "description": "The value the server answers a `version.bind` or `version.server` CHAOS query\nwith, when EnableChaosVersionQueries is enabled.",
+            "description": "The value the server answers a `version.bind` or `version.server` CHAOS query\nwith, when `enableChaosVersionQueries` is enabled.",
             "nullable": true
           },
           "enableChaosVersionQueries": {
@@ -24370,7 +24370,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the server-wide CAA auto-management defaults\n(configuration section `DnsServer:Acme:CaaAutoManagement`), nested in\n`AcmeSettingsDetail.CaaAutoManagement`."
+        "description": "This record is the REST shape of the server-wide CAA auto-management defaults\n(configuration section `DnsServer:Acme:CaaAutoManagement`), nested in\n`AcmeSettingsDetail.caaAutoManagement`."
       },
       "ChangeEmailPendingResult": {
         "type": "object",
@@ -24415,7 +24415,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the caller's self-service password change\n(`POST /api/users/me/change-password`). `ChangePasswordRequest.CurrentPassword`\nis required and checked by ASP.NET Core Identity: unlike an\nadministrator's reset, a caller changing their own password must prove they know it."
+        "description": "This class carries the caller's self-service password change\n(`POST /api/users/me/change-password`). `currentPassword`\nis required and checked by ASP.NET Core Identity: unlike an\nadministrator's reset, a caller changing their own password must prove they know it."
       },
       "ClientAddressDetail": {
         "type": "object",
@@ -24461,21 +24461,21 @@
           },
           "macAddress": {
             "type": "string",
-            "description": "The MAC address ClientIdentifier embeds (directly, or inside a DHCPv4\nclient-id or a link-layer DUID), as lowercase colon-separated hexadecimal, or\nnull when it embeds none.",
+            "description": "The MAC address `clientIdentifier` embeds (directly, or inside a DHCPv4\nclient-id or a link-layer DUID), as lowercase colon-separated hexadecimal, or\nnull when it embeds none.",
             "nullable": true
           },
           "vendor": {
             "type": "string",
-            "description": "The organization IEEE assigned MacAddress's block to, computed when the\nresponse is built. null when there is no MAC, it is randomized, or no registry lists it.",
+            "description": "The organization IEEE assigned `macAddress`'s block to, computed when the\nresponse is built. null when there is no MAC, it is randomized, or no registry lists it.",
             "nullable": true
           },
           "isRandomizedMacAddress": {
             "type": "boolean",
-            "description": "Whether MacAddress is a randomized (locally administered) address, which\nis never looked up because it names no manufacturer."
+            "description": "Whether `macAddress` is a randomized (locally administered) address, which\nis never looked up because it names no manufacturer."
           }
         },
         "additionalProperties": false,
-        "description": "This class carries one persistent identifier a known client device answers to. It appears\nin `ClientDetail.Addresses` and in the responses of\n`/api/clients/{clientId}/addresses`."
+        "description": "This class carries one persistent identifier a known client device answers to. It appears\nin `ClientDetail.addresses` and in the responses of\n`/api/clients/{clientId}/addresses`."
       },
       "ClientAddressDetailPagedResult": {
         "type": "object",
@@ -24564,7 +24564,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to register a known client device\n(`POST /api/clients`) with its first address. `ClientCreateRequest.ClientIdentifier` and\n`ClientCreateRequest.ProtocolVersion` become that address's identity, which cannot change later.\nFurther addresses are added through `POST /api/clients/{clientId}/addresses`. The\ndevice fields that stay editable are in `ClientWriteRequest`, used by\n`PUT` and `PATCH`."
+        "description": "This class carries the fields used to register a known client device\n(`POST /api/clients`) with its first address. `clientIdentifier` and\n`protocolVersion` become that address's identity, which cannot change later.\nFurther addresses are added through `POST /api/clients/{clientId}/addresses`. The\ndevice fields that stay editable are in `ClientWriteRequest`, used by\n`PUT` and `PATCH`."
       },
       "ClientDetail": {
         "type": "object",
@@ -24624,7 +24624,7 @@
           },
           "isCurrentlyPaused": {
             "type": "boolean",
-            "description": "Whether PausedUntilUtc is still in the future, computed when the\nresponse is built. An expired pause is never cleared from storage, so this flag, not the\ntimestamp, says whether the client is paused."
+            "description": "Whether `pausedUntilUtc` is still in the future, computed when the\nresponse is built. An expired pause is never cleared from storage, so this flag, not the\ntimestamp, says whether the client is paused."
           },
           "lastSeenUtc": {
             "type": "string",
@@ -24634,7 +24634,7 @@
           },
           "isOnline": {
             "type": "boolean",
-            "description": "Whether LastSeenUtc falls within the configured online window. It is\ncomputed when the response is built, so it turns false once a device goes quiet."
+            "description": "Whether `lastSeenUtc` falls within the configured online window. It is\ncomputed when the response is built, so it turns false once a device goes quiet."
           },
           "deviceIconKey": {
             "$ref": "#/components/schemas/DnsClientDeviceIconEnum"
@@ -24657,7 +24657,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a known client device, as returned by the list, get and create\nendpoints of `/api/clients`. `ClientDetail.Addresses` lists every identifier the device\nanswers to, since one device can have several (a dual-stack device's IPv4 MAC address and\nIPv6 DUID, for instance)."
+        "description": "This class carries a known client device, as returned by the list, get and create\nendpoints of `/api/clients`. `addresses` lists every identifier the device\nanswers to, since one device can have several (a dual-stack device's IPv4 MAC address and\nIPv6 DUID, for instance)."
       },
       "ClientDetailPagedResult": {
         "type": "object",
@@ -24729,7 +24729,7 @@
           },
           "isCurrentlyPaused": {
             "type": "boolean",
-            "description": "Whether PausedUntilUtc is still in the future, computed when the\nresponse is built, as for `ClientDetail.IsCurrentlyPaused`."
+            "description": "Whether `pausedUntilUtc` is still in the future, computed when the\nresponse is built, as for `ClientDetail.isCurrentlyPaused`."
           }
         },
         "additionalProperties": false,
@@ -24892,17 +24892,17 @@
         "properties": {
           "cidr": {
             "type": "string",
-            "description": "An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a\nbare IPv6 address one host (/128). A zone index (`fe80::1%2`) and an out-of-range\nprefix length are rejected with a 400. null when\nClientId is set instead.",
+            "description": "An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a\nbare IPv6 address one host (/128). A zone index (`fe80::1%2`) and an out-of-range\nprefix length are rejected with a 400. null when\n`clientId` is set instead.",
             "nullable": true
           },
           "clientId": {
             "type": "string",
-            "description": "A DNS-over-HTTPS ClientID label this row matches. null when\nCidr is set instead.",
+            "description": "A DNS-over-HTTPS ClientID label this row matches. null when\n`cidr` is set instead.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to create or fully replace a network belonging to a\nclient group (`POST` and `PUT` under `/api/client-groups/{groupId}/networks`).\nExactly one of Cidr and ClientId must be set."
+        "description": "This class carries the fields used to create or fully replace a network belonging to a\nclient group (`POST` and `PUT` under `/api/client-groups/{groupId}/networks`).\nExactly one of `cidr` and `clientId` must be set."
       },
       "ClientGroupScheduleDetail": {
         "type": "object",
@@ -25204,12 +25204,12 @@
           },
           "startTime": {
             "type": "string",
-            "description": "The local time the blocking window begins, in TimeZoneId.",
+            "description": "The local time the blocking window begins, in `timeZoneId`.",
             "format": "time"
           },
           "endTime": {
             "type": "string",
-            "description": "The local time the blocking window ends. A time earlier than StartTime\nmakes a window that crosses midnight (e.g. a 21:00 to 07:00 bedtime); a time equal to it is\nrejected.",
+            "description": "The local time the blocking window ends. A time earlier than `startTime`\nmakes a window that crosses midnight (e.g. a 21:00 to 07:00 bedtime); a time equal to it is\nrejected.",
             "format": "time"
           },
           "timeZoneId": {
@@ -25266,17 +25266,17 @@
           },
           "onlineCount": {
             "type": "integer",
-            "description": "Clients with any address seen within OnlineWindow.",
+            "description": "Clients with any address seen within `onlineWindow`.",
             "format": "int32"
           },
           "offlineCount": {
             "type": "integer",
-            "description": "Clients not seen within OnlineWindow, including clients never seen; computed as total minus online.",
+            "description": "Clients not seen within `onlineWindow`, including clients never seen; computed as total minus online.",
             "format": "int32"
           },
           "newCount": {
             "type": "integer",
-            "description": "Clients registered at or after NewSinceUtc.",
+            "description": "Clients registered at or after `newSinceUtc`.",
             "format": "int32"
           },
           "favoriteCount": {
@@ -25286,7 +25286,7 @@
           },
           "newSinceUtc": {
             "type": "string",
-            "description": "The instant NewCount counts from: the request's `newSinceUtc`, or 24 hours ago when it was omitted.",
+            "description": "The instant `newCount` counts from: the request's `newSinceUtc`, or 24 hours ago when it was omitted.",
             "format": "date-time"
           },
           "onlineWindow": {
@@ -25332,7 +25332,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the editable fields of a known client, replaced in full by\n`PUT /api/clients/{id}`. It has no `ClientCreateRequest.ClientIdentifier`\nor `ClientCreateRequest.ProtocolVersion`, because an address's identity never\nchanges. To change one, add a new address and delete the old one, as with the shared secret\nof a TSIG key."
+        "description": "This class carries the editable fields of a known client, replaced in full by\n`PUT /api/clients/{id}`. It has no `ClientCreateRequest.clientIdentifier`\nor `ClientCreateRequest.protocolVersion`, because an address's identity never\nchanges. To change one, add a new address and delete the old one, as with the shared secret\nof a TSIG key."
       },
       "CloudDnsProviderTypeEnum": {
         "enum": [
@@ -25359,7 +25359,7 @@
               "type": "string",
               "nullable": true
             },
-            "description": "The secret material, keyed by field name; the keys depend on `CloudProviderCredentialCreateRequest.ProviderType`.\nIt is stored encrypted, and the values are returned once, in this endpoint's response.",
+            "description": "The secret material, keyed by field name; the keys depend on `providerType`.\nIt is stored encrypted, and the values are returned once, in this endpoint's response.",
             "nullable": true
           },
           "isDisabled": {
@@ -25392,7 +25392,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a newly created cloud DNS provider credential set with its plaintext\nsecrets. It is the only response that includes `CloudProviderCredentialCreateResponse.Secrets`: like every\nsecret-bearing entity, a secret is revealed once at creation and omitted afterwards."
+        "description": "This class carries a newly created cloud DNS provider credential set with its plaintext\nsecrets. It is the only response that includes `secrets`: like every\nsecret-bearing entity, a secret is revealed once at creation and omitted afterwards."
       },
       "CloudProviderCredentialDetail": {
         "type": "object",
@@ -25489,7 +25489,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to fully replace an existing cloud DNS provider\ncredential set (`PUT /api/cloud-provider-credentials/{id}`). Unlike the shared secret\nof a TSIG key (see `TsigKeyWriteRequest`), these secrets come from the\noperator, who rotates them at the provider, so a `PUT` replaces\n`CloudProviderCredentialWriteRequest.Credentials` along with every other field. Nothing new is revealed, since the\ncaller supplies the values. To change only the name, comments or disabled flag, use\n`PATCH` and leave out `credentials`."
+        "description": "This class carries the fields used to fully replace an existing cloud DNS provider\ncredential set (`PUT /api/cloud-provider-credentials/{id}`). Unlike the shared secret\nof a TSIG key (see `TsigKeyWriteRequest`), these secrets come from the\noperator, who rotates them at the provider, so a `PUT` replaces\n`credentials` along with every other field. Nothing new is revealed, since the\ncaller supplies the values. To change only the name, comments or disabled flag, use\n`PATCH` and leave out `credentials`."
       },
       "ClusterAggregateQueryStatsDetail": {
         "type": "object",
@@ -25533,7 +25533,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries one node's query statistics for the cluster dashboard\n(`GET /api/cluster/nodes/stats`). A row is either the answering node\n(`ClusterAggregateQueryStatsDetail.IsSelf` is true and it is always `ClusterAggregateQueryStatsDetail.Reachable`)\nor a known peer. A peer whose snapshot could not be collected is reported unreachable\nrather than left out."
+        "description": "This class carries one node's query statistics for the cluster dashboard\n(`GET /api/cluster/nodes/stats`). A row is either the answering node\n(`isSelf` is true and it is always `reachable`)\nor a known peer. A peer whose snapshot could not be collected is reported unreachable\nrather than left out."
       },
       "ClusterConfigSyncEnvelope": {
         "type": "object",
@@ -25597,7 +25597,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a new invite's opaque code and expiry\n(`POST /api/cluster/nodes/invite`). The code contains the cluster's shared TSIG secret\nin plaintext; this response is the one place that secret is revealed (see\n`ClusterInviteCode`)."
+        "description": "This class carries a new invite's opaque code and expiry\n(`POST /api/cluster/nodes/invite`). The code contains the cluster's shared TSIG secret\nin plaintext; this response is the one place that secret is revealed."
       },
       "ClusterJoinCompleteRequest": {
         "type": "object",
@@ -25700,7 +25700,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a peer node in this node's cluster registry, as returned by\n`GET /api/cluster/nodes` and `GET /api/cluster/nodes/{id}`. The shared secret of\nthe peer's TSIG key is never included; `ClusterNodeDetail.TsigKeyName` only names the key, as\n`TsigKeyDetail` omits its secret."
+        "description": "This class carries a peer node in this node's cluster registry, as returned by\n`GET /api/cluster/nodes` and `GET /api/cluster/nodes/{id}`. The shared secret of\nthe peer's TSIG key is never included; `tsigKeyName` only names the key, as\n`TsigKeyDetail` omits its secret."
       },
       "ClusterNodeDetailPagedResult": {
         "type": "object",
@@ -25829,7 +25829,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries this node's cluster settings (`GET /api/cluster-settings`).\n`ClusterSettingsDetail.NodeId` is read-only and shown for diagnostics; a `PATCH` cannot change\nit. `ClusterSettingsDetail.AddressReconcileInterval` belongs to the catalog zone settings instead.\nIt shares this page because it only exists to keep the NOTIFY and primary address lists\nof catalog-managed zones in step with cluster membership."
+        "description": "This class carries this node's cluster settings (`GET /api/cluster-settings`).\n`nodeId` is read-only and shown for diagnostics; a `PATCH` cannot change\nit. `addressReconcileInterval` belongs to the catalog zone settings instead.\nIt shares this page because it only exists to keep the NOTIFY and primary address lists\nof catalog-managed zones in step with cluster membership."
       },
       "ClusterUsernameCheckRequest": {
         "type": "object",
@@ -25865,12 +25865,12 @@
           },
           "token": {
             "type": "string",
-            "description": "The change-email token ASP.NET Core Identity issued,\nBase64Url-encoded for the link, as `ConfirmPasswordResetRequest.Token` is.",
+            "description": "The change-email token ASP.NET Core Identity issued,\nBase64Url-encoded for the link, as `ConfirmPasswordResetRequest.token` is.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This class carries what the admin console's \"confirm e-mail change\" page submits to\n`POST /api/auth/confirm-email-change`, taken from the link\n`EmailChangeLinkSender` e-mails to the new address. The action is anonymous because the\nlink may be opened in a browser that is not signed in; `ConfirmEmailChangeRequest.Token` is the proof."
+        "description": "This class carries what the admin console's \"confirm e-mail change\" page submits to\n`POST /api/auth/confirm-email-change`, taken from the link e-mailed\nto the new address. The action is anonymous because the link may be opened in a browser that\nis not signed in; `token` is the proof."
       },
       "ConfirmPasswordResetRequest": {
         "type": "object",
@@ -25887,12 +25887,12 @@
           },
           "newPassword": {
             "type": "string",
-            "description": "The new password to set, once `ConfirmPasswordResetRequest.Token` checks out.",
+            "description": "The new password to set, once `token` checks out.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a token-based password reset, submitted from the \"set new password\"\nlanding page to `POST /api/auth/reset-password`. The page serves\nboth the reset e-mail an administrator sends (`POST /api/users/{id}/reset-password` in\n`EmailLink` mode) and the self-service\n`POST /api/auth/forgot-password` request. Nobody is signed in at\nthis point, so the action is `[AllowAnonymous]` and `ConfirmPasswordResetRequest.Token` with\n`ConfirmPasswordResetRequest.UserId` is its only proof of authorization."
+        "description": "This class carries a token-based password reset, submitted from the \"set new password\"\nlanding page to `POST /api/auth/reset-password`. The page serves\nboth the reset e-mail an administrator sends (`POST /api/users/{id}/reset-password` in\n`EmailLink` mode) and the self-service\n`POST /api/auth/forgot-password` request. Nobody is signed in at\nthis point, so the action needs no sign-in and `token` with\n`userId` is its only proof of authorization."
       },
       "CreateApiTokenRequest": {
         "type": "object",
@@ -25904,7 +25904,7 @@
           },
           "oneTime": {
             "type": "boolean",
-            "description": "Whether the token is consumed the first time it is used\n(`ApiTokenTypeEnum.OneTime`) rather than working until it is revoked or\nexpires (`ApiTokenTypeEnum.Static`)."
+            "description": "Whether the token is consumed the first time it is used\n(`OneTime`) rather than working until it is revoked or\nexpires (`Static`)."
           },
           "expiresAtUtc": {
             "type": "string",
@@ -26057,7 +26057,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries one DHCP lease, as returned by the list and get endpoints of\n`/api/dhcp-leases`. There is no write request: the allocation engine creates and\nupdates leases as clients come and go, and an operator can only release one\n(`POST /api/dhcp-leases/{id}/release`). `DhcpLeaseDetail.PrefixLength` is set only for a\nDHCPv6 Prefix Delegation lease and is null for an address lease.\n\n<b>Declined addresses.</b> When a client declines an address (RFC 2131 Section 4.3.3),\n    the lease row becomes a quarantine row: `ClientIdentifier` is\n    `declined:<address>` (for example `declined:192.0.2.55`), `State` is\n    `Expired` and `LeaseExpiresAtUtc` is the end of the quarantine, which is\n    `DeclinedAddressQuarantineDuration` after the decline (see\n    `DhcpCoreSettingsDetail`). No client owns the row, and the address is not\n    offered to any client until that time. `POST /api/dhcp-leases/{id}/release`\n    on a quarantine row sets `State` to `Released` and ends the quarantine at\n    once."
+        "description": "This class carries one DHCP lease, as returned by the list and get endpoints of\n`/api/dhcp-leases`. There is no write request: the allocation engine creates and\nupdates leases as clients come and go, and an operator can only release one\n(`POST /api/dhcp-leases/{id}/release`). `prefixLength` is set only for a\nDHCPv6 Prefix Delegation lease and is null for an address lease.\n\n<b>Declined addresses.</b> When a client declines an address (RFC 2131 Section 4.3.3),\n    the lease row becomes a quarantine row: `clientIdentifier` is\n    `declined:<address>` (for example `declined:192.0.2.55`), `state`\n    is `Expired` and `leaseExpiresAtUtc` is the end of the quarantine, which is\n    `declinedAddressQuarantineDuration` after the decline (see\n    `DhcpCoreSettingsDetail`). No client owns the row, and the address is not\n    offered to any client until that time. `POST /api/dhcp-leases/{id}/release` on a\n    quarantine row sets `state` to `Released` and ends the quarantine at once."
       },
       "DhcpLeaseDetailPagedResult": {
         "type": "object",
@@ -26094,7 +26094,7 @@
         "properties": {
           "code": {
             "type": "integer",
-            "description": "The option's numeric code (see `DhcpOptionCatalogEntry.Code`).",
+            "description": "The option's numeric code.",
             "format": "int32"
           },
           "name": {
@@ -26116,7 +26116,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of one `DhcpOptionCatalogEntry`, as returned by\n`GET /api/dhcp-option-catalog`. It copies the catalog record field by field so the API\ndoes not change when the record does."
+        "description": "This record is the REST shape of one DHCP option catalog entry, as returned by\n`GET /api/dhcp-option-catalog`. It copies the catalog record field by field so the API\ndoes not change when the record does."
       },
       "DhcpOptionValueSourceEnum": {
         "enum": [
@@ -26161,7 +26161,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of `Dhcpv4ProtocolOptions`,\nthe DHCPv4 UDP listener's settings (`GET /api/dhcp-settings/protocol`)."
+        "description": "This record is the REST shape of the DHCPv4 UDP listener's settings\n(`GET /api/dhcp-settings/protocol`)."
       },
       "DhcpRaInterfaceOverrideDetail": {
         "type": "object",
@@ -26177,41 +26177,41 @@
           },
           "managedAddressConfiguration": {
             "type": "boolean",
-            "description": "Overrides `DhcpRaSettingsDetail.ManagedAddressConfiguration` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.managedAddressConfiguration` for this interface, or inherits it when null.",
             "nullable": true
           },
           "otherConfiguration": {
             "type": "boolean",
-            "description": "Overrides `DhcpRaSettingsDetail.OtherConfiguration` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.otherConfiguration` for this interface, or inherits it when null.",
             "nullable": true
           },
           "routerLifetime": {
             "type": "string",
-            "description": "Overrides `DhcpRaSettingsDetail.RouterLifetime` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.routerLifetime` for this interface, or inherits it when null.",
             "format": "date-span",
             "nullable": true
           },
           "currentHopLimit": {
             "type": "integer",
-            "description": "Overrides `DhcpRaSettingsDetail.CurrentHopLimit` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.currentHopLimit` for this interface, or inherits it when null.",
             "format": "int32",
             "nullable": true
           },
           "reachableTime": {
             "type": "string",
-            "description": "Overrides `DhcpRaSettingsDetail.ReachableTime` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.reachableTime` for this interface, or inherits it when null.",
             "format": "date-span",
             "nullable": true
           },
           "retransTimer": {
             "type": "string",
-            "description": "Overrides `DhcpRaSettingsDetail.RetransTimer` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.retransTimer` for this interface, or inherits it when null.",
             "format": "date-span",
             "nullable": true
           },
           "linkMtu": {
             "type": "integer",
-            "description": "Overrides `DhcpRaSettingsDetail.LinkMtu` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.linkMtu` for this interface, or inherits it when null.",
             "format": "int32",
             "nullable": true
           },
@@ -26220,12 +26220,12 @@
             "items": {
               "type": "string"
             },
-            "description": "Wholesale-replaces `DhcpRaSettingsDetail.RecursiveDnsServers` for this interface when non-null, or inherits the global list when null.",
+            "description": "Wholesale-replaces `DhcpRaSettingsDetail.recursiveDnsServers` for this interface when non-null, or inherits the global list when null.",
             "nullable": true
           },
           "recursiveDnsServerLifetime": {
             "type": "string",
-            "description": "Overrides `DhcpRaSettingsDetail.RecursiveDnsServerLifetime` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.recursiveDnsServerLifetime` for this interface, or inherits it when null.",
             "format": "date-span",
             "nullable": true
           },
@@ -26234,18 +26234,18 @@
             "items": {
               "type": "string"
             },
-            "description": "Wholesale-replaces `DhcpRaSettingsDetail.DnsSearchListDomains` for this interface when non-null, or inherits the global list when null.",
+            "description": "Wholesale-replaces `DhcpRaSettingsDetail.dnsSearchListDomains` for this interface when non-null, or inherits the global list when null.",
             "nullable": true
           },
           "dnsSearchListLifetime": {
             "type": "string",
-            "description": "Overrides `DhcpRaSettingsDetail.DnsSearchListLifetime` for this interface, or inherits it when null.",
+            "description": "Overrides `DhcpRaSettingsDetail.dnsSearchListLifetime` for this interface, or inherits it when null.",
             "format": "date-span",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`:\ndifferent Router Advertisement content for one network interface. It appears in\n`DhcpRaSettingsDetail.InterfaceOverrides` and in the `interfaceOverrides`\narray of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits\nthe matching global field. A null`DhcpRaInterfaceOverrideDetail.RecursiveDnsServers` or\n`DhcpRaInterfaceOverrideDetail.DnsSearchListDomains` inherits the global list; any other value, even an empty\nlist, replaces it.\n\n<b>The override's `Prefixes` and `Routes` lists are not included.</b>\n    Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a\n    route list nested inside this list would make the API and UI much more complex. Both\n    can be set in the JSON configuration file\n    (the `Prefixes` and `Routes` of each `DhcpServer:Ra:InterfaceOverrides`\n    entry)."
+        "description": "This record is the REST shape of one entry of `DhcpServer:Ra:InterfaceOverrides`:\ndifferent Router Advertisement content for one network interface. It appears in\n`DhcpRaSettingsDetail.interfaceOverrides` and in the `interfaceOverrides`\narray of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits\nthe matching global field. A null`recursiveDnsServers` or\n`dnsSearchListDomains` inherits the global list; any other value, even an empty\nlist, replaces it.\n\n<b>The override's `Prefixes` and `routes` lists are not included.</b>\n    Prefixes are file-only globally too (see `DhcpRaSettingsDetail`), and a\n    route list nested inside this list would make the API and UI much more complex. Both\n    can be set in the JSON configuration file\n    (the `Prefixes` and `routes` of each `DhcpServer:Ra:InterfaceOverrides`\n    entry)."
       },
       "DhcpRaProtocolSettingsDetail": {
         "type": "object",
@@ -26273,12 +26273,12 @@
         "properties": {
           "prefix": {
             "type": "string",
-            "description": "The route's prefix, or null or empty when PrefixLength is `0` (an entry that only sets the default route's preference).",
+            "description": "The route's prefix, or null or empty when `prefixLength` is `0` (an entry that only sets the default route's preference).",
             "nullable": true
           },
           "prefixLength": {
             "type": "integer",
-            "description": "The number of significant leading bits of Prefix, 0 to 128. Defaults to 64.",
+            "description": "The number of significant leading bits of `prefix`, 0 to 128. Defaults to 64.",
             "format": "int32"
           },
           "preference": {
@@ -26291,7 +26291,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of one entry of `DhcpServer:Ra:Routes`: a route\nadvertised in an RFC 4191 Section 2.3 Route Information option. It appears in\n`DhcpRaSettingsDetail.Routes` and in the `routes` array of\n`PATCH /api/dhcp-settings/ra`."
+        "description": "This record is the REST shape of one entry of `DhcpServer:Ra:Routes`: a route\nadvertised in an RFC 4191 Section 2.3 Route Information option. It appears in\n`DhcpRaSettingsDetail.routes` and in the `routes` array of\n`PATCH /api/dhcp-settings/ra`."
       },
       "DhcpRaSettingsDetail": {
         "type": "object",
@@ -26340,7 +26340,7 @@
           },
           "recursiveDnsServerLifetime": {
             "type": "string",
-            "description": "How long a host may use RecursiveDnsServers. Defaults to 1800 seconds.",
+            "description": "How long a host may use `recursiveDnsServers`. Defaults to 1800 seconds.",
             "format": "date-span"
           },
           "dnsSearchListDomains": {
@@ -26353,7 +26353,7 @@
           },
           "dnsSearchListLifetime": {
             "type": "string",
-            "description": "How long a host may use DnsSearchListDomains. Defaults to 1800 seconds.",
+            "description": "How long a host may use `dnsSearchListDomains`. Defaults to 1800 seconds.",
             "format": "date-span"
           },
           "routes": {
@@ -26374,7 +26374,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of configuration section `DhcpServer:Ra`\n(`GET /api/dhcp-settings/ra`): what the server's Router Advertisements contain. The\ntransport and timing settings are in `DhcpRaProtocolSettingsDetail`.\n\n<b>`DhcpServer:Ra:Prefixes` is not included.</b> Each advertised prefix has its own\n    on-link and autonomous flags and two lifetimes, which suits a separate sub-resource\n    (as `/api/dhcp-scopes/{scopeId}/reservations` gives reservations) better than a\n    field here. Prefixes are configured in the configuration file only.\n<b>`DhcpRaSettingsDetail.Routes` is included.</b> An RFC 4191 route is a simple triple (prefix\n    and length, preference, lifetime), so a `PATCH` replaces the whole list, as it\n    does `DhcpRaSettingsDetail.RecursiveDnsServers` and `DhcpRaSettingsDetail.DnsSearchListDomains`.\n    `DhcpServer:Ra` lives in the JSON configuration file, not the database, so its list\n    entries have no stable identifiers to build a sub-resource on. Every change needs a\n    restart."
+        "description": "This record is the REST shape of configuration section `DhcpServer:Ra`\n(`GET /api/dhcp-settings/ra`): what the server's Router Advertisements contain. The\ntransport and timing settings are in `DhcpRaProtocolSettingsDetail`.\n\n<b>`DhcpServer:Ra:Prefixes` is not included.</b> Each advertised prefix has its own\n    on-link and autonomous flags and two lifetimes, which suits a separate sub-resource\n    (as `/api/dhcp-scopes/{scopeId}/reservations` gives reservations) better than a\n    field here. Prefixes are configured in the configuration file only.\n<b>`routes` is included.</b> An RFC 4191 route is a simple triple (prefix\n    and length, preference, lifetime), so a `PATCH` replaces the whole list, as it\n    does `recursiveDnsServers` and `dnsSearchListDomains`.\n    `DhcpServer:Ra` lives in the JSON configuration file, not the database, so its list\n    entries have no stable identifiers to build a sub-resource on. Every change needs a\n    restart."
       },
       "DhcpRelaySettingsDetail": {
         "type": "object",
@@ -26413,7 +26413,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of `Dhcpv4RelayOptions`\n(`GET /api/dhcp-settings/relay`): whether the server relays DHCPv4 requests to\nupstream servers instead of answering them from its own scopes."
+        "description": "This record is the REST shape of the DHCPv4 relay settings\n(`GET /api/dhcp-settings/relay`): whether the server relays DHCPv4 requests to upstream\nservers instead of answering them from its own scopes."
       },
       "DhcpReservationDetail": {
         "type": "object",
@@ -26601,7 +26601,7 @@
           },
           "valueHex": {
             "type": "string",
-            "description": "The option's raw value bytes as a hexadecimal string with an even number of digits; it is\nstored in uppercase. It is not used, and may be blank, when\nValueSource is `DhcpOptionValueSourceEnum.ServerAddress`.",
+            "description": "The option's raw value bytes as a hexadecimal string with an even number of digits; it is\nstored in uppercase. It is not used, and may be blank, when\n`valueSource` is `ServerAddress`.",
             "nullable": true
           },
           "isDisabled": {
@@ -26767,7 +26767,7 @@
           },
           "totalSlots": {
             "type": "string",
-            "description": "How many slots the scope's range holds, as a decimal string. A slot is an address for an\n`DhcpScopeKindEnum.AddressAssignment` scope, or a block-aligned delegable\nprefix for a `DhcpScopeKindEnum.PrefixDelegation` scope.",
+            "description": "How many slots the scope's range holds, as a decimal string. A slot is an address for an\n`AddressAssignment` scope, or a block-aligned delegable\nprefix for a `PrefixDelegation` scope.",
             "nullable": true
           },
           "leasedCount": {
@@ -26787,12 +26787,12 @@
           },
           "availableSlots": {
             "type": "string",
-            "description": "TotalSlots minus every distinct slot held by a blocking lease or an\n                enabled reservation, as a decimal string; never negative.",
+            "description": "`totalSlots` minus every distinct slot held by a blocking lease or an\n                enabled reservation, as a decimal string; never negative.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of `DhcpScopeStatistics`,\none scope's utilization (`GET /api/dhcp-scopes/{id}/statistics`). The figures are\ncomputed on each request, not cached; that class documents how. `DhcpScopeStatisticsDetail.TotalSlots`\nand `DhcpScopeStatisticsDetail.AvailableSlots` are decimal strings rather than JSON numbers because an\nIPv6 range can hold far more addresses than a JSON number represents exactly (a\n`/64` holds 2^64)."
+        "description": "This record is the REST shape of one scope's utilization\n(`GET /api/dhcp-scopes/{id}/statistics`). The figures are computed on each request, not\ncached. `totalSlots` and `availableSlots` are decimal strings rather than JSON\nnumbers because an IPv6 range can hold far more addresses than a JSON number represents\nexactly (a `/64` holds 2^64)."
       },
       "DhcpScopeWriteRequest": {
         "type": "object",
@@ -26868,7 +26868,7 @@
           },
           "nextServerAddress": {
             "type": "string",
-            "description": "The TFTP (or other boot) server a PXE client should contact for\nBootFileName, or null to use this server's Server\nIdentifier address.",
+            "description": "The TFTP (or other boot) server a PXE client should contact for\n`bootFileName`, or null to use this server's Server\nIdentifier address.",
             "nullable": true
           },
           "kind": {
@@ -26876,7 +26876,7 @@
           },
           "delegatedPrefixLength": {
             "type": "integer",
-            "description": "The length, in bits, of each prefix the scope delegates. Required when\nKind is `DhcpScopeKindEnum.PrefixDelegation`, and must be\nnull otherwise.",
+            "description": "The length, in bits, of each prefix the scope delegates. Required when\n`kind` is `PrefixDelegation`, and must be\nnull otherwise.",
             "format": "int32",
             "nullable": true
           }
@@ -26902,7 +26902,7 @@
           },
           "enabled": {
             "type": "boolean",
-            "description": "Whether the service's `Enable` option says it starts at boot. It is read from the\nsettings loaded at startup, so a saved change shows only after a restart."
+            "description": "Whether the service's `enable` option says it starts at boot. It is read from the\nsettings loaded at startup, so a saved change shows only after a restart."
           },
           "isRunning": {
             "type": "boolean",
@@ -26910,7 +26910,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is one DHCP-family service's state, as returned by\n`/api/dhcp-services`: its configured `DhcpServiceStatus.Enabled` flag (whether it starts at\nboot) and whether it `DhcpServiceStatus.IsRunning`. The two can differ either way. A service\nconfigured off can be running because it was started through this controller, and one\nconfigured on can be stopped, either through this controller or, for\n`DhcpServiceKindEnum.Tftp` only, because it declined to bind (for example when\nits root directory is missing)."
+        "description": "This record is one DHCP-family service's state, as returned by\n`/api/dhcp-services`: its configured `enabled` flag (whether it starts at\nboot) and whether it `isRunning`. The two can differ either way. A service\nconfigured off can be running because it was started through this controller, and one\nconfigured on can be stopped, either through this controller or, for\n`Tftp` only, because it declined to bind (for example when\nits root directory is missing)."
       },
       "DhcpTagRuleDetail": {
         "type": "object",
@@ -27078,12 +27078,12 @@
         "properties": {
           "optionTag": {
             "type": "integer",
-            "description": "The option's numeric tag, as in `DhcpScopeCustomOptionWriteRequest.OptionTag`.\nThose limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6\nscope rejects tag 0, values over 65 535 bytes and the option codes the server writes\nitself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24\n(Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4, which\npoints to RFC 9915 Section 10).",
+            "description": "The option's numeric tag, as in `DhcpScopeCustomOptionWriteRequest.optionTag`.\nThose limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6\nscope rejects tag 0, values over 65 535 bytes and the option codes the server writes\nitself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24\n(Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4, which\npoints to RFC 9915 Section 10).",
             "format": "int32"
           },
           "valueHex": {
             "type": "string",
-            "description": "The option's raw value bytes as hexadecimal, as in\n`DhcpScopeCustomOptionWriteRequest.ValueHex`. It is not used, and may be\nblank, when ValueSource is\n`DhcpOptionValueSourceEnum.ServerAddress`.",
+            "description": "The option's raw value bytes as hexadecimal, as in\n`DhcpScopeCustomOptionWriteRequest.valueHex`. It is not used, and may be\nblank, when `valueSource` is\n`ServerAddress`.",
             "nullable": true
           },
           "valueSource": {
@@ -27224,7 +27224,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of `Dhcpv6ProtocolOptions`,\nthe DHCPv6 UDP listener's settings (`GET /api/dhcp-settings/dhcpv6-protocol`); the\nDHCPv6 counterpart of `DhcpProtocolSettingsDetail`."
+        "description": "This record is the REST shape of the DHCPv6 UDP listener's settings\n(`GET /api/dhcp-settings/dhcpv6-protocol`); the DHCPv6 counterpart of\n`DhcpProtocolSettingsDetail`."
       },
       "Dhcpv6RelaySettingsDetail": {
         "type": "object",
@@ -27258,7 +27258,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of `Dhcpv6RelayOptions`\n(`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 9915\nDHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart\nof `DhcpRelaySettingsDetail`."
+        "description": "This record is the REST shape of the DHCPv6 relay settings\n(`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 9915 DHCPv6\nrelay agent instead of answering from its own scopes. It is the DHCPv6 counterpart of\n`DhcpRelaySettingsDetail`."
       },
       "Dns64SettingsDetail": {
         "type": "object",
@@ -27274,7 +27274,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the DNS64 settings (`Dns64Options`) that\n`GET /api/dns64-settings` returns. Nothing in it is secret, so a `PATCH` to the\nsame endpoint accepts the same fields."
+        "description": "This record is the REST shape of the DNS64 settings (configuration section\n`DnsServer:Dns64`) that `GET /api/dns64-settings` returns. Nothing in it is\nsecret, so a `PATCH` to the same endpoint accepts the same fields."
       },
       "DnsAccessControlRuleDetail": {
         "type": "object",
@@ -27299,7 +27299,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The capabilities the rule grants, as an array of\n`DnsAccessControlCapabilityEnum` member names (see\n`DnsAccessControlRuleWriteRequest.Capabilities`).",
+            "description": "The capabilities the rule grants, as an array of\n`DnsAccessControlCapabilityEnum` member names (see\n`DnsAccessControlRuleWriteRequest.capabilities`).",
             "nullable": true
           },
           "isDisabled": {
@@ -27375,7 +27375,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The capabilities the rule grants a client whose source address is in `DnsAccessControlRuleWriteRequest.Cidr`,\nas an array of `DnsAccessControlCapabilityEnum` member names (for example\n`[\"RecursionAccess\", \"RateLimitBypass\"]`), not the stored\nSystem.FlagsAttribute bitmask. Names are case-sensitive. An empty array is\naccepted (a rule that grants nothing); an unknown name is rejected with a 400.",
+            "description": "The capabilities the rule grants a client whose source address is in `cidr`,\nas an array of `DnsAccessControlCapabilityEnum` member names (for example\n`[\"RecursionAccess\", \"RateLimitBypass\"]`), not the stored\nbitmask. Names are case-sensitive. An empty array is\naccepted (a rule that grants nothing); an unknown name is rejected with a 400.",
             "nullable": true
           },
           "isDisabled": {
@@ -27566,12 +27566,12 @@
         "properties": {
           "cidr": {
             "type": "string",
-            "description": "The source address or network mapped to ClientIdentifier: a bare IP\naddress (exact match) or a CIDR network with a `/` (matches every address in it). A\nvalue with a `/` must parse with\n`System.Net.IPNetwork.TryParse` and one\nwithout with `System.Net.IPAddress.TryParse`,\nthe same two forms the server matches at query time.",
+            "description": "The source address or network mapped to `clientIdentifier`: a bare IP\naddress (exact match) or a CIDR network with a `/` (matches every address in it). A\nvalue with a `/` must be a valid IPv4 or IPv6 CIDR prefix and one without must be a\nvalid IPv4 or IPv6 address, the same two forms the server matches at query time.",
             "nullable": true
           },
           "clientIdentifier": {
             "type": "string",
-            "description": "The persistent client identifier a query from Cidr resolves to: a\nMAC address for an `InternetProtocolVersionEnum.IPv4` mapping, or a DHCP\nUnique Identifier (DUID) for an `InternetProtocolVersionEnum.IPv6` one, in\nhex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned\nas `aa:bb:cc:dd:ee:ff`.",
+            "description": "The persistent client identifier a query from `cidr` resolves to: a\nMAC address for an `IPv4` mapping, or a DHCP\nUnique Identifier (DUID) for an `IPv6` one, in\nhex. Accepted spellings are `aa:bb:cc:dd:ee:ff`, `aa-bb-cc-dd-ee-ff`,\n`aabb.ccdd.eeff` and `aabbccddeeff` (up to 85 bytes); it is stored and returned\nas `aa:bb:cc:dd:ee:ff`.",
             "nullable": true
           },
           "protocolVersion": {
@@ -27620,7 +27620,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the RFC 7873 DNS Cookie settings\n(configuration section `DnsServer:Cookies`) that `GET /api/dns-cookie-settings`\nreturns. A `PATCH` to the same endpoint accepts `DnsCookieSettingsDetail.Enable`,\n`DnsCookieSettingsDetail.Require` and `DnsCookieSettingsDetail.SecretRotationInterval`; the last two fields are\nread-only cluster sync bookkeeping."
+        "description": "This record is the REST shape of the RFC 7873 DNS Cookie settings\n(configuration section `DnsServer:Cookies`) that `GET /api/dns-cookie-settings`\nreturns. A `PATCH` to the same endpoint accepts `enable`,\n`require` and `secretRotationInterval`; the last two fields are\nread-only cluster sync bookkeeping."
       },
       "DnsCryptSettingsDetail": {
         "type": "object",
@@ -27742,12 +27742,12 @@
           },
           "maxMessageSizeBytes": {
             "type": "integer",
-            "description": "The largest DNS message the transport accepts. Like `DnsOverHttpsSettingsDetail.Path`, it is captured\nwhen the route is mapped at startup, so a change needs a process restart.",
+            "description": "The largest DNS message the transport accepts. Like `path`, it is captured\nwhen the route is mapped at startup, so a change needs a process restart.",
             "format": "int32"
           }
         },
         "additionalProperties": false,
-        "description": "This record is the DNS-over-HTTPS settings that\n`GET /api/transport-settings/dns-over-https` returns, limited to the fields the server\nuses. The server serves the RFC 8484 GET and POST forms on the shared web listener, so\nthat listener's port, certificate and addresses (`DnsServer:Web`) apply. `Port`\nand `Certificate` belong to a self-hosted DNS-over-HTTPS listener, which this\nserver never starts, so they are left out rather than shown as if they had an effect; for\nthe same reason there is no `ListenAddresses`."
+        "description": "This record is the DNS-over-HTTPS settings that\n`GET /api/transport-settings/dns-over-https` returns, limited to the fields the server\nuses. The server serves the RFC 8484 GET and POST forms on the shared web listener, so\nthat listener's port, certificate and addresses (`DnsServer:Web`) apply. `port`\nand `certificate` belong to a self-hosted DNS-over-HTTPS listener, which this\nserver never starts, so they are left out rather than shown as if they had an effect; for\nthe same reason there is no `listenAddresses`."
       },
       "DnsOverQuicSettingsDetail": {
         "type": "object",
@@ -27931,7 +27931,7 @@
           },
           "clientIdentifier": {
             "type": "string",
-            "description": "The client's persistent identifier (a MAC address or DUID), resolved when the entry was\nwritten, or null when it was not resolved or the privacy level hides it\n(see `DnsQueryLogSubscriber`).",
+            "description": "The client's persistent identifier (a MAC address or DUID), resolved when the entry was\nwritten, or null when it was not resolved or the privacy level hides it.",
             "nullable": true
           },
           "clientProtocolVersion": {
@@ -28107,7 +28107,7 @@
           },
           "clientGroupId": {
             "type": "string",
-            "description": "The one client group the rewrite applies to, or null if it is global or\nscoped to a client. Read-only, like `DnsRewriteDetail.ClientId`.",
+            "description": "The one client group the rewrite applies to, or null if it is global or\nscoped to a client. Read-only, like `clientId`.",
             "format": "uuid",
             "nullable": true
           }
@@ -28163,7 +28163,7 @@
           },
           "target": {
             "type": "string",
-            "description": "An IP address (answered as an A or AAAA record) or another domain name (answered as a\nCNAME). It is checked with `DnsRewriteTargetClassifier.TryClassify`, the classifier\nused at query time, much as a record's `data` is checked when a record is written.",
+            "description": "An IP address (answered as an A or AAAA record) or another domain name (answered as a\nCNAME). It is checked with the same rule the server applies at query time, much as a\nrecord's `data` is checked when a record is written.",
             "nullable": true
           },
           "isDisabled": {
@@ -28282,7 +28282,7 @@
           },
           "isRetired": {
             "type": "boolean",
-            "description": "Whether the key has been withdrawn from the zone's DNSKEY RRset: true\nwhen `DnssecKeyDetail.LifecycleState` is `Removed`. It is the field\n`DnssecKeyWriteRequest.IsRetired` writes."
+            "description": "Whether the key has been withdrawn from the zone's DNSKEY RRset: true\nwhen `lifecycleState` is `Removed`. It is the field\n`DnssecKeyWriteRequest.isRetired` writes."
           },
           "comments": {
             "type": "string",
@@ -28332,12 +28332,12 @@
           },
           "dsDigest": {
             "type": "string",
-            "description": "The digest part of DsRecord on its own, as uppercase hexadecimal, for\nregistrars that ask for the key tag, algorithm, digest type and digest separately.",
+            "description": "The digest part of `dsRecord` on its own, as uppercase hexadecimal, for\nregistrars that ask for the key tag, algorithm, digest type and digest separately.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a DNSSEC key, as returned by the list, get and create endpoints under\n`/api/zones/{zoneId}/dnssec-keys`. It never includes the private key. Unlike a TSIG\nsecret or a cloud provider credential, a DNSSEC private key never needs to leave the\nserver: it is used only for signing inside `Server.Authoritative`, stays encrypted at\nrest and is never exposed over REST."
+        "description": "This class carries a DNSSEC key, as returned by the list, get and create endpoints under\n`/api/zones/{zoneId}/dnssec-keys`. It never includes the private key. Unlike a TSIG\nsecret or a cloud provider credential, a DNSSEC private key never needs to leave the\nserver: it is used only for signing inside the server, stays encrypted at\nrest and is never exposed over REST."
       },
       "DnssecKeyDetailPagedResult": {
         "type": "object",
@@ -28399,7 +28399,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to start an automated RFC 6781 key rollover for an\nactive key (`POST /api/zones/{zoneId}/dnssec-keys/{id}/roll`). The scheme follows from\nthe key's `Role`: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature\n(RFC 6781 §4.1.2) for a KSK. The other scheme cannot be requested."
+        "description": "This class carries the fields used to start an automated RFC 6781 key rollover for an\nactive key (`POST /api/zones/{zoneId}/dnssec-keys/{id}/roll`). The scheme follows from\nthe key's `role`: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature\n(RFC 6781 §4.1.2) for a KSK. The other scheme cannot be requested."
       },
       "DnssecKeyRolloverSettingsDetail": {
         "type": "object",
@@ -28462,7 +28462,7 @@
           },
           "isConnected": {
             "type": "boolean",
-            "description": "Whether the active broker transport reports itself connected, or null\nwhen `EventBrokerSettingsDetail.Transport` is `EventTransportEnum.InMemory`, where\n\"connected\" has no meaning.",
+            "description": "Whether the active broker transport reports itself connected, or null\nwhen `transport` is `InMemory`, where\n\"connected\" has no meaning.",
             "nullable": true
           },
           "rabbitMq": {
@@ -28479,13 +28479,13 @@
           },
           "originatingNodeId": {
             "type": "string",
-            "description": "The cluster node the settings were last written on, or null together\nwith `EventBrokerSettingsDetail.LastModifiedUtc`.",
+            "description": "The cluster node the settings were last written on, or null together\nwith `lastModifiedUtc`.",
             "format": "uuid",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the event transport configuration that `GET /api/event-broker-settings`\nreturns. Only the section matching `EventBrokerSettingsDetail.Transport` is filled in; the other is\nnull. A broker that was not selected never had its options configured,\nso reporting its settings would return compiled-in defaults that look like live\nconfiguration."
+        "description": "This record is the event transport configuration that `GET /api/event-broker-settings`\nreturns. Only the section matching `transport` is filled in; the other is\nnull. A broker that was not selected never had its options configured,\nso reporting its settings would return compiled-in defaults that look like live\nconfiguration."
       },
       "EventTransportEnum": {
         "enum": [
@@ -28552,7 +28552,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a block or allow list without its entries, as returned by the list, get\nand write endpoints of `/api/filter-lists`. `LastFetchedAtUtc` is when a\nsubscribed list was last fetched, and `OriginatingNodeId` the cluster node the list\nwas last written on."
+        "description": "This class carries a block or allow list without its entries, as returned by the list, get\nand write endpoints of `/api/filter-lists`. `lastFetchedAtUtc` is when a\nsubscribed list was last fetched, and `originatingNodeId` the cluster node the list\nwas last written on."
       },
       "FilterListDetailPagedResult": {
         "type": "object",
@@ -28625,7 +28625,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries one filter list entry, as returned by the list, get and write endpoints\nunder `/api/filter-lists/{listId}/entries`. `IsException` marks an exception (an adblock-syntax `@@`\nrule from a subscribed list) that lets a name through even though another entry in the\nsame list covers it; only a subscribed list's refresh ever sets it, so it is not part of\n`FilterListEntryWriteRequest`."
+        "description": "This class carries one filter list entry, as returned by the list, get and write endpoints\nunder `/api/filter-lists/{listId}/entries`. `isException` marks an exception (an\nadblock-syntax `@@` rule from a subscribed list) that lets a name through even though\nanother entry in the same list covers it; only a subscribed list's refresh ever sets it, so\nit is not part of `FilterListEntryWriteRequest`."
       },
       "FilterListEntryDetailPagedResult": {
         "type": "object",
@@ -28662,7 +28662,7 @@
         "properties": {
           "value": {
             "type": "string",
-            "description": "The entry's value: a domain name, wildcard or regular expression (by `FilterListEntryWriteRequest.Kind`)\nin a `DnsFilterListKindEnum.Domain` list, or an IP address or CIDR network in\na `DnsFilterListKindEnum.ResponseIp` or\n`DnsFilterListKindEnum.ClientSource` list, where `FilterListEntryWriteRequest.Kind` must be\n`DnsFilterEntryKindEnum.Domain` (the default).",
+            "description": "The entry's value: a domain name, wildcard or regular expression (by `kind`)\nin a `Domain` list, or an IP address or CIDR network in\na `ResponseIp` or\n`ClientSource` list, where `kind` must be\n`Domain` (the default).",
             "nullable": true
           },
           "comment": {
@@ -28675,7 +28675,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to create or replace an entry in a\n`DnsFilterListSourceEnum.Local` list (`POST` and `PUT` under\n`/api/filter-lists/{listId}/entries`). Every write to the entries of a\n`DnsFilterListSourceEnum.Subscribed` list is rejected with 409."
+        "description": "This class carries the fields used to create or replace an entry in a\n`Local` list (`POST` and `PUT` under\n`/api/filter-lists/{listId}/entries`). Every write to the entries of a\n`Subscribed` list is rejected with 409."
       },
       "FilterListWriteRequest": {
         "type": "object",
@@ -28696,12 +28696,12 @@
           },
           "subscriptionUrl": {
             "type": "string",
-            "description": "The URL a `DnsFilterListSourceEnum.Subscribed` list's entries are fetched\nfrom. Required for a subscribed list, otherwise ignored.",
+            "description": "The URL a `Subscribed` list's entries are fetched\nfrom. Required for a subscribed list, otherwise ignored.",
             "nullable": true
           },
           "refreshInterval": {
             "type": "string",
-            "description": "How often a `DnsFilterListSourceEnum.Subscribed` list is fetched again.\n`null` means every 24 hours. The minimum is one hour (`01:00:00`); a smaller\nvalue is rejected with 400. Ignored for a `DnsFilterListSourceEnum.Local` list.",
+            "description": "How often a `Subscribed` list is fetched again.\n`null` means every 24 hours. The minimum is one hour (`01:00:00`); a smaller\nvalue is rejected with 400. Ignored for a `Local` list.",
             "format": "date-span",
             "nullable": true
           },
@@ -28748,7 +28748,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The domains to test `FilterPatternPreviewRequest.Value` against. When omitted or empty, the small built-in\nset of ten sample domains is used. At most 20 domains\nare accepted, each non-blank and at most 253 characters; anything else is rejected with 400.",
+            "description": "The domains to test `value` against. When omitted or empty, the small built-in\nset of ten sample domains is used. At most 20 domains\nare accepted, each non-blank and at most 253 characters; anything else is rejected with 400.",
             "nullable": true
           }
         },
@@ -28760,11 +28760,11 @@
         "properties": {
           "isValid": {
             "type": "boolean",
-            "description": "Whether `FilterPatternPreviewRequest.Value` compiles as the requested\n`FilterPatternPreviewRequest.Kind`, using the same check that\n`POST /api/filter-lists/{listId}/entries` applies before saving a\n`DnsFilterEntryKindEnum.Wildcard` or\n`DnsFilterEntryKindEnum.Regex` entry."
+            "description": "Whether `FilterPatternPreviewRequest.value` compiles as the requested\n`FilterPatternPreviewRequest.kind`, using the same check that\n`POST /api/filter-lists/{listId}/entries` applies before saving a\n`Wildcard` or\n`Regex` entry."
           },
           "error": {
             "type": "string",
-            "description": "A human-readable reason `FilterPatternPreviewResult.IsValid` is false, or null when it is true.",
+            "description": "A human-readable reason `isValid` is false, or null when it is true.",
             "nullable": true
           },
           "matches": {
@@ -28772,7 +28772,7 @@
             "items": {
               "$ref": "#/components/schemas/FilterPatternPreviewMatch"
             },
-            "description": "Each sample domain tested and whether the pattern matched it. Empty when\n`FilterPatternPreviewResult.IsValid` is false, since a pattern that does not compile is\nnot tested.",
+            "description": "Each sample domain tested and whether the pattern matched it. Empty when\n`isValid` is false, since a pattern that does not compile is\nnot tested.",
             "nullable": true
           }
         },
@@ -28837,7 +28837,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the response of `POST /api/auth/forgot-password`.\n`ForgotPasswordResult.Message` is the same whether or not a reset link was sent, so a caller cannot\ntell the two apart."
+        "description": "This class carries the response of `POST /api/auth/forgot-password`.\n`message` is the same whether or not a reset link was sent, so a caller cannot\ntell the two apart."
       },
       "ForwarderDetail": {
         "type": "object",
@@ -29048,19 +29048,19 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the password complexity policy that `GET /api/identity-settings`\nreturns, from ASP.NET Core Identity's `Identity:Password` settings, plus three\ndeprecated lockout fields from `Identity:Lockout` that have no effect\nand stay only so existing callers keep working. Swashbuckle marks them\n`deprecated` in the OpenAPI document because of their\nSystem.ObsoleteAttribute. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.\nThe `Identity:User`, `Identity:SignIn`, `Identity:Tokens`,\n`Identity:ClaimsIdentity` and `Identity:Stores` settings are left out: they are\nstructural choices the identity wiring depends on (unique e-mail enforcement, for example,\nwhich rejects an account with no e-mail), not policy to tune."
+        "description": "This record is the password complexity policy that `GET /api/identity-settings`\nreturns, from ASP.NET Core Identity's `Identity:Password` settings, plus three\ndeprecated lockout fields from `Identity:Lockout` that have no effect\nand stay only so existing callers keep working. Swashbuckle marks them\n`deprecated` in the OpenAPI document because they are obsolete. Nothing in it is\nsecret, so a `PATCH` to the same endpoint accepts the same fields. The\n`Identity:User`, `Identity:SignIn`, `Identity:Tokens`,\n`Identity:ClaimsIdentity` and `Identity:Stores` settings are left out: they are\nstructural choices the identity wiring depends on (unique e-mail enforcement, for example,\nwhich rejects an account with no e-mail), not policy to tune."
       },
       "InstantPauseRequest": {
         "type": "object",
         "properties": {
           "durationMinutes": {
             "type": "integer",
-            "description": "How many minutes from now to pause for. Zero or a negative number is rejected with a\n`400` (`ValidationException`).",
+            "description": "How many minutes from now to pause for. Zero or a negative number is rejected with a\n`400`.",
             "format": "int32"
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to start an instant pause\n(`POST /api/clients/{id}/pause` and `POST /api/client-groups/{id}/pause`). It\ntakes a duration rather than a timestamp because the UI offers one-click choices such as\n\"15 minutes\" or \"1 hour\", and a duration needs no reasoning about the caller's time zone or\nclock. The server sets `PausedUntilUtc` to its current time plus the duration."
+        "description": "This class carries the fields used to start an instant pause\n(`POST /api/clients/{id}/pause` and `POST /api/client-groups/{id}/pause`). It\ntakes a duration rather than a timestamp because the UI offers one-click choices such as\n\"15 minutes\" or \"1 hour\", and a duration needs no reasoning about the caller's time zone or\nclock. The server sets `pausedUntilUtc` to its current time plus the duration."
       },
       "InternetProtocolVersionEnum": {
         "enum": [
@@ -29094,7 +29094,7 @@
           },
           "rememberMe": {
             "type": "boolean",
-            "description": "With `RefreshTokenDeliveryEnum.Cookie` delivery, whether the session should\noutlive the browser: a persistent cookie and the long refresh lifetime when\ntrue, otherwise a browser-session cookie and the short browser-session\nlifetime. Ignored for `RefreshTokenDeliveryEnum.Body` delivery, whose sessions\nare always long-lived."
+            "description": "With `Cookie` delivery, whether the session should\noutlive the browser: a persistent cookie and the long refresh lifetime when\ntrue, otherwise a browser-session cookie and the short browser-session\nlifetime. Ignored for `Body` delivery, whose sessions\nare always long-lived."
           },
           "refreshTokenDelivery": {
             "$ref": "#/components/schemas/RefreshTokenDeliveryEnum"
@@ -29112,7 +29112,7 @@
           },
           "mfaToken": {
             "type": "string",
-            "description": "An opaque, short-lived token identifying this pending sign-in, to be echoed back to\n`POST /api/auth/login/two-factor`. Only set when `LoginResponse.RequiresTwoFactor` is\ntrue.",
+            "description": "An opaque, short-lived token identifying this pending sign-in, to be echoed back to\n`POST /api/auth/login/two-factor`. Only set when `requiresTwoFactor` is\ntrue.",
             "nullable": true
           },
           "accessToken": {
@@ -29122,7 +29122,7 @@
           },
           "expiresAtUtc": {
             "type": "string",
-            "description": "The UTC date and time `LoginResponse.AccessToken` expires.",
+            "description": "The UTC date and time `accessToken` expires.",
             "format": "date-time",
             "nullable": true
           },
@@ -29133,7 +29133,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the outcome of a sign-in attempt. One of two shapes applies: either `LoginResponse.RequiresTwoFactor` is true and\n`LoginResponse.MfaToken` is set (the caller must next call\n`POST /api/auth/login/two-factor`), or a full `LoginResponse.AccessToken`/\n`LoginResponse.RefreshToken` pair is set because sign-in is already complete."
+        "description": "This class carries the outcome of a sign-in attempt. One of two shapes applies: either\n`requiresTwoFactor` is true and `mfaToken` is set (the caller\nmust next call `POST /api/auth/login/two-factor`), or a full `accessToken`/\n`refreshToken` pair is set because sign-in is already complete."
       },
       "MacVendorDataSourceEnum": {
         "enum": [
@@ -29248,7 +29248,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the MAC vendor lookup settings (configuration section\n`DnsServer:MacVendorLookup`) that `GET /api/mac-vendor-settings` returns, with a\nread-only report of the vendor data loaded. A `PATCH` to the same endpoint accepts\nevery settings field except DataFilePath, a path read once at startup\nthat, like other state paths, is set only in the configuration file."
+        "description": "This record is the MAC vendor lookup settings (configuration section\n`DnsServer:MacVendorLookup`) that `GET /api/mac-vendor-settings` returns, with a\nread-only report of the vendor data loaded. A `PATCH` to the same endpoint accepts\nevery settings field except `dataFilePath`, a path read once at startup\nthat, like other state paths, is set only in the configuration file."
       },
       "ManagedServiceCategoryEnum": {
         "enum": [
@@ -29347,7 +29347,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the OpenID Connect single sign-on settings (configuration section\n`Identity:Sso`) that `GET /api/sso-settings` returns. The client secret is never\nreturned, as with every other secret; `OidcSsoSettingsDetail.ClientSecretConfigured` says whether one\nis set. A `PATCH` accepts these fields with `clientSecret` in place of\n`OidcSsoSettingsDetail.ClientSecretConfigured`."
+        "description": "This record is the OpenID Connect single sign-on settings (configuration section\n`Identity:Sso`) that `GET /api/sso-settings` returns. The client secret is never\nreturned, as with every other secret; `clientSecretConfigured` says whether one\nis set. A `PATCH` accepts these fields with `clientSecret` in place of\n`clientSecretConfigured`."
       },
       "OutboundQuerySettingsDetail": {
         "type": "object",
@@ -29426,7 +29426,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the plain DNS transport settings (configuration section\n`DnsServer:Protocol:Plain`) that `GET /api/transport-settings/plain` returns. It\nhas no `Enable` field because plain DNS has none: it is the baseline transport and\nalways starts. Every field needs a listener restart."
+        "description": "This record is the plain DNS transport settings (configuration section\n`DnsServer:Protocol:Plain`) that `GET /api/transport-settings/plain` returns. It\nhas no `enable` field because plain DNS has none: it is the baseline transport and\nalways starts. Every field needs a listener restart."
       },
       "PresetApplyResult": {
         "type": "object",
@@ -29475,7 +29475,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record summarizes one built-in `PresetDefinition`\nfor `GET /api/presets`. It leaves out the individual settings, since a preset is\napplied as a whole, not inspected field by field."
+        "description": "This record summarizes one built-in preset for `GET /api/presets`. It leaves out the\nindividual settings, since a preset is applied as a whole, not inspected field by field."
       },
       "PtrSyncSettingsDetail": {
         "type": "object",
@@ -29496,7 +29496,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the PTR sync defaults (configuration section\n`DnsServer:Authoritative:PtrSync`) that `GET /api/ptr-sync-settings` returns:\nwhether the A and AAAA records of a `ZoneTypeEnum.Primary` or\n`ZoneTypeEnum.CloudPrimary` zone are mirrored as PTR records into the matching reverse\nzone, and how reverse zones are sized. Each applies when the zone's own setting is unset. A\n`PATCH` to the same endpoint accepts the same fields."
+        "description": "This record is the REST shape of the PTR sync defaults (configuration section\n`DnsServer:Authoritative:PtrSync`) that `GET /api/ptr-sync-settings` returns:\nwhether the A and AAAA records of a `Primary` or `CloudPrimary` zone are mirrored\nas PTR records into the matching reverse zone, and how reverse zones are sized. Each applies\nwhen the zone's own setting is unset. A `PATCH` to the same endpoint accepts the same\nfields."
       },
       "QueryLogClearResult": {
         "type": "object",
@@ -29589,7 +29589,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record carries the RabbitMQ event broker settings (configuration section\n`DnsServer:Events:RabbitMq`) without `Password`. A `GET` never returns the\npassword, as with every other secret, even though this one is stored in the plaintext\nconfiguration file rather than encrypted like the SMTP password."
+        "description": "This record carries the RabbitMQ event broker settings (configuration section\n`DnsServer:Events:RabbitMq`) without `password`. A `GET` never returns the\npassword, as with every other secret, even though this one is stored in the plaintext\nconfiguration file rather than encrypted like the SMTP password."
       },
       "RateLimitingSettingsDetail": {
         "type": "object",
@@ -29803,12 +29803,12 @@
             "items": {
               "type": "string"
             },
-            "description": "The 10 new codes, each usable once at `POST /api/auth/login/two-factor` with\n`\"RecoveryCode\"` as the `TwoFactorLoginRequest.Provider`. Generating a\nbatch invalidates every code from earlier batches.",
+            "description": "The 10 new codes, each usable once at `POST /api/auth/login/two-factor` with\n`\"RecoveryCode\"` as the `TwoFactorLoginRequest.provider`. Generating a\nbatch invalidates every code from earlier batches.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a new batch of single-use recovery codes\n(`POST /api/auth/two-factor/recovery-codes/generate`, which requires two-factor\nauthentication to be enabled). They are a fallback when the authenticator app or e-mail is\nunavailable. Like every generated secret (a TSIG key's secret, a webhook's signing\nsecret), they are shown once, in this response; afterwards only\n`TwoFactorStatus.RecoveryCodesRemaining` reports on them."
+        "description": "This class carries a new batch of single-use recovery codes\n(`POST /api/auth/two-factor/recovery-codes/generate`, which requires two-factor\nauthentication to be enabled). They are a fallback when the authenticator app or e-mail is\nunavailable. Like every generated secret (a TSIG key's secret, a webhook's signing\nsecret), they are shown once, in this response; afterwards only\n`TwoFactorStatus.recoveryCodesRemaining` reports on them."
       },
       "RecursiveRootHintServerDetail": {
         "type": "object",
@@ -29826,7 +29826,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is one `RootHintServerOption` entry in\n`RecursiveSettingsDetail.RootHintServersOverride`: a root server's name and\naddresses. An empty override list uses the built-in internet root hints."
+        "description": "This record is one entry in\n`RecursiveSettingsDetail.rootHintServersOverride`: a root server's name and\naddresses. An empty override list uses the built-in internet root hints."
       },
       "RecursiveSettingsDetail": {
         "type": "object",
@@ -29930,7 +29930,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the recursive resolver settings\n(configuration section `DnsServer:Recursive`) that `GET /api/recursive-settings`\nreturns. A `PATCH` to the same endpoint accepts the same fields. The two override lists\nare read once at startup or first seed, so the GET shows the saved lists, which may not be\nthe ones in use; every other field takes effect at once. The default of each field is in the\nconfiguration section `DnsServer:Recursive`.\n\n`InsecureDomains` is the list of Insecure domains (negative trust anchors) in\n    force: a query for a name at or below one skips DNSSEC validation and is never answered\n    with AD. It is the built-in list while `UseCustomInsecureDomains` is\n    false. A `PATCH` with an array replaces the whole list and makes\n    it custom; a `PATCH` with null restores the built-in list.\n    `BuiltInInsecureDomains` is that built-in list (`home.arpa`,\n    `resolver.arpa`, `service.arpa`, `internal` and the locally-served\n    reverse zones of RFC 6303), for comparison and for a \"restore defaults\" action; it is\n    read-only.\n`EnableRecursion` turns on recursive service for every client, by iterating from\n    the root and by forwarding to the configured forwarders (forwarding also needs its own\n    switch). While it is off, an access rule granting recursion access still lets\n    particular clients use both."
+        "description": "This record is the REST shape of the recursive resolver settings\n(configuration section `DnsServer:Recursive`) that `GET /api/recursive-settings`\nreturns. A `PATCH` to the same endpoint accepts the same fields. The two override lists\nare read once at startup or first seed, so the GET shows the saved lists, which may not be\nthe ones in use; every other field takes effect at once. The defaults of the fields are\nlisted in `ENVIRONMENT.md`, in the `NINLIL_DNS_SERVER_RECURSIVE_*` rows.\n\n`insecureDomains` is the list of Insecure domains (negative trust anchors) in\n    force: a query for a name at or below one skips DNSSEC validation and is never answered\n    with AD. It is the built-in list while `useCustomInsecureDomains` is\n    false. A `PATCH` with an array replaces the whole list and makes\n    it custom; a `PATCH` with null restores the built-in list.\n    `builtInInsecureDomains` is that built-in list (`home.arpa`,\n    `resolver.arpa`, `service.arpa`, `internal` and the locally-served\n    reverse zones of RFC 6303), for comparison and for a \"restore defaults\" action; it is\n    read-only.\n`enableRecursion` turns on recursive service for every client, by iterating from\n    the root and by forwarding to the configured forwarders (forwarding also needs its own\n    switch). While it is off, an access rule granting recursion access still lets\n    particular clients use both."
       },
       "RecursiveTrustAnchorDetail": {
         "type": "object",
@@ -29952,7 +29952,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is one `TrustAnchorOption` entry in\n`RecursiveSettingsDetail.TrustAnchorsOverride`: a root DS record given as key\ntag, algorithm, digest type and hex digest. An empty override list uses the IANA root\nanchors. The list only seeds the trust anchor store when its state file is missing."
+        "description": "This record is one entry in\n`RecursiveSettingsDetail.trustAnchorsOverride`: a root DS record given as key\ntag, algorithm, digest type and hex digest. An empty override list uses the IANA root\nanchors. The list only seeds the trust anchor store when its state file is missing."
       },
       "RefreshRequest": {
         "type": "object",
@@ -30003,12 +30003,12 @@
           },
           "encryptionMode": {
             "type": "string",
-            "description": "The engine's connection encryption mode, as the name of one of its driver's values (see\n`StorageConnectionStringAssembler`).",
+            "description": "The engine's connection encryption mode, as the name of one of its driver's values.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record carries the connection fields `POST /api/storage/switch` accepts for a\nPostgreSQL, MySQL or SQL Server target; the three server engines share this shape. The\naccepted `RelationalStorageConnectionFields.EncryptionMode` values differ by engine: each is checked against\nthat engine's driver enum by\n`StorageConnectionStringAssembler`, which lists them."
+        "description": "This record carries the connection fields `POST /api/storage/switch` accepts for a\nPostgreSQL, MySQL or SQL Server target; the three server engines share this shape. The\naccepted `encryptionMode` values differ by engine: each is checked against\nthat engine's driver enum, and the error for a wrong value lists them."
       },
       "ReverseProxySettingsDetail": {
         "type": "object",
@@ -30053,13 +30053,13 @@
           },
           "originatingNodeId": {
             "type": "string",
-            "description": "The cluster node the settings were last written on, or null together\nwith `ReverseProxySettingsDetail.LastModifiedUtc`.",
+            "description": "The cluster node the settings were last written on, or null together\nwith `lastModifiedUtc`.",
             "format": "uuid",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the reverse proxy trust configuration that\n`GET /api/reverse-proxy-settings` returns. The shared secret is never returned;\n`ReverseProxySettingsDetail.SharedSecretConfigured` says whether one is set, as\n`TwoFactorStatus.HasAuthenticator` does for an authenticator. A `PATCH` accepts\nthese fields with `sharedSecret` in place of `ReverseProxySettingsDetail.SharedSecretConfigured`;\nthe last two fields are read-only."
+        "description": "This record is the reverse proxy trust configuration that\n`GET /api/reverse-proxy-settings` returns. The shared secret is never returned;\n`sharedSecretConfigured` says whether one is set, as `hasAuthenticator` does in\nthe two-factor status. A `PATCH` accepts these fields with `sharedSecret` in place\nof `sharedSecretConfigured`; the last two fields are read-only."
       },
       "RewriteSettingsDetail": {
         "type": "object",
@@ -30248,7 +30248,7 @@
         "properties": {
           "enableAutomaticCheck": {
             "type": "boolean",
-            "description": "Whether the server checks `SelfUpdateSettingsDetail.ReleaseFeedUrl` periodically. Defaults to true."
+            "description": "Whether the server checks `releaseFeedUrl` periodically. Defaults to true."
           },
           "releaseFeedUrl": {
             "type": "string",
@@ -30283,7 +30283,7 @@
           },
           "updateAvailable": {
             "type": "boolean",
-            "description": "Whether a release newer than CurrentVersion is known."
+            "description": "Whether a release newer than `currentVersion` is known."
           },
           "releaseUrl": {
             "type": "string",
@@ -30366,7 +30366,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the SMTP settings (configuration section `Email`) that\n`GET /api/smtp-settings` returns: the server e-mail is sent through, for two-factor\ncodes and password reset links. A `PATCH` accepts these fields with `password`\nin place of `SmtpSettingsDetail.PasswordConfigured`."
+        "description": "This record is the SMTP settings (configuration section `email`) that\n`GET /api/smtp-settings` returns: the server e-mail is sent through, for two-factor\ncodes and password reset links. A `PATCH` accepts these fields with `password`\nin place of `passwordConfigured`."
       },
       "SqliteStorageConnectionFields": {
         "type": "object",
@@ -30421,7 +30421,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries one health check's result, as listed in\n`StatusResponse.Components`."
+        "description": "This class carries one health check's result, as listed in\n`StatusResponse.components`."
       },
       "StatusResponse": {
         "type": "object",
@@ -30441,7 +30441,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the response of `GET /status`. A caller without the\n`status:read` permission, including an anonymous one, gets only `StatusResponse.Status`,\nwith `StatusResponse.Componentsnull`. A caller with it gets both.\n`StatusResponse.Status` is aggregated from the same health checks the components report."
+        "description": "This class carries the response of `GET /status`. A caller without the\n`status:read` permission, including an anonymous one, gets only `status`,\nwith `components`null. A caller with it gets both.\n`status` is aggregated from the same health checks the components report."
       },
       "StorageEngineEnum": {
         "enum": [
@@ -30473,7 +30473,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the request body of `POST /api/storage/switch`: structured connection\nfields per engine rather than a free-text connection string. Only the section matching\n`StorageEngineSwitchApiRequest.TargetEngine` needs to be filled in;\n`StorageConnectionStringAssembler` reads that section and\nignores the others."
+        "description": "This record is the request body of `POST /api/storage/switch`: structured connection\nfields per engine rather than a free-text connection string. Only the section matching\n`targetEngine` needs to be filled in; the server reads that section and ignores the\nothers."
       },
       "StoragePrimaryStatus": {
         "type": "object",
@@ -30537,7 +30537,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The `host:port` entries of the read connection. Empty on MongoDB, where the replica\nset members are the primary's hosts and ReadPreference chooses among\nthem.",
+            "description": "The `host:port` entries of the read connection. Empty on MongoDB, where the replica\nset members are the primary's hosts and `readPreference` chooses among\nthem.",
             "nullable": true
           },
           "readPreference": {
@@ -30566,7 +30566,7 @@
             "items": {
               "$ref": "#/components/schemas/StorageEngineEnum"
             },
-            "description": "The engines `POST /api/storage/switch` accepts as a target: the four relational\nengines Entity Framework Core serves with one model.\n`StorageEngineEnum.MongoDb` is not among them. It uses a separate repository\nimplementation chosen at startup.",
+            "description": "The engines `POST /api/storage/switch` accepts as a target: the four relational\nengines Entity Framework Core serves with one model.\n`MongoDb` is not among them. It uses a separate repository\nimplementation chosen at startup.",
             "nullable": true
           },
           "primary": {
@@ -30632,7 +30632,7 @@
           },
           "appliesAutomatically": {
             "type": "boolean",
-            "description": "True when the runtime configuration file decides the storage settings, so Ninlil points it\nat the target itself during the copy. False when an environment variable or another\nconfiguration source decides; Note then names what to set."
+            "description": "True when the runtime configuration file decides the storage settings, so Ninlil points it\nat the target itself during the copy. False when an environment variable or another\nconfiguration source decides; `note` then names what to set."
           },
           "targetHasData": {
             "type": "boolean",
@@ -30664,7 +30664,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The subject alternative names of the self-signed certificate, which is generated only when\n`TlsCertificateSettingsDetail.PfxPath` is empty.",
+            "description": "The subject alternative names of the self-signed certificate, which is generated only when\n`pfxPath` is empty.",
             "nullable": true
           },
           "certificateReloadPollInterval": {
@@ -30677,12 +30677,12 @@
             "items": {
               "type": "string"
             },
-            "description": "The TLS protocol versions the handshake accepts, by name (for example\n`[\"Tls12\", \"Tls13\"]`). An empty list means\nSystem.Security.Authentication.SslProtocols.None: the operating system picks\nits default.",
+            "description": "The TLS protocol versions the handshake accepts, by name (for example\n`[\"Tls12\", \"Tls13\"]`). An empty list means\n`None`: the operating system picks\nits default.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the server certificate configuration of a TLS-based transport\n(the `Certificate` section of the transport's settings), used by DNS-over-TLS and\nDNS-over-QUIC. DNS-over-HTTPS runs on the shared Kestrel listener and uses its certificate,\nso it has no such field (see `DnsOverHttpsSettingsDetail`). The web listener\nuses the same shape: a PFX file path, or a self-signed certificate the server manages. Key\nmaterial cannot be uploaded through the API."
+        "description": "This record is the server certificate configuration of a TLS-based transport\n(the `certificate` section of the transport's settings), used by DNS-over-TLS and\nDNS-over-QUIC. DNS-over-HTTPS runs on the shared Kestrel listener and uses its certificate,\nso it has no such field (see `DnsOverHttpsSettingsDetail`). The web listener\nuses the same shape: a PFX file path, or a self-signed certificate the server manages. Key\nmaterial cannot be uploaded through the API."
       },
       "TsigKeyCreateRequest": {
         "type": "object",
@@ -30728,7 +30728,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a newly created TSIG key with its plaintext shared secret. It is the\nonly response that includes `TsigKeyCreateResponse.Secret`: like every secret-bearing entity, a\nsecret is revealed once at creation and omitted afterwards."
+        "description": "This class carries a newly created TSIG key with its plaintext shared secret. It is the\nonly response that includes `secret`: like every secret-bearing entity, a\nsecret is revealed once at creation and omitted afterwards."
       },
       "TsigKeyDetail": {
         "type": "object",
@@ -30837,7 +30837,7 @@
         "properties": {
           "defaultFudgeSeconds": {
             "type": "integer",
-            "description": "The fudge, in seconds. The options property is a System.UInt16, but it is shown as\nan System.Int32 because JSON has no unsigned 16-bit type; a `PATCH` rejects\nvalues outside 0 to 65535.",
+            "description": "The fudge, in seconds, from 0 to 65535. A `PATCH` rejects values outside that range.",
             "format": "int32"
           }
         },
@@ -30861,7 +30861,7 @@
         "properties": {
           "mfaToken": {
             "type": "string",
-            "description": "The opaque token `LoginResponse.MfaToken` returned.",
+            "description": "The opaque token `LoginResponse.mfaToken` returned.",
             "nullable": true
           }
         },
@@ -30873,7 +30873,7 @@
         "properties": {
           "mfaToken": {
             "type": "string",
-            "description": "The opaque token `LoginResponse.MfaToken` returned.",
+            "description": "The opaque token `LoginResponse.mfaToken` returned.",
             "nullable": true
           },
           "code": {
@@ -30883,19 +30883,19 @@
           },
           "provider": {
             "type": "string",
-            "description": "Which second factor Code comes from: `\"Authenticator\"`,\n`\"Email\"` or `\"RecoveryCode\"`. A recovery code is one of the caller's single-use\nfallback codes from `POST /api/auth/two-factor/recovery-codes/generate`; this call\nredeems it, so it cannot be used again. Any other value is treated as\n`\"Authenticator\"`.",
+            "description": "Which second factor `code` comes from: `\"Authenticator\"`,\n`\"Email\"` or `\"RecoveryCode\"`. A recovery code is one of the caller's single-use\nfallback codes from `POST /api/auth/two-factor/recovery-codes/generate`; this call\nredeems it, so it cannot be used again. Any other value is treated as\n`\"Authenticator\"`.",
             "nullable": true
           },
           "rememberMe": {
             "type": "boolean",
-            "description": "The same choice `LoginRequest.RememberMe` describes, repeated for this final step."
+            "description": "The same choice `LoginRequest.rememberMe` describes, repeated for this final step."
           },
           "refreshTokenDelivery": {
             "$ref": "#/components/schemas/RefreshTokenDeliveryEnum"
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the second-factor code a caller submits to finish a sign-in that\n`LoginResponse.RequiresTwoFactor` flagged as still pending."
+        "description": "This class carries the second-factor code a caller submits to finish a sign-in that\n`LoginResponse.requiresTwoFactor` flagged as still pending."
       },
       "TwoFactorStatus": {
         "type": "object",
@@ -31047,7 +31047,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the caller's self-service profile, read through\n`GET /api/users/me` and changed through\n`PATCH /api/users/me`, which accepts only the display name\nand phone number. `UserProfileDetail.Email` is shown, and lets the Profile page compute the\nGravatar hash, but `PATCH /api/users/me` ignores it: the\naddress changes only through `POST /api/users/me/email`,\nwhich needs the current password. An administrator can change it through\n`UpdateUserRequest`."
+        "description": "This class carries the caller's self-service profile, read through\n`GET /api/users/me` and changed through\n`PATCH /api/users/me`, which accepts only the display name\nand phone number. `email` is shown, and lets the Profile page compute the\nGravatar hash, but `PATCH /api/users/me` ignores it: the\naddress changes only through `POST /api/users/me/email`,\nwhich needs the current password. An administrator can change it through\n`UpdateUserRequest`."
       },
       "UserRoleAssignmentRequest": {
         "type": "object",
@@ -31105,12 +31105,12 @@
             "items": {
               "type": "string"
             },
-            "description": "The permissions granted to the account directly, not through a role (the counterpart of\n`RoleSummary.Permissions`).",
+            "description": "The permissions granted to the account directly, not through a role (the counterpart of\n`RoleSummary.permissions`).",
             "nullable": true
           },
           "originatingNodeId": {
             "type": "string",
-            "description": "The cluster node the account was last created or modified on, or null\nif it was never written with clustering enabled. The admin console shows it with\n`UserSummary.LastModifiedUtc` in `ClusterSyncInfoComponent`, as for other synced\nentities.",
+            "description": "The cluster node the account was last created or modified on, or null\nif it was never written with clustering enabled. The admin console shows it with\n`lastModifiedUtc`, as for other synced entities.",
             "format": "uuid",
             "nullable": true
           },
@@ -31121,7 +31121,7 @@
           },
           "lastModifiedUtc": {
             "type": "string",
-            "description": "When the account was last created or modified\n(`AuditableEntityBaseExtensions.GetLastModifiedUtc()`).",
+            "description": "When the account was last created or modified\n(the later of its creation and update times).",
             "format": "date-time",
             "nullable": true
           }
@@ -31185,7 +31185,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the web listener settings (configuration section `DnsServer:Web`) that\n`GET /api/web-listen-settings` returns: the ports and certificate shared by the REST\nAPI, the SignalR hub and DNS-over-HTTPS. A `PATCH` accepts the same fields, with the\ncertificate password in place of `PfxPasswordConfigured`. Every change needs a process\nrestart (see `RuntimeSettingsWriteResult.WebListenRestartRequiredNote`)."
+        "description": "This record is the web listener settings (configuration section `DnsServer:Web`) that\n`GET /api/web-listen-settings` returns: the ports and certificate shared by the REST\nAPI, the SignalR hub and DNS-over-HTTPS. A `PATCH` accepts the same fields, with the\ncertificate password in place of `pfxPasswordConfigured`. Every change needs a process\nrestart, because the HTTP and HTTPS sockets are bound once, at startup."
       },
       "WebhookAuthModeEnum": {
         "enum": [
@@ -31233,7 +31233,7 @@
           },
           "maxAttempts": {
             "type": "integer",
-            "description": "The most attempts the delivery may make: the subscription's\n`WebhookSubscriptionDetail.MaxDeliveryAttempts` when the delivery was created.",
+            "description": "The most attempts the delivery may make: the subscription's\n`WebhookSubscriptionDetail.maxDeliveryAttempts` when the delivery was created.",
             "format": "int32"
           },
           "lastAttemptedAtUtc": {
@@ -31244,7 +31244,7 @@
           },
           "nextRetryDueUtc": {
             "type": "string",
-            "description": "When the next retry is due, or null once `WebhookDeliveryAttemptDetail.Status` is final.",
+            "description": "When the next retry is due, or null once `status` is final.",
             "format": "date-time",
             "nullable": true
           },
@@ -31364,7 +31364,7 @@
               "type": "string",
               "nullable": true
             },
-            "description": "The delivery POST's credentials, required when `WebhookSubscriptionCreateRequest.AuthMode` is not `None`:\n`{\"BearerToken\":\"...\"}` for `Bearer`, or\n`{\"Username\":\"...\",\"Password\":\"...\"}` for `Basic`. They always come from the\noperator (the server never generates them) and are returned once, in this endpoint's\nresponse.",
+            "description": "The delivery POST's credentials, required when `authMode` is not `None`:\n`{\"BearerToken\":\"...\"}` for `Bearer`, or\n`{\"Username\":\"...\",\"Password\":\"...\"}` for `Basic`. They always come from the\noperator (the server never generates them) and are returned once, in this endpoint's\nresponse.",
             "nullable": true
           },
           "enableHmacSigning": {
@@ -31373,7 +31373,7 @@
           },
           "hmacSigningSecret": {
             "type": "string",
-            "description": "The HMAC signing secret, used only when `WebhookSubscriptionCreateRequest.EnableHmacSigning` is\ntrue. When omitted, a random 32-byte secret is generated. Either way the\nplaintext secret is shown once, in this endpoint's response. Neither `PUT` nor\n`PATCH` can change it, as with a TSIG key's secret (see\n`TsigKeyWriteRequest`); to rotate or remove it, delete and recreate the\nsubscription.",
+            "description": "The HMAC signing secret, used only when `enableHmacSigning` is\ntrue. When omitted, a random 32-byte secret is generated. Either way the\nplaintext secret is shown once, in this endpoint's response. Neither `PUT` nor\n`PATCH` can change it, as with a TSIG key's secret (see\n`TsigKeyWriteRequest`); to rotate or remove it, delete and recreate the\nsubscription.",
             "nullable": true
           },
           "maxDeliveryAttempts": {
@@ -31392,7 +31392,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to create a new outbound webhook subscription\n(`POST /api/webhooks`). `WebhookSubscriptionCreateResponse` is the only\nplace `WebhookSubscriptionCreateRequest.AuthCredentials` and the HMAC signing secret are ever returned."
+        "description": "This class carries the fields used to create a new outbound webhook subscription\n(`POST /api/webhooks`). `WebhookSubscriptionCreateResponse` is the only\nplace `authCredentials` and the HMAC signing secret are ever returned."
       },
       "WebhookSubscriptionCreateResponse": {
         "type": "object",
@@ -31406,7 +31406,7 @@
               "type": "string",
               "nullable": true
             },
-            "description": "The delivery POST's credentials, or null when\n`WebhookSubscriptionDetail.AuthMode` is `None`.",
+            "description": "The delivery POST's credentials, or null when\n`WebhookSubscriptionDetail.authMode` is `None`.",
             "nullable": true
           },
           "hmacSigningSecret": {
@@ -31478,7 +31478,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a webhook subscription without its secrets, as returned by the list and\nget endpoints and nested in `WebhookSubscriptionCreateResponse`, the one\nresponse that includes `WebhookSubscriptionCreateResponse.AuthCredentials` and\n`WebhookSubscriptionCreateResponse.HmacSigningSecret`."
+        "description": "This class carries a webhook subscription without its secrets, as returned by the list and\nget endpoints and nested in `WebhookSubscriptionCreateResponse`, the one\nresponse that includes `WebhookSubscriptionCreateResponse.authCredentials` and\n`WebhookSubscriptionCreateResponse.hmacSigningSecret`."
       },
       "WebhookSubscriptionDetailPagedResult": {
         "type": "object",
@@ -31559,7 +31559,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the fields used to fully replace an existing webhook subscription's\nsettings and credentials (`PUT /api/webhooks/{id}`). Unlike a TSIG key's generated\nsecret, `WebhookSubscriptionWriteRequest.AuthCredentials` comes from the operator, who already knows the value,\nso a `PUT` replaces it too, as with `CloudProviderCredentialWriteRequest`.\nThe HMAC signing secret (see `WebhookSubscriptionCreateRequest.HmacSigningSecret`)\ncannot be changed this way; delete and recreate the subscription instead."
+        "description": "This class carries the fields used to fully replace an existing webhook subscription's\nsettings and credentials (`PUT /api/webhooks/{id}`). Unlike a TSIG key's generated\nsecret, `authCredentials` comes from the operator, who already knows the value,\nso a `PUT` replaces it too, as with `CloudProviderCredentialWriteRequest`.\nThe HMAC signing secret (see `WebhookSubscriptionCreateRequest.hmacSigningSecret`)\ncannot be changed this way; delete and recreate the subscription instead."
       },
       "ZoneCaaReconciliationResponse": {
         "type": "object",
@@ -31576,16 +31576,16 @@
           },
           "skipped": {
             "type": "boolean",
-            "description": "Whether the pass did nothing (see SkipReason). A pass that ran but\nfound nothing to change reports false with zero counts."
+            "description": "Whether the pass did nothing (see `skipReason`). A pass that ran but\nfound nothing to change reports false with zero counts."
           },
           "skipReason": {
             "type": "string",
-            "description": "Why the pass was skipped, set only when Skipped is true.",
+            "description": "Why the pass was skipped, set only when `skipped` is true.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the response of `POST /api/zones/{id}/reconcile-caa`: what one\non-demand CAA reconciliation did, or why it did nothing. It copies\n`Server.Acme.Caa.CaaReconciliationResult` so the internal service type is not exposed\nover REST, as `ZoneCatalogMembersResponse` does for the catalog service."
+        "description": "This record is the response of `POST /api/zones/{id}/reconcile-caa`: what one\non-demand CAA reconciliation did, or why it did nothing. It copies the result of the\nreconciliation so the internal service type is not exposed over REST."
       },
       "ZoneCatalogMembersResponse": {
         "type": "object",
@@ -31607,7 +31607,7 @@
         "properties": {
           "catalogZoneId": {
             "type": "string",
-            "description": "The identifier of the `ZoneTypeEnum.Catalog` zone to join.",
+            "description": "The identifier of the `Catalog` zone to join.",
             "format": "uuid"
           }
         },
@@ -31833,16 +31833,16 @@
           },
           "skipped": {
             "type": "boolean",
-            "description": "Whether the pass did nothing (see SkipReason). A pass that ran but\nfound nothing to change reports false with zero counts."
+            "description": "Whether the pass did nothing (see `skipReason`). A pass that ran but\nfound nothing to change reports false with zero counts."
           },
           "skipReason": {
             "type": "string",
-            "description": "Why the pass was skipped, set only when Skipped is true.",
+            "description": "Why the pass was skipped, set only when `skipped` is true.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the response of `POST /api/zones/{id}/reconcile-ptr`: what one\non-demand PTR sync did, or why it did nothing. It copies\n`Server.Authoritative.Ptr.PtrReconciliationResult`, as\n`ZoneCaaReconciliationResponse` does for CAA."
+        "description": "This record is the response of `POST /api/zones/{id}/reconcile-ptr`: what one\non-demand PTR sync did, or why it did nothing. It copies the result of the sync, as the CAA\nreconciliation response does for CAA."
       },
       "ZoneSigningSettingsDetail": {
         "type": "object",

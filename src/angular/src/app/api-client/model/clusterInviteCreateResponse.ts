@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a new invite\'s opaque code and expiry (`POST /api/cluster/nodes/invite`). The code contains the cluster\'s shared TSIG secret in plaintext; this response is the one place that secret is revealed (see `ClusterInviteCode`).
+ * This class carries a new invite\'s opaque code and expiry (`POST /api/cluster/nodes/invite`). The code contains the cluster\'s shared TSIG secret in plaintext; this response is the one place that secret is revealed.
  */
 export interface ClusterInviteCreateResponse { 
     /**

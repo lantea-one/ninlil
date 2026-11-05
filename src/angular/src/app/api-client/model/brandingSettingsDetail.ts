@@ -22,11 +22,11 @@ export interface BrandingSettingsDetail {
      */
     logoDataUri?: string | null;
     /**
-     * The value the server answers a `hostname.bind` or `id.server` CHAOS query with, when EnableChaosVersionQueries is enabled.
+     * The value the server answers a `hostname.bind` or `id.server` CHAOS query with, when `enableChaosVersionQueries` is enabled.
      */
     hostnameString?: string | null;
     /**
-     * The value the server answers a `version.bind` or `version.server` CHAOS query with, when EnableChaosVersionQueries is enabled.
+     * The value the server answers a `version.bind` or `version.server` CHAOS query with, when `enableChaosVersionQueries` is enabled.
      */
     versionString?: string | null;
     /**

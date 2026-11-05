@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Dhcpv6RelayOptions` (`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 9915 DHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart of `DhcpRelaySettingsDetail`.
+ * This record is the REST shape of the DHCPv6 relay settings (`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 9915 DHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart of `DhcpRelaySettingsDetail`.
  */
 export interface Dhcpv6RelaySettingsDetail { 
     /**

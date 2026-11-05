@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the PTR sync defaults (configuration section `DnsServer:Authoritative:PtrSync`) that `GET /api/ptr-sync-settings` returns: whether the A and AAAA records of a `ZoneTypeEnum.Primary` or `ZoneTypeEnum.CloudPrimary` zone are mirrored as PTR records into the matching reverse zone, and how reverse zones are sized. Each applies when the zone\'s own setting is unset. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the PTR sync defaults (configuration section `DnsServer:Authoritative:PtrSync`) that `GET /api/ptr-sync-settings` returns: whether the A and AAAA records of a `Primary` or `CloudPrimary` zone are mirrored as PTR records into the matching reverse zone, and how reverse zones are sized. Each applies when the zone\'s own setting is unset. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface PtrSyncSettingsDetail { 
     /**

@@ -26,7 +26,7 @@ export interface BlockedServiceDetail {
      */
     description?: string | null;
     /**
-     * The third-party domain list this entry subscribes to when enabled. `BlockedServiceCatalog` documents its source and license.
+     * The third-party domain list this entry subscribes to when enabled. The catalog entry records its source and license.
      */
     subscriptionUrl?: string | null;
     /**
