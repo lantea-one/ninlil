@@ -263,12 +263,12 @@ public class TwoFactorController(
     ///     This action e-mails the caller a short-lived verification code from the e-mail token
     ///     provider and returns 202. The account must have a confirmed e-mail address, otherwise
     ///     this returns 400. Returns 429 with a <c>Retry-After</c> header when a code was sent to
-    ///     the account in the last 60 seconds, by this action or by the sign-in step. Because it needs a signed-in caller, it cannot be called during the
-    ///     two-factor step of a sign-in; <see cref="AuthController.SendTwoFactorEmailCode" /> does
-    ///     that.
+    ///     the account in the last 60 seconds, by this action or by the sign-in step. Because it
+    ///     needs a signed-in caller, it cannot be called during the two-factor step of a sign-in;
+    ///     <see cref="AuthController.SendTwoFactorEmailCode" /> does that.
     /// </summary>
     [HttpPost("email/send")]
-    public async Task<IActionResult> SendEmailCode()
+    public async Task<IActionResult> SendEmailCode(CancellationToken stoppingToken)
     {
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
@@ -279,6 +279,7 @@ public class TwoFactorController(
                 "This account has no confirmed e-mail address to send a code to."
             );
 
+        // The cooldown starts before the send, so a cancelled or failed send still uses it.
         if (!emailCodeCooldown.TryAcquire(user.Id, null, out TimeSpan retryAfter))
             return TwoFactorCodeAttemptLimiter.TooManyRequests(
                 this,
@@ -295,7 +296,8 @@ public class TwoFactorController(
         await emailSender.SendAsync(
             user.Email,
             "Your Ninlil sign-in code",
-            $"<p>Your verification code is <strong>{code}</strong>. It expires shortly.</p>"
+            $"<p>Your verification code is <strong>{code}</strong>. It expires shortly.</p>",
+            stoppingToken
         );
 
         return Accepted();

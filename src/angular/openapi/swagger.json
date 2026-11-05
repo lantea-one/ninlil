@@ -21234,7 +21234,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action e-mails the caller a short-lived verification code from the e-mail token\nprovider and returns 202. The account must have a confirmed e-mail address, otherwise\nthis returns 400. Returns 429 with a `Retry-After` header when a code was sent to\nthe account in the last 60 seconds, by this action or by the sign-in step. Because it needs a signed-in caller, it cannot be called during the\ntwo-factor step of a sign-in; `POST /api/auth/login/two-factor/email-code` does\nthat.",
+        "summary": "This action e-mails the caller a short-lived verification code from the e-mail token\nprovider and returns 202. The account must have a confirmed e-mail address, otherwise\nthis returns 400. Returns 429 with a `Retry-After` header when a code was sent to\nthe account in the last 60 seconds, by this action or by the sign-in step. Because it\nneeds a signed-in caller, it cannot be called during the two-factor step of a sign-in;\n`POST /api/auth/login/two-factor/email-code` does that.",
         "operationId": "apiAuthTwoFactorEmailSendPost",
         "responses": {
           "200": {
