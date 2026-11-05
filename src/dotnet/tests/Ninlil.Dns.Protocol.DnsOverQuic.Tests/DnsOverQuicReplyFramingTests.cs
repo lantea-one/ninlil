@@ -37,7 +37,6 @@ public sealed class DnsOverQuicReplyFramingTests
             return;
 
         string statePath = Path.Combine(Path.GetTempPath(), $"doq-framing-{Guid.NewGuid():N}.pfx");
-        int port = GetFreeUdpPort();
         DnsQueryProcessingPipeline pipeline = new(
             new AnsweringDispatcher(),
             new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
@@ -54,7 +53,7 @@ public sealed class DnsOverQuicReplyFramingTests
                 new DnsOverQuicOptions
                 {
                     Enable = true,
-                    Port = port,
+                    Port = 0,
                     Certificate = new TlsCertificateOptions
                     {
                         SelfSignedCertificateStatePath = statePath,
@@ -75,6 +74,7 @@ public sealed class DnsOverQuicReplyFramingTests
                 await Task.Delay(10);
 
             Assert.True(listener.IsListening);
+            int port = listener.BoundPort;
 
             await using QuicConnection connection = await QuicConnection.ConnectAsync(
                 new QuicClientConnectionOptions
@@ -153,12 +153,6 @@ public sealed class DnsOverQuicReplyFramingTests
         DnsMessage response = DnsMessageReader.Read(reply);
         Assert.Equal(name, response.Questions[0].Name.ToString());
         Assert.Single(response.Answers);
-    }
-
-    private static int GetFreeUdpPort()
-    {
-        using System.Net.Sockets.UdpClient probe = new(0);
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
     }
 
     /// <summary>

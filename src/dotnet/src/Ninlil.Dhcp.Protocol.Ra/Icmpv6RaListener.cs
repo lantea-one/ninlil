@@ -734,29 +734,51 @@ public sealed class Icmpv6RaListener(
                 continue;
             }
 
-            bool isMulticastReply = solicitationSource.Equals(IPAddress.IPv6Any);
-
-            // One pending multicast reply answers every solicitation from "::" that arrives
-            // before it is sent (RFC 4861 Section 6.2.6).
-            if (isMulticastReply && Interlocked.Exchange(ref _multicastReplyPending, 1) == 1)
+            if (!TryAdmitSolicitation(solicitationSource))
                 continue;
-
-            if (Interlocked.Increment(ref _pendingSolicitedReplies) > MaxPendingSolicitedReplies)
-            {
-                Interlocked.Decrement(ref _pendingSolicitedReplies);
-
-                if (isMulticastReply)
-                    Volatile.Write(ref _multicastReplyPending, 0);
-
-                logger.LogDebug(
-                    "Dropped a Router Solicitation from {Source}: too many replies are pending.",
-                    solicitationSource
-                );
-                continue;
-            }
 
             _ = HandleSolicitationAsync(sender, solicitationSource, stoppingToken);
         }
+    }
+
+    /// <summary>
+    ///     This method decides whether an acceptable solicitation starts a reply. A solicitation
+    ///     from <c>::</c> while a multicast reply is already pending is coalesced into it and
+    ///     takes no slot, because one multicast advertisement answers all of them (RFC 4861
+    ///     Section 6.2.6). Any other solicitation takes one of the
+    ///     <see cref="MaxPendingSolicitedReplies" /> slots, or is dropped with a Debug entry when
+    ///     none is free. An admitted solicitation must be passed to
+    ///     <see cref="HandleSolicitationAsync" />, which releases its slot.
+    /// </summary>
+    /// <param name="solicitationSource">The source address of the solicitation.</param>
+    /// <returns>
+    ///     <see langword="true" /> if a reply was admitted; <see langword="false" /> if the
+    ///     solicitation was coalesced or dropped.
+    /// </returns>
+    internal bool TryAdmitSolicitation(IPAddress solicitationSource)
+    {
+        bool isMulticastReply = solicitationSource.Equals(IPAddress.IPv6Any);
+
+        // One pending multicast reply answers every solicitation from "::" that arrives
+        // before it is sent (RFC 4861 Section 6.2.6).
+        if (isMulticastReply && Interlocked.Exchange(ref _multicastReplyPending, 1) == 1)
+            return false;
+
+        if (Interlocked.Increment(ref _pendingSolicitedReplies) > MaxPendingSolicitedReplies)
+        {
+            Interlocked.Decrement(ref _pendingSolicitedReplies);
+
+            if (isMulticastReply)
+                Volatile.Write(ref _multicastReplyPending, 0);
+
+            logger.LogDebug(
+                "Dropped a Router Solicitation from {Source}: too many replies are pending.",
+                solicitationSource
+            );
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -765,7 +787,7 @@ public sealed class Icmpv6RaListener(
     ///     next receive. It runs detached, so it catches every exception, and it releases the
     ///     pending-reply slot the receive loop took.
     /// </summary>
-    private async Task HandleSolicitationAsync(
+    internal async Task HandleSolicitationAsync(
         IRaDatagramSender sender,
         IPAddress solicitationSource,
         CancellationToken stoppingToken

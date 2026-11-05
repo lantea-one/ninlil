@@ -61,7 +61,8 @@ public sealed class TcpDnsListener(
     private readonly ZoneTransferRequestRunner _transferRunner = new(
         scopeFactory,
         rateLimiter,
-        eventPublisher
+        eventPublisher,
+        logger
     );
 
     /// <summary>

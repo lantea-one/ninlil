@@ -32,7 +32,6 @@ namespace Ninlil.Dns.Protocol.DnsOverTls.Tests;
 /// </summary>
 public sealed class DnsOverTlsListenerTests : IAsyncLifetime
 {
-    private static readonly int TestPort = GetFreePort();
     private static readonly IPAddress ExpectedAnswer = IPAddress.Parse("192.0.2.123");
 
     private DnsQueryProcessingPipeline _pipeline;
@@ -58,7 +57,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         DnsOverTlsOptions options = new()
         {
             Enable = true,
-            Port = TestPort,
+            Port = 0,
             IdleTimeout = TimeSpan.FromMilliseconds(400),
         };
 
@@ -81,10 +80,10 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         await _pipeline.DisposeAsync();
     }
 
-    private static async Task<SslStream> ConnectAsync()
+    private async Task<SslStream> ConnectAsync()
     {
         TcpClient client = new();
-        await client.ConnectAsync(IPAddress.Loopback, TestPort);
+        await client.ConnectAsync(IPAddress.Loopback, _listener.BoundPort);
 
         SslStream sslStream = new(
             client.GetStream(),
@@ -227,7 +226,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     public async Task TheServerPresentsTheSelfSignedCertificateItGeneratedItself()
     {
         using TcpClient client = new();
-        await client.ConnectAsync(IPAddress.Loopback, TestPort);
+        await client.ConnectAsync(IPAddress.Loopback, _listener.BoundPort);
 
         X509Certificate2 remoteCertificate = null;
         using SslStream sslStream = new(
@@ -249,8 +248,6 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task RestrictingAllowedProtocolsToTls12AndTls13StillHandshakesSuccessfully()
     {
-        int restrictedPort = GetFreePort();
-
         DnsQueryDispatcher dispatcher = new(
             [new AlwaysAnswerAResolver(ExpectedAnswer)],
             new NoOpEventPublisher()
@@ -271,7 +268,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
                 new DnsOverTlsOptions
                 {
                     Enable = true,
-                    Port = restrictedPort,
+                    Port = 0,
                     IdleTimeout = TimeSpan.FromMilliseconds(400),
                     Certificate = new TlsCertificateOptions
                     {
@@ -288,7 +285,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             await WaitUntilListeningAsync(listener);
 
             using TcpClient client = new();
-            await client.ConnectAsync(IPAddress.Loopback, restrictedPort);
+            await client.ConnectAsync(IPAddress.Loopback, listener.BoundPort);
             using SslStream stream = new(
                 client.GetStream(),
                 leaveInnerStreamOpen: false,
@@ -384,7 +381,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         DnsQueryProcessingPipeline Pipeline,
         DnsOverTlsListener Listener,
         RemoteAddressCapturingResolver Resolver
-    )> StartProxyProtocolListenerAsync(int port, ProxyProtocolOptions proxyProtocolOptions)
+    )> StartProxyProtocolListenerAsync(ProxyProtocolOptions proxyProtocolOptions)
     {
         RemoteAddressCapturingResolver resolver = new(ExpectedAnswer);
         DnsQueryDispatcher dispatcher = new([resolver], new NoOpEventPublisher());
@@ -404,7 +401,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
                 new DnsOverTlsOptions
                 {
                     Enable = true,
-                    Port = port,
+                    Port = 0,
                     // The listener bounds the TLS handshake by the idle timeout, so a short one
                     // aborts the first handshake of a busy machine (certificate load, JIT) before
                     // it ends. These tests prove the PROXY header handling, not the timeout.
@@ -433,7 +430,6 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAKnownProxySource_WithAValidV1Header_UsesTheClaimedClientAddress()
     {
-        int port = GetFreePort();
         IPAddress claimedAddress = IPAddress.Parse("203.0.113.9");
 
         (
@@ -441,14 +437,13 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             DnsOverTlsListener listener,
             RemoteAddressCapturingResolver resolver
         ) = await StartProxyProtocolListenerAsync(
-            port,
             new ProxyProtocolOptions { Enable = true, KnownProxies = ["127.0.0.1"] }
         );
 
         try
         {
             using TcpClient client = new();
-            await client.ConnectAsync(IPAddress.Loopback, port);
+            await client.ConnectAsync(IPAddress.Loopback, listener.BoundPort);
             NetworkStream rawStream = client.GetStream();
 
             await rawStream.WriteAsync(
@@ -477,7 +472,6 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAKnownProxySource_WithAValidV2Header_UsesTheClaimedClientAddress()
     {
-        int port = GetFreePort();
         IPAddress claimedAddress = IPAddress.Parse("203.0.113.42");
 
         (
@@ -485,14 +479,13 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             DnsOverTlsListener listener,
             RemoteAddressCapturingResolver resolver
         ) = await StartProxyProtocolListenerAsync(
-            port,
             new ProxyProtocolOptions { Enable = true, KnownProxies = ["127.0.0.1"] }
         );
 
         try
         {
             using TcpClient client = new();
-            await client.ConnectAsync(IPAddress.Loopback, port);
+            await client.ConnectAsync(IPAddress.Loopback, listener.BoundPort);
             NetworkStream rawStream = client.GetStream();
 
             await rawStream.WriteAsync(BuildV2ProxyHeader(claimedAddress));
@@ -519,20 +512,17 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAnUnknownSource_SendingAForgedProxyHeader_IsNeverInspectedForOne()
     {
-        int port = GetFreePort();
-
         // The PROXY protocol is on, but only for a source that is not loopback, so a forged
         // header from this untrusted connection must not be read as one.
         (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, _) =
             await StartProxyProtocolListenerAsync(
-                port,
                 new ProxyProtocolOptions { Enable = true, KnownProxies = ["203.0.113.99"] }
             );
 
         try
         {
             using TcpClient client = new();
-            await client.ConnectAsync(IPAddress.Loopback, port);
+            await client.ConnectAsync(IPAddress.Loopback, listener.BoundPort);
             NetworkStream rawStream = client.GetStream();
 
             // A forged v1 header from an untrusted source is not read as a header; the bytes go
@@ -559,18 +549,15 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAKnownProxySource_WithAMalformedHeader_IsRejected()
     {
-        int port = GetFreePort();
-
         (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, _) =
             await StartProxyProtocolListenerAsync(
-                port,
                 new ProxyProtocolOptions { Enable = true, KnownProxies = ["127.0.0.1"] }
             );
 
         try
         {
             using TcpClient client = new();
-            await client.ConnectAsync(IPAddress.Loopback, port);
+            await client.ConnectAsync(IPAddress.Loopback, listener.BoundPort);
             NetworkStream rawStream = client.GetStream();
 
             // A trusted source sends a line that is not a PROXY protocol header, so the server
@@ -594,15 +581,19 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
 
     /// <summary>
     ///     This method starts a separate pipeline and listener bound to the given listen addresses
-    ///     on a free port, apart from the shared one in <see cref="InitializeAsync" />.
+    ///     on <paramref name="port" /> (0 picks a free one), apart from the shared one in
+    ///     <see cref="InitializeAsync" />.
     /// </summary>
     private static async Task<(
         DnsQueryProcessingPipeline Pipeline,
         DnsOverTlsListener Listener,
         int Port
-    )> StartListenAddressListenerAsync(string listenAddresses, ILogger<DnsOverTlsListener> logger)
+    )> StartListenAddressListenerAsync(
+        string listenAddresses,
+        ILogger<DnsOverTlsListener> logger,
+        int port = 0
+    )
     {
-        int port = LocalAddresses.GetFreePort();
         DnsQueryProcessingPipeline pipeline = new(
             new DnsQueryDispatcher(
                 [new AlwaysAnswerAResolver(ExpectedAnswer)],
@@ -631,7 +622,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         await listener.StartAsync(CancellationToken.None);
         await WaitUntilListeningAsync(listener);
 
-        return (pipeline, listener, port);
+        return (pipeline, listener, listener.BoundPort);
     }
 
     /// <summary>
@@ -744,7 +735,10 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, int port) =
             await StartListenAddressListenerAsync(
                 $"127.0.0.1, {LocalAddresses.Unassigned}, {other}",
-                logger
+                logger,
+                // Two bound addresses must share one port, but port 0 gives each socket its own,
+                // so this test needs a port known before the listener starts.
+                LocalAddresses.GetFreePort()
             );
 
         try
@@ -876,19 +870,5 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             DnsQueryContext context,
             CancellationToken stoppingToken = default
         ) => CreateAxfrResponseAsync(context, stoppingToken);
-    }
-
-    /// <summary>
-    ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned. Tests run on shared machines with their
-    ///     own DNS, DHCP and web services, and may run alongside another copy of this suite, so no
-    ///     test listener uses a fixed or well-known port.
-    /// </summary>
-    /// <returns>A free TCP port number.</returns>
-    private static int GetFreePort()
-    {
-        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

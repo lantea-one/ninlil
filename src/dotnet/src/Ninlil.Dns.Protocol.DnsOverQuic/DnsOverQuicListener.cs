@@ -90,7 +90,8 @@ public sealed class DnsOverQuicListener(
     private readonly ZoneTransferRequestRunner _transferRunner = new(
         scopeFactory,
         rateLimiter,
-        eventPublisher
+        eventPublisher,
+        logger
     );
 
     /// <summary>
@@ -112,6 +113,15 @@ public sealed class DnsOverQuicListener(
     ///     registered or configured does not mean a transport is running.
     /// </summary>
     public bool IsListening { get; private set; }
+
+    /// <summary>
+    ///     This property contains the port of the first bound <see cref="QuicListener" />, or 0
+    ///     while nothing is bound. It equals <see cref="DnsOverQuicOptions.Port" /> unless that is
+    ///     0, which tests use to get an ephemeral port. With port 0 and several listen addresses
+    ///     each listener gets its own port, so only a single-address listener has one meaningful
+    ///     value. It is set before <see cref="IsListening" /> turns true.
+    /// </summary>
+    public int BoundPort { get; private set; }
 
     /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
@@ -223,6 +233,7 @@ public sealed class DnsOverQuicListener(
             if (listeners.Count == 0)
                 return;
 
+            BoundPort = listeners[0].LocalEndPoint.Port;
             IsListening = true;
 
             await Task.WhenAll(
@@ -232,6 +243,7 @@ public sealed class DnsOverQuicListener(
         finally
         {
             IsListening = false;
+            BoundPort = 0;
 
             foreach (QuicListener listener in listeners)
                 await listener.DisposeAsync();

@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Events;
@@ -32,10 +33,15 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     The publisher for <see cref="DnsQueryAnsweredEvent" />. <see langword="null" /> publishes
 ///     nothing.
 /// </param>
+/// <param name="logger">
+///     The logger a denied transfer is reported to at Debug level, like a rate-limited query in
+///     the pipeline. <see langword="null" /> logs nothing.
+/// </param>
 public sealed class ZoneTransferRequestRunner(
     IServiceScopeFactory scopeFactory,
     IDnsRateLimiter rateLimiter = null,
-    IDnsServerEventPublisher eventPublisher = null
+    IDnsServerEventPublisher eventPublisher = null,
+    ILogger logger = null
 )
 {
     /// <summary>
@@ -73,15 +79,20 @@ public sealed class ZoneTransferRequestRunner(
         {
             // Stream transports are not datagrams, so the subnet check can only drop, never
             // answer truncated; any outcome other than Allow denies the transfer.
-            if (
-                !await rateLimiter.TryAcquireAsync(remoteAddress, transferToken)
-                || await rateLimiter.CheckSubnetLimitAsync(
-                    remoteAddress,
-                    isUdp: false,
-                    transferToken
-                ) != DnsSubnetRateLimitDecisionEnum.Allow
-            )
+            if (!await rateLimiter.TryAcquireAsync(remoteAddress, transferToken))
+            {
+                LogDenied(request, remoteAddress, "token budget exhausted");
                 return false;
+            }
+
+            if (
+                await rateLimiter.CheckSubnetLimitAsync(remoteAddress, isUdp: false, transferToken)
+                != DnsSubnetRateLimitDecisionEnum.Allow
+            )
+            {
+                LogDenied(request, remoteAddress, "its own subnet's budget is exhausted");
+                return false;
+            }
         }
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
@@ -130,4 +141,16 @@ public sealed class ZoneTransferRequestRunner(
 
         return true;
     }
+
+    /// <summary>
+    ///     This method logs a denied transfer at Debug level, in the style of the pipeline's
+    ///     "Rate-limiting a query" entries. No query-log event is published for it.
+    /// </summary>
+    private void LogDenied(DnsMessage request, IPAddress remoteAddress, string decision) =>
+        logger?.LogDebug(
+            "Rate-limiting a zone transfer of {Zone} from {RemoteAddress}: {Decision}.",
+            request.Questions.Count > 0 ? request.Questions[0].Name.ToString() : null,
+            remoteAddress,
+            decision
+        );
 }
