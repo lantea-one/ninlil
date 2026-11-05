@@ -61,14 +61,14 @@ public sealed class DnsServerEventDispatcher(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // A per-query event read before the control queue was checked again. See ReadNext.
+        QueuedDnsServerEvent? pendingLossy = null;
+
         while (true)
         {
             stoppingToken.ThrowIfCancellationRequested();
 
-            if (
-                !publisher.ControlReader.TryRead(out QueuedDnsServerEvent item)
-                && !publisher.LossyReader.TryRead(out item)
-            )
+            if (!ReadNext(ref pendingLossy, out QueuedDnsServerEvent item))
             {
                 publisher.ReportDroppedEvents();
                 await WaitForAnyEventAsync(stoppingToken);
@@ -91,6 +91,44 @@ public sealed class DnsServerEventDispatcher(
 
             publisher.ReportDroppedEvents();
         }
+    }
+
+    /// <summary>
+    ///     This method takes the next event to deliver: a control event if one is queued, else a
+    ///     per-query event. A control event published before a per-query event is always
+    ///     delivered first.
+    ///     <para>
+    ///         The two reads are not one atomic step. A control event and then a per-query event
+    ///         can be written between a failed control read and the per-query read, and the
+    ///         per-query event would be delivered first. So after a per-query read the control
+    ///         queue is read once more; the per-query event waits in
+    ///         <paramref name="pendingLossy" /> when a control event turned up. Any control event
+    ///         written before the per-query event is visible to that second read.
+    ///     </para>
+    /// </summary>
+    private bool ReadNext(ref QueuedDnsServerEvent? pendingLossy, out QueuedDnsServerEvent item)
+    {
+        if (publisher.ControlReader.TryRead(out item))
+            return true;
+
+        if (pendingLossy is { } held)
+        {
+            pendingLossy = null;
+            item = held;
+            return true;
+        }
+
+        if (!publisher.LossyReader.TryRead(out QueuedDnsServerEvent lossy))
+            return false;
+
+        if (publisher.ControlReader.TryRead(out item))
+        {
+            pendingLossy = lossy;
+            return true;
+        }
+
+        item = lossy;
+        return true;
     }
 
     /// <summary>
