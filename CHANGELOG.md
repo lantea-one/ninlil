@@ -11,6 +11,15 @@ outside Forgejo.
 
 ## Unreleased
 
+### Deprecated
+
+- **The identity settings lockout fields are deprecated.** `defaultLockoutTimeSpan`,
+  `maxFailedAccessAttempts` and `allowedForNewUsers` of `/api/identity-settings`, and the
+  `NINLIL_IDENTITY_LOCKOUT_*` variables, never had an effect: Ninlil has no account lockout, and
+  sign-in is rate limited per client address instead. The OpenAPI document marks the three fields
+  `deprecated`. Reads and writes keep working; a later release removes them
+  ([#32](https://git.lantea.one/lantea-one/ninlil/issues/32)).
+
 ### Removed
 
 - **Settings that had no effect are gone.** These variables never changed anything, because
