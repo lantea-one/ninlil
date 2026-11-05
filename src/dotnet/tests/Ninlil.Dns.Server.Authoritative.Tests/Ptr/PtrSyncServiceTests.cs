@@ -40,14 +40,7 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
-        builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
-        builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
-        builder.Services.AddSingleton<IDnsServerEventPublisher, NoOpEventPublisher>();
-        builder.Services.AddSingleton<IZoneWriteSerializer, ZoneWriteSerializer>();
-        builder.Services.AddScoped<IZoneUpdateService, ZoneUpdateService>();
-
-        _host = builder.Build();
+        _host = BuildHost();
 
         await using AsyncServiceScope seedScope = _host.Services.CreateAsyncScope();
         NinlilDnsContext context = seedScope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
@@ -56,6 +49,23 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
         _zoneRepository = _host.Services.GetRequiredService<IZoneRepository>();
         _recordRepository = _host.Services.GetRequiredService<IRecordRepository>();
         _unitOfWork = _host.Services.GetRequiredService<IUnitOfWork>();
+    }
+
+    /// <summary>
+    ///     This method builds one service provider over the test database file. Each call has its own
+    ///     <see cref="IZoneWriteSerializer" /> and its own connections, like a separate node.
+    /// </summary>
+    private IHost BuildHost()
+    {
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+        builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
+        builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
+        builder.Services.AddSingleton<IDnsServerEventPublisher, NoOpEventPublisher>();
+        builder.Services.AddSingleton<IZoneWriteSerializer, ZoneWriteSerializer>();
+        builder.Services.AddScoped<IZoneUpdateService, ZoneUpdateService>();
+        builder.Services.AddSingleton<PtrSyncPassLock>();
+
+        return builder.Build();
     }
 
     public Task DisposeAsync()
@@ -75,9 +85,9 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
     ///     (see that class's doc comment on why a fresh instance per call matters,
     ///     the "EF Core identity-map staleness across scopes" shape).
     /// </summary>
-    private PtrSyncService CreateService(bool defaultEnabled = false)
+    private PtrSyncService CreateService(bool defaultEnabled = false, IHost host = null)
     {
-        IServiceScope scope = _host.Services.CreateScope();
+        IServiceScope scope = (host ?? _host).Services.CreateScope();
         return new PtrSyncService(
             scope.ServiceProvider.GetRequiredService<IZoneRepository>(),
             scope.ServiceProvider.GetRequiredService<IRecordRepository>(),
@@ -86,7 +96,8 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
             new StaticOptionsMonitor<PtrSyncOptions>(
                 new PtrSyncOptions { DefaultEnabled = defaultEnabled }
             ),
-            NullLogger<PtrSyncService>.Instance
+            NullLogger<PtrSyncService>.Instance,
+            scope.ServiceProvider.GetRequiredService<PtrSyncPassLock>()
         );
     }
 
@@ -800,6 +811,161 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
                 ptrRecords.Select(record => record.Name).Distinct().Count()
             );
         }
+    }
+
+    /// <summary>
+    ///     This test runs two services on separate service providers over one SQLite file, the way
+    ///     two cluster nodes share a database. The per-process pass lock and the per-zone write lock
+    ///     then cover nothing, so the passes race on the records. After the race every address must
+    ///     have exactly one PTR record, because each pass removes the duplicates it finds at its end.
+    /// </summary>
+    [Fact]
+    public async Task PassesOnTwoServiceProvidersStoreEachPtrRecordOnce()
+    {
+        const int rounds = 8;
+        const int passesPerNode = 3;
+        const int addressesPerZone = 4;
+
+        using IHost secondHost = BuildHost();
+
+        for (int round = 0; round < rounds; round++)
+        {
+            string zoneName = $"ptr-nodes-{round}.example.com";
+            Guid zoneId = await SeedForwardZoneAsync(
+                zoneName,
+                ZoneTypeEnum.Primary,
+                autoManagePtrRecords: true
+            );
+            for (int host = 1; host <= addressesPerZone; host++)
+                await AddARecordAsync(
+                    zoneId,
+                    $"host{host}.{zoneName}",
+                    IPAddress.Parse($"203.0.{100 + round}.{host}")
+                );
+
+            // The reverse zone exists first, so the nodes race on the records, not on the zone.
+            await CreateService().ReconcileZoneAsync(zoneId);
+            IReadOnlyList<RecordEntity> existing = await _recordRepository.ListByZoneIdAsync(
+                (await _zoneRepository.FindByNameAsync($"{100 + round}.0.203.in-addr.arpa")).Id
+            );
+            Assert.Equal(
+                addressesPerZone,
+                existing.Count(r => r.Type == DnsResourceRecordTypeEnum.Ptr)
+            );
+
+            // Remove the PTRs again, so every pass starts from the same empty state and all of them
+            // want to add the same records.
+            await RemoveManagedPtrsAsync($"{100 + round}.0.203.in-addr.arpa");
+
+            using ManualResetEventSlim start = new(false);
+            Task[] passes =
+            [
+                .. Enumerable
+                    .Range(0, passesPerNode * 2)
+                    .Select(index =>
+                        Task.Run(async () =>
+                        {
+                            PtrSyncService service = CreateService(
+                                host: index % 2 == 0 ? _host : secondHost
+                            );
+                            start.Wait();
+                            await service.ReconcileZoneAsync(zoneId);
+                        })
+                    ),
+            ];
+            start.Set();
+            await Task.WhenAll(passes);
+
+            ZoneEntity reverseZone = await _zoneRepository.FindByNameAsync(
+                $"{100 + round}.0.203.in-addr.arpa"
+            );
+            List<RecordEntity> ptrRecords =
+            [
+                .. (await _recordRepository.ListByZoneIdAsync(reverseZone.Id)).Where(record =>
+                    record.Type == DnsResourceRecordTypeEnum.Ptr
+                ),
+            ];
+            Assert.Equal(addressesPerZone, ptrRecords.Count);
+            Assert.Equal(
+                addressesPerZone,
+                ptrRecords.Select(record => record.Name).Distinct().Count()
+            );
+        }
+    }
+
+    /// <summary>
+    ///     This method deletes every PTR record of a zone, bypassing the zone update service.
+    /// </summary>
+    private async Task RemoveManagedPtrsAsync(string zoneName)
+    {
+        ZoneEntity zone = await _zoneRepository.FindByNameAsync(zoneName);
+        foreach (
+            RecordEntity record in (await _recordRepository.ListByZoneIdAsync(zone.Id)).Where(r =>
+                r.Type == DnsResourceRecordTypeEnum.Ptr
+            )
+        )
+            _recordRepository.Remove(record);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    ///     This test checks the duplicate rule: of two managed PTRs with the same owner and target
+    ///     one is removed, while an operator-created PTR with the same owner and target (no
+    ///     managed marker) stays, because the service only manages what it created.
+    /// </summary>
+    [Fact]
+    public async Task ReconcileZoneAsync_WithAManagedDuplicate_RemovesItAndKeepsOperatorPtrs()
+    {
+        Guid zoneId = await SeedForwardZoneAsync(
+            "dupe.example.com",
+            ZoneTypeEnum.Primary,
+            autoManagePtrRecords: true
+        );
+        await AddARecordAsync(zoneId, "host.dupe.example.com", IPAddress.Parse("198.18.7.9"));
+        await CreateService().ReconcileZoneAsync(zoneId);
+
+        ZoneEntity reverseZone = await _zoneRepository.FindByNameAsync("7.18.198.in-addr.arpa");
+        RecordEntity managed = (await _recordRepository.ListByZoneIdAsync(reverseZone.Id)).Single(
+            record => record.Type == DnsResourceRecordTypeEnum.Ptr
+        );
+
+        foreach (
+            RecordManagedByFeatureEnum? marker in new RecordManagedByFeatureEnum?[]
+            {
+                RecordManagedByFeatureEnum.Ptr,
+                null,
+            }
+        )
+        {
+            await _recordRepository.AddAsync(
+                new RecordEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ZoneId = reverseZone.Id,
+                    Name = managed.Name,
+                    Type = DnsResourceRecordTypeEnum.Ptr,
+                    Class = DnsClassEnum.Internet,
+                    TimeToLiveSeconds = 3600,
+                    DataJson = managed.DataJson,
+                    ManagedByFeature = marker,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                }
+            );
+        }
+        await _unitOfWork.SaveChangesAsync();
+
+        PtrReconciliationResult result = await CreateService().ReconcileZoneAsync(zoneId);
+
+        Assert.Equal(1, result.RecordsRemoved);
+        List<RecordEntity> ptrs =
+        [
+            .. (await _recordRepository.ListByZoneIdAsync(reverseZone.Id)).Where(record =>
+                record.Type == DnsResourceRecordTypeEnum.Ptr
+            ),
+        ];
+        Assert.Equal(2, ptrs.Count);
+        Assert.Single(ptrs, record => record.ManagedByFeature == RecordManagedByFeatureEnum.Ptr);
+        Assert.Single(ptrs, record => record.ManagedByFeature == null);
     }
 
     [Fact]

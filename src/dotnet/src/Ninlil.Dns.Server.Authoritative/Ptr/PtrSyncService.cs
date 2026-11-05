@@ -44,13 +44,18 @@ namespace Ninlil.Dns.Server.Authoritative.Ptr;
 ///     <see cref="IOptions{TOptions}" /> would keep the startup value, even in a scoped service.
 /// </param>
 /// <param name="logger">The logger this service records skip/reconcile decisions to.</param>
+/// <param name="passLock">
+///     The lock that serializes the passes of this process. A pass reads the managed records, works
+///     out the difference and writes it, so two overlapping passes would both add the missing records.
+/// </param>
 public class PtrSyncService(
     IZoneRepository zoneRepository,
     IRecordRepository recordRepository,
     IZoneUpdateService zoneUpdateService,
     IUnitOfWork unitOfWork,
     IOptionsMonitor<PtrSyncOptions> options,
-    ILogger<PtrSyncService> logger
+    ILogger<PtrSyncService> logger,
+    PtrSyncPassLock passLock
 )
 {
     /// <summary>
@@ -58,16 +63,6 @@ public class PtrSyncService(
     ///     creates.
     /// </summary>
     private const uint PtrRecordTimeToLiveSeconds = 3600;
-
-    /// <summary>
-    ///     This field serializes the passes of this process. A pass reads the managed records, works
-    ///     out the difference and writes it, so two passes that overlap both see the same missing
-    ///     records and both add them; the database has no unique key on records that would refuse the
-    ///     second copy. The event-driven pass and <c>POST /api/zones/{id}/reconcile-ptr</c>
-    ///     run on separate scopes, so a per-instance lock cannot cover them. One lock for all zones
-    ///     is enough: a pass only needs the database for a few commands.
-    /// </summary>
-    private static readonly SemaphoreSlim passLock = new(1, 1);
 
     private const uint DefaultSoaRefreshSeconds = 3600;
     private const uint DefaultSoaRetrySeconds = 900;
@@ -103,20 +98,20 @@ public class PtrSyncService(
         CancellationToken stoppingToken = default
     )
     {
-        await passLock.WaitAsync(stoppingToken);
+        await passLock.Semaphore.WaitAsync(stoppingToken);
         try
         {
             return await ReconcileZoneUnlockedAsync(forwardZoneId, stoppingToken);
         }
         finally
         {
-            passLock.Release();
+            passLock.Semaphore.Release();
         }
     }
 
     /// <summary>
-    ///     This method is one pass of <see cref="ReconcileZoneAsync" />; the caller holds
-    ///     <see cref="passLock" />.
+    ///     This method is one pass of <see cref="ReconcileZoneAsync" />; the caller holds the
+    ///     <see cref="PtrSyncPassLock" />.
     /// </summary>
     private async Task<PtrReconciliationResult> ReconcileZoneUnlockedAsync(
         Guid forwardZoneId,
@@ -375,6 +370,13 @@ public class PtrSyncService(
             totalRemoved += removed;
         }
 
+        // Why this is needed: the pass lock covers one process, and records have no unique key, so
+        // two nodes on one database can each add the same PTR. Each pass therefore ends by reading
+        // the managed records back and removing every copy but one. A pass that finishes after all
+        // the adds sees all the copies, so the set converges whatever the interleaving. It works the
+        // same on every storage engine and needs no lock row or schema change.
+        totalRemoved += await RemoveDuplicateManagedRecordsAsync(touchedZoneIds, stoppingToken);
+
         return new PtrReconciliationResult(
             totalAdded,
             totalRemoved,
@@ -382,6 +384,95 @@ public class PtrSyncService(
             false,
             null
         );
+    }
+
+    /// <summary>
+    ///     This method removes duplicate managed records from the given zones. Two records are
+    ///     duplicates when they have the same zone, owner name (case-insensitive), type and decoded
+    ///     target and both carry <see cref="RecordManagedByFeatureEnum.Ptr" />; only PTR records and
+    ///     RFC 2317 CNAMEs are considered. Records the operator added have no such marker and are
+    ///     never touched. The copy with the smallest <see cref="EntityBase.Id" /> is kept, so nodes
+    ///     that run this at the same time agree on the survivor and never remove all copies.
+    ///     Removals go through <see cref="IZoneUpdateService.ApplyChangesAsync" />, so each one bumps
+    ///     the SOA serial, writes a journal entry and raises the zone-changed event like any other
+    ///     change.
+    /// </summary>
+    /// <param name="zoneIds">The reverse and /24 zones this pass reconciled.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>How many records were removed.</returns>
+    private async Task<int> RemoveDuplicateManagedRecordsAsync(
+        HashSet<Guid> zoneIds,
+        CancellationToken stoppingToken
+    )
+    {
+        if (zoneIds.Count == 0)
+            return 0;
+
+        IReadOnlyList<RecordEntity> managedRecords = await recordRepository.ListAsync(
+            record => record.ManagedByFeature == RecordManagedByFeatureEnum.Ptr,
+            stoppingToken
+        );
+
+        int removed = 0;
+        foreach (
+            IGrouping<Guid, RecordEntity> zoneRecords in managedRecords
+                .Where(record =>
+                    zoneIds.Contains(record.ZoneId)
+                    && record.Type
+                        is DnsResourceRecordTypeEnum.Ptr
+                            or DnsResourceRecordTypeEnum.Cname
+                )
+                .GroupBy(record => record.ZoneId)
+        )
+        {
+            List<RecordEntity> duplicates =
+            [
+                .. zoneRecords
+                    .GroupBy(record =>
+                        (
+                            record.Type,
+                            KeyOf(record.Name, DecodeTarget(record)).Owner,
+                            KeyOf(record.Name, DecodeTarget(record)).Target
+                        )
+                    )
+                    .SelectMany(group => group.OrderBy(record => record.Id).Skip(1)),
+            ];
+
+            if (duplicates.Count == 0)
+                continue;
+
+            try
+            {
+                await zoneUpdateService.ApplyChangesAsync(
+                    zoneRecords.Key,
+                    [],
+                    duplicates,
+                    null,
+                    stoppingToken
+                );
+                removed += duplicates.Count;
+
+                logger.LogInformation(
+                    "Removed {Count} duplicate managed record(s) from zone {ZoneId}.",
+                    duplicates.Count,
+                    zoneRecords.Key
+                );
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Another node removed the same copy first, so this write found nothing to delete
+                // (or the zone has no SOA yet). The other node's removal already did the job, and a
+                // later pass re-checks.
+                logger.LogDebug(
+                    exception,
+                    "Could not remove duplicate managed records from zone {ZoneId}; another node "
+                        + "may have removed them.",
+                    zoneRecords.Key
+                );
+            }
+        }
+
+        return removed;
     }
 
     /// <summary>

@@ -186,7 +186,8 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
             scope.ServiceProvider.GetRequiredService<IZoneUpdateService>(),
             scope.ServiceProvider.GetRequiredService<IUnitOfWork>(),
             monitor,
-            NullLogger<PtrSyncService>.Instance
+            NullLogger<PtrSyncService>.Instance,
+            new PtrSyncPassLock()
         );
 
         await service.ReconcileZoneAsync(zoneId);

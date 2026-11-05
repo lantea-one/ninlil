@@ -186,6 +186,8 @@ public static class ServiceCollectionAuthoritativeExtension
         );
 
         // Scoped, because it uses the scoped repositories and unit of work.
+        // Singleton: every scope of this process shares the one pass lock.
+        instance.AddSingleton<PtrSyncPassLock>();
         instance.AddScoped<PtrSyncService>();
 
         // Sync PTR records when a zone changes.
