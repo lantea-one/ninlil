@@ -49,11 +49,14 @@ namespace Ninlil.Dns.Server.Filtering;
 ///         the full queried name. Plain domain entries are looked up in a hash set per list (see
 ///         <see cref="DnsFilterListIndex" />), which gives the same answer as comparing every
 ///         entry. Globs are turned into anchored regexes, so one engine with one
-///         timeout handles both. The index compiles each pattern once, when the list is loaded
-///         (see <see cref="DnsFilterListIndex.Build" />), and every query reuses the compiled
-///         <see cref="Regex" />. Every match runs with <see cref="RegexMatchTimeout" />, so a
-///         pathological pattern cannot stall query answering; a timeout counts as no match and is
-///         logged.
+///         timeout handles both. The index validates each pattern once, when the list is loaded
+///         (see <see cref="DnsFilterListIndex.Build" />), and builds its linear-time regex the
+///         first time a query needs it (see <see cref="DnsFilterLinearMatcher" />); every later
+///         query reuses it. Patterns compile with <see cref="RegexOptions.NonBacktracking" />, which
+///         runs in linear time, so a pathological pattern such as <c>^(a+)+$</c> cannot stall
+///         query answering and never times out. A pattern that engine cannot run (backreferences,
+///         lookarounds, atomic groups) falls back to the backtracking engine and
+///         <see cref="RegexMatchTimeout" />; a timeout there counts as no match and is logged.
 ///     </para>
 ///     <para>
 ///         <strong>Exceptions and precedence.</strong> An adblock <c>@@</c> exception only cancels
@@ -87,7 +90,7 @@ public sealed class DnsFilterEngine(
 ) : IDnsFilterEngine
 {
     /// <summary>
-    ///     This field bounds how long one wildcard or regex match may run (see the class summary).
+    ///     This field bounds how long one match may run on the backtracking fallback (see the class summary). The linear engine needs no bound.
     /// </summary>
     private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
 
@@ -596,16 +599,18 @@ public sealed class DnsFilterEngine(
     /// </summary>
     private bool MatchesPatternEntry(string queriedPresentation, DnsFilterPatternEntry entry)
     {
-        if (entry.Compiled is null)
+        Regex regex = entry.MatchRegex;
+
+        if (regex is null)
             return false;
 
         try
         {
-            return entry.Compiled.IsMatch(queriedPresentation);
+            return regex.IsMatch(queriedPresentation);
         }
         catch (RegexMatchTimeoutException)
         {
-            // A backtracking pattern must not stall or fail the query, so a timeout is no match.
+            // Only a pattern on the backtracking fallback can time out. It must not stall or fail the query, so a timeout is no match.
             logger.LogWarning(
                 "A {Kind} filter list entry pattern timed out matching a query name; treating as a non-match. "
                     + "Pattern: {Pattern}",
@@ -618,12 +623,57 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method compiles a pattern case-insensitively with the engine's match timeout and
-    ///     returns <see langword="null" /> instead of throwing when the pattern is malformed.
-    ///     <c>FilterListEntriesController</c> and <c>FilterPatternPreviewController</c> also call
-    ///     it to validate patterns.
+    ///     This method compiles a pattern case-insensitively and returns <see langword="null" />
+    ///     instead of throwing when the pattern is malformed. It prefers the linear-time engine
+    ///     (<see cref="CompileLinearOrNull" />) and otherwise returns the backtracking regex
+    ///     (<see cref="CompileBacktrackingOrNull" />). A pattern is valid exactly when the
+    ///     backtracking engine accepts it, so this choice never changes what
+    ///     <c>FilterListEntriesController</c> and <c>FilterPatternPreviewController</c>, which
+    ///     call this method to validate and preview patterns, accept.
     /// </summary>
-    public static Regex CompileOrNull(string pattern)
+    public static Regex CompileOrNull(string pattern) =>
+        CompileLinearOrNull(pattern) ?? CompileBacktrackingOrNull(pattern);
+
+    /// <summary>
+    ///     This method compiles a pattern case-insensitively with
+    ///     <see cref="RegexOptions.NonBacktracking" />, which matches in time linear in the name,
+    ///     so a catastrophic pattern such as <c>^(a+)+$</c> neither stalls a query nor times out
+    ///     and needs no timeout. It returns <see langword="null" /> for a malformed pattern and
+    ///     for one that engine refuses (backreferences, lookarounds, atomic groups, conditionals);
+    ///     those run on the regex of <see cref="CompileBacktrackingOrNull" /> instead. Building one
+    ///     costs far more memory than a backtracking regex (the index builds it on first use, see
+    ///     <see cref="DnsFilterLinearMatcher" />).
+    /// </summary>
+    public static Regex CompileLinearOrNull(string pattern)
+    {
+        try
+        {
+            return new Regex(
+                pattern,
+                RegexOptions.IgnoreCase
+                    | RegexOptions.CultureInvariant
+                    | RegexOptions.NonBacktracking
+            );
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     This method compiles a pattern case-insensitively on the backtracking engine with
+    ///     <see cref="RegexMatchTimeout" />, and returns <see langword="null" /> when the pattern
+    ///     is malformed. This engine decides whether a pattern is valid. It is also the engine a
+    ///     pattern the linear one refuses runs on; a timeout there counts as no match (see
+    ///     <see cref="MatchesPatternEntry" />) so a bad pattern cannot stall queries, at the price
+    ///     that the name is not blocked (or, on an allow list, not allowed).
+    /// </summary>
+    public static Regex CompileBacktrackingOrNull(string pattern)
     {
         try
         {

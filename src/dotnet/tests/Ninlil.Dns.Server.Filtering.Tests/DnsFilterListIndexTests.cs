@@ -150,6 +150,27 @@ public class DnsFilterListIndexTests
     }
 
     [Fact]
+    public void Build_ForPatternEntries_BuildsTheLinearRegexOnceAndRecordsTheFallback()
+    {
+        DnsFilterListIndex index = DnsFilterListIndex.Build(
+            DnsFilterListKindEnum.Domain,
+            [
+                Entry("^(a+)+$", kind: DnsFilterEntryKindEnum.Regex),
+                Entry(@"^(a)\1$", kind: DnsFilterEntryKindEnum.Regex),
+            ]
+        );
+
+        DnsFilterPatternEntry linear = index.Patterns[0];
+        DnsFilterPatternEntry fallback = index.Patterns[1];
+
+        Assert.False(linear.UsesBacktrackingFallback);
+        Assert.Same(linear.Linear.Regex, linear.MatchRegex);
+        Assert.Same(linear.Linear.Regex, linear.Linear.Regex);
+        Assert.True(fallback.UsesBacktrackingFallback);
+        Assert.Same(fallback.Compiled, fallback.MatchRegex);
+    }
+
+    [Fact]
     public void Build_WithAPreviousIndex_ReusesTheCompiledPatternsOfUnchangedEntries()
     {
         DnsFilterListIndex first = DnsFilterListIndex.Build(
@@ -168,7 +189,9 @@ public class DnsFilterListIndexTests
         );
 
         Assert.Same(first.Patterns[0].Compiled, second.Patterns[0].Compiled);
+        Assert.Same(first.Patterns[0].Linear, second.Patterns[0].Linear);
         Assert.Null(second.Patterns[1].Compiled);
+        Assert.Null(second.Patterns[1].Linear);
         Assert.Null(second.Patterns[2].Compiled);
     }
 
