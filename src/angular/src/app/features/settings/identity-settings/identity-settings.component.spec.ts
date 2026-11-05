@@ -40,6 +40,7 @@ describe('IdentitySettingsComponent', () => {
         requireNonAlphanumeric: true,
         defaultLockoutTimeSpan: '00:15:00',
         maxFailedAccessAttempts: 5,
+        requireEmailChangeConfirmation: true,
         allowedForNewUsers: true, // the API still sends them; the page ignores them
       }),
     );
@@ -105,6 +106,25 @@ describe('IdentitySettingsComponent', () => {
     expect(Object.keys(body)).not.toContain('maxFailedAccessAttempts');
     expect(Object.keys(body)).not.toContain('allowedForNewUsers');
     expect(body.requiredLength).toBe(12);
+  });
+
+  it('shows the require e-mail confirmation switch on, as loaded, and saves a switch-off', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiIdentitySettingsPatch.and.returnValue(of({ note: 'saved' }));
+    });
+    const root = fixture.nativeElement as HTMLElement;
+    const toggle = root.querySelector<HTMLInputElement>(
+      '#identity-require-email-change-confirmation',
+    );
+
+    expect(toggle?.checked).toBeTrue();
+
+    toggle!.click();
+    fixture.detectChanges();
+    await fixture.componentInstance.save();
+
+    const body = apiSpy.apiIdentitySettingsPatch.calls.mostRecent().args[0].body;
+    expect(body.requireEmailChangeConfirmation).toBeFalse();
   });
 
   it('offers no lockout inputs and links the admin login rate limit page', async () => {

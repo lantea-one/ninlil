@@ -791,6 +791,11 @@ function buildAdminPages(ids, api, options) {
   add('dashboard-mobile-drawer', '/dashboard', { onlyWidth: (width) => width < 992, prepare: (page) => page.click('button[aria-label="Toggle sidebar"]') });
   add('forbidden', '/forbidden');
   add('login', '/login', { fresh: true, expect: ['401 /api/'] });
+  // The e-mail change link with a token the server rejects: the page posts once and shows the 400.
+  add('confirm-email-change-invalid', '/confirm-email-change?userId=00000000-0000-0000-0000-000000000000&email=nobody%40example.com&token=not-a-valid-token', {
+    fresh: true,
+    expect: ['400 /api/auth/confirm-email-change', '401 /api/'],
+  });
 
   add('zones-list', '/zones');
   add('zone-new', '/zones/new', {

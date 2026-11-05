@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Identity.Extension;
+using Ninlil.Dns.Identity.Options;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.Examples.IdentitySettings;
 using Ninlil.Web.Examples.Settings;
@@ -17,10 +18,12 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes the password-complexity and account-lockout policy:
-///     ASP.NET Core Identity's <see cref="IdentityOptions.Password" /> and
+///     This controller reads and writes the password-complexity and account-lockout policy and the
+///     e-mail change policy: ASP.NET Core Identity's <see cref="IdentityOptions.Password" /> and
 ///     <see cref="IdentityOptions.Lockout" />, which <c>UserManager{TUser}</c> enforces when an
-///     account is created, a password changes and someone signs in. Reading needs
+///     account is created, a password changes and someone signs in, and
+///     <see cref="EmailChangeOptions.RequireConfirmation" />, which
+///     <see cref="UsersController.ChangeMyEmail" /> reads. Reading needs
 ///     <c>identitysettings:read</c> and writing needs <c>identitysettings:write</c>.
 ///     <para>
 ///         <b>Every field takes effect on the next request, with no restart.</b>
@@ -35,11 +38,16 @@ namespace Ninlil.Web.Controllers;
 ///     </para>
 /// </summary>
 /// <param name="identityOptions">The current identity policy.</param>
+/// <param name="emailChangeOptions">
+///     The current policy for a user changing their own e-mail address, reported and patched as
+///     <c>requireEmailChangeConfirmation</c>.
+/// </param>
 /// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/identity-settings")]
 public class IdentitySettingsController(
     IOptionsMonitor<IdentityOptions> identityOptions,
+    IOptionsMonitor<EmailChangeOptions> emailChangeOptions,
     RuntimeConfigurationOptions runtimeConfigurationOptions
 ) : ControllerBase
 {
@@ -71,7 +79,14 @@ public class IdentitySettingsController(
         $"{ServiceCollectionIdentityExtension.IdentityOptionsSectionName}:Lockout";
 
     /// <summary>
-    ///     This action returns the current password-complexity and account-lockout policy. Requires
+    ///     This constant contains the configuration section path
+    ///     <see cref="EmailChangeOptions" /> binds from.
+    /// </summary>
+    private const string EmailChangeSectionPath = EmailChangeOptions.SectionName;
+
+    /// <summary>
+    ///     This action returns the current password-complexity, account-lockout and e-mail change
+    ///     policy. Requires
     ///     <c>identitysettings:read</c>.
     /// </summary>
     [HttpGet]
@@ -91,14 +106,15 @@ public class IdentitySettingsController(
                 options.Password.RequireNonAlphanumeric,
                 options.Lockout.DefaultLockoutTimeSpan,
                 options.Lockout.MaxFailedAccessAttempts,
-                options.Lockout.AllowedForNewUsers
+                options.Lockout.AllowedForNewUsers,
+                emailChangeOptions.CurrentValue.RequireConfirmation
             )
         );
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>Identity:Password</c> and
-    ///     <c>Identity:Lockout</c> as an RFC 7396 merge patch, through
+    ///     This action merges a partial update into <c>Identity:Password</c>,
+    ///     <c>Identity:Lockout</c> and <c>Identity:EmailChange</c> as an RFC 7396 merge patch, through
     ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect on the next
     ///     request. Returns 400 for a field of the wrong JSON type, a length or attempt count below
     ///     1, a length above 128, a unique-character count above 64 or above the length, or a lockout duration that is negative or longer than 100 years. Requires <c>identitysettings:write</c>.
@@ -235,6 +251,21 @@ public class IdentitySettingsController(
                     LockoutSectionPath,
                     nameof(LockoutOptions.AllowedForNewUsers),
                     allowedForNewUsers
+                )
+            );
+
+        // Written through the file like the sections above; the live value follows the reload.
+        if (
+            patch.TryGetMergePatchBoolean(
+                "requireEmailChangeConfirmation",
+                out bool requireEmailChangeConfirmation
+            )
+        )
+            settings.Add(
+                new PresetConfigurationSetting(
+                    EmailChangeSectionPath,
+                    nameof(EmailChangeOptions.RequireConfirmation),
+                    requireEmailChangeConfirmation
                 )
             );
 

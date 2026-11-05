@@ -21,6 +21,10 @@ import { AdminResetPasswordRequest } from '../model/adminResetPasswordRequest';
 // @ts-ignore
 import { AdminResetPasswordResult } from '../model/adminResetPasswordResult';
 // @ts-ignore
+import { ChangeEmailPendingResult } from '../model/changeEmailPendingResult';
+// @ts-ignore
+import { ChangeEmailRequest } from '../model/changeEmailRequest';
+// @ts-ignore
 import { ChangePasswordRequest } from '../model/changePasswordRequest';
 // @ts-ignore
 import { CreateUserRequest } from '../model/createUserRequest';
@@ -53,6 +57,7 @@ import {
     ApiUsersIdRolesPostRequestParams,
     ApiUsersIdRolesRoleNameDeleteRequestParams,
     ApiUsersMeChangePasswordPostRequestParams,
+    ApiUsersMeEmailPostRequestParams,
     ApiUsersMePatchRequestParams,
     ApiUsersPostRequestParams
 } from './users.serviceInterface';
@@ -477,7 +482,7 @@ export class UsersService extends BaseService implements UsersServiceInterface {
     }
 
     /**
-     * This action resets an account\&#39;s password for an administrator, for an account that cannot supply its current password as &#x60;POST /api/users/me/change-password&#x60; requires. &#x60;AdminResetPasswordRequest.Mode&#x60; picks one of two modes (see &#x60;AdminPasswordResetMode&#x60;). Requires &#x60;users:write&#x60;. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.AutoGenerate&#x60; sets a generated strong         password at once, through a reset token and         M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) so Identity\&#39;s usual         validation and hashing apply, and returns it in this response only. It also replaces         the account\&#39;s security stamp and revokes every refresh token of the account, so         every access token issued before the reset answers 401 on its next request.     &lt;/item&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.EmailLink&#x60; e-mails the account a link to         the admin console\&#39;s \&quot;set new password\&quot; page, which submits to         &#x60;POST /api/auth/reset-password&#x60;. The link carries an         Identity reset token, Base64Url-encoded for the query string (see         &#x60;ConfirmPasswordResetRequest&#x60;). The account must have an e-mail         address, and SMTP and the public base URL the link points at must be         configured (see &#x60;SmtpSettingsController&#x60;); otherwise this returns 400         with a clear message.     &lt;/item&gt;&lt;/list&gt;
+     * This action resets an account\&#39;s password for an administrator, for an account that cannot supply its current password as &#x60;POST /api/users/me/change-password&#x60; requires. &#x60;AdminResetPasswordRequest.Mode&#x60; picks one of two modes (see &#x60;AdminPasswordResetMode&#x60;). Requires &#x60;users:write&#x60;. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.AutoGenerate&#x60; sets a generated strong         password at once, through a reset token and         &#x60;UserManager.ResetPasswordAsync&#x60; so Identity\&#39;s usual         validation and hashing apply, and returns it in this response only. It also replaces         the account\&#39;s security stamp and revokes every refresh token of the account, so         every access token issued before the reset answers 401 on its next request.     &lt;/item&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.EmailLink&#x60; e-mails the account a link to         the admin console\&#39;s \&quot;set new password\&quot; page, which submits to         &#x60;POST /api/auth/reset-password&#x60;. The link carries an         Identity reset token, Base64Url-encoded for the query string (see         &#x60;ConfirmPasswordResetRequest&#x60;). The account must have an e-mail         address, and SMTP and the public base URL the link points at must be         configured (see &#x60;SmtpSettingsController&#x60;); otherwise this returns 400         with a clear message.     &lt;/item&gt;&lt;/list&gt;
      * @endpoint post /api/users/{id}/reset-password
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -747,7 +752,74 @@ export class UsersService extends BaseService implements UsersServiceInterface {
     }
 
     /**
-     * This action returns the caller\&#39;s profile: display name, phone number and read-only e-mail address. Requires only a signed-in caller.
+     * This action changes the caller\&#39;s own e-mail address. It requires the current password; a wrong one returns 400 with Identity\&#39;s &#x60;PasswordMismatch&#x60; error. An invalid address or one another account uses returns 400 with Identity\&#39;s error. Requires only a signed-in caller. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;&lt;b&gt;Confirmation required&lt;/b&gt; (&#x60;EmailChangeOptions.RequireConfirmation&#x60;,         the default): SMTP and the public base URL must be configured, otherwise this         returns 400 naming what is missing. It e-mails a link to the new address and         returns 202 with &#x60;ChangeEmailPendingResult&#x60;. Nothing on the account         changes until the link is submitted to         &#x60;POST /api/auth/confirm-email-change&#x60;, which also marks the address         confirmed.     &lt;/item&gt;&lt;item&gt;&lt;b&gt;Not required&lt;/b&gt;: the address changes at once and the response is 200 with         the profile. The account\&#39;s confirmed state stays as it was, as after an         administrator\&#39;s change in &#x60;PUT /api/users/{id}&#x60;, so a mistyped address can cut         off e-mailed two-factor codes, which go only to a confirmed address.     &lt;/item&gt;&lt;/list&gt; When the address changes, the security stamp is replaced and every refresh token is revoked, so every session of the account, the caller\&#39;s own included, must sign in again, and a notice goes to the old address if SMTP is configured.
+     * @endpoint post /api/users/me/email
+     * @param requestParameters
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public apiUsersMeEmailPost(requestParameters?: ApiUsersMeEmailPostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<UserProfileDetail>;
+    public apiUsersMeEmailPost(requestParameters?: ApiUsersMeEmailPostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<UserProfileDetail>>;
+    public apiUsersMeEmailPost(requestParameters?: ApiUsersMeEmailPostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<UserProfileDetail>>;
+    public apiUsersMeEmailPost(requestParameters?: ApiUsersMeEmailPostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        const changeEmailRequest = requestParameters?.changeEmailRequest;
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (Bearer) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        // to determine the Content-Type header
+        const consumes: string[] = [
+            'application/json'
+        ];
+        const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
+        if (httpContentTypeSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Content-Type', httpContentTypeSelected);
+        }
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/users/me/email`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<UserProfileDetail>('post', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                body: changeEmailRequest,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * This action returns the caller\&#39;s profile: display name, phone number, read-only e-mail address and whether changing that address needs a confirmation. Requires only a signed-in caller.
      * @endpoint get /api/users/me
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -802,7 +874,7 @@ export class UsersService extends BaseService implements UsersServiceInterface {
     }
 
     /**
-     * This action updates the caller\&#39;s display name and phone number as an RFC 7396 merge patch (see &#x60;JsonElementMergePatchExtension&#x60;): an absent field is unchanged, a JSON &#x60;null&#x60; clears it, and a string sets it. The e-mail address cannot be changed here (see &#x60;UserProfileDetail&#x60;). Requires only a signed-in caller.
+     * This action updates the caller\&#39;s display name and phone number as an RFC 7396 merge patch (see &#x60;JsonElementMergePatchExtension&#x60;): an absent field is unchanged, a JSON &#x60;null&#x60; clears it, and a string sets it. An &#x60;email&#x60; field is ignored: the address changes only through &#x60;POST /api/users/me/email&#x60;. Requires only a signed-in caller.
      * @endpoint patch /api/users/me
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -27,12 +27,11 @@
           Your avatar is looked up from
           <a href="https://gravatar.com" target="_blank" rel="noopener">Gravatar</a>, keyed on an
           MD5 hash of your account's own e-mail address ({{ profile()?.email }}) -- so if that
-          address is ever changed (today only possible for an administrator to do, from the Users
-          page), your avatar changes with it automatically, the next time this page loads. If no
-          Gravatar is registered for that address -- or this server has no path to the internet at
-          all -- your initials are shown instead. This lookup happens entirely in your own browser;
-          your e-mail address itself is never sent anywhere by this server to make it work, only its
-          hash, computed locally before ever leaving your browser.
+          address is ever changed, your avatar changes with it automatically, the next time this
+          page loads. If no Gravatar is registered for that address -- or this server has no path to
+          the internet at all -- your initials are shown instead. This lookup happens entirely in
+          your own browser; your e-mail address itself is never sent anywhere by this server to make
+          it work, only its hash, computed locally before ever leaving your browser.
         </p>
       </div>
     </c-card-body>
@@ -51,7 +50,7 @@
         <div class="field">
           <label cLabel for="profile-email">E-mail address</label>
           <input cFormControl id="profile-email" [value]="profile()?.email" disabled />
-          <p class="hint">Changing your e-mail address is not available from this page yet.</p>
+          <p class="hint">To change it, use the Change e-mail section below.</p>
         </div>
         <div class="field">
           <label cLabel for="profile-display-name">Display name</label>
@@ -83,6 +82,74 @@
             <c-spinner size="sm" />
           } @else {
             Save
+          }
+        </button>
+      </form>
+    </c-card-body>
+  </c-card>
+
+  <c-card class="profile-card">
+    <c-card-header>
+      <strong>Change e-mail</strong>
+    </c-card-header>
+    <c-card-body>
+      <form cForm [formGroup]="changeEmailForm" class="profile-form" (ngSubmit)="changeEmail()">
+        @if (profile()?.emailChangeRequiresConfirmation !== false) {
+          <p class="hint" id="email-change-mode">
+            We send a link to the new address. Your address does not change until you open it.
+            Opening it signs out every session of your account.
+          </p>
+        } @else {
+          <p class="hint" id="email-change-mode">
+            The address changes as soon as you submit. This signs out every session of your account,
+            this one included.
+          </p>
+        }
+        <div class="field">
+          <label cLabel for="profile-new-email">New e-mail address</label>
+          <input
+            cFormControl
+            id="profile-new-email"
+            type="email"
+            formControlName="newEmail"
+            autocomplete="email"
+          />
+        </div>
+        <div class="field">
+          <label cLabel for="profile-email-password">Current password</label>
+          <input
+            cFormControl
+            id="profile-email-password"
+            type="password"
+            formControlName="currentPassword"
+            autocomplete="current-password"
+          />
+        </div>
+
+        @if (pendingEmailAddress()) {
+          <c-alert color="success" [dismissible]="false" role="status">
+            Check the inbox of {{ pendingEmailAddress() }}. Open the link in the message to finish
+            the change. Your address stays the same until you do.
+          </c-alert>
+        }
+
+        @if (changeEmailErrorMessage()) {
+          <c-alert color="danger" [dismissible]="false" role="alert">{{
+            changeEmailErrorMessage()
+          }}</c-alert>
+        }
+
+        <button
+          cButton
+          color="primary"
+          type="submit"
+          class="save-button"
+          [disabled]="changeEmailForm.invalid || changingEmail()"
+        >
+          @if (changingEmail()) {
+            <c-spinner size="sm" />
+          } @else {
+            Change e-mail
           }
         </button>
       </form>

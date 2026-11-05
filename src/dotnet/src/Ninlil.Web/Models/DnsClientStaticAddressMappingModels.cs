@@ -12,8 +12,8 @@ namespace Ninlil.Web.Models;
 ///     The source address or network mapped to <paramref name="ClientIdentifier" />: a bare IP
 ///     address (exact match) or a CIDR network with a <c>/</c> (matches every address in it). A
 ///     value with a <c>/</c> must parse with
-///     <see cref="System.Net.IPNetwork.TryParse(string, out System.Net.IPNetwork)" /> and one
-///     without with <see cref="System.Net.IPAddress.TryParse(string, out System.Net.IPAddress)" />,
+///     <c>System.Net.IPNetwork.TryParse</c> and one
+///     without with <c>System.Net.IPAddress.TryParse</c>,
 ///     the same two forms
 ///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> matches
 ///     at query time.

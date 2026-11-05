@@ -197,6 +197,8 @@ model/blockedServiceDetail.ts
 model/brandingEffectiveDetail.ts
 model/brandingSettingsDetail.ts
 model/caaAutoManagementSettingsDetail.ts
+model/changeEmailPendingResult.ts
+model/changeEmailRequest.ts
 model/changePasswordRequest.ts
 model/clientAddressDetail.ts
 model/clientAddressDetailPagedResult.ts
@@ -247,6 +249,7 @@ model/clusterQueryStatsSnapshot.ts
 model/clusterSettingsDetail.ts
 model/clusterUsernameCheckRequest.ts
 model/clusterUsernameCheckResult.ts
+model/confirmEmailChangeRequest.ts
 model/confirmPasswordResetRequest.ts
 model/createApiTokenRequest.ts
 model/createApiTokenResponse.ts

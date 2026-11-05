@@ -53,6 +53,13 @@ function passwordsMatchValidator(control: AbstractControl): ValidationErrors | n
  * password of an account that does not know it from the Users page (`ResetPasswordDialogComponent`).
  * A successful change ends every session of the account, so the page sends the user to the login
  * page with a message. Two-factor settings are on the Security page (`AccountSecurityComponent`).
+ *
+ * <p>The change-e-mail section posts the new address and the current password to
+ * `POST /api/users/me/email`. When the server requires confirmation (`emailChangeRequiresConfirmation`
+ * on the profile), it answers 202 after mailing a link to the new address and nothing changes
+ * until that link is opened (`ConfirmEmailChangeComponent`). Otherwise it answers 200, the address
+ * changes at once and every session of the account ends, so the page signs out like the password
+ * change does.
  */
 @Component({
   selector: 'app-account-profile',
@@ -89,6 +96,17 @@ export class AccountProfileComponent {
   readonly profileForm = this.formBuilder.group({
     displayName: ['', [Validators.maxLength(256)]],
     phoneNumber: ['', [Validators.maxLength(64)]],
+  });
+
+  readonly changingEmail = signal(false);
+  readonly changeEmailErrorMessage = signal<string | null>(null);
+
+  /** The address a confirmation link was mailed to, once the server has answered 202; `null` before. */
+  readonly pendingEmailAddress = signal<string | null>(null);
+
+  readonly changeEmailForm = this.formBuilder.group({
+    newEmail: ['', [Validators.required, Validators.email, Validators.maxLength(256)]],
+    currentPassword: ['', [Validators.required]],
   });
 
   readonly changingPassword = signal(false);
@@ -164,6 +182,49 @@ export class AccountProfileComponent {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save your profile.'));
     } finally {
       this.saving.set(false);
+    }
+  }
+
+  /**
+   * This method asks to change the signed-in user's e-mail address through
+   * `POST /api/users/me/email`. The response is read with its status, because the two successes
+   * have different bodies: 202 means a link was mailed and nothing changed yet (the page then
+   * says where to look), 200 means the address changed and every session ended, this one
+   * included (the page signs out and opens the login page). Errors, such as a wrong password or
+   * an address that another account uses, show the backend's message.
+   */
+  async changeEmail(): Promise<void> {
+    if (this.changeEmailForm.invalid || this.changingEmail()) return;
+
+    this.changingEmail.set(true);
+    this.changeEmailErrorMessage.set(null);
+    this.pendingEmailAddress.set(null);
+
+    const newEmail = this.changeEmailForm.getRawValue().newEmail.trim();
+    const { currentPassword } = this.changeEmailForm.getRawValue();
+
+    try {
+      const response = await firstValueFrom(
+        this.usersApi.apiUsersMeEmailPost(
+          { changeEmailRequest: { newEmail, currentPassword } },
+          'response',
+        ),
+      );
+      this.changeEmailForm.reset({ newEmail: '', currentPassword: '' });
+      if (response.status === 202) {
+        this.pendingEmailAddress.set(newEmail);
+        return;
+      }
+      await this.authService.endSessionAfterSecurityChange(
+        'Your e-mail address was changed and every session of your account was signed out. Sign in again.',
+      );
+      await this.router.navigateByUrl('/login');
+    } catch (error) {
+      this.changeEmailErrorMessage.set(
+        extractErrorMessage(error, 'Could not change your e-mail address.'),
+      );
+    } finally {
+      this.changingEmail.set(false);
     }
   }
 

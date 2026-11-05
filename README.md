@@ -4519,12 +4519,13 @@ you out of every session, yours included; sign in again with a code from the app
   refresh. API tokens (`Authorization: ApiToken <token>`) use the owner's current permissions at
   each request, and stop working when revoked or when the owner is disabled. The lifetimes are
   [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) settings.
-- **A password change or a two-factor change signs out every session of the account.** Each
+- **A password, e-mail address or two-factor change signs out every session of the account.** Each
   access token carries a digest of the account's security stamp, and Ninlil compares it at every
   request. These changes replace the stamp and revoke every refresh token of the account:
   changing your password, an administrator resetting it
   (`POST /api/users/<id>/reset-password`), setting a new password with a reset link (Forgot
-  password), confirming an authenticator, turning two-factor off, and generating new recovery codes.
+  password), changing your own e-mail address (see the next item), confirming an authenticator,
+  turning two-factor off, and generating new recovery codes.
   Every access token issued before the change then answers `401` on its next request, and no refresh
   token works, so a stolen session is cut off. The session that made the change is cut off too: the
   console signs you out and the sign-in page says why, and an API client signs in again. Starting an
@@ -4534,6 +4535,34 @@ you out of every session, yours included; sign in again with a code from the app
   tokens do not carry a stamp and keep working after these changes: they belong to the account, not
   to a password, and you revoke one by name (see [REST API](#rest-api)). Using a recovery code at
   sign-in does not end other sessions.
+- **Changing your own e-mail address needs your password.** The address receives password-reset
+  links and e-mailed two-factor codes, so the console's **Change e-mail** form on the Profile page
+  (`POST /api/users/me/email` with `{"newEmail": "...", "currentPassword": "..."}`) asks for the
+  current password, as a password change does, and shows a `400` for a wrong password, an invalid
+  address or one that another account uses. What happens next depends on
+  [`NINLIL_IDENTITY_EMAIL_CHANGE_REQUIRE_CONFIRMATION`](./ENVIRONMENT.md#identity-authentication--sso),
+  which is `true` by default and can be changed with the **Require e-mail confirmation** switch
+  under Settings, Identity, or `requireEmailChangeConfirmation` on
+  `PATCH /api/identity-settings`. `GET /api/users/me` shows the current value as
+  `emailChangeRequiresConfirmation`, and the form tells the user which of the two cases applies
+  before they submit.
+  - **With confirmation (the default)**, SMTP and the public base URL must be configured (see
+    [Single sign-on and e-mail secrets](#single-sign-on-and-e-mail-secrets)); otherwise the request
+    answers `400` and names what is missing. Ninlil e-mails a link to the new address and answers
+    `202` with `{"confirmationSent": true}`; the form then says to check the inbox of the new
+    address. Nothing changes until the link is opened. The link goes to the console page
+    `/confirm-email-change`, which needs no sign-in and submits `{userId, email, token}` to
+    `POST /api/auth/confirm-email-change` once. The link works once and a bad or expired one
+    answers `400`, which the page shows. Opening it sets the address and marks it confirmed.
+  - **Without confirmation**, the address changes at once and the answer is `200` with the profile.
+    The address keeps the confirmed state it had, as when an administrator changes it. E-mailed
+    two-factor codes go only to a confirmed address, and password-reset links go to whatever
+    address the account has, so **a mistyped address can cut off e-mailed two-factor codes and
+    send reset links to someone else.** Leave confirmation on unless SMTP is unavailable.
+  - **Either way**, when the address changes, every session of the account ends, the caller's own
+    included (the console signs you out and the sign-in page says why; the confirmation page also
+    clears a session in the browser that opens the link), and the old address gets a notice if
+    SMTP is configured. The change reaches the other nodes of a cluster like any account change.
 - **The JWT signing key proves a token is Ninlil's.** Whoever holds `data/jwt-signing-key.txt` can
   make a token for any enabled account, the bootstrap administrator's included, and the token then
   gets that account's permissions. Treat the file like a root password.

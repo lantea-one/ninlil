@@ -62,6 +62,9 @@ export function uniqueCharsWithinLength(group: AbstractControl): ValidationError
  * form does not offer them and the PATCH omits them. A note points to the admin login rate limit
  * page (`/settings/admin-login-rate-limit`), which bounds password guessing; it links there only
  * with `adminloginratelimit:read`, the permission that route needs.
+ * <p>The "Require e-mail confirmation" switch sets whether a user who changes their own e-mail
+ * address (Profile page) must first open a link mailed to the new address
+ * (`requireEmailChangeConfirmation`, on by default).
  * <p>A change applies from the next sign-in, registration or password change, not to requests
  * already running (see `IdentitySettingsController`). The backend's note is shown on save.
  */
@@ -116,6 +119,7 @@ export class IdentitySettingsComponent implements OnInit {
       requireLowercase: [true],
       requireUppercase: [true],
       requireNonAlphanumeric: [true],
+      requireEmailChangeConfirmation: [true],
     },
     { validators: uniqueCharsWithinLength },
   );
@@ -156,6 +160,7 @@ export class IdentitySettingsComponent implements OnInit {
         requireLowercase: settings.requireLowercase ?? true,
         requireUppercase: settings.requireUppercase ?? true,
         requireNonAlphanumeric: settings.requireNonAlphanumeric ?? true,
+        requireEmailChangeConfirmation: settings.requireEmailChangeConfirmation ?? true,
       });
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load identity settings.'));

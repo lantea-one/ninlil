@@ -29,7 +29,8 @@ namespace Ninlil.Web.Controllers;
 ///     This controller issues, refreshes and revokes sign-in credentials: a short-lived JSON Web
 ///     Token access token, a longer-lived opaque refresh token and, for an account with two-factor
 ///     authentication, the challenge token between the two steps. It also hosts the anonymous
-///     password-recovery actions (<see cref="ForgotPassword" /> and <see cref="ResetPassword" />),
+///     password-recovery actions (<see cref="ForgotPassword" /> and <see cref="ResetPassword" />)
+///     and the confirmation of a self-service e-mail change (<see cref="ConfirmEmailChange" />),
 ///     since their callers are not signed in and every <c>UsersController</c> action needs a
 ///     sign-in. Every action here allows anonymous callers.
 ///     <para>
@@ -85,6 +86,10 @@ namespace Ninlil.Web.Controllers;
 ///     Supplies this node's cluster node id, which <see cref="ResetPassword" /> stamps onto
 ///     <see cref="AuditableEntityBase.OriginatingNodeId" />.
 /// </param>
+/// <param name="emailChangeLinkSender">
+///     Sends the notice to the old address after <see cref="ConfirmEmailChange" /> applies a
+///     change.
+/// </param>
 /// <param name="scopeFactory">
 ///     Creates the service scope <see cref="ForgotPassword" /> sends its e-mail from after the
 ///     response has gone.
@@ -107,6 +112,7 @@ public class AuthController(
     IOptionsMonitor<EmailSenderOptions> emailOptions,
     IDnsServerEventPublisher eventPublisher,
     IOptionsMonitor<ClusterOptions> clusterOptions,
+    EmailChangeLinkSender emailChangeLinkSender,
     IServiceScopeFactory scopeFactory,
     ILogger<AuthController> logger
 ) : ControllerBase
@@ -539,7 +545,7 @@ public class AuthController(
     ///     <c>UsersController.ResetPassword</c>, called from the admin console's "set new password"
     ///     page. The caller is not signed in, so it allows anonymous callers;
     ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
-    ///     <see cref="UserManager{TUser}.ResetPasswordAsync" /> rejects a wrong, expired or used
+    ///     <c>UserManager.ResetPasswordAsync</c> rejects a wrong, expired or used
     ///     token. An unknown account and an undecodable token return the same 400 message, so the
     ///     response does not reveal whether an account exists. A successful reset replaces the
     ///     account's security stamp and revokes every refresh token of the account, so every
@@ -586,6 +592,98 @@ public class AuthController(
         await userManager.UpdateAsync(user);
 
         eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    ///     This action applies a self-service e-mail change from the link
+    ///     <see cref="UsersController.ChangeMyEmail" /> e-mailed to the new address, called from the
+    ///     admin console's "confirm e-mail change" page. The link may be opened in a browser that
+    ///     is not signed in, so it allows anonymous callers; <see cref="ConfirmEmailChangeRequest.Token" />
+    ///     is the only proof, and <c>UserManager.ChangeEmailAsync</c> rejects a
+    ///     wrong, expired, reused or tampered token, and one issued for another address. An
+    ///     unknown, disabled or mismatched account and a bad token return the same 400 message, so
+    ///     the response does not reveal whether an account exists. A successful change sets the
+    ///     address, marks it confirmed, replaces the account's security stamp and revokes every
+    ///     refresh token, so every session of the account must sign in again. A notice goes to the
+    ///     old address when SMTP is configured; a failed send is logged and does not undo the
+    ///     change.
+    /// </summary>
+    [HttpPost("confirm-email-change")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [SwaggerRequestExample(
+        typeof(ConfirmEmailChangeRequest),
+        typeof(ConfirmEmailChangeRequestExample)
+    )]
+    public async Task<IActionResult> ConfirmEmailChange(
+        ConfirmEmailChangeRequest request,
+        CancellationToken stoppingToken
+    )
+    {
+        const string invalidLinkMessage = "This e-mail change link is no longer valid.";
+
+        UserEntity user = await userManager.FindByIdAsync(request.UserId.ToString());
+
+        string rawToken;
+        try
+        {
+            rawToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token));
+        }
+        catch (FormatException)
+        {
+            throw new ValidationException(invalidLinkMessage);
+        }
+
+        // A disabled account cannot sign in, so it must not be able to move its address either.
+        if (user is null || user.IsDisabled || string.IsNullOrWhiteSpace(request.Email))
+            throw new ValidationException(invalidLinkMessage);
+
+        string oldEmail = user.Email;
+
+        IdentityResult result = await userManager.ChangeEmailAsync(user, request.Email, rawToken);
+
+        // Only a valid token gets past InvalidToken, so a different error (the address was taken
+        // in the meantime) is safe to show to the holder of that token.
+        if (
+            result.Errors.Any(error => error.Code == userManager.ErrorDescriber.InvalidToken().Code)
+        )
+            throw new ValidationException(invalidLinkMessage);
+        result.ThrowIfFailed();
+
+        // ChangeEmailAsync has replaced the security stamp; the refresh tokens go too.
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
+
+        user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+        await userManager.UpdateAsync(user);
+
+        eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
+
+        // The change has happened and cannot be undone by a failing mail server, so a failed
+        // notice is logged and not returned.
+        if (
+            !string.IsNullOrWhiteSpace(oldEmail)
+            && !string.IsNullOrWhiteSpace(emailOptions.CurrentValue.SmtpHost)
+        )
+        {
+            try
+            {
+                await emailChangeLinkSender.SendChangedNoticeAsync(
+                    oldEmail,
+                    user.Email,
+                    stoppingToken
+                );
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    exception,
+                    "The e-mail change notice for account {UserId} was not delivered.",
+                    user.Id
+                );
+            }
+        }
 
         return NoContent();
     }

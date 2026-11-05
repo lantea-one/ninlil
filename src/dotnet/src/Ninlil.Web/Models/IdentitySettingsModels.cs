@@ -23,6 +23,10 @@ namespace Ninlil.Web.Models;
 /// <param name="DefaultLockoutTimeSpan">How long an account is locked out once <see cref="MaxFailedAccessAttempts" /> is reached.</param>
 /// <param name="MaxFailedAccessAttempts">How many consecutive failed sign-in attempts trigger a lockout.</param>
 /// <param name="AllowedForNewUsers">Whether lockout applies to a newly created account too.</param>
+/// <param name="RequireEmailChangeConfirmation">
+///     Whether a user who changes their own e-mail address must first confirm the new one through
+///     an e-mailed link (<c>Identity:EmailChange:RequireConfirmation</c>).
+/// </param>
 public record IdentitySettingsDetail(
     int RequiredLength,
     int RequiredUniqueChars,
@@ -32,5 +36,6 @@ public record IdentitySettingsDetail(
     bool RequireNonAlphanumeric,
     TimeSpan DefaultLockoutTimeSpan,
     int MaxFailedAccessAttempts,
-    bool AllowedForNewUsers
+    bool AllowedForNewUsers,
+    bool RequireEmailChangeConfirmation
 );
