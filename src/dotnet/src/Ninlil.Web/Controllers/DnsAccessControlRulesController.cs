@@ -281,10 +281,11 @@ public class DnsAccessControlRulesController(
 
     /// <summary>
     ///     This method converts an array of capability names into the stored
-    ///     <see cref="DnsAccessControlCapabilityEnum" /> bitmask. Each entry must name one defined
-    ///     member other than <see cref="DnsAccessControlCapabilityEnum.None" />, case-sensitively;
-    ///     <see cref="Enum.IsDefined{TEnum}(TEnum)" /> rejects a combined value. An unknown name is
-    ///     a validation error, not ignored. A null list means no capabilities.
+    ///     <see cref="DnsAccessControlCapabilityEnum" /> bitmask. Each entry must equal the name of
+    ///     one member other than <see cref="DnsAccessControlCapabilityEnum.None" />, compared
+    ///     ordinally (case-sensitively). Digit strings, combined values and unknown names are
+    ///     refused with a validation error, never ignored: <see cref="Enum.TryParse{TEnum}(string, out TEnum)" />
+    ///     would accept a digit string equal to a member's value. A null list means no capabilities.
     /// </summary>
     private static bool TryParseCapabilities(
         IReadOnlyList<string> names,
@@ -298,26 +299,22 @@ public class DnsAccessControlRulesController(
         if (names is null)
             return true;
 
+        string[] validNames = Enum.GetNames<DnsAccessControlCapabilityEnum>()
+            .Where(memberName => memberName != nameof(DnsAccessControlCapabilityEnum.None))
+            .ToArray();
+
         foreach (string name in names)
         {
-            if (
-                !Enum.TryParse(name, ignoreCase: false, out DnsAccessControlCapabilityEnum parsed)
-                || parsed == DnsAccessControlCapabilityEnum.None
-                || !Enum.IsDefined(parsed)
-            )
+            if (name is null || Array.IndexOf(validNames, name) < 0)
             {
                 error =
                     $"'{name}' is not a recognized access-control capability. Valid values: "
-                    + string.Join(
-                        ", ",
-                        Enum.GetValues<DnsAccessControlCapabilityEnum>()
-                            .Where(value => value != DnsAccessControlCapabilityEnum.None)
-                    )
+                    + string.Join(", ", validNames)
                     + ".";
                 return false;
             }
 
-            capabilities |= parsed;
+            capabilities |= Enum.Parse<DnsAccessControlCapabilityEnum>(name);
         }
 
         return true;
