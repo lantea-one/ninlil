@@ -4488,10 +4488,13 @@ you out of every session, yours included; sign in again with a code from the app
   the `NINLIL_IDENTITY_PASSWORD_*` and `NINLIL_IDENTITY_USER_REQUIRE_UNIQUE_EMAIL` rows in
   [`ENVIRONMENT.md`](./ENVIRONMENT.md#identity-authentication--sso) show the values. The bootstrap
   password you set must meet the same rules.
-- **There is no account lockout.** A wrong password never locks an account, so nobody can lock an
-  administrator out by guessing. The `lockout` fields of `/api/identity-settings` have no effect,
-  and the console's Identity page does not show them. Password guessing is limited by the sign-in
-  limit instead.
+- **A wrong password at sign-in never locks an account**, so nobody can lock an administrator out
+  by guessing. Password guessing at sign-in is limited by the sign-in limit instead. A wrong
+  *current* password on a password change or an e-mail change does count: after 5 in a row (the
+  `lockout` fields of `/api/identity-settings`) the account is locked for 15 minutes, those two
+  requests answer `423 Locked` and sign-in refuses even the correct password until the lockout
+  ends, so a stolen access token cannot be used to guess the password. A right password resets the
+  count. The console's Identity page does not show the lockout fields.
 - **The sign-in limit counts per client address.** It allows 5 attempts in 5 minutes for the
   password sign-in and the second-factor sign-in together, and returns `429 Too Many Requests` after
   that. An IPv6 client counts by its /64 network, so an attacker cannot rotate through addresses of
@@ -4602,7 +4605,7 @@ you out of every session, yours included; sign in again with a code from the app
 | Setting | Variable and row |
 |---|---|
 | Password rules, unique e-mail | [`NINLIL_IDENTITY_PASSWORD_*`, `NINLIL_IDENTITY_USER_REQUIRE_UNIQUE_EMAIL`](./ENVIRONMENT.md#identity-authentication--sso). Console page: **Settings**, **Identity**. |
-| Lockout (no effect) | `NINLIL_IDENTITY_LOCKOUT_*` |
+| Lockout (current-password checks only) | `NINLIL_IDENTITY_LOCKOUT_*` |
 | Sign-in limit | [`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso). Console page: **Settings**, **Admin Login Rate Limit**. |
 | Token lifetimes, issuer, audience, signing key | [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) |
 | Bootstrap administrator | [Bootstrap administrator credentials](./ENVIRONMENT.md#bootstrap-administrator-credentials) |
@@ -5547,8 +5550,9 @@ curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/users -H
   read replica and the engine-specific cluster settings, as the server returns them, so the page
   cannot name a variable the server ignores. While a read replica is configured, the page hides the
   switch form and shows that Ninlil refuses a switch.
-- **The Identity page has no lockout fields.** Ninlil does not lock accounts after wrong passwords;
-  see [Security](#security). The API still returns the lockout values, but they have no effect.
+- **The Identity page has no lockout fields.** Ninlil does not lock accounts after wrong sign-in
+  passwords; see [Security](#security). The API still returns the lockout values, and they apply
+  only to wrong current passwords on a password or e-mail change.
 - **A secret is shown once.** Creating a TSIG key, a cloud credential, a webhook or an API token,
   creating a cluster invite, resetting a password and generating recovery codes open a dialog with
   the secret. Copy it before you close the dialog; Ninlil cannot show it again.
