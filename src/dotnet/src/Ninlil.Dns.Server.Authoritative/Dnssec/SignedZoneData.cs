@@ -85,11 +85,11 @@ public sealed class SignedZoneData(
 
     /// <summary>
     ///     This property tells which kind of chain <see cref="DenialOfExistenceRecords" /> holds:
-    ///     NSEC3 when <see cref="Nsec3ParamRecord" /> is set or the first chain record is an
+    ///     NSEC3 when <see cref="Nsec3ParamRecord" /> is set and its Flags are zero (RFC 5155 §4.1.2) or the first chain record is an
     ///     NSEC3, otherwise NSEC.
     /// </summary>
     public DnssecDenialOfExistenceModeEnum DenialOfExistenceMode { get; } =
-        DetermineMode(nsec3ParamRecord, denialOfExistenceRecords);
+        DetermineMode(UsableNsec3Param(nsec3ParamRecord), denialOfExistenceRecords);
 
     /// <summary>
     ///     This property contains the hash parameters of the NSEC3 chain, or
@@ -98,7 +98,7 @@ public sealed class SignedZoneData(
     ///     from the first NSEC3 record of the chain.
     /// </summary>
     public Nsec3HashParameters Nsec3Parameters { get; } =
-        DetermineNsec3Parameters(nsec3ParamRecord, denialOfExistenceRecords);
+        DetermineNsec3Parameters(UsableNsec3Param(nsec3ParamRecord), denialOfExistenceRecords);
 
     /// <summary>
     ///     This property contains the DS RRset of each delegation point (generated and stored
@@ -125,6 +125,18 @@ public sealed class SignedZoneData(
         DnsName name,
         DnsResourceRecordTypeEnum type
     ) => RrsigsByCoveredRrset.GetValueOrDefault((name, type), []);
+
+    /// <summary>
+    ///     This method returns the NSEC3PARAM record, or <see langword="null" /> when its Flags
+    ///     field is other than zero: RFC 5155 §4.1.2 says "NSEC3PARAM RRs with a Flags field
+    ///     value other than zero MUST be ignored".
+    /// </summary>
+    private static DnsResourceRecord UsableNsec3Param(DnsResourceRecord nsec3Param) =>
+        nsec3Param is not null
+        && DnsRecordDataCodecRegistry.Decode(nsec3Param.Type, nsec3Param.Data)
+            is Nsec3ParamRecordData { HasValidFlags: false }
+            ? null
+            : nsec3Param;
 
     /// <summary>
     ///     This method decides the chain's mode from the NSEC3PARAM record and the chain.

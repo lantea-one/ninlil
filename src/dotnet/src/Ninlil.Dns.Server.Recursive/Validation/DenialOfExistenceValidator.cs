@@ -722,7 +722,7 @@ public static class DenialOfExistenceValidator
     /// <summary>
     ///     This method decodes the usable NSEC3 records: owned exactly one label below the zone
     ///     apex, with a hash algorithm this validator can compute (others are ignored, RFC 5155
-    ///     §8.1) and an owner hash that is as long as the next hashed owner name.
+    ///     §8.1), a Flags value of zero or one (RFC 5155 §8.2) and an owner hash that is as long as the next hashed owner name.
     /// </summary>
     private static List<Nsec3Entry> DecodeNsec3s(
         IReadOnlyList<DnsResourceRecord> records,
@@ -741,6 +741,11 @@ public static class DenialOfExistenceValidator
                     is not Nsec3RecordData data
                 || !Nsec3Hasher.IsSupported(data.HashAlgorithm)
             )
+                continue;
+
+            // RFC 5155 §8.2: "A validator MUST ignore NSEC3 RRs with a Flag fields value other
+            // than zero or one." The record counts as absent before any proof logic runs.
+            if (!data.HasValidFlags)
                 continue;
 
             // A label that is not base32hex is unusable, like a length mismatch.

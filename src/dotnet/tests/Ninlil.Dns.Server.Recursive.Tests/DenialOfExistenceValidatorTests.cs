@@ -63,6 +63,43 @@ public class DenialOfExistenceValidatorTests
             )
         );
 
+    /// <summary>
+    ///     This method re-encodes every record of a chain with the given Flags octet, keeping all
+    ///     other fields.
+    /// </summary>
+    private static List<DnsResourceRecord> WithFlags(
+        IEnumerable<DnsResourceRecord> chain,
+        byte flags
+    ) =>
+        [
+            .. chain.Select(record =>
+            {
+                Nsec3RecordData data = (Nsec3RecordData)
+                    DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Nsec3, record.Data);
+
+                return new DnsResourceRecord(
+                    record.Name,
+                    record.Type,
+                    record.Class,
+                    record.TimeToLive,
+                    DnsRecordDataCodecRegistry.Encode(
+                        DnsResourceRecordTypeEnum.Nsec3,
+                        new Nsec3RecordData(
+                            data.HashAlgorithm,
+                            false,
+                            data.Iterations,
+                            data.Salt,
+                            data.NextHashedOwnerName,
+                            data.Types
+                        )
+                        {
+                            Flags = flags,
+                        }
+                    )
+                );
+            }),
+        ];
+
     private static byte[] Hash(string name, ushort iterations = 0) =>
         Nsec3Hasher.ComputeHash(1, DnsName.Parse(name), iterations, []);
 
@@ -913,6 +950,84 @@ public class DenialOfExistenceValidatorTests
                 DnsName.Parse("here.example.com"),
                 Apex,
                 chain
+            )
+        );
+    }
+
+    // RFC 5155 §8.2: "A validator MUST ignore NSEC3 RRs with a Flag fields value other than zero
+    // or one." A proof whose every record is ignored has no usable NSEC3 record, which the
+    // validator answers as NotProven, exactly as for an absent proof.
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(0x80)]
+    public void VerifyNxDomainNsec3_EveryRecordHasFlagsAboveOne_IsNotProven(byte flags)
+    {
+        List<DnsResourceRecord> chain = BuildChain(
+            false,
+            0,
+            ("example.com", ApexTypes),
+            ("mail.example.com", [DnsResourceRecordTypeEnum.A])
+        );
+
+        Assert.Equal(
+            Proven,
+            DenialOfExistenceValidator.VerifyNxDomainNsec3(
+                DnsName.Parse("a.b.example.com"),
+                Apex,
+                WithFlags(chain, 0)
+            )
+        );
+        Assert.Equal(
+            NotProven,
+            DenialOfExistenceValidator.VerifyNxDomainNsec3(
+                DnsName.Parse("a.b.example.com"),
+                Apex,
+                WithFlags(chain, flags)
+            )
+        );
+    }
+
+    [Fact]
+    public void VerifyNoDataNsec3_EveryRecordHasFlagsTwo_IsNotProven()
+    {
+        List<DnsResourceRecord> chain = BuildChain(
+            false,
+            0,
+            ("example.com", ApexTypes),
+            ("delegated.example.com", [DnsResourceRecordTypeEnum.NS])
+        );
+
+        Assert.Equal(
+            NotProven,
+            DenialOfExistenceValidator.VerifyNoDataNsec3(
+                DnsName.Parse("delegated.example.com"),
+                DnsResourceRecordTypeEnum.DS,
+                Apex,
+                WithFlags(chain, 2)
+            )
+        );
+    }
+
+    [Fact]
+    public void VerifyNxDomainNsec3_OnlyTheRecordsWithFlagsAboveOneAreIgnored_ProofNeedsTheRest()
+    {
+        List<DnsResourceRecord> chain = BuildChain(
+            false,
+            0,
+            ("example.com", ApexTypes),
+            ("mail.example.com", [DnsResourceRecordTypeEnum.A])
+        );
+
+        // One record keeps Flags 0, the other gets Flags 2: neither half is enough alone.
+        List<DnsResourceRecord> mixed = [chain[0], WithFlags([chain[1]], 2)[0]];
+
+        Assert.Equal(
+            NotProven,
+            DenialOfExistenceValidator.VerifyNxDomainNsec3(
+                DnsName.Parse("a.b.example.com"),
+                Apex,
+                mixed
             )
         );
     }
