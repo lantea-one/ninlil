@@ -18,13 +18,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes the password-complexity and account-lockout policy and the
-///     e-mail change policy: ASP.NET Core Identity's <see cref="IdentityOptions.Password" /> and
-///     <see cref="IdentityOptions.Lockout" />, which <c>UserManager{TUser}</c> enforces when an
-///     account is created, a password changes and someone signs in, and
+///     This controller reads and writes the password-complexity policy and the e-mail change
+///     policy: ASP.NET Core Identity's <see cref="IdentityOptions.Password" />, which
+///     <c>UserManager{TUser}</c> enforces when an account is created or a password changes, and
 ///     <see cref="EmailChangeOptions.RequireConfirmation" />, which
-///     <see cref="UsersController.ChangeMyEmail" /> reads. Reading needs
-///     <c>identitysettings:read</c> and writing needs <c>identitysettings:write</c>.
+///     <see cref="UsersController.ChangeMyEmail" /> reads. It also reads and writes the deprecated
+///     <see cref="IdentityOptions.Lockout" /> fields, which have no effect because Ninlil has no
+///     account lockout. Reading needs <c>identitysettings:read</c> and writing needs
+///     <c>identitysettings:write</c>.
 ///     <para>
 ///         <b>Every field takes effect on the next request, with no restart.</b>
 ///         <c>UserManager{TUser}</c> reads <see cref="IOptions{TOptions}" /> of

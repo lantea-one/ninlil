@@ -8,8 +8,8 @@ namespace Ninlil.Web.Models;
 ///     returns, from ASP.NET Core Identity's <see cref="IdentityOptions.Password" />, plus three
 ///     deprecated lockout fields from <see cref="IdentityOptions.Lockout" /> that have no effect
 ///     and stay only so existing callers keep working. Swashbuckle marks them
-///     <c>deprecated</c> in the OpenAPI document because of their <see cref="ObsoleteAttribute" />. Nothing
-///     in it is secret, so a <c>PATCH</c> to the same endpoint accepts the same fields.
+///     <c>deprecated</c> in the OpenAPI document because of their
+///     <see cref="ObsoleteAttribute" />. Nothing in it is secret, so a <c>PATCH</c> to the same endpoint accepts the same fields.
 ///     <see cref="IdentityOptions.User" />, <see cref="IdentityOptions.SignIn" />,
 ///     <see cref="IdentityOptions.Tokens" />, <see cref="IdentityOptions.ClaimsIdentity" /> and
 ///     <see cref="IdentityOptions.Stores" /> are left out: they are structural choices the

@@ -5552,7 +5552,8 @@ curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/users -H
   cannot name a variable the server ignores. While a read replica is configured, the page hides the
   switch form and shows that Ninlil refuses a switch.
 - **The Identity page has no lockout fields.** Ninlil does not lock accounts after wrong passwords;
-  see [Security](#security). The API still returns the lockout values, but they are deprecated, have no effect and go away in a later release.
+  see [Security](#security). The API still returns the lockout values, but they are deprecated,
+  have no effect and go away in a later release.
 - **A secret is shown once.** Creating a TSIG key, a cloud credential, a webhook or an API token,
   creating a cluster invite, resetting a password and generating recovery codes open a dialog with
   the secret. Copy it before you close the dialog; Ninlil cannot show it again.
