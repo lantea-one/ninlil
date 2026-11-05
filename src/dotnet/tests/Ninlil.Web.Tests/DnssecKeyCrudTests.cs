@@ -266,8 +266,11 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        string expected = algorithm is "RSASHA1" or "RSASHA1-NSEC3-SHA1"
+            ? "Ninlil does not sign with"
+            : "prohibited for signing (RFC 9904 §3)";
         Assert.Contains(
-            "prohibited",
+            expected,
             await response.Content.ReadAsStringAsync(),
             StringComparison.Ordinal
         );

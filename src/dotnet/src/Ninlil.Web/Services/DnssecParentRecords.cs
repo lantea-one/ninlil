@@ -16,7 +16,7 @@ public static class DnssecParentRecords
 {
     /// <summary>
     ///     This constant contains the DS digest type used: SHA-256, which every parent accepts
-    ///     and RFC 8624 says must be implemented.
+    ///     and RFC 9904 §4 says must be implemented.
     /// </summary>
     private const byte Sha256DigestType = 2;
 

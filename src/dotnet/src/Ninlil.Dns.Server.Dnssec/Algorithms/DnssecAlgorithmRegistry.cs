@@ -11,7 +11,7 @@ namespace Ninlil.Dns.Server.Dnssec.Algorithms;
 ///     well-maintained, audited .NET implementation. DS and DNSKEY records that use algorithm 12
 ///     can still be parsed and stored; they just cannot be signed or verified.
 ///     <para>
-///         Nothing here excludes the algorithms RFC 8624 says must not be used for signing
+///         Nothing here excludes the algorithms RFC 9904 §3 says must not be used for signing
 ///         (RSAMD5, DSA, DSA-NSEC3-SHA1). Key generation limits them only through
 ///         <see cref="DnssecAlgorithmPolicyOptions" />.
 ///     </para>
@@ -85,10 +85,11 @@ public static class DnssecAlgorithmRegistry
 
     /// <summary>
     ///     This method says whether this server refuses to sign with an algorithm. It is true for
-    ///     RSAMD5 (1), DSA (3), DSA-NSEC3-SHA1 (6) and ECC-GOST (12), which RFC 8624 §3.1 says
-    ///     MUST NOT be used for signing, and for RSASHA1 (5) and RSASHA1-NSEC3-SHA1 (7), which
-    ///     that section marks NOT RECOMMENDED. This server also refuses 5 and 7, because SHA-1
-    ///     signatures are no longer sound. Validation is not affected: signatures made with
+    ///     RSAMD5 (1), DSA (3), DSA-NSEC3-SHA1 (6) and ECC-GOST (12), which RFC 9904 §3
+    ///     (Table 2) says MUST NOT be used for signing, and for RSASHA1 (5) and
+    ///     RSASHA1-NSEC3-SHA1 (7), which that table marks NOT RECOMMENDED for signing. This
+    ///     server refuses 5 and 7 as its own rule, because SHA-1 signatures are no longer
+    ///     sound. Validation is not affected: signatures made with
     ///     these algorithms are still checked.
     /// </summary>
     /// <param name="algorithm">The algorithm to check.</param>
@@ -101,4 +102,27 @@ public static class DnssecAlgorithmRegistry
                 or DnssecAlgorithmEnum.DsaNsec3Sha1
                 or DnssecAlgorithmEnum.RsaSha1Nsec3Sha1
                 or DnssecAlgorithmEnum.EccGost;
+
+    /// <summary>
+    ///     This method returns the sentence that tells an operator why this server does not sign
+    ///     with an algorithm, or <see langword="null" /> when signing with it is allowed. The
+    ///     four algorithms RFC 9904 §3 marks MUST NOT (1, 3, 6, 12) are "prohibited for signing".
+    ///     RSASHA1 (5) and RSASHA1-NSEC3-SHA1 (7) are only NOT RECOMMENDED there, so the sentence
+    ///     says that refusing them is this server's own rule. Every rejection site (REST API,
+    ///     key management, signing log) uses it so the wording stays in one place.
+    /// </summary>
+    /// <param name="algorithm">The algorithm to describe.</param>
+    /// <returns>
+    ///     A <see langword="string" /> ending in a period, or <see langword="null" /> when
+    ///     <see cref="IsSigningProhibited" /> is false.
+    /// </returns>
+    public static string DescribeSigningRefusal(DnssecAlgorithmEnum algorithm)
+    {
+        if (!IsSigningProhibited(algorithm))
+            return null;
+
+        return algorithm is DnssecAlgorithmEnum.RsaSha1 or DnssecAlgorithmEnum.RsaSha1Nsec3Sha1
+            ? $"Ninlil does not sign with '{algorithm}' (RFC 9904 §3 marks it NOT RECOMMENDED for signing)."
+            : $"DNSSEC algorithm '{algorithm}' is prohibited for signing (RFC 9904 §3).";
+    }
 }
