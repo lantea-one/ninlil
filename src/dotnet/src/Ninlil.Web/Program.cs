@@ -1076,8 +1076,8 @@ app.UseMiddleware<StorageReadIntentMiddleware>();
 
 // The admin sign-in limiter policies (ServiceCollectionAdminLoginRateLimitingExtension's
 // AuthenticationEndpointPolicyName and PasswordResetEndpointPolicyName) apply only where
-// [EnableRateLimiting] names them (AuthController.Login, TwoFactorLogin and ForgotPassword); this
-// middleware is what enforces that attribute.
+// [EnableRateLimiting] names them (AuthController.Login, TwoFactorLogin, ForgotPassword,
+// ResetPassword and ConfirmEmailChange); this middleware is what enforces that attribute.
 app.UseRateLimiter();
 
 app.MapControllers();

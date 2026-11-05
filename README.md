@@ -4495,11 +4495,11 @@ you out of every session, yours included; sign in again with a code from the app
 - **The sign-in limit counts per client address.** It allows 5 attempts in 5 minutes for the
   password sign-in and the second-factor sign-in together, and returns `429 Too Many Requests` after
   that. An IPv6 client counts by its /64 network, so an attacker cannot rotate through addresses of
-  one subscriber. A Forgot password request has a separate count of 5 in 5 minutes. The window is
-  fixed: a client that reaches the limit waits until the window ends, and the `429` carries a
-  `Retry-After` header with the seconds that are left. The settings are read at
-  startup, so a change needs a restart
-  ([`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso)).
+  one subscriber. Forgot password requests, setting a new password with a reset link and
+  confirming an e-mail change share a separate count of 5 in 5 minutes. The window is fixed: a
+  client that reaches the limit waits until the window ends, and the `429` carries a `Retry-After`
+  header with the seconds that are left. The settings are read at startup, so a change needs a
+  restart ([`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso)).
 - **Two-factor codes have separate limits, kept per node in memory.** Five wrong codes in 15
   minutes block that account's second-factor checks (`429`), whichever address they come from. An
   e-mailed code can be requested once a minute, and a pending sign-in may ask for three. A pending

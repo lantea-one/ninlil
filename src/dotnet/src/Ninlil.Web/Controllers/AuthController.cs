@@ -553,6 +553,9 @@ public class AuthController(
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(
+        ServiceCollectionAdminLoginRateLimitingExtension.PasswordResetEndpointPolicyName
+    )]
     [SwaggerRequestExample(
         typeof(ConfirmPasswordResetRequest),
         typeof(ConfirmPasswordResetRequestExample)
@@ -612,6 +615,9 @@ public class AuthController(
     /// </summary>
     [HttpPost("confirm-email-change")]
     [AllowAnonymous]
+    [EnableRateLimiting(
+        ServiceCollectionAdminLoginRateLimitingExtension.PasswordResetEndpointPolicyName
+    )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [SwaggerRequestExample(
         typeof(ConfirmEmailChangeRequest),
