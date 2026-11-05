@@ -17,10 +17,12 @@
 #      src/script/development/file-scoped-namespaces.sh converts.
 #   4. The agent definitions of every coding assistant (.claude/, .gemini/, .agents/, .codex/)
 #      match the roles in src/agents/ (src/script/development/sync-agent-definitions.py --check).
-#   5. Every .forgejo/scripts/tests/*.test.sh.
+#   5. Every relative link and #anchor in the tracked Markdown files resolves
+#      (.forgejo/scripts/check-markdown-links.py; external URLs are not fetched).
+#   6. Every .forgejo/scripts/tests/*.test.sh.
 #
 # Inputs: none; run from anywhere (it changes to the repository root). Needs shellcheck,
-# actionlint, find and the tools the tests need. Outputs: tool output on stdout/stderr and a
+# actionlint, python3, find and the tools the tests need. Outputs: tool output on stdout/stderr and a
 # summary line. Exit status: 0 when every step passes, 1 otherwise.
 
 set -euo pipefail
@@ -71,6 +73,11 @@ if python3 src/script/development/sync-agent-definitions.py --check; then
     :
 else
     failed+=('agent definitions')
+fi
+
+echo '== markdown links'
+if ! python3 -I .forgejo/scripts/check-markdown-links.py; then
+    failed+=('markdown links')
 fi
 
 echo '== script self-tests'
