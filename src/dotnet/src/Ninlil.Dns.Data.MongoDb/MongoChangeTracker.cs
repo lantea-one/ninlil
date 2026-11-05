@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.Abstractions.Routing;
 
@@ -61,6 +62,22 @@ public class MongoChangeTracker(
     );
 
     /// <summary>
+    ///     This method tells whether the server rejected a write for a duplicate key (error code
+    ///     11000), however the driver reports it: a single write, a bulk write or a command error.
+    /// </summary>
+    private static bool IsDuplicateKey(Exception exception) =>
+        exception switch
+        {
+            MongoWriteException write => write.WriteError.Category
+                == ServerErrorCategory.DuplicateKey,
+            MongoBulkWriteException bulk => bulk.WriteErrors.Any(error =>
+                error.Category == ServerErrorCategory.DuplicateKey
+            ),
+            MongoCommandException command => command.Code == 11000,
+            _ => false,
+        };
+
+    /// <summary>
     ///     This method stages a single write to be performed the next time
     ///     <see cref="FlushAsync" /> runs.
     /// </summary>
@@ -100,6 +117,10 @@ public class MongoChangeTracker(
     /// <exception cref="Abstractions.Routing.StorageReadOnlyException">
     ///     The scope reads from a replica.
     /// </exception>
+    /// <exception cref="ConflictException">
+    ///     A write violated a unique index (for example a second DHCP custom option with the same
+    ///     tag on one scope). The API maps it to 409.
+    /// </exception>
     public async Task<int> FlushAsync(CancellationToken stoppingToken = default)
     {
         context.EnsureWritable("SaveChanges");
@@ -111,37 +132,53 @@ public class MongoChangeTracker(
         if (operations.Length == 0)
             return 0;
 
-        PendingOperation[] transactional = operations.Where(item => item.Transactional).ToArray();
-        PendingOperation[] afterCommit = operations.Where(item => !item.Transactional).ToArray();
-
-        if (transactional.Length > 0)
+        try
         {
-            if (await transactionSupport.DetectAsync(stoppingToken))
-            {
-                using IClientSessionHandle session = await client.StartSessionAsync(
-                    cancellationToken: stoppingToken
-                );
+            PendingOperation[] transactional = operations
+                .Where(item => item.Transactional)
+                .ToArray();
+            PendingOperation[] afterCommit = operations
+                .Where(item => !item.Transactional)
+                .ToArray();
 
-                await session.WithTransactionAsync(
-                    async (transactionSession, token) =>
-                    {
-                        foreach (PendingOperation item in transactional)
-                            await item.Operation(transactionSession, token);
-
-                        return true;
-                    },
-                    cancellationToken: stoppingToken
-                );
-            }
-            else
+            if (transactional.Length > 0)
             {
-                foreach (PendingOperation item in transactional)
-                    await item.Operation(null, stoppingToken);
+                if (await transactionSupport.DetectAsync(stoppingToken))
+                {
+                    using IClientSessionHandle session = await client.StartSessionAsync(
+                        cancellationToken: stoppingToken
+                    );
+
+                    await session.WithTransactionAsync(
+                        async (transactionSession, token) =>
+                        {
+                            foreach (PendingOperation item in transactional)
+                                await item.Operation(transactionSession, token);
+
+                            return true;
+                        },
+                        cancellationToken: stoppingToken
+                    );
+                }
+                else
+                {
+                    foreach (PendingOperation item in transactional)
+                        await item.Operation(null, stoppingToken);
+                }
             }
+
+            foreach (PendingOperation item in afterCommit)
+                await item.Operation(null, stoppingToken);
         }
-
-        foreach (PendingOperation item in afterCommit)
-            await item.Operation(null, stoppingToken);
+        catch (Exception exception) when (IsDuplicateKey(exception))
+        {
+            // A unique index rejected a write (code 11000). The relational engines have the same
+            // constraints; the controllers answer 409 for a duplicate they see first, and this
+            // is the same answer for the concurrent write that slipped past their check.
+            throw new ConflictException(
+                "A value that must be unique is already in use by another entry."
+            );
+        }
 
         // Every write has succeeded (an exception above skips this line), so tell the caches.
         notifier.NotifyChanged([.. operations.Select(item => item.EntityType).Distinct()]);

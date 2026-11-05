@@ -4915,6 +4915,7 @@ other, it logs a critical entry that begins with `Startup refused:`, explains wh
 | The MySQL server ... has read_only set | The connection string reaches a replica. | Point it at the writable primary. |
 | A setting under `Storage:` is wrong | A storage cluster or replica setting is out of range or contradicts the connection string. | Fix the setting the message names. |
 | MongoDB: unknown schema step, or a backfill failed | See [MongoDB](#mongodb). | |
+| MongoDB: DHCP custom options that share a tag on one scope or tag rule | Two documents in `NinlilDhcpScopeCustomOptions` (same `ScopeId` and `OptionTag`) or in `NinlilDhcpTagRuleOptions` (same `TagRuleId` and `OptionTag`). Ninlil needs a unique index on each pair, as the other engines have, and will not choose which document to keep. Nothing was deleted. | The message lists every group with its collection, scope or tag rule id, tag and document ids. Delete all but one document of each group (for example `db.NinlilDhcpScopeCustomOptions.deleteOne({_id: UUID("<id>")})` in `mongosh`), then start again. |
 
 To see the message: `sudo journalctl -u ninlil -e` (Linux packages), `docker logs ninlil`, or the
 console output of `dotnet run`.

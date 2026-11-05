@@ -52,6 +52,17 @@ public static class MongoSchemaSteps
     public const string DhcpLeaseScopeIdBackfill = nameof(DhcpLeaseScopeIdBackfill);
 
     /// <summary>
+    ///     This constant names the step that makes the compound indexes on DHCP scope custom
+    ///     options (scope, tag) and tag rule options (tag rule, tag) unique, as the relational
+    ///     engines already have (see <see cref="DhcpCustomOptionUniqueIndexes" />). It guarantees
+    ///     that the start is refused while either collection holds two documents with the same
+    ///     owner and tag, and that the unique indexes exist once the step is recorded. It deletes
+    ///     nothing. Recording it makes an older build refuse a database this version has used,
+    ///     since an older build would write the duplicates the unique index rejects.
+    /// </summary>
+    public const string DhcpCustomOptionUniqueIndexes = nameof(DhcpCustomOptionUniqueIndexes);
+
+    /// <summary>
     ///     This property contains every step this build knows, in the order they run.
     /// </summary>
     public static IReadOnlyList<string> Known { get; } =
@@ -61,5 +72,6 @@ public static class MongoSchemaSteps
         ZoneJournalSoaHistory,
         FilterListAppliesToAllClients,
         DhcpLeaseScopeIdBackfill,
+        DhcpCustomOptionUniqueIndexes,
     ];
 }
