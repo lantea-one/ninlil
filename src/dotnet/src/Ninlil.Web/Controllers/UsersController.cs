@@ -586,7 +586,7 @@ public class UsersController(
     ///         <item>
     ///             <see cref="AdminPasswordResetMode.AutoGenerate" /> sets a generated strong
     ///             password at once, through a reset token and
-    ///             <see cref="UserManager{TUser}.ResetPasswordAsync" /> so Identity's usual
+    ///             <c>UserManager.ResetPasswordAsync</c> so Identity's usual
     ///             validation and hashing apply, and returns it in this response only. It also replaces
     ///             the account's security stamp and revokes every refresh token of the account, so
     ///             every access token issued before the reset answers 401 on its next request.

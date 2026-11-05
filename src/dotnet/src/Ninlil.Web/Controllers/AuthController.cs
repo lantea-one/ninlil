@@ -545,7 +545,7 @@ public class AuthController(
     ///     <c>UsersController.ResetPassword</c>, called from the admin console's "set new password"
     ///     page. The caller is not signed in, so it allows anonymous callers;
     ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
-    ///     <see cref="UserManager{TUser}.ResetPasswordAsync" /> rejects a wrong, expired or used
+    ///     <c>UserManager.ResetPasswordAsync</c> rejects a wrong, expired or used
     ///     token. An unknown account and an undecodable token return the same 400 message, so the
     ///     response does not reveal whether an account exists. A successful reset replaces the
     ///     account's security stamp and revokes every refresh token of the account, so every
@@ -601,7 +601,7 @@ public class AuthController(
     ///     <see cref="UsersController.ChangeMyEmail" /> e-mailed to the new address, called from the
     ///     admin console's "confirm e-mail change" page. The link may be opened in a browser that
     ///     is not signed in, so it allows anonymous callers; <see cref="ConfirmEmailChangeRequest.Token" />
-    ///     is the only proof, and <see cref="UserManager{TUser}.ChangeEmailAsync" /> rejects a
+    ///     is the only proof, and <c>UserManager.ChangeEmailAsync</c> rejects a
     ///     wrong, expired, reused or tampered token, and one issued for another address. An
     ///     unknown, disabled or mismatched account and a bad token return the same 400 message, so
     ///     the response does not reveal whether an account exists. A successful change sets the
@@ -612,6 +612,7 @@ public class AuthController(
     /// </summary>
     [HttpPost("confirm-email-change")]
     [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [SwaggerRequestExample(
         typeof(ConfirmEmailChangeRequest),
         typeof(ConfirmEmailChangeRequestExample)
