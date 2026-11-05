@@ -375,7 +375,8 @@ public sealed class SignedZoneCache(
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
     ///     Whether the bump and the signing both succeeded. A storage failure while reloading is
-    ///     thrown, as before; the DS path catches it.
+    ///     thrown to the caller; the DS-change path catches it, the scheduled path lets it reach
+    ///     the re-signing job.
     /// </returns>
     private async Task<bool> BumpSerialAndResignAsync(
         Guid zoneId,

@@ -1241,9 +1241,12 @@ child zone's `id`; copy it as `<child-zone-id>`.
    whenever the child's set of `Active` KSKs changes: when you add a KSK, remove or retire one,
    switch the child's signing on or off, delete the child, or when a rollover promotes the new
    KSK. The parent's SOA serial goes up with each such re-sign, so a secondary of the parent
-   transfers the new DS record. If the re-sign fails, Ninlil logs a warning and tries again at the
-   next reload of the child. A change to a ZSK leaves the parent alone, because a DS record names
-   a KSK. Step 4 of "Check that it worked" below shows the parent's DS answer.
+   transfers the new DS record. If the re-sign fails, Ninlil logs a warning and tries again the
+   next time the child is reloaded. There is no retry timer: that happens when the child changes
+   again or its signatures are refreshed (about 25 days after its last signing with the default
+   settings), and a restart drops the pending retry. Editing any record of the child retries at
+   once. A change to a ZSK leaves the parent alone, because a DS record names a KSK. Step 4 of
+   "Check that it worked" below shows the parent's DS answer.
 
 **Roll a key (optional).** A rollover replaces a key without breaking validation. Ninlil follows
 the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signature for a KSK
