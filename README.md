@@ -4536,27 +4536,32 @@ you out of every session, yours included; sign in again with a code from the app
   to a password, and you revoke one by name (see [REST API](#rest-api)). Using a recovery code at
   sign-in does not end other sessions.
 - **Changing your own e-mail address needs your password.** The address receives password-reset
-  links and e-mailed two-factor codes, so `POST /api/users/me/email` with
-  `{"newEmail": "...", "currentPassword": "..."}` asks for the current password, as a password
-  change does, and answers `400` for a wrong password, an invalid address or one that another
-  account uses. What happens next depends on
+  links and e-mailed two-factor codes, so the console's **Change e-mail** form on the Profile page
+  (`POST /api/users/me/email` with `{"newEmail": "...", "currentPassword": "..."}`) asks for the
+  current password, as a password change does, and shows a `400` for a wrong password, an invalid
+  address or one that another account uses. What happens next depends on
   [`NINLIL_IDENTITY_EMAIL_CHANGE_REQUIRE_CONFIRMATION`](./ENVIRONMENT.md#identity-authentication--sso),
-  which is `true` by default and can be changed with `requireEmailChangeConfirmation` on
+  which is `true` by default and can be changed with the **Require e-mail confirmation** switch
+  under Settings, Identity, or `requireEmailChangeConfirmation` on
   `PATCH /api/identity-settings`. `GET /api/users/me` shows the current value as
-  `emailChangeRequiresConfirmation`.
+  `emailChangeRequiresConfirmation`, and the form tells the user which of the two cases applies
+  before they submit.
   - **With confirmation (the default)**, SMTP and the public base URL must be configured (see
     [Single sign-on and e-mail secrets](#single-sign-on-and-e-mail-secrets)); otherwise the request
     answers `400` and names what is missing. Ninlil e-mails a link to the new address and answers
-    `202` with `{"confirmationSent": true}`. Nothing changes until the link is opened, which
-    submits `{userId, email, token}` to `POST /api/auth/confirm-email-change`. The link works once
-    and a bad or expired one answers `400`. Opening it sets the address and marks it confirmed.
+    `202` with `{"confirmationSent": true}`; the form then says to check the inbox of the new
+    address. Nothing changes until the link is opened. The link goes to the console page
+    `/confirm-email-change`, which needs no sign-in and submits `{userId, email, token}` to
+    `POST /api/auth/confirm-email-change` once. The link works once and a bad or expired one
+    answers `400`, which the page shows. Opening it sets the address and marks it confirmed.
   - **Without confirmation**, the address changes at once and the answer is `200` with the profile.
     The address keeps the confirmed state it had, as when an administrator changes it. E-mailed
     two-factor codes go only to a confirmed address, and password-reset links go to whatever
     address the account has, so **a mistyped address can cut off e-mailed two-factor codes and
     send reset links to someone else.** Leave confirmation on unless SMTP is unavailable.
   - **Either way**, when the address changes, every session of the account ends, the caller's own
-    included, and the old address gets a notice if SMTP is configured. The change reaches the
+    included (the console signs you out and the sign-in page says why; the confirmation page also
+    clears a session in the browser that opens the link), and the old address gets a notice if SMTP is configured. The change reaches the
     other nodes of a cluster like any account change.
 - **The JWT signing key proves a token is Ninlil's.** Whoever holds `data/jwt-signing-key.txt` can
   make a token for any enabled account, the bootstrap administrator's included, and the token then
