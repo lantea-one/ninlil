@@ -85,6 +85,8 @@ public class ClusterChannelController(
     ///     identity the cluster channel's TSIG authentication established, never from the request
     ///     body. It is the one action an unused, unexpired invite key may sign.
     /// </summary>
+    // The route must stay ClusterTsigAuthenticationDefaults.JoinCompletePath: the TSIG handler
+    // lets an invite key sign only that path, and the joining node calls it by that constant.
     [HttpPost("join-complete")]
     public async Task<IActionResult> JoinComplete(
         [FromBody] ClusterJoinCompleteRequest request,
