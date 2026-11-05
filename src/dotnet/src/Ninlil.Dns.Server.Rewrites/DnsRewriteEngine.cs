@@ -152,17 +152,19 @@ public sealed class DnsRewriteEngine(
     ///         CNAME questions itself.
     ///     </para>
     ///     <para>
-    ///         The authority section keeps the zone's SOA (RFC 2308 §3: a NODATA answer carries
-    ///         it) with a TTL of no more than the SOA's MINIMUM field and its own TTL (§3: the
-    ///         negative TTL is the lesser of the two) and no more than the rewrite TTL, so the
-    ///         client asks again no later than it would for a rewrite answer. The RRSIG over the
-    ///         SOA gets the same TTL (§3). The SOA is the closest enclosing zone's, which is valid
-    ///         for NODATA at any name in that zone. Without a SOA none is sent, and the answer is
-    ///         not cacheable (§5: negative responses without a SOA should not be cached). The AA
-    ///         and AD flags are cleared: this server is no authority for the rewritten name, and
-    ///         a signed denial of the name's existence no longer describes the answer (RFC 4035
-    ///         §3.2.3). NSEC and NSEC3 records and the RRSIGs over them (RFC 4034 §3.1, §4;
-    ///         RFC 5155 §7.2) are dropped for the same reason, whether or not the client set DO.
+    ///         The authority section keeps the zone's SOA (RFC 2308 §3: a NODATA answer carries it)
+    ///         with a TTL of no more than the SOA's MINIMUM field and its own TTL (§3: the negative
+    ///         TTL is the lesser of the two) and no more than the rewrite TTL, so the client asks
+    ///         again no later than it would for a rewrite answer. The RRSIG over the SOA gets the
+    ///         same TTL, because an RRSIG's TTL matches the TTL of the RRset it covers (RFC 4034
+    ///         §3); its signed Original TTL field is left alone. The SOA is the closest enclosing
+    ///         zone's, which is valid for NODATA at any name in that zone. Without a SOA none is
+    ///         sent, and the answer is not cacheable (RFC 2308 §5: negative responses without a SOA
+    ///         should not be cached). The AA and AD flags are cleared: this server is no authority
+    ///         for the rewritten name, and a signed denial of the name's existence no longer
+    ///         describes the answer (RFC 4035 §3.2.3). NSEC and NSEC3 records and the RRSIGs over
+    ///         them (RFC 4034 §3.1, §4; RFC 5155 §7.2) are dropped for the same reason, whether or
+    ///         not the client set DO.
     ///     </para>
     /// </remarks>
     public async ValueTask<DnsMessage> TryBuildNoDataForNxDomainAsync(
@@ -246,7 +248,7 @@ public sealed class DnsRewriteEngine(
             );
         }
 
-        // The RRSIG over the SOA stays with it, trimmed to the SOA's TTL (RFC 2308 §3);
+        // The RRSIG over the SOA stays with it, trimmed to the SOA's TTL (RFC 4034 §3);
         // signatures over the denial proof go.
         if (soaTimeToLive is { } trimmedTimeToLive)
         {
