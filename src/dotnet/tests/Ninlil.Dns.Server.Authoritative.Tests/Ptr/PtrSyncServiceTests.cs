@@ -62,8 +62,10 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddSingleton<IDnsServerEventPublisher, NoOpEventPublisher>();
         builder.Services.AddSingleton<IZoneWriteSerializer, ZoneWriteSerializer>();
-        builder.Services.AddScoped<IZoneUpdateService, ZoneUpdateService>();
+        builder.Services.AddScoped<ZoneUpdateService>();
+        builder.Services.AddScoped<IZoneUpdateService, LostRaceZoneUpdateService>();
         builder.Services.AddSingleton<PtrSyncPassLock>();
+        builder.Services.AddSingleton<LostRaceHook>();
 
         return builder.Build();
     }
@@ -97,7 +99,8 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
                 new PtrSyncOptions { DefaultEnabled = defaultEnabled }
             ),
             NullLogger<PtrSyncService>.Instance,
-            scope.ServiceProvider.GetRequiredService<PtrSyncPassLock>()
+            scope.ServiceProvider.GetRequiredService<PtrSyncPassLock>(),
+            (host ?? _host).Services.GetRequiredService<IServiceScopeFactory>()
         );
     }
 
@@ -820,7 +823,7 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
     ///     have exactly one PTR record, because each pass removes the duplicates it finds at its end.
     /// </summary>
     [Fact]
-    public async Task PassesOnTwoServiceProvidersStoreEachPtrRecordOnce()
+    public async Task ReconcileZoneAsync_OnTwoServiceProvidersAtOnce_StoresEachPtrRecordOnce()
     {
         const int rounds = 8;
         const int passesPerNode = 3;
@@ -891,6 +894,62 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
                 ptrRecords.Select(record => record.Name).Distinct().Count()
             );
         }
+    }
+
+    /// <summary>
+    ///     This test makes the removal in the first reverse zone lose a race: another writer deletes
+    ///     the duplicate just before the service saves, so the save fails. The duplicate removal in
+    ///     the second reverse zone must still happen, because each zone is cleaned in its own scope
+    ///     and the failed save leaves nothing staged for the next zone.
+    /// </summary>
+    [Fact]
+    public async Task ReconcileZoneAsync_WhenTheFirstZonesRemovalLosesARace_StillRemovesLaterZonesDuplicates()
+    {
+        Guid zoneId = await SeedForwardZoneAsync(
+            "lost-race.example.com",
+            ZoneTypeEnum.Primary,
+            autoManagePtrRecords: true
+        );
+        await AddARecordAsync(zoneId, "a.lost-race.example.com", IPAddress.Parse("198.18.30.1"));
+        await AddARecordAsync(zoneId, "b.lost-race.example.com", IPAddress.Parse("198.18.31.1"));
+        await CreateService().ReconcileZoneAsync(zoneId);
+
+        List<Guid> reverseZoneIds = [];
+        foreach (string name in new[] { "30.18.198.in-addr.arpa", "31.18.198.in-addr.arpa" })
+        {
+            ZoneEntity reverseZone = await _zoneRepository.FindByNameAsync(name);
+            reverseZoneIds.Add(reverseZone.Id);
+            RecordEntity managed = (
+                await _recordRepository.ListByZoneIdAsync(reverseZone.Id)
+            ).Single(record => record.Type == DnsResourceRecordTypeEnum.Ptr);
+            await _recordRepository.AddAsync(
+                new RecordEntity
+                {
+                    Id = Guid.NewGuid(),
+                    ZoneId = reverseZone.Id,
+                    Name = managed.Name,
+                    Type = DnsResourceRecordTypeEnum.Ptr,
+                    Class = DnsClassEnum.Internet,
+                    TimeToLiveSeconds = 3600,
+                    DataJson = managed.DataJson,
+                    ManagedByFeature = RecordManagedByFeatureEnum.Ptr,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                }
+            );
+        }
+        await _unitOfWork.SaveChangesAsync();
+
+        _host.Services.GetRequiredService<LostRaceHook>().ArmFor(reverseZoneIds[0]);
+
+        await CreateService().ReconcileZoneAsync(zoneId);
+
+        foreach (Guid reverseZoneId in reverseZoneIds)
+            Assert.Equal(
+                1,
+                (await _recordRepository.ListByZoneIdAsync(reverseZoneId)).Count(record =>
+                    record.Type == DnsResourceRecordTypeEnum.Ptr
+                )
+            );
     }
 
     /// <summary>
@@ -977,6 +1036,91 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
         Assert.False(PtrSyncService.IsEligibleZoneType(ZoneTypeEnum.CloudSecondary));
         Assert.False(PtrSyncService.IsEligibleZoneType(ZoneTypeEnum.Stub));
         Assert.False(PtrSyncService.IsEligibleZoneType(ZoneTypeEnum.Forwarder));
+    }
+
+    /// <summary>
+    ///     This class tells <see cref="LostRaceZoneUpdateService" /> which zone's next removal must
+    ///     lose a race. It is a singleton per test host.
+    /// </summary>
+    private sealed class LostRaceHook
+    {
+        /// <summary>
+        ///     This property contains the zone whose next removal loses the race, or
+        ///     <see langword="null" /> when no race is armed.
+        /// </summary>
+        public Guid? ZoneId { get; private set; }
+
+        /// <summary>
+        ///     This method arms the hook for one removal in <paramref name="zoneId" />.
+        /// </summary>
+        public void ArmFor(Guid zoneId) => ZoneId = zoneId;
+
+        /// <summary>
+        ///     This method disarms the hook, so the race happens once.
+        /// </summary>
+        public void Disarm() => ZoneId = null;
+    }
+
+    /// <summary>
+    ///     This class wraps <see cref="ZoneUpdateService" />. While <see cref="LostRaceHook" /> is
+    ///     armed for a zone, it first deletes the records about to be removed through a separate
+    ///     scope, as another node would, so the wrapped save finds nothing to delete and fails.
+    /// </summary>
+    private sealed class LostRaceZoneUpdateService(
+        ZoneUpdateService inner,
+        LostRaceHook hook,
+        IServiceScopeFactory scopeFactory
+    ) : IZoneUpdateService
+    {
+        public async Task ApplyChangesAsync(
+            Guid zoneId,
+            IReadOnlyList<RecordEntity> recordsToAdd,
+            IReadOnlyList<RecordEntity> recordsToRemove,
+            uint? explicitNewSerial = null,
+            CancellationToken stoppingToken = default,
+            DnsResourceRecord replacementSoa = null
+        )
+        {
+            if (hook.ZoneId == zoneId && recordsToRemove.Count > 0)
+            {
+                hook.Disarm();
+                using IServiceScope scope = scopeFactory.CreateScope();
+                IRecordRepository records =
+                    scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+                foreach (RecordEntity record in recordsToRemove)
+                    records.Remove(await records.GetByIdAsync(record.Id, stoppingToken));
+                await scope
+                    .ServiceProvider.GetRequiredService<IUnitOfWork>()
+                    .SaveChangesAsync(stoppingToken);
+            }
+
+            await inner.ApplyChangesAsync(
+                zoneId,
+                recordsToAdd,
+                recordsToRemove,
+                explicitNewSerial,
+                stoppingToken,
+                replacementSoa
+            );
+        }
+
+        public Task BootstrapZoneAsync(
+            Guid zoneId,
+            IReadOnlyList<RecordEntity> records,
+            CancellationToken stoppingToken = default
+        ) => inner.BootstrapZoneAsync(zoneId, records, stoppingToken);
+
+        public Task ApplyRecordEditAsync(
+            Guid zoneId,
+            Guid recordId,
+            Action<RecordEntity> applyEdit,
+            CancellationToken stoppingToken = default
+        ) => inner.ApplyRecordEditAsync(zoneId, recordId, applyEdit, stoppingToken);
+
+        public Task BumpSerialForDnssecResignAsync(
+            Guid zoneId,
+            CancellationToken stoppingToken = default
+        ) => inner.BumpSerialForDnssecResignAsync(zoneId, stoppingToken);
     }
 
     /// <summary>

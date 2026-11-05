@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
@@ -44,6 +45,10 @@ namespace Ninlil.Dns.Server.Authoritative.Ptr;
 ///     <see cref="IOptions{TOptions}" /> would keep the startup value, even in a scoped service.
 /// </param>
 /// <param name="logger">The logger this service records skip/reconcile decisions to.</param>
+/// <param name="scopeFactory">
+///     The factory for the scope each zone's duplicate removal runs in, so a failed save in one zone
+///     leaves no staged changes behind for the next.
+/// </param>
 /// <param name="passLock">
 ///     The lock that serializes the passes of this process. A pass reads the managed records, works
 ///     out the difference and writes it, so two overlapping passes would both add the missing records.
@@ -55,7 +60,8 @@ public class PtrSyncService(
     IUnitOfWork unitOfWork,
     IOptionsMonitor<PtrSyncOptions> options,
     ILogger<PtrSyncService> logger,
-    PtrSyncPassLock passLock
+    PtrSyncPassLock passLock,
+    IServiceScopeFactory scopeFactory
 )
 {
     /// <summary>
@@ -387,15 +393,9 @@ public class PtrSyncService(
     }
 
     /// <summary>
-    ///     This method removes duplicate managed records from the given zones. Two records are
-    ///     duplicates when they have the same zone, owner name (case-insensitive), type and decoded
-    ///     target and both carry <see cref="RecordManagedByFeatureEnum.Ptr" />; only PTR records and
-    ///     RFC 2317 CNAMEs are considered. Records the operator added have no such marker and are
-    ///     never touched. The copy with the smallest <see cref="EntityBase.Id" /> is kept, so nodes
-    ///     that run this at the same time agree on the survivor and never remove all copies.
-    ///     Removals go through <see cref="IZoneUpdateService.ApplyChangesAsync" />, so each one bumps
-    ///     the SOA serial, writes a journal entry and raises the zone-changed event like any other
-    ///     change.
+    ///     This method removes duplicate managed records from the given zones, each in its own
+    ///     dependency-injection scope (see <see cref="RemoveDuplicatesInZoneAsync" />). A zone whose
+    ///     removal fails never stops the zones after it.
     /// </summary>
     /// <param name="zoneIds">The reverse and /24 zones this pass reconciled.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -405,74 +405,134 @@ public class PtrSyncService(
         CancellationToken stoppingToken
     )
     {
-        if (zoneIds.Count == 0)
-            return 0;
-
-        IReadOnlyList<RecordEntity> managedRecords = await recordRepository.ListAsync(
-            record => record.ManagedByFeature == RecordManagedByFeatureEnum.Ptr,
-            stoppingToken
-        );
-
         int removed = 0;
-        foreach (
-            IGrouping<Guid, RecordEntity> zoneRecords in managedRecords
-                .Where(record =>
-                    zoneIds.Contains(record.ZoneId)
-                    && record.Type
-                        is DnsResourceRecordTypeEnum.Ptr
-                            or DnsResourceRecordTypeEnum.Cname
-                )
-                .GroupBy(record => record.ZoneId)
-        )
+        foreach (Guid zoneId in zoneIds)
         {
-            List<RecordEntity> duplicates =
-            [
-                .. zoneRecords
-                    .GroupBy(record =>
-                        (
-                            record.Type,
-                            KeyOf(record.Name, DecodeTarget(record)).Owner,
-                            KeyOf(record.Name, DecodeTarget(record)).Target
-                        )
-                    )
-                    .SelectMany(group => group.OrderBy(record => record.Id).Skip(1)),
-            ];
-
-            if (duplicates.Count == 0)
-                continue;
-
             try
             {
-                await zoneUpdateService.ApplyChangesAsync(
-                    zoneRecords.Key,
-                    [],
-                    duplicates,
-                    null,
-                    stoppingToken
-                );
-                removed += duplicates.Count;
-
-                logger.LogInformation(
-                    "Removed {Count} duplicate managed record(s) from zone {ZoneId}.",
-                    duplicates.Count,
-                    zoneRecords.Key
-                );
+                removed += await RemoveDuplicatesInZoneAsync(zoneId, stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // Another node removed the same copy first, so this write found nothing to delete
-                // (or the zone has no SOA yet). The other node's removal already did the job, and a
-                // later pass re-checks.
-                logger.LogDebug(
-                    exception,
-                    "Could not remove duplicate managed records from zone {ZoneId}; another node "
-                        + "may have removed them.",
-                    zoneRecords.Key
+                // A failed save leaves its staged changes (the deletes, the SOA update and the
+                // journal entry) tracked in the scope's context, so the scope used for the failed
+                // zone is discarded and the next zone gets a fresh one. The cause is told apart
+                // without naming an EF type, which this project does not reference: a fresh read
+                // shows whether the duplicates are gone, meaning another node removed them first
+                // (on a relational engine the delete of a missing row throws, which is expected).
+                // On MongoDB a lost race does not throw (DeleteOne is not checked for a count), so
+                // the removed count can include a record another node already removed.
+                (bool duplicatesGone, string zoneName) = await DescribeZoneAfterFailureAsync(
+                    zoneId,
+                    stoppingToken
                 );
+
+                if (duplicatesGone)
+                    logger.LogDebug(
+                        exception,
+                        "Another node removed the duplicate managed records of zone '{ZoneName}' first.",
+                        zoneName
+                    );
+                else
+                    logger.LogWarning(
+                        exception,
+                        "Could not remove duplicate managed records from zone '{ZoneName}'.",
+                        zoneName
+                    );
             }
         }
 
         return removed;
+    }
+
+    /// <summary>
+    ///     This method removes duplicate managed records from one zone. Two records are duplicates
+    ///     when they have the same zone, owner name (case-insensitive), type and decoded target and
+    ///     both carry <see cref="RecordManagedByFeatureEnum.Ptr" />; only PTR records and RFC 2317
+    ///     CNAMEs are considered. Records the operator added have no such marker and are never
+    ///     touched. The copy with the smallest <see cref="EntityBase.Id" /> is kept, so nodes that run
+    ///     this at the same time agree on the survivor and never remove all copies. Removals go
+    ///     through <see cref="IZoneUpdateService.ApplyChangesAsync" />, so each one bumps the SOA
+    ///     serial, writes a journal entry and raises the zone-changed event like any other change.
+    /// </summary>
+    /// <param name="zoneId">The zone to clean.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>How many records were removed.</returns>
+    private async Task<int> RemoveDuplicatesInZoneAsync(
+        Guid zoneId,
+        CancellationToken stoppingToken
+    )
+    {
+        // A scope of its own, so a failed save here cannot taint the next zone's work.
+        using IServiceScope scope = scopeFactory.CreateScope();
+        IRecordRepository scopedRecords =
+            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+
+        List<RecordEntity> duplicates = FindDuplicates(
+            await scopedRecords.ListByZoneIdAsync(zoneId, stoppingToken)
+        );
+
+        if (duplicates.Count == 0)
+            return 0;
+
+        await scope
+            .ServiceProvider.GetRequiredService<IZoneUpdateService>()
+            .ApplyChangesAsync(zoneId, [], duplicates, null, stoppingToken);
+
+        logger.LogInformation(
+            "Removed {Count} duplicate managed record(s) from zone {ZoneId}.",
+            duplicates.Count,
+            zoneId
+        );
+
+        return duplicates.Count;
+    }
+
+    /// <summary>
+    ///     This method picks the duplicates to remove from a zone's records: all but the smallest
+    ///     <see cref="EntityBase.Id" /> of each group of managed PTRs or CNAMEs with one owner, type
+    ///     and target.
+    /// </summary>
+    private static List<RecordEntity> FindDuplicates(IReadOnlyList<RecordEntity> zoneRecords) =>
+        [
+            .. zoneRecords
+                .Where(record =>
+                    record.ManagedByFeature == RecordManagedByFeatureEnum.Ptr
+                    && record.Type
+                        is DnsResourceRecordTypeEnum.Ptr
+                            or DnsResourceRecordTypeEnum.Cname
+                )
+                .GroupBy(record => (record.Type, Key: KeyOf(record.Name, DecodeTarget(record))))
+                .SelectMany(group => group.OrderBy(record => record.Id).Skip(1)),
+        ];
+
+    /// <summary>
+    ///     This method reads a zone in a fresh scope after a failed removal, to tell a lost race
+    ///     (no duplicates left) from a real failure (duplicates remain).
+    /// </summary>
+    private async Task<(bool DuplicatesGone, string ZoneName)> DescribeZoneAfterFailureAsync(
+        Guid zoneId,
+        CancellationToken stoppingToken
+    )
+    {
+        try
+        {
+            using IServiceScope scope = scopeFactory.CreateScope();
+            ZoneEntity zone = await scope
+                .ServiceProvider.GetRequiredService<IZoneRepository>()
+                .GetByIdAsync(zoneId, stoppingToken);
+            IReadOnlyList<RecordEntity> records = await scope
+                .ServiceProvider.GetRequiredService<IRecordRepository>()
+                .ListByZoneIdAsync(zoneId, stoppingToken);
+
+            return (FindDuplicates(records).Count == 0, zone?.Name ?? zoneId.ToString());
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The database is unreachable: report it as a real failure.
+            logger.LogDebug(exception, "Could not re-read zone {ZoneId}.", zoneId);
+            return (false, zoneId.ToString());
+        }
     }
 
     /// <summary>
