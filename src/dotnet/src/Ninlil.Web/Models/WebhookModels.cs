@@ -11,7 +11,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Name">An operator-chosen, human-readable, unique name for the subscription.</param>
 /// <param name="TargetUrl">The absolute http or https URL every matching event is POSTed to.</param>
 /// <param name="EventTypeNames">
-///     The event types to deliver, by their <c>DnsServerEventTypeRegistry</c> name. Only the
+///     The event types to deliver, by name. Only the
 ///     seven types webhooks deliver are accepted: <c>DnsZoneChanged</c>, <c>DnsCacheEvicted</c>,
 ///     <c>DnssecZoneResigningCompleted</c>, <c>AcmeCertificateRenewalSucceeded</c>,
 ///     <c>AcmeCertificateRenewalFailed</c>, <c>CloudDnsZoneSyncFailed</c> and

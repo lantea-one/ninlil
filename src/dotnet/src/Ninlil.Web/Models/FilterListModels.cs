@@ -14,7 +14,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Source">
 ///     Where the list's entries come from. A <see cref="DnsFilterListSourceEnum.Subscribed" />
 ///     list also needs <see cref="SubscriptionUrl" />; its entries are then replaced on each
-///     refresh and cannot be edited by hand (see <see cref="FilterListEntriesController" />).
+///     refresh and cannot be edited by hand.
 /// </param>
 /// <param name="SubscriptionUrl">
 ///     The URL a <see cref="DnsFilterListSourceEnum.Subscribed" /> list's entries are fetched
@@ -64,8 +64,7 @@ public record FilterListDetail(
 ///     This class carries the fields used to create or replace an entry in a
 ///     <see cref="DnsFilterListSourceEnum.Local" /> list (<c>POST</c> and <c>PUT</c> under
 ///     <c>/api/filter-lists/{listId}/entries</c>). Every write to the entries of a
-///     <see cref="DnsFilterListSourceEnum.Subscribed" /> list is rejected with 409 (see
-///     <see cref="FilterListEntriesController" />).
+///     <see cref="DnsFilterListSourceEnum.Subscribed" /> list is rejected with 409.
 /// </summary>
 /// <param name="Value">
 ///     The entry's value: a domain name, wildcard or regular expression (by <see cref="Kind" />)
@@ -79,7 +78,7 @@ public record FilterListDetail(
 ///     How <see cref="Value" /> is matched. Defaults to <see cref="DnsFilterEntryKindEnum.Domain" />.
 ///     A <see cref="DnsFilterEntryKindEnum.Wildcard" /> or <see cref="DnsFilterEntryKindEnum.Regex" />
 ///     value is rejected with a 400 unless it compiles and the list is a
-///     <see cref="DnsFilterListKindEnum.Domain" /> list (see <see cref="FilterListEntriesController" />).
+///     <see cref="DnsFilterListKindEnum.Domain" /> list.
 /// </param>
 public record FilterListEntryWriteRequest(
     string Value,

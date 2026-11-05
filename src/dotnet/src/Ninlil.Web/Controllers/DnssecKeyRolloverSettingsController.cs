@@ -67,10 +67,10 @@ public class DnssecKeyRolloverSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into
-    ///     <c>DnsServer:Authoritative:DnssecKeyRollover</c> as an RFC 7396 merge patch, through
-    ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect at once. Returns
-    ///     400 for a malformed duration, a negative propagation delay, or a non-positive parent DS
-    ///     TTL or poll interval. Requires <c>dnsseckeyrolloversettings:write</c>.
+    ///     <c>DnsServer:Authoritative:DnssecKeyRollover</c> as an RFC 7396 merge patch. Every field
+    ///     takes effect at once. Returns 400 for a malformed duration, a negative propagation
+    ///     delay, or a non-positive parent DS TTL or poll interval. Requires
+    ///     <c>dnsseckeyrolloversettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("dnsseckeyrolloversettings:write")]

@@ -14,9 +14,7 @@ namespace Ninlil.Web.Models;
 ///     value with a <c>/</c> must parse with
 ///     <c>System.Net.IPNetwork.TryParse</c> and one
 ///     without with <c>System.Net.IPAddress.TryParse</c>,
-///     the same two forms
-///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> matches
-///     at query time.
+///     the same two forms the server matches at query time.
 /// </param>
 /// <param name="ClientIdentifier">
 ///     The persistent client identifier a query from <paramref name="Cidr" /> resolves to: a
@@ -49,8 +47,7 @@ public record DnsClientStaticAddressMappingWriteRequest(
 /// <param name="ClientIdentifier">The persistent client identifier the mapping resolves to.</param>
 /// <param name="ProtocolVersion">Which identifier space <see cref="ClientIdentifier" /> belongs to.</param>
 /// <param name="IsDisabled">
-///     Whether the mapping is disabled. <c>StaticAddressMappingClientIdentityResolver</c> ignores
-///     a disabled mapping.
+///     Whether the mapping is disabled. A disabled mapping is ignored when a client is identified.
 /// </param>
 /// <param name="Comments">Free-text operator notes about the mapping.</param>
 /// <param name="CreatedAtUtc">When the mapping was created.</param>

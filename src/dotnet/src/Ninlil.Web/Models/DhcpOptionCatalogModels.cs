@@ -6,8 +6,7 @@ namespace Ninlil.Web.Models;
 /// <summary>
 ///     This record is the REST shape of one <see cref="DhcpOptionCatalogEntry" />, as returned by
 ///     <c>GET /api/dhcp-option-catalog</c>. It copies the catalog record field by field so the API
-///     does not change when the record does (see
-///     <see cref="Controllers.DhcpOptionCatalogController" />).
+///     does not change when the record does.
 /// </summary>
 /// <param name="Code">The option's numeric code (see <see cref="DhcpOptionCatalogEntry.Code" />).</param>
 /// <param name="Name">A short, human-readable name for the option.</param>

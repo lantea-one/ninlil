@@ -531,7 +531,7 @@ public class DhcpScopesController(
     ///     explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases
     ///     recorded for the scope (which refer to it by <c>ScopeId</c>) are left alone as
     ///     operational data, as <c>BackupEntityCatalog</c> treats them. A tag rule
-    ///     that names the scope (<c>DhcpTagRuleEntity.ScopeId</c>) is also left alone and simply
+    ///     that names the scope (a DHCP tag rule's scope) is also left alone and simply
     ///     never matches again. Returns 404 for an unknown id. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]

@@ -71,7 +71,7 @@ public class RewriteSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Rewrites</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch. A field absent from
     ///     <paramref name="patch" /> keeps its value. Every field takes effect at once, and the
     ///     change is also replicated to the other cluster nodes, which apply it live as well.
     ///     Requires <c>rewritesettings:write</c>.

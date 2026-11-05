@@ -51,7 +51,7 @@ public class NotifySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Authoritative:Notify</c> as an RFC
-    ///     7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. Every field
+    ///     7396 merge patch. Every field
     ///     takes effect at once. Returns 400 when <c>maxAttempts</c> is below 1, the port is
     ///     outside 1-65535, or a timeout or delay is not a positive TimeSpan. Requires
     ///     <c>notifysettings:write</c>.

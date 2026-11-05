@@ -68,12 +68,11 @@ public class FilterPatternPreviewController : ControllerBase
 
     /// <summary>
     ///     This action tests a candidate pattern against the caller's sample domains, or
-    ///     <see cref="DefaultSampleDomains" /> when none are given, and reports which match. An
+    ///     a built-in set of ten sample domains when none are given, and reports which match. An
     ///     invalid pattern is reported in the 200 response, not as an error status. Each match is
-    ///     bounded by the engine's regex timeout (see <see cref="Compile" />). More than
-    ///     <see cref="MaxSampleDomains" /> sample domains, or a sample domain that is null, blank or
-    ///     longer than <see cref="MaxSampleDomainLength" /> characters, is rejected with 400.
-    ///     Requires <c>filterlists:read</c>.
+    ///     bounded by the filter engine's regex timeout. More than 20
+    ///     sample domains, or a sample domain that is null, blank or longer than 253 characters, is
+    ///     rejected with 400. Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("filterlists:read")]

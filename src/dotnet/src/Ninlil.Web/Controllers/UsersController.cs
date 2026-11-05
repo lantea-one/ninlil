@@ -163,8 +163,8 @@ public class UsersController(
     ///     whether the username exists there and returns 409 if one does; an unreachable peer is
     ///     skipped, so user management never blocks on one node being down. A collision that only
     ///     shows up later (after a network partition) is resolved when the nodes resync, by the
-    ///     last-write-wins handling in <c>UserClusterConfigSyncApplier</c>. Returns 400 when the
-    ///     username, e-mail address or password fails validation. Requires <c>users:write</c>.
+    ///     cluster user sync's last-write-wins handling. Returns 400 when the username, e-mail
+    ///     address or password fails validation. Requires <c>users:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("users:write")]
@@ -519,13 +519,13 @@ public class UsersController(
     ///     signed-in caller.
     ///     <list type="bullet">
     ///         <item>
-    ///             <b>Confirmation required</b> (<see cref="EmailChangeOptions.RequireConfirmation" />,
-    ///             the default): SMTP and the public base URL must be configured, otherwise this
-    ///             returns 400 naming what is missing. It e-mails a link to the new address and
-    ///             returns 202 with <see cref="ChangeEmailPendingResult" />. Nothing on the account
-    ///             changes until the link is submitted to
-    ///             <see cref="AuthController.ConfirmEmailChange" />, which also marks the address
-    ///             confirmed.
+    ///             <b>Confirmation required</b> (the
+    ///             <c>Identity:EmailChange:RequireConfirmation</c> setting, the default): SMTP and
+    ///             the public base URL must be configured, otherwise this returns 400 naming what
+    ///             is missing. It e-mails a link to the new address and returns 202 with
+    ///             <see cref="ChangeEmailPendingResult" />. Nothing on the account changes until
+    ///             the link is submitted to <see cref="AuthController.ConfirmEmailChange" />, which
+    ///             also marks the address confirmed.
     ///         </item>
     ///         <item>
     ///             <b>Not required</b>: the address changes at once and the response is 200 with
@@ -636,10 +636,9 @@ public class UsersController(
     ///     <list type="bullet">
     ///         <item>
     ///             <see cref="AdminPasswordResetMode.AutoGenerate" /> sets a generated strong
-    ///             password at once, through a reset token and
-    ///             <c>UserManager.ResetPasswordAsync</c> so Identity's usual
-    ///             validation and hashing apply, and returns it in this response only. It also replaces
-    ///             the account's security stamp and revokes every refresh token of the account, so
+    ///             password at once, through a reset token, so Identity's usual validation and
+    ///             hashing apply, and returns it in this response only. It also replaces the
+    ///             account's security stamp and revokes every refresh token of the account, so
     ///             every access token issued before the reset answers 401 on its next request.
     ///         </item>
     ///         <item>
@@ -649,7 +648,7 @@ public class UsersController(
     ///             Identity reset token, Base64Url-encoded for the query string (see
     ///             <see cref="ConfirmPasswordResetRequest" />). The account must have an e-mail
     ///             address, and SMTP and the public base URL the link points at must be
-    ///             configured (see <c>SmtpSettingsController</c>); otherwise this returns 400
+    ///             configured (see <c>/api/smtp-settings</c>); otherwise this returns 400
     ///             with a clear message.
     ///         </item>
     ///     </list>

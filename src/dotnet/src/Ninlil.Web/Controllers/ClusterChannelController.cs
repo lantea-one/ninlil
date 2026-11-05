@@ -102,16 +102,14 @@ public class ClusterChannelController(
 
     /// <summary>
     ///     This action receives one config-sync envelope from a peer and passes it to the
-    ///     <see cref="IClusterConfigSyncApplier" /> whose
-    ///     <see cref="IClusterConfigSyncApplier.EntityType" /> matches
-    ///     <see cref="ClusterConfigSyncEnvelope.EntityType" />. Every synced kind of data (filter
-    ///     lists and entries, access-control rules, rewrites, forwarders, users, roles, settings
-    ///     sections) comes through this one endpoint.
+    ///     config-sync handler registered for the envelope's entity type. Every synced kind of data
+    ///     (filter lists and entries, access-control rules, rewrites, forwarders, users, roles,
+    ///     settings sections) comes through this one endpoint.
     ///     <para>
     ///         It always returns 200, even for an entity type this node does not know (logged and
     ///         ignored), so a newer peer sending a kind an older node cannot handle does not look
-    ///         like a channel failure. Accepting, rejecting and last-write-wins are decided by the
-    ///         applier (see <see cref="IClusterConfigSyncApplier" />).
+    ///         like a channel failure. Accepting, rejecting and last-write-wins are decided by that
+    ///         handler.
     ///     </para>
     /// </summary>
     [HttpPost("config-sync")]
@@ -155,12 +153,10 @@ public class ClusterChannelController(
     }
 
     /// <summary>
-    ///     This action tells a peer whether a username exists on this node. A peer's
-    ///     <c>ClusterUsernameUniquenessChecker</c> calls it when creating a user. It is a plain
-    ///     lookup with no lock or reservation, so two nodes creating the same name within moments
-    ///     of each other can both succeed; <see cref="ClusterSyncConflictResolver" />, applied by
-    ///     <c>UserClusterConfigSyncApplier</c>, resolves and flags that collision once the nodes
-    ///     sync.
+    ///     This action tells a peer whether a username exists on this node. A peer calls it when it
+    ///     creates a user. It is a plain lookup with no lock or reservation, so two nodes creating
+    ///     the same name within moments of each other can both succeed; the cluster user sync
+    ///     resolves and flags that collision once the nodes sync.
     /// </summary>
     [HttpPost("username-check")]
     public async Task<ActionResult<ClusterUsernameCheckResult>> UsernameCheck(
@@ -178,7 +174,7 @@ public class ClusterChannelController(
 
     /// <summary>
     ///     This action returns this node's query counts (last hour, last 24 hours, all retained)
-    ///     for the cluster dashboard. A peer's <c>ClusterQueryStatsAggregator</c> calls it when an
+    ///     for the cluster dashboard. A peer's cluster query statistics collection calls it when an
     ///     operator opens that peer's Cluster page. The counts are computed from the query log on
     ///     every call and not cached; a dashboard load can afford that. They are read through a
     ///     scope of their own that uses a read replica when one is eligible: a count that is a few

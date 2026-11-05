@@ -88,9 +88,8 @@ public class ClientGroupsController(
     /// <summary>
     ///     This action creates a client group. When
     ///     <see cref="ClientGroupWriteRequest.IsDefault" /> is <see langword="true" />, the group
-    ///     that currently holds <see cref="DnsClientGroupEntity.IsDefault" /> loses it (see
-    ///     <see cref="DemoteExistingDefaultAsync" />). Returns 400 for a missing name and 409 when
-    ///     the name is taken. Requires <c>clientgroups:write</c>.
+    ///     that currently is the default loses that flag. Returns 400 for a missing name and 409
+    ///     when the name is taken. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clientgroups:write")]
@@ -343,9 +342,9 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action ends a client group's pause now by clearing
-    ///     <see cref="DnsClientGroupEntity.PausedUntilUtc" />. Resuming a group that is not paused
-    ///     is not an error. Returns 404 for an unknown id. Requires <c>clientgroups:write</c>.
+    ///     This action ends a client group's pause now by clearing the group's pause time. Resuming
+    ///     a group that is not paused is not an error. Returns 404 for an unknown id. Requires
+    ///     <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/resume")]
     [RequirePermission("clientgroups:write")]

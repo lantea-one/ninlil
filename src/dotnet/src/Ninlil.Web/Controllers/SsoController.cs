@@ -39,10 +39,9 @@ public class SsoController(
     ///     This action reports whether this server can start an SSO sign-in and, if so, the label
     ///     for the button that starts one. Allows anonymous callers.
     ///     <para>
-    ///         <b>It checks whether the OpenID Connect scheme is registered, not
-    ///         <see cref="OidcSsoOptions.Enable" />.</b> <c>OidcSsoSettingsController.Patch</c> can
-    ///         change that setting without a restart, but the scheme is registered once at startup
-    ///         (see
+    ///         <b>It checks whether the OpenID Connect scheme is registered, not the
+    ///         <c>Identity:Sso:Enable</c> setting.</b> <c>PATCH /api/sso-settings</c> can change
+    ///         that setting without a restart, but the scheme is registered once at startup (see
     ///         <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" />),
     ///         so checking the setting could show a button that returns 404 when clicked.
     ///     </para>

@@ -105,7 +105,7 @@ public class ReverseProxySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:ReverseProxy</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch. A field absent from
     ///     <paramref name="patch" /> keeps its value, including <c>sharedSecret</c>, which is
     ///     always operator-supplied and so can be replaced in place. The secret is stored
     ///     encrypted with this node's key ring (<c>sharedSecretEncrypted</c> in the file) and is

@@ -2,7 +2,7 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the web listener settings (<c>WebListenOptions</c>) that
+///     This record is the web listener settings (configuration section <c>DnsServer:Web</c>) that
 ///     <c>GET /api/web-listen-settings</c> returns: the ports and certificate shared by the REST
 ///     API, the SignalR hub and DNS-over-HTTPS. A <c>PATCH</c> accepts the same fields, with the
 ///     certificate password in place of <c>PfxPasswordConfigured</c>. Every change needs a process
@@ -15,7 +15,7 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="Certificate">
 ///     The server certificate configuration, in the shape used for DNS-over-TLS and
-///     DNS-over-QUIC, since all three bind a <c>TlsCertificateOptions</c>.
+///     DNS-over-QUIC, since all three use the same certificate settings.
 /// </param>
 public record WebListenSettingsDetail(
     int HttpPort,

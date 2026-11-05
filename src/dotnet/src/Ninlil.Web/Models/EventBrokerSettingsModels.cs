@@ -7,8 +7,8 @@ namespace Ninlil.Web.Models;
 ///     This record is the event transport configuration that <c>GET /api/event-broker-settings</c>
 ///     returns. Only the section matching <see cref="Transport" /> is filled in; the other is
 ///     <see langword="null" />. A broker that was not selected never had its options configured,
-///     so reading them through <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" /> would
-///     return compiled-in defaults that look like live configuration.
+///     so reporting its settings would return compiled-in defaults that look like live
+///     configuration.
 /// </summary>
 /// <param name="Transport">Which transport delivers published events in the running process.</param>
 /// <param name="IsConnected">
@@ -36,10 +36,10 @@ public record EventBrokerSettingsDetail(
 );
 
 /// <summary>
-///     This record carries the <c>RabbitMqEventBrokerOptions</c> settings without
-///     <c>Password</c>. A <c>GET</c> never returns the password, as with every other secret, even
-///     though this one is stored in the plaintext configuration file rather than encrypted with an
-///     <c>IDataProtector</c>.
+///     This record carries the RabbitMQ event broker settings (configuration section
+///     <c>DnsServer:Events:RabbitMq</c>) without <c>Password</c>. A <c>GET</c> never returns the
+///     password, as with every other secret, even though this one is stored in the plaintext
+///     configuration file rather than encrypted like the SMTP password.
 /// </summary>
 public record RabbitMqBrokerSettingsDetail(
     string HostName,
@@ -52,8 +52,9 @@ public record RabbitMqBrokerSettingsDetail(
 );
 
 /// <summary>
-///     This record carries the <c>ActiveMqEventBrokerOptions</c> settings without <c>Password</c>,
-///     for the reason given on <see cref="RabbitMqBrokerSettingsDetail" />.
+///     This record carries the ActiveMQ event broker settings (configuration section
+///     <c>DnsServer:Events:ActiveMq</c>) without <c>Password</c>, for the reason given on
+///     <see cref="RabbitMqBrokerSettingsDetail" />.
 /// </summary>
 public record ActiveMqBrokerSettingsDetail(
     string HostName,
@@ -72,28 +73,26 @@ public record ActiveMqBrokerSettingsDetail(
 /// </summary>
 /// <param name="Note">
 ///     When the change takes effect: at once, after a listener or service restart, or after a
-///     process restart (see <see cref="Options.RuntimeConfigurationOptions" />).
+///     process restart.
 /// </param>
 public record RuntimeSettingsWriteResult(string Note)
 {
     /// <summary>
-    ///     This constant contains the note for a write to settings read through
-    ///     <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />, which take effect only
-    ///     after a process restart.
+    ///     This constant contains the note for a write to settings that are read once at startup
+    ///     and take effect only after a process restart.
     /// </summary>
     public const string RestartRequiredNote =
-        "Written to the configuration file. This setting is bound via IOptions, not "
-        + "IOptionsMonitor, so a restart is required before this change takes effect.";
+        "Written to the configuration file. This setting is read once, at startup, so a restart is "
+        + "required before this change takes effect.";
 
     /// <summary>
-    ///     This constant contains the note for a write to settings read through
-    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, which take effect
-    ///     on the next read with no restart. Most settings controllers return it, for example
-    ///     <see cref="Controllers.AppearanceSettingsController.Patch" />.
+    ///     This constant contains the note for a write to settings that are read live and take
+    ///     effect on the next read with no restart. Most settings controllers return it, for
+    ///     example <see cref="Controllers.AppearanceSettingsController.Patch" />.
     /// </summary>
     public const string HotReloadedNote =
-        "Written to the configuration file. This setting is bound via IOptionsMonitor, so it "
-        + "takes effect immediately -- no restart required.";
+        "Written to the configuration file. This setting is read live, so it takes effect "
+        + "immediately -- no restart required.";
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.RecursiveSettingsController.Patch" />

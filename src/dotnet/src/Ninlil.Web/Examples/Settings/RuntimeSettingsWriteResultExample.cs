@@ -28,12 +28,12 @@ public class RuntimeSettingsWriteResultExample
         [
             Example(
                 "Applied at once",
-                "Every field written is read through IOptionsMonitor, so the change is live.",
+                "Every field written is read live, so the change takes effect at once.",
                 RuntimeSettingsWriteResult.HotReloadedNote
             ),
             Example(
                 "Process restart needed",
-                "The settings are read once at startup through IOptions.",
+                "The settings are read once, at startup.",
                 RuntimeSettingsWriteResult.RestartRequiredNote
             ),
             Example(

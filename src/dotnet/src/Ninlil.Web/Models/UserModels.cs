@@ -44,9 +44,8 @@ public record UpdateUserRequest(string DisplayName, string Email, bool IsDisable
 /// </param>
 /// <param name="ClusterConflictNote">
 ///     An explanation of a cluster username collision this account lost, so an administrator can
-///     see it was renamed or overwritten rather than silently dropped or merged (see
-///     <c>UserEntity.ClusterConflictNote</c>). <see langword="null" /> when there was none
-///     (almost always).
+///     see it was renamed or overwritten rather than silently dropped or merged.
+///     <see langword="null" /> when there was none (almost always).
 /// </param>
 /// <param name="LastModifiedUtc">
 ///     When the account was last created or modified
@@ -111,7 +110,7 @@ public record UserProfileDetail(
 /// <summary>
 ///     This class carries the caller's self-service password change
 ///     (<see cref="Controllers.UsersController.ChangeMyPassword" />). <see cref="CurrentPassword" />
-///     is required and checked by <c>UserManager&lt;TUser&gt;.ChangePasswordAsync</c>: unlike an
+///     is required and checked by ASP.NET Core Identity: unlike an
 ///     administrator's reset, a caller changing their own password must prove they know it.
 /// </summary>
 /// <param name="CurrentPassword">The account's current password.</param>
@@ -143,7 +142,7 @@ public record ChangeEmailPendingResult(bool ConfirmationSent);
 ///     locked-out account. Both are needed: <see cref="AutoGenerate" /> works without any SMTP
 ///     server, which suits a homelab, while <see cref="EmailLink" /> lets the account holder pick
 ///     a password the administrator never sees, but needs a configured SMTP server (see
-///     <c>EmailSenderOptions</c> and <c>SmtpSettingsController</c>).
+///     <c>GET /api/smtp-settings</c>).
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<AdminPasswordResetMode>))]
 public enum AdminPasswordResetMode

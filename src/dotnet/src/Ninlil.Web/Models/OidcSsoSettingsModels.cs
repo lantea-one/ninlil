@@ -2,10 +2,10 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the OpenID Connect single sign-on settings (<c>OidcSsoOptions</c>) that
-///     <c>GET /api/sso-settings</c> returns. The client secret is never returned, as with every
-///     other secret; <see cref="ClientSecretConfigured" /> says whether one is set. A
-///     <c>PATCH</c> accepts these fields with <c>clientSecret</c> in place of
+///     This record is the OpenID Connect single sign-on settings (configuration section
+///     <c>Identity:Sso</c>) that <c>GET /api/sso-settings</c> returns. The client secret is never
+///     returned, as with every other secret; <see cref="ClientSecretConfigured" /> says whether one
+///     is set. A <c>PATCH</c> accepts these fields with <c>clientSecret</c> in place of
 ///     <see cref="ClientSecretConfigured" />.
 /// </summary>
 /// <param name="Enable">Whether admin sign-in through OpenID Connect is offered. Defaults to <see langword="false" />.</param>
@@ -13,8 +13,8 @@ namespace Ninlil.Web.Models;
 /// <param name="Authority">The identity provider's issuer URL.</param>
 /// <param name="ClientId">The OAuth 2.0 client identifier this server is registered under.</param>
 /// <param name="ClientSecretConfigured">
-///     Whether a client secret is set from either source: <c>OidcSsoOptions.ClientSecretEncrypted</c>
-///     or the plaintext <c>OidcSsoOptions.ClientSecret</c>. The secret itself is never returned.
+///     Whether a client secret is set from either source: <c>Identity:Sso:ClientSecretEncrypted</c>
+///     or the plaintext <c>Identity:Sso:ClientSecret</c>. The secret itself is never returned.
 /// </param>
 /// <param name="Scopes">The scopes requested in the authorization code flow. Defaults to <c>openid</c>, <c>profile</c> and <c>email</c>.</param>
 /// <param name="ClientSecretFromEnvironment">

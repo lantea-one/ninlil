@@ -2,12 +2,12 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST shape of the ACME certificate settings (<c>AcmeOptions</c>) that
-///     <c>GET /api/acme-settings</c> returns. The server-wide CAA defaults
-///     (<c>CaaAutoManagementOptions</c>) are nested under <see cref="CaaAutoManagement" />; the
-///     per-zone override lives on the zone itself (<c>ZonesController</c>). The ACME account's
-///     private key is never exposed over REST, so a <c>PATCH</c> to the same endpoint accepts the
-///     same fields this record has.
+///     This record is the REST shape of the ACME certificate settings (configuration section
+///     <c>DnsServer:Acme</c>) that <c>GET /api/acme-settings</c> returns. The server-wide CAA
+///     defaults (configuration section <c>DnsServer:Acme:CaaAutoManagement</c>) are nested under
+///     <see cref="CaaAutoManagement" />; the per-zone override lives on the zone itself
+///     (<c>/api/zones</c>). The ACME account's private key is never exposed over REST, so a
+///     <c>PATCH</c> to the same endpoint accepts the same fields this record has.
 /// </summary>
 public record AcmeSettingsDetail(
     bool Enable,
@@ -24,19 +24,20 @@ public record AcmeSettingsDetail(
 
 /// <summary>
 ///     This record is the REST shape of the server-wide CAA auto-management defaults
-///     (<c>CaaAutoManagementOptions</c>), nested in <see cref="AcmeSettingsDetail.CaaAutoManagement" />.
+///     (configuration section <c>DnsServer:Acme:CaaAutoManagement</c>), nested in
+///     <see cref="AcmeSettingsDetail.CaaAutoManagement" />.
 /// </summary>
 public record CaaAutoManagementSettingsDetail(bool DefaultEnabled, string DefaultIssuerDomain);
 
 /// <summary>
 ///     This record is one row of the certificate inventory that
-///     <c>AcmeSettingsController.Certificates</c> returns: one per domain in
-///     <c>AcmeOptions.Domains</c>, with what <c>IAcmeAccountStore</c> knows about it.
+///     <c>GET /api/acme-settings/certificates</c> returns: one per domain in
+///     <c>DnsServer:Acme:Domains</c>, with what the server has recorded about it.
 ///     <see cref="HasCertificate" /> separates a domain that has never been issued a certificate
 ///     from one that simply is not due for renewal yet, whatever <see cref="IsDueForRenewal" />
 ///     says.
 /// </summary>
-/// <param name="Domain">The domain as configured in <c>AcmeOptions.Domains</c>.</param>
+/// <param name="Domain">The domain as configured in <c>DnsServer:Acme:Domains</c>.</param>
 /// <param name="HasCertificate">
 ///     <see langword="true" /> once the domain has been issued at least one certificate;
 ///     <see langword="false" /> means none has ever been issued.

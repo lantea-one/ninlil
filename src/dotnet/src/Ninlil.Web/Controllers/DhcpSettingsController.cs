@@ -140,7 +140,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Core</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch. A field absent from
     ///     <paramref name="patch" /> keeps its value. A change to <c>leaseExpirySweepInterval</c>
     ///     applies at the next sweep; every other field needs a restart, and the returned note
     ///     says which applies (see the class summary). Returns 400 for an invalid value. Requires
@@ -261,7 +261,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv4</c> as an
-    ///     RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. The change
+    ///     RFC 7396 merge patch. The change
     ///     needs a restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("protocol")]
@@ -320,7 +320,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv6</c> as an
-    ///     RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. The change
+    ///     RFC 7396 merge patch. The change
     ///     needs a restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("dhcpv6-protocol")]
@@ -382,7 +382,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv4</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. Turning the relay on
+    ///     merge patch. Turning the relay on
     ///     replaces the local DHCPv4 engine only after a restart (see the class summary). Returns
     ///     400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
@@ -538,7 +538,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv6</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. Turning the relay on
+    ///     merge patch. Turning the relay on
     ///     replaces the local DHCPv6 engine only after a restart (see the class summary). Returns
     ///     400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
@@ -654,7 +654,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Tftp</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change needs a
+    ///     patch. The change needs a
     ///     restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("tftp")]
@@ -766,7 +766,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Protocol:Ra</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. The change needs a
+    ///     merge patch. The change needs a
     ///     restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("ra-protocol")]
@@ -849,8 +849,8 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action returns the Router Advertisement content settings, with routes and interface
-    ///     overrides but without <see cref="RaOptions.Prefixes" /> (see the class summary).
-    ///     Requires <c>dhcpsettings:read</c>.
+    ///     overrides but without the advertised prefixes, which are set only in the configuration
+    ///     file. Requires <c>dhcpsettings:read</c>.
     /// </summary>
     [HttpGet("ra")]
     [RequirePermission("dhcpsettings:read")]
@@ -906,7 +906,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Ra</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />; <c>routes</c> and
+    ///     patch; <c>routes</c> and
     ///     <c>interfaceOverrides</c> each replace the whole list. The change applies at the next
     ///     advertisement, with no restart. Returns 400 for an invalid value, including more than
     ///     <see cref="RaContentRules.MaxRecursiveDnsServers" /> RDNSS addresses or a search list

@@ -109,7 +109,7 @@ public record RefreshRequest(string RefreshToken = null);
 /// <summary>
 ///     This class carries a token-based password reset, submitted from the "set new password"
 ///     landing page to <see cref="Controllers.AuthController.ResetPassword" />. The page serves
-///     both the reset e-mail an administrator sends (<c>UsersController.ResetPassword</c> in
+///     both the reset e-mail an administrator sends (<c>POST /api/users/{id}/reset-password</c> in
 ///     <c>EmailLink</c> mode) and the self-service
 ///     <see cref="Controllers.AuthController.ForgotPassword" /> request. Nobody is signed in at
 ///     this point, so the action is <c>[AllowAnonymous]</c> and <see cref="Token" /> with
@@ -117,7 +117,7 @@ public record RefreshRequest(string RefreshToken = null);
 /// </summary>
 /// <param name="UserId">The account the reset applies to, carried in the landing page's link.</param>
 /// <param name="Token">
-///     The password-reset token from <c>UserManager&lt;TUser&gt;.GeneratePasswordResetTokenAsync</c>,
+///     The password-reset token ASP.NET Core Identity issued,
 ///     Base64Url-encoded because a raw Identity token can contain <c>+</c>, <c>/</c> and
 ///     <c>=</c>, which are unsafe in a URL query string. The action decodes it before checking it.
 /// </param>
@@ -133,7 +133,7 @@ public record ConfirmPasswordResetRequest(Guid UserId, string Token, string NewP
 /// <param name="UserId">The account whose address changes, carried in the link.</param>
 /// <param name="Email">The new address, carried in the link. The token is bound to it.</param>
 /// <param name="Token">
-///     The change-email token from <c>UserManager&lt;TUser&gt;.GenerateChangeEmailTokenAsync</c>,
+///     The change-email token ASP.NET Core Identity issued,
 ///     Base64Url-encoded for the link, as <see cref="ConfirmPasswordResetRequest.Token" /> is.
 /// </param>
 public record ConfirmEmailChangeRequest(Guid UserId, string Email, string Token);

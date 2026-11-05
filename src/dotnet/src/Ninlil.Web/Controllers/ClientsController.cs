@@ -528,7 +528,7 @@ public class ClientsController(
 
     /// <summary>
     ///     This action ends a client's pause now by clearing
-    ///     <see cref="DnsClientEntity.PausedUntilUtc" />. Resuming a client that is not paused is
+    ///     the client's pause time. Resuming a client that is not paused is
     ///     not an error. Returns 404 for an unknown id. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/resume")]

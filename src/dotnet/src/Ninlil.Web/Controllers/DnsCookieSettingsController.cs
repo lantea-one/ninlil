@@ -71,7 +71,7 @@ public class DnsCookieSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Cookies</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch. A field absent from
     ///     <paramref name="patch" /> keeps its value. The change needs a restart. Returns 400 for a
     ///     field of the wrong JSON type or a rotation interval outside 1 minute to the timer
     ///     limit (about 49 days). Requires <c>dnscookies:write</c>.

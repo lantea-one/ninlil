@@ -15,7 +15,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Kind">
 ///     What the scope hands out: addresses, or (DHCPv6 only) RFC 9915 delegated prefixes.
 ///     Defaults to <see cref="DhcpScopeKindEnum.AddressAssignment" />, the only valid value for a
-///     DHCPv4 scope (see <c>DhcpScopeEntity.Kind</c>).
+///     DHCPv4 scope.
 /// </param>
 /// <param name="RangeStartAddress">The first address of the pool the scope leases from, inclusive.</param>
 /// <param name="RangeEndAddress">The last address of the pool the scope leases from, inclusive.</param>
@@ -33,17 +33,17 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="BootFileName">
 ///     The boot file a PXE client leasing from this scope should request, or
-///     <see langword="null" /> to offer none (see <c>DhcpScopeEntity.BootFileName</c>).
+///     <see langword="null" /> to offer none.
 /// </param>
 /// <param name="NextServerAddress">
 ///     The TFTP (or other boot) server a PXE client should contact for
 ///     <paramref name="BootFileName" />, or <see langword="null" /> to use this server's Server
-///     Identifier address (see <c>DhcpScopeEntity.NextServerAddress</c>).
+///     Identifier address.
 /// </param>
 /// <param name="DelegatedPrefixLength">
 ///     The length, in bits, of each prefix the scope delegates. Required when
 ///     <paramref name="Kind" /> is <see cref="DhcpScopeKindEnum.PrefixDelegation" />, and must be
-///     <see langword="null" /> otherwise (see <c>DhcpScopeEntity.DelegatedPrefixLength</c>).
+///     <see langword="null" /> otherwise.
 /// </param>
 public record DhcpScopeWriteRequest(
     string Name,
@@ -102,7 +102,7 @@ public record DhcpScopeDetail(
 /// <param name="ScopeId">The identifier of the scope the figures describe.</param>
 /// <param name="ScopeName">The name of the scope the figures describe.</param>
 /// <param name="ProtocolVersion">Whether this is a DHCPv4 or a DHCPv6 scope.</param>
-/// <param name="Kind">What the scope hands out (see <c>DhcpScopeEntity.Kind</c>).</param>
+/// <param name="Kind">What the scope hands out.</param>
 /// <param name="TotalSlots">
 ///     How many slots the scope's range holds, as a decimal string. A slot is an address for an
 ///     <see cref="DhcpScopeKindEnum.AddressAssignment" /> scope, or a block-aligned delegable
@@ -215,9 +215,9 @@ public record DhcpScopeCustomOptionDetail(
 /// <summary>
 ///     This class carries the fields used to create or fully replace a tag-based conditional
 ///     option delivery rule (<c>POST /api/dhcp-tag-rules</c>, <c>PUT /api/dhcp-tag-rules/{id}</c>).
-///     <c>Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleEntity</c> documents how rules match,
-///     the order they apply in and how conflicts resolve. Every match field is optional; the set
-///     ones must all match.
+///     Matching rules apply in ascending priority, then creation time, and each rule's options
+///     replace earlier values for the same tag, so the last rule applied wins. Every match field is
+///     optional; the set ones must all match.
 /// </summary>
 /// <param name="Name">An operator-chosen, descriptive name for the rule.</param>
 /// <param name="ScopeId">
@@ -321,8 +321,7 @@ public record DhcpTagRuleOptionDetail(
 ///     <c>/api/dhcp-leases</c>. There is no write request: the allocation engine creates and
 ///     updates leases as clients come and go, and an operator can only release one
 ///     (<c>POST /api/dhcp-leases/{id}/release</c>). <see cref="PrefixLength" /> is set only for a
-///     DHCPv6 Prefix Delegation lease and is <see langword="null" /> for an address lease (see
-///     <c>LeaseEntity.PrefixLength</c>).
+///     DHCPv6 Prefix Delegation lease and is <see langword="null" /> for an address lease.
 ///     <para>
 ///         <b>Declined addresses.</b> When a client declines an address (RFC 2131 Section 4.3.3),
 ///         the lease row becomes a quarantine row: <c>ClientIdentifier</c> is
@@ -351,7 +350,7 @@ public record DhcpLeaseDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of part of <c>Ninlil.Dhcp.Server.Core.DhcpServerOptions</c>,
+///     This record is the REST shape of part of configuration section <c>DhcpServer:Core</c>,
 ///     the settings shared by the local DHCP engines (<c>GET /api/dhcp-settings/core</c>).
 /// </summary>
 /// <param name="ServerIdentifierAddress">
@@ -436,7 +435,7 @@ public record Dhcpv6RelaySettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Server.Tftp.TftpServerOptions</c>, the
+///     This record is the REST shape of configuration section <c>DhcpServer:Tftp</c>, the
 ///     bundled read-only RFC 1350 TFTP server (<c>GET /api/dhcp-settings/tftp</c>).
 /// </summary>
 /// <param name="Enable">Whether the TFTP server starts at boot. Defaults to <see langword="false" />.</param>
@@ -455,10 +454,10 @@ public record DhcpTftpSettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Protocol.Ra.RaProtocolOptions</c>
+///     This record is the REST shape of configuration section <c>DhcpServer:Protocol:Ra</c>
 ///     (<c>GET /api/dhcp-settings/ra-protocol</c>): whether the Router Advertisement listener runs
 ///     and how often it sends unsolicited advertisements. What an advertisement contains is in
-///     <see cref="DhcpRaSettingsDetail" />, following the same split in the options classes.
+///     <see cref="DhcpRaSettingsDetail" />, following the same split in the configuration.
 /// </summary>
 /// <param name="Enable">Whether the listener starts at boot, sending and answering Router Advertisement traffic. Defaults to <see langword="false" />.</param>
 /// <param name="MinRouterAdvertisementInterval">The shortest interval between two unsolicited advertisements on one interface. Defaults to 198 seconds.</param>
@@ -470,20 +469,20 @@ public record DhcpRaProtocolSettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Server.Ra.RaOptions</c>
+///     This record is the REST shape of configuration section <c>DhcpServer:Ra</c>
 ///     (<c>GET /api/dhcp-settings/ra</c>): what the server's Router Advertisements contain. The
 ///     transport and timing settings are in <see cref="DhcpRaProtocolSettingsDetail" />.
 ///     <para>
-///         <b><c>RaOptions.Prefixes</c> is not included.</b> Each advertised prefix has its own
+///         <b><c>DhcpServer:Ra:Prefixes</c> is not included.</b> Each advertised prefix has its own
 ///         on-link and autonomous flags and two lifetimes, which suits a separate sub-resource
-///         (as <c>DhcpReservationsController</c> gives reservations) better than a field here.
-///         Prefixes are configured in the configuration file only.
+///         (as <c>/api/dhcp-scopes/{scopeId}/reservations</c> gives reservations) better than a
+///         field here. Prefixes are configured in the configuration file only.
 ///     </para>
 ///     <para>
 ///         <b><see cref="Routes" /> is included.</b> An RFC 4191 route is a simple triple (prefix
 ///         and length, preference, lifetime), so a <c>PATCH</c> replaces the whole list, as it
 ///         does <see cref="RecursiveDnsServers" /> and <see cref="DnsSearchListDomains" />.
-///         <c>RaOptions</c> lives in the JSON configuration file, not the database, so its list
+///         <c>DhcpServer:Ra</c> lives in the JSON configuration file, not the database, so its list
 ///         entries have no stable identifiers to build a sub-resource on. Every change needs a
 ///         restart.
 ///     </para>
@@ -522,9 +521,9 @@ public record DhcpRaSettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of one <c>Ninlil.Dhcp.Server.Ra.RaAdvertisedRouteOptions</c>
-///     entry: a route advertised in an RFC 4191 Section 2.3 Route Information option. It appears
-///     in <see cref="DhcpRaSettingsDetail.Routes" /> and in the <c>routes</c> array of
+///     This record is the REST shape of one entry of <c>DhcpServer:Ra:Routes</c>: a route
+///     advertised in an RFC 4191 Section 2.3 Route Information option. It appears in
+///     <see cref="DhcpRaSettingsDetail.Routes" /> and in the <c>routes</c> array of
 ///     <c>PATCH /api/dhcp-settings/ra</c>.
 /// </summary>
 /// <param name="Prefix">The route's prefix, or <see langword="null" /> or empty when <paramref name="PrefixLength" /> is <c>0</c> (an entry that only sets the default route's preference).</param>
@@ -539,20 +538,20 @@ public record DhcpRaRouteDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of one <c>Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions</c>
-///     entry: different Router Advertisement content for one network interface. It appears in
-///     <see cref="DhcpRaSettingsDetail.InterfaceOverrides" /> and in the
-///     <c>interfaceOverrides</c> array of <c>PATCH /api/dhcp-settings/ra</c>. A
-///     <see langword="null" /> scalar field inherits the matching global field. A
-///     <see langword="null" /> <see cref="RecursiveDnsServers" /> or
-///     <see cref="DnsSearchListDomains" /> inherits the global list; any other value, even an
-///     empty list, replaces it. <c>RaInterfaceOverrideOptions</c> has the full rules.
+///     This record is the REST shape of one entry of <c>DhcpServer:Ra:InterfaceOverrides</c>:
+///     different Router Advertisement content for one network interface. It appears in
+///     <see cref="DhcpRaSettingsDetail.InterfaceOverrides" /> and in the <c>interfaceOverrides</c>
+///     array of <c>PATCH /api/dhcp-settings/ra</c>. A <see langword="null" /> scalar field inherits
+///     the matching global field. A <see langword="null" /> <see cref="RecursiveDnsServers" /> or
+///     <see cref="DnsSearchListDomains" /> inherits the global list; any other value, even an empty
+///     list, replaces it.
 ///     <para>
 ///         <b>The override's <c>Prefixes</c> and <c>Routes</c> lists are not included.</b>
 ///         Prefixes are file-only globally too (see <see cref="DhcpRaSettingsDetail" />), and a
 ///         route list nested inside this list would make the API and UI much more complex. Both
 ///         can be set in the JSON configuration file
-///         (<c>RaInterfaceOverrideOptions.Prefixes</c> and <c>.Routes</c>).
+///         (the <c>Prefixes</c> and <c>Routes</c> of each <c>DhcpServer:Ra:InterfaceOverrides</c>
+///         entry).
 ///     </para>
 /// </summary>
 /// <param name="InterfaceName">The OS-reported network interface name this override applies to (for example <c>eth0</c>), matched case-insensitively.</param>

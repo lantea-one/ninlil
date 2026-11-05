@@ -61,13 +61,13 @@ public class OidcSsoSettingsController(
     public ActionResult<OidcSsoSettingsDetail> Get() => Ok(ToDetail(ssoOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>Identity:Sso</c> as an RFC 7396 merge patch,
-    ///     through <see cref="PresetConfigurationFileApplier" />. A field absent from
-    ///     <paramref name="patch" /> keeps its value, including <c>clientSecret</c>, so an operator
-    ///     can change only <c>displayName</c> without resupplying a secret <see cref="Get" /> never
-    ///     shows. A blank <c>clientSecret</c> clears it. Returns 400 for a blank display name or
-    ///     client id, an authority that is not an absolute http(s) URL, or scopes without
-    ///     <c>openid</c>. Requires <c>ssosettings:write</c>.
+    ///     This action merges a partial update into <c>Identity:Sso</c> as an RFC 7396 merge patch.
+    ///     A field absent from <paramref name="patch" /> keeps its value, including
+    ///     <c>clientSecret</c>, so an operator can change only <c>displayName</c> without
+    ///     resupplying a secret <see cref="Get" /> never shows. A blank <c>clientSecret</c> clears
+    ///     it. Returns 400 for a blank display name or client id, an authority that is not an
+    ///     absolute http(s) URL, or scopes without <c>openid</c>. Requires
+    ///     <c>ssosettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("ssosettings:write")]

@@ -2,9 +2,10 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the webhook delivery settings (<c>WebhookDeliveryOptions</c>) that
-///     <c>GET /api/webhook-delivery-settings</c> returns: the retry backoff and HTTP timeout every
-///     subscription's deliveries use. A <c>PATCH</c> to the same endpoint accepts the same fields.
+///     This record is the webhook delivery settings (configuration section
+///     <c>DnsServer:Webhooks:Delivery</c>) that <c>GET /api/webhook-delivery-settings</c> returns:
+///     the retry backoff and HTTP timeout every subscription's deliveries use. A <c>PATCH</c> to
+///     the same endpoint accepts the same fields.
 /// </summary>
 /// <param name="InitialRetryDelay">The wait before the first retry of a failed delivery, doubled for each later retry. Defaults to 1 second.</param>
 /// <param name="MaxRetryDelay">The longest wait between retries. Defaults to 30 seconds.</param>

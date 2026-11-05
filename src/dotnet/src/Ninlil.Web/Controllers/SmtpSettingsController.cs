@@ -60,7 +60,7 @@ public class SmtpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into the <c>Email</c> section as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch. A field absent from
     ///     <paramref name="patch" /> keeps its value, including <c>password</c>, so an operator can
     ///     change only <c>smtpHost</c> without resupplying a password <see cref="Get" /> never
     ///     shows. A password is encrypted before it is written to the configuration file, and a blank

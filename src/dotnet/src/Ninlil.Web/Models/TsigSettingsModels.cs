@@ -2,7 +2,7 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the TSIG settings (<c>TsigServiceOptions</c>) that
+///     This record is the TSIG settings (configuration section <c>DnsServer:Tsig</c>) that
 ///     <c>GET /api/tsig-settings</c> returns: the clock skew tolerance (fudge) written into every
 ///     message the server signs. A <c>PATCH</c> to the same endpoint accepts the same field.
 /// </summary>

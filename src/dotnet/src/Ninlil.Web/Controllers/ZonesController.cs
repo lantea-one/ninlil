@@ -130,8 +130,9 @@ public class ZonesController(
 
     /// <summary>
     ///     This action creates a zone with no records, not even an SOA; add them through
-    ///     <see cref="RecordsController" />. Returns 400 for an invalid zone name, a PTR prefix
-    ///     length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires <c>zones:write</c>.
+    ///     <c>/api/zones/{zoneId}/records</c>. Returns 400 for an invalid zone name, a PTR prefix
+    ///     length, an NSEC3 iteration count above 150 or a TSIG key name that names a cluster key,
+    ///     and 409 when the name is taken. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]

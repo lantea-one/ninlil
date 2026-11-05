@@ -321,10 +321,10 @@ public class FilterListsController(
 
     /// <summary>
     ///     This action deletes a list together with its entries and every assignment that refers
-    ///     to it: client-group assignments (see <see cref="ClientGroupListAssignmentsController" />)
-    ///     and direct client assignments (see <see cref="ClientListAssignmentsController" />).
-    ///     Nothing is left behind. The removal runs in one transaction on the relational engines.
-    ///     Returns 404 for an unknown id. Requires <c>filterlists:write</c>.
+    ///     to it: client-group assignments (<c>/api/client-groups/{groupId}/list-assignments</c>)
+    ///     and direct client assignments (<c>/api/clients/{clientId}/list-assignments</c>). Nothing
+    ///     is left behind. The removal runs in one transaction on the relational engines. Returns
+    ///     404 for an unknown id. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("filterlists:write")]

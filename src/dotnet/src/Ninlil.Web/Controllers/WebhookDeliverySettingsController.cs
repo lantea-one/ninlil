@@ -59,7 +59,7 @@ public class WebhookDeliverySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Webhooks:Delivery</c> as an RFC
-    ///     7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. The response
+    ///     7396 merge patch. The response
     ///     note depends on whether <c>requestTimeout</c> was changed alone, with another field, or
     ///     not at all. Returns 400 for a value that is not a positive TimeSpan. Requires
     ///     <c>webhookdeliverysettings:write</c>.

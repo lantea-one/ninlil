@@ -57,10 +57,9 @@ public class ZoneTransferClientSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into
-    ///     <c>DnsServer:Authoritative:ZoneTransferClient</c> as an RFC 7396 merge patch, through
-    ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect at once. Returns
-    ///     400 for a port outside 1-65535 or a timeout that is not a positive TimeSpan. Requires
-    ///     <c>zonetransferclientsettings:write</c>.
+    ///     <c>DnsServer:Authoritative:ZoneTransferClient</c> as an RFC 7396 merge patch. Every
+    ///     field takes effect at once. Returns 400 for a port outside 1-65535 or a timeout that is
+    ///     not a positive TimeSpan. Requires <c>zonetransferclientsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("zonetransferclientsettings:write")]

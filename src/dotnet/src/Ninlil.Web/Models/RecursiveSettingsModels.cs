@@ -5,11 +5,11 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record is the REST shape of the recursive resolver settings
-///     (<c>RecursiveServerOptions</c>) that <c>GET /api/recursive-settings</c> returns. A
-///     <c>PATCH</c> to the same endpoint accepts the same fields. The two override lists are read
-///     once at startup or first seed, so the GET shows the saved lists, which may not be the ones
-///     in use; every other field takes effect at once. <c>RecursiveServerOptions</c> documents
-///     each field and its default.
+///     (configuration section <c>DnsServer:Recursive</c>) that <c>GET /api/recursive-settings</c>
+///     returns. A <c>PATCH</c> to the same endpoint accepts the same fields. The two override lists
+///     are read once at startup or first seed, so the GET shows the saved lists, which may not be
+///     the ones in use; every other field takes effect at once. The default of each field is in the
+///     configuration section <c>DnsServer:Recursive</c>.
 ///     <para>
 ///         <c>InsecureDomains</c> is the list of Insecure domains (negative trust anchors) in
 ///         force: a query for a name at or below one skips DNSSEC validation and is never answered

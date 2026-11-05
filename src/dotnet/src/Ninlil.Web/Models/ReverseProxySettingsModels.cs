@@ -35,10 +35,12 @@ public record ReverseProxySettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol.ProxyProtocolOptions</c>:
-///     whether <c>DnsOverTlsListener</c> accepts an HAProxy PROXY protocol header (v1 text or v2
-///     binary) before the TLS handshake, and which addresses and networks may send one. Unlike the
-///     HTTP settings above it has no shared secret; <c>ProxyProtocolOptions</c> explains why.
+///     This record is the REST shape of configuration section
+///     <c>DnsServer:Protocol:DnsOverTls:ProxyProtocol</c>: whether the DNS-over-TLS listener
+///     accepts an HAProxy PROXY protocol header (v1 text or v2 binary) before the TLS handshake,
+///     and which addresses and networks may send one. Unlike the HTTP settings above it has no
+///     shared secret: the PROXY protocol header has no place for one, so the allowlist alone is the
+///     trust boundary.
 /// </summary>
 /// <param name="Enable">Whether a connection from a trusted source is checked for a PROXY protocol header.</param>
 /// <param name="KnownProxies">The individual IP addresses allowed to send a PROXY protocol header.</param>

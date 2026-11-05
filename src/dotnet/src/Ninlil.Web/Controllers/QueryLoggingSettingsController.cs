@@ -65,7 +65,7 @@ public class QueryLoggingSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:QueryLogging</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch. A field absent from
     ///     <paramref name="patch" /> keeps its value. The response note says whether a restart is
     ///     needed. Returns 400 for a field of the wrong JSON type, a negative <c>retentionPeriod</c>
     ///     or <c>maxRetainedEntries</c> (zero turns the bound off), a <c>cleanupInterval</c> that

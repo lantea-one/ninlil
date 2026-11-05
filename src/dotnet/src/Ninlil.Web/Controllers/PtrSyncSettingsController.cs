@@ -52,9 +52,9 @@ public class PtrSyncSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Authoritative:PtrSync</c> as an
-    ///     RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. Every field
+    ///     RFC 7396 merge patch. Every field
     ///     takes effect at once. Returns 400 for an IPv4 prefix outside 24-30 or an IPv6 prefix
-    ///     that is not a multiple of 4 from 16 to 124 (see <c>ZonesController</c> for why).
+    ///     that is not a multiple of 4 from 16 to 124 (the zone fields use the same limits).
     ///     Requires <c>ptrsyncsettings:write</c>.
     /// </summary>
     [HttpPatch]

@@ -30,8 +30,8 @@ namespace Ninlil.Web.Controllers;
 ///         <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> size the worker pool,
 ///         the concurrency slots and the <see cref="System.Threading.Channels.Channel{T}" /> that
 ///         <see cref="DnsQueryProcessingPipeline" /> builds in <c>StartAsync</c>, so they apply
-///         after restarting that service (<c>POST
-///         /api/services/query-processing-pipeline/restart</c>) or the process. The
+///         after restarting that service
+///         (<c>POST /api/services/query-processing-pipeline/restart</c>) or the process. The
 ///         <see cref="Patch" /> response note says which case applies.
 ///     </para>
 /// </summary>
@@ -65,7 +65,7 @@ public class DnsPipelineSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Pipeline</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The response note depends
+    ///     patch. The response note depends
     ///     on whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns
     ///     400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor
     ///     that is not above 0. Requires <c>dnspipelinesettings:write</c>.

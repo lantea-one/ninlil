@@ -7,16 +7,16 @@ namespace Ninlil.Web.Models;
 /// <summary>
 ///     This class carries the fields used to register a known client device
 ///     (<c>POST /api/clients</c>) with its first address. <see cref="ClientIdentifier" /> and
-///     <see cref="ProtocolVersion" /> become that address's identity, which cannot change later
-///     (see <see cref="ClientsController" />). Further addresses are added through
-///     <see cref="Controllers.ClientAddressesController.Create" />. The device fields that stay
-///     editable are in <see cref="ClientWriteRequest" />, used by <c>PUT</c> and <c>PATCH</c>.
+///     <see cref="ProtocolVersion" /> become that address's identity, which cannot change later.
+///     Further addresses are added through <c>POST /api/clients/{clientId}/addresses</c>. The
+///     device fields that stay editable are in <see cref="ClientWriteRequest" />, used by
+///     <c>PUT</c> and <c>PATCH</c>.
 /// </summary>
 /// <param name="ClientIdentifier">A MAC address for an IPv4 client, or a DUID for an IPv6 one, in hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned as <c>aa:bb:cc:dd:ee:ff</c>.</param>
 /// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs to.</param>
 /// <param name="DisplayName">An optional, operator-chosen, human-readable name for the client.</param>
 /// <param name="ClientGroupId">
-///     The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> the client is
+///     The client group the client is
 ///     explicitly assigned to, or <see langword="null" /> for none.
 /// </param>
 /// <param name="IsDisabled">Whether the client starts out disabled.</param>
@@ -41,14 +41,13 @@ public record ClientCreateRequest(
 /// <summary>
 ///     This class carries the editable fields of a known client, replaced in full by
 ///     <c>PUT /api/clients/{id}</c>. It has no <see cref="ClientCreateRequest.ClientIdentifier" />
-///     or <see cref="ClientCreateRequest.ProtocolVersion" />, because
-///     <see cref="ClientsController" /> never lets an address's identity change. To change one, add
-///     a new address and delete the old one, as with the shared secret of a
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity" />.
+///     or <see cref="ClientCreateRequest.ProtocolVersion" />, because an address's identity never
+///     changes. To change one, add a new address and delete the old one, as with the shared secret
+///     of a TSIG key.
 /// </summary>
 /// <param name="DisplayName">An operator-chosen, human-readable name for the client.</param>
 /// <param name="ClientGroupId">
-///     The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> the client is
+///     The client group the client is
 ///     explicitly assigned to, or <see langword="null" /> for none.
 /// </param>
 /// <param name="IsDisabled">Whether the client is disabled.</param>
@@ -78,7 +77,7 @@ public record ClientWriteRequest(
 /// <param name="Addresses">Every persistent identifier the device answers to (see <see cref="ClientAddressDetail" />).</param>
 /// <param name="DisplayName">An operator-chosen, human-readable name for the client.</param>
 /// <param name="ClientGroupId">
-///     The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> the client is
+///     The client group the client is
 ///     explicitly assigned to, or <see langword="null" /> for none.
 /// </param>
 /// <param name="IsDisabled">Whether the client is disabled.</param>
@@ -87,8 +86,7 @@ public record ClientWriteRequest(
 /// <param name="CreatedAtUtc">When the client was registered.</param>
 /// <param name="UpdatedAtUtc">When the client was last updated, or <see langword="null" /> if never.</param>
 /// <param name="PausedUntilUtc">
-///     The UTC instant until which the client's pause blocks all of its DNS resolution (see
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.PausedUntilUtc" />), or
+///     The UTC instant until which the client's pause blocks all of its DNS resolution, or
 ///     <see langword="null" /> when no pause has been set.
 /// </param>
 /// <param name="IsCurrentlyPaused">
@@ -170,7 +168,7 @@ public record ClientSummaryDetail(
 /// <summary>
 ///     This class carries one persistent identifier a known client device answers to. It appears
 ///     in <see cref="ClientDetail.Addresses" /> and in the responses of
-///     <see cref="Controllers.ClientAddressesController" />.
+///     <c>/api/clients/{clientId}/addresses</c>.
 /// </summary>
 /// <param name="Id">The address's unique identifier.</param>
 /// <param name="ClientId">The owning device's unique identifier.</param>
@@ -218,8 +216,8 @@ public record ClientAddressDetail(
 ///     (<c>POST /api/clients/{clientId}/addresses</c>). Apart from the first address in
 ///     <see cref="ClientCreateRequest" />, this is the only way a device gains an identifier. The
 ///     request is rejected with <c>409 Conflict</c> when the identifier and protocol pair already
-///     belongs to any device, this one included, matching the unique composite index on
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity" />.
+///     belongs to any device, this one included, matching the unique composite index on the client
+///     address table.
 /// </summary>
 /// <param name="ClientIdentifier">A MAC address for an IPv4 identity, or a DUID for an IPv6 one, in hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned as <c>aa:bb:cc:dd:ee:ff</c>.</param>
 /// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs to.</param>
@@ -248,7 +246,7 @@ public record InstantPauseRequest(int DurationMinutes);
 ///     <c>PATCH</c>: an assignment only joins a client to a list, so assigning a different list
 ///     means deleting one assignment and creating another.
 /// </summary>
-/// <param name="ListId">The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity" /> to assign to the client.</param>
+/// <param name="ListId">The filter list to assign to the client.</param>
 public record ClientListAssignmentWriteRequest(Guid ListId);
 
 /// <summary>

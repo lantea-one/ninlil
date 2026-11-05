@@ -49,7 +49,7 @@ public class Dns64SettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Dns64</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch. A field absent from
     ///     <paramref name="patch" /> keeps its value. <see cref="Dns64Options.SynthesisPrefix" />
     ///     is checked against the same rule
     ///     <c>Dns64SynthesisService.TryParsePrefix</c> applies (an IPv6 prefix of /32, /40, /48,

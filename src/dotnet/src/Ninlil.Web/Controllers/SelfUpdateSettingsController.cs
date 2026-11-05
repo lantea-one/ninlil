@@ -54,7 +54,7 @@ public class SelfUpdateSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:SelfUpdate</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch. A field absent from
     ///     <paramref name="patch" /> keeps its value. <c>releaseFeedUrl</c> must be blank (no feed)
     ///     or an absolute http(s) URL; it is only checked for shape, not fetched, so a typo is
     ///     caught here rather than as a failing background check. Returns 400 for a bad URL or a

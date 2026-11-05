@@ -101,7 +101,7 @@ public class ClusterSettingsController(
     /// <summary>
     ///     This action merges a partial update into the <c>Cluster</c> section (and, for
     ///     <c>addressReconcileInterval</c>, the <c>CatalogSync</c> section) as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. There is no <c>nodeId</c>
+    ///     patch. There is no <c>nodeId</c>
     ///     field. The response note says whether the change applies at once or needs a restart.
     ///     Returns 400 for a field of the wrong JSON type, a port outside 0-65535 (0 means the
     ///     shared HTTPS port), a missed-heartbeat threshold below 1, a <c>heartbeatInterval</c>

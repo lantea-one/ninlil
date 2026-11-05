@@ -23,8 +23,7 @@ public record PresetSummary(
 /// <param name="Name">The preset that was applied.</param>
 /// <param name="AppliedAtUtc">When the preset was applied.</param>
 /// <param name="Note">
-///     A reminder that settings read through
-///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> take effect at once,
+///     A reminder that settings the server reads live take effect at once,
 ///     while the others the preset touched need a restart.
 /// </param>
 public record PresetApplyResult(string Name, DateTimeOffset AppliedAtUtc, string Note);

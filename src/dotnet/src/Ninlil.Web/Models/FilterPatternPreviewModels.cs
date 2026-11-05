@@ -15,7 +15,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Value">The candidate pattern text.</param>
 /// <param name="SampleDomains">
 ///     The domains to test <see cref="Value" /> against. When omitted or empty, the small built-in
-///     set <c>FilterPatternPreviewController.DefaultSampleDomains</c> is used. At most 20 domains
+///     set of ten sample domains is used. At most 20 domains
 ///     are accepted, each non-blank and at most 253 characters; anything else is rejected with 400.
 /// </param>
 public record FilterPatternPreviewRequest(
@@ -35,10 +35,10 @@ public record FilterPatternPreviewMatch(string Domain, bool IsMatch);
 /// </summary>
 /// <param name="IsValid">
 ///     Whether <see cref="FilterPatternPreviewRequest.Value" /> compiles as the requested
-///     <see cref="FilterPatternPreviewRequest.Kind" />, using the same check
-///     <c>FilterListEntriesController</c> applies before saving a
-///     <see cref="DnsFilterEntryKindEnum.Wildcard" /> or <see cref="DnsFilterEntryKindEnum.Regex" />
-///     entry.
+///     <see cref="FilterPatternPreviewRequest.Kind" />, using the same check that
+///     <c>POST /api/filter-lists/{listId}/entries</c> applies before saving a
+///     <see cref="DnsFilterEntryKindEnum.Wildcard" /> or
+///     <see cref="DnsFilterEntryKindEnum.Regex" /> entry.
 /// </param>
 /// <param name="Error">A human-readable reason <see cref="IsValid" /> is <see langword="false" />, or <see langword="null" /> when it is <see langword="true" />.</param>
 /// <param name="Matches">

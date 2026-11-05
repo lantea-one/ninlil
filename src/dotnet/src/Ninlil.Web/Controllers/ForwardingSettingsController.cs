@@ -52,7 +52,7 @@ public class ForwardingSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Forwarding</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch. A field absent from
     ///     <paramref name="patch" /> keeps its value. Every field takes effect at once. Returns 400
     ///     for a field of the wrong JSON type, an unknown failover strategy, a
     ///     <c>healthCheckInterval</c> outside 1 second to 1 day, a <c>perForwarderTimeout</c>

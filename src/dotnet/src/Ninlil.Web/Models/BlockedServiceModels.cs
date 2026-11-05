@@ -18,7 +18,7 @@ namespace Ninlil.Web.Models;
 ///     whether that target has an assignment of the enabled list instead.
 /// </param>
 /// <param name="FilterListId">
-///     The identifier of the entry's managed <c>DnsFilterListEntity</c> when one exists, so the UI
+///     The identifier of the entry's managed filter list when one exists, so the UI
 ///     can link to it on the Filter Lists page; otherwise <see langword="null" />.
 /// </param>
 public record BlockedServiceDetail(

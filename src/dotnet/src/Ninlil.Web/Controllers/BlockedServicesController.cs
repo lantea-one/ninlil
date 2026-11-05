@@ -137,13 +137,12 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This action enables one catalog entry: it creates the entry's managed
-    ///     <see cref="DnsFilterListEntity" /> if none exists or re-enables a disabled one, and,
-    ///     with a <c>clientId</c> or <c>clientGroupId</c>, also assigns the list to that target if
-    ///     it is not already. Without a target it marks the list as applying to every client.
-    ///     Enabling an enabled entry just returns its state. Returns 400 when
-    ///     both targets are given or the target does not exist, and 404 for an unknown key.
-    ///     Requires <c>filterlists:write</c>.
+    ///     This action enables one catalog entry: it creates the entry's managed filter list if
+    ///     none exists or re-enables a disabled one, and, with a <c>clientId</c> or
+    ///     <c>clientGroupId</c>, also assigns the list to that target if it is not already. Without
+    ///     a target it marks the list as applying to every client. Enabling an enabled entry just
+    ///     returns its state. Returns 400 when both targets are given or the target does not exist,
+    ///     and 404 for an unknown key. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpPost("{key}")]
     [RequirePermission("filterlists:write")]
@@ -233,18 +232,16 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This action disables one catalog entry. Without a target it clears
-    ///     <see cref="DnsFilterListEntity.AppliesToAllClients" />, so the service is no longer
-    ///     blocked for every client, and tells the cluster peers. The managed
-    ///     <see cref="DnsFilterListEntity" /> stays while a client or client group is still
-    ///     assigned to it; when none is, the action deletes the list and its entries (as
+    ///     This action disables one catalog entry. Without a target it clears the list's
+    ///     applies-to-all-clients flag, so the service is no longer blocked for every client, and
+    ///     tells the cluster peers. The managed filter list stays while a client or client group is
+    ///     still assigned to it; when none is, the action deletes the list and its entries (as
     ///     <see cref="FilterListsController.Delete" /> does) and tells the peers to delete it. With
-    ///     a <c>clientId</c> or
-    ///     <c>clientGroupId</c> it removes only that target's assignment, which stays on this node,
-    ///     and leaves the list and every other target alone, so unblocking a service for one
-    ///     device does not unblock it for everyone. Having nothing to remove is not
-    ///     an error. Returns 400 when both targets are given and 404 for an unknown key. Requires
-    ///     <c>filterlists:write</c>.
+    ///     a <c>clientId</c> or <c>clientGroupId</c> it removes only that target's assignment,
+    ///     which stays on this node, and leaves the list and every other target alone, so
+    ///     unblocking a service for one device does not unblock it for everyone. Having nothing to
+    ///     remove is not an error. Returns 400 when both targets are given and 404 for an unknown
+    ///     key. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpDelete("{key}")]
     [RequirePermission("filterlists:write")]

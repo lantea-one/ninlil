@@ -2,9 +2,9 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST shape of the update check settings (<c>SelfUpdateOptions</c>) that
-///     <c>GET /api/self-update-settings</c> returns. A <c>PATCH</c> to the same endpoint accepts
-///     the same fields.
+///     This record is the REST shape of the update check settings (configuration section
+///     <c>DnsServer:SelfUpdate</c>) that <c>GET /api/self-update-settings</c> returns. A
+///     <c>PATCH</c> to the same endpoint accepts the same fields.
 /// </summary>
 /// <param name="EnableAutomaticCheck">Whether the server checks <see cref="ReleaseFeedUrl" /> periodically. Defaults to <see langword="true" />.</param>
 /// <param name="ReleaseFeedUrl">The release feed URL to check, or an empty string (the default) if none is set.</param>
@@ -18,7 +18,7 @@ public record SelfUpdateSettingsDetail(
 /// <summary>
 ///     This record is what the update checker knows, as returned by <c>GET /api/self-update</c>
 ///     and <c>POST /api/self-update/check</c>: whether an update is available, with enough context
-///     to act on it. <c>Controllers.SelfUpdateController</c> explains how an update is applied.
+///     to act on it. The server does not update itself; the operator applies an update by hand.
 /// </summary>
 /// <param name="Configured">Whether a release feed URL is set.</param>
 /// <param name="CurrentVersion">The running version, as a plain dotted string.</param>
@@ -33,8 +33,7 @@ public record SelfUpdateSettingsDetail(
 /// <param name="LastCheckError">A short description of why the last check failed, or <see langword="null" /> if it succeeded.</param>
 /// <param name="UpdateInstructions">
 ///     Plain-language guidance on how to update. The server does not update itself, so the UI
-///     shows these instructions rather than an update button (see
-///     <c>Controllers.SelfUpdateController</c>).
+///     shows these instructions rather than an update button.
 /// </param>
 public record SelfUpdateStatusDetail(
     bool Configured,

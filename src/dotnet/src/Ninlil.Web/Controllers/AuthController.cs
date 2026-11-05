@@ -133,11 +133,11 @@ public class AuthController(
     ///         <b>The response never varies.</b> It is always 200 with the same
     ///         <see cref="ForgotPasswordResult" />, whichever condition failed, including "no
     ///         account has this address". An administrator using
-    ///         <c>UsersController.ResetPassword</c> may learn whether an account has an e-mail
-    ///         address or whether SMTP is configured, but an anonymous caller must not be able to
-    ///         tell from the response which addresses have accounts. A delivery failure (the SMTP
-    ///         server rejects the message, say) is logged rather than returned as a 500 for the
-    ///         same reason.
+    ///         <c>POST /api/users/{id}/reset-password</c> may learn whether an account has an
+    ///         e-mail address or whether SMTP is configured, but an anonymous caller must not be
+    ///         able to tell from the response which addresses have accounts. A delivery failure
+    ///         (the SMTP server rejects the message, say) is logged rather than returned as a 500
+    ///         for the same reason.
     ///     </para>
     ///     <para>
     ///         <b>Neither does its timing, as far as is practical.</b> The e-mail is sent in the
@@ -359,9 +359,10 @@ public class AuthController(
     ///     pending sign-in's account. A challenge token that reaches the code check is spent
     ///     whether or not the code is right. Returns 401 for an unknown or used challenge token or
     ///     a wrong code. After 5 wrong codes in 15 minutes for the account (counted across all
-    ///     client addresses and shared with <see cref="TwoFactorController" />) it returns 429
-    ///     with a <c>Retry-After</c> header, without checking the code and without spending the
-    ///     challenge token. Allows anonymous callers and is rate limited per client address.
+    ///     client addresses and shared with the two-factor actions of the signed-in account) it
+    ///     returns 429 with a <c>Retry-After</c> header, without checking the code and without
+    ///     spending the challenge token. Allows anonymous callers and is rate limited per client
+    ///     address.
     /// </summary>
     [HttpPost("login/two-factor")]
     [AllowAnonymous]
@@ -455,7 +456,7 @@ public class AuthController(
     ///     revokes the old refresh token (rotation), so it cannot be reused. The token comes from
     ///     the request body when one is given there, otherwise from the browser's refresh cookie,
     ///     in which case the new refresh token goes back as a cookie rather than in the body. The
-    ///     new session keeps the old one's <see cref="SessionEntity.IsPersistent" /> choice.
+    ///     new session keeps the old one's persistent-session choice.
     ///     Returns 401 for an invalid, expired or revoked token or a disabled account. Allows
     ///     anonymous callers.
     ///     <para>
@@ -542,14 +543,14 @@ public class AuthController(
     /// <summary>
     ///     This action sets a new password from a password-reset token. It is the second step of
     ///     both <see cref="ForgotPassword" /> and the <c>EmailLink</c> mode of
-    ///     <c>UsersController.ResetPassword</c>, called from the admin console's "set new password"
-    ///     page. The caller is not signed in, so it allows anonymous callers;
+    ///     <c>POST /api/users/{id}/reset-password</c>, called from the admin console's "set new
+    ///     password" page. The caller is not signed in, so it allows anonymous callers;
     ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
-    ///     <c>UserManager.ResetPasswordAsync</c> rejects a wrong, expired or used
-    ///     token. An unknown account and an undecodable token return the same 400 message, so the
-    ///     response does not reveal whether an account exists. A successful reset replaces the
-    ///     account's security stamp and revokes every refresh token of the account, so every
-    ///     access token issued before it answers 401 on its next request.
+    ///     ASP.NET Core Identity rejects a wrong, expired or used token. An unknown account and an
+    ///     undecodable token return the same 400 message, so the response does not reveal whether
+    ///     an account exists. A successful reset replaces the account's security stamp and revokes
+    ///     every refresh token of the account, so every access token issued before it answers 401
+    ///     on its next request.
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
@@ -604,14 +605,13 @@ public class AuthController(
     ///     <see cref="UsersController.ChangeMyEmail" /> e-mailed to the new address, called from the
     ///     admin console's "confirm e-mail change" page. The link may be opened in a browser that
     ///     is not signed in, so it allows anonymous callers; <see cref="ConfirmEmailChangeRequest.Token" />
-    ///     is the only proof, and <c>UserManager.ChangeEmailAsync</c> rejects a
-    ///     wrong, expired, reused or tampered token, and one issued for another address. An
-    ///     unknown, disabled or mismatched account and a bad token return the same 400 message, so
-    ///     the response does not reveal whether an account exists. A successful change sets the
-    ///     address, marks it confirmed, replaces the account's security stamp and revokes every
-    ///     refresh token, so every session of the account must sign in again. A notice goes to the
-    ///     old address when SMTP is configured; a failed send is logged and does not undo the
-    ///     change.
+    ///     is the only proof, and ASP.NET Core Identity rejects a wrong, expired, reused or
+    ///     tampered token, and one issued for another address. An unknown, disabled or mismatched
+    ///     account and a bad token return the same 400 message, so the response does not reveal
+    ///     whether an account exists. A successful change sets the address, marks it confirmed,
+    ///     replaces the account's security stamp and revokes every refresh token, so every session
+    ///     of the account must sign in again. A notice goes to the old address when SMTP is
+    ///     configured; a failed send is logged and does not undo the change.
     /// </summary>
     [HttpPost("confirm-email-change")]
     [AllowAnonymous]

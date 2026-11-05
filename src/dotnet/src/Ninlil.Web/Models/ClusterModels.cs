@@ -61,8 +61,7 @@ public record ClusterJoinRequest(string InviteCode, string DisplayName = null);
 ///     (<c>GET /api/cluster/nodes/stats</c>). A row is either the answering node
 ///     (<see cref="IsSelf" /> is <see langword="true" /> and it is always <see cref="Reachable" />)
 ///     or a known peer. A peer whose snapshot could not be collected is reported unreachable
-///     rather than left out (see
-///     <see cref="Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator" />).
+///     rather than left out.
 /// </summary>
 /// <param name="ClusterNodeRegistryId">
 ///     The id of the peer's row in this node's registry, or <see langword="null" /> for the

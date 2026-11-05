@@ -136,7 +136,7 @@ public class EventBrokerSettingsController(
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Events</c>,
     ///     <c>DnsServer:Events:RabbitMq</c> and <c>DnsServer:Events:ActiveMq</c> as an RFC 7396
-    ///     merge patch at every level, through <see cref="PresetConfigurationFileApplier" />. A
+    ///     merge patch at every level. A
     ///     field absent at the top level or within <c>rabbitMq</c> or <c>activeMq</c> keeps its
     ///     value, including <c>password</c>, so an operator can change only <c>hostName</c> without
     ///     resupplying a password <see cref="Get" /> never shows. A password is stored encrypted

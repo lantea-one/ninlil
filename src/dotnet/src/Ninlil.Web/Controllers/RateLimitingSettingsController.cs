@@ -83,7 +83,7 @@ public class RateLimitingSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:RateLimiting</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch. A field absent from
     ///     <paramref name="patch" /> keeps its value; <c>subnetBypassCidrs</c> replaces the whole
     ///     list. The change needs a restart. Returns 400 for a field of the wrong JSON type, a rate,
     ///     bucket size, tracked-client ceiling or subnet query limit below 1, a duration that is

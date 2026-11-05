@@ -15,8 +15,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Target">
 ///     An IP address (answered as an A or AAAA record) or another domain name (answered as a
 ///     CNAME). It is checked with <c>DnsRewriteTargetClassifier.TryClassify</c>, the classifier
-///     used at query time, much as <see cref="RecordsController" /> checks a record's
-///     <c>data</c> with the record codec.
+///     used at query time, much as a record's <c>data</c> is checked when a record is written.
 /// </param>
 /// <param name="IsDisabled">Whether the rewrite is disabled.</param>
 /// <param name="Comments">Free-form operator notes about the rewrite.</param>
@@ -49,12 +48,11 @@ public record DnsRewriteWriteRequest(
 ///     or <see langword="null" /> if it was never written with clustering enabled.
 /// </param>
 /// <param name="ClientId">
-///     The one known client (<c>Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity</c>) the
-///     rewrite applies to, or <see langword="null" /> if it is global or scoped to a client
-///     group. It is read-only here: this controller never sets it; only
-///     <c>SafeSearchController.Enable</c> with a target does. It is shown so the Rewrites page can
-///     tell a targeted Safe Search row from a global one that would otherwise look like a
-///     duplicate.
+///     The one known client the rewrite applies to, or <see langword="null" /> if it is global or
+///     scoped to a client group. It is read-only here: this controller never sets it; only enabling
+///     a Safe Search entry with a target (<c>POST /api/safe-search/{key}</c>) does. It is shown so
+///     the Rewrites page can tell a targeted Safe Search row from a global one that would otherwise
+///     look like a duplicate.
 /// </param>
 /// <param name="ClientGroupId">
 ///     The one client group the rewrite applies to, or <see langword="null" /> if it is global or

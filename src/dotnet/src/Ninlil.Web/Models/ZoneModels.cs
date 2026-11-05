@@ -4,7 +4,7 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries every writable field of a <c>ZoneEntity</c>, used to create a zone
+///     This class carries every writable field of a zone, used to create a zone
 ///     (<c>POST /api/zones</c>) and to fully replace one (<c>PUT /api/zones/{id}</c>). Creating a
 ///     zone adds no records, not even an SOA; records are managed through
 ///     <c>/api/zones/{zoneId}/records</c>.
@@ -42,31 +42,32 @@ namespace Ninlil.Web.Models;
 /// <param name="CloudSyncInterval">How often a cloud zone is synced.</param>
 /// <param name="AutoManageCaaRecords">
 ///     Whether CAA auto-management keeps the zone's CAA records in step.
-///     <see langword="null" /> inherits <c>CaaAutoManagementOptions.DefaultEnabled</c>.
+///     <see langword="null" /> inherits <c>DnsServer:Acme:CaaAutoManagement:DefaultEnabled</c>.
 /// </param>
 /// <param name="CaaIssuerDomain">
 ///     The CA issuer domain CAA auto-management writes into the zone's CAA records.
-///     <see langword="null" /> inherits <c>CaaAutoManagementOptions.DefaultIssuerDomain</c>.
+///     <see langword="null" /> inherits
+///     <c>DnsServer:Acme:CaaAutoManagement:DefaultIssuerDomain</c>.
 /// </param>
 /// <param name="AutoManagePtrRecords">
 ///     Whether PTR sync mirrors the zone's A and AAAA records into the matching reverse zone.
-///     <see langword="null" /> inherits <c>PtrSyncOptions.DefaultEnabled</c>, which defaults to
-///     <see langword="false" />: unlike CAA auto-management, PTR sync is opt-in.
+///     <see langword="null" /> inherits <c>DnsServer:Authoritative:PtrSync:DefaultEnabled</c>,
+///     which defaults to <see langword="false" />: unlike CAA auto-management, PTR sync is opt-in.
 /// </param>
 /// <param name="PtrIpv4PrefixLength">
 ///     The zone's IPv4 reverse zone size, in prefix bits, or <see langword="null" /> to inherit
-///     <c>PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits</c>. 24 means one zone per octet
-///     boundary; 25 to 30 use RFC 2317 classless delegation. Only <c>null</c> or 24 to 30 is
-///     accepted.
+///     <c>DnsServer:Authoritative:PtrSync:DefaultIpv4ReverseZonePrefixBits</c>. 24 means one zone
+///     per octet boundary; 25 to 30 use RFC 2317 classless delegation. Only <c>null</c> or 24 to 30
+///     is accepted.
 /// </param>
 /// <param name="PtrIpv6PrefixLength">
 ///     The zone's IPv6 reverse zone size, in prefix bits, or <see langword="null" /> to inherit
-///     <c>PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits</c>. Only <c>null</c> or a multiple of 4
-///     from 16 to 124 is accepted.
+///     <c>DnsServer:Authoritative:PtrSync:DefaultIpv6ReverseZonePrefixBits</c>. Only <c>null</c> or
+///     a multiple of 4 from 16 to 124 is accepted.
 /// </param>
 /// <param name="TransferTransport">
-///     The transport that carries the zone's AXFR and IXFR traffic (see
-///     <c>ZoneEntity.TransferTransport</c>). Defaults to <see cref="ZoneTransferTransportEnum.Plain" />.
+///     The transport that carries the zone's AXFR and IXFR traffic. Defaults to
+///     <see cref="ZoneTransferTransportEnum.Plain" />.
 /// </param>
 /// <param name="ValidateDnssec">
 ///     Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default,
@@ -144,23 +145,23 @@ public record ZoneWriteRequest(
 /// <param name="CloudSyncInterval">How often a cloud zone is synced.</param>
 /// <param name="AutoManageCaaRecords">
 ///     Whether CAA auto-management keeps the zone's CAA records in step.
-///     <see langword="null" /> inherits <c>CaaAutoManagementOptions.DefaultEnabled</c>.
+///     <see langword="null" /> inherits <c>DnsServer:Acme:CaaAutoManagement:DefaultEnabled</c>.
 /// </param>
 /// <param name="CaaIssuerDomain">
 ///     The CA issuer domain CAA auto-management writes. <see langword="null" /> inherits
-///     <c>CaaAutoManagementOptions.DefaultIssuerDomain</c>.
+///     <c>DnsServer:Acme:CaaAutoManagement:DefaultIssuerDomain</c>.
 /// </param>
 /// <param name="AutoManagePtrRecords">
 ///     Whether PTR sync mirrors the zone's A and AAAA records into the matching reverse zone.
-///     <see langword="null" /> inherits <c>PtrSyncOptions.DefaultEnabled</c>.
+///     <see langword="null" /> inherits <c>DnsServer:Authoritative:PtrSync:DefaultEnabled</c>.
 /// </param>
 /// <param name="PtrIpv4PrefixLength">
 ///     The zone's IPv4 reverse zone size, in prefix bits. <see langword="null" /> inherits
-///     <c>PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits</c>.
+///     <c>DnsServer:Authoritative:PtrSync:DefaultIpv4ReverseZonePrefixBits</c>.
 /// </param>
 /// <param name="PtrIpv6PrefixLength">
 ///     The zone's IPv6 reverse zone size, in prefix bits. <see langword="null" /> inherits
-///     <c>PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits</c>.
+///     <c>DnsServer:Authoritative:PtrSync:DefaultIpv6ReverseZonePrefixBits</c>.
 /// </param>
 /// <param name="CreatedAtUtc">When the zone was created.</param>
 /// <param name="UpdatedAtUtc">When the zone was last updated, or <see langword="null" /> if never.</param>

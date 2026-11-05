@@ -13,7 +13,7 @@ namespace Ninlil.Web.Models;
 ///     The address or network the rule applies to: a bare IPv4 or IPv6 address (one host, matched
 ///     exactly) or a network in CIDR notation. A zone index (<c>fe80::1%2</c>) and an
 ///     out-of-range prefix length are rejected with a 400. The value is stored as entered
-///     (trimmed) and matched by <c>DnsAccessControlRuleCache</c> at query time.
+///     (trimmed) and matched against the client address at query time.
 /// </param>
 /// <param name="Capabilities">
 ///     The capabilities the rule grants a client whose source address is in <see cref="Cidr" />,
@@ -44,8 +44,7 @@ public record DnsAccessControlRuleWriteRequest(
 ///     <see cref="DnsAccessControlRuleWriteRequest.Capabilities" />).
 /// </param>
 /// <param name="IsDisabled">
-///     Whether the rule is disabled. The enforcement engine ignores a disabled rule (see
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity.IsDisabled" />).
+///     Whether the rule is disabled. The enforcement engine ignores a disabled rule.
 /// </param>
 /// <param name="CreatedAtUtc">When the rule was created.</param>
 /// <param name="UpdatedAtUtc">When the rule was last modified, or <see langword="null" /> if never.</param>

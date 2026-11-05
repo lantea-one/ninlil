@@ -5,8 +5,9 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record is the REST shape of the server-wide default appearance
-///     (<c>AppearanceOptions</c>) that <c>GET /api/appearance-settings</c> returns: the palette and
-///     light/dark mode a signed-in user gets when they have not chosen their own.
+///     (configuration section <c>DnsServer:Appearance</c>) that <c>GET /api/appearance-settings</c>
+///     returns: the palette and light/dark mode a signed-in user gets when they have not chosen
+///     their own.
 /// </summary>
 /// <param name="Palette">The default color palette.</param>
 /// <param name="Mode">The default light/dark mode.</param>
