@@ -88,6 +88,10 @@ namespace Ninlil.Web.Controllers;
 ///     Builds and sends the confirmation link and the notice to the old address for
 ///     <see cref="ChangeMyEmail" />. <c>AuthController.ConfirmEmailChange</c> uses it for the notice.
 /// </param>
+/// <param name="passwordAttemptLimiter">
+///     Limits wrong current passwords per account for <see cref="ChangeMyPassword" /> and
+///     <see cref="ChangeMyEmail" /> (see <see cref="CurrentPasswordAttemptLimiter" />).
+/// </param>
 /// <param name="logger">Logs a notice to the old address that could not be delivered.</param>
 [ApiController]
 [Route("api/users")]
@@ -104,6 +108,7 @@ public class UsersController(
     IOptionsMonitor<IdentityOptions> identityOptions,
     IOptionsMonitor<EmailChangeOptions> emailChangeOptions,
     EmailChangeLinkSender emailChangeLinkSender,
+    CurrentPasswordAttemptLimiter passwordAttemptLimiter,
     ILogger<UsersController> logger
 ) : ControllerBase
 {
@@ -427,7 +432,10 @@ public class UsersController(
 
     /// <summary>
     ///     This action changes the caller's password. It requires the current password; a wrong one
-    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. A successful change replaces
+    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. Wrong passwords are counted
+    ///     per account, together with those of the e-mail change: once 5 have been submitted within
+    ///     15 minutes, this returns 429 with a <c>Retry-After</c> header, even for the correct
+    ///     password, until the window ends. A successful change replaces
     ///     the account's security stamp and revokes every refresh token of the account, including
     ///     the caller's own session: every access token issued before the change, the caller's
     ///     included, answers 401 on its next request, and the caller signs in again with the new
@@ -444,6 +452,10 @@ public class UsersController(
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
             return Unauthorized();
+
+        IActionResult refused = await CheckCurrentPasswordAsync(user, request.CurrentPassword);
+        if (refused is not null)
+            return refused;
 
         IdentityResult result = await userManager.ChangePasswordAsync(
             user,
@@ -463,8 +475,46 @@ public class UsersController(
     }
 
     /// <summary>
+    ///     This method checks the current password a self-service action asks for. It returns
+    ///     <see langword="null" /> when the password is right, a 429 result while the account has
+    ///     used up its budget of wrong passwords, and throws a 400
+    ///     <see cref="ValidationException" /> with Identity's <c>PasswordMismatch</c> error for a
+    ///     wrong password.
+    /// </summary>
+    /// <remarks>
+    ///     The budget is per account and not Identity lockout: a wrong password at sign-in does
+    ///     not lock an account either, so a stranger can never lock anyone out. This check is
+    ///     reachable only with a valid access token, and without a limit that token could guess
+    ///     the password endlessly. The blocked check comes first, so the correct password is
+    ///     refused too until the window ends.
+    /// </remarks>
+    private async Task<IActionResult> CheckCurrentPasswordAsync(UserEntity user, string password)
+    {
+        if (passwordAttemptLimiter.IsBlocked(user.Id, out TimeSpan retryAfter))
+            return TwoFactorCodeAttemptLimiter.TooManyRequests(
+                this,
+                retryAfter,
+                "Too many wrong passwords",
+                "Too many wrong current passwords."
+            );
+
+        if (await userManager.CheckPasswordAsync(user, password))
+        {
+            passwordAttemptLimiter.RecordSuccess(user.Id);
+            return null;
+        }
+
+        passwordAttemptLimiter.RecordFailure(user.Id);
+        IdentityResult.Failed(userManager.ErrorDescriber.PasswordMismatch()).ThrowIfFailed();
+        return null;
+    }
+
+    /// <summary>
     ///     This action changes the caller's own e-mail address. It requires the current password; a
-    ///     wrong one returns 400 with Identity's <c>PasswordMismatch</c> error. An invalid address
+    ///     wrong one returns 400 with Identity's <c>PasswordMismatch</c> error. Wrong passwords are
+    ///     counted per account, together with those of the password change: once 5 have been
+    ///     submitted within 15 minutes, this returns 429 with a <c>Retry-After</c> header, even
+    ///     for the correct password, until the window ends. An invalid address
     ///     or one another account uses returns 400 with Identity's error. Requires only a
     ///     signed-in caller.
     ///     <list type="bullet">
@@ -506,8 +556,9 @@ public class UsersController(
 
         // The password check comes first, so a stolen access token alone cannot learn which
         // addresses are taken or trigger an e-mail.
-        if (!await userManager.CheckPasswordAsync(user, request.CurrentPassword))
-            IdentityResult.Failed(userManager.ErrorDescriber.PasswordMismatch()).ThrowIfFailed();
+        IActionResult refused = await CheckCurrentPasswordAsync(user, request.CurrentPassword);
+        if (refused is not null)
+            return refused;
 
         string newEmail = request.NewEmail?.Trim();
         await ValidateNewEmailAsync(user, newEmail);
