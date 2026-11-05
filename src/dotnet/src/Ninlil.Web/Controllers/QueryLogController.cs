@@ -15,8 +15,7 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller serves the persistent query log that
-///     <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber" /> writes for every answered
+///     This controller serves the persistent query log that the server writes for every answered
 ///     query: a searchable history, unlike the dashboard's live SignalR feed, which is capped and
 ///     resets on reload. The route is flat. Searching needs <c>querylog:read</c>; clearing the log
 ///     needs <c>querylog:write</c>.

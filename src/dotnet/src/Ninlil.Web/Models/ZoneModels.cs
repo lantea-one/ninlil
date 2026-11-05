@@ -67,7 +67,7 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="TransferTransport">
 ///     The transport that carries the zone's AXFR and IXFR traffic. Defaults to
-///     <see cref="ZoneTransferTransportEnum.Plain" />.
+///     <c>Plain</c>.
 /// </param>
 /// <param name="ValidateDnssec">
 ///     Whether answers forwarded for a forwarder zone are validated with DNSSEC. Off by default,
@@ -76,7 +76,7 @@ namespace Ninlil.Web.Models;
 ///     validated.
 /// </param>
 /// <remarks>
-///     There is no <c>MemberOfCatalogZoneId</c> field. RFC 9432 catalog membership is set and
+///     There is no <c>memberOfCatalogZoneId</c> field. RFC 9432 catalog membership is set and
 ///     cleared only through <c>POST</c> and <c>DELETE /api/zones/{id}/catalog-membership</c>,
 ///     which update the field and the catalog zone's member PTR record together.
 /// </remarks>
@@ -222,17 +222,16 @@ public record ZoneDetail(
 
 /// <summary>
 ///     This record is the response of <c>POST /api/zones/{id}/reconcile-caa</c>: what one
-///     on-demand CAA reconciliation did, or why it did nothing. It copies
-///     <c>Server.Acme.Caa.CaaReconciliationResult</c> so the internal service type is not exposed
-///     over REST, as <see cref="ZoneCatalogMembersResponse" /> does for the catalog service.
+///     on-demand CAA reconciliation did, or why it did nothing. It copies the result of the
+///     reconciliation so the internal service type is not exposed over REST.
 /// </summary>
 /// <param name="RecordsAdded">How many CAA records the pass created.</param>
 /// <param name="RecordsRemoved">How many CAA records the pass removed as no longer wanted.</param>
 /// <param name="Skipped">
-///     Whether the pass did nothing (see <paramref name="SkipReason" />). A pass that ran but
+///     Whether the pass did nothing (see <c>skipReason</c>). A pass that ran but
 ///     found nothing to change reports <see langword="false" /> with zero counts.
 /// </param>
-/// <param name="SkipReason">Why the pass was skipped, set only when <paramref name="Skipped" /> is <see langword="true" />.</param>
+/// <param name="SkipReason">Why the pass was skipped, set only when <c>skipped</c> is <see langword="true" />.</param>
 public record ZoneCaaReconciliationResponse(
     int RecordsAdded,
     int RecordsRemoved,
@@ -242,9 +241,8 @@ public record ZoneCaaReconciliationResponse(
 
 /// <summary>
 ///     This record is the response of <c>POST /api/zones/{id}/reconcile-ptr</c>: what one
-///     on-demand PTR sync did, or why it did nothing. It copies
-///     <c>Server.Authoritative.Ptr.PtrReconciliationResult</c>, as
-///     <see cref="ZoneCaaReconciliationResponse" /> does for CAA.
+///     on-demand PTR sync did, or why it did nothing. It copies the result of the sync, as the CAA
+///     reconciliation response does for CAA.
 /// </summary>
 /// <param name="RecordsAdded">
 ///     How many PTR and delegation CNAME records the pass created, across every reverse zone and,
@@ -255,10 +253,10 @@ public record ZoneCaaReconciliationResponse(
 ///     How many distinct zones the pass created, wrote to or checked for stale records.
 /// </param>
 /// <param name="Skipped">
-///     Whether the pass did nothing (see <paramref name="SkipReason" />). A pass that ran but
+///     Whether the pass did nothing (see <c>skipReason</c>). A pass that ran but
 ///     found nothing to change reports <see langword="false" /> with zero counts.
 /// </param>
-/// <param name="SkipReason">Why the pass was skipped, set only when <paramref name="Skipped" /> is <see langword="true" />.</param>
+/// <param name="SkipReason">Why the pass was skipped, set only when <c>skipped</c> is <see langword="true" />.</param>
 public record ZonePtrReconciliationResponse(
     int RecordsAdded,
     int RecordsRemoved,
@@ -271,7 +269,7 @@ public record ZonePtrReconciliationResponse(
 ///     This class carries the catalog zone a zone should join, the request body of
 ///     <c>POST /api/zones/{id}/catalog-membership</c>.
 /// </summary>
-/// <param name="CatalogZoneId">The identifier of the <see cref="ZoneTypeEnum.Catalog" /> zone to join.</param>
+/// <param name="CatalogZoneId">The identifier of the <c>Catalog</c> zone to join.</param>
 public record ZoneCatalogMembershipRequest(Guid CatalogZoneId);
 
 /// <summary>

@@ -14,8 +14,8 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="Target">
 ///     An IP address (answered as an A or AAAA record) or another domain name (answered as a
-///     CNAME). It is checked with <c>DnsRewriteTargetClassifier.TryClassify</c>, the classifier
-///     used at query time, much as a record's <c>data</c> is checked when a record is written.
+///     CNAME). It is checked with the same rule the server applies at query time, much as a
+///     record's <c>data</c> is checked when a record is written.
 /// </param>
 /// <param name="IsDisabled">Whether the rewrite is disabled.</param>
 /// <param name="Comments">Free-form operator notes about the rewrite.</param>
@@ -35,7 +35,7 @@ public record DnsRewriteWriteRequest(
 /// <param name="Domain">The rewrite's domain pattern, as stored.</param>
 /// <param name="Target">The rewrite's target, as stored.</param>
 /// <param name="TargetKind">
-///     The record kind <see cref="Target" /> classifies to, computed when the response is built
+///     The record kind <c>target</c> classifies to, computed when the response is built
 ///     with the classifier that validated it (as <c>ForwarderDetail.Protocol</c> is), or
 ///     <see langword="null" /> if it no longer classifies.
 /// </param>
@@ -56,7 +56,7 @@ public record DnsRewriteWriteRequest(
 /// </param>
 /// <param name="ClientGroupId">
 ///     The one client group the rewrite applies to, or <see langword="null" /> if it is global or
-///     scoped to a client. Read-only, like <see cref="ClientId" />.
+///     scoped to a client. Read-only, like <c>clientId</c>.
 /// </param>
 public record DnsRewriteDetail(
     Guid Id,

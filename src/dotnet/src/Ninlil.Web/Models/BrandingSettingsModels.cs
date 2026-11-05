@@ -17,11 +17,11 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="HostnameString">
 ///     The value the server answers a <c>hostname.bind</c> or <c>id.server</c> CHAOS query with,
-///     when <paramref name="EnableChaosVersionQueries" /> is enabled.
+///     when <c>enableChaosVersionQueries</c> is enabled.
 /// </param>
 /// <param name="VersionString">
 ///     The value the server answers a <c>version.bind</c> or <c>version.server</c> CHAOS query
-///     with, when <paramref name="EnableChaosVersionQueries" /> is enabled.
+///     with, when <c>enableChaosVersionQueries</c> is enabled.
 /// </param>
 /// <param name="EnableChaosVersionQueries">
 ///     Whether the server answers these CHAOS-class identification queries at all.

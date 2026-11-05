@@ -16,10 +16,10 @@ namespace Ninlil.Web.Models;
 ///     (trimmed) and matched against the client address at query time.
 /// </param>
 /// <param name="Capabilities">
-///     The capabilities the rule grants a client whose source address is in <see cref="Cidr" />,
+///     The capabilities the rule grants a client whose source address is in <c>cidr</c>,
 ///     as an array of <see cref="DnsAccessControlCapabilityEnum" /> member names (for example
 ///     <c>["RecursionAccess", "RateLimitBypass"]</c>), not the stored
-///     <see cref="System.FlagsAttribute" /> bitmask. Names are case-sensitive. An empty array is
+///     bitmask. Names are case-sensitive. An empty array is
 ///     accepted (a rule that grants nothing); an unknown name is rejected with a 400.
 /// </param>
 /// <param name="IsDisabled">Whether the rule is disabled.</param>
@@ -41,7 +41,7 @@ public record DnsAccessControlRuleWriteRequest(
 /// <param name="Capabilities">
 ///     The capabilities the rule grants, as an array of
 ///     <see cref="DnsAccessControlCapabilityEnum" /> member names (see
-///     <see cref="DnsAccessControlRuleWriteRequest.Capabilities" />).
+///     <c>DnsAccessControlRuleWriteRequest.capabilities</c>).
 /// </param>
 /// <param name="IsDisabled">
 ///     Whether the rule is disabled. The enforcement engine ignores a disabled rule.

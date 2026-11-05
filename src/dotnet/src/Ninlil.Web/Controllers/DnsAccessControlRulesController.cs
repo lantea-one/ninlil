@@ -40,8 +40,8 @@ namespace Ninlil.Web.Controllers;
 ///         <c>[JsonConverter&lt;EnumDescriptionJsonConverter&lt;T&gt;&gt;]</c>, since that
 ///         converter handles one <see cref="System.Runtime.Serialization.EnumMemberAttribute" />
 ///         name, not a combined value. This controller converts between the name array of
-///         <see cref="DnsAccessControlRuleWriteRequest.Capabilities" /> and
-///         <see cref="DnsAccessControlRuleDetail.Capabilities" /> and the stored bitmask with
+///         <c>DnsAccessControlRuleWriteRequest.capabilities</c> and
+///         <c>DnsAccessControlRuleDetail.capabilities</c> and the stored bitmask with
 ///         <see cref="TryParseCapabilities" /> and <see cref="ToCapabilityList" />.
 ///     </para>
 /// </summary>

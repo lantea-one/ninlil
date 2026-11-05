@@ -13,9 +13,9 @@ namespace Ninlil.Web.Models;
 ///     the client schedule routes support <c>PUT</c>.
 /// </summary>
 /// <param name="DaysOfWeek">The days of the week the schedule applies to; at least one is required.</param>
-/// <param name="StartTime">The local time the blocking window begins, in <paramref name="TimeZoneId" />.</param>
+/// <param name="StartTime">The local time the blocking window begins, in <c>timeZoneId</c>.</param>
 /// <param name="EndTime">
-///     The local time the blocking window ends. A time earlier than <paramref name="StartTime" />
+///     The local time the blocking window ends. A time earlier than <c>startTime</c>
 ///     makes a window that crosses midnight (e.g. a 21:00 to 07:00 bedtime); a time equal to it is
 ///     rejected.
 /// </param>

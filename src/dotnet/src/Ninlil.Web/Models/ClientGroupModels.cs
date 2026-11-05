@@ -31,8 +31,8 @@ public record ClientGroupWriteRequest(string Name, bool IsDefault = false, bool 
 ///     <see langword="null" /> when no pause has been set.
 /// </param>
 /// <param name="IsCurrentlyPaused">
-///     Whether <paramref name="PausedUntilUtc" /> is still in the future, computed when the
-///     response is built, as for <see cref="ClientDetail.IsCurrentlyPaused" />.
+///     Whether <c>pausedUntilUtc</c> is still in the future, computed when the
+///     response is built, as for <c>ClientDetail.isCurrentlyPaused</c>.
 /// </param>
 public record ClientGroupDetail(
     Guid Id,
@@ -48,17 +48,17 @@ public record ClientGroupDetail(
 /// <summary>
 ///     This class carries the fields used to create or fully replace a network belonging to a
 ///     client group (<c>POST</c> and <c>PUT</c> under <c>/api/client-groups/{groupId}/networks</c>).
-///     Exactly one of <paramref name="Cidr" /> and <paramref name="ClientId" /> must be set.
+///     Exactly one of <c>cidr</c> and <c>clientId</c> must be set.
 /// </summary>
 /// <param name="Cidr">
 ///     An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a
 ///     bare IPv6 address one host (/128). A zone index (<c>fe80::1%2</c>) and an out-of-range
 ///     prefix length are rejected with a 400. <see langword="null" /> when
-///     <paramref name="ClientId" /> is set instead.
+///     <c>clientId</c> is set instead.
 /// </param>
 /// <param name="ClientId">
 ///     A DNS-over-HTTPS ClientID label this row matches. <see langword="null" /> when
-///     <paramref name="Cidr" /> is set instead.
+///     <c>cidr</c> is set instead.
 /// </param>
 public record ClientGroupNetworkWriteRequest(string Cidr, string ClientId = null);
 

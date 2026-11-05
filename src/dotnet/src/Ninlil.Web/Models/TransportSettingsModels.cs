@@ -5,7 +5,7 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record is the server certificate configuration of a TLS-based transport
-///     (the <c>Certificate</c> section of the transport's settings), used by DNS-over-TLS and
+///     (the <c>certificate</c> section of the transport's settings), used by DNS-over-TLS and
 ///     DNS-over-QUIC. DNS-over-HTTPS runs on the shared Kestrel listener and uses its certificate,
 ///     so it has no such field (see <see cref="DnsOverHttpsSettingsDetail" />). The web listener
 ///     uses the same shape: a PFX file path, or a self-signed certificate the server manages. Key
@@ -21,7 +21,7 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="SelfSignedSubjectAlternativeNames">
 ///     The subject alternative names of the self-signed certificate, which is generated only when
-///     <see cref="PfxPath" /> is empty.
+///     <c>pfxPath</c> is empty.
 /// </param>
 /// <param name="CertificateReloadPollInterval">
 ///     How often the transport checks whether the
@@ -30,7 +30,7 @@ namespace Ninlil.Web.Models;
 /// <param name="AllowedProtocols">
 ///     The TLS protocol versions the handshake accepts, by name (for example
 ///     <c>["Tls12", "Tls13"]</c>). An empty list means
-///     <see cref="System.Security.Authentication.SslProtocols.None" />: the operating system picks
+///     <c>None</c>: the operating system picks
 ///     its default.
 /// </param>
 public record TlsCertificateSettingsDetail(
@@ -44,7 +44,7 @@ public record TlsCertificateSettingsDetail(
 /// <summary>
 ///     This record is the plain DNS transport settings (configuration section
 ///     <c>DnsServer:Protocol:Plain</c>) that <c>GET /api/transport-settings/plain</c> returns. It
-///     has no <c>Enable</c> field because plain DNS has none: it is the baseline transport and
+///     has no <c>enable</c> field because plain DNS has none: it is the baseline transport and
 ///     always starts. Every field needs a listener restart.
 /// </summary>
 /// <param name="Port">The port the UDP and TCP listeners bind to.</param>
@@ -95,10 +95,10 @@ public record DnsOverTlsSettingsDetail(
 ///     This record is the DNS-over-HTTPS settings that
 ///     <c>GET /api/transport-settings/dns-over-https</c> returns, limited to the fields the server
 ///     uses. The server serves the RFC 8484 GET and POST forms on the shared web listener, so
-///     that listener's port, certificate and addresses (<c>DnsServer:Web</c>) apply. <c>Port</c>
-///     and <c>Certificate</c> belong to a self-hosted DNS-over-HTTPS listener, which this
+///     that listener's port, certificate and addresses (<c>DnsServer:Web</c>) apply. <c>port</c>
+///     and <c>certificate</c> belong to a self-hosted DNS-over-HTTPS listener, which this
 ///     server never starts, so they are left out rather than shown as if they had an effect; for
-///     the same reason there is no <c>ListenAddresses</c>.
+///     the same reason there is no <c>listenAddresses</c>.
 /// </summary>
 /// <param name="Enable">
 ///     Whether a request on the DNS-over-HTTPS route is answered. A change applies at once: it
@@ -112,7 +112,7 @@ public record DnsOverTlsSettingsDetail(
 ///     started.
 /// </param>
 /// <param name="MaxMessageSizeBytes">
-///     The largest DNS message the transport accepts. Like <see cref="Path" />, it is captured
+///     The largest DNS message the transport accepts. Like <c>path</c>, it is captured
 ///     when the route is mapped at startup, so a change needs a process restart.
 /// </param>
 public record DnsOverHttpsSettingsDetail(bool Enable, string Path, int MaxMessageSizeBytes);

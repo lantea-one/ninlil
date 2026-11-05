@@ -32,8 +32,8 @@ namespace Ninlil.Web.Controllers;
 /// </param>
 /// <param name="stateRepository">
 ///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
-///     <see cref="DnsCookieSettingsDetail.LastModifiedUtc" /> and
-///     <see cref="DnsCookieSettingsDetail.OriginatingNodeId" />.
+///     <c>DnsCookieSettingsDetail.lastModifiedUtc</c> and
+///     <c>DnsCookieSettingsDetail.originatingNodeId</c>.
 /// </param>
 [ApiController]
 [Route("api/dns-cookie-settings")]
@@ -71,7 +71,7 @@ public class DnsCookieSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Cookies</c> as an RFC 7396 merge
-    ///     patch. A field absent from
+    ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value. The change needs a restart. Returns 400 for a
     ///     field of the wrong JSON type or a rotation interval outside 1 minute to the timer
     ///     limit (about 49 days). Requires <c>dnscookies:write</c>.

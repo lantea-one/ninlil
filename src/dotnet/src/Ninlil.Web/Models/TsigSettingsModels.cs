@@ -7,8 +7,6 @@ namespace Ninlil.Web.Models;
 ///     message the server signs. A <c>PATCH</c> to the same endpoint accepts the same field.
 /// </summary>
 /// <param name="DefaultFudgeSeconds">
-///     The fudge, in seconds. The options property is a <see cref="ushort" />, but it is shown as
-///     an <see cref="int" /> because JSON has no unsigned 16-bit type; a <c>PATCH</c> rejects
-///     values outside 0 to 65535.
+///     The fudge, in seconds, from 0 to 65535. A <c>PATCH</c> rejects values outside that range.
 /// </param>
 public record TsigSettingsDetail(int DefaultFudgeSeconds);

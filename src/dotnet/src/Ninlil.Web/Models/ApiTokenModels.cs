@@ -9,8 +9,8 @@ namespace Ninlil.Web.Models;
 /// <param name="Name">A human-readable name describing what the token is used for.</param>
 /// <param name="OneTime">
 ///     Whether the token is consumed the first time it is used
-///     (<see cref="ApiTokenTypeEnum.OneTime" />) rather than working until it is revoked or
-///     expires (<see cref="ApiTokenTypeEnum.Static" />).
+///     (<c>OneTime</c>) rather than working until it is revoked or
+///     expires (<c>Static</c>).
 /// </param>
 /// <param name="ExpiresAtUtc">
 ///     The UTC date and time the token stops being valid, or <see langword="null" /> for a token

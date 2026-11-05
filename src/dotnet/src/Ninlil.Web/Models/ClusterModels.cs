@@ -6,7 +6,7 @@ namespace Ninlil.Web.Models;
 /// <summary>
 ///     This class carries a peer node in this node's cluster registry, as returned by
 ///     <c>GET /api/cluster/nodes</c> and <c>GET /api/cluster/nodes/{id}</c>. The shared secret of
-///     the peer's TSIG key is never included; <see cref="TsigKeyName" /> only names the key, as
+///     the peer's TSIG key is never included; <c>tsigKeyName</c> only names the key, as
 ///     <c>TsigKeyDetail</c> omits its secret.
 /// </summary>
 public record ClusterNodeDetail(
@@ -38,8 +38,7 @@ public record ClusterNodeWriteRequest(string Name = null, string Comments = null
 /// <summary>
 ///     This class carries a new invite's opaque code and expiry
 ///     (<c>POST /api/cluster/nodes/invite</c>). The code contains the cluster's shared TSIG secret
-///     in plaintext; this response is the one place that secret is revealed (see
-///     <c>ClusterInviteCode</c>).
+///     in plaintext; this response is the one place that secret is revealed.
 /// </summary>
 /// <param name="InviteCode">The opaque code to hand to the operator of the joining node.</param>
 /// <param name="ExpiresAtUtc">The UTC moment after which the code can no longer be used.</param>
@@ -59,7 +58,7 @@ public record ClusterJoinRequest(string InviteCode, string DisplayName = null);
 /// <summary>
 ///     This class carries one node's query statistics for the cluster dashboard
 ///     (<c>GET /api/cluster/nodes/stats</c>). A row is either the answering node
-///     (<see cref="IsSelf" /> is <see langword="true" /> and it is always <see cref="Reachable" />)
+///     (<c>isSelf</c> is <see langword="true" /> and it is always <c>reachable</c>)
 ///     or a known peer. A peer whose snapshot could not be collected is reported unreachable
 ///     rather than left out.
 /// </summary>

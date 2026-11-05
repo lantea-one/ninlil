@@ -45,7 +45,7 @@ namespace Ninlil.Web.Controllers;
 ///         each decide, once in <c>Program.cs</c> before dependency injection is built, whether the
 ///         local engine or the relay agent answers that protocol (the two protocols decide
 ///         independently), as the message-broker and OIDC scheme choices are made. The
-///         <c>Enable</c> flags of DHCPv4, DHCPv6 and Router Advertisement are read once at boot by
+///         <c>enable</c> flags of DHCPv4, DHCPv6 and Router Advertisement are read once at boot by
 ///         each listener's hosted-service wrapper. <see cref="DhcpServiceControlController" /> can
 ///         stop and start the listeners, but they keep the settings they started with. These
 ///         PATCH actions therefore return
@@ -140,7 +140,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Core</c> as an RFC 7396 merge
-    ///     patch. A field absent from
+    ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value. A change to <c>leaseExpirySweepInterval</c>
     ///     applies at the next sweep; every other field needs a restart, and the returned note
     ///     says which applies (see the class summary). Returns 400 for an invalid value. Requires
@@ -261,7 +261,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv4</c> as an
-    ///     RFC 7396 merge patch. The change
+    ///     RFC 7396 merge patch, written to the configuration file. The change
     ///     needs a restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("protocol")]
@@ -320,7 +320,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv6</c> as an
-    ///     RFC 7396 merge patch. The change
+    ///     RFC 7396 merge patch, written to the configuration file. The change
     ///     needs a restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("dhcpv6-protocol")]
@@ -382,7 +382,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv4</c> as an RFC 7396
-    ///     merge patch. Turning the relay on
+    ///     merge patch, written to the configuration file. Turning the relay on
     ///     replaces the local DHCPv4 engine only after a restart (see the class summary). Returns
     ///     400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
@@ -538,7 +538,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv6</c> as an RFC 7396
-    ///     merge patch. Turning the relay on
+    ///     merge patch, written to the configuration file. Turning the relay on
     ///     replaces the local DHCPv6 engine only after a restart (see the class summary). Returns
     ///     400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
@@ -654,7 +654,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Tftp</c> as an RFC 7396 merge
-    ///     patch. The change needs a
+    ///     patch, written to the configuration file. The change needs a
     ///     restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("tftp")]
@@ -766,7 +766,7 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Protocol:Ra</c> as an RFC 7396
-    ///     merge patch. The change needs a
+    ///     merge patch, written to the configuration file. The change needs a
     ///     restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("ra-protocol")]
@@ -906,12 +906,11 @@ public class DhcpSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DhcpServer:Ra</c> as an RFC 7396 merge
-    ///     patch; <c>routes</c> and
+    ///     patch, written to the configuration file; <c>routes</c> and
     ///     <c>interfaceOverrides</c> each replace the whole list. The change applies at the next
-    ///     advertisement, with no restart. Returns 400 for an invalid value, including more than
-    ///     <see cref="RaContentRules.MaxRecursiveDnsServers" /> RDNSS addresses or a search list
-    ///     that encodes to more than <see cref="RaContentRules.MaxDnsSearchListOctets" /> octets,
-    ///     the sizes that fit one advertisement. Requires <c>dhcpsettings:write</c>.
+    ///     advertisement, with no restart. Returns 400 for an invalid value, including more than 75
+    ///     RDNSS addresses or a search list that encodes to more than 1208 octets, the sizes that
+    ///     fit one advertisement. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("ra")]
     [RequirePermission("dhcpsettings:write")]

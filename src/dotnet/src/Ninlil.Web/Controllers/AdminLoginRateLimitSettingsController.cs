@@ -62,7 +62,7 @@ public class AdminLoginRateLimitSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:AdminLoginRateLimit</c> as an RFC
-    ///     7396 merge patch. A field absent
+    ///     7396 merge patch, written to the configuration file. A field absent
     ///     from <paramref name="patch" /> keeps its value. Returns 400 when <c>permitLimit</c> is
     ///     below 1 or <c>window</c> is not a positive TimeSpan. The change needs a restart.
     ///     Requires <c>adminloginratelimit:write</c>.

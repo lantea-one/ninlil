@@ -394,9 +394,9 @@ public class UsersController(
 
     /// <summary>
     ///     This action updates the caller's display name and phone number as an RFC 7396 merge
-    ///     patch (see <see cref="JsonElementMergePatchExtension" />): an absent field is unchanged,
-    ///     a JSON <c>null</c> clears it, and a string sets it. An <c>email</c> field is ignored: the
-    ///     address changes only through <see cref="ChangeMyEmail" />. Requires only a signed-in caller.
+    ///     patch: an absent field is unchanged, a JSON <c>null</c> clears it, and a string sets it.
+    ///     An <c>email</c> field is ignored: the address changes only through
+    ///     <see cref="ChangeMyEmail" />. Requires only a signed-in caller.
     /// </summary>
     [HttpPatch("me")]
     [Authorize]
@@ -522,9 +522,9 @@ public class UsersController(
     ///             <b>Confirmation required</b> (the
     ///             <c>Identity:EmailChange:RequireConfirmation</c> setting, the default): SMTP and
     ///             the public base URL must be configured, otherwise this returns 400 naming what
-    ///             is missing. It e-mails a link to the new address and returns 202 with
-    ///             <see cref="ChangeEmailPendingResult" />. Nothing on the account changes until
-    ///             the link is submitted to <see cref="AuthController.ConfirmEmailChange" />, which
+    ///             is missing. It e-mails a link to the new address and returns 202 with a body
+    ///             whose <c>confirmationSent</c> is true. Nothing on the account changes until the
+    ///             link is submitted to <see cref="AuthController.ConfirmEmailChange" />, which
     ///             also marks the address confirmed.
     ///         </item>
     ///         <item>
@@ -631,18 +631,18 @@ public class UsersController(
     /// <summary>
     ///     This action resets an account's password for an administrator, for an account that
     ///     cannot supply its current password as <see cref="ChangeMyPassword" /> requires.
-    ///     <see cref="AdminResetPasswordRequest.Mode" /> picks one of two modes (see
+    ///     <c>AdminResetPasswordRequest.mode</c> picks one of two modes (see
     ///     <see cref="AdminPasswordResetMode" />). Requires <c>users:write</c>.
     ///     <list type="bullet">
     ///         <item>
-    ///             <see cref="AdminPasswordResetMode.AutoGenerate" /> sets a generated strong
+    ///             <c>AutoGenerate</c> sets a generated strong
     ///             password at once, through a reset token, so Identity's usual validation and
     ///             hashing apply, and returns it in this response only. It also replaces the
     ///             account's security stamp and revokes every refresh token of the account, so
     ///             every access token issued before the reset answers 401 on its next request.
     ///         </item>
     ///         <item>
-    ///             <see cref="AdminPasswordResetMode.EmailLink" /> e-mails the account a link to
+    ///             <c>EmailLink</c> e-mails the account a link to
     ///             the admin console's "set new password" page, which submits to
     ///             <see cref="Controllers.AuthController.ResetPassword" />. The link carries an
     ///             Identity reset token, Base64Url-encoded for the query string (see

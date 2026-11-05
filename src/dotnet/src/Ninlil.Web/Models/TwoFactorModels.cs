@@ -50,11 +50,11 @@ public record TwoFactorStatus(
 ///     authentication to be enabled). They are a fallback when the authenticator app or e-mail is
 ///     unavailable. Like every generated secret (a TSIG key's secret, a webhook's signing
 ///     secret), they are shown once, in this response; afterwards only
-///     <see cref="TwoFactorStatus.RecoveryCodesRemaining" /> reports on them.
+///     <c>TwoFactorStatus.recoveryCodesRemaining</c> reports on them.
 /// </summary>
 /// <param name="Codes">
 ///     The 10 new codes, each usable once at <c>POST /api/auth/login/two-factor</c> with
-///     <c>"RecoveryCode"</c> as the <see cref="TwoFactorLoginRequest.Provider" />. Generating a
+///     <c>"RecoveryCode"</c> as the <c>TwoFactorLoginRequest.provider</c>. Generating a
 ///     batch invalidates every code from earlier batches.
 /// </param>
 public record RecoveryCodesResult(IReadOnlyList<string> Codes);

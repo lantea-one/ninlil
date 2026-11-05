@@ -39,7 +39,7 @@ public record ForwarderWriteRequest(
 /// <param name="Name">The forwarder's human-readable name.</param>
 /// <param name="DefinitionString">The forwarder's definition string, as stored.</param>
 /// <param name="Protocol">
-///     The transport protocol <see cref="DefinitionString" /> parses to, computed when the
+///     The transport protocol <c>definitionString</c> parses to, computed when the
 ///     response is built with the parser that validated it, so a caller need not parse the string;
 ///     <see langword="null" /> if it no longer parses.
 /// </param>

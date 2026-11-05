@@ -5,8 +5,8 @@ namespace Ninlil.Web.Models;
 ///     This record is the web listener settings (configuration section <c>DnsServer:Web</c>) that
 ///     <c>GET /api/web-listen-settings</c> returns: the ports and certificate shared by the REST
 ///     API, the SignalR hub and DNS-over-HTTPS. A <c>PATCH</c> accepts the same fields, with the
-///     certificate password in place of <c>PfxPasswordConfigured</c>. Every change needs a process
-///     restart (see <see cref="RuntimeSettingsWriteResult.WebListenRestartRequiredNote" />).
+///     certificate password in place of <c>pfxPasswordConfigured</c>. Every change needs a process
+///     restart, because the HTTP and HTTPS sockets are bound once, at startup.
 /// </summary>
 /// <param name="HttpPort">The plain HTTP port. Defaults to 80.</param>
 /// <param name="HttpsPort">The HTTPS port. Defaults to 443.</param>

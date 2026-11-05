@@ -526,7 +526,7 @@ public class WebhooksController(
 
     /// <summary>
     ///     This method checks that the credentials fit the auth mode: nothing for <c>None</c>, a
-    ///     <c>BearerToken</c> for <c>Bearer</c>, a <c>Username</c> and <c>Password</c> for
+    ///     <c>BearerToken</c> for <c>Bearer</c>, a <c>username</c> and <c>password</c> for
     ///     <c>Basic</c>. <c>CloudCredentialValidator</c> does the same for cloud provider
     ///     credentials.
     /// </summary>

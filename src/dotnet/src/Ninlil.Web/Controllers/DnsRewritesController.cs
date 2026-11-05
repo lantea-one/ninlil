@@ -377,7 +377,7 @@ public class DnsRewritesController(
 
     /// <summary>
     ///     This method converts a rewrite entity to its API representation, classifying the target
-    ///     to fill in <see cref="DnsRewriteDetail.TargetKind" />. A target saved through this
+    ///     to fill in <c>DnsRewriteDetail.targetKind</c>. A target saved through this
     ///     controller always classifies; for a row written another way the kind is left
     ///     <see langword="null" />, so a read never fails.
     /// </summary>

@@ -4,10 +4,10 @@ namespace Ninlil.Web.Models;
 /// <summary>
 ///     This record is the REST shape of the PTR sync defaults (configuration section
 ///     <c>DnsServer:Authoritative:PtrSync</c>) that <c>GET /api/ptr-sync-settings</c> returns:
-///     whether the A and AAAA records of a <c>ZoneTypeEnum.Primary</c> or
-///     <c>ZoneTypeEnum.CloudPrimary</c> zone are mirrored as PTR records into the matching reverse
-///     zone, and how reverse zones are sized. Each applies when the zone's own setting is unset. A
-///     <c>PATCH</c> to the same endpoint accepts the same fields.
+///     whether the A and AAAA records of a <c>Primary</c> or <c>CloudPrimary</c> zone are mirrored
+///     as PTR records into the matching reverse zone, and how reverse zones are sized. Each applies
+///     when the zone's own setting is unset. A <c>PATCH</c> to the same endpoint accepts the same
+///     fields.
 /// </summary>
 /// <param name="DefaultEnabled">
 ///     Whether PTR records are managed for a zone whose <c>autoManagePtrRecords</c> is unset.

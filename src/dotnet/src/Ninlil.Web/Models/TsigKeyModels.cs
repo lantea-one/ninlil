@@ -81,7 +81,7 @@ public record TsigKeyDetail(
 
 /// <summary>
 ///     This class carries a newly created TSIG key with its plaintext shared secret. It is the
-///     only response that includes <see cref="Secret" />: like every secret-bearing entity, a
+///     only response that includes <c>secret</c>: like every secret-bearing entity, a
 ///     secret is revealed once at creation and omitted afterwards.
 /// </summary>
 /// <param name="Key">The new key, without its secret.</param>

@@ -25,7 +25,7 @@ namespace Ninlil.Web.Controllers;
 ///         <b>Address scopes only.</b> RFC 9915 has no form for reserving a delegated prefix; a
 ///         reservation is always one fixed address. <see cref="Create" /> and
 ///         <see cref="Replace" /> therefore return 400 for a
-///         <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope rather than accept a
+///         <c>PrefixDelegation</c> scope rather than accept a
 ///         reservation the server could not honor.
 ///     </para>
 /// </summary>

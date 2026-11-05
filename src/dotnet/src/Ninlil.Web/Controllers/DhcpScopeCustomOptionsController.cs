@@ -252,12 +252,12 @@ public class DhcpScopeCustomOptionsController(
 
     /// <summary>
     ///     This method checks a custom option request and converts
-    ///     <see cref="DhcpScopeCustomOptionWriteRequest.ValueHex" /> to the uppercase, even-length
+    ///     <c>DhcpScopeCustomOptionWriteRequest.valueHex</c> to the uppercase, even-length
     ///     hex that
     ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity.ValueHex" />
     ///     stores. A blank value is an error only for
-    ///     <see cref="DhcpOptionValueSourceEnum.Custom" />, where the stored value is what gets
-    ///     sent. For <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the server's address is
+    ///     <c>Custom</c>, where the stored value is what gets
+    ///     sent. For <c>ServerAddress</c> the server's address is
     ///     sent instead and the value is never read, so a blank value is stored as an empty string.
     ///     For a DHCPv4 <paramref name="scope" /> the tag and value length must also pass
     ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a server address is 4 bytes) and a

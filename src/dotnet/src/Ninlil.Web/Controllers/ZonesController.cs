@@ -34,11 +34,11 @@ namespace Ninlil.Web.Controllers;
 /// <param name="dnssecKeyRepository">
 ///     Removes a deleted zone's DNSSEC keys (see <see cref="DnssecKeysController" />).
 ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity" /> refers to its zone by
-///     <c>ZoneId</c> only, and MongoDB has no cascade delete, so the keys are removed explicitly,
+///     <c>zoneId</c> only, and MongoDB has no cascade delete, so the keys are removed explicitly,
 ///     like the records.
 /// </param>
 /// <param name="tsigKeyRepository">
-///     Checks that a zone's <c>TsigKeyName</c> does not name a cluster key.
+///     Checks that a zone's <c>tsigKeyName</c> does not name a cluster key.
 /// </param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
@@ -60,7 +60,7 @@ namespace Ninlil.Web.Controllers;
 ///     uses.
 /// </param>
 /// <param name="signedZoneCache">
-///     This node's signing cache, read for <see cref="ZoneDetail.DnssecServedUnsigned" />.
+///     This node's signing cache, read for <c>ZoneDetail.dnssecServedUnsigned</c>.
 /// </param>
 [ApiController]
 [Route("api/zones")]
@@ -493,8 +493,8 @@ public class ZonesController(
 
     /// <summary>
     ///     This action lists the member zone names of an RFC 9432 catalog zone (a
-    ///     <see cref="ZoneTypeEnum.Catalog" /> zone or a
-    ///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> copy), read from its stored PTR records.
+    ///     <c>Catalog</c> zone or a
+    ///     <c>SecondaryCatalog</c> copy), read from its stored PTR records.
     ///     Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}/catalog-members")]
@@ -512,11 +512,11 @@ public class ZonesController(
         );
 
     /// <summary>
-    ///     This action makes a <see cref="ZoneTypeEnum.Primary" /> or
-    ///     <see cref="ZoneTypeEnum.CloudPrimary" /> zone that this server originates a member of a
-    ///     <see cref="ZoneTypeEnum.Catalog" /> zone it also originates. It writes the member's RFC
+    ///     This action makes a <c>Primary</c> or
+    ///     <c>CloudPrimary</c> zone that this server originates a member of a
+    ///     <c>Catalog</c> zone it also originates. It writes the member's RFC
     ///     9432 PTR record into the catalog zone and adds every healthy cluster peer's address to
-    ///     both zones' <c>NotifyAddresses</c>, so the change reaches the cluster without manual
+    ///     both zones' <c>notifyAddresses</c>, so the change reaches the cluster without manual
     ///     configuration. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/catalog-membership")]
@@ -587,7 +587,7 @@ public class ZonesController(
     /// <summary>
     ///     This action runs one PTR (reverse-zone) sync pass for the zone now, with the same
     ///     logic the automatic path runs on each zone change, including RFC 2317 classless-delegation records
-    ///     when the zone's <c>PtrIpv4PrefixLength</c> (or the server-wide default) calls for them.
+    ///     when the zone's <c>ptrIpv4PrefixLength</c> (or the server-wide default) calls for them.
     ///     Returns the records added and removed and the reverse zones touched, or why the pass was
     ///     skipped, and 404 for an unknown id. Requires <c>zones:write</c>.
     /// </summary>
@@ -700,8 +700,8 @@ public class ZonesController(
 
     /// <summary>
     ///     This method validates and canonicalizes a zone's list of bound TSIG key names
-    ///     (<c>UpdateTsigKeyNames</c> or <c>TransferTsigKeyNames</c>). Each name must parse as a DNS
-    ///     name and must not name a cluster key (same rule as <c>TsigKeyName</c>, which
+    ///     (<c>updateTsigKeyNames</c> or <c>transferTsigKeyNames</c>). Each name must parse as a
+    ///     DNS name and must not name a cluster key (same rule as <c>tsigKeyName</c>, which
     ///     <see cref="ValidateTsigKeyNameAsync" /> applies). A name that matches no key is
     ///     accepted, because a zone may be set up before its key. Names are stored lowercase
     ///     without a trailing dot, as TSIG key names are, and duplicates are dropped.
@@ -736,7 +736,7 @@ public class ZonesController(
 
     /// <summary>
     ///     This method copies every writable field from a write request onto a zone entity. A
-    ///     missing <c>CloudSyncInterval</c> defaults to five minutes.
+    ///     missing <c>cloudSyncInterval</c> defaults to five minutes.
     /// </summary>
     private static void ApplyWrite(
         ZoneEntity zone,

@@ -46,12 +46,12 @@ namespace Ninlil.Web.Controllers;
 ///     <para>
 ///         <b>Two ways to hold a refresh token.</b> A script or API client gets the refresh token
 ///         in the response body. The browser admin console asks for
-///         <see cref="RefreshTokenDeliveryEnum.Cookie" /> delivery instead: the refresh token then
+///         <c>Cookie</c> delivery instead: the refresh token then
 ///         travels only in the HttpOnly cookie of <see cref="RefreshTokenCookie" />, which page
 ///         scripts cannot read, and <see cref="Refresh" /> and <see cref="Logout" /> use that
 ///         cookie when the request body names no token. A page reload can then renew the session
 ///         without exposing the refresh token to JavaScript. "Remember me"
-///         (<see cref="LoginRequest.RememberMe" />) chooses between a persistent session and a
+///         (<c>LoginRequest.rememberMe</c>) chooses between a persistent session and a
 ///         browser-session one; see <see cref="SessionEntity.IsPersistent" />.
 ///     </para>
 /// </summary>
@@ -126,13 +126,12 @@ public class AuthController(
 
     /// <summary>
     ///     This action starts a self-service password reset. Given an e-mail address and no
-    ///     sign-in, it sends a reset-link e-mail through <see cref="PasswordResetLinkSender" />
-    ///     when a matching account exists, is not disabled, has an e-mail address, and SMTP and
-    ///     the public base URL are configured. Allows anonymous callers and is rate limited.
+    ///     sign-in, it sends a reset-link e-mail when a matching account exists, is not disabled,
+    ///     has an e-mail address, and SMTP and the public base URL are configured. Allows anonymous
+    ///     callers and is rate limited.
     ///     <para>
-    ///         <b>The response never varies.</b> It is always 200 with the same
-    ///         <see cref="ForgotPasswordResult" />, whichever condition failed, including "no
-    ///         account has this address". An administrator using
+    ///         <b>The response never varies.</b> It is always 200 with the same message, whichever
+    ///         condition failed, including "no account has this address". An administrator using
     ///         <c>POST /api/users/{id}/reset-password</c> may learn whether an account has an
     ///         e-mail address or whether SMTP is configured, but an anonymous caller must not be
     ///         able to tell from the response which addresses have accounts. A delivery failure
@@ -545,7 +544,7 @@ public class AuthController(
     ///     both <see cref="ForgotPassword" /> and the <c>EmailLink</c> mode of
     ///     <c>POST /api/users/{id}/reset-password</c>, called from the admin console's "set new
     ///     password" page. The caller is not signed in, so it allows anonymous callers;
-    ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
+    ///     <c>ConfirmPasswordResetRequest.token</c> is the only proof of authorization, and
     ///     ASP.NET Core Identity rejects a wrong, expired or used token. An unknown account and an
     ///     undecodable token return the same 400 message, so the response does not reveal whether
     ///     an account exists. A successful reset replaces the account's security stamp and revokes
@@ -604,7 +603,7 @@ public class AuthController(
     ///     This action applies a self-service e-mail change from the link
     ///     <see cref="UsersController.ChangeMyEmail" /> e-mailed to the new address, called from the
     ///     admin console's "confirm e-mail change" page. The link may be opened in a browser that
-    ///     is not signed in, so it allows anonymous callers; <see cref="ConfirmEmailChangeRequest.Token" />
+    ///     is not signed in, so it allows anonymous callers; <c>ConfirmEmailChangeRequest.token</c>
     ///     is the only proof, and ASP.NET Core Identity rejects a wrong, expired, reused or
     ///     tampered token, and one issued for another address. An unknown, disabled or mismatched
     ///     account and a bad token return the same 400 message, so the response does not reveal

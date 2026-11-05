@@ -9,12 +9,12 @@ namespace Ninlil.Web.Models;
 ///     operator types, before anything is saved.
 /// </summary>
 /// <param name="Kind">
-///     What kind of pattern <see cref="Value" /> is, as a <c>DnsFilterListEntryEntity</c> would
+///     What kind of pattern <c>value</c> is, as a <c>DnsFilterListEntryEntity</c> would
 ///     store it.
 /// </param>
 /// <param name="Value">The candidate pattern text.</param>
 /// <param name="SampleDomains">
-///     The domains to test <see cref="Value" /> against. When omitted or empty, the small built-in
+///     The domains to test <c>value</c> against. When omitted or empty, the small built-in
 ///     set of ten sample domains is used. At most 20 domains
 ///     are accepted, each non-blank and at most 253 characters; anything else is rejected with 400.
 /// </param>
@@ -34,16 +34,16 @@ public record FilterPatternPreviewMatch(string Domain, bool IsMatch);
 ///     response of <c>POST /api/filter-pattern-preview</c>.
 /// </summary>
 /// <param name="IsValid">
-///     Whether <see cref="FilterPatternPreviewRequest.Value" /> compiles as the requested
-///     <see cref="FilterPatternPreviewRequest.Kind" />, using the same check that
+///     Whether <c>FilterPatternPreviewRequest.value</c> compiles as the requested
+///     <c>FilterPatternPreviewRequest.kind</c>, using the same check that
 ///     <c>POST /api/filter-lists/{listId}/entries</c> applies before saving a
-///     <see cref="DnsFilterEntryKindEnum.Wildcard" /> or
-///     <see cref="DnsFilterEntryKindEnum.Regex" /> entry.
+///     <c>Wildcard</c> or
+///     <c>Regex</c> entry.
 /// </param>
-/// <param name="Error">A human-readable reason <see cref="IsValid" /> is <see langword="false" />, or <see langword="null" /> when it is <see langword="true" />.</param>
+/// <param name="Error">A human-readable reason <c>isValid</c> is <see langword="false" />, or <see langword="null" /> when it is <see langword="true" />.</param>
 /// <param name="Matches">
 ///     Each sample domain tested and whether the pattern matched it. Empty when
-///     <see cref="IsValid" /> is <see langword="false" />, since a pattern that does not compile is
+///     <c>isValid</c> is <see langword="false" />, since a pattern that does not compile is
 ///     not tested.
 /// </param>
 public record FilterPatternPreviewResult(

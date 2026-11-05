@@ -12,18 +12,18 @@ namespace Ninlil.Web.Models;
 /// <param name="Kind">What kind of value the list's entries hold.</param>
 /// <param name="Action">Whether a match against the list blocks or allows.</param>
 /// <param name="Source">
-///     Where the list's entries come from. A <see cref="DnsFilterListSourceEnum.Subscribed" />
-///     list also needs <see cref="SubscriptionUrl" />; its entries are then replaced on each
+///     Where the list's entries come from. A <c>Subscribed</c>
+///     list also needs <c>subscriptionUrl</c>; its entries are then replaced on each
 ///     refresh and cannot be edited by hand.
 /// </param>
 /// <param name="SubscriptionUrl">
-///     The URL a <see cref="DnsFilterListSourceEnum.Subscribed" /> list's entries are fetched
+///     The URL a <c>Subscribed</c> list's entries are fetched
 ///     from. Required for a subscribed list, otherwise ignored.
 /// </param>
 /// <param name="RefreshInterval">
-///     How often a <see cref="DnsFilterListSourceEnum.Subscribed" /> list is fetched again.
+///     How often a <c>Subscribed</c> list is fetched again.
 ///     <c>null</c> means every 24 hours. The minimum is one hour (<c>01:00:00</c>); a smaller
-///     value is rejected with 400. Ignored for a <see cref="DnsFilterListSourceEnum.Local" /> list.
+///     value is rejected with 400. Ignored for a <c>Local</c> list.
 /// </param>
 /// <param name="IsDisabled">Whether the list is disabled.</param>
 /// <param name="Comments">Free-form operator notes about the list.</param>
@@ -40,8 +40,8 @@ public record FilterListWriteRequest(
 
 /// <summary>
 ///     This class carries a block or allow list without its entries, as returned by the list, get
-///     and write endpoints of <c>/api/filter-lists</c>. <c>LastFetchedAtUtc</c> is when a
-///     subscribed list was last fetched, and <c>OriginatingNodeId</c> the cluster node the list
+///     and write endpoints of <c>/api/filter-lists</c>. <c>lastFetchedAtUtc</c> is when a
+///     subscribed list was last fetched, and <c>originatingNodeId</c> the cluster node the list
 ///     was last written on.
 /// </summary>
 public record FilterListDetail(
@@ -62,23 +62,23 @@ public record FilterListDetail(
 
 /// <summary>
 ///     This class carries the fields used to create or replace an entry in a
-///     <see cref="DnsFilterListSourceEnum.Local" /> list (<c>POST</c> and <c>PUT</c> under
+///     <c>Local</c> list (<c>POST</c> and <c>PUT</c> under
 ///     <c>/api/filter-lists/{listId}/entries</c>). Every write to the entries of a
-///     <see cref="DnsFilterListSourceEnum.Subscribed" /> list is rejected with 409.
+///     <c>Subscribed</c> list is rejected with 409.
 /// </summary>
 /// <param name="Value">
-///     The entry's value: a domain name, wildcard or regular expression (by <see cref="Kind" />)
-///     in a <see cref="DnsFilterListKindEnum.Domain" /> list, or an IP address or CIDR network in
-///     a <see cref="DnsFilterListKindEnum.ResponseIp" /> or
-///     <see cref="DnsFilterListKindEnum.ClientSource" /> list, where <see cref="Kind" /> must be
-///     <see cref="DnsFilterEntryKindEnum.Domain" /> (the default).
+///     The entry's value: a domain name, wildcard or regular expression (by <c>kind</c>)
+///     in a <c>Domain</c> list, or an IP address or CIDR network in
+///     a <c>ResponseIp</c> or
+///     <c>ClientSource</c> list, where <c>kind</c> must be
+///     <c>Domain</c> (the default).
 /// </param>
 /// <param name="Comment">Free-form operator notes about the entry.</param>
 /// <param name="Kind">
-///     How <see cref="Value" /> is matched. Defaults to <see cref="DnsFilterEntryKindEnum.Domain" />.
-///     A <see cref="DnsFilterEntryKindEnum.Wildcard" /> or <see cref="DnsFilterEntryKindEnum.Regex" />
+///     How <c>value</c> is matched. Defaults to <c>Domain</c>.
+///     A <c>Wildcard</c> or <c>Regex</c>
 ///     value is rejected with a 400 unless it compiles and the list is a
-///     <see cref="DnsFilterListKindEnum.Domain" /> list.
+///     <c>Domain</c> list.
 /// </param>
 public record FilterListEntryWriteRequest(
     string Value,
@@ -88,10 +88,10 @@ public record FilterListEntryWriteRequest(
 
 /// <summary>
 ///     This class carries one filter list entry, as returned by the list, get and write endpoints
-///     under <c>/api/filter-lists/{listId}/entries</c>. <c>IsException</c> marks an exception (an adblock-syntax <c>@@</c>
-///     rule from a subscribed list) that lets a name through even though another entry in the
-///     same list covers it; only a subscribed list's refresh ever sets it, so it is not part of
-///     <see cref="FilterListEntryWriteRequest" />.
+///     under <c>/api/filter-lists/{listId}/entries</c>. <c>isException</c> marks an exception (an
+///     adblock-syntax <c>@@</c> rule from a subscribed list) that lets a name through even though
+///     another entry in the same list covers it; only a subscribed list's refresh ever sets it, so
+///     it is not part of <see cref="FilterListEntryWriteRequest" />.
 /// </summary>
 public record FilterListEntryDetail(
     Guid Id,

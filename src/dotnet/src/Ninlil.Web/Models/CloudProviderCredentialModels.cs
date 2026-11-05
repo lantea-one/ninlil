@@ -10,11 +10,11 @@ namespace Ninlil.Web.Models;
 /// <param name="Name">An operator-chosen, human-readable, unique name for the credential set.</param>
 /// <param name="ProviderType">
 ///     Which cloud DNS provider the credentials authenticate against, and so which keys
-///     <see cref="Credentials" /> must supply: <c>ApiToken</c> for Cloudflare and DigitalOcean,
+///     <c>credentials</c> must supply: <c>ApiToken</c> for Cloudflare and DigitalOcean,
 ///     or <c>AccessKeyId</c> and <c>SecretAccessKey</c> for Route 53.
 /// </param>
 /// <param name="Credentials">
-///     The secret material, keyed by field name; the keys depend on <see cref="ProviderType" />.
+///     The secret material, keyed by field name; the keys depend on <c>providerType</c>.
 ///     It is stored encrypted, and the values are returned once, in this endpoint's response.
 /// </param>
 /// <param name="IsDisabled">Whether the credential set starts out disabled.</param>
@@ -32,7 +32,7 @@ public record CloudProviderCredentialCreateRequest(
 ///     credential set (<c>PUT /api/cloud-provider-credentials/{id}</c>). Unlike the shared secret
 ///     of a TSIG key (see <see cref="TsigKeyWriteRequest" />), these secrets come from the
 ///     operator, who rotates them at the provider, so a <c>PUT</c> replaces
-///     <see cref="Credentials" /> along with every other field. Nothing new is revealed, since the
+///     <c>credentials</c> along with every other field. Nothing new is revealed, since the
 ///     caller supplies the values. To change only the name, comments or disabled flag, use
 ///     <c>PATCH</c> and leave out <c>credentials</c>.
 /// </summary>
@@ -67,7 +67,7 @@ public record CloudProviderCredentialDetail(
 
 /// <summary>
 ///     This class carries a newly created cloud DNS provider credential set with its plaintext
-///     secrets. It is the only response that includes <see cref="Secrets" />: like every
+///     secrets. It is the only response that includes <c>secrets</c>: like every
 ///     secret-bearing entity, a secret is revealed once at creation and omitted afterwards.
 /// </summary>
 /// <param name="Credential">The new credential set, without secrets.</param>

@@ -56,9 +56,10 @@ public class SecondaryZoneRefreshSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into
-    ///     <c>DnsServer:Authoritative:SecondaryZoneRefresh</c> as an RFC 7396 merge patch. Every
-    ///     field takes effect without a restart. Returns 400 for a value that is not a positive
-    ///     TimeSpan. Requires <c>secondaryzonerefreshsettings:write</c>.
+    ///     <c>DnsServer:Authoritative:SecondaryZoneRefresh</c> as an RFC 7396 merge patch, written
+    ///     to the configuration file. Every field takes effect without a restart. Returns 400 for a
+    ///     value that is not a positive TimeSpan. Requires
+    ///     <c>secondaryzonerefreshsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("secondaryzonerefreshsettings:write")]

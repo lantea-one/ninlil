@@ -47,7 +47,7 @@ public class ZoneTransferSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Authoritative:ZoneTransfer</c> as
-    ///     an RFC 7396 merge patch. The
+    ///     an RFC 7396 merge patch, written to the configuration file. The
     ///     change takes effect at once. Returns 400 when <c>recordsPerMessage</c> is below 1.
     ///     Requires <c>zonetransfersettings:write</c>.
     /// </summary>

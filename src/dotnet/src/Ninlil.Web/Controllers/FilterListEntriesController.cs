@@ -24,7 +24,7 @@ namespace Ninlil.Web.Controllers;
 ///     <para>
 ///         <b>Entries of a subscribed list cannot be edited.</b>
 ///         <c>DnsFilterListExternalRefreshService</c> replaces a
-///         <see cref="DnsFilterListSourceEnum.Subscribed" /> list's whole entry set on each
+///         <c>Subscribed</c> list's whole entry set on each
 ///         refresh (through <see cref="IDnsFilterListEntryRepository.ReplaceEntriesAsync" />), so a
 ///         manual edit would be silently lost. <see cref="Create" />, <see cref="Replace" /> and
 ///         <see cref="Delete" /> therefore return 409 for such a list; change its <c>source</c> to
@@ -33,9 +33,9 @@ namespace Ninlil.Web.Controllers;
 ///     </para>
 ///     <para>
 ///         A subscribed list's entries are always
-///         <see cref="Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain" />:
+///         <c>Domain</c>:
 ///         <see cref="DnsFilterListParser" /> skips adblock wildcard and regex rules rather than
-///         translating them, so the entry <c>Kind</c> matters only for a local list.
+///         translating them, so the entry <c>kind</c> matters only for a local list.
 ///         <see cref="Create" /> and <see cref="Replace" /> compile a regex or wildcard pattern
 ///         with <c>DnsFilterEngine.CompileOrNull</c> (and
 ///         <c>DnsFilterEngine.BuildWildcardRegexPattern</c>), the same compilation the engine uses
@@ -128,7 +128,7 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This action adds an entry to a <see cref="DnsFilterListSourceEnum.Local" /> list.
+    ///     This action adds an entry to a <c>Local</c> list.
     ///     Returns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a
     ///     pattern that does not compile; 404 for an unknown list; and 409 for a subscribed list.
     ///     Requires <c>filterlists:write</c>.
@@ -249,7 +249,7 @@ public class FilterListEntriesController(
 
     /// <summary>
     ///     This method throws <see cref="ConflictException" /> when the list is
-    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> (see the class summary).
+    ///     <c>Subscribed</c> (see the class summary).
     /// </summary>
     private static void ValidateNotSubscribedOrThrow(DnsFilterListEntity list)
     {
@@ -266,7 +266,7 @@ public class FilterListEntriesController(
     ///     request's <c>value</c> and <c>kind</c>. A bad regex or wildcard pattern must be caught
     ///     here, because <c>DnsFilterEngine</c> treats an unparseable pattern as a silent non-match
     ///     (the query path never throws). A wildcard or regex entry is also rejected for a list
-    ///     that is not a <see cref="DnsFilterListKindEnum.Domain" /> list, since neither means
+    ///     that is not a <c>Domain</c> list, since neither means
     ///     anything for an IP address or network.
     /// </summary>
     private static void ValidateEntryRequestOrThrow(

@@ -24,8 +24,8 @@ namespace Ninlil.Web.Controllers;
 ///     This controller manages the server-wide upstream forwarders
 ///     (<see cref="DnsForwarderEntity" />) that <c>ForwarderQueryResolver</c> in
 ///     <c>Server.Forwarding</c> tries before falling back to iterative resolution in
-///     <c>Server.Recursive</c>. These are not the per-zone <c>ForwarderAddresses</c> of a
-///     <see cref="ZoneTypeEnum.Forwarder" /> zone, which <see cref="ZonesController" /> manages.
+///     <c>Server.Recursive</c>. These are not the per-zone <c>forwarderAddresses</c> of a
+///     <c>Forwarder</c> zone, which <see cref="ZonesController" /> manages.
 ///     Reads need <c>forwarders:read</c> and changes need <c>forwarders:write</c>.
 ///     <para>
 ///         <b>A change applies to the next query without any cache reset.</b>
@@ -34,7 +34,7 @@ namespace Ninlil.Web.Controllers;
 ///         <see cref="IServiceScope" /> on every query. <c>ForwarderEndpointCache</c> (parsed
 ///         definitions and the resolved addresses of host names) and
 ///         <c>ForwarderHealthTracker</c>'s health map are keyed by the definition string, not by
-///         <c>Id</c>, so an edited definition is simply treated as a new forwarder. Every write
+///         <c>id</c>, so an edited definition is simply treated as a new forwarder. Every write
 ///         still publishes a <see cref="DnsForwarderChangedEvent" />, which
 ///         <c>ForwarderClusterSyncEventSubscriber</c> sends to the other cluster nodes.
 ///     </para>
@@ -339,7 +339,7 @@ public class ForwardersController(
 
     /// <summary>
     ///     This method converts a forwarder entity to its API representation, parsing the
-    ///     definition string to fill in <see cref="ForwarderDetail.Protocol" />. A string saved
+    ///     definition string to fill in <c>ForwarderDetail.protocol</c>. A string saved
     ///     through this controller always parses; for a row written another way (cluster sync, for
     ///     example) the protocol is left <see langword="null" /> and a warning logged, so a read
     ///     never fails.

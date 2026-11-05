@@ -164,9 +164,9 @@ public class FilterListsController(
 
     /// <summary>
     ///     This action replaces a list's settings. Changing
-    ///     <see cref="FilterListWriteRequest.Source" /> from
-    ///     <see cref="DnsFilterListSourceEnum.Local" /> to
-    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> leaves the existing entries alone
+    ///     <c>FilterListWriteRequest.source</c> from
+    ///     <c>Local</c> to
+    ///     <c>Subscribed</c> leaves the existing entries alone
     ///     until the next refresh replaces them all. Validation and errors are as for
     ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>filterlists:write</c>.
     /// </summary>
@@ -364,7 +364,7 @@ public class FilterListsController(
 
     /// <summary>
     ///     This method requires a subscription URL for a
-    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> list.
+    ///     <c>Subscribed</c> list.
     ///     <c>DnsFilterListExternalRefreshService</c> silently skips a subscribed list without one,
     ///     so this check returns a 400 instead.
     /// </summary>

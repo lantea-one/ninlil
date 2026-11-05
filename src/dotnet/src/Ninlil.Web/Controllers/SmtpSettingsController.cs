@@ -49,7 +49,7 @@ public class SmtpSettingsController(
 {
     /// <summary>
     ///     This action returns the current SMTP settings. The password is never returned, only
-    ///     whether one is set (see <see cref="SmtpSettingsDetail.PasswordConfigured" />), whether
+    ///     whether one is set (see <c>SmtpSettingsDetail.passwordConfigured</c>), whether
     ///     <c>NINLIL_EMAIL_PASSWORD</c> overrides it and whether the stored one is unreadable.
     ///     Requires <c>smtpsettings:read</c>.
     /// </summary>
@@ -59,8 +59,8 @@ public class SmtpSettingsController(
     public ActionResult<SmtpSettingsDetail> Get() => Ok(ToDetail(emailOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into the <c>Email</c> section as an RFC 7396 merge
-    ///     patch. A field absent from
+    ///     This action merges a partial update into the <c>email</c> section as an RFC 7396 merge
+    ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value, including <c>password</c>, so an operator can
     ///     change only <c>smtpHost</c> without resupplying a password <see cref="Get" /> never
     ///     shows. A password is encrypted before it is written to the configuration file, and a blank
@@ -226,7 +226,7 @@ public class SmtpSettingsController(
     ///     password from any source, because every e-mail send would then fail
     ///     (<see cref="SmtpEmailSender" /> throws before connecting). The result is the current
     ///     settings with the patch applied. A password counts when the patch sets a non-blank one,
-    ///     or when the current settings hold a plaintext <c>Password</c> (the environment variable,
+    ///     or when the current settings hold a plaintext <c>password</c> (the environment variable,
     ///     which survives a cleared password) or, when the patch leaves <c>password</c> out, a
     ///     stored <c>PasswordEncrypted</c>. The admin console never sends a blank password, so
     ///     saving other fields while a password is stored stays valid.

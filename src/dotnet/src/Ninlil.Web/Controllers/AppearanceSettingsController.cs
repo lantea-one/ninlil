@@ -63,7 +63,7 @@ public class AppearanceSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Appearance</c> as an RFC 7396
-    ///     merge patch. A field absent from
+    ///     merge patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value. The change takes effect at once. Returns 400
     ///     for an unknown palette or mode name. Requires <c>appearance:write</c>.
     /// </summary>

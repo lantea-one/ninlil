@@ -210,12 +210,12 @@ public class DnsClientStaticAddressMappingsController(
 
     /// <summary>
     ///     This method checks a write request before anything is saved:
-    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.Cidr" /> must be a bare IP address
+    ///     <c>DnsClientStaticAddressMappingWriteRequest.cidr</c> must be a bare IP address
     ///     or a CIDR network (the two forms the resolver matches),
-    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.ClientIdentifier" /> must be an
+    ///     <c>DnsClientStaticAddressMappingWriteRequest.clientIdentifier</c> must be an
     ///     identifier <see cref="ClientIdentifierFormat.TryNormalize" /> accepts (it is stored in
     ///     normal form, <c>aa:bb:cc:dd:ee:ff</c>), and
-    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.ProtocolVersion" /> must
+    ///     <c>DnsClientStaticAddressMappingWriteRequest.protocolVersion</c> must
     ///     match the address family, since an IPv4 network cannot map into the IPv6 identifier
     ///     space or the reverse (see
     ///     <see cref="DnsClientStaticAddressMappingEntity.ProtocolVersion" />).

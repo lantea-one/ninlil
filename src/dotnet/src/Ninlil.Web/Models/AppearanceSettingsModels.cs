@@ -20,18 +20,18 @@ public record AppearanceSettingsDetail(UiThemePaletteEnum Palette, UiThemeModeEn
 /// </summary>
 /// <param name="Palette">
 ///     The caller's palette override, or <see langword="null" /> if they have not set one (then
-///     <paramref name="EffectivePalette" /> is the server-wide default).
+///     <c>effectivePalette</c> is the server-wide default).
 /// </param>
 /// <param name="Mode">
 ///     The caller's mode override, or <see langword="null" /> if they have not set one (then
-///     <paramref name="EffectiveMode" /> is the server-wide default).
+///     <c>effectiveMode</c> is the server-wide default).
 /// </param>
 /// <param name="EffectivePalette">
-///     The palette the admin console should render for the caller: <paramref name="Palette" /> if
+///     The palette the admin console should render for the caller: <c>palette</c> if
 ///     set, otherwise the server-wide default.
 /// </param>
 /// <param name="EffectiveMode">
-///     The mode the admin console should render for the caller: <paramref name="Mode" /> if set,
+///     The mode the admin console should render for the caller: <c>mode</c> if set,
 ///     otherwise the server-wide default.
 /// </param>
 public record UserAppearancePreferenceDetail(

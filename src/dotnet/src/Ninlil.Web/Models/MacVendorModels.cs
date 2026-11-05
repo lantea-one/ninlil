@@ -7,7 +7,7 @@ namespace Ninlil.Web.Models;
 ///     This record is the MAC vendor lookup settings (configuration section
 ///     <c>DnsServer:MacVendorLookup</c>) that <c>GET /api/mac-vendor-settings</c> returns, with a
 ///     read-only report of the vendor data loaded. A <c>PATCH</c> to the same endpoint accepts
-///     every settings field except <paramref name="DataFilePath" />, a path read once at startup
+///     every settings field except <c>dataFilePath</c>, a path read once at startup
 ///     that, like other state paths, is set only in the configuration file.
 /// </summary>
 /// <param name="EnableAutomaticRefresh">Whether the IEEE registries are downloaded again periodically. Defaults to <see langword="true" />.</param>

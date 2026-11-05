@@ -8,6 +8,6 @@ namespace Ninlil.Web.Models;
 ///     <c>PATCH</c> to the same endpoint accepts the same fields.
 /// </summary>
 /// <param name="Enable">Whether the limiter rejects anything. Defaults to <see langword="true" />.</param>
-/// <param name="PermitLimit">How many sign-in attempts one client address may make within one <see cref="Window" />. Defaults to 5.</param>
-/// <param name="Window">The fixed window <see cref="PermitLimit" /> is counted over, which is also the lockout length. Defaults to five minutes.</param>
+/// <param name="PermitLimit">How many sign-in attempts one client address may make within one <c>window</c>. Defaults to 5.</param>
+/// <param name="Window">The fixed window <c>permitLimit</c> is counted over, which is also the lockout length. Defaults to five minutes.</param>
 public record AdminLoginRateLimitSettingsDetail(bool Enable, int PermitLimit, TimeSpan Window);

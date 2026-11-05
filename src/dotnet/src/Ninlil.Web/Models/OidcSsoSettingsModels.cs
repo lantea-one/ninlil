@@ -4,9 +4,9 @@ namespace Ninlil.Web.Models;
 /// <summary>
 ///     This record is the OpenID Connect single sign-on settings (configuration section
 ///     <c>Identity:Sso</c>) that <c>GET /api/sso-settings</c> returns. The client secret is never
-///     returned, as with every other secret; <see cref="ClientSecretConfigured" /> says whether one
+///     returned, as with every other secret; <c>clientSecretConfigured</c> says whether one
 ///     is set. A <c>PATCH</c> accepts these fields with <c>clientSecret</c> in place of
-///     <see cref="ClientSecretConfigured" />.
+///     <c>clientSecretConfigured</c>.
 /// </summary>
 /// <param name="Enable">Whether admin sign-in through OpenID Connect is offered. Defaults to <see langword="false" />.</param>
 /// <param name="DisplayName">The label of the sign-in button on the admin console's login page. Defaults to "Single Sign-On".</param>

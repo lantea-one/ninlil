@@ -41,9 +41,8 @@ public class SsoController(
     ///     <para>
     ///         <b>It checks whether the OpenID Connect scheme is registered, not the
     ///         <c>Identity:Sso:Enable</c> setting.</b> <c>PATCH /api/sso-settings</c> can change
-    ///         that setting without a restart, but the scheme is registered once at startup (see
-    ///         <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" />),
-    ///         so checking the setting could show a button that returns 404 when clicked.
+    ///         that setting without a restart, but the scheme is registered once at startup, so
+    ///         checking the setting could show a button that returns 404 when clicked.
     ///     </para>
     /// </summary>
     [HttpGet]
@@ -64,12 +63,8 @@ public class SsoController(
     ///     returns 404 when the OpenID Connect scheme is not registered (as <see cref="Get" />
     ///     reports with <c>enabled: false</c>), and otherwise redirects (302) to the identity
     ///     provider's authorization endpoint. The browser ends up, several redirects later,
-    ///     wherever <c>OnTokenValidated</c> or <c>OnRemoteFailure</c> sends it. Allows anonymous
+    ///     wherever the sign-in outcome sends it. Allows anonymous
     ///     callers.
-    ///     <para>
-    ///         It is named <see cref="StartChallenge" /> rather than <c>Challenge</c> so it does
-    ///         not hide the protected <c>ControllerBase.Challenge(...)</c> helper it calls.
-    ///     </para>
     /// </summary>
     /// <param name="rememberMe">
     ///     Whether the resulting session should outlive the browser, like "Remember me" on a local

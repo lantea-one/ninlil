@@ -35,7 +35,7 @@ namespace Ninlil.Web.Controllers;
 ///     Moves a renamed scope's leases to its new name (see <see cref="Replace" />).
 /// </param>
 /// <param name="zoneRepository">
-///     Confirms a scope's <see cref="DhcpScopeWriteRequest.DnsZoneId" /> names an existing zone.
+///     Confirms a scope's <c>DhcpScopeWriteRequest.dnsZoneId</c> names an existing zone.
 ///     Only existence is checked here; whether the zone can take DHCP registrations is decided
 ///     when registering, as for the CAA and PTR settings on <c>ZonesController</c>.
 /// </param>
@@ -529,8 +529,8 @@ public class DhcpScopesController(
     /// <summary>
     ///     This action deletes a DHCP scope with its reservations and custom options, removed
     ///     explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases
-    ///     recorded for the scope (which refer to it by <c>ScopeId</c>) are left alone as
-    ///     operational data, as <c>BackupEntityCatalog</c> treats them. A tag rule
+    ///     recorded for the scope (which refer to it by <c>scopeId</c>) are left alone as
+    ///     operational data. A tag rule
     ///     that names the scope (a DHCP tag rule's scope) is also left alone and simply
     ///     never matches again. Returns 404 for an unknown id. Requires <c>dhcpscopes:write</c>.
     /// </summary>
@@ -906,10 +906,10 @@ public class DhcpScopesController(
             == (isIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
 
     /// <summary>
-    ///     This method checks the scope kind against <c>DelegatedPrefixLength</c>. A
-    ///     <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope must be IPv6 (DHCPv4 has no
+    ///     This method checks the scope kind against <c>delegatedPrefixLength</c>. A
+    ///     <c>PrefixDelegation</c> scope must be IPv6 (DHCPv4 has no
     ///     prefix delegation; see <c>DhcpScopeKindEnum</c>) and needs a delegated prefix length
-    ///     from 1 to 128. An <see cref="DhcpScopeKindEnum.AddressAssignment" /> scope (every DHCPv4
+    ///     from 1 to 128. An <c>AddressAssignment</c> scope (every DHCPv4
     ///     scope and an ordinary DHCPv6 one) has no delegated prefix length, so setting one is
     ///     rejected rather than ignored.
     /// </summary>

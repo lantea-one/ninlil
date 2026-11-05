@@ -190,7 +190,7 @@ public class ClientGroupNetworksController(
     }
 
     /// <summary>
-    ///     This method checks that exactly one of <c>Cidr</c> and <c>ClientId</c> is set and that a
+    ///     This method checks that exactly one of <c>cidr</c> and <c>clientId</c> is set and that a
     ///     value is a bare IP address or a CIDR network (<see cref="NetworkEntryFormat" />), the
     ///     forms <c>ClientAddress.NetworkContains</c> matches, so an accepted entry can match. A ClientID is an operator-chosen label matched
     ///     by case-insensitive equality, so it has no format to check.

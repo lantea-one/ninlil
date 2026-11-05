@@ -6,7 +6,7 @@ namespace Ninlil.Web.Models;
 ///     <c>DnsServer:SelfUpdate</c>) that <c>GET /api/self-update-settings</c> returns. A
 ///     <c>PATCH</c> to the same endpoint accepts the same fields.
 /// </summary>
-/// <param name="EnableAutomaticCheck">Whether the server checks <see cref="ReleaseFeedUrl" /> periodically. Defaults to <see langword="true" />.</param>
+/// <param name="EnableAutomaticCheck">Whether the server checks <c>releaseFeedUrl</c> periodically. Defaults to <see langword="true" />.</param>
 /// <param name="ReleaseFeedUrl">The release feed URL to check, or an empty string (the default) if none is set.</param>
 /// <param name="CheckInterval">How often a check is due. Defaults to 24 hours.</param>
 public record SelfUpdateSettingsDetail(
@@ -26,7 +26,7 @@ public record SelfUpdateSettingsDetail(
 ///     The newest version the release feed has reported, as a plain dotted string, or
 ///     <see langword="null" /> if no check has succeeded.
 /// </param>
-/// <param name="UpdateAvailable">Whether a release newer than <paramref name="CurrentVersion" /> is known.</param>
+/// <param name="UpdateAvailable">Whether a release newer than <c>currentVersion</c> is known.</param>
 /// <param name="ReleaseUrl">A human-facing URL for the latest known release.</param>
 /// <param name="ReleaseNotes">Free-text release notes for the latest known release.</param>
 /// <param name="LastCheckedAtUtc">When a check was last attempted, or <see langword="null" /> if none has run.</param>

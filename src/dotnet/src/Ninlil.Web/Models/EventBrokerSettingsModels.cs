@@ -5,7 +5,7 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record is the event transport configuration that <c>GET /api/event-broker-settings</c>
-///     returns. Only the section matching <see cref="Transport" /> is filled in; the other is
+///     returns. Only the section matching <c>transport</c> is filled in; the other is
 ///     <see langword="null" />. A broker that was not selected never had its options configured,
 ///     so reporting its settings would return compiled-in defaults that look like live
 ///     configuration.
@@ -13,18 +13,18 @@ namespace Ninlil.Web.Models;
 /// <param name="Transport">Which transport delivers published events in the running process.</param>
 /// <param name="IsConnected">
 ///     Whether the active broker transport reports itself connected, or <see langword="null" />
-///     when <see cref="Transport" /> is <see cref="EventTransportEnum.InMemory" />, where
+///     when <c>transport</c> is <c>InMemory</c>, where
 ///     "connected" has no meaning.
 /// </param>
-/// <param name="RabbitMq">Populated only when <see cref="Transport" /> is <see cref="EventTransportEnum.RabbitMq" />.</param>
-/// <param name="ActiveMq">Populated only when <see cref="Transport" /> is <see cref="EventTransportEnum.ActiveMq" />.</param>
+/// <param name="RabbitMq">Populated only when <c>transport</c> is <c>RabbitMq</c>.</param>
+/// <param name="ActiveMq">Populated only when <c>transport</c> is <c>ActiveMq</c>.</param>
 /// <param name="LastModifiedUtc">
 ///     When the settings were last written through the REST API, used by cluster config sync, or
 ///     <see langword="null" /> if they never have been.
 /// </param>
 /// <param name="OriginatingNodeId">
 ///     The cluster node the settings were last written on, or <see langword="null" /> together
-///     with <see cref="LastModifiedUtc" />.
+///     with <c>lastModifiedUtc</c>.
 /// </param>
 public record EventBrokerSettingsDetail(
     EventTransportEnum Transport,
@@ -37,7 +37,7 @@ public record EventBrokerSettingsDetail(
 
 /// <summary>
 ///     This record carries the RabbitMQ event broker settings (configuration section
-///     <c>DnsServer:Events:RabbitMq</c>) without <c>Password</c>. A <c>GET</c> never returns the
+///     <c>DnsServer:Events:RabbitMq</c>) without <c>password</c>. A <c>GET</c> never returns the
 ///     password, as with every other secret, even though this one is stored in the plaintext
 ///     configuration file rather than encrypted like the SMTP password.
 /// </summary>
@@ -53,7 +53,7 @@ public record RabbitMqBrokerSettingsDetail(
 
 /// <summary>
 ///     This record carries the ActiveMQ event broker settings (configuration section
-///     <c>DnsServer:Events:ActiveMq</c>) without <c>Password</c>, for the reason given on
+///     <c>DnsServer:Events:ActiveMq</c>) without <c>password</c>, for the reason given on
 ///     <see cref="RabbitMqBrokerSettingsDetail" />.
 /// </summary>
 public record ActiveMqBrokerSettingsDetail(

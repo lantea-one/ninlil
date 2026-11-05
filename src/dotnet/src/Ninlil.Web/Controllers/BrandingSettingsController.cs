@@ -84,11 +84,11 @@ public class BrandingSettingsController(
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Branding</c> (<c>siteTitle</c>,
     ///     <c>logoDataUri</c>) and <c>DnsServer:Authoritative</c> (<c>hostnameString</c>,
-    ///     <c>versionString</c>, <c>enableChaosVersionQueries</c>) as an RFC 7396 merge patch. One
-    ///     write may touch either section or both. An absent field keeps its value; a JSON
-    ///     <c>null</c> clears <c>siteTitle</c> or <c>logoDataUri</c>. Every field takes effect at
-    ///     once. Returns 400 for a blank hostname or version string or an invalid logo. Requires
-    ///     <c>branding:write</c>.
+    ///     <c>versionString</c>, <c>enableChaosVersionQueries</c>) as an RFC 7396 merge patch,
+    ///     written to the configuration file. One write may touch either section or both. An absent
+    ///     field keeps its value; a JSON <c>null</c> clears <c>siteTitle</c> or <c>logoDataUri</c>.
+    ///     Every field takes effect at once. Returns 400 for a blank hostname or version string or
+    ///     an invalid logo. Requires <c>branding:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("branding:write")]

@@ -36,8 +36,8 @@ namespace Ninlil.Web.Controllers;
 ///         <b>Scoping to a client or client group.</b> Every action takes optional, mutually
 ///         exclusive <c>clientId</c> and <c>clientGroupId</c> query parameters. Without them the
 ///         actions work on global (unscoped) rewrites. With one, <c>List</c> reports whether the
-///         entry is enabled for that target, <c>Enable</c> creates or re-enables rewrites scoped to
-///         it (through <see cref="DnsRewriteEntity.ClientId" /> or <c>ClientGroupId</c>; see that
+///         entry is enabled for that target, <c>enable</c> creates or re-enables rewrites scoped to
+///         it (through <see cref="DnsRewriteEntity.ClientId" /> or <c>clientGroupId</c>; see that
 ///         entity for the query-time behavior), and <c>Disable</c> removes only that target's
 ///         rewrites. A scoped rewrite and a global one for the same mapping are separate rows; both
 ///         can exist and each applies to its own audience.
@@ -45,7 +45,7 @@ namespace Ninlil.Web.Controllers;
 ///     <para>
 ///         <b>Cluster replication.</b> Only global rewrites replicate: creating or re-enabling one
 ///         stamps this node's id on it and publishes a <see cref="DnsRewriteChangedEvent" />, and
-///         removing one publishes the same event with <c>IsDeleted</c>, which
+///         removing one publishes the same event with <c>isDeleted</c>, which
 ///         <c>RewriteClusterSyncEventSubscriber</c> sends to the peers. A rewrite scoped to a
 ///         client or client group stays on this node and publishes nothing: the cluster payload
 ///         has no scope, and clients and groups exist only on the node that made them, so a peer
@@ -311,7 +311,7 @@ public class SafeSearchController(
     }
 
     /// <summary>
-    ///     This method checks an <c>Enable</c> request's target: not both kinds at once, and the
+    ///     This method checks an <c>enable</c> request's target: not both kinds at once, and the
     ///     one given must exist, so no scoped rewrite points at a missing client or group.
     /// </summary>
     private async Task ValidateTargetAsync(
@@ -334,7 +334,7 @@ public class SafeSearchController(
 
     /// <summary>
     ///     This method keeps only the rewrites in one scope: those whose
-    ///     <see cref="DnsRewriteEntity.ClientId" /> and <c>ClientGroupId</c> both equal
+    ///     <see cref="DnsRewriteEntity.ClientId" /> and <c>clientGroupId</c> both equal
     ///     <paramref name="clientId" /> and <paramref name="clientGroupId" />. Two nulls select the
     ///     global rows. Every action filters right after loading, so
     ///     <see cref="FindConflictingCname" />, <see cref="FindExactMatch" /> and

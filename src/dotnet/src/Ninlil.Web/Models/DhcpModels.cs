@@ -14,7 +14,7 @@ namespace Ninlil.Web.Models;
 /// <param name="ProtocolVersion">Whether this is a DHCPv4 or a DHCPv6 scope.</param>
 /// <param name="Kind">
 ///     What the scope hands out: addresses, or (DHCPv6 only) RFC 9915 delegated prefixes.
-///     Defaults to <see cref="DhcpScopeKindEnum.AddressAssignment" />, the only valid value for a
+///     Defaults to <c>AddressAssignment</c>, the only valid value for a
 ///     DHCPv4 scope.
 /// </param>
 /// <param name="RangeStartAddress">The first address of the pool the scope leases from, inclusive.</param>
@@ -37,12 +37,12 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="NextServerAddress">
 ///     The TFTP (or other boot) server a PXE client should contact for
-///     <paramref name="BootFileName" />, or <see langword="null" /> to use this server's Server
+///     <c>bootFileName</c>, or <see langword="null" /> to use this server's Server
 ///     Identifier address.
 /// </param>
 /// <param name="DelegatedPrefixLength">
 ///     The length, in bits, of each prefix the scope delegates. Required when
-///     <paramref name="Kind" /> is <see cref="DhcpScopeKindEnum.PrefixDelegation" />, and must be
+///     <c>kind</c> is <c>PrefixDelegation</c>, and must be
 ///     <see langword="null" /> otherwise.
 /// </param>
 public record DhcpScopeWriteRequest(
@@ -92,12 +92,11 @@ public record DhcpScopeDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Server.Core.Statistics.DhcpScopeStatistics</c>,
-///     one scope's utilization (<c>GET /api/dhcp-scopes/{id}/statistics</c>). The figures are
-///     computed on each request, not cached; that class documents how. <see cref="TotalSlots" />
-///     and <see cref="AvailableSlots" /> are decimal strings rather than JSON numbers because an
-///     IPv6 range can hold far more addresses than a JSON number represents exactly (a
-///     <c>/64</c> holds 2^64).
+///     This record is the REST shape of one scope's utilization
+///     (<c>GET /api/dhcp-scopes/{id}/statistics</c>). The figures are computed on each request, not
+///     cached. <c>totalSlots</c> and <c>availableSlots</c> are decimal strings rather than JSON
+///     numbers because an IPv6 range can hold far more addresses than a JSON number represents
+///     exactly (a <c>/64</c> holds 2^64).
 /// </summary>
 /// <param name="ScopeId">The identifier of the scope the figures describe.</param>
 /// <param name="ScopeName">The name of the scope the figures describe.</param>
@@ -105,14 +104,14 @@ public record DhcpScopeDetail(
 /// <param name="Kind">What the scope hands out.</param>
 /// <param name="TotalSlots">
 ///     How many slots the scope's range holds, as a decimal string. A slot is an address for an
-///     <see cref="DhcpScopeKindEnum.AddressAssignment" /> scope, or a block-aligned delegable
-///     prefix for a <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope.
+///     <c>AddressAssignment</c> scope, or a block-aligned delegable
+///     prefix for a <c>PrefixDelegation</c> scope.
 /// </param>
 /// <param name="LeasedCount">How many slots are actively leased.</param>
 /// <param name="OfferedCount">How many slots are offered and awaiting the client's request.</param>
 /// <param name="ReservedCount">How many enabled static reservations the scope has.</param>
 /// <param name="AvailableSlots">
-///     <paramref name="TotalSlots" /> minus every distinct slot held by a blocking lease or an
+///     <c>totalSlots</c> minus every distinct slot held by a blocking lease or an
 ///     enabled reservation, as a decimal string; never negative.
 /// </param>
 public record DhcpScopeStatisticsDetail(
@@ -179,13 +178,13 @@ public record DhcpReservationDetail(
 /// <param name="ValueHex">
 ///     The option's raw value bytes as a hexadecimal string with an even number of digits; it is
 ///     stored in uppercase. It is not used, and may be blank, when
-///     <paramref name="ValueSource" /> is <see cref="DhcpOptionValueSourceEnum.ServerAddress" />.
+///     <c>valueSource</c> is <c>ServerAddress</c>.
 /// </param>
 /// <param name="IsDisabled">Whether the custom option is disabled.</param>
 /// <param name="ValueSource">
 ///     Where the delivered value comes from (see <see cref="DhcpOptionValueSourceEnum" />).
-///     Defaults to <see cref="DhcpOptionValueSourceEnum.Custom" />, which sends
-///     <paramref name="ValueHex" />.
+///     Defaults to <c>Custom</c>, which sends
+///     <c>valueHex</c>.
 /// </param>
 /// <param name="Comments">Free-form operator notes about the custom option.</param>
 public record DhcpScopeCustomOptionWriteRequest(
@@ -228,9 +227,9 @@ public record DhcpScopeCustomOptionDetail(
 /// <param name="Priority">The rule's evaluation order, ascending; a later rule's option overrides an earlier one's. Defaults to 0.</param>
 /// <param name="IsDisabled">Whether the rule is disabled.</param>
 /// <param name="VendorClassIdentifierMatch">The Vendor Class Identifier value the rule matches, or <see langword="null" />.</param>
-/// <param name="VendorClassIdentifierMatchMode">How <paramref name="VendorClassIdentifierMatch" /> is compared.</param>
+/// <param name="VendorClassIdentifierMatchMode">How <c>vendorClassIdentifierMatch</c> is compared.</param>
 /// <param name="UserClassMatch">The User Class value the rule matches, or <see langword="null" />.</param>
-/// <param name="UserClassMatchMode">How <paramref name="UserClassMatch" /> is compared.</param>
+/// <param name="UserClassMatchMode">How <c>userClassMatch</c> is compared.</param>
 /// <param name="RelayAgentCircuitIdHex">The Agent Circuit ID the rule requires, as hex, or <see langword="null" /> (DHCPv4 rules only; a DHCPv6-scope rule with it is refused).</param>
 /// <param name="RelayAgentRemoteIdHex">The relay agent (DHCPv4) or DHCPv6 Remote ID the rule requires, as hex, or <see langword="null" />.</param>
 /// <param name="RelayInterfaceIdHex">The DHCPv6 Interface-ID the rule requires, as hex, or <see langword="null" /> (DHCPv6-scope rules only; a global or DHCPv4-scope rule with it is refused).</param>
@@ -280,7 +279,7 @@ public record DhcpTagRuleDetail(
 ///     contributes (<c>POST</c> and <c>PUT</c> under <c>/api/dhcp-tag-rules/{tagRuleId}/options</c>).
 /// </summary>
 /// <param name="OptionTag">
-///     The option's numeric tag, as in <see cref="DhcpScopeCustomOptionWriteRequest.OptionTag" />.
+///     The option's numeric tag, as in <c>DhcpScopeCustomOptionWriteRequest.optionTag</c>.
 ///     Those limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6
 ///     scope rejects tag 0, values over 65 535 bytes and the option codes the server writes
 ///     itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24
@@ -289,13 +288,13 @@ public record DhcpTagRuleDetail(
 /// </param>
 /// <param name="ValueHex">
 ///     The option's raw value bytes as hexadecimal, as in
-///     <see cref="DhcpScopeCustomOptionWriteRequest.ValueHex" />. It is not used, and may be
-///     blank, when <paramref name="ValueSource" /> is
-///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" />.
+///     <c>DhcpScopeCustomOptionWriteRequest.valueHex</c>. It is not used, and may be
+///     blank, when <c>valueSource</c> is
+///     <c>ServerAddress</c>.
 /// </param>
 /// <param name="ValueSource">
 ///     Where the delivered value comes from, as in
-///     <see cref="DhcpScopeCustomOptionWriteRequest.ValueSource" />.
+///     <c>DhcpScopeCustomOptionWriteRequest.valueSource</c>.
 /// </param>
 public record DhcpTagRuleOptionWriteRequest(
     byte OptionTag,
@@ -320,18 +319,17 @@ public record DhcpTagRuleOptionDetail(
 ///     This class carries one DHCP lease, as returned by the list and get endpoints of
 ///     <c>/api/dhcp-leases</c>. There is no write request: the allocation engine creates and
 ///     updates leases as clients come and go, and an operator can only release one
-///     (<c>POST /api/dhcp-leases/{id}/release</c>). <see cref="PrefixLength" /> is set only for a
+///     (<c>POST /api/dhcp-leases/{id}/release</c>). <c>prefixLength</c> is set only for a
 ///     DHCPv6 Prefix Delegation lease and is <see langword="null" /> for an address lease.
 ///     <para>
 ///         <b>Declined addresses.</b> When a client declines an address (RFC 2131 Section 4.3.3),
-///         the lease row becomes a quarantine row: <c>ClientIdentifier</c> is
-///         <c>declined:&lt;address&gt;</c> (for example <c>declined:192.0.2.55</c>), <c>State</c> is
-///         <c>Expired</c> and <c>LeaseExpiresAtUtc</c> is the end of the quarantine, which is
-///         <c>DeclinedAddressQuarantineDuration</c> after the decline (see
+///         the lease row becomes a quarantine row: <c>clientIdentifier</c> is
+///         <c>declined:&lt;address&gt;</c> (for example <c>declined:192.0.2.55</c>), <c>state</c>
+///         is <c>Expired</c> and <c>leaseExpiresAtUtc</c> is the end of the quarantine, which is
+///         <c>declinedAddressQuarantineDuration</c> after the decline (see
 ///         <see cref="DhcpCoreSettingsDetail" />). No client owns the row, and the address is not
-///         offered to any client until that time. <c>POST /api/dhcp-leases/{id}/release</c>
-///         on a quarantine row sets <c>State</c> to <c>Released</c> and ends the quarantine at
-///         once.
+///         offered to any client until that time. <c>POST /api/dhcp-leases/{id}/release</c> on a
+///         quarantine row sets <c>state</c> to <c>Released</c> and ends the quarantine at once.
 ///     </para>
 /// </summary>
 public record DhcpLeaseDetail(
@@ -371,8 +369,8 @@ public record DhcpCoreSettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4ProtocolOptions</c>,
-///     the DHCPv4 UDP listener's settings (<c>GET /api/dhcp-settings/protocol</c>).
+///     This record is the REST shape of the DHCPv4 UDP listener's settings
+///     (<c>GET /api/dhcp-settings/protocol</c>).
 /// </summary>
 /// <param name="Enable">Whether the listener starts at boot and answers DHCPv4 traffic. Defaults to <see langword="false" />.</param>
 /// <param name="ServerPort">The port the listener binds to. Defaults to 67.</param>
@@ -380,9 +378,9 @@ public record DhcpCoreSettingsDetail(
 public record DhcpProtocolSettingsDetail(bool Enable, int ServerPort, int ClientPort);
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Server.Relay.Dhcpv4RelayOptions</c>
-///     (<c>GET /api/dhcp-settings/relay</c>): whether the server relays DHCPv4 requests to
-///     upstream servers instead of answering them from its own scopes.
+///     This record is the REST shape of the DHCPv4 relay settings
+///     (<c>GET /api/dhcp-settings/relay</c>): whether the server relays DHCPv4 requests to upstream
+///     servers instead of answering them from its own scopes.
 /// </summary>
 /// <param name="Enable">Whether the server acts as a DHCPv4 relay agent. Defaults to <see langword="false" />.</param>
 /// <param name="UpstreamServerAddresses">The IPv4 addresses of the upstream DHCPv4 servers requests are forwarded to.</param>
@@ -403,9 +401,9 @@ public record DhcpRelaySettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6ProtocolOptions</c>,
-///     the DHCPv6 UDP listener's settings (<c>GET /api/dhcp-settings/dhcpv6-protocol</c>); the
-///     DHCPv6 counterpart of <see cref="DhcpProtocolSettingsDetail" />.
+///     This record is the REST shape of the DHCPv6 UDP listener's settings
+///     (<c>GET /api/dhcp-settings/dhcpv6-protocol</c>); the DHCPv6 counterpart of
+///     <see cref="DhcpProtocolSettingsDetail" />.
 /// </summary>
 /// <param name="Enable">Whether the listener starts at boot and answers DHCPv6 traffic. Defaults to <see langword="false" />.</param>
 /// <param name="ServerPort">The port the listener binds to. Defaults to 547, the IANA DHCPv6 server port.</param>
@@ -413,10 +411,10 @@ public record DhcpRelaySettingsDetail(
 public record Dhcpv6ProtocolSettingsDetail(bool Enable, int ServerPort, int ClientPort);
 
 /// <summary>
-///     This record is the REST shape of <c>Ninlil.Dhcp.Server.Relay.Dhcpv6RelayOptions</c>
-///     (<c>GET /api/dhcp-settings/dhcpv6-relay</c>): whether the server acts as an RFC 9915
-///     DHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart
-///     of <see cref="DhcpRelaySettingsDetail" />.
+///     This record is the REST shape of the DHCPv6 relay settings
+///     (<c>GET /api/dhcp-settings/dhcpv6-relay</c>): whether the server acts as an RFC 9915 DHCPv6
+///     relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart of
+///     <see cref="DhcpRelaySettingsDetail" />.
 /// </summary>
 /// <param name="Enable">Whether the server acts as a DHCPv6 relay agent. Defaults to <see langword="false" />.</param>
 /// <param name="UpstreamServerAddresses">The IPv6 addresses of the upstream DHCPv6 servers RELAY-FORW messages are sent to.</param>
@@ -479,9 +477,9 @@ public record DhcpRaProtocolSettingsDetail(
 ///         field here. Prefixes are configured in the configuration file only.
 ///     </para>
 ///     <para>
-///         <b><see cref="Routes" /> is included.</b> An RFC 4191 route is a simple triple (prefix
+///         <b><c>routes</c> is included.</b> An RFC 4191 route is a simple triple (prefix
 ///         and length, preference, lifetime), so a <c>PATCH</c> replaces the whole list, as it
-///         does <see cref="RecursiveDnsServers" /> and <see cref="DnsSearchListDomains" />.
+///         does <c>recursiveDnsServers</c> and <c>dnsSearchListDomains</c>.
 ///         <c>DhcpServer:Ra</c> lives in the JSON configuration file, not the database, so its list
 ///         entries have no stable identifiers to build a sub-resource on. Every change needs a
 ///         restart.
@@ -495,9 +493,9 @@ public record DhcpRaProtocolSettingsDetail(
 /// <param name="RetransTimer">How long a host waits before sending a Neighbor Solicitation again; zero (the default) means no recommendation.</param>
 /// <param name="LinkMtu">The link MTU to advertise, or <see langword="null" /> (the default) to send no MTU option.</param>
 /// <param name="RecursiveDnsServers">The Recursive DNS Server addresses (RFC 8106 Section 5.1) advertised to SLAAC hosts.</param>
-/// <param name="RecursiveDnsServerLifetime">How long a host may use <paramref name="RecursiveDnsServers" />. Defaults to 1800 seconds.</param>
+/// <param name="RecursiveDnsServerLifetime">How long a host may use <c>recursiveDnsServers</c>. Defaults to 1800 seconds.</param>
 /// <param name="DnsSearchListDomains">The DNS Search List domains (RFC 8106 Section 5.2) advertised to SLAAC hosts.</param>
-/// <param name="DnsSearchListLifetime">How long a host may use <paramref name="DnsSearchListDomains" />. Defaults to 1800 seconds.</param>
+/// <param name="DnsSearchListLifetime">How long a host may use <c>dnsSearchListDomains</c>. Defaults to 1800 seconds.</param>
 /// <param name="Routes">The specific routes advertised in RFC 4191 Section 2.3 Route Information options.</param>
 /// <param name="InterfaceOverrides">
 ///     Per-interface content overrides. <see cref="DhcpRaInterfaceOverrideDetail" /> explains how
@@ -523,11 +521,11 @@ public record DhcpRaSettingsDetail(
 /// <summary>
 ///     This record is the REST shape of one entry of <c>DhcpServer:Ra:Routes</c>: a route
 ///     advertised in an RFC 4191 Section 2.3 Route Information option. It appears in
-///     <see cref="DhcpRaSettingsDetail.Routes" /> and in the <c>routes</c> array of
+///     <c>DhcpRaSettingsDetail.routes</c> and in the <c>routes</c> array of
 ///     <c>PATCH /api/dhcp-settings/ra</c>.
 /// </summary>
-/// <param name="Prefix">The route's prefix, or <see langword="null" /> or empty when <paramref name="PrefixLength" /> is <c>0</c> (an entry that only sets the default route's preference).</param>
-/// <param name="PrefixLength">The number of significant leading bits of <paramref name="Prefix" />, 0 to 128. Defaults to 64.</param>
+/// <param name="Prefix">The route's prefix, or <see langword="null" /> or empty when <c>prefixLength</c> is <c>0</c> (an entry that only sets the default route's preference).</param>
+/// <param name="PrefixLength">The number of significant leading bits of <c>prefix</c>, 0 to 128. Defaults to 64.</param>
 /// <param name="Preference">The route's preference (RFC 4191 Section 2.1) relative to other routes and default routers on the link. Defaults to Medium.</param>
 /// <param name="RouteLifetime">How long the route stays valid, counted from each advertisement that carries it. Defaults to 1800 seconds.</param>
 public record DhcpRaRouteDetail(
@@ -540,33 +538,33 @@ public record DhcpRaRouteDetail(
 /// <summary>
 ///     This record is the REST shape of one entry of <c>DhcpServer:Ra:InterfaceOverrides</c>:
 ///     different Router Advertisement content for one network interface. It appears in
-///     <see cref="DhcpRaSettingsDetail.InterfaceOverrides" /> and in the <c>interfaceOverrides</c>
+///     <c>DhcpRaSettingsDetail.interfaceOverrides</c> and in the <c>interfaceOverrides</c>
 ///     array of <c>PATCH /api/dhcp-settings/ra</c>. A <see langword="null" /> scalar field inherits
-///     the matching global field. A <see langword="null" /> <see cref="RecursiveDnsServers" /> or
-///     <see cref="DnsSearchListDomains" /> inherits the global list; any other value, even an empty
+///     the matching global field. A <see langword="null" /> <c>recursiveDnsServers</c> or
+///     <c>dnsSearchListDomains</c> inherits the global list; any other value, even an empty
 ///     list, replaces it.
 ///     <para>
-///         <b>The override's <c>Prefixes</c> and <c>Routes</c> lists are not included.</b>
+///         <b>The override's <c>Prefixes</c> and <c>routes</c> lists are not included.</b>
 ///         Prefixes are file-only globally too (see <see cref="DhcpRaSettingsDetail" />), and a
 ///         route list nested inside this list would make the API and UI much more complex. Both
 ///         can be set in the JSON configuration file
-///         (the <c>Prefixes</c> and <c>Routes</c> of each <c>DhcpServer:Ra:InterfaceOverrides</c>
+///         (the <c>Prefixes</c> and <c>routes</c> of each <c>DhcpServer:Ra:InterfaceOverrides</c>
 ///         entry).
 ///     </para>
 /// </summary>
 /// <param name="InterfaceName">The OS-reported network interface name this override applies to (for example <c>eth0</c>), matched case-insensitively.</param>
 /// <param name="Exclude">When <see langword="true" />, no Router Advertisements are sent on this interface and every other field is ignored.</param>
-/// <param name="ManagedAddressConfiguration">Overrides <see cref="DhcpRaSettingsDetail.ManagedAddressConfiguration" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="OtherConfiguration">Overrides <see cref="DhcpRaSettingsDetail.OtherConfiguration" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="RouterLifetime">Overrides <see cref="DhcpRaSettingsDetail.RouterLifetime" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="CurrentHopLimit">Overrides <see cref="DhcpRaSettingsDetail.CurrentHopLimit" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="ReachableTime">Overrides <see cref="DhcpRaSettingsDetail.ReachableTime" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="RetransTimer">Overrides <see cref="DhcpRaSettingsDetail.RetransTimer" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="LinkMtu">Overrides <see cref="DhcpRaSettingsDetail.LinkMtu" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="RecursiveDnsServers">Wholesale-replaces <see cref="DhcpRaSettingsDetail.RecursiveDnsServers" /> for this interface when non-<see langword="null" />, or inherits the global list when <see langword="null" />.</param>
-/// <param name="RecursiveDnsServerLifetime">Overrides <see cref="DhcpRaSettingsDetail.RecursiveDnsServerLifetime" /> for this interface, or inherits it when <see langword="null" />.</param>
-/// <param name="DnsSearchListDomains">Wholesale-replaces <see cref="DhcpRaSettingsDetail.DnsSearchListDomains" /> for this interface when non-<see langword="null" />, or inherits the global list when <see langword="null" />.</param>
-/// <param name="DnsSearchListLifetime">Overrides <see cref="DhcpRaSettingsDetail.DnsSearchListLifetime" /> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="ManagedAddressConfiguration">Overrides <c>DhcpRaSettingsDetail.managedAddressConfiguration</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="OtherConfiguration">Overrides <c>DhcpRaSettingsDetail.otherConfiguration</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="RouterLifetime">Overrides <c>DhcpRaSettingsDetail.routerLifetime</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="CurrentHopLimit">Overrides <c>DhcpRaSettingsDetail.currentHopLimit</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="ReachableTime">Overrides <c>DhcpRaSettingsDetail.reachableTime</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="RetransTimer">Overrides <c>DhcpRaSettingsDetail.retransTimer</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="LinkMtu">Overrides <c>DhcpRaSettingsDetail.linkMtu</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="RecursiveDnsServers">Wholesale-replaces <c>DhcpRaSettingsDetail.recursiveDnsServers</c> for this interface when non-<see langword="null" />, or inherits the global list when <see langword="null" />.</param>
+/// <param name="RecursiveDnsServerLifetime">Overrides <c>DhcpRaSettingsDetail.recursiveDnsServerLifetime</c> for this interface, or inherits it when <see langword="null" />.</param>
+/// <param name="DnsSearchListDomains">Wholesale-replaces <c>DhcpRaSettingsDetail.dnsSearchListDomains</c> for this interface when non-<see langword="null" />, or inherits the global list when <see langword="null" />.</param>
+/// <param name="DnsSearchListLifetime">Overrides <c>DhcpRaSettingsDetail.dnsSearchListLifetime</c> for this interface, or inherits it when <see langword="null" />.</param>
 public record DhcpRaInterfaceOverrideDetail(
     string InterfaceName,
     bool Exclude,
@@ -612,16 +610,16 @@ public enum DhcpServiceKindEnum
 
 /// <summary>
 ///     This record is one DHCP-family service's state, as returned by
-///     <c>/api/dhcp-services</c>: its configured <see cref="Enabled" /> flag (whether it starts at
-///     boot) and whether it <see cref="IsRunning" />. The two can differ either way. A service
+///     <c>/api/dhcp-services</c>: its configured <c>enabled</c> flag (whether it starts at
+///     boot) and whether it <c>isRunning</c>. The two can differ either way. A service
 ///     configured off can be running because it was started through this controller, and one
 ///     configured on can be stopped, either through this controller or, for
-///     <see cref="DhcpServiceKindEnum.Tftp" /> only, because it declined to bind (for example when
+///     <c>Tftp</c> only, because it declined to bind (for example when
 ///     its root directory is missing).
 /// </summary>
 /// <param name="Kind">Which of the four DHCP-family services this status describes.</param>
 /// <param name="Enabled">
-///     Whether the service's <c>Enable</c> option says it starts at boot. It is read from the
+///     Whether the service's <c>enable</c> option says it starts at boot. It is read from the
 ///     settings loaded at startup, so a saved change shows only after a restart.
 /// </param>
 /// <param name="IsRunning">Whether the service's listener is bound and serving traffic now.</param>

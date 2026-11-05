@@ -56,7 +56,7 @@ public class BackupController(
     /// <summary>
     ///     This action builds a complete backup archive and returns it as a file download
     ///     (<c>application/octet-stream</c>, <c>ninlil-backup-*.ltbk</c>), not JSON. With
-    ///     <see cref="BackupCreateRequest.Passphrase" /> the archive is encrypted with AES-256-GCM;
+    ///     <c>BackupCreateRequest.passphrase</c> the archive is encrypted with AES-256-GCM;
     ///     without one it is unencrypted and marked as such in its header. Returns 400 when the
     ///     passphrase is only whitespace or too short. Requires <c>backup:read</c>.
     /// </summary>

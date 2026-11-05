@@ -19,12 +19,12 @@ namespace Ninlil.Web.Controllers;
 /// <summary>
 ///     This controller reads and writes <see cref="WebhookDeliveryOptions" />: the retry backoff
 ///     and outbound HTTP timeout shared by every webhook subscription's deliveries. Each
-///     subscription's attempt limit (<c>MaxDeliveryAttempts</c>) is managed separately, through
+///     subscription's attempt limit (<c>maxDeliveryAttempts</c>) is managed separately, through
 ///     <see cref="WebhooksController" />. Reading needs <c>webhookdeliverysettings:read</c> and
 ///     writing needs <c>webhookdeliverysettings:write</c>.
 ///     <para>
-///         <b><c>InitialRetryDelay</c> and <c>MaxRetryDelay</c> take effect at once;
-///         <c>RequestTimeout</c> takes effect gradually.</b> <c>WebhookDeliveryService</c> and its
+///         <b><c>initialRetryDelay</c> and <c>maxRetryDelay</c> take effect at once;
+///         <c>requestTimeout</c> takes effect gradually.</b> <c>WebhookDeliveryService</c> and its
 ///         <c>ConfigureHttpClient</c> registration read <see cref="IOptionsMonitor{TOptions}" />'s
 ///         <c>CurrentValue</c> on every delivery attempt. The timeout, though, is applied only when
 ///         <see cref="IHttpClientFactory" /> builds a new handler for the webhook client; a pooled
@@ -59,7 +59,7 @@ public class WebhookDeliverySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Webhooks:Delivery</c> as an RFC
-    ///     7396 merge patch. The response
+    ///     7396 merge patch, written to the configuration file. The response
     ///     note depends on whether <c>requestTimeout</c> was changed alone, with another field, or
     ///     not at all. Returns 400 for a value that is not a positive TimeSpan. Requires
     ///     <c>webhookdeliverysettings:write</c>.

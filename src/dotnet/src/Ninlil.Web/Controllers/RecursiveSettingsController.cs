@@ -73,7 +73,7 @@ public class RecursiveSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Recursive</c> as an RFC 7396 merge
-    ///     patch. A field absent from
+    ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value; an override list, when present, replaces the
     ///     whole list. <c>insecureDomains</c> is the same, and also accepts <c>null</c> to restore the
     ///     built-in list. The response note says whether a restart is needed. Returns 400 for a

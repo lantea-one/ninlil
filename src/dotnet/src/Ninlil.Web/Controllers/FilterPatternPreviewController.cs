@@ -14,8 +14,8 @@ namespace Ninlil.Web.Controllers;
 /// <summary>
 ///     This controller shows which of a sample set of domains a candidate filter-list pattern would
 ///     match. The admin console's entry form calls it as the operator types a
-///     <see cref="DnsFilterEntryKindEnum.Wildcard" /> or
-///     <see cref="DnsFilterEntryKindEnum.Regex" /> entry, before it is saved.
+///     <c>Wildcard</c> or
+///     <c>Regex</c> entry, before it is saved.
 ///     <para>
 ///         <b>It uses the filter engine's own pattern compilation</b>
 ///         (<see cref="DnsFilterEngine.CompileOrNull" /> and
@@ -184,7 +184,7 @@ public class FilterPatternPreviewController : ControllerBase
 
     /// <summary>
     ///     This method applies <c>DnsFilterEngine</c>'s rule for a
-    ///     <see cref="DnsFilterEntryKindEnum.Domain" /> entry: a domain covers itself and every
+    ///     <c>Domain</c> entry: a domain covers itself and every
     ///     subdomain. It is three lines, so it is repeated here rather than exposed as another
     ///     public helper on <see cref="DnsFilterEngine" /> for this one caller.
     /// </summary>

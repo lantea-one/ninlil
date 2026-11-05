@@ -1019,7 +1019,7 @@ public class TransportSettingsController(
     }
 
     /// <summary>
-    ///     This method turns a configured <c>ListenAddresses</c> string into the array the API
+    ///     This method turns a configured <c>listenAddresses</c> string into the array the API
     ///     returns, entry by entry as written, including any entry the listener had to skip, so an
     ///     operator can see and fix it.
     /// </summary>
