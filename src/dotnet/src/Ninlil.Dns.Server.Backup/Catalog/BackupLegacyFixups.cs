@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Entity;
 
 // Define our namespace.
@@ -74,6 +75,82 @@ public static class BackupLegacyFixups
         }
 
         return linked;
+    }
+
+    /// <summary>
+    ///     This method links DHCP leases to their scopes for an archive taken before
+    ///     <see cref="LeaseEntity.ScopeId" /> existed. Such an archive has no <c>ScopeId</c>
+    ///     property on its DhcpLeases elements at all, while an archive written since always
+    ///     carries it, so a missing property is the exact test and a lease that already has the
+    ///     property is never changed. A lease takes the id of the archive's scope whose
+    ///     <see cref="DhcpScopeEntity.Name" /> equals the lease's <see cref="LeaseEntity.ScopeName" />,
+    ///     compared ordinally. A lease that matches no scope belonged to a deleted scope and is
+    ///     removed from <paramref name="leases" />, because it would otherwise keep the empty id
+    ///     and collide with other such leases on the unique indexes. This is the same rule as the
+    ///     MongoDB backfill and the relational migration.
+    /// </summary>
+    /// <param name="leasesJson">The archive's <c>database/DhcpLeases.json</c> text.</param>
+    /// <param name="leases">
+    ///     The leases parsed from that text, in the same order. Orphaned leases are removed from it.
+    /// </param>
+    /// <param name="scopes">The DHCP scopes parsed from the archive.</param>
+    /// <returns>The number of leases that were linked and the number that were removed.</returns>
+    public static (int Linked, int Removed) LinkLeasesToScopes(
+        string leasesJson,
+        IList<LeaseEntity> leases,
+        IReadOnlyList<DhcpScopeEntity> scopes
+    )
+    {
+        if (string.IsNullOrWhiteSpace(leasesJson) || leases.Count == 0)
+            return (0, 0);
+
+        using JsonDocument document = JsonDocument.Parse(
+            leasesJson,
+            new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true,
+            }
+        );
+
+        // The parsed list follows the array element for element; if it does not, nothing can be
+        // matched safely.
+        if (
+            document.RootElement.ValueKind != JsonValueKind.Array
+            || document.RootElement.GetArrayLength() != leases.Count
+        )
+            return (0, 0);
+
+        List<LeaseEntity> orphans = [];
+        int linked = 0;
+        int index = 0;
+        foreach (JsonElement element in document.RootElement.EnumerateArray())
+        {
+            LeaseEntity lease = leases[index++];
+            if (
+                element.ValueKind != JsonValueKind.Object
+                || lease is null
+                || HasProperty(element, nameof(LeaseEntity.ScopeId))
+            )
+                continue;
+
+            DhcpScopeEntity scope = scopes.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, lease.ScopeName, StringComparison.Ordinal)
+            );
+            if (scope is null)
+            {
+                orphans.Add(lease);
+                continue;
+            }
+
+            lease.ScopeId = scope.Id;
+            linked++;
+        }
+
+        foreach (LeaseEntity orphan in orphans)
+            leases.Remove(orphan);
+
+        return (linked, orphans.Count);
     }
 
     private static bool HasProperty(JsonElement element, string name) =>

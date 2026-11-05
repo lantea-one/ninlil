@@ -20,6 +20,9 @@ public class LeaseConfiguration : IEntityTypeConfiguration<LeaseEntity>
 
         builder.HasKey(lease => lease.Id);
 
+        // No foreign key: a deleted scope leaves its leases behind as operational data, and
+        // the MongoDB model has no such constraint.
+        builder.Property(lease => lease.ScopeId).IsRequired();
         builder.Property(lease => lease.ScopeName).HasMaxLength(256).IsRequired();
         builder.Property(lease => lease.ClientIdentifier).HasMaxLength(256).IsRequired();
         builder.Property(lease => lease.IpAddress).HasMaxLength(45).IsRequired();
@@ -46,8 +49,12 @@ public class LeaseConfiguration : IEntityTypeConfiguration<LeaseEntity>
 
         // Within a scope, a client holds at most one lease and an address is leased at most
         // once.
-        builder.HasIndex(lease => new { lease.ScopeName, lease.ClientIdentifier }).IsUnique();
-        builder.HasIndex(lease => new { lease.ScopeName, lease.IpAddress }).IsUnique();
+        builder.HasIndex(lease => new { lease.ScopeId, lease.ClientIdentifier }).IsUnique();
+        builder.HasIndex(lease => new { lease.ScopeId, lease.IpAddress }).IsUnique();
+
+        // The all-scopes lease list (ILeaseRepository.SearchAsync) is ordered by the scope name
+        // copy and then the client, so this index lets the database page it without a sort.
+        builder.HasIndex(lease => new { lease.ScopeName, lease.ClientIdentifier });
 
         // A non-unique index on IpAddress alone backs the cross-scope lookup in
         // ILeaseRepository.FindActiveByIpAddressAsync, which client identity resolution uses

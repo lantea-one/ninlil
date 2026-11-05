@@ -6,6 +6,7 @@ using System.Xml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Options;
@@ -322,6 +323,27 @@ public sealed partial class SystemBackupService(
                 "Linked {LinkedKeyCount} cluster TSIG keys to their peers in an archive that predates the link.",
                 linkedClusterKeys
             );
+
+        // An archive from before the lease scope id has DhcpLeases without a ScopeId property;
+        // relink those leases to their scopes by name and drop the ones whose scope is gone, as
+        // the migration did for a live database. This runs before anything is wiped, so a bad
+        // archive never half-restores.
+        List<LeaseEntity> leases = [.. parsedByName["DhcpLeases"].Cast<LeaseEntity>()];
+        List<DhcpScopeEntity> dhcpScopes = [.. parsedByName["DhcpScopes"].Cast<DhcpScopeEntity>()];
+        (int linkedLeases, int removedLeases) = BackupLegacyFixups.LinkLeasesToScopes(
+            entityJsonByName["DhcpLeases"],
+            leases,
+            dhcpScopes
+        );
+        if (linkedLeases > 0 || removedLeases > 0)
+        {
+            parsedByName["DhcpLeases"] = leases;
+            logger.LogInformation(
+                "Linked {LinkedLeaseCount} DHCP leases to their scopes and dropped {DroppedLeaseCount} leases of deleted scopes in an archive that predates the link.",
+                linkedLeases,
+                removedLeases
+            );
+        }
 
         // Every required entry is present and valid. The files are staged next to their targets
         // first, so a full disk or a permission error aborts here with nothing changed; the

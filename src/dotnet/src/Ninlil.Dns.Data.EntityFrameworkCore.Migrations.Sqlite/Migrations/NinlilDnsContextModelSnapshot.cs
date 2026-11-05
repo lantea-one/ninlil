@@ -353,6 +353,9 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(16)
                     .HasColumnType("TEXT");
 
+                b.Property<Guid>("ScopeId")
+                    .HasColumnType("TEXT");
+
                 b.Property<string>("ScopeName")
                     .IsRequired()
                     .HasMaxLength(256)
@@ -370,11 +373,13 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("IpAddress");
 
-                b.HasIndex("ScopeName", "ClientIdentifier")
+                b.HasIndex("ScopeId", "ClientIdentifier")
                     .IsUnique();
 
-                b.HasIndex("ScopeName", "IpAddress")
+                b.HasIndex("ScopeId", "IpAddress")
                     .IsUnique();
+
+                b.HasIndex("ScopeName", "ClientIdentifier");
 
                 b.HasIndex("State", "LeaseExpiresAtUtc");
 

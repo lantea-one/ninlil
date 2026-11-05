@@ -46,7 +46,8 @@ public interface IDhcpScopeRepository : IRepository<DhcpScopeEntity>
     ///     This method reads a scope's current name from the database, never from a tracked
     ///     instance, so an engine that holds a stale scope object can see a rename that has
     ///     committed since (<c>Dhcpv4LeaseAllocationService</c> and
-    ///     <c>Dhcpv6LeaseAllocationService</c> use it after each lease write).
+    ///     <c>Dhcpv6LeaseAllocationService</c> use it after each lease write to keep the lease's
+    ///     display copy of the name, <see cref="LeaseEntity.ScopeName" />, current).
     /// </summary>
     /// <param name="scopeId">The identifier of the scope.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

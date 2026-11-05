@@ -289,8 +289,9 @@ public static class MongoIndexCatalog
         created += await EnsureCollectionAsync(
             context.Leases,
             new IndexSet<LeaseEntity>()
+                .Asc(lease => lease.ScopeId, lease => lease.ClientIdentifier)
+                .Asc(lease => lease.ScopeId, lease => lease.IpAddress)
                 .Asc(lease => lease.ScopeName, lease => lease.ClientIdentifier)
-                .Asc(lease => lease.ScopeName, lease => lease.IpAddress)
                 .Asc(lease => lease.IpAddress)
                 .Asc(lease => lease.State, lease => lease.LeaseExpiresAtUtc),
             logger,

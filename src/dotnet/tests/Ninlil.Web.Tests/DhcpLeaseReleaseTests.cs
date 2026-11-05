@@ -84,6 +84,8 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
             }
         );
         scopeResponse.EnsureSuccessStatusCode();
+        DhcpScopeDetail grantScope =
+            await scopeResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
 
         // Grant a lease through the engine with DISCOVER, REQUEST and ACK, not a saved row.
         IDhcpv4RequestHandler handler =
@@ -119,7 +121,7 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
             ILeaseRepository leaseRepository =
                 scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
             grantedLease = await leaseRepository.FindByClientIdentifierAsync(
-                scopeName,
+                grantScope.Id,
                 "aa:bb:cc:dd:ee:50"
             );
         }
@@ -181,6 +183,7 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
                     Id = leaseId,
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = Guid.NewGuid(),
                     ScopeName = scopeName,
                     ClientIdentifier = "aa:bb:cc:dd:ee:99",
                     IpAddress = "192.168.78.10",

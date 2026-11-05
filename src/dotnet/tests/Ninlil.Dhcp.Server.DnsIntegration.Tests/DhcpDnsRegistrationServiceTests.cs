@@ -161,7 +161,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     }
 
     private async Task<LeaseEntity> SeedLeaseAsync(
-        string scopeName,
+        DhcpScopeEntity scopeEntity,
         string ipAddress,
         string hostName,
         LeaseStateEnum state = LeaseStateEnum.Active,
@@ -175,7 +175,8 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             Id = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
             ProtocolVersion = protocol,
-            ScopeName = scopeName,
+            ScopeId = scopeEntity.Id,
+            ScopeName = scopeEntity.Name,
             ClientIdentifier = clientIdentifier,
             IpAddress = ipAddress,
             HostName = hostName,
@@ -210,12 +211,33 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
         await _unitOfWork.SaveChangesAsync();
     }
 
+    /// <summary>
+    ///     A lease belongs to its scope by id, so renaming the scope (a write to the scope row
+    ///     alone) keeps the lease's DNS registration working.
+    /// </summary>
+    [Fact]
+    public async Task HandleLeaseChangeAsync_AfterTheScopeIsRenamed_StillRegistersTheLease()
+    {
+        Guid zoneId = await SeedForwardZoneAsync("renamed.example.com");
+        DhcpScopeEntity scope = await SeedDhcpScopeAsync("before-rename", zoneId);
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.31", "renamed-host");
+        scope.Name = "after-rename";
+        _scopeRepository.Update(scope);
+        await _unitOfWork.SaveChangesAsync();
+
+        DhcpDnsRegistrationResult result = await CreateService()
+            .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
+
+        Assert.False(result.WasSkipped);
+        Assert.Single(await GetManagedRecordsAsync(zoneId));
+    }
+
     [Fact]
     public async Task HandleLeaseChangeAsync_GrantedEventForARowThatExpired_RemovesTheRecord()
     {
         Guid zoneId = await SeedForwardZoneAsync("o1.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.30", "late");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.30", "late");
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         Assert.Single(await GetManagedRecordsAsync(zoneId));
         await SetStateAsync(lease, LeaseStateEnum.Expired);
@@ -232,7 +254,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("o2.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.31", "renewed");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.31", "renewed");
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Expired);
@@ -246,7 +268,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("o3.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.32", "back");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.32", "back");
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Released);
@@ -263,7 +285,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync($"o4{state}.example.com".ToLowerInvariant());
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.33", "pending");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.33", "pending");
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         await SetStateAsync(lease, state);
 
@@ -290,7 +312,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.15", "workstation");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.15", "workstation");
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
@@ -313,7 +335,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease2.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.16", "printer");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.16", "printer");
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         DhcpDnsRegistrationResult second = await CreateService()
@@ -330,7 +352,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease3.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.17", "laptop");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.17", "laptop");
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
 
@@ -354,7 +376,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease4.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.19", "old-name");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.19", "old-name");
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
 
@@ -374,7 +396,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease5.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.21", "phone");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.21", "phone");
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         Assert.Single(await GetManagedRecordsAsync(zoneId));
@@ -392,7 +414,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease6.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.22", "tablet");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.22", "tablet");
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         Assert.Single(await GetManagedRecordsAsync(zoneId));
@@ -409,7 +431,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     public async Task HandleLeaseChangeAsync_ScopeWithNoDesignatedZone_IsSkipped()
     {
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", dnsZoneId: null);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.23", "console");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.23", "console");
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
@@ -422,7 +444,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease7.example.com", ZoneTypeEnum.Secondary);
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.24", "camera");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.24", "camera");
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
@@ -436,7 +458,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease8.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.25", hostName: null);
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.25", hostName: null);
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
@@ -450,7 +472,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("lease9.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.26", "My_Phone!!");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.26", "My_Phone!!");
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
@@ -533,7 +555,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             AData("192.0.2.200"),
             null
         );
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.30", "nas");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.30", "nas");
         CapturingLogger logger = new();
 
         DhcpDnsRegistrationResult result = await CreateService(logger)
@@ -566,7 +588,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             null
         );
         LeaseEntity lease = await SeedLeaseAsync(
-            scope.Name,
+            scope,
             "2001:db8::30",
             "nas",
             protocol: InternetProtocolVersionEnum.IPv6
@@ -591,7 +613,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             CnameData("www.c2.example.com"),
             null
         );
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.31", "web");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.31", "web");
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
@@ -612,7 +634,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             TxtData("reserved"),
             null
         );
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.32", "note");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.32", "note");
         CapturingLogger logger = new();
 
         DhcpDnsRegistrationResult result = await CreateService(logger)
@@ -629,14 +651,14 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
         Guid zoneId = await SeedForwardZoneAsync("c4.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
         LeaseEntity first = await SeedLeaseAsync(
-            scope.Name,
+            scope,
             "192.0.2.40",
             "printer",
             clientIdentifier: "11:11:11:11:11:11"
         );
         await CreateService().HandleLeaseChangeAsync(first.Id, DhcpLeaseChangeKindEnum.Granted);
         LeaseEntity second = await SeedLeaseAsync(
-            scope.Name,
+            scope,
             "192.0.2.41",
             "printer",
             clientIdentifier: "22:22:22:22:22:22"
@@ -658,7 +680,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
         Guid zoneId = await SeedForwardZoneAsync("c5.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
         LeaseEntity first = await SeedLeaseAsync(
-            scope.Name,
+            scope,
             "192.0.2.50",
             "printer",
             clientIdentifier: "11:11:11:11:11:11"
@@ -668,7 +690,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
         _leaseRepository.Update(first);
         await _unitOfWork.SaveChangesAsync();
         LeaseEntity second = await SeedLeaseAsync(
-            scope.Name,
+            scope,
             "192.0.2.51",
             "printer",
             clientIdentifier: "22:22:22:22:22:22"
@@ -694,7 +716,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             AData("192.0.2.60"),
             RecordManagedByFeatureEnum.Dhcp
         );
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.61", "camera");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.61", "camera");
 
         DhcpDnsRegistrationResult result = await CreateService()
             .HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
@@ -709,7 +731,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     {
         Guid zoneId = await SeedForwardZoneAsync("c7.example.com");
         DhcpScopeEntity scope = await SeedDhcpScopeAsync("lan", zoneId);
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.10", "laptop");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.10", "laptop");
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
 
         lease.IpAddress = "192.0.2.11";
@@ -736,7 +758,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
             AData("192.0.2.201"),
             null
         );
-        LeaseEntity lease = await SeedLeaseAsync(scope.Name, "192.0.2.70", "old");
+        LeaseEntity lease = await SeedLeaseAsync(scope, "192.0.2.70", "old");
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
         Assert.Single(await GetManagedRecordsAsync(zoneId));
 

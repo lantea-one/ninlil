@@ -6487,7 +6487,7 @@
         "tags": [
           "DhcpScopes"
         ],
-        "summary": "This action deletes a DHCP scope with its reservations and custom options, removed\nexplicitly rather than by a relational cascade delete, which MongoDB lacks. Leases\nrecorded for the scope (which refer to it by `ScopeName`, not id) are left alone as\noperational data, as `BackupEntityCatalog` treats them. A tag rule\nthat names the scope (`DhcpTagRuleEntity.ScopeId`) is also left alone and simply\nnever matches again. Returns 404 for an unknown id. Requires `dhcpscopes:write`.",
+        "summary": "This action deletes a DHCP scope with its reservations and custom options, removed\nexplicitly rather than by a relational cascade delete, which MongoDB lacks. Leases\nrecorded for the scope (which refer to it by `ScopeId`) are left alone as\noperational data, as `BackupEntityCatalog` treats them. A tag rule\nthat names the scope (`DhcpTagRuleEntity.ScopeId`) is also left alone and simply\nnever matches again. Returns 404 for an unknown id. Requires `dhcpscopes:write`.",
         "operationId": "apiDhcpScopesIdDelete",
         "parameters": [
           {

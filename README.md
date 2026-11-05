@@ -3190,7 +3190,8 @@ The services run on Linux. For macOS and Windows, see [Download a binary](#downl
   and lease times. A scope is for IPv4 or for IPv6. A scope of kind `PrefixDelegation` hands out
   blocks of IPv6 addresses (prefixes) instead of single addresses.
 - A **lease** is an address that Ninlil has granted to one device for a limited time. A device
-  renews it before it ends.
+  renews it before it ends. A lease belongs to its scope, not to the scope's name, so renaming a
+  scope keeps its leases and their DNS records.
 - A **reservation** ties one address to one device, so the device always gets that address.
 - A **client identifier** is how Ninlil recognises a device: its hardware (MAC) address for
   DHCPv4, or its DHCP unique identifier (DUID) for DHCPv6.
@@ -3617,8 +3618,8 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   advertisement, and the sweep interval from the next sweep. The start and stop calls of the
   **DHCP Services** page change the running state without saving anything.
 - **A scope is removed with its settings, not its history.** Deleting a scope deletes its
-  reservations and custom options. Its leases stay as records. A tag rule that names the scope
-  stays and never matches.
+  reservations and custom options. Its leases stay as records, and nothing renews them. A tag
+  rule that names the scope stays and never matches.
 - **A cluster does not copy DHCP data** (see [Clustering, events and webhooks](#clustering-events-and-webhooks)).
   Each Ninlil instance that serves DHCP needs separate scopes, and two instances must not serve the
   same range. On MongoDB, do not point two instances at one database (see
@@ -5179,6 +5180,10 @@ cluster sync tombstones. It also leaves out the JWT signing key, the cluster nod
 anchor file and the ACME certificate files. A restore replaces all stored data with the content
 of the file. There is no partial or merged restore. Ninlil takes no backups by itself; run the
 backup when you want one.
+
+A backup taken before DHCP leases referred to their scope by id still restores. The restore
+relinks each lease to the scope in the file with the same name and drops the leases whose scope
+is not in the file, as the upgrade does for a live database.
 
 #### Before you start
 

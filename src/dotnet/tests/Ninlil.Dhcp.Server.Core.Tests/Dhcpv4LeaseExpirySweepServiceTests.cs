@@ -42,7 +42,7 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
             "192.0.2.140"
         );
         LeaseEntity lease = await SeedActiveLeaseAsync(
-            scope.Name,
+            scope,
             "05:05:05:05:05:05",
             "192.0.2.140",
             DateTimeOffset.UtcNow.AddMinutes(-1)
@@ -73,7 +73,7 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
             "192.0.2.141"
         );
         await SeedActiveLeaseAsync(
-            scope.Name,
+            scope,
             "06:06:06:06:06:06",
             "192.0.2.141",
             DateTimeOffset.UtcNow.AddHours(1)
@@ -141,7 +141,7 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
             "192.0.2.142"
         );
         await SeedActiveLeaseAsync(
-            scope.Name,
+            scope,
             "07:07:07:07:07:07",
             "192.0.2.142",
             DateTimeOffset.UtcNow.AddMinutes(-1)
@@ -155,7 +155,7 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
                 {
                     // The renewal commits through its own scope between the sweep's load and write.
                     if (method.Name == nameof(ILeaseRepository.ListAsync))
-                        await RenewAsync(scope.Name, "07:07:07:07:07:07", renewedExpiry);
+                        await RenewAsync(scope, "07:07:07:07:07:07", renewedExpiry);
                 }
             ),
             new StaticOptionsMonitor(TimeSpan.FromMinutes(1)),
@@ -173,7 +173,7 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
     }
 
     private async Task RenewAsync(
-        string scopeName,
+        DhcpScopeEntity scopeEntity,
         string clientIdentifier,
         DateTimeOffset expiresAtUtc
     )
@@ -181,7 +181,7 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
         await using AsyncServiceScope scope = _host.Host.Services.CreateAsyncScope();
         ILeaseRepository repository = scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
         LeaseEntity lease = await repository.FindByClientIdentifierAsync(
-            scopeName,
+            scopeEntity.Id,
             clientIdentifier
         );
         lease.LeaseExpiresAtUtc = expiresAtUtc;
@@ -211,7 +211,7 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
     }
 
     private async Task<LeaseEntity> SeedActiveLeaseAsync(
-        string scopeName,
+        DhcpScopeEntity scopeEntity,
         string clientIdentifier,
         string ipAddress,
         DateTimeOffset leaseExpiresAtUtc
@@ -222,7 +222,8 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
             Id = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
             ProtocolVersion = InternetProtocolVersionEnum.IPv4,
-            ScopeName = scopeName,
+            ScopeId = scopeEntity.Id,
+            ScopeName = scopeEntity.Name,
             ClientIdentifier = clientIdentifier,
             IpAddress = ipAddress,
             State = LeaseStateEnum.Active,

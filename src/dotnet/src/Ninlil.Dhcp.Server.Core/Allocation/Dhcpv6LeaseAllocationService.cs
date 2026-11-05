@@ -74,8 +74,8 @@ public sealed class Dhcpv6LeaseAllocationService(
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeNameAsync(
-            scope.Name,
+        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeIdAsync(
+            scope.Id,
             cancellationToken
         );
         LeaseEntity existing = leases.FirstOrDefault(lease =>
@@ -127,7 +127,7 @@ public sealed class Dhcpv6LeaseAllocationService(
 
         // Another client's row at the candidate is non-blocking (every path skipped blocking
         // rows), so delete it first, in its own SaveChanges. The client's row, new or not, would
-        // otherwise hit the (ScopeName, IpAddress) unique index.
+        // otherwise hit the (ScopeId, IpAddress) unique index.
         await RemoveOccupyingLeaseIfAnyAsync(
             leases,
             candidate.ToString(),
@@ -191,8 +191,8 @@ public sealed class Dhcpv6LeaseAllocationService(
                 return null;
         }
 
-        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeNameAsync(
-            scope.Name,
+        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeIdAsync(
+            scope.Id,
             cancellationToken
         );
         LeaseEntity existingByClient = leases.FirstOrDefault(lease =>
@@ -217,7 +217,7 @@ public sealed class Dhcpv6LeaseAllocationService(
                 return null;
 
             // A non-blocking row of another client is deleted first, in its own SaveChanges, so
-            // claiming the address does not hit the (ScopeName, IpAddress) unique index.
+            // claiming the address does not hit the (ScopeId, IpAddress) unique index.
             leaseRepository.Remove(existingByAddress);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
@@ -254,7 +254,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
         LeaseEntity lease = await leaseRepository.FindByIpAddressAsync(
-            scope.Name,
+            scope.Id,
             declinedAddress.ToString(),
             cancellationToken
         );
@@ -309,8 +309,8 @@ public sealed class Dhcpv6LeaseAllocationService(
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeNameAsync(
-            scope.Name,
+        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeIdAsync(
+            scope.Id,
             cancellationToken
         );
         LeaseEntity existing = leases.FirstOrDefault(lease =>
@@ -395,8 +395,8 @@ public sealed class Dhcpv6LeaseAllocationService(
         )
             return null;
 
-        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeNameAsync(
-            scope.Name,
+        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeIdAsync(
+            scope.Id,
             cancellationToken
         );
         LeaseEntity existingByClient = leases.FirstOrDefault(lease =>
@@ -414,7 +414,7 @@ public sealed class Dhcpv6LeaseAllocationService(
         )
             return null;
 
-        // The unique index is on (ScopeName, IpAddress), so a non-blocking row holding exactly
+        // The unique index is on (ScopeId, IpAddress), so a non-blocking row holding exactly
         // this base is removed whatever its length.
         LeaseEntity existingByPrefix = leases.FirstOrDefault(lease =>
             string.Equals(lease.IpAddress, prefix.ToString(), StringComparison.OrdinalIgnoreCase)
@@ -457,7 +457,7 @@ public sealed class Dhcpv6LeaseAllocationService(
     )
     {
         LeaseEntity lease = await leaseRepository.FindByClientIdentifierAsync(
-            scope.Name,
+            scope.Id,
             clientKey,
             cancellationToken
         );
@@ -764,7 +764,7 @@ public sealed class Dhcpv6LeaseAllocationService(
     ///     This method deletes, in its own <c>SaveChanges</c>, another client's non-blocking row
     ///     that holds a value the client's row is about to claim (the client's own row, <paramref name="own" />,
     ///     is never removed), so the save does not hit the
-    ///     <c>(ScopeName, IpAddress)</c> unique index. The match ignores <c>PrefixLength</c>
+    ///     <c>(ScopeId, IpAddress)</c> unique index. The match ignores <c>PrefixLength</c>
     ///     because the index does not include it (see <c>Dhcpv4LeaseAllocationService</c>).
     /// </summary>
     private async Task RemoveOccupyingLeaseIfAnyAsync(
@@ -857,6 +857,7 @@ public sealed class Dhcpv6LeaseAllocationService(
             Id = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
             ProtocolVersion = InternetProtocolVersionEnum.IPv6,
+            ScopeId = scope.Id,
             ScopeName = scope.Name,
             ClientIdentifier = clientKey,
             IpAddress = ipAddress?.ToString(),
@@ -889,13 +890,14 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method closes the race with a scope rename. <c>DhcpScopesController</c> moves the
-    ///     leases of a renamed scope to the new name, but a lease written under the old name
-    ///     after that move's read would stay there. After each lease write this method reads the
-    ///     scope's current name from the database; when it differs from the row's, the row is
-    ///     corrected and saved again. If the rename commits after this check, the controller's
-    ///     second pass moves the row instead. The request's own scope object keeps its stale
-    ///     name; only the row changes. A scope deleted meanwhile leaves the row as it is.
+    ///     This method keeps the lease's display copy of the scope name current. Leases are found
+    ///     by scope id, so a rename never hides one, but <c>DhcpScopesController</c> rewrites the
+    ///     copies only for the rows it reads, and a row written with the old name after that read
+    ///     would keep it. After each lease write this method reads the scope's current name from
+    ///     the database; when it differs from the row's, the row is corrected and saved again. If
+    ///     the rename commits after this check, the controller's second pass corrects the row
+    ///     instead. The request's own scope object keeps its stale name; only the row changes. A
+    ///     scope deleted meanwhile leaves the row as it is.
     /// </summary>
     private async Task FollowScopeRenameAsync(
         DhcpScopeEntity scope,
@@ -912,7 +914,7 @@ public sealed class Dhcpv6LeaseAllocationService(
             return;
 
         logger.LogInformation(
-            "Moving lease {LeaseId} from scope '{OldName}' to '{NewName}': the scope was renamed while the lease was written.",
+            "Correcting the scope name on lease {LeaseId} from '{OldName}' to '{NewName}': the scope was renamed while the lease was written.",
             lease.Id,
             lease.ScopeName,
             currentName

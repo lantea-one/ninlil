@@ -105,6 +105,7 @@ public abstract class LeaseConditionalExpiryTestsBase(EngineFixtureBase fixture)
             Id = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
             ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+            ScopeId = Guid.NewGuid(),
             ScopeName = "expiry",
             ClientIdentifier = "client-expiry",
             IpAddress = "10.0.0.1",

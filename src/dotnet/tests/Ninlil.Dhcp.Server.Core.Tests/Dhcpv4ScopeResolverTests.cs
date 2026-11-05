@@ -47,7 +47,7 @@ public sealed class Dhcpv4ScopeResolverTests : IAsyncLifetime
             "10.0.2.10",
             "10.0.2.20"
         );
-        await SeedLeaseAsync(scope1.Name, "aa:bb:cc:00:00:01", "10.0.1.10");
+        await SeedLeaseAsync(scope1, "aa:bb:cc:00:00:01", "10.0.1.10");
 
         DhcpScopeEntity resolved = await ResolveAsync(
             NewMessage([0xaa, 0xbb, 0xcc, 0, 0, 0x01], giaddr: "10.0.2.1")
@@ -87,7 +87,7 @@ public sealed class Dhcpv4ScopeResolverTests : IAsyncLifetime
     {
         DhcpScopeEntity scope1 = await _host.SeedScopeAsync("off-1", "10.3.1.10", "10.3.1.20");
         await _host.SeedScopeAsync("off-2", "10.3.2.10", "10.3.2.20");
-        await SeedLeaseAsync(scope1.Name, "aa:bb:cc:00:00:04", "10.3.1.10");
+        await SeedLeaseAsync(scope1, "aa:bb:cc:00:00:04", "10.3.1.10");
 
         Dhcpv4Message discover = NewMessage([0xaa, 0xbb, 0xcc, 0, 0, 0x04], giaddr: "10.3.2.1");
         discover.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
@@ -107,12 +107,7 @@ public sealed class Dhcpv4ScopeResolverTests : IAsyncLifetime
     {
         DhcpScopeEntity scope1 = await _host.SeedScopeAsync("ci-1", "10.4.1.10", "10.4.1.20");
         DhcpScopeEntity scope2 = await _host.SeedScopeAsync("ci-2", "10.4.2.10", "10.4.2.20");
-        await SeedLeaseAsync(
-            scope1.Name,
-            "aa:bb:cc:00:00:05",
-            "10.4.1.10",
-            LeaseStateEnum.Released
-        );
+        await SeedLeaseAsync(scope1, "aa:bb:cc:00:00:05", "10.4.1.10", LeaseStateEnum.Released);
 
         Dhcpv4Message request = NewMessage([0xaa, 0xbb, 0xcc, 0, 0, 0x05], giaddr: null);
         request.ClientIpAddress = IPAddress.Parse("10.4.2.15");
@@ -127,7 +122,7 @@ public sealed class Dhcpv4ScopeResolverTests : IAsyncLifetime
     {
         DhcpScopeEntity scope1 = await _host.SeedScopeAsync("mix-1", "10.5.1.10", "10.5.1.20");
         DhcpScopeEntity scope2 = await _host.SeedScopeAsync("mix-2", "10.5.2.10", "10.5.2.20");
-        await SeedLeaseAsync(scope1.Name, "aa:bb:cc:00:00:06", "10.5.1.10");
+        await SeedLeaseAsync(scope1, "aa:bb:cc:00:00:06", "10.5.1.10");
         await _host.SeedReservationAsync(scope2.Id, "aa:bb:cc:00:00:06", "10.5.2.15");
 
         DhcpScopeEntity resolved = await ResolveAsync(
@@ -142,7 +137,7 @@ public sealed class Dhcpv4ScopeResolverTests : IAsyncLifetime
     {
         await _host.SeedScopeAsync("row-1", "10.6.1.10", "10.6.1.20");
         DhcpScopeEntity scope2 = await _host.SeedScopeAsync("row-2", "10.6.2.10", "10.6.2.20");
-        await SeedLeaseAsync(scope2.Name, "aa:bb:cc:00:00:07", "10.6.2.10");
+        await SeedLeaseAsync(scope2, "aa:bb:cc:00:00:07", "10.6.2.10");
 
         DhcpScopeEntity resolved = await ResolveAsync(
             NewMessage([0xaa, 0xbb, 0xcc, 0, 0, 0x07], giaddr: null)
@@ -184,7 +179,7 @@ public sealed class Dhcpv4ScopeResolverTests : IAsyncLifetime
     ///     This method saves a lease row through the repository in a separate scope.
     /// </summary>
     private async Task SeedLeaseAsync(
-        string scopeName,
+        DhcpScopeEntity scopeEntity,
         string clientIdentifier,
         string ipAddress,
         LeaseStateEnum state = LeaseStateEnum.Active
@@ -199,7 +194,8 @@ public sealed class Dhcpv4ScopeResolverTests : IAsyncLifetime
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
-                    ScopeName = scopeName,
+                    ScopeId = scopeEntity.Id,
+                    ScopeName = scopeEntity.Name,
                     ClientIdentifier = clientIdentifier,
                     IpAddress = ipAddress,
                     State = state,

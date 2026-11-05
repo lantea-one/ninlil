@@ -494,6 +494,7 @@ public sealed class Dhcpv6AllocationIntegrityTests : IAsyncLifetime
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv6,
+                    ScopeId = scope.Id,
                     ScopeName = scope.Name,
                     ClientIdentifier = clientIdentifier,
                     IpAddress = ipAddress,

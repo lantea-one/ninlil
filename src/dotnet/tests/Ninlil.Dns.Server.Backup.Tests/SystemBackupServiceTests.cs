@@ -394,6 +394,7 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         {
             Id = Guid.NewGuid(),
             ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+            ScopeId = scope.Id,
             ScopeName = "lan",
             ClientIdentifier = "11:22:33:44:55:66",
             IpAddress = "192.0.2.101",

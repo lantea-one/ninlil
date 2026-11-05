@@ -11,6 +11,17 @@ outside Forgejo.
 
 ## Unreleased
 
+### Behaviour worth knowing
+
+- **Renaming a DHCP scope keeps its leases.** A lease refers to its scope by id, so a renamed
+  scope keeps its leases, the DHCP engine renews them, and their DNS records stay registered. On
+  upgrade, each existing lease takes the id of the scope with its scope name, and a lease whose
+  scope name matches no scope (its scope was deleted) is deleted. A backup taken before this
+  change restores the same way: its leases are relinked by scope name and the orphans are
+  dropped. See [DHCP, DHCPv6 and Router
+  Advertisement](./README.md#dhcp-dhcpv6-and-router-advertisement)
+  ([#58](https://git.lantea.one/lantea-one/ninlil/issues/58)).
+
 ## v2026.10.31.1
 
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with

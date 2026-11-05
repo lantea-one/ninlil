@@ -26,6 +26,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
     public async Task AddAsync_ThenGetByIdAsync_RoundTripsEveryField()
     {
         Guid leaseId = Guid.NewGuid();
+        Guid scopeId = Guid.NewGuid();
         DateTimeOffset obtainedAtUtc = DateTimeOffset.UtcNow;
         DateTimeOffset expiresAtUtc = obtainedAtUtc.AddHours(24);
 
@@ -41,6 +42,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
                     Id = leaseId,
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = scopeId,
                     ScopeName = "lease-round-trip-scope",
                     ClientIdentifier = "00:11:22:33:44:55",
                     IpAddress = "192.0.2.42",
@@ -64,6 +66,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
 
         Assert.NotNull(lease);
         Assert.Equal(InternetProtocolVersionEnum.IPv4, lease.ProtocolVersion);
+        Assert.Equal(scopeId, lease.ScopeId);
         Assert.Equal("lease-round-trip-scope", lease.ScopeName);
         Assert.Equal("00:11:22:33:44:55", lease.ClientIdentifier);
         Assert.Equal("192.0.2.42", lease.IpAddress);
@@ -74,9 +77,10 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task FindByClientIdentifierAsync_And_FindByIpAddressAsync_And_ListByScopeNameAsync_AllWork()
+    public async Task FindByClientIdentifierAsync_And_FindByIpAddressAsync_And_ListByScopeIdAsync_AllWork()
     {
         const string scopeName = "lease-lookup-scope";
+        Guid scopeId = Guid.NewGuid();
 
         await using (AsyncServiceScope writeScope = _testHost.Host.Services.CreateAsyncScope())
         {
@@ -90,6 +94,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = scopeId,
                     ScopeName = scopeName,
                     ClientIdentifier = "aa:aa:aa:aa:aa:aa",
                     IpAddress = "192.0.2.50",
@@ -102,6 +107,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = scopeId,
                     ScopeName = scopeName,
                     ClientIdentifier = "bb:bb:bb:bb:bb:bb",
                     IpAddress = "192.0.2.51",
@@ -115,6 +121,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = Guid.NewGuid(),
                     ScopeName = "other-scope",
                     ClientIdentifier = "cc:cc:cc:cc:cc:cc",
                     IpAddress = "192.0.2.52",
@@ -130,20 +137,18 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
             readScope.ServiceProvider.GetRequiredService<ILeaseRepository>();
 
         LeaseEntity byClient = await readRepository.FindByClientIdentifierAsync(
-            scopeName,
+            scopeId,
             "aa:aa:aa:aa:aa:aa"
         );
-        LeaseEntity byAddress = await readRepository.FindByIpAddressAsync(scopeName, "192.0.2.51");
-        IReadOnlyList<LeaseEntity> scopeLeases = await readRepository.ListByScopeNameAsync(
-            scopeName
-        );
+        LeaseEntity byAddress = await readRepository.FindByIpAddressAsync(scopeId, "192.0.2.51");
+        IReadOnlyList<LeaseEntity> scopeLeases = await readRepository.ListByScopeIdAsync(scopeId);
 
         Assert.NotNull(byClient);
         Assert.Equal("192.0.2.50", byClient.IpAddress);
         Assert.NotNull(byAddress);
         Assert.Equal("bb:bb:bb:bb:bb:bb", byAddress.ClientIdentifier);
         Assert.Equal(2, scopeLeases.Count);
-        Assert.All(scopeLeases, lease => Assert.Equal(scopeName, lease.ScopeName));
+        Assert.All(scopeLeases, lease => Assert.Equal(scopeId, lease.ScopeId));
     }
 
     /// <summary>
@@ -190,6 +195,9 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
         );
     }
 
+    /// <summary>This field is the scope every lease of the active-lease test belongs to.</summary>
+    private static readonly Guid ActiveListScopeId = Guid.NewGuid();
+
     /// <summary>
     ///     This method builds a lease with a unique client identifier for the active-lease test.
     /// </summary>
@@ -203,6 +211,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
             Id = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
             ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+            ScopeId = ActiveListScopeId,
             ScopeName = "active-list-scope",
             ClientIdentifier = $"client-{ipAddress}",
             IpAddress = ipAddress,

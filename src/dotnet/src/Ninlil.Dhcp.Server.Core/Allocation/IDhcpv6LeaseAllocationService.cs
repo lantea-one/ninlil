@@ -14,7 +14,7 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///     <para>
 ///         <b>One IA_NA and one IA_PD per message.</b> A client may send several, but the
 ///         <c>LeaseConfiguration</c> unique index allows one lease row per
-///         <c>(ScopeName, ClientIdentifier)</c>; including the IAID in that key would need a
+///         <c>(ScopeId, ClientIdentifier)</c>; including the IAID in that key would need a
 ///         schema change. <see cref="Dhcpv6RequestHandler" /> therefore handles only the first
 ///         IA_NA and the first IA_PD of a message, which covers the usual client asking for one
 ///         address and at most one prefix.

@@ -25,7 +25,7 @@ public interface IDhcpScopeStatisticsService
     ///     </para>
     ///     <para>
     ///         <b>Counts.</b> Leases come from
-    ///         <see cref="Ninlil.Dhcp.Data.Abstractions.Repository.ILeaseRepository.ListByScopeNameAsync" />
+    ///         <see cref="Ninlil.Dhcp.Data.Abstractions.Repository.ILeaseRepository.ListByScopeIdAsync" />
     ///         and reservations from
     ///         <see cref="Ninlil.Dhcp.Data.Abstractions.Repository.IDhcpReservationRepository" />
     ///         (see <see cref="DhcpScopeStatistics" /> for each field).

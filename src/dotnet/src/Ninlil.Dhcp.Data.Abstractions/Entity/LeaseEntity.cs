@@ -19,8 +19,19 @@ public class LeaseEntity : AuditableEntityBase
     public InternetProtocolVersionEnum ProtocolVersion { get; set; }
 
     /// <summary>
-    ///     This property contains the name of the scope this lease came from
-    ///     (<see cref="DhcpScopeEntity.Name" />).
+    ///     This property contains the identifier of the scope this lease came from
+    ///     (<see cref="Ninlil.Dns.Data.Abstractions.Entity.EntityBase.Id" />). It is the link between a lease and its scope, so a
+    ///     renamed scope keeps its leases. A scope that was deleted leaves its leases behind with
+    ///     an identifier that no scope holds any more.
+    /// </summary>
+    public Guid ScopeId { get; set; }
+
+    /// <summary>
+    ///     This property contains a copy of the scope's name (<see cref="DhcpScopeEntity.Name" />)
+    ///     for display only: the REST API shows it, the all-scopes lease list is ordered by it,
+    ///     and it is the only trace of the scope's name once the scope is deleted. Nothing looks a
+    ///     scope up by it. A scope rename rewrites the copy, and the allocation services correct a
+    ///     row they wrote under a stale name.
     /// </summary>
     public string ScopeName { get; set; }
 

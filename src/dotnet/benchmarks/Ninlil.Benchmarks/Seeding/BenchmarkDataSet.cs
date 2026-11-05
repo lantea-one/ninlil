@@ -36,7 +36,7 @@ public static class BenchmarkDataSet
     ///     This constant contains the version of the generator; it is part of the database name
     ///     and of the marker zone name.
     /// </summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>
     ///     This constant contains the seed of the random generator.
@@ -713,6 +713,7 @@ public static class BenchmarkDataSet
                         Id = Guid.NewGuid(),
                         CreatedAtUtc = now,
                         ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                        ScopeId = scopes[scope].Id,
                         ScopeName = scopes[scope].Name,
                         ClientIdentifier = $"lease-client-{n:D6}",
                         IpAddress = $"10.{100 + scope}.{host / 250 + 1}.{host % 250 + 1}",

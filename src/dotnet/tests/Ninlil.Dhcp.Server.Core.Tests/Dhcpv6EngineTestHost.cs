@@ -260,13 +260,20 @@ public sealed class Dhcpv6EngineTestHost : IAsyncDisposable
 
     /// <summary>
     ///     This method reads a client's lease in a scope, if any, in a separate scope, so the test
-    ///     sees what the engine last saved.
+    ///     sees what the engine last saved. The scope is named by its current name; the lease is
+    ///     found by the scope's id. It returns <see langword="null" /> when no scope has the name.
     /// </summary>
     public async Task<LeaseEntity> FindLeaseAsync(string scopeName, string clientIdentifier)
     {
         await using AsyncServiceScope scope = Host.Services.CreateAsyncScope();
+        DhcpScopeEntity dhcpScope = await scope
+            .ServiceProvider.GetRequiredService<IDhcpScopeRepository>()
+            .FindByNameAsync(scopeName);
+        if (dhcpScope is null)
+            return null;
+
         ILeaseRepository repository = scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
-        return await repository.FindByClientIdentifierAsync(scopeName, clientIdentifier);
+        return await repository.FindByClientIdentifierAsync(dhcpScope.Id, clientIdentifier);
     }
 
     /// <summary>
