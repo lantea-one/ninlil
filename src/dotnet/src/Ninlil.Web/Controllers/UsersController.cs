@@ -427,7 +427,10 @@ public class UsersController(
 
     /// <summary>
     ///     This action changes the caller's password. It requires the current password; a wrong one
-    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. A successful change replaces
+    ///     returns 400 with Identity's <c>PasswordMismatch</c> error and counts toward account
+    ///     lockout. While the account is locked out, or when the wrong password reaches the
+    ///     lockout limit, it returns 423 and refuses even the correct password until the lockout
+    ///     ends. A successful change replaces
     ///     the account's security stamp and revokes every refresh token of the account, including
     ///     the caller's own session: every access token issued before the change, the caller's
     ///     included, answers 401 on its next request, and the caller signs in again with the new
@@ -444,6 +447,10 @@ public class UsersController(
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
             return Unauthorized();
+
+        IActionResult refused = await CheckCurrentPasswordAsync(user, request.CurrentPassword);
+        if (refused is not null)
+            return refused;
 
         IdentityResult result = await userManager.ChangePasswordAsync(
             user,
@@ -463,8 +470,76 @@ public class UsersController(
     }
 
     /// <summary>
+    ///     This method checks the current password a self-service action asks for. It returns
+    ///     <see langword="null" /> when the password is right, a 423 result while the account is
+    ///     locked out, and throws a 400 <see cref="ValidationException" /> with Identity's
+    ///     <c>PasswordMismatch</c> error for a wrong password.
+    /// </summary>
+    /// <remarks>
+    ///     A wrong password counts toward Identity lockout here, unlike at sign-in
+    ///     (<see cref="AuthController.Login" />), which is open to anyone who knows a username and
+    ///     so must not let them lock that account. This check runs only for a caller who already
+    ///     holds a valid access token, so counting failures cannot be used to lock out a stranger,
+    ///     and it stops a stolen token from guessing the password without limit. The policy is
+    ///     the one Identity holds in <see cref="IdentityOptions.Lockout" />, and the 423 matches
+    ///     the status sign-in gives for a locked account. A right password resets the failed
+    ///     count, as a sign-in does.
+    /// </remarks>
+    private async Task<IActionResult> CheckCurrentPasswordAsync(UserEntity user, string password)
+    {
+        if (await userManager.IsLockedOutAsync(user))
+            return LockedOutResult();
+
+        if (await userManager.CheckPasswordAsync(user, password))
+        {
+            if (user.AccessFailedCount > 0)
+            {
+                user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+                (await userManager.ResetAccessFailedCountAsync(user)).ThrowIfFailed();
+                eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
+            }
+
+            return null;
+        }
+
+        if (userManager.SupportsUserLockout)
+        {
+            user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+            (await userManager.AccessFailedAsync(user)).ThrowIfFailed();
+            eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
+
+            // The attempt that reaches the limit is answered like the ones after it.
+            if (await userManager.IsLockedOutAsync(user))
+                return LockedOutResult();
+        }
+
+        IdentityResult.Failed(userManager.ErrorDescriber.PasswordMismatch()).ThrowIfFailed();
+        return null;
+    }
+
+    /// <summary>
+    ///     This method builds the 423 answer for a locked-out account, with a message that says
+    ///     the password is not checked until the lockout ends.
+    /// </summary>
+    private ObjectResult LockedOutResult() =>
+        StatusCode(
+            StatusCodes.Status423Locked,
+            new ProblemDetails
+            {
+                Status = StatusCodes.Status423Locked,
+                Title = "Account locked",
+                Detail =
+                    "Too many wrong current passwords. The account is locked out, and the "
+                    + "password is not accepted until the lockout ends.",
+            }
+        );
+
+    /// <summary>
     ///     This action changes the caller's own e-mail address. It requires the current password; a
-    ///     wrong one returns 400 with Identity's <c>PasswordMismatch</c> error. An invalid address
+    ///     wrong one returns 400 with Identity's <c>PasswordMismatch</c> error and counts toward
+    ///     account lockout. While the account is locked out, or when the wrong password reaches
+    ///     the lockout limit, it returns 423 and refuses even the correct password until the
+    ///     lockout ends. An invalid address
     ///     or one another account uses returns 400 with Identity's error. Requires only a
     ///     signed-in caller.
     ///     <list type="bullet">
@@ -506,8 +581,9 @@ public class UsersController(
 
         // The password check comes first, so a stolen access token alone cannot learn which
         // addresses are taken or trigger an e-mail.
-        if (!await userManager.CheckPasswordAsync(user, request.CurrentPassword))
-            IdentityResult.Failed(userManager.ErrorDescriber.PasswordMismatch()).ThrowIfFailed();
+        IActionResult refused = await CheckCurrentPasswordAsync(user, request.CurrentPassword);
+        if (refused is not null)
+            return refused;
 
         string newEmail = request.NewEmail?.Trim();
         await ValidateNewEmailAsync(user, newEmail);
