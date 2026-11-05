@@ -3,10 +3,10 @@ namespace Ninlil.Dns.Identity.Options;
 
 /// <summary>
 ///     This class binds to the <c>Identity:EmailChange</c> section of the application's
-///     configuration and holds the setting the self-service e-mail change reads when a signed-in
-///     user asks to change their own e-mail address on the profile page. It is read through
-///     <c>IOptionsMonitor{EmailChangeOptions}</c>, so a change in the configuration file applies to
-///     the next request without a restart.
+///     configuration and holds the policy for a signed-in user changing their own e-mail address.
+///     It is registered with <c>Configure</c>, so a reader that takes
+///     <c>IOptionsMonitor{EmailChangeOptions}</c> sees a change in the configuration file without a
+///     restart. No endpoint offers the self-service change yet, so nothing reads it today.
 /// </summary>
 public sealed class EmailChangeOptions
 {
@@ -16,10 +16,9 @@ public sealed class EmailChangeOptions
     public const string SectionName = "Identity:EmailChange";
 
     /// <summary>
-    ///     This property controls whether a new address must be confirmed before it applies. When
-    ///     <see langword="true" /> (the default), a link goes to the new address and the change
-    ///     applies when the user opens it, which proves the user controls that mailbox. When
-    ///     <see langword="false" />, the change applies at once and no mail is sent.
+    ///     This property states whether a new address must be confirmed before it applies:
+    ///     <see langword="true" /> (the default) means the user must prove they control the new
+    ///     mailbox first; <see langword="false" /> means the change may apply at once.
     /// </summary>
     public bool RequireConfirmation { get; set; } = true;
 }

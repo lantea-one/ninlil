@@ -96,7 +96,8 @@ public static class ServiceCollectionIdentityExtension
         );
         instance.Configure<OidcSsoOptions>(configuration.GetSection(OidcSsoOptions.SectionName));
 
-        // Read through IOptionsMonitor, so a change of the setting applies without a restart.
+        // Configure (not a one-time bind), so an IOptionsMonitor reader sees a change without a
+        // restart.
         instance.Configure<EmailChangeOptions>(
             configuration.GetSection(EmailChangeOptions.SectionName)
         );
