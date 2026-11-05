@@ -60,7 +60,7 @@ public static class DhcpServiceRegistration
         // The DHCPv6 UDP transport is registered always, independently of the DHCPv4 choice above.
         // Dhcpv6ListenerHostedService checks Dhcpv6ProtocolOptions.Enable once at boot, off by default
         // for the same reason as DHCPv4. The DHCPv6 handler is its own either/or choice: the local engine
-        // (Ninlil.Dhcp.Server.Core) or a single-hop RFC 8415 relay agent (Ninlil.Dhcp.Server.Relay),
+        // (Ninlil.Dhcp.Server.Core) or a single-hop RFC 9915 relay agent (Ninlil.Dhcp.Server.Relay),
         // decided from Dhcpv6RelayOptions.Enable before dependency injection is built. The DHCPv4 and
         // DHCPv6 choices are independent of each other.
         bool dhcpv6RelayEnabled =

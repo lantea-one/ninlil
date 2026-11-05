@@ -7,7 +7,7 @@ namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 /// <summary>
 ///     This class represents a DHCP lease: the record that a client holds, was offered, or once
 ///     held an address (or, for DHCPv6 prefix delegation, a prefix). DHCPv4 (RFC 2131) and DHCPv6
-///     (RFC 8415) leases share this shape; <see cref="ProtocolVersion" /> says which protocol
+///     (RFC 9915) leases share this shape; <see cref="ProtocolVersion" /> says which protocol
 ///     issued it. The lease allocation services in <c>Ninlil.Dhcp.Server.Core</c> create and
 ///     update leases; an expired or released row stays as a record.
 /// </summary>

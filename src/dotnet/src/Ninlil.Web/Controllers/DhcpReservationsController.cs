@@ -22,7 +22,7 @@ namespace Ninlil.Web.Controllers;
 ///     <c>/api/dhcp-scopes/{scopeId}/reservations</c>. Reads need <c>dhcpscopes:read</c> and
 ///     changes need <c>dhcpscopes:write</c>, as for <see cref="DhcpScopesController" />.
 ///     <para>
-///         <b>Address scopes only.</b> RFC 8415 has no form for reserving a delegated prefix; a
+///         <b>Address scopes only.</b> RFC 9915 has no form for reserving a delegated prefix; a
 ///         reservation is always one fixed address. <see cref="Create" /> and
 ///         <see cref="Replace" /> therefore return 400 for a
 ///         <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope rather than accept a
@@ -131,7 +131,7 @@ public class DhcpReservationsController(
 
         if (scope.Kind == DhcpScopeKindEnum.PrefixDelegation)
             throw new ValidationException(
-                "A reservation cannot be created against a 'PrefixDelegation' scope -- RFC 8415 "
+                "A reservation cannot be created against a 'PrefixDelegation' scope -- RFC 9915 "
                     + "defines no delegated-prefix reservation shape of its own."
             );
 
@@ -215,7 +215,7 @@ public class DhcpReservationsController(
         DhcpScopeEntity scope = await scopeRepository.GetByIdAsync(scopeId, stoppingToken);
         if (scope is not null && scope.Kind == DhcpScopeKindEnum.PrefixDelegation)
             throw new ValidationException(
-                "A reservation cannot be updated against a 'PrefixDelegation' scope -- RFC 8415 "
+                "A reservation cannot be updated against a 'PrefixDelegation' scope -- RFC 9915 "
                     + "defines no delegated-prefix reservation shape of its own."
             );
 

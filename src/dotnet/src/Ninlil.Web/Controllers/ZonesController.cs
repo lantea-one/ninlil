@@ -626,9 +626,7 @@ public class ZonesController(
     private static void ValidateDnssecAlgorithm(DnssecAlgorithmEnum? algorithm)
     {
         if (algorithm is { } value && DnssecAlgorithmRegistry.IsSigningProhibited(value))
-            throw new ValidationException(
-                $"DNSSEC algorithm '{value}' is prohibited for signing (RFC 8624 §3.1)."
-            );
+            throw new ValidationException(DnssecAlgorithmRegistry.DescribeSigningRefusal(value));
     }
 
     /// <summary>

@@ -7,7 +7,7 @@ using System.Net.Sockets;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 8415 Section 21.22's IA Prefix (IAPREFIX) option: one prefix a
+///     This class represents RFC 9915 Section 21.22's IA Prefix (IAPREFIX) option: one prefix a
 ///     server has delegated (or a client is requesting or renewing) with its preferred and valid
 ///     lifetimes, the prefix counterpart of <see cref="Dhcpv6IdentityAssociationAddress" />. It
 ///     only appears nested inside a <see cref="Dhcpv6IdentityAssociationForPrefixDelegation" />
@@ -23,20 +23,20 @@ public class Dhcpv6IdentityAssociationPrefix
 
     /// <summary>
     ///     This property contains how long after this option is sent the prefix stays preferred.
-    ///     This is RFC 8415 Section 21.22's "preferred-lifetime" field, in whole seconds on the
+    ///     This is RFC 9915 Section 21.22's "preferred-lifetime" field, in whole seconds on the
     ///     wire.
     /// </summary>
     public TimeSpan PreferredLifetime { get; set; }
 
     /// <summary>
     ///     This property contains how long after this option is sent the prefix stays valid.
-    ///     This is RFC 8415 Section 21.22's "valid-lifetime" field, in whole seconds on the wire.
+    ///     This is RFC 9915 Section 21.22's "valid-lifetime" field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan ValidLifetime { get; set; }
 
     /// <summary>
     ///     This property contains the number of significant leading bits of <see cref="Prefix" />
-    ///     (RFC 8415 Section 21.22's "prefix-length" field).
+    ///     (RFC 9915 Section 21.22's "prefix-length" field).
     /// </summary>
     public byte PrefixLength { get; set; }
 
@@ -48,7 +48,7 @@ public class Dhcpv6IdentityAssociationPrefix
     public IPAddress Prefix { get; set; }
 
     /// <summary>
-    ///     This property contains the nested options RFC 8415 Section 21.22 allows, usually a
+    ///     This property contains the nested options RFC 9915 Section 21.22 allows, usually a
     ///     Status Code option about this prefix. It is normally empty.
     /// </summary>
     public List<Dhcpv6Option> Options { get; } = [];

@@ -6,7 +6,7 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Allocation;
 
 /// <summary>
-///     This interface makes the DHCPv6 lease decisions for RFC 8415 address assignment (IA_NA)
+///     This interface makes the DHCPv6 lease decisions for RFC 9915 address assignment (IA_NA)
 ///     and prefix delegation (IA_PD), the counterpart of <see cref="IDhcpv4LeaseAllocationService" />.
 ///     There is no prefix DECLINE, since a DECLINE reports duplicate address detection, which only
 ///     applies to addresses. <see cref="ReleaseAsync" /> serves both kinds, since giving back an
@@ -23,7 +23,7 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 public interface IDhcpv6LeaseAllocationService
 {
     /// <summary>
-    ///     This method picks an address for a SOLICIT without Rapid Commit (an ADVERTISE, RFC 8415
+    ///     This method picks an address for a SOLICIT without Rapid Commit (an ADVERTISE, RFC 9915
     ///     Section 18.3.9) and holds it for the client as an offer. The order is described on
     ///     <see cref="Dhcpv6LeaseAllocationService" />.
     /// </summary>
@@ -42,7 +42,7 @@ public interface IDhcpv6LeaseAllocationService
     );
 
     /// <summary>
-    ///     This method commits an address to a client for a REQUEST, RENEW or REBIND (RFC 8415
+    ///     This method commits an address to a client for a REQUEST, RENEW or REBIND (RFC 9915
     ///     Sections 18.3.2 and 18.3.4) or a Rapid Commit SOLICIT, making its lease
     ///     <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum.Active" /> with the given lifetimes.
     /// </summary>

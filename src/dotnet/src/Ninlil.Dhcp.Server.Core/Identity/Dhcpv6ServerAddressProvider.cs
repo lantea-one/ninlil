@@ -79,7 +79,7 @@ public sealed class Dhcpv6ServerAddressProvider(
 
                 // A link-local address (fe80::/10) only works on one interface, so it is a poor
                 // value for an option such as a DNS server. Look for a global or ULA address, as
-                // Dhcpv6RelayAgentAddressProvider does for the RFC 8415 "link-address".
+                // Dhcpv6RelayAgentAddressProvider does for the RFC 9915 "link-address".
                 if (
                     candidate.AddressFamily == AddressFamily.InterNetworkV6
                     && !candidate.IsIPv6LinkLocal

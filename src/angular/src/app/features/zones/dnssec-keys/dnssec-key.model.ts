@@ -47,8 +47,8 @@ export function dnssecAlgorithmNumber(algorithm: DnssecAlgorithmEnum | undefined
 
 /**
  * This constant lists the algorithms the server never signs with: RSAMD5, DSA, DSA-NSEC3-SHA1 and
- * ECC-GOST (RFC 8624 §3.1 says MUST NOT) and RSASHA1 and RSASHA1-NSEC3-SHA1 (that section says NOT
- * RECOMMENDED; the server bars them too).
+ * ECC-GOST (RFC 9904 §3 says MUST NOT) and RSASHA1 and RSASHA1-NSEC3-SHA1 (that section says NOT
+ * RECOMMENDED; the server bars them as its own rule).
  * It mirrors `DnssecAlgorithmRegistry.IsSigningProhibited`, and the backend answers 400 for any of
  * them. The key form, the rollover dialog, the zone form and the policy page offer only the
  * algorithms outside this list. The record forms (DNSKEY, RRSIG, DS, CERT) keep every value,

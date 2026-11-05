@@ -143,7 +143,7 @@ interface DhcpOptionRowViewState {
  * `nextServerAddress` are the PXE boot settings; a blank next server means this server's
  * address.
  *
- * <p>`kind` and `delegatedPrefixLength` apply to IPv6 only, since Prefix Delegation (RFC 8415)
+ * <p>`kind` and `delegatedPrefixLength` apply to IPv6 only, since Prefix Delegation (RFC 9915)
  * has no DHCPv4 form: the `kind` select shows for IPv6 scopes ({@link showKindField}) and the
  * prefix length for Prefix Delegation ({@link showDelegatedPrefixLengthField}). Switching away
  * resets the field that no longer applies, so a stale value is never sent. Changing the protocol

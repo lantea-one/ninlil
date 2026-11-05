@@ -89,8 +89,8 @@ public class DnssecKeyManagementService(
         // Rollover calls this method, so it is covered too.
         if (DnssecAlgorithmRegistry.IsSigningProhibited(algorithm))
             throw new ValidationException(
-                $"DNSSEC algorithm '{algorithm}' is prohibited for signing (RFC 8624 §3.1). "
-                    + "Use ECDSAP256SHA256, ED25519 or another current algorithm."
+                DnssecAlgorithmRegistry.DescribeSigningRefusal(algorithm)
+                    + " Use ECDSAP256SHA256, ED25519 or another current algorithm."
             );
 
         // Check the policy next so a disallowed algorithm gets the policy message rather than

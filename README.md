@@ -77,8 +77,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   RFC 8945 §5.3.1 multi-message TSIG chaining) over plain TCP, TLS, or QUIC.
 - **Recursive & validating resolution**: a full iterative walk (RFC 1034 §5.3.3) with RFC 9156 QNAME
   minimization, RFC 8767 serve-stale, prefetch, EDNS Client Subnet, and DNS64.
-- **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA, MD5 and GOST algorithms
-  are validated but never signed with, per RFC 8624), NSEC/NSEC3 (with RFC 5155 opt-out),
+- **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA and MD5 algorithms are
+  validated but never signed with, per RFC 9904 §3 and Ninlil's own SHA-1 rule; GOST is neither
+  signed nor validated), NSEC/NSEC3 (with RFC 5155 opt-out),
   automated proactive re-signing, and a full RFC 6781 automated key-rollover state machine
   (Pre-Publish for ZSKs, Double-Signature for KSKs, with automatic DS cutover when the parent zone
   is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side: the first check runs a
@@ -136,7 +137,7 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   INFORMATION-REQUEST with stateful addresses (IA_NA) and prefix delegation (IA_PD) side by side,
   and with optional Rapid Commit.
 - **A relay-agent mode** for each protocol, which replaces the local server for that protocol
-  (RFC 1542 and RFC 2131 §4.1 with the RFC 3046 option for DHCPv4, RFC 8415 §9 and §19
+  (RFC 1542 and RFC 2131 §4.1 with the RFC 3046 option for DHCPv4, RFC 9915 §9 and §19
   RELAY-FORW/RELAY-REPL for DHCPv6).
 - **Router Advertisement** (RFC 4861) for SLAAC, with the RFC 8106 DNS servers and search domains,
   RFC 4191 routes, and different content per interface.
@@ -1344,9 +1345,12 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   signing by moments. The console shows a warning icon on the zone list and a banner on the key
   list.
 - **Algorithms Ninlil never signs with.** RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1,
-  RSASHA1-NSEC3-SHA1 and ECC-GOST: RFC 8624 §3.1 marks each as `MUST NOT` or `NOT RECOMMENDED`
-  for signing. Creating such a key, or setting one as the zone's `dnssecAlgorithm`, answers `400`.
-  Ninlil still validates zones that other servers sign with these algorithms. A key like this that
+  RSASHA1-NSEC3-SHA1 and ECC-GOST: RFC 9904 §3 marks RSAMD5, DSA, DSA-NSEC3-SHA1 and ECC-GOST
+  `MUST NOT` for signing. It marks RSASHA1 and RSASHA1-NSEC3-SHA1 `NOT RECOMMENDED`, and Ninlil
+  refuses those two as its own rule. Creating such a key, or setting one as the zone's
+  `dnssecAlgorithm`, answers `400`.
+  Ninlil still validates zones that other servers sign with these algorithms, except ECC-GOST,
+  which it cannot validate because .NET has no audited implementation. A key like this that
   already exists is not published and signs nothing. When it was the zone's only signing key, the
   zone is served unsigned until a key with a permitted algorithm exists. A parent zone at another
   operator that still publishes a DS record for that key must replace or remove the DS record.
@@ -3184,7 +3188,7 @@ out. Four services take part, and each one is off until you turn it on:
 | Service | Answers | Standard | Default port |
 |---|---|---|---|
 | DHCPv4 | A device that asks for an IPv4 address, router and DNS server | RFC 2131 | UDP `67` (server), `68` (client) |
-| DHCPv6 | A device that asks for an IPv6 address, or for a block of addresses to hand out on a network behind it | RFC 8415 | UDP `547` (server), `546` (client) |
+| DHCPv6 | A device that asks for an IPv6 address, or for a block of addresses to hand out on a network behind it | RFC 9915 | UDP `547` (server), `546` (client) |
 | Router Advertisement (RA) | A device that builds an IPv6 address itself (SLAAC) and needs the network's prefix, router and DNS server | RFC 4861, RFC 8106 | none, it uses raw ICMPv6 |
 | TFTP | A device that fetches a boot file | RFC 1350 | UDP `69`, see [TFTP and PXE](#tftp-and-pxe) |
 
@@ -3596,7 +3600,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   ignores temporary addresses (`IA_TA`).
 - **Rapid Commit.** DHCPv6 Rapid Commit (a two-message exchange) is off. Turn it on with
   `NINLIL_DHCP_SERVER_CORE_ENABLE_DHCPV6_RAPID_COMMIT=true` only when the network has one DHCPv6
-  server: with several, all but one commit a lease that the device does not use (RFC 8415
+  server: with several, all but one commit a lease that the device does not use (RFC 9915
   Section 21.14).
 - **DNS registration.** Ninlil registers the host name a device sends: the Host Name option for
   DHCPv4, the Client FQDN option for DHCPv6. The name becomes a label of the scope's zone: letters

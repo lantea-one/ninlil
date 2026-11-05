@@ -26596,7 +26596,7 @@
         "properties": {
           "optionTag": {
             "type": "integer",
-            "description": "The option's numeric tag (on a DHCPv6 scope, its option code). On a DHCPv6 scope use 1 to\n255 except the codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19,\n20, 25, 26, 37 and 39), with a value of at most 65 535 bytes; code 24 (Domain Search List)\nmust be domain names in uncompressed wire form (RFC 3646 Section 4, which points to RFC 8415 Section 10). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)\nand 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and\n255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name)\nand 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in\ntag 150.",
+            "description": "The option's numeric tag (on a DHCPv6 scope, its option code). On a DHCPv6 scope use 1 to\n255 except the codes the server writes itself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19,\n20, 25, 26, 37 and 39), with a value of at most 65 535 bytes; code 24 (Domain Search List)\nmust be domain names in uncompressed wire form (RFC 3646 Section 4, which points to RFC 9915 Section 10). On a DHCPv4 scope use 1 to 254, except 52 (Option Overload), 53 (DHCP Message Type)\nand 82 (Relay Agent Information), which the server or relay agent sets itself. 0 (Pad) and\n255 (End) are reserved markers. The value is at most 255 bytes. Tags 66 (TFTP Server Name)\nand 67 (Bootfile Name) are text and must be printable ASCII; a binary address belongs in\ntag 150.",
             "format": "int32"
           },
           "valueHex": {
@@ -27078,7 +27078,7 @@
         "properties": {
           "optionTag": {
             "type": "integer",
-            "description": "The option's numeric tag, as in `DhcpScopeCustomOptionWriteRequest.OptionTag`.\nThose limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6\nscope rejects tag 0, values over 65 535 bytes and the option codes the server writes\nitself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24\n(Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4, which\npoints to RFC 8415 Section 10).",
+            "description": "The option's numeric tag, as in `DhcpScopeCustomOptionWriteRequest.OptionTag`.\nThose limits apply to a global rule and to a rule for a DHCPv4 scope. A rule for a DHCPv6\nscope rejects tag 0, values over 65 535 bytes and the option codes the server writes\nitself (1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 18, 19, 20, 25, 26, 37 and 39). Its code 24\n(Domain Search List) must be domain names in uncompressed wire form (RFC 3646 Section 4, which\npoints to RFC 9915 Section 10).",
             "format": "int32"
           },
           "valueHex": {
@@ -27253,12 +27253,12 @@
           },
           "interfaceId": {
             "type": "string",
-            "description": "The RFC 8415 Section 21.18 Interface-ID text added to every RELAY-FORW, or null for none.",
+            "description": "The RFC 9915 Section 21.18 Interface-ID text added to every RELAY-FORW, or null for none.",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of `Dhcpv6RelayOptions`\n(`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 8415\nDHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart\nof `DhcpRelaySettingsDetail`."
+        "description": "This record is the REST shape of `Dhcpv6RelayOptions`\n(`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 9915\nDHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart\nof `DhcpRelaySettingsDetail`."
       },
       "Dns64SettingsDetail": {
         "type": "object",

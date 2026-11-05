@@ -7,7 +7,7 @@ namespace Ninlil.Dhcp.Common.Wire;
 ///     This static class reads and writes a list of domain names in the wire form of the DHCPv6
 ///     Domain Search List option (RFC 3646 Section 4, code 24): each name is a run of RFC 1035
 ///     Section 3.1 length-prefixed labels ending in a zero-length root label, and the names follow
-///     each other back to back. Compression is not used (RFC 8415 Section 10 and RFC 3315 Section
+///     each other back to back. Compression is not used (RFC 9915 Section 10 and RFC 3315 Section
 ///     8 require uncompressed names in DHCPv6), so a compression pointer is a decoding failure.
 ///     <para>
 ///         <c>Dhcpv6MessageOptionExtensions</c> uses it for the Domain Search List accessors, and

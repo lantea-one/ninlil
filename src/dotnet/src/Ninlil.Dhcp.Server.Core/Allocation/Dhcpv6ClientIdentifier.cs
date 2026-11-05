@@ -7,7 +7,7 @@ namespace Ninlil.Dhcp.Server.Core.Allocation;
 ///     This static class computes and formats the key the DHCPv6 engine uses to recognize a
 ///     client, the counterpart of <see cref="Dhcpv4ClientIdentifier" />.
 ///     <para>
-///         The key is the client's DUID from the Client Identifier option, which RFC 8415 Section
+///         The key is the client's DUID from the Client Identifier option, which RFC 9915 Section
 ///         21.2 requires in the client messages this engine handles. There is no fallback:
 ///         <see cref="Resolve" /> returns <see langword="null" /> when the option is missing, and
 ///         <see cref="Dhcpv6RequestHandler" /> then ignores the message.

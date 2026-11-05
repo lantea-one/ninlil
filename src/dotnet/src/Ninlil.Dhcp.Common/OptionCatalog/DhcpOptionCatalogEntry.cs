@@ -11,7 +11,7 @@ namespace Ninlil.Dhcp.Common.OptionCatalog;
 /// </summary>
 /// <param name="Code">
 ///     The option's tag or code as carried on the wire: 0-255 for a DHCPv4 tag
-///     (<c>Dhcpv4Option.Tag</c>), 0-65535 for a DHCPv6 code (the RFC 8415 2-octet option code).
+///     (<c>Dhcpv4Option.Tag</c>), 0-65535 for a DHCPv6 code (the RFC 9915 2-octet option code).
 ///     It matches the <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv4OptionTagEnum" /> or
 ///     <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv6OptionCodeEnum" /> member when there is one.
 /// </param>

@@ -38,7 +38,7 @@ import {
  * `POST` or `PUT /api/dhcp-scopes/{scopeId}/reservations/{id}`. The backend answers 409 for a
  * client identifier or IP address already reserved in the scope, shown in {@link errorMessage}.
  *
- * <p>RFC 8415 has no reservation for a delegated prefix, so the page loads the scope's `kind`
+ * <p>RFC 9915 has no reservation for a delegated prefix, so the page loads the scope's `kind`
  * ({@link loadScopeKind}) and, for a Prefix Delegation scope, shows a notice instead of the form.
  * The list page already hides "Add reservation" there; this covers a typed-in URL or bookmark.
  */

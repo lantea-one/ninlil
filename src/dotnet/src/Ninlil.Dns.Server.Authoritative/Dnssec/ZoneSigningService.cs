@@ -49,7 +49,7 @@ public class ZoneSigningService(
 {
     /// <summary>
     ///     This constant contains the DS digest type used for generated DS records: 2 (SHA-256),
-    ///     which RFC 8624 makes mandatory to implement.
+    ///     which RFC 9904 §4 makes mandatory to implement.
     /// </summary>
     private const byte DsDigestType = 2;
 
@@ -107,10 +107,10 @@ public class ZoneSigningService(
             )
         )
             logger?.LogWarning(
-                "Zone {Zone}: DNSSEC key {KeyTag} uses algorithm {Algorithm}, which is prohibited for signing (RFC 8624 §3.1); it is not published and signs nothing. Roll the key over to a current algorithm.",
+                "Zone {Zone}: DNSSEC key {KeyTag} is not published and signs nothing. {Reason} Roll the key over to a current algorithm.",
                 zone.Name,
                 skipped.KeyTag,
-                skipped.Algorithm
+                DnssecAlgorithmRegistry.DescribeSigningRefusal(skipped.Algorithm)
             );
 
         List<DnssecKeyEntity> activeKeys =

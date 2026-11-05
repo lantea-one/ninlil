@@ -3,7 +3,7 @@ namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
 ///     This class represents one DHCPv6 option as it appears on the wire: a 2-byte
-///     "option-code" and the raw "option-data" bytes (RFC 8415 Section 21.1). Interpreting a value
+///     "option-code" and the raw "option-data" bytes (RFC 9915 Section 21.1). Interpreting a value
 ///     belongs to <see cref="Dhcpv6MessageOptionExtensions" />; this class carries the bytes
 ///     whether or not the code is understood. It is the DHCPv6 counterpart of
 ///     <see cref="Dhcpv4Option" />.

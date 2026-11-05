@@ -106,7 +106,7 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
         Dhcpv6Message request = new();
         request.SetClientIdentifier(clientDuid);
         // The client sits behind a relay on the other scope's link, so that scope serves it even
-        // though a reservation exists elsewhere (RFC 8415 Section 13.1).
+        // though a reservation exists elsewhere (RFC 9915 Section 13.1).
         request.RelayLinkAddress = IPAddress.Parse("2001:db8:1111::1");
 
         DhcpScopeEntity resolved = await ResolveAsync(request);
@@ -155,7 +155,7 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
 
         Dhcpv6Message request = new();
         request.SetClientIdentifier(duid);
-        // RFC 8415 Section 13.1 has a server ignore a link-address of :: (RFC 6221).
+        // RFC 9915 Section 13.1 has a server ignore a link-address of :: (RFC 6221).
         request.RelayLinkAddress = IPAddress.IPv6Any;
 
         DhcpScopeEntity resolved = await ResolveAsync(request);
