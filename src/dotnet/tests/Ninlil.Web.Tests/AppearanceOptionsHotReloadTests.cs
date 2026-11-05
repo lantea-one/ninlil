@@ -16,14 +16,14 @@ namespace Ninlil.Web.Tests;
 ///     <see cref="IOptionsMonitor{TOptions}" /> rather than <see cref="IOptions{TOptions}" />.
 ///     <para>
 ///         It builds its own configuration root and service collection instead of using
-///         <see cref="NinlilDnsWebApplicationFactory" />. That host only sets its temporary
-///         settings file as <c>RuntimeConfigurationOptions.ConfigurationFilePath</c> (where writes
-///         land) and never loads it as a configuration source, so test writes cannot leak into the
-///         <c>appsettings.json</c> in the build output. In a deployment the path defaults to
-///         <c>appsettings.json</c>, which the host already loads with reload-on-change, so writes
-///         and reads use one file. This test builds that shape: one file, added as a
-///         reload-on-change source and written through <see cref="PresetConfigurationFileApplier" />,
-///         the call <see cref="Controllers.AppearanceSettingsController.Patch" /> makes.
+///         <see cref="NinlilDnsWebApplicationFactory" />, so it exercises the provider and the
+///         options binding alone. <see cref="RuntimeConfigurationFileSourceTests" /> covers the
+///         host, where a custom <c>RuntimeConfigurationOptions.ConfigurationFilePath</c> is added
+///         as a reload-on-change source. In a deployment the path defaults to
+///         <c>appsettings.json</c>, which the host already loads that way, so writes and reads use
+///         one file. This test builds that shape: one file, added as a reload-on-change source and
+///         written through <see cref="PresetConfigurationFileApplier" />, the call
+///         <see cref="Controllers.AppearanceSettingsController.Patch" /> makes.
 ///     </para>
 /// </summary>
 public class AppearanceOptionsHotReloadTests

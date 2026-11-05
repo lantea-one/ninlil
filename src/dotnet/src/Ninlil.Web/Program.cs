@@ -163,6 +163,22 @@ if (environmentVariablesSources.Count > 0)
 }
 builder.Configuration.Sources.Insert(ninlilSourceInsertIndex, ninlilEnvironmentVariableSource);
 
+// The file the settings pages save to must also be a configuration source that reloads on change,
+// or an IOptionsMonitor never sees a saved value. The default appsettings.json already is one;
+// a custom path is added here, just before the NINLIL_* source, so an environment variable still
+// overrides a saved value and command-line arguments still override both. The path is read
+// from the sources registered so far (environment variables, appsettings.json), so it cannot
+// itself be set inside the custom file.
+string runtimeConfigurationFilePath = RuntimeConfigurationFileSource.ResolvePath(
+    builder.Configuration,
+    builder.Environment.ContentRootPath
+);
+RuntimeConfigurationFileSource.AddIfMissing(
+    builder.Configuration.Sources,
+    runtimeConfigurationFilePath,
+    ninlilSourceInsertIndex
+);
+
 // Everything the host generates and keeps (an auto-generated SQLite database, the Data
 // Protection key ring, the JWT signing key, the cluster node id) lives in one "data" directory
 // next to the application.
@@ -387,10 +403,7 @@ RuntimeConfigurationOptions runtimeConfigurationOptions =
         .Get<RuntimeConfigurationOptions>()
     ?? new RuntimeConfigurationOptions();
 if (string.IsNullOrWhiteSpace(runtimeConfigurationOptions.ConfigurationFilePath))
-    runtimeConfigurationOptions.ConfigurationFilePath = Path.Combine(
-        builder.Environment.ContentRootPath,
-        "appsettings.json"
-    );
+    runtimeConfigurationOptions.ConfigurationFilePath = runtimeConfigurationFilePath;
 builder.Services.AddSingleton(runtimeConfigurationOptions);
 
 // Encrypts an SMTP password that an earlier version stored in plaintext in that file.

@@ -100,8 +100,9 @@ public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory fa
     [Fact]
     public async Task Get_ReturnsTheCompiledInDefaultsWhenNothingHasBeenConfigured()
     {
-        // The host's settings file is not a configuration source, so this returns the
-        // compiled-in defaults even after another test has patched the settings.
+        // The shared host drops its settings file as a configuration source (see
+        // NinlilDnsWebApplicationFactory), so this returns the compiled-in defaults even after
+        // another test has patched the settings.
         HttpClient client = await CreateAuthenticatedAdminClientAsync();
 
         HttpResponseMessage response = await client.GetAsync("/api/appearance-settings");
@@ -133,8 +134,8 @@ public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory fa
         Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, patchResult.Note);
         Assert.Contains("immediately", patchResult.Note, StringComparison.OrdinalIgnoreCase);
 
-        // The write landed in the host's settings file. The reload itself is checked by
-        // AppearanceOptionsHotReloadTests.
+        // The write landed in the host's settings file. The reload is checked by
+        // RuntimeConfigurationFileSourceTests.
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
         JsonObject section = (JsonObject)root["DnsServer"]["Appearance"];
