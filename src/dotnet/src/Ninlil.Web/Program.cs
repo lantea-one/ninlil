@@ -58,6 +58,7 @@ using Ninlil.Dns.Protocol.Plain.Extension;
 using Ninlil.Dns.Server.AccessControl.Extension;
 using Ninlil.Dns.Server.Acme.Extension;
 using Ninlil.Dns.Server.Authoritative.Extension;
+using Ninlil.Dns.Server.Backup;
 using Ninlil.Dns.Server.Backup.Extension;
 using Ninlil.Dns.Server.Backup.Options;
 using Ninlil.Dns.Server.ClientIdentity;
@@ -86,6 +87,7 @@ using Ninlil.Dns.Server.Rewrites.Extension;
 using Ninlil.Dns.Server.SelfUpdate.Extension;
 using Ninlil.Dns.Server.Tsig.Extension;
 using Ninlil.Dns.Server.Webhooks.Extension;
+using Ninlil.Web.DataProtection;
 using Ninlil.Web.EnvironmentVariables;
 using Ninlil.Web.ExceptionHandling;
 using Ninlil.Web.Extension;
@@ -171,22 +173,55 @@ Directory.CreateDirectory(dataDirectory);
 
 // The directory is restricted to the process owner, as the self-signed TLS certificate and
 // DNSCrypt provider keys are, because the Data Protection key ring is not encrypted at rest on
-// Linux without a certificate, which operators are not asked to provide.
+// Linux when no DataProtection certificate is configured.
 if (!OperatingSystem.IsWindows())
     File.SetUnixFileMode(
         dataDirectory,
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
     );
 
+// How the key ring is encrypted at rest: with the DataProtection certificate when one is set, with
+// DPAPI on Windows otherwise, and not at all elsewhere. A setting that cannot work (a missing file,
+// a wrong password, no private key) stops the start with exit code 78, the same code the database
+// guards use. Falling back would write new keys unencrypted, or under another protection than the
+// operator configured, and the operator would not notice.
+DataProtectionKeyRingOptions keyRingOptions =
+    builder
+        .Configuration.GetSection(DataProtectionKeyRingOptions.SectionName)
+        .Get<DataProtectionKeyRingOptions>()
+    ?? new DataProtectionKeyRingOptions();
+KeyRingProtection keyRingProtection;
+try
+{
+    keyRingProtection = KeyRingProtection.Resolve(keyRingOptions, OperatingSystem.IsWindows());
+}
+catch (DatabaseStartupRefusedException refusal)
+{
+    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
+        logging.AddConsole()
+    );
+    refusalLoggerFactory
+        .CreateLogger("Ninlil.Web.DataProtection")
+        .LogCritical("Startup refused: {Message}", refusal.Message);
+    Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
+    return;
+}
+
+// The factory registration lets the container dispose the loaded certificates at shutdown.
+builder.Services.AddSingleton(_ => keyRingProtection);
+builder.Services.AddSingleton<IKeyRingRestoreCheck, KeyRingRestoreCheck>();
+
 // The Data Protection key ring must survive a restart, or every secret encrypted with it (TOTP
 // authenticator keys, TSIG secrets, DNSSEC keys, cloud provider credentials, the ACME account
 // key) becomes undecryptable when a new process generates a fresh key. This is registered
 // before the unconfigured AddDataProtection() call in AddNinlilDnsIdentity so this
 // configuration wins; AddDataProtection() can be called more than once.
-builder
-    .Services.AddDataProtection()
-    .SetApplicationName("Ninlil.Dns")
-    .PersistKeysToFileSystem(new DirectoryInfo(dataDirectory));
+keyRingProtection.Apply(
+    builder
+        .Services.AddDataProtection()
+        .SetApplicationName("Ninlil.Dns")
+        .PersistKeysToFileSystem(new DirectoryInfo(dataDirectory))
+);
 
 // JSON Web Tokens need a signing key. One is generated and kept in the data directory so a fresh
 // installation works without configuration (as the auto-generated SQLite connection string of
