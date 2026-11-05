@@ -191,6 +191,16 @@ public sealed class KeyRingProtection : IDisposable
                     : X509KeyStorageFlags.DefaultKeySet
             );
         }
+        catch (UnauthorizedAccessException exception)
+        {
+            // A service account without read access to the file must still stop with exit 78
+            // and a message, not crash.
+            throw new DatabaseStartupRefusedException(
+                $"{pathSetting} names the file '{path}', which this account is not allowed to read. "
+                    + "Grant the account that runs Ninlil read access to it.",
+                exception
+            );
+        }
         catch (Exception exception) when (exception is CryptographicException or IOException)
         {
             // The password is never part of the message.

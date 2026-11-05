@@ -4345,11 +4345,10 @@ Ninlil encrypts it depends on the settings in [`ENVIRONMENT.md`](./ENVIRONMENT.m
    restored on another machine, or you do not want a Windows account to be the only way in, use a
    certificate, on Windows too. A DPAPI-protected key ring cannot be read on another Windows machine
    or under another account.
-2. Create an RSA certificate and export it with its private key as a PKCS#12 (`.pfx`) file. It
-   does not need to be trusted by anyone, and an expired certificate still works: it only wraps
-   the keys. Keep the file outside the data directory, and keep a copy of it apart from your
-   backups of the data directory. Without the certificate the key ring, and so every stored
-   secret, cannot be read.
+2. Create an RSA certificate and export it with its private key as a PKCS#12 (`.pfx`) file. It does
+   not need to be trusted by anyone: it only wraps the keys. Keep the file outside the data
+   directory, and keep a copy of it apart from your backups of the data directory. Without the
+   certificate the key ring, and so every stored secret, cannot be read.
 3. Set the path and, if the file has a password, the password as a secret (see
    [`ENVIRONMENT.md`](./ENVIRONMENT.md#data-protection-key-ring)), then restart:
 
@@ -5311,12 +5310,12 @@ backup when you want one.
   logs a warning): an error after the wipe can leave a partly restored database.
 - **The key ring is merged.** The keys from the file are added, and no key on the machine
   is deleted.
-- **A restore refuses a key ring this server cannot read.** If the file's keys are encrypted with
-  DPAPI from another machine or account, or with a certificate that is not
+- **A restore refuses a key ring this server cannot read.** If the backup's key files are encrypted
+  with DPAPI from another machine or account, or with a certificate that is not
   `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH` or `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PATH`,
-  the restore returns `400` before it changes anything. The message names the cause and the
-  setting. Set the certificate the backup's key ring was encrypted with as the previous
-  certificate, restart and restore again. Back the certificate up separately from the backup file.
+  the restore returns `400` before it changes anything. The message names the cause and the setting.
+  Set the certificate the backup's key ring was encrypted with as the previous certificate, restart
+  and restore again. Back the certificate up separately from the backup file.
 - **Only one restore runs at a time.** A second request returns `409` and changes nothing.
 - **Tokens after a restore.** Refresh tokens and API tokens are database rows, so they come back.
   Access tokens are signed with the JWT key, which a backup does not hold. On a machine with
