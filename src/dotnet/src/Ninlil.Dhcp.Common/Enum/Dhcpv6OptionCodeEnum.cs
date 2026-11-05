@@ -46,9 +46,10 @@ public enum Dhcpv6OptionCodeEnum : ushort
     IaNa = 3,
 
     /// <summary>
-    ///     RFC 9915 Section 21.5's Identity Association for Temporary Addresses (IA_TA) option.
-    ///     It nests <see cref="IaAddress" /> options like <see cref="IaNa" />, but has no T1/T2
-    ///     timers. See
+    ///     The Identity Association for Temporary Addresses (IA_TA) option. RFC 9915 Section 21.5
+    ///     marks it obsolete; its format is the one RFC 8415 Section 21.5 defines. It nests
+    ///     <see cref="IaAddress" /> options like <see cref="IaNa" />, but has no T1/T2 timers.
+    ///     The DHCPv6 server ignores it. See
     ///     <see cref="Ninlil.Dhcp.Common.Wire.Dhcpv6IdentityAssociationForTemporaryAddresses" />.
     /// </summary>
     IaTa = 4,

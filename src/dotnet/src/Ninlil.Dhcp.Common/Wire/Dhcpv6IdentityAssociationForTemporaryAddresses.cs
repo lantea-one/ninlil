@@ -6,10 +6,12 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 9915 Section 21.5's Identity Association for Temporary
-///     Addresses (IA_TA) option. It nests <see cref="Dhcpv6IdentityAssociationAddress" /> options
+///     This class represents the Identity Association for Temporary Addresses (IA_TA) option.
+///     RFC 9915 Section 21.5 marks the option obsolete, so its format is the one RFC 8415
+///     Section 21.5 defines. It nests <see cref="Dhcpv6IdentityAssociationAddress" /> options
 ///     like <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />, but has no T1/T2
-///     timers, since temporary addresses are not renewed.
+///     timers, since temporary addresses are not renewed. The DHCPv6 server ignores the option;
+///     this codec lets it read and write one.
 /// </summary>
 public class Dhcpv6IdentityAssociationForTemporaryAddresses
 {

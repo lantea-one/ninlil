@@ -77,9 +77,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   RFC 8945 §5.3.1 multi-message TSIG chaining) over plain TCP, TLS, or QUIC.
 - **Recursive & validating resolution**: a full iterative walk (RFC 1034 §5.3.3) with RFC 9156 QNAME
   minimization, RFC 8767 serve-stale, prefetch, EDNS Client Subnet, and DNS64.
-- **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA, MD5 and GOST algorithms
-  are validated but never signed with, per RFC 9904 §3 and Ninlil's
-  own SHA-1 rule), NSEC/NSEC3 (with RFC 5155 opt-out),
+- **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA and MD5 algorithms are
+  validated but never signed with, per RFC 9904 §3 and Ninlil's own SHA-1 rule; GOST is neither
+  signed nor validated), NSEC/NSEC3 (with RFC 5155 opt-out),
   automated proactive re-signing, and a full RFC 6781 automated key-rollover state machine
   (Pre-Publish for ZSKs, Double-Signature for KSKs, with automatic DS cutover when the parent zone
   is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side: the first check runs a
@@ -1347,8 +1347,10 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
 - **Algorithms Ninlil never signs with.** RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1,
   RSASHA1-NSEC3-SHA1 and ECC-GOST: RFC 9904 §3 marks RSAMD5, DSA, DSA-NSEC3-SHA1 and ECC-GOST
   `MUST NOT` for signing. It marks RSASHA1 and RSASHA1-NSEC3-SHA1 `NOT RECOMMENDED`, and Ninlil
-  refuses those two as its own rule. Creating such a key, or setting one as the zone's `dnssecAlgorithm`, answers `400`.
-  Ninlil still validates zones that other servers sign with these algorithms. A key like this that
+  refuses those two as its own rule. Creating such a key, or setting one as the zone's
+  `dnssecAlgorithm`, answers `400`.
+  Ninlil still validates zones that other servers sign with these algorithms, except ECC-GOST,
+  which it cannot validate because .NET has no audited implementation. A key like this that
   already exists is not published and signs nothing. When it was the zone's only signing key, the
   zone is served unsigned until a key with a permitted algorithm exists. A parent zone at another
   operator that still publishes a DS record for that key must replace or remove the DS record.

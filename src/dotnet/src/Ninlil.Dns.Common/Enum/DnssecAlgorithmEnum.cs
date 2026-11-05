@@ -53,7 +53,7 @@ public enum DnssecAlgorithmEnum : byte
     RsaSha1Nsec3Sha1 = 7,
 
     /// <summary>
-    ///     RSA/SHA-256, defined by RFC 5702. One of RFC 9904's mandatory-to-implement algorithms.
+    ///     RSA/SHA-256, defined by RFC 5702. RFC 9904 §3 marks it MUST for signing.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "RSASHA256")]
     RsaSha256 = 8,
@@ -65,15 +65,16 @@ public enum DnssecAlgorithmEnum : byte
     RsaSha512 = 10,
 
     /// <summary>
-    ///     GOST R 34.10-2001, defined by RFC 5933. Regionally required in some jurisdictions;
-    ///     RFC 9904 treats it as optional.
+    ///     GOST R 34.10-2001, defined by RFC 5933. Regionally required in some jurisdictions.
+    ///     RFC 9904 §3 marks it MUST NOT for signing and MAY for validation; this server can
+    ///     neither sign nor validate with it.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "ECC-GOST")]
     EccGost = 12,
 
     /// <summary>
-    ///     ECDSA using the P-256 curve and SHA-256, defined by RFC 6605. One of RFC 9904's
-    ///     mandatory-to-implement algorithms, and the recommended choice for new zones.
+    ///     ECDSA using the P-256 curve and SHA-256, defined by RFC 6605. RFC 9904 §3 marks it MUST
+    ///     for signing, and it is the recommended choice for new zones.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "ECDSAP256SHA256")]
     EcdsaP256Sha256 = 13,
@@ -85,8 +86,8 @@ public enum DnssecAlgorithmEnum : byte
     EcdsaP384Sha384 = 14,
 
     /// <summary>
-    ///     Ed25519, defined by RFC 8080. Fast to compute and produces very small signatures; one
-    ///     of RFC 9904's mandatory-to-implement algorithms.
+    ///     Ed25519, defined by RFC 8080. Fast to compute and produces very small signatures.
+    ///     RFC 9904 §3 marks it RECOMMENDED for signing.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "ED25519")]
     Ed25519 = 15,
