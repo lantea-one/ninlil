@@ -45,8 +45,8 @@ public record CaaAutoManagementSettingsDetail(bool DefaultEnabled, string Defaul
 /// <param name="ExpiresAtUtc">When the current certificate expires, or <see langword="null" /> if <see cref="HasCertificate" /> is <see langword="false" />.</param>
 /// <param name="IsDueForRenewal">
 ///     <see langword="true" /> when the domain has no certificate yet, or its certificate expires
-///     within <c>AcmeOptions.RenewBeforeExpiration</c>. It is computed by
-///     <c>AcmeCertificateRenewalService.IsDomainDue</c>, the check the renewal loop itself uses.
+///     within the configured <c>RenewBeforeExpiration</c> setting. The certificate
+///     renewal job uses the same check.
 /// </param>
 /// <param name="LastFailureAtUtc">
 ///     When the domain's most recent issuance or renewal attempt failed, or

@@ -92,12 +92,11 @@ public record DnsOverTlsSettingsDetail(
 );
 
 /// <summary>
-///     This record is the DNS-over-HTTPS settings (<c>DnsOverHttpsOptions</c>) that
+///     This record is the DNS-over-HTTPS settings that
 ///     <c>GET /api/transport-settings/dns-over-https</c> returns, limited to the fields the server
-///     uses. <see cref="Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps" />
-///     maps the RFC 8484 GET and POST forms onto the shared Kestrel listener, so the shared web
-///     listener's port, certificate and addresses (<c>DnsServer:Web</c>) apply. <c>Port</c> and
-///     <c>Certificate</c> belong to the self-hosted <c>DnsOverHttpsHostedService</c>, which this
+///     uses. The server serves the RFC 8484 GET and POST forms on the shared web listener, so
+///     that listener's port, certificate and addresses (<c>DnsServer:Web</c>) apply. <c>Port</c>
+///     and <c>Certificate</c> belong to a self-hosted DNS-over-HTTPS listener, which this
 ///     server never starts, so they are left out rather than shown as if they had an effect; for
 ///     the same reason there is no <c>ListenAddresses</c>.
 /// </summary>
@@ -175,9 +174,9 @@ public record DnsOverQuicSettingsDetail(
 /// <param name="MaxConcurrentTcpConnections">How many TCP connections the server accepts at once. A change needs a listener restart.</param>
 /// <param name="EnabledEsVersions">
 ///     The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example
-///     <c>["XChaCha20Poly1305", "XSalsa20Poly1305"]</c>). <c>DnsCryptCertificateRotationService</c>
-///     reads it when it starts, so a change applies once that loop restarts, for example by
-///     turning the transport off and on.
+///     <c>["XChaCha20Poly1305", "XSalsa20Poly1305"]</c>). The DNSCrypt certificate
+///     rotation job reads it when it starts, so a change applies once that job restarts, for
+///     example by turning the transport off and on.
 /// </param>
 /// <param name="CertificateRotationInterval">How often a new certificate is considered for each enabled cipher. A change needs a restart of the rotation loop.</param>
 /// <param name="CertificateValidityDuration">How long a new certificate stays valid. A change needs a restart of the rotation loop.</param>

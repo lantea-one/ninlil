@@ -340,9 +340,7 @@ public class AcmeSettingsController(
 
     /// <summary>
     ///     This action issues or renews one configured domain's certificate now, outside the
-    ///     renewal service's schedule, through
-    ///     <see cref="AcmeCertificateRenewalService.RenewOneDomainAsync" />, the same method the
-    ///     background loop uses. A failed attempt (a certificate authority outage, a challenge that
+    ///     certificate renewal job's schedule, with the same logic the job uses. A failed attempt (a certificate authority outage, a challenge that
     ///     did not validate) is not an HTTP error: it is logged and recorded, and the returned
     ///     entry shows it. Returns 404 when the domain is not configured. Requires
     ///     <c>acmesettings:manage</c>.

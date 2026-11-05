@@ -271,9 +271,9 @@ public class DnssecKeysController(
 
     /// <summary>
     ///     This action starts an automated RFC 6781 rollover of an active key and returns the new
-    ///     key. The scheme (Pre-Publish or Double-Signature) follows from the key's role; see
-    ///     <see cref="IDnssecKeyManagementService.StartRolloverAsync" /> for the steps. Returns
-    ///     400, 404 or 409 as that method reports; 400 includes an RSA key size that is not 0 or a
+    ///     key. The scheme (Pre-Publish or Double-Signature) follows from the key's role. The
+    ///     background rollover job carries out the later steps. Returns 400, 404 or 409; 400
+    ///     includes an RSA key size that is not 0 or a
     ///     multiple of 64 between 2048 and 4096 bits. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/roll")]
@@ -318,8 +318,8 @@ public class DnssecKeysController(
 
     /// <summary>
     ///     This action records that the operator has published a Key-Signing Key rollover's new DS
-    ///     record at an externally hosted parent zone, so the rollover can continue (see
-    ///     <see cref="IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync" />). Returns 400
+    ///     record at an externally hosted parent zone, so the rollover can continue.
+    ///     Returns 400
     ///     when the key is not a KSK in the middle of a rollover and 404 when it does not exist in
     ///     this zone. Requires <c>zones:write</c>.
     /// </summary>

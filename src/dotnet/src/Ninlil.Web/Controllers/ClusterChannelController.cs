@@ -55,9 +55,8 @@ public class ClusterChannelController(
 {
     /// <summary>
     ///     This action answers a peer's heartbeat with 200, after checking that the body names the
-    ///     peer the key belongs to and storing a newly announced certificate thumbprint (see
-    ///     <see cref="ClusterHeartbeatReceiver" />). Each node's <c>ClusterHeartbeatBackgroundService</c>
-    ///     sets a peer's <see cref="ClusterNodeEntity.Status" /> from whether its own probe of that
+    ///     peer the key belongs to and storing a newly announced certificate thumbprint. Each
+    ///     node's cluster heartbeat job sets a peer's status from whether its own probe of that
     ///     peer succeeded, so each node trusts its own view of a peer's health rather than
     ///     anything the peer reports. An invite key cannot reach this action.
     /// </summary>
@@ -82,10 +81,9 @@ public class ClusterChannelController(
 
     /// <summary>
     ///     This action receives the joining node's callback, the second half of the join handshake
-    ///     (see <see cref="ClusterJoinService.HandleJoinCompleteAsync" />). The TSIG key name comes
-    ///     from the identity <see cref="ClusterTsigAuthenticationHandler" /> authenticated, never
-    ///     from the request body. It is the one action an unused, unexpired invite key may sign;
-    ///     the route must stay <see cref="ClusterTsigAuthenticationDefaults.JoinCompletePath" />.
+    ///     (the join itself is <c>POST /api/cluster/nodes/join</c>). The TSIG key name comes from the
+    ///     identity the cluster channel's TSIG authentication established, never from the request
+    ///     body. It is the one action an unused, unexpired invite key may sign.
     /// </summary>
     [HttpPost("join-complete")]
     public async Task<IActionResult> JoinComplete(

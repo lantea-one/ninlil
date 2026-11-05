@@ -110,8 +110,8 @@ public class ClientAddressesController(
     /// <summary>
     ///     This action adds an address to a device. Returns 400 for a missing or malformed identifier,
     ///     404 for an unknown client, and 409 when the identifier and protocol pair already belongs to any
-    ///     device, this one included (the pair the address table's unique index covers, checked
-    ///     first through <see cref="IDnsClientAddressRepository.GetByIdentifierAsync" />). The
+    ///     device, this one included (the pair the address table's unique index covers, which the
+    ///     action checks first). The
     ///     identifier is accepted as <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>,
     ///     <c>aabb.ccdd.eeff</c> or <c>aabbccddeeff</c> (up to 85 bytes) and is stored and
     ///     returned as <c>aa:bb:cc:dd:ee:ff</c>, so the duplicate check ignores the spelling.

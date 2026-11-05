@@ -98,8 +98,8 @@ public class DhcpServiceControlController(
 
     /// <summary>
     ///     This action starts one DHCP-family service now, binding its socket, whatever its
-    ///     <c>Enable</c> flag says. Starting a running service changes nothing (see
-    ///     <see cref="IDhcpProtocolService.StartAsync" />). Returns 400 for an unknown kind.
+    ///     <c>Enable</c> flag says. Starting a running service changes nothing.
+    ///     Returns 400 for an unknown kind.
     ///     Requires <c>dhcpservices:manage</c>.
     /// </summary>
     /// <param name="kind">Which of the four DHCP-family services to start.</param>
@@ -119,8 +119,8 @@ public class DhcpServiceControlController(
 
     /// <summary>
     ///     This action stops one DHCP-family service now, releasing its socket and leaving every
-    ///     other service running. Stopping a stopped service changes nothing (see
-    ///     <see cref="IDhcpProtocolService.StopAsync" />). Returns 400 for an unknown kind.
+    ///     other service running. Stopping a stopped service changes nothing.
+    ///     Returns 400 for an unknown kind.
     ///     Requires <c>dhcpservices:manage</c>.
     /// </summary>
     /// <param name="kind">Which of the four DHCP-family services to stop.</param>

@@ -42,8 +42,7 @@ public class SelfUpdateController(
 
     /// <summary>
     ///     This action checks the configured release feed now, waits for the result and returns
-    ///     it. It runs the same check as the periodic loop in
-    ///     <see cref="SelfUpdateCheckService" />. Requires <c>selfupdate:manage</c>.
+    ///     it. It runs the same check as the periodic self-update check job. Requires <c>selfupdate:manage</c>.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpPost("check")]

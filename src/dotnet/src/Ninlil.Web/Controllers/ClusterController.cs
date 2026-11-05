@@ -159,8 +159,8 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action creates a cluster invite and returns its code and expiry time (see
-    ///     <see cref="ClusterInviteService" />). Requires <c>clusternodes:write</c>.
+    ///     This action creates a cluster invite and returns its code and expiry time. Requires
+    ///     <c>clusternodes:write</c>.
     /// </summary>
     [HttpPost("invite")]
     [RequirePermission("clusternodes:write")]
@@ -181,8 +181,7 @@ public class ClusterController(
 
     /// <summary>
     ///     This action uses an invite code from another node to complete the join handshake with
-    ///     that node, and returns the new peer (see <see cref="ClusterJoinService" />). Requires
-    ///     <c>clusternodes:write</c>.
+    ///     that node, and returns the new peer. Requires <c>clusternodes:write</c>.
     /// </summary>
     [HttpPost("join")]
     [RequirePermission("clusternodes:write")]

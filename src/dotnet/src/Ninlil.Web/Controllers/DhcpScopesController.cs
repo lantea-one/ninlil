@@ -100,7 +100,7 @@ public class DhcpScopesController(
     ///     This action reports a scope's current utilization: the total addresses or prefixes in
     ///     its range, how many are leased or offered, how many its reservations account for, and
     ///     how many remain available. It is computed from the scope's settings and its recorded
-    ///     leases and reservations on every call (see <see cref="IDhcpScopeStatisticsService" />).
+    ///     leases and reservations on every call.
     ///     The two slot counts are strings because an IPv6 range can exceed a 64-bit integer.
     ///     Returns 404 for an unknown id. Requires <c>dhcpscopes:read</c>.
     /// </summary>

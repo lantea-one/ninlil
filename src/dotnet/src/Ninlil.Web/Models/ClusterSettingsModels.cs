@@ -2,12 +2,11 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries this node's cluster settings (<c>GET /api/cluster-settings</c>), from
-///     <c>ClusterOptions</c>. <see cref="NodeId" /> is read-only and shown for diagnostics;
-///     <c>ClusterSettingsController.Patch</c> cannot change it. <see cref="AddressReconcileInterval" />
-///     comes from <c>CatalogSyncOptions</c> instead. It shares this page because it only exists to
-///     keep the NOTIFY and primary address lists of catalog-managed zones in step with cluster
-///     membership (see <c>CatalogClusterAddressSyncService</c>).
+///     This class carries this node's cluster settings (<c>GET /api/cluster-settings</c>).
+///     <see cref="NodeId" /> is read-only and shown for diagnostics; a <c>PATCH</c> cannot change
+///     it. <see cref="AddressReconcileInterval" /> belongs to the catalog zone settings instead.
+///     It shares this page because it only exists to keep the NOTIFY and primary address lists
+///     of catalog-managed zones in step with cluster membership.
 /// </summary>
 /// <param name="Enable">Whether clustering is on. Defaults to <see langword="false" />.</param>
 /// <param name="NodeId">This node's identifier, generated at first startup.</param>

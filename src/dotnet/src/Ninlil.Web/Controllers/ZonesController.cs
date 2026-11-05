@@ -516,8 +516,7 @@ public class ZonesController(
     ///     <see cref="ZoneTypeEnum.Catalog" /> zone it also originates. It writes the member's RFC
     ///     9432 PTR record into the catalog zone and adds every healthy cluster peer's address to
     ///     both zones' <c>NotifyAddresses</c>, so the change reaches the cluster without manual
-    ///     configuration (see <see cref="CatalogZoneMembershipService.JoinAsync" />). Requires
-    ///     <c>zones:write</c>.
+    ///     configuration. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/catalog-membership")]
     [RequirePermission("zones:write")]
@@ -555,10 +554,8 @@ public class ZonesController(
     /// <summary>
     ///     This action runs one CAA reconciliation pass for the zone now and returns how many
     ///     records were added or removed, or why the pass was skipped. The same pass runs
-    ///     automatically on each <c>DnsZoneChangedEvent</c>; running it by hand is useful after
-    ///     changing the server-wide CAA default. It calls
-    ///     <see cref="CaaRecordReconciliationService.ReconcileZoneAsync(Guid, CancellationToken)" />,
-    ///     like the automatic path. Returns 404 for an unknown id. Requires <c>zones:write</c>.
+    ///     automatically on each zone change; running it by hand is useful after changing the
+    ///     server-wide CAA default. It uses the same logic as the automatic path. Returns 404 for an unknown id. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/reconcile-caa")]
     [RequirePermission("zones:write")]
@@ -587,9 +584,8 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action runs one PTR (reverse-zone) sync pass for the zone now, through
-    ///     <see cref="PtrSyncService.ReconcileZoneAsync" />, the same logic the automatic
-    ///     <c>DnsZoneChangedEvent</c> path uses, including RFC 2317 classless-delegation records
+    ///     This action runs one PTR (reverse-zone) sync pass for the zone now, with the same
+    ///     logic the automatic path runs on each zone change, including RFC 2317 classless-delegation records
     ///     when the zone's <c>PtrIpv4PrefixLength</c> (or the server-wide default) calls for them.
     ///     Returns the records added and removed and the reverse zones touched, or why the pass was
     ///     skipped, and 404 for an unknown id. Requires <c>zones:write</c>.
