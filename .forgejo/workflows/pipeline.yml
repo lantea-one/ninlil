@@ -5,17 +5,16 @@ name: 'Ninlil Pipeline'
 ##
 ## Every build and test step runs in a throwaway container of one of the toolchains in
 ## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg; shellcheck and
-## actionlint; nFPM), through .forgejo/scripts/in-container.sh, with only the checkout mounted.
-## The Linux jobs run on
-## the runner 'asgard' only, which needs just Docker (with buildx), git, curl, and jq, for the version,
+## actionlint; nFPM), through .forgejo/scripts/in-container.sh, with only the checkout mounted;
+## the toolchain images are tagged ninlil-builder-<toolchain>. The Linux jobs run on the amd64
+## runner 'asgard' only, which needs just Docker (with buildx), git, curl, and jq, for the version,
 ## the release API calls, and the container image, which is the prebuilt Linux executables copied
-## onto a chiseled base. Everything cross-compiles, so any runner builds every platform; the arch
-## toolchain image is amd64-only, so an arm64 runner needs amd64 emulation (binfmt) for it. The
-## Deb and RPM install test pulls Debian, Ubuntu, Rocky Linux and Fedora images from
-## public.ecr.aws and quay.io.
+## onto a chiseled base. Everything cross-compiles, so asgard builds every platform; the arm64
+## image and smoke steps run under binfmt emulation there. The Deb and RPM install test pulls
+## Debian, Ubuntu, Rocky Linux and Fedora images from public.ecr.aws and quay.io.
 ##
 ## Tests run as the runner's unprivileged user inside a container on Docker's bridge network, so
-## they never collide with the DNS, DHCP, web, and database services the runners host; every
+## they never collide with the DNS, DHCP, web, and database services the runner hosts; every
 ## test listener (Karma's included) also takes a port the operating system reports as free, so
 ## two copies of the suite never meet.
 ##

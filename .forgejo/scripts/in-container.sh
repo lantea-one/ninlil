@@ -30,7 +30,7 @@ toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch|lint|package
 shift
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-image="ninlil-ci-${toolchain}"
+image="ninlil-builder-${toolchain}"
 cache="${XDG_CACHE_HOME:-${HOME}/.cache}/ninlil-ci"
 mkdir -p "${cache}/nuget" "${cache}/nuget-scratch" "${cache}/npm"
 
@@ -40,16 +40,23 @@ if [[ "${toolchain}" == 'arch' ]]; then
     platform=(--platform linux/amd64)
 fi
 
-# The image is built from the Dockerfile alone, with no build context; after the first build on
-# a host every layer is cached. The build output is shown only if it fails.
+# The image is built from the Dockerfile alone, with no build context, on every call, so it always
+# matches the checkout's docker/ci.Dockerfile; an unchanged file costs nothing because every layer
+# is cached. The build output is shown only if it fails.
 build_log="$(mktemp)"
 trap 'rm -f "${build_log}"' EXIT
 if ! docker build --progress=plain "${platform[@]}" --target "${toolchain}" --tag "${image}" \
+    --label "ninlil.builder=${toolchain}" \
     - < "${repository_root}/docker/ci.Dockerfile" > "${build_log}" 2>&1; then
     cat "${build_log}" >&2
     exit 1
 fi
 rm -f "${build_log}"
+
+# A changed Dockerfile leaves the previous build of this toolchain untagged on the runner. Remove
+# those: the filter matches only untagged images carrying this toolchain's builder label, so the
+# runner's other images stay, and Docker keeps any image a running container still uses.
+docker image prune --force --filter "label=ninlil.builder=${toolchain}" > /dev/null 2>&1 || true
 
 arguments=(
     --rm

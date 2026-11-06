@@ -6180,13 +6180,15 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 ### The pipeline
 
 The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run only on the project's
-own Forgejo runner `asgard`, which needs only Docker with buildx (and binfmt emulation for the
-arm64 builds), `git`, `curl`, and `jq`. Every
-build and test step runs in a throwaway container of one of the toolchains in
-[`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and Chromium;
-`makepkg`; shellcheck and actionlint; nFPM) with just the checkout mounted, through
-[`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). One job, the Windows
-smoke test, runs on the project's Windows runner `lofnheim` instead. It runs
+own Forgejo runner `asgard`, which needs only Docker with buildx (and binfmt emulation for the arm64
+builds), `git`, `curl`, and `jq`. Every build and test step runs in a throwaway container of one of
+the toolchains in [`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and
+Chromium; `makepkg`; shellcheck and actionlint; nFPM) with just the checkout mounted, through
+[`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). The toolchain images are
+tagged `ninlil-builder-<toolchain>` and rebuilt from that file by every job, so they always match
+the checkout; the weekly pin bump keeps their base images current, and the previous build of a
+toolchain is removed when the file changes. One job, the Windows smoke test, runs on the project's
+Windows runner `lofnheim` instead. It runs
 [`windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1), which unzips the Windows release
 asset and starts the executable beside `msquic.dll`, and checks `/status`, the admin console, one DNS query, HTTPS and DNS-over-TLS on the first
 start, and that DNS-over-QUIC is listening (a real DoQ query under PowerShell 7). Locally, `pwsh
@@ -6217,7 +6219,7 @@ runs with `--filter "Category!=RequiresDocker"`, which skips the PostgreSQL quer
 same-repo branch is pushed before its pull request, and that push build runs them with the socket.
 Mark any new test that starts a container with `[Trait("Category", "RequiresDocker")]`.
 
-**Fork pull requests.** The runners run steps on the host as a user in the Docker group, and a pull
+**Fork pull requests.** The runners (`asgard` and `lofnheim`) run steps on the host as a user in the Docker group, and a pull
 request from a fork runs its own copy of every workflow, so the rule above cannot stop a malicious
 fork by itself. Workflow runs from fork pull requests wait for a maintainer's approval, and the
 maintainer reads the diff of `.forgejo/` and every script it runs before approving a run.
