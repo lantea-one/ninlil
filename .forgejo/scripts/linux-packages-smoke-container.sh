@@ -49,7 +49,7 @@ die() {
 if command -v apt-get > /dev/null 2>&1; then
     format=deb
     architecture="$(dpkg --print-architecture)"
-    pattern="ninlil_*_${architecture}.deb"
+    pattern="ninlil-*-${architecture}.deb"
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq > /dev/null || die 'apt-get update failed'
     install_package() { apt-get install -y -qq "$@" > /tmp/package-manager.log 2>&1; }

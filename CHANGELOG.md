@@ -70,6 +70,12 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **The Debian release files are named with hyphens.** They are now `ninlil-<version>-amd64.deb`
+  and `ninlil-<version>-arm64.deb`, like every other release file. The package inside is still
+  called `ninlil`, so `apt install ./ninlil-<version>-amd64.deb` installs and upgrades it as
+  before. A script that downloads the Deb by its file name needs the new name. See [Debian,
+  Ubuntu, Fedora, RHEL and Rocky Linux](./README.md#debian-ubuntu-fedora-rhel-and-rocky-linux).
+  ([#342](https://git.lantea.one/lantea-one/ninlil/issues/342))
 - **A node that joins a cluster receives the inviting node's configuration, and a peer that missed
   a change catches up.** When a join completes, the inviting node sends the new peer its
   filter lists, the entries of local lists, access control rules, global rewrites, forwarders,

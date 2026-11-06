@@ -372,8 +372,8 @@ failed checks first; `shots/` holds one full-page screenshot per visit; `host.lo
   database helper scripts.
 - [`.forgejo/scripts/windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1) starts the Windows
   executable (from the release zip, or a local file with `-ExecutablePath`) and checks `/status`,
-  the console, DNS over UDP, HTTPS, DNS-over-TLS and DNS-over-QUIC. The pipeline runs it on a
-  Windows runner.
+  the console, DNS over UDP, HTTPS, DNS-over-TLS and DNS-over-QUIC. The pipeline runs it on the
+  Windows runner `lofnheim`.
 
 ## Format and lint
 

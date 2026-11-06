@@ -17,7 +17,7 @@
 #   RPM_RELEASE  the RPM release (rpm-release), e.g. 1 or 0.develop.a1b2c3d
 #
 # Output, in <binaries-directory>:
-#   ninlil_<DEB_VERSION>_amd64.deb         ninlil_<DEB_VERSION>_arm64.deb
+#   ninlil-<DEB_VERSION>-amd64.deb         ninlil-<DEB_VERSION>-arm64.deb
 #   ninlil-<RPM_VERSION>-<RPM_RELEASE>.x86_64.rpm   ninlil-<RPM_VERSION>-<RPM_RELEASE>.aarch64.rpm
 # Exits non-zero when an input is missing or nFPM fails.
 
@@ -51,9 +51,9 @@ build() {
         nfpm package --config "${config}" --packager "${format}" --target "${target}"
 }
 
-build amd64 ninlil-linux-amd64 deb "${DEB_VERSION}" '' "${binaries}/ninlil_${DEB_VERSION}_amd64.deb"
-build arm64 ninlil-linux-arm64 deb "${DEB_VERSION}" '' "${binaries}/ninlil_${DEB_VERSION}_arm64.deb"
+build amd64 ninlil-linux-amd64 deb "${DEB_VERSION}" '' "${binaries}/ninlil-${DEB_VERSION}-amd64.deb"
+build arm64 ninlil-linux-arm64 deb "${DEB_VERSION}" '' "${binaries}/ninlil-${DEB_VERSION}-arm64.deb"
 build amd64 ninlil-linux-amd64 rpm "${RPM_VERSION}" "${RPM_RELEASE}" "${binaries}/ninlil-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm"
 build arm64 ninlil-linux-arm64 rpm "${RPM_VERSION}" "${RPM_RELEASE}" "${binaries}/ninlil-${RPM_VERSION}-${RPM_RELEASE}.aarch64.rpm"
 
-ls -l "${binaries}"/ninlil_*.deb "${binaries}"/ninlil-*.rpm
+ls -l "${binaries}"/ninlil-*.deb "${binaries}"/ninlil-*.rpm
