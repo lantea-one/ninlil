@@ -7,7 +7,7 @@ name: 'Ninlil Pipeline'
 ## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg; shellcheck and
 ## actionlint; nFPM), through .forgejo/scripts/in-container.sh, with only the checkout mounted.
 ## The Linux jobs run on
-## runners labelled 'archlinux-multi-platform', which need just Docker (with buildx), git, curl, and jq, for the version,
+## the runner 'asgard' only, which needs just Docker (with buildx), git, curl, and jq, for the version,
 ## the release API calls, and the container image, which is the prebuilt Linux executables copied
 ## onto a chiseled base. Everything cross-compiles, so any runner builds every platform; the arch
 ## toolchain image is amd64-only, so an arm64 runner needs amd64 emulation (binfmt) for it. The
@@ -62,7 +62,7 @@ jobs:
     name: 'Compute Version'
     if: >-
       inputs.kind != 'verify'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     outputs:
       version: '${{ steps.version.outputs.version }}'
       assembly-version: '${{ steps.version.outputs.assembly-version }}'
@@ -113,7 +113,7 @@ jobs:
   ##
   test-dotnet:
     name: 'Test .NET'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -172,7 +172,7 @@ jobs:
   ##
   test-admin-console:
     name: 'Test Admin Console'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -214,7 +214,7 @@ jobs:
   ##
   lint:
     name: 'Lint and Script Tests'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -239,7 +239,7 @@ jobs:
       - 'lint'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -273,7 +273,7 @@ jobs:
     needs:
       - 'version'
       - 'draft'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     strategy:
       matrix:
         ## 'file' is the name publish-binary.sh writes (the Windows one is a zip holding the .exe and
@@ -332,7 +332,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'
@@ -376,7 +376,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'
@@ -423,7 +423,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -490,7 +490,7 @@ jobs:
       - 'lint'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     strategy:
       matrix:
         include:
@@ -556,8 +556,7 @@ jobs:
   ##
   ## Starts the Windows executable from the draft on the Windows runner and checks /status, the
   ## admin console and one DNS query (windows-smoke.ps1). A smoke test only; there is no Windows
-  ## test suite. 'windows-latest' is the label the Windows runner registers; if that runner
-  ## registers only under its own name, change the label to 'lofnheim' (both are declared in
+  ## test suite. It runs on the Windows runner 'lofnheim' only (declared in
   ## .forgejo/actionlint.yaml). Windows PowerShell 5.1 is always installed there, so the step
   ## uses it instead of requiring pwsh.
   ##
@@ -568,7 +567,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
-    runs-on: 'windows-latest'
+    runs-on: 'lofnheim'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -602,7 +601,7 @@ jobs:
       - 'linux-packages'
       - 'image'
       - 'packages'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'

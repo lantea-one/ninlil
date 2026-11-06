@@ -40,7 +40,7 @@ jobs:
   ##
   bump:
     name: 'Bump Pins'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     env:
       BASE_BRANCH: '${{ inputs.base || ''develop'' }}'
     steps:
