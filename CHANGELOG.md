@@ -146,6 +146,13 @@ outside Forgejo.
   retries the file replace for up to about a second instead of failing.
   ([#13](https://git.lantea.one/lantea-one/ninlil/issues/13))
 
+- **On Windows, a client that closes its port before the reply no longer logs a warning.** Windows
+  reports the ICMP "port unreachable" that follows as an error on the server's next UDP receive,
+  and Ninlil logged "Error receiving a UDP datagram" for each one, which any sender could
+  provoke. Plain DNS, DNSCrypt, DHCPv4, DHCPv6, the TFTP listener and the DHCPv6 relay now switch
+  that behaviour off on their UDP sockets. Linux is unaffected.
+  ([#17](https://git.lantea.one/lantea-one/ninlil/issues/17))
+
 ## v2026.10.31.1
 
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with

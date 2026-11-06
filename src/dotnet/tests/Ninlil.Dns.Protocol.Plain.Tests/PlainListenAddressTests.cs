@@ -303,7 +303,40 @@ public sealed class PlainListenAddressTests
             int? port = null
         )
         {
-            RunningListeners running = new() { Port = port ?? LocalAddresses.GetFreePort() };
+            // Several sockets (one per listen address, UDP and TCP) must share one port number,
+            // which a listener asked for port 0 cannot give: each socket would get its own. So
+            // the port is picked first and the start retried a bounded number of times when
+            // another process takes it in between (the bind reports "address already in use").
+            // A caller that passes a port gets exactly one attempt.
+            for (int attempt = 1; ; attempt++)
+            {
+                RunningListeners running = await TryStartAsync(
+                    listenAddresses,
+                    port ?? LocalAddresses.GetFreePort()
+                );
+
+                if (port is not null || attempt == 5 || !running.LostThePortRace())
+                    return running;
+
+                await running.DisposeAsync();
+            }
+        }
+
+        /// <summary>
+        ///     This method reports whether a listener failed to bind because the port was taken
+        ///     after it was picked.
+        /// </summary>
+        private bool LostThePortRace()
+        {
+            string inUse = new SocketException((int)SocketError.AddressAlreadyInUse).Message;
+            return Udp
+                .FailedListenAddresses.Concat(Tcp.FailedListenAddresses)
+                .Any(failure => failure.Contains(inUse));
+        }
+
+        private static async Task<RunningListeners> TryStartAsync(string listenAddresses, int port)
+        {
+            RunningListeners running = new() { Port = port };
 
             running._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher(

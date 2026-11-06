@@ -6,9 +6,19 @@
             as a clean, storage- and transport-agnostic Dhcpv4Message any DHCPv4 transport or
             server engine can build on. Nothing in here talks to a network socket or a database;
             it only knows how to turn a Dhcpv4Message into raw bytes and back again. It needs
-            nothing beyond the base class library, the same "framework-free" posture
-            Ninlil.Dns.Common already established for the DNS wire-format layer.
+            nothing beyond the base class library and Ninlil.Common.Extension (a socket helper
+            the DHCP listeners share), the same "framework-free" posture Ninlil.Dns.Common
+            already established for the DNS wire-format layer.
         </Description>
     <PackageId>Ninlil.Dhcp.Common</PackageId>
   </PropertyGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Common.Extension -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Common.Extension\Ninlil.Common.Extension.csproj')">
+    <ProjectReference Include="..\Ninlil.Common.Extension\Ninlil.Common.Extension.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Common.Extension\Ninlil.Common.Extension.csproj')">
+    <PackageReference Include="Ninlil.Common.Extension" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Common.Extension -->
 </Project>

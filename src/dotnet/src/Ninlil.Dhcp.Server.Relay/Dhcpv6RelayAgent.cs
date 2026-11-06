@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Sockets;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
@@ -113,6 +114,11 @@ public sealed class Dhcpv6RelayAgent
             SocketType.Dgram,
             ProtocolType.Udp
         );
+
+        // The relay receives server replies on this socket. On Windows an ICMP port-unreachable
+        // for an earlier send (a server that is down) would fail the next receive with
+        // WSAECONNRESET and log a warning for each one.
+        _outboundSocket.IgnoreIcmpPortUnreachable();
         _outboundSocket.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
 
         // The link-address names the client link (RFC 9915 Section 19.1.1), so its interface is the

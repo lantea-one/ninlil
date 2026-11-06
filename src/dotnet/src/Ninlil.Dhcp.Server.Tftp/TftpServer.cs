@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Sockets;
 using Ninlil.Dhcp.Common.Control;
 using Ninlil.Dhcp.Server.Tftp.Wire;
 
@@ -267,6 +268,12 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             rootDirectory = TftpPathResolver.ResolveRealRoot(rootDirectory);
 
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+            // The listening socket receives requests from many clients. On Windows a client that
+            // closes its port before the reply would fail the next receive with WSAECONNRESET (a
+            // warning in the log that any sender can provoke). The per-transfer sockets keep the
+            // default: there the error is how a client that vanished mid-transfer is noticed.
+            socket.IgnoreIcmpPortUnreachable();
 
             try
             {
