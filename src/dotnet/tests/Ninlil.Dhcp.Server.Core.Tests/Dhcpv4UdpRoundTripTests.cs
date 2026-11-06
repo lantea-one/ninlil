@@ -27,8 +27,8 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
 {
     private Dhcpv4EngineTestHost _host;
     private Dhcpv4UdpListener _listener;
+    private Dhcpv4ProtocolOptions _options;
     private int _serverPort;
-    private int _clientPort;
 
     /// <inheritdoc />
     public async Task InitializeAsync()
@@ -36,22 +36,18 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
         _host = new Dhcpv4EngineTestHost();
         await _host.InitializeAsync();
 
-        _serverPort = GetFreeUdpPort();
-        _clientPort = GetFreeUdpPort();
-
-        Dhcpv4ProtocolOptions options = new()
-        {
-            Enable = true,
-            ServerPort = _serverPort,
-            ClientPort = _clientPort,
-        };
+        // Port 0 lets the operating system pick the server port and the listener report it, so no
+        // other process can take a port number between a probe and the bind. The client port is
+        // set in CreateClient, once the test's client socket has its own port.
+        _options = new Dhcpv4ProtocolOptions { Enable = true, ServerPort = 0 };
         _listener = new Dhcpv4UdpListener(
             _host.Handler,
-            MicrosoftOptions.Create(options),
+            MicrosoftOptions.Create(_options),
             NullLogger<Dhcpv4UdpListener>.Instance
         );
 
         await _listener.StartAsync(CancellationToken.None);
+        _serverPort = _listener.BoundPort;
 
         DateTime deadline = DateTime.UtcNow.AddSeconds(5);
         while (!_listener.IsListening && DateTime.UtcNow < deadline)
@@ -75,7 +71,7 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
             gatewayAddresses: ["198.51.100.1"]
         );
 
-        using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, _clientPort));
+        using UdpClient client = CreateClient();
         byte[] clientHardwareAddress = [0xde, 0xad, 0xbe, 0xef, 0x00, 0x01];
 
         // 1. DISCOVER -> OFFER.
@@ -152,7 +148,7 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
             valueSource: DhcpOptionValueSourceEnum.ServerAddress
         );
 
-        using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, _clientPort));
+        using UdpClient client = CreateClient();
         byte[] clientHardwareAddress = [0xde, 0xad, 0xbe, 0xef, 0x00, 0x03];
 
         Dhcpv4Message discover = NewMessage(clientHardwareAddress, 0x4444);
@@ -168,6 +164,26 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This constant is how long a test waits for a reply. A reply ends the wait at once, so
+    ///     the length only matters when the machine is slow: the first request makes the engine
+    ///     compile its database queries, which takes seconds when many test processes share a
+    ///     host.
+    /// </summary>
+    private static readonly TimeSpan ReceiveTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    ///     This method opens a client socket on an OS-assigned loopback port and tells the
+    ///     listener to send replies there. The listener reads the client port from its options at
+    ///     each send, so setting it after the listener started is enough.
+    /// </summary>
+    private UdpClient CreateClient()
+    {
+        UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
+        _options.ClientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
+        return client;
+    }
+
+    /// <summary>
     ///     This method sends a request datagram and waits for the corresponding reply, decoding it
     ///     back into a <see cref="Dhcpv4Message" />.
     /// </summary>
@@ -175,7 +191,7 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
     {
         await SendAsync(client, request);
 
-        using CancellationTokenSource receiveTimeout = new(TimeSpan.FromSeconds(5));
+        using CancellationTokenSource receiveTimeout = new(ReceiveTimeout);
         UdpReceiveResult received = await client.ReceiveAsync(receiveTimeout.Token);
 
         Assert.True(
@@ -213,16 +229,6 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await client.ReceiveAsync(shortTimeout.Token)
         );
-    }
-
-    /// <summary>
-    ///     This method gets an unused high UDP port, as
-    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c> does.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using UdpClient probe = new(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
     }
 
     /// <summary>

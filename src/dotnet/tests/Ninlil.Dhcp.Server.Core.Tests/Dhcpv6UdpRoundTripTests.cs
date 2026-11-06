@@ -25,8 +25,8 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
     private Dhcpv6EngineTestHost _host;
     private Dhcpv6UdpListener _listener;
     private bool _ipv6LoopbackAvailable;
+    private Dhcpv6ProtocolOptions _options;
     private int _serverPort;
-    private int _clientPort;
 
     /// <inheritdoc />
     public async Task InitializeAsync()
@@ -40,22 +40,18 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
         if (!_ipv6LoopbackAvailable)
             return;
 
-        _serverPort = GetFreeUdpPort();
-        _clientPort = GetFreeUdpPort();
-
-        Dhcpv6ProtocolOptions options = new()
-        {
-            Enable = true,
-            ServerPort = _serverPort,
-            ClientPort = _clientPort,
-        };
+        // Port 0 lets the operating system pick the server port and the listener report it, so no
+        // other process can take a port number between a probe and the bind. The client port is
+        // set in CreateClient, once the test's client socket has its own port.
+        _options = new Dhcpv6ProtocolOptions { Enable = true, ServerPort = 0 };
         _listener = new Dhcpv6UdpListener(
             _host.Handler,
-            MicrosoftOptions.Create(options),
+            MicrosoftOptions.Create(_options),
             NullLogger<Dhcpv6UdpListener>.Instance
         );
 
         await _listener.StartAsync(CancellationToken.None);
+        _serverPort = _listener.BoundPort;
 
         DateTime deadline = DateTime.UtcNow.AddSeconds(5);
         while (!_listener.IsListening && DateTime.UtcNow < deadline)
@@ -83,8 +79,7 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
             "2001:db8:9999::11"
         );
 
-        using UdpClient client = new(AddressFamily.InterNetworkV6);
-        client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, _clientPort));
+        using UdpClient client = CreateClient();
         byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x01];
 
         // 1. SOLICIT -> ADVERTISE.
@@ -181,8 +176,7 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
             serverAddressOptionTags: new HashSet<byte> { 23 }
         );
 
-        using UdpClient client = new(AddressFamily.InterNetworkV6);
-        client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, _clientPort));
+        using UdpClient client = CreateClient();
         byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x02];
 
         Dhcpv6Message solicit = new()
@@ -207,6 +201,27 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This constant is how long a test waits for a reply. A reply ends the wait at once, so
+    ///     the length only matters when the machine is slow: the first request makes the engine
+    ///     compile its database queries, which takes seconds when many test processes share a
+    ///     host.
+    /// </summary>
+    private static readonly TimeSpan ReceiveTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    ///     This method opens a client socket on an OS-assigned IPv6 loopback port and tells the
+    ///     listener to send replies there. The listener reads the client port from its options at
+    ///     each send, so setting it after the listener started is enough.
+    /// </summary>
+    private UdpClient CreateClient()
+    {
+        UdpClient client = new(AddressFamily.InterNetworkV6);
+        client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        _options.ClientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
+        return client;
+    }
+
+    /// <summary>
     ///     This method sends a request datagram and waits for the corresponding reply, decoding it
     ///     back into a <see cref="Dhcpv6Message" />.
     /// </summary>
@@ -219,7 +234,7 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
             new IPEndPoint(IPAddress.IPv6Loopback, _serverPort)
         );
 
-        using CancellationTokenSource receiveTimeout = new(TimeSpan.FromSeconds(5));
+        using CancellationTokenSource receiveTimeout = new(ReceiveTimeout);
         UdpReceiveResult received = await client.ReceiveAsync(receiveTimeout.Token);
 
         Assert.True(
@@ -231,16 +246,5 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
             reason
         );
         return reply;
-    }
-
-    /// <summary>
-    ///     This method gets an unused high IPv6 UDP port, as
-    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> does.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        probe.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
-        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }
