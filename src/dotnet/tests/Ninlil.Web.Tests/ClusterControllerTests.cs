@@ -262,6 +262,63 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
             };
     }
 
+    /// <summary>
+    ///     Deleting a peer removes its pending config backfill request and leaves the request of
+    ///     another peer. The host runs on SQLite, where the foreign key cascades too, so this
+    ///     guards the endpoint's own removal, which MongoDB needs because it has no cascade.
+    /// </summary>
+    [Fact]
+    public async Task Delete_OfAPeerWithAPendingBackfill_RemovesTheRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        Guid nodeId = Guid.NewGuid();
+        Guid otherNodeId = Guid.NewGuid();
+
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IClusterNodeRepository nodes =
+                scope.ServiceProvider.GetRequiredService<IClusterNodeRepository>();
+            IClusterPeerConfigBackfillRepository backfills =
+                scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
+            foreach (Guid id in new[] { nodeId, otherNodeId })
+            {
+                await nodes.AddAsync(
+                    new ClusterNodeEntity
+                    {
+                        Id = id,
+                        Name = $"backfill-peer-{id:N}",
+                        RemoteNodeId = Guid.NewGuid(),
+                        Host = "192.168.1.53",
+                        Port = 443,
+                        TsigKeyName = $"backfill-key-{id:N}",
+                        TlsCertificateThumbprint = new string('c', 64),
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+                await backfills.AddAsync(
+                    new ClusterPeerConfigBackfillEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        ClusterNodeId = id,
+                        RequestedAtUtc = DateTimeOffset.UtcNow,
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+            }
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        (await client.DeleteAsync($"/api/cluster/nodes/{nodeId}")).EnsureSuccessStatusCode();
+
+        using IServiceScope checkScope = factory.Services.CreateScope();
+        IClusterPeerConfigBackfillRepository check =
+            checkScope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
+        Assert.Null(await check.FindByClusterNodeIdAsync(nodeId));
+        Assert.NotNull(await check.FindByClusterNodeIdAsync(otherNodeId));
+
+        (await client.DeleteAsync($"/api/cluster/nodes/{otherNodeId}")).EnsureSuccessStatusCode();
+    }
+
     [Fact]
     public async Task ClusterNodesEndpoint_WithoutAToken_ReturnsUnauthorized()
     {

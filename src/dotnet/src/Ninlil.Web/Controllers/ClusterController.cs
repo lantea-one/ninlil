@@ -29,6 +29,10 @@ namespace Ninlil.Web.Controllers;
 /// <param name="tsigKeyRepository">
 ///     Finds and removes a removed peer's channel key (see <see cref="RemoveNode" />).
 /// </param>
+/// <param name="backfillRepository">
+///     Finds and removes a removed peer's pending config backfill request (see
+///     <see cref="RemoveNode" />).
+/// </param>
 /// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="inviteService">Creates invites.</param>
 /// <param name="joinService">Completes a join with an invite code.</param>
@@ -43,6 +47,7 @@ namespace Ninlil.Web.Controllers;
 public class ClusterController(
     IClusterNodeRepository clusterNodeRepository,
     ITsigKeyRepository tsigKeyRepository,
+    IClusterPeerConfigBackfillRepository backfillRepository,
     IUnitOfWork unitOfWork,
     ClusterInviteService inviteService,
     ClusterJoinService joinService,
@@ -132,7 +137,7 @@ public class ClusterController(
     ///     This action removes a peer from this node's registry only. The peer is not told and
     ///     keeps its own entry for this node, so a clean two-sided break means removing the
     ///     relationship on both nodes. The peer's channel TSIG key goes with it, in the same save,
-    ///     so the peer can no longer authenticate; the key API refuses to delete a cluster key
+    ///     so the peer can no longer authenticate, and so is its pending config backfill request; the key API refuses to delete a cluster key
     ///     any other way. A key of the same name that is not linked to this peer is left alone.
     ///     Returns 404 for an unknown id. Requires
     ///     <c>clusternodes:write</c>.
@@ -151,6 +156,13 @@ public class ClusterController(
         );
         if (peerKey is not null && peerKey.ClusterNodeId == node.Id)
             tsigKeyRepository.Remove(peerKey);
+
+        // The relational engines cascade this delete; MongoDB has no cascade, so the request is
+        // removed here, in the same save, on every engine.
+        ClusterPeerConfigBackfillEntity backfill =
+            await backfillRepository.FindByClusterNodeIdAsync(node.Id, stoppingToken);
+        if (backfill is not null)
+            backfillRepository.Remove(backfill);
 
         clusterNodeRepository.Remove(node);
         await unitOfWork.SaveChangesAsync(stoppingToken);
