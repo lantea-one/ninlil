@@ -36,7 +36,9 @@ namespace Ninlil.Dns.Server.Backup;
 ///         tampered archive, a missing entry, an unexpected key ring entry, a second
 ///         certificate or configuration entry, a configuration that is not a JSON object or
 ///         more decompressed data than <see cref="BackupOptions.MaximumRestoredPayloadBytes" />
-///         is rejected before anything is written, and so is entity JSON that does not parse.
+///         is rejected before anything is written, and so is entity JSON that does not parse
+///         and, when files are restored, a key ring that <see cref="IKeyRingRestoreCheck" /> says
+///         this server cannot read.
 ///         A TsigKeys list from before the cluster key link is re-linked to its peers while the
 ///         archive is still only in memory. The bundled files are then staged next to their
 ///         targets. The existing rows are wiped and the archive's rows imported inside one
@@ -57,13 +59,18 @@ namespace Ninlil.Dns.Server.Backup;
 /// <param name="tlsCertificateOptions">Where the shared TLS certificate lives.</param>
 /// <param name="storageOptions">The active storage engine, recorded in the manifest for reference.</param>
 /// <param name="logger">The logger this service records progress and failures to.</param>
+/// <param name="keyRingRestoreCheck">
+///     Tests whether the archive's key files can be read before a restore with files changes anything;
+///     <see langword="null" /> skips the test.
+/// </param>
 public sealed partial class SystemBackupService(
     IServiceScopeFactory scopeFactory,
     IOptions<BackupOptions> backupOptions,
     BackupPathSettings backupPaths,
     TlsCertificateOptions tlsCertificateOptions,
     StorageOptions storageOptions,
-    ILogger<SystemBackupService> logger
+    ILogger<SystemBackupService> logger,
+    IKeyRingRestoreCheck keyRingRestoreCheck = null
 ) : IBackupService
 {
     /// <summary>
@@ -272,6 +279,14 @@ public sealed partial class SystemBackupService(
         RestoredFiles files = ReadAndValidateFiles(archive, budget);
         if (!restoreFiles)
             files = new RestoredFiles([], null, null);
+        else if (files.KeyRing.Count > 0 && keyRingRestoreCheck is not null)
+        {
+            // Keys this server cannot read would leave every restored secret undecryptable, and
+            // the merge cannot be undone afterwards, so the restore stops before it writes.
+            string unreadable = keyRingRestoreCheck.Check(files.KeyRing);
+            if (unreadable is not null)
+                throw new BackupArchiveInvalidException(unreadable);
+        }
 
         // Every entity file is parsed now, before anything is wiped, so malformed JSON aborts the
         // restore with nothing changed.

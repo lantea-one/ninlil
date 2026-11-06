@@ -61,10 +61,10 @@ mapping, not from hand arithmetic.
 
 <!-- EnvironmentVariableDocumentationTests matches the "Total:" sentence with a regular expression
 (TotalsPattern). Keep its wording and change only the numbers. -->
-Total: **325 individual settings** across 59 bound configuration classes, plus **3 standalone**
+Total: **329 individual settings** across 60 bound configuration classes, plus **3 standalone**
 variables read directly by configuration key (the two bootstrap administrator credentials and
 `NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's unprefixed
-equivalents, giving **335 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
+equivalents, giving **339 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
 in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not part of that
 total.
 
@@ -90,6 +90,7 @@ total.
 - [Webhooks, backup, self-update & clustering](#webhooks-backup-self-update--clustering)
 - [DHCP, DHCPv6, Router Advertisement & TFTP](#dhcp-dhcpv6-router-advertisement--tftp)
 - [Web host (Kestrel, reverse proxy, branding)](#web-host-kestrel-reverse-proxy-branding)
+- [Data Protection key ring](#data-protection-key-ring)
 - [Framework-level variables](#framework-level-variables)
   - [.NET runtime settings](#net-runtime-settings)
 - [Bootstrap administrator credentials](#bootstrap-administrator-credentials)
@@ -554,6 +555,23 @@ appearance/branding.
 | `NINLIL_DNS_SERVER_BRANDING_SITE_TITLE` | A custom browser-tab/header title overriding the default "Ninlil". | *(none)* |
 | `NINLIL_DNS_SERVER_BRANDING_LOGO_DATA_URI` | A custom logo, as a `data:` URI, overriding the default. | *(none)* |
 | `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` | Path of the JSON file that the settings pages merge their changes into at runtime, so a change survives a restart without editing the file by hand. A path other than `appsettings.json` is loaded and watched as a configuration source too, below `NINLIL_*` variables in precedence. | *(empty — startup uses `appsettings.json` in the content root)* |
+
+## Data Protection key ring
+
+The certificate that encrypts the key ring Ninlil keeps in the `data/` folder. The key ring unlocks
+every stored secret (TSIG secrets, DNSSEC private keys, TOTP keys, the SSO client secret, the SMTP
+password, cloud and webhook credentials, the ACME account key). A certificate set here wins on every
+platform; with none, Windows encrypts the key ring with DPAPI for the account that runs Ninlil and
+other platforms leave it unencrypted in an owner-only folder. A path or password that does not work
+stops the start with exit code 78. How to choose, how to change certificate and what a backup
+needs: [README: Security](./README.md#security).
+
+| Variable | Controls | Default |
+|---|---|---|
+| `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH` | Path of a PKCS#12 (`.pfx`) file with an RSA certificate and its private key. New key ring entries are encrypted with it. Back the certificate up separately from the data folder: without it the key ring cannot be read. | *(empty — DPAPI on Windows, no encryption elsewhere)* |
+| `NINLIL_DATA_PROTECTION_CERTIFICATE_PASSWORD` | The password of the file named by `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`. It is a secret: set it from outside the application. Leave it empty for a file without a password. | *(empty)* |
+| `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PATH` | Path of the certificate that was in use before the one above, so entries written under it stay readable. Needs `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`. Remove it once no entry uses it. | *(empty)* |
+| `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PASSWORD` | The password of the previous certificate file. It is a secret. | *(empty)* |
 
 ## Framework-level variables
 

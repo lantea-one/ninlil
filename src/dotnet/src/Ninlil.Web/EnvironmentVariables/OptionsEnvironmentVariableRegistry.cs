@@ -159,6 +159,8 @@ public static class OptionsEnvironmentVariableRegistry
         new(typeof(AppearanceOptions)),
         new(typeof(BrandingOptions)),
         new(typeof(RuntimeConfigurationOptions)),
+        // The Data Protection key ring encryption at rest (Ninlil.Web).
+        new(typeof(DataProtectionKeyRingOptions)),
     ];
 
     /// <summary>
