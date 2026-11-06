@@ -227,7 +227,7 @@ public class ListenSocketSetTests
                     message.Contains("Plain DNS (test)")
                     && message.Contains("::")
                     && message.Contains($"port {port}")
-                    && message.Contains("in use")
+                    && PortTakenReason.IsIn(message)
             );
         }
         finally
