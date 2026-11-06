@@ -35,8 +35,11 @@ namespace Ninlil.Dns.Server.Backup.Catalog;
 ///         <see cref="WebhookDeliveryAttemptEntity" /> (webhook delivery history). Cluster sync
 ///         tombstones (<see cref="ClusterSyncTombstoneEntity" />) are left out too: they only
 ///         guard against stale changes still in flight between peers, and the pending config backfill
-///         requests (<see cref="ClusterPeerConfigBackfillEntity" />) are left out because a restored
-///         node starts with no peer owed a push. A new
+///         requests (<see cref="ClusterPeerConfigBackfillEntity" />) are left out because a restore
+///         wipes the peers and the sync state restarts. On the relational engines the foreign key
+///         cascade removes the requests of the wiped peers. On MongoDB there is no cascade, so a
+///         request for a wiped peer can stay behind; the backfill runner must ignore or delete a
+///         request whose peer is missing. A new
 ///         configuration entity belongs in this catalog; only a new history table belongs in
 ///         this list.
 ///     </para>
