@@ -41,6 +41,7 @@ jobs:
   bump:
     name: 'Bump Pins'
     runs-on: 'asgard'
+    timeout-minutes: 30
     env:
       BASE_BRANCH: '${{ inputs.base || ''develop'' }}'
     steps:
