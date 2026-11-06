@@ -341,7 +341,7 @@ public class JsonElementMergePatchExtensionTests
     [InlineData("null")]
     [InlineData("true")]
     [InlineData("\"Nope\"")]
-    public void GetEnumName_ForAJsonNumber_ThrowsValidationExceptionNamingTheField(string json)
+    public void GetEnumName_ForANonNameValue_ThrowsValidationExceptionNamingTheField(string json)
     {
         ValidationException ex = Assert.Throws<ValidationException>(() =>
             Parse(json).GetEnumName<ZoneTypeEnum>("type")
