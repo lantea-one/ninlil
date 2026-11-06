@@ -8,9 +8,12 @@
 # too. The pipeline runs this script in the node toolchain container, which has both:
 #   .forgejo/scripts/in-container.sh node .forgejo/scripts/build-admin-console.sh
 #
-# Usage: build-admin-console.sh (no arguments, no environment)
+# Usage: build-admin-console.sh (no arguments)
 #
-# Output: src/dotnet/src/Ninlil.Web/wwwroot/, replaced. Exits non-zero when npm fails.
+# Environment: NPM_CI_TIMEOUT and NPM_CI_KILL_AFTER, optional; see npm-ci.sh, which runs the
+# install under a time limit.
+#
+# Output: src/dotnet/src/Ninlil.Web/wwwroot/, replaced. Exits non-zero when npm fails or hangs.
 
 set -euo pipefail
 
@@ -20,7 +23,7 @@ wwwroot="${repository_root}/src/dotnet/src/Ninlil.Web/wwwroot"
 
 (
     cd "${workspace}"
-    npm ci --no-audit --no-fund
+    "${repository_root}/.forgejo/scripts/npm-ci.sh"
     npm run build
 )
 
