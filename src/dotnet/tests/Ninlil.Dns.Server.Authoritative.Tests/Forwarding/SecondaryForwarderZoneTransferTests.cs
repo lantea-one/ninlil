@@ -54,6 +54,12 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
         $"ninlil-dns-secondaryforwarder-secondary-{Guid.NewGuid()}.sqlite3"
     );
 
+    /// <summary>
+    ///     This constant is how many times <see cref="InitializeAsync" /> starts the primary host
+    ///     on a new port when its listener could not bind the reserved one.
+    /// </summary>
+    private const int MaximumPrimaryStarts = 10;
+
     private IHost _primaryHost;
     private IHost _secondaryHost;
     private Guid _primaryZoneId;
@@ -61,18 +67,38 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        int tcpPort = GetFreeTcpPort();
         byte[] rawTsigSecret = new byte[32];
         Random.Shared.NextBytes(rawTsigSecret);
 
-        _primaryHost = BuildPrimaryHost(tcpPort);
-        await SeedPrimaryAsync(rawTsigSecret);
+        // The primary's TcpDnsListener does not expose the port it bound, so a port is reserved
+        // and released first. Another process can take it in between, so the primary starts
+        // again on a new port a bounded number of times when its listener could not bind.
+        int tcpPort = 0;
+        bool primaryListening = false;
 
-        // Starts AuthoritativeZoneCache's initial load and TcpDnsListener's real socket
-        // bind, so the secondary host below has a real, already-listening primary to pull from
-        // the moment it starts.
-        await _primaryHost.StartAsync();
-        await WaitUntilPrimaryTcpListenerIsBoundAsync();
+        for (int attempt = 1; attempt <= MaximumPrimaryStarts && !primaryListening; attempt++)
+        {
+            tcpPort = GetFreeTcpPort();
+
+            _primaryHost = BuildPrimaryHost(tcpPort);
+            await SeedPrimaryAsync(rawTsigSecret);
+
+            // Starts AuthoritativeZoneCache's initial load and TcpDnsListener's real socket
+            // bind, so the secondary host below has a real, already-listening primary to pull
+            // from the moment it starts.
+            await _primaryHost.StartAsync();
+            primaryListening = await WaitForPrimaryTcpListenerBindOutcomeAsync();
+
+            if (!primaryListening)
+            {
+                await _primaryHost.StopAsync();
+                _primaryHost.Dispose();
+                _primaryHost = null;
+                TemporaryFiles.DeleteSqliteDatabase(_primaryDatabasePath);
+            }
+        }
+
+        Assert.True(primaryListening, "The primary host's own TcpDnsListener never bound.");
 
         _secondaryHost = BuildSecondaryHost(tcpPort);
         await SeedSecondaryAsync(rawTsigSecret);
@@ -255,31 +281,36 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
 
     /// <summary>
     ///     This method waits for the primary host's real <see cref="TcpDnsListener" /> to
-    ///     report it has bound its socket -- <see cref="BackgroundService.StartAsync" />
+    ///     report the outcome of its socket bind -- <see cref="BackgroundService.StartAsync" />
     ///     (which <see cref="IHost.StartAsync" /> does await) only starts <see cref="TcpDnsListener.ExecuteAsync" />
     ///     running in the background rather than waiting for its first statements (the real
     ///     socket bind) to complete, so this closes that small window rather than leaving the
-    ///     secondary host's very first pull attempt to race it.
+    ///     secondary host's very first pull attempt to race it. It returns <see langword="true" />
+    ///     when the listener is accepting and <see langword="false" /> when the bind failed.
     /// </summary>
-    private async Task WaitUntilPrimaryTcpListenerIsBoundAsync()
+    private async Task<bool> WaitForPrimaryTcpListenerBindOutcomeAsync()
     {
         TcpDnsListener listener = _primaryHost
             .Services.GetServices<IHostedService>()
             .OfType<TcpDnsListener>()
             .Single();
 
-        DateTimeOffset deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
 
-        while (!listener.IsListening && DateTimeOffset.UtcNow < deadline)
+        while (
+            !listener.IsListening
+            && listener.FailedListenAddresses.Count == 0
+            && DateTimeOffset.UtcNow < deadline
+        )
             await Task.Delay(TimeSpan.FromMilliseconds(20));
 
-        Assert.True(listener.IsListening, "The primary host's own TcpDnsListener never bound.");
+        return listener.IsListening;
     }
 
     /// <summary>
-    ///     This method finds a free loopback TCP port by briefly binding one and releasing it --
-    ///     good enough for a single-process test run, the same technique this project's test
-    ///     suite already trusts for <c>FakeUdpUpstream</c>'s port selection.
+    ///     This method finds a free loopback TCP port by briefly binding one and releasing it.
+    ///     <see cref="InitializeAsync" /> retries the primary when the port is taken before the
+    ///     listener binds it.
     /// </summary>
     private static int GetFreeTcpPort()
     {
