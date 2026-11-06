@@ -21,9 +21,15 @@ namespace Ninlil.Dns.Server.Cluster.Channel;
 ///     <para>
 ///         <b>Known limitation</b>: a peer that is <see cref="ClusterNodeStatusEnum.Unreachable" />
 ///         or <see cref="ClusterNodeStatusEnum.Joining" /> at that moment is skipped, and a failed
-///         delivery is only logged. There is no retry, backlog or catch-up pass; the peer gets
-///         the entity again only when a later change to it is broadcast while the peer is
+///         delivery is only logged. A broadcast has no retry or backlog. The one catch-up is the
+///         join backfill (<see cref="Backfill.ClusterConfigBackfillRunner" />), which sends a
+///         peer that just joined everything this node holds; a peer that misses a later broadcast
+///         gets the entity again only when a later change to it is broadcast while the peer is
 ///         healthy, or when an operator intervenes.
+///     </para>
+///     <para>
+///         The class also sends one envelope to one chosen peer (<see cref="SendToPeerAsync" />),
+///         which is how a backfill delivers its items.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
@@ -38,7 +44,7 @@ public class ClusterConfigSyncBroadcaster(
     ClusterPeerHttpClientFactory httpClientFactory,
     IOptionsMonitor<ClusterOptions> clusterOptions,
     ILogger<ClusterConfigSyncBroadcaster> logger
-) : IClusterConfigSyncBroadcaster
+) : IClusterConfigSyncBroadcaster, IClusterConfigPeerSender
 {
     /// <summary>
     ///     This constant contains the path of the <c>ClusterChannelController.ConfigSync</c> action.
@@ -85,6 +91,52 @@ public class ClusterConfigSyncBroadcaster(
         );
     }
 
+    /// <inheritdoc />
+    public async Task<bool> SendToPeerAsync(
+        ClusterNodeEntity peer,
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    ) => await SendAsync(peer, JsonSerializer.Serialize(envelope), envelope, stoppingToken);
+
+    /// <summary>
+    ///     This method sends one serialized envelope to one peer and returns whether the peer
+    ///     answered 2xx. It logs a rejection and lets a transport failure propagate.
+    /// </summary>
+    private async Task<bool> SendAsync(
+        ClusterNodeEntity peer,
+        string requestBody,
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    )
+    {
+        using HttpClient client = httpClientFactory.CreateClient(
+            peer.TlsCertificateThumbprint,
+            DeliveryTimeout
+        );
+
+        using HttpResponseMessage response = await httpClientFactory.SendSignedAsync(
+            client,
+            $"https://{peer.Host}:{peer.Port}",
+            ConfigSyncPath,
+            peer.TsigKeyName,
+            requestBody,
+            stoppingToken
+        );
+
+        if (response.IsSuccessStatusCode)
+            return true;
+
+        logger.LogWarning(
+            "Peer node '{PeerName}' rejected a config-sync envelope for {EntityType} "
+                + "'{EntityKey}' with HTTP {StatusCode}.",
+            peer.Name,
+            envelope.EntityType,
+            envelope.EntityKey,
+            (int)response.StatusCode
+        );
+        return false;
+    }
+
     /// <summary>
     ///     This method delivers one envelope to one peer and logs a rejection or failure instead
     ///     of throwing (see the class summary), a timeout included.
@@ -98,29 +150,7 @@ public class ClusterConfigSyncBroadcaster(
     {
         try
         {
-            using HttpClient client = httpClientFactory.CreateClient(
-                peer.TlsCertificateThumbprint,
-                DeliveryTimeout
-            );
-
-            HttpResponseMessage response = await httpClientFactory.SendSignedAsync(
-                client,
-                $"https://{peer.Host}:{peer.Port}",
-                ConfigSyncPath,
-                peer.TsigKeyName,
-                requestBody,
-                stoppingToken
-            );
-
-            if (!response.IsSuccessStatusCode)
-                logger.LogWarning(
-                    "Peer node '{PeerName}' rejected a config-sync envelope for {EntityType} "
-                        + "'{EntityKey}' with HTTP {StatusCode}.",
-                    peer.Name,
-                    envelope.EntityType,
-                    envelope.EntityKey,
-                    (int)response.StatusCode
-                );
+            await SendAsync(peer, requestBody, envelope, stoppingToken);
         }
         // An HttpClient timeout is a TaskCanceledException too; only a cancelled stoppingToken
         // (shutdown) propagates, so a peer that times out counts as failed like any other.

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Cluster.Backfill;
 using Ninlil.Dns.Server.Cluster.Channel;
 using Ninlil.Dns.Server.Cluster.Http;
 using Ninlil.Dns.Server.Cluster.Options;
@@ -29,6 +30,13 @@ namespace Ninlil.Dns.Server.Cluster.Heartbeat;
 ///         it after a renewal (see <see cref="ClusterHeartbeatReceiver" />), and each round
 ///         removes invite keys whose invite expired unused (see <see cref="Invite.ClusterInviteService" />).
 ///     </para>
+///     <para>
+///         After a round has saved, every peer whose probe succeeded in that round and that is
+///         owed a config backfill is handed to <see cref="IClusterConfigBackfillRunner" />. The
+///         gate is the successful probe, not the stored status: a peer that joined is stored as
+///         healthy before the joiner has stored its own key, and a request sent in that gap would
+///         be refused.
+///     </para>
 /// </summary>
 /// <param name="scopeFactory">
 ///     The factory used to create a scope for each round, for the scoped repository and unit of
@@ -37,12 +45,14 @@ namespace Ninlil.Dns.Server.Cluster.Heartbeat;
 /// <param name="httpClientFactory">The factory used to build and sign each outbound probe.</param>
 /// <param name="clusterOptions">The cluster settings, read on every round (except the interval).</param>
 /// <param name="certificateProvider">The provider of this node's TLS certificate, whose thumbprint each probe announces.</param>
+/// <param name="backfillRunner">The runner started for a reachable peer that is owed a config backfill.</param>
 /// <param name="logger">The logger this service records a status transition, or a probe failure, to.</param>
 public class ClusterHeartbeatBackgroundService(
     IServiceScopeFactory scopeFactory,
     ClusterPeerHttpClientFactory httpClientFactory,
     IOptionsMonitor<ClusterOptions> clusterOptions,
     ReloadableTlsCertificateProvider certificateProvider,
+    IClusterConfigBackfillRunner backfillRunner,
     ILogger<ClusterHeartbeatBackgroundService> logger
 ) : BackgroundService
 {
@@ -127,12 +137,24 @@ public class ClusterHeartbeatBackgroundService(
             return;
 
         // Probed concurrently, so a slow peer does not delay the others.
-        await Task.WhenAll(peers.Select(peer => ProbeOneAsync(peer, options, stoppingToken)));
+        bool[] reached = await Task.WhenAll(
+            peers.Select(peer => ProbeOneAsync(peer, options, stoppingToken))
+        );
 
         foreach (ClusterNodeEntity peer in peers)
             clusterNodeRepository.Update(peer);
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        // After the save, so the pass sees the peer's stored state. The pending list is bounded
+        // by the number of peers. A pass runs detached; a pass already running for a peer makes
+        // TryStart return false and the round moves on.
+        IReadOnlyList<Guid> pending = await scope
+            .ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>()
+            .ListPendingClusterNodeIdsAsync(stoppingToken);
+        for (int index = 0; index < peers.Count; index++)
+            if (reached[index] && pending.Contains(peers[index].Id))
+                backfillRunner.TryStart(peers[index].Id);
     }
 
     /// <summary>
@@ -141,7 +163,8 @@ public class ClusterHeartbeatBackgroundService(
     ///     as a missed heartbeat; only shutdown (a cancelled <paramref name="stoppingToken" />)
     ///     propagates.
     /// </summary>
-    private async Task ProbeOneAsync(
+    /// <returns><see langword="true" /> when the peer answered the probe with a 2xx.</returns>
+    private async Task<bool> ProbeOneAsync(
         ClusterNodeEntity peer,
         ClusterOptions options,
         CancellationToken stoppingToken
@@ -176,10 +199,11 @@ public class ClusterHeartbeatBackgroundService(
                 peer.LastHeartbeatAtUtc = DateTimeOffset.UtcNow;
                 peer.MissedHeartbeatCount = 0;
                 peer.Status = ClusterNodeStatusEnum.Healthy;
-                return;
+                return true;
             }
 
             RecordMissedHeartbeat(peer, options, $"HTTP {(int)response.StatusCode}");
+            return false;
         }
         // An HttpClient timeout is a TaskCanceledException too; only a cancelled stoppingToken
         // (shutdown) propagates, so a peer that times out counts as failed like any other.
@@ -189,6 +213,7 @@ public class ClusterHeartbeatBackgroundService(
             )
         {
             RecordMissedHeartbeat(peer, options, exception.Message);
+            return false;
         }
     }
 

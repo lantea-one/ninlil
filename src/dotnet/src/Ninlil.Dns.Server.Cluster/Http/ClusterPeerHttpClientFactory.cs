@@ -35,7 +35,11 @@ public class ClusterPeerHttpClientFactory(
     /// </summary>
     /// <param name="pinnedCertificateThumbprintHex">The peer's pinned certificate thumbprint.</param>
     /// <param name="timeout">How long a request through this client may take before it is abandoned.</param>
-    public HttpClient CreateClient(string pinnedCertificateThumbprintHex, TimeSpan timeout)
+    /// <remarks>
+    ///     The method is virtual only as a test seam: a test subclass returns a client over a stub
+    ///     handler, so the heartbeat and the broadcaster run without a TLS peer.
+    /// </remarks>
+    public virtual HttpClient CreateClient(string pinnedCertificateThumbprintHex, TimeSpan timeout)
     {
         HttpClientHandler handler = new()
         {
