@@ -135,6 +135,11 @@ outside Forgejo.
   document as one built on Linux.
   ([#15](https://git.lantea.one/lantea-one/ninlil/issues/15))
 
+- **Saving settings on Windows works while another program is reading the file.** A virus
+  scanner, a backup tool or an editor can briefly hold the settings file open. The save then
+  retries the file replace for up to about a second instead of failing.
+  ([#13](https://git.lantea.one/lantea-one/ninlil/issues/13))
+
 ## v2026.10.31.1
 
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with
