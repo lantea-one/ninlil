@@ -114,8 +114,15 @@ public sealed partial class ForwarderQueryResolverTests
         IDnssecValidator validator = null,
         RecursiveServerOptions recursiveOptions = null,
         EdnsClientSubnetService clientSubnetService = null
-    ) =>
-        CreateResolver(
+    )
+    {
+        // The gated upstream holds a query until the test lets it go, which can take longer than
+        // the default per-forwarder timeout on a loaded machine. A leader cut off by that timeout
+        // would answer NotHandled and fail the test for a reason unrelated to coalescing, so the
+        // timeout is longer than any wait UntilAsync allows.
+        _cachingForwardingOptions.PerForwarderTimeout = _coalescingTimeout * 2;
+
+        return CreateResolver(
             forwardingOptions: _cachingForwardingOptions,
             recursiveOptions: recursiveOptions ?? _cachingRecursiveOptions,
             validator: validator,
@@ -123,6 +130,7 @@ public sealed partial class ForwarderQueryResolverTests
             forwarderClients: [client],
             clientSubnetService: clientSubnetService
         );
+    }
 
     /// <summary>
     ///     This method starts a query on the thread pool so several can be in flight at once.
