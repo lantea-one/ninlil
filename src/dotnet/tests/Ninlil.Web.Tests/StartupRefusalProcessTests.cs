@@ -35,8 +35,7 @@ public sealed class StartupRefusalProcessTests : IDisposable
     /// </summary>
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
-        Directory.Delete(_directory, recursive: true);
+        TemporaryFiles.DeleteDirectory(_directory);
     }
 
     /// <summary>

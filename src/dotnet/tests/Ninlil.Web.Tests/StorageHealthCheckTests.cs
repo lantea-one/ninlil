@@ -93,7 +93,7 @@ public sealed class StorageHealthCheckTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TemporaryFiles.DeleteDirectory(directory);
         }
     }
 
@@ -118,7 +118,7 @@ public sealed class StorageHealthCheckTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TemporaryFiles.DeleteDirectory(directory);
         }
     }
 }

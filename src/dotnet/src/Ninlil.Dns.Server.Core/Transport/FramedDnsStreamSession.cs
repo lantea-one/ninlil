@@ -181,6 +181,22 @@ public sealed class FramedDnsStreamSession
     public long DroppedResponseCount => Interlocked.Read(ref _droppedResponses);
 
     /// <summary>
+    ///     This property is <see langword="true" /> once <see cref="RunAsync" /> returned because
+    ///     a handler returned <see cref="FrameOutcomeEnum.CloseAfterDrain" /> or
+    ///     <see cref="FrameOutcomeEnum.EnqueuedAndCloseAfterDrain" /> and every reply was written.
+    ///     It stays <see langword="false" /> after an abort, a peer close or the idle timeout. The
+    ///     client may still have unread data on the socket in the <see langword="true" /> case, so
+    ///     the owner closes with <see cref="LingeringSocketClose.CloseAsync" />.
+    /// </summary>
+    public bool ClosedAfterDrain { get; private set; }
+
+    /// <summary>
+    ///     This field is set when a handler asked to close after the drain; the read loop then
+    ///     returns like it does for a peer close, so the flag tells the two apart.
+    /// </summary>
+    private bool _handlerRequestedClose;
+
+    /// <summary>
     ///     This method ends the connection now. Queued frames are discarded, in-flight slots are
     ///     released as their queries finish, and <see cref="RunAsync" /> returns. It is safe to
     ///     call more than once, from any thread.
@@ -295,7 +311,10 @@ public sealed class FramedDnsStreamSession
         try
         {
             if (await ReadLoopAsync(handleFrameAsync))
+            {
                 await WaitForInFlightQueriesAsync();
+                ClosedAfterDrain = _handlerRequestedClose && !Lifetime.IsCancellationRequested;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -399,7 +418,10 @@ public sealed class FramedDnsStreamSession
                     is FrameOutcomeEnum.CloseAfterDrain
                         or FrameOutcomeEnum.EnqueuedAndCloseAfterDrain
                 )
+                {
+                    _handlerRequestedClose = true;
                     return true;
+                }
             }
             catch
             {

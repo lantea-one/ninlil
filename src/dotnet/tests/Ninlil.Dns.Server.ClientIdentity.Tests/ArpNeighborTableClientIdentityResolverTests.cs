@@ -18,6 +18,10 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
     [Fact]
     public async Task RefreshAsync_ThenResolveAsync_ResolvesARealEntryFromThisMachinesOwnArpTable()
     {
+        // The resolver reads /proc/net/arp, which exists on Linux only.
+        if (!OperatingSystem.IsLinux())
+            return;
+
         // Read the file independently of the resolver to find an entry to assert against, so
         // the test does not depend on a particular address existing on the machine.
         IReadOnlyList<ArpNeighborTableEntry> realEntries = ArpNeighborTableParser.Parse(
@@ -98,6 +102,10 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
     [Fact]
     public async Task RefreshAsync_ThenResolveAsync_ResolvesAnIPv4MappedIPv6AddressTheSameAsItsPlainIPv4Form()
     {
+        // The resolver reads /proc/net/arp, which exists on Linux only.
+        if (!OperatingSystem.IsLinux())
+            return;
+
         IReadOnlyList<ArpNeighborTableEntry> realEntries = ArpNeighborTableParser.Parse(
             await File.ReadAllTextAsync("/proc/net/arp")
         );

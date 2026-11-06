@@ -11,9 +11,9 @@ namespace Ninlil.Dhcp.Protocol.Dhcpv6.Tests;
 ///     This test class checks what <see cref="Dhcpv6ListenerHostedService" /> does at boot when
 ///     the DHCPv6 port is already taken: another socket on the IPv6 wildcard UDP address holds an
 ///     OS-assigned port (without address reuse), so the listener's bind fails with a real
-///     "address in use" error. The hosted service must not throw, because an exception out of a
-///     hosted service stops the whole host. It logs one Error and the listener stays stopped and
-///     keeps the reason for the health check.
+///     "address in use" error (access denied on Windows). The hosted service must not throw,
+///     because an exception out of a hosted service stops the whole host. It logs one Error and
+///     the listener stays stopped and keeps the reason for the health check.
 /// </summary>
 public class Dhcpv6ListenerBindFailureTests
 {
@@ -43,9 +43,15 @@ public class Dhcpv6ListenerBindFailureTests
         await hosted.StartAsync(CancellationToken.None);
 
         Assert.False(listener.IsListening);
-        Assert.Contains("in use", listener.StartFailure, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            PortTakenReason.IsIn(listener.StartFailure),
+            $"Expected an OS port-taken reason ({PortTakenReason.Describe()}), got: {listener.StartFailure}"
+        );
         string error = Assert.Single(logger.Messages(LogLevel.Error));
         Assert.Contains("could not bind its socket", error);
-        Assert.Contains("in use", error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            PortTakenReason.IsIn(error),
+            $"Expected an OS port-taken reason ({PortTakenReason.Describe()}), got: {error}"
+        );
     }
 }

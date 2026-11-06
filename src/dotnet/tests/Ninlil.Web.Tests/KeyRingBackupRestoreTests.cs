@@ -36,8 +36,7 @@ public sealed class KeyRingBackupRestoreTests : IDisposable
     /// </summary>
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        Directory.Delete(_root, recursive: true);
+        TemporaryFiles.DeleteDirectory(_root);
     }
 
     /// <summary>

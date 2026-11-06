@@ -104,8 +104,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         if (_pipeline is not null)
             await _pipeline.StopAsync(CancellationToken.None);
 
-        if (_certificateStatePath is not null && File.Exists(_certificateStatePath))
-            File.Delete(_certificateStatePath);
+        TemporaryFiles.DeleteFile(_certificateStatePath);
     }
 
     [Fact]

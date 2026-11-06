@@ -16,7 +16,7 @@ public sealed class AtomicFileTests : IDisposable
 
     private string TargetPath => Path.Combine(_directory, "target.bin");
 
-    public void Dispose() => Directory.Delete(_directory, recursive: true);
+    public void Dispose() => TemporaryFiles.DeleteDirectory(_directory);
 
     private string[] TempFiles() =>
         [.. Directory.GetFiles(_directory, "*.tmp", SearchOption.AllDirectories)];
@@ -29,6 +29,50 @@ public sealed class AtomicFileTests : IDisposable
         AtomicFile.WriteAllBytes(TargetPath, [1, 2, 3], AtomicFilePermissions.OwnerOnly);
 
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(TargetPath));
+        Assert.Empty(TempFiles());
+    }
+
+    [Fact]
+    public async Task AWriteWaitsForAReaderThatBlocksDeleteSharingAndThenReplacesTheFile()
+    {
+        File.WriteAllBytes(TargetPath, [9, 9, 9]);
+
+        // The sharing the configuration provider's file reader uses: other handles may read and
+        // write but not delete or rename. On Windows that blocks File.Replace until it closes.
+        FileStream reader = new(TargetPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        Task release = Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            reader.Dispose();
+        });
+
+        AtomicFile.WriteAllBytes(TargetPath, [1, 2, 3], AtomicFilePermissions.PreserveExisting);
+        await release;
+
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(TargetPath));
+        Assert.Empty(TempFiles());
+    }
+
+    [Fact]
+    public void AWriteGivesUpAfterABoundedWaitWhenAReaderNeverReleasesTheFile()
+    {
+        // Windows only: on Unix a rename-over succeeds while the file is open.
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        File.WriteAllBytes(TargetPath, [9, 9, 9]);
+
+        using FileStream reader = new(
+            TargetPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite
+        );
+
+        Assert.Throws<IOException>(() =>
+            AtomicFile.WriteAllBytes(TargetPath, [1], AtomicFilePermissions.PreserveExisting)
+        );
+
         Assert.Empty(TempFiles());
     }
 

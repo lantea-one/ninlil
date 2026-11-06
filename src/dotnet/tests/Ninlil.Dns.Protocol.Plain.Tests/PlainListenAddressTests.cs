@@ -48,23 +48,48 @@ public sealed class PlainListenAddressTests
     {
         // Another program holds the wildcard UDP and TCP port. Neither listener may fault: a
         // faulted hosted service stops the whole host.
-        using Socket tcpOccupant = new(
-            AddressFamily.InterNetworkV6,
-            SocketType.Stream,
-            ProtocolType.Tcp
-        );
-        tcpOccupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        tcpOccupant.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
-        tcpOccupant.Listen();
-        int port = ((IPEndPoint)tcpOccupant.LocalEndPoint).Port;
+        //
+        // The UDP socket picks the port and TCP follows it. Windows can refuse a UDP bind on a
+        // port that a TCP port-0 bind returned (WSAEACCES, a reserved or excluded range), so the
+        // UDP side goes first. The TCP bind of the same number can still fail when another
+        // process holds it, so the pair is retried a bounded number of times.
+        Socket udpOccupant = null;
+        Socket tcpOccupant = null;
+        int port = 0;
 
-        using Socket udpOccupant = new(
-            AddressFamily.InterNetworkV6,
-            SocketType.Dgram,
-            ProtocolType.Udp
-        );
-        udpOccupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        udpOccupant.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+        for (int attempt = 1; tcpOccupant is null; attempt++)
+        {
+            udpOccupant = new Socket(
+                AddressFamily.InterNetworkV6,
+                SocketType.Dgram,
+                ProtocolType.Udp
+            );
+            udpOccupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+            udpOccupant.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+            port = ((IPEndPoint)udpOccupant.LocalEndPoint).Port;
+
+            Socket candidate = new(
+                AddressFamily.InterNetworkV6,
+                SocketType.Stream,
+                ProtocolType.Tcp
+            );
+            candidate.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+
+            try
+            {
+                candidate.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+                candidate.Listen();
+                tcpOccupant = candidate;
+            }
+            catch (SocketException) when (attempt < 10)
+            {
+                candidate.Dispose();
+                udpOccupant.Dispose();
+            }
+        }
+
+        using Socket udpHolder = udpOccupant;
+        using Socket tcpHolder = tcpOccupant;
 
         await using RunningListeners listeners = await RunningListeners.StartAsync("", port);
 

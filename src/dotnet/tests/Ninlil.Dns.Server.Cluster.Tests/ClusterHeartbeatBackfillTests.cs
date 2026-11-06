@@ -43,8 +43,7 @@ public sealed class ClusterHeartbeatBackfillTests : IDisposable
     {
         _host.Dispose();
         _certificateProvider.Dispose();
-        if (File.Exists(_certificateStatePath))
-            File.Delete(_certificateStatePath);
+        TemporaryFiles.DeleteFile(_certificateStatePath);
     }
 
     [Fact]

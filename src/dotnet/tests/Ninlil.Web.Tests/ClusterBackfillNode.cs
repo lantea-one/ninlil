@@ -131,7 +131,6 @@ internal sealed class ClusterBackfillNode : IDisposable
     public void Dispose()
     {
         Services.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         TemporaryFiles.DeleteSqliteDatabase(_databasePath);
         if (File.Exists(SettingsFilePath))
             File.Delete(SettingsFilePath);

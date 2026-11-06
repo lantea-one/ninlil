@@ -187,6 +187,7 @@ public sealed class TcpDnsListener(
     private async Task HandleConnectionAsync(Socket connection, CancellationToken stoppingToken)
     {
         IPEndPoint remoteEndpoint = (IPEndPoint)connection.RemoteEndPoint;
+        bool lingeringClose = false;
         // Every write is a complete reply batch that a client is waiting for. With Nagle's
         // algorithm on (it holds a small segment while earlier data is unacknowledged), the next
         // batch of a pipelined connection waits for the client's delayed acknowledgement, which is
@@ -208,6 +209,7 @@ public sealed class TcpDnsListener(
                 (messageBytes, _, sessionToken) =>
                     HandleMessageAsync(messageBytes, remoteEndpoint.Address, session, sessionToken)
             );
+            lingeringClose = session.ClosedAfterDrain;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -219,7 +221,17 @@ public sealed class TcpDnsListener(
         }
         finally
         {
-            connection.Close();
+            // After a transfer the client may have sent a message the session never read; a plain
+            // close would reset the connection and could destroy the last reply.
+            if (lingeringClose)
+                await LingeringSocketClose.CloseAsync(
+                    connection,
+                    LingeringSocketClose.DefaultMaxWait,
+                    stoppingToken
+                );
+            else
+                connection.Close();
+
             _connectionLimiter.Release();
         }
     }

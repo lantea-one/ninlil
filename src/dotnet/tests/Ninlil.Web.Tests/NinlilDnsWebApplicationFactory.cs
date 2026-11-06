@@ -245,6 +245,10 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     {
         base.Dispose(disposing);
 
+        // The hosts load the default self-signed certificate from data/ next to this assembly. On
+        // Windows that imports an entry and a key into the user's stores, which this removes.
+        TlsCertificateStore.RemoveEntriesForSource(TlsCertificateStore.DefaultStatePath);
+
         try
         {
             TemporaryFiles.DeleteSqliteDatabase(_sqlitePath);

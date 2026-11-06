@@ -76,16 +76,7 @@ public sealed class RewriteSettingsClusterSyncTests : IDisposable
     public void Dispose()
     {
         _context.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-
-        try
-        {
-            Directory.Delete(_directory, recursive: true);
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup; a leftover temporary file is harmless.
-        }
+        TemporaryFiles.DeleteDirectory(_directory);
     }
 
     private string LocalFilePath => Path.Combine(_directory, "local.json");

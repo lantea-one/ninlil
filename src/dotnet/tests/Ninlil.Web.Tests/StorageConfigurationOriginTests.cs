@@ -16,7 +16,7 @@ public sealed class StorageConfigurationOriginTests : IDisposable
         .CreateDirectory(Path.Combine(Path.GetTempPath(), $"ninlil-origin-{Guid.NewGuid():N}"))
         .FullName;
 
-    public void Dispose() => Directory.Delete(_directory, recursive: true);
+    public void Dispose() => TemporaryFiles.DeleteDirectory(_directory);
 
     private string WriteFile(string name, string json)
     {
