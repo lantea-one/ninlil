@@ -40,7 +40,7 @@ stage_env=(RELEASE_TAG="${tag}" RELEASE_PRERELEASE=false COMMIT_SHA=abc1234def R
 set_routes "{\"GET ${releases}#1\": [200, []], \"POST ${releases}\": [201, {\"id\": 9}]}"
 run_script "${stage_env[@]}" DEB_VERSION=2026.01.01.1 RPM_VERSION=2026.01.01.1 RPM_RELEASE=1 -- bash "${scripts}/release.sh" stage
 assert_eq 'release: stage exits 0' 0 "${status}"
-assert_contains 'release: the notes install the Deb with apt' "$(cat "${argv_log}")" 'sudo apt install ./ninlil_2026.01.01.1_amd64.deb'
+assert_contains 'release: the notes install the Deb with apt' "$(cat "${argv_log}")" 'sudo apt install ./ninlil-2026.01.01.1-amd64.deb'
 assert_contains 'release: the notes name the Windows zip' "$(cat "${argv_log}")" 'ninlil-windows-amd64.zip'
 assert_contains 'release: the notes install the RPM with dnf' "$(cat "${argv_log}")" 'sudo dnf install ./ninlil-2026.01.01.1-1.x86_64.rpm'
 set_routes "{}"
