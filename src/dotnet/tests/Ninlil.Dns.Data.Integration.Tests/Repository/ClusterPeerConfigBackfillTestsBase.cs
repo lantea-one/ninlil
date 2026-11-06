@@ -6,6 +6,9 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Data.Integration.Tests.Fixtures;
 using Ninlil.Dns.Data.MongoDb;
 using Ninlil.Dns.Data.MongoDb.Maintenance;
+using Ninlil.Dns.Server.Cluster.Backfill;
+using Ninlil.Dns.Server.Cluster.Channel;
+using Ninlil.Dns.Server.Core.ClusterSync;
 
 // Define our namespace.
 namespace Ninlil.Dns.Data.Integration.Tests.Repository;
@@ -15,8 +18,10 @@ namespace Ninlil.Dns.Data.Integration.Tests.Repository;
 ///     <see cref="IRepository{TEntity}.ListIdsAsync" /> that run against every engine, one
 ///     subclass per engine: the id snapshot with and without a predicate, the unique index that
 ///     allows one backfill request per peer (a second row throws the
-///     <see cref="ConflictException" /> the callers see on every engine), and the list of pending
-///     peers. The cascade on peer delete is relational only and is in
+///     <see cref="ConflictException" /> the callers see on every engine), the list of pending
+///     peers, and the backfill runner's orphan rule (a request whose peer row is gone is deleted
+///     and nothing is sent; only MongoDB can hold such a request, because the relational engines
+///     cascade the peer delete). The cascade on peer delete is relational only and is in
 ///     <see cref="ClusterPeerConfigBackfillCascadeTestsBase" />. Each test uses a fresh database.
 /// </summary>
 public abstract class ClusterPeerConfigBackfillTestsBase(EngineFixtureBase fixture)
@@ -105,6 +110,79 @@ public abstract class ClusterPeerConfigBackfillTestsBase(EngineFixtureBase fixtu
         Assert.Equal(new[] { first.Id, second.Id }.Order(), pending.Order());
         Assert.Equal(first.Id, found?.ClusterNodeId);
         Assert.Null(await repository.FindByClusterNodeIdAsync(idle.Id));
+    }
+
+    /// <summary>
+    ///     A backfill pass for a request whose peer row is gone deletes the request and sends
+    ///     nothing. MongoDB has no foreign key, so removing the peer through the repository leaves
+    ///     the request behind, as a backup restore or an older build's delete can; the relational
+    ///     engines already removed it through the cascade, and the pass then has nothing to do.
+    /// </summary>
+    [Fact]
+    public async Task Runner_ForARequestWhosePeerRowIsGone_DeletesTheRequestAndSendsNothing()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        await EnsureIndexesAsync(database);
+        ClusterNodeEntity node = NewNode("vanished");
+        await SaveNodesAsync(database, node);
+        await SaveRequestAsync(database, node.Id);
+        await using (AsyncServiceScope scope = database.Services.CreateAsyncScope())
+        {
+            IClusterNodeRepository nodes =
+                scope.ServiceProvider.GetRequiredService<IClusterNodeRepository>();
+            nodes.Remove(await nodes.GetByIdAsync(node.Id));
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        bool isMongo = database.Services.GetService<NinlilDnsMongoContext>() != null;
+        if (isMongo)
+            Assert.NotNull(await FindRequestAsync(database, node.Id));
+
+        NeverSender sender = new();
+        ClusterConfigBackfillRunner runner = new(
+            database.Services.GetRequiredService<IServiceScopeFactory>(),
+            sender,
+            NullLogger<ClusterConfigBackfillRunner>.Instance
+        );
+
+        Assert.True(await runner.RunPassAsync(node.Id, CancellationToken.None));
+
+        Assert.Null(await FindRequestAsync(database, node.Id));
+        Assert.Equal(0, sender.Calls);
+    }
+
+    private static async Task<ClusterPeerConfigBackfillEntity> FindRequestAsync(
+        EngineDatabase database,
+        Guid clusterNodeId
+    )
+    {
+        await using AsyncServiceScope scope = database.Services.CreateAsyncScope();
+        return await scope
+            .ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>()
+            .FindByClusterNodeIdAsync(clusterNodeId);
+    }
+
+    /// <summary>
+    ///     This class is a peer sender that counts its calls and refuses them, for a pass that
+    ///     must not send anything.
+    /// </summary>
+    private sealed class NeverSender : IClusterConfigPeerSender
+    {
+        private int _calls;
+
+        /// <summary>This property contains how many deliveries were attempted.</summary>
+        public int Calls => _calls;
+
+        /// <inheritdoc />
+        public Task<bool> SendToPeerAsync(
+            ClusterNodeEntity peer,
+            ClusterConfigSyncEnvelope envelope,
+            CancellationToken stoppingToken
+        )
+        {
+            Interlocked.Increment(ref _calls);
+            return Task.FromResult(false);
+        }
     }
 
     /// <summary>

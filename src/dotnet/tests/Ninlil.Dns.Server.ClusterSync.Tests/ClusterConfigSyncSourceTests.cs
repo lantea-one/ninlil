@@ -116,6 +116,79 @@ public sealed class ClusterConfigSyncSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadBackfillAsync_ForFilterListEntries_TakesOneIdSnapshotPerLocalList()
+    {
+        DnsFilterListEntity first = List(DnsFilterListSourceEnum.Local, "First");
+        DnsFilterListEntity second = List(DnsFilterListSourceEnum.Local, "Second");
+        await _host.AddAsync(first);
+        await _host.AddAsync(second);
+        DnsFilterListEntryEntity[] firstEntries =
+        [
+            Entry(first.Id, "a1.example.com"),
+            Entry(first.Id, "a2.example.com"),
+            Entry(first.Id, "a3.example.com"),
+        ];
+        DnsFilterListEntryEntity[] secondEntries =
+        [
+            Entry(second.Id, "b1.example.com"),
+            Entry(second.Id, "b2.example.com"),
+            Entry(second.Id, "b3.example.com"),
+        ];
+        foreach (DnsFilterListEntryEntity entry in firstEntries.Concat(secondEntries))
+            await _host.AddAsync(entry);
+
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
+        CountingEntryRepository entries = new(
+            scope.ServiceProvider.GetRequiredService<Ninlil.Dns.Data.EntityFrameworkCore.NinlilDnsContext>()
+        );
+        FilterListEntryClusterConfigSyncSource source = new(
+            entries,
+            scope.ServiceProvider.GetRequiredService<IDnsFilterListRepository>(),
+            scope.ServiceProvider.GetRequiredService<IOptionsMonitor<ClusterOptions>>(),
+            scope.ServiceProvider.GetRequiredService<
+                ILogger<FilterListEntryClusterConfigSyncSource>
+            >()
+        );
+
+        // An entry that is deleted after its list's snapshot is skipped, and no other entry is
+        // skipped because of it. An offset page would shift the later rows by one instead.
+        DnsFilterListEntryEntity[] all = [.. firstEntries, .. secondEntries];
+        DnsFilterListEntryEntity victim = null;
+        List<ClusterConfigSyncEnvelope> envelopes = [];
+        await foreach (
+            ClusterConfigSyncEnvelope envelope in source.ReadBackfillAsync(CancellationToken.None)
+        )
+        {
+            if (victim is null)
+            {
+                // The first envelope proves its list's snapshot exists; delete a sibling that
+                // was in that snapshot (each list has three entries, so a sibling always exists).
+                DnsFilterListEntryEntity yielded = all.Single(entry =>
+                    entry.Id.ToString() == envelope.EntityKey
+                );
+                victim = all.FirstOrDefault(entry =>
+                    entry.ListId == yielded.ListId && entry.Id != yielded.Id
+                );
+                if (victim is not null)
+                    await _host.RemoveAsync<DnsFilterListEntryEntity>(victim.Id);
+            }
+
+            envelopes.Add(envelope);
+        }
+
+        // One snapshot per local list: two lists, two id queries.
+        Assert.Equal(2, entries.IdSnapshots);
+
+        Assert.NotNull(victim);
+        string[] keys = [.. envelopes.Select(envelope => envelope.EntityKey)];
+        Assert.DoesNotContain(victim.Id.ToString(), keys);
+        Assert.Equal(
+            all.Where(entry => entry.Id != victim.Id).Select(entry => entry.Id.ToString()).Order(),
+            keys.Order()
+        );
+    }
+
+    [Fact]
     public async Task ReadBackfillAsync_ForFilterListEntries_YieldsOnlyEntriesOfLocalLists()
     {
         DnsFilterListEntity local = List(DnsFilterListSourceEnum.Local, "Mine");
@@ -451,5 +524,31 @@ public sealed class ClusterConfigSyncSourceTests : IDisposable
             ClusterConfigSyncEnvelope envelope,
             CancellationToken stoppingToken
         ) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     This class is the entry repository with a count of its id snapshot queries, so a test
+    ///     can show the source takes one per local list.
+    /// </summary>
+    /// <param name="context">The database context of the test host.</param>
+    private sealed class CountingEntryRepository(
+        Ninlil.Dns.Data.EntityFrameworkCore.NinlilDnsContext context
+    ) : Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsFilterListEntryRepository(context)
+    {
+        private int _idSnapshots;
+
+        /// <summary>This property contains how many id snapshot queries ran.</summary>
+        public int IdSnapshots => _idSnapshots;
+
+        /// <inheritdoc />
+        public override Task<IReadOnlyList<Guid>> ListIdsAsync(
+            System.Linq.Expressions.Expression<Func<DnsFilterListEntryEntity, bool>> predicate =
+                null,
+            CancellationToken stoppingToken = default
+        )
+        {
+            Interlocked.Increment(ref _idSnapshots);
+            return base.ListIdsAsync(predicate, stoppingToken);
+        }
     }
 }
