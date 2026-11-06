@@ -10,9 +10,9 @@ namespace Ninlil.Dhcp.Protocol.Dhcpv4.Tests;
 ///     This test class checks what <see cref="Dhcpv4ListenerHostedService" /> does at boot when
 ///     the DHCPv4 port is already taken: another socket on the wildcard UDP address holds an
 ///     OS-assigned port (without address reuse), so the listener's bind fails with a real
-///     "address in use" error (access denied on Windows). The hosted service must not throw, because an exception out of a
-///     hosted service stops the whole host. It logs one Error, the listener stays stopped and
-///     keeps the reason for the health check.
+///     "address in use" error (access denied on Windows). The hosted service must not throw,
+///     because an exception out of a hosted service stops the whole host. It logs one Error, the
+///     listener stays stopped and keeps the reason for the health check.
 /// </summary>
 public class Dhcpv4ListenerBindFailureTests
 {

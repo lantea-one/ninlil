@@ -128,7 +128,7 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
     /// </summary>
     private static bool CanUseRawIcmpv6OnLoopback()
     {
-        // Router Advertisement needs Linux (README: "DHCP, Router Advertisement and passive
+        // Router Advertisement needs Linux (CHANGELOG.md: "DHCP, Router Advertisement and passive
         // device presence need Linux"); the live tests fail on Windows.
         if (!OperatingSystem.IsLinux())
             return false;

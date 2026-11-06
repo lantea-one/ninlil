@@ -11,9 +11,9 @@ namespace Ninlil.Dhcp.Protocol.Dhcpv6.Tests;
 ///     This test class checks what <see cref="Dhcpv6ListenerHostedService" /> does at boot when
 ///     the DHCPv6 port is already taken: another socket on the IPv6 wildcard UDP address holds an
 ///     OS-assigned port (without address reuse), so the listener's bind fails with a real
-///     "address in use" error (access denied on Windows). The hosted service must not throw, because an exception out of a
-///     hosted service stops the whole host. It logs one Error and the listener stays stopped and
-///     keeps the reason for the health check.
+///     "address in use" error (access denied on Windows). The hosted service must not throw,
+///     because an exception out of a hosted service stops the whole host. It logs one Error and
+///     the listener stays stopped and keeps the reason for the health check.
 /// </summary>
 public class Dhcpv6ListenerBindFailureTests
 {

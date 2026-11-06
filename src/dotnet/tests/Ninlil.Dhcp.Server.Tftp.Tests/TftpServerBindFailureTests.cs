@@ -10,9 +10,9 @@ namespace Ninlil.Dhcp.Server.Tftp.Tests;
 ///     This test class checks what <see cref="TftpServerHostedService" /> does at boot when the
 ///     TFTP port is already taken: another socket on the wildcard UDP address holds an
 ///     OS-assigned port (without address reuse), so the server's bind fails with a real "address
-///     in use" error (access denied on Windows). The hosted service must not throw, because an exception out of a hosted
-///     service stops the whole host. It logs one Error, the server stays stopped and keeps the
-///     reason for the health check.
+///     in use" error (access denied on Windows). The hosted service must not throw, because an
+///     exception out of a hosted service stops the whole host. It logs one Error, the server stays
+///     stopped and keeps the reason for the health check.
 /// </summary>
 public sealed class TftpServerBindFailureTests : IAsyncLifetime
 {
