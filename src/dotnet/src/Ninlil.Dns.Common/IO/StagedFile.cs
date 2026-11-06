@@ -11,6 +11,17 @@ public sealed class StagedFile : IDisposable
     private readonly string _targetPath;
     private bool _finished;
 
+    /// <summary>The most replace attempts on Windows when another handle blocks the target.</summary>
+    private const int MaxReplaceAttempts = 20;
+
+    /// <summary>The pause between two replace attempts.</summary>
+    private static readonly TimeSpan ReplaceRetryDelay = TimeSpan.FromMilliseconds(50);
+
+    // Win32 error codes, as the HResult of the IOException that File.Replace throws.
+    private const int HResultSharingViolation = unchecked((int)0x80070020);
+    private const int HResultLockViolation = unchecked((int)0x80070021);
+    private const int HResultUnableToRemoveReplaced = unchecked((int)0x80070497);
+
     internal StagedFile(string tempPath, string targetPath)
     {
         _tempPath = tempPath;
@@ -28,8 +39,7 @@ public sealed class StagedFile : IDisposable
         try
         {
             if (OperatingSystem.IsWindows() && File.Exists(_targetPath))
-                // Replace keeps the ACL of the existing target.
-                File.Replace(_tempPath, _targetPath, null, ignoreMetadataErrors: true);
+                ReplaceWithRetry();
             else
                 // rename(2) on Unix: atomic, and it overwrites an existing file.
                 File.Move(_tempPath, _targetPath, overwrite: true);
@@ -42,6 +52,37 @@ public sealed class StagedFile : IDisposable
         finally
         {
             _finished = true;
+        }
+    }
+
+    /// <summary>
+    ///     This method replaces the target and keeps its ACL. Windows refuses the replace while
+    ///     another handle on the target lacks delete sharing. A configuration provider that
+    ///     reloads on change opens the file that way (<c>FileShare.ReadWrite</c> without
+    ///     <c>Delete</c>) a moment after every write, and we do not control that reader. Such a
+    ///     handle is short-lived, so the replace is retried a bounded number of times before the
+    ///     error reaches the caller. Rename-over (the Unix path) has no such rule.
+    /// </summary>
+    private void ReplaceWithRetry()
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                // Replace keeps the ACL of the existing target.
+                File.Replace(_tempPath, _targetPath, null, ignoreMetadataErrors: true);
+                return;
+            }
+            catch (IOException exception)
+                when (attempt < MaxReplaceAttempts
+                    && exception.HResult
+                        is HResultSharingViolation
+                            or HResultLockViolation
+                            or HResultUnableToRemoveReplaced
+                )
+            {
+                Thread.Sleep(ReplaceRetryDelay);
+            }
         }
     }
 
