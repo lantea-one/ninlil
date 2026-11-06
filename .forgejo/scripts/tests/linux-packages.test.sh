@@ -51,7 +51,7 @@ assert_contains 'linux-packages: amd64 Deb' "$(cat "${log}")" 'deb amd64 2026.10
 assert_contains 'linux-packages: arm64 Deb' "$(cat "${log}")" 'deb arm64 2026.10.09.3~develop.a1b2c3d [] ninlil-2026.10.09.3~develop.a1b2c3d-arm64.deb binary=ninlil-linux-arm64'
 assert_contains 'linux-packages: x86_64 RPM' "$(cat "${log}")" 'rpm amd64 2026.10.09.3 [0.develop.a1b2c3d] ninlil-2026.10.09.3-0.develop.a1b2c3d.x86_64.rpm binary=ninlil-linux-amd64'
 assert_contains 'linux-packages: aarch64 RPM' "$(cat "${log}")" 'rpm arm64 2026.10.09.3 [0.develop.a1b2c3d] ninlil-2026.10.09.3-0.develop.a1b2c3d.aarch64.rpm binary=ninlil-linux-arm64'
-assert_eq 'linux-packages: four packages land in the directory' 4 "$(find "${work_root}/binaries" -name 'ninlil[-_]*' ! -name 'ninlil-linux-*' | wc -l)"
+assert_eq 'linux-packages: four packages land in the directory' 4 "$(find "${work_root}/binaries" -name 'ninlil-*' ! -name 'ninlil-linux-*' | wc -l)"
 
 # A missing arm64 binary must stop the script before any package is built.
 rm -f "${work_root}/binaries"/ninlil-*.deb "${work_root}/binaries"/ninlil-*.rpm "${work_root}/binaries/ninlil-linux-arm64" "${log}"
