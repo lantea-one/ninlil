@@ -12,6 +12,7 @@ using Ninlil.Dns.Identity;
 using Ninlil.Dns.Identity.Store;
 using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.ClusterSync.AccessControl;
+using Ninlil.Dns.Server.ClusterSync.Extension;
 using Ninlil.Dns.Server.ClusterSync.Filtering;
 using Ninlil.Dns.Server.ClusterSync.Forwarding;
 using Ninlil.Dns.Server.ClusterSync.Identity;
@@ -38,73 +39,17 @@ public sealed class ClusterConfigSyncLiveEnvelopeTests : IDisposable
     private static readonly DateTimeOffset Created = new(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
     private static readonly DateTimeOffset Updated = new(2026, 2, 3, 4, 5, 6, TimeSpan.Zero);
 
-    private readonly string _databasePath = Path.Combine(
-        Path.GetTempPath(),
-        $"ninlil-dns-cluster-sync-live-envelope-tests-{Guid.NewGuid():N}.sqlite3"
-    );
-
-    private readonly ServiceProvider _services;
-    private readonly RecordingBroadcaster _broadcaster = new();
-    private readonly IDataProtectionProvider _dataProtection =
-        new EphemeralDataProtectionProvider();
-
-    public ClusterConfigSyncLiveEnvelopeTests()
-    {
-        ServiceCollection collection = new();
-        collection.AddLogging();
-        collection.AddDbContext<NinlilDnsContext>(options =>
-            options.UseNinlilDnsSqlite($"Data Source={_databasePath}")
-        );
-        collection.AddScoped<IDnsFilterListRepository, DnsFilterListRepository>();
-        collection.AddScoped<IDnsFilterListEntryRepository, DnsFilterListEntryRepository>();
-        collection.AddScoped<IDnsAccessControlRuleRepository, DnsAccessControlRuleRepository>();
-        collection.AddScoped<IDnsRewriteRepository, DnsRewriteRepository>();
-        collection.AddScoped<IDnsForwarderRepository, DnsForwarderRepository>();
-        collection.AddScoped<IUserRepository, UserRepository>();
-        collection.AddScoped<IRoleRepository, RoleRepository>();
-        collection.AddScoped<IClusterSyncTombstoneRepository, ClusterSyncTombstoneRepository>();
-        collection.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
-        collection.AddSingleton(_dataProtection);
-        collection.AddSingleton<IClusterConfigSyncBroadcaster>(_broadcaster);
-        collection.AddSingleton<IOptionsMonitor<ClusterOptions>>(
-            new FixedClusterOptions(new ClusterOptions { NodeId = OwnNode, Enable = true })
-        );
-        _services = collection.BuildServiceProvider();
-
-        using IServiceScope scope = _services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<NinlilDnsContext>().Database.EnsureCreated();
-    }
+    private readonly ClusterSyncTestHost _host = new(OwnNode);
 
     /// <inheritdoc />
-    public void Dispose()
-    {
-        _services.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+    public void Dispose() => _host.Dispose();
 
-        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
-    }
+    private Task AddAsync<TEntity>(TEntity entity)
+        where TEntity : EntityBase => _host.AddAsync(entity);
 
-    private async Task AddAsync<TEntity>(TEntity entity)
-        where TEntity : EntityBase
-    {
-        await using AsyncServiceScope scope = _services.CreateAsyncScope();
-        NinlilDnsContext context = scope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
-        context.Add(entity);
-        await context.SaveChangesAsync();
-    }
-
-    /// <summary>
-    ///     This method hands one event to a real subscriber and waits for the envelope that the
-    ///     subscriber's detached task passes to the broadcaster.
-    /// </summary>
-    private async Task<ClusterConfigSyncEnvelope> SendAsync<TSubscriber, TEvent>(TEvent domainEvent)
+    private Task<ClusterConfigSyncEnvelope> SendAsync<TSubscriber, TEvent>(TEvent domainEvent)
         where TSubscriber : IDnsServerEventSubscriber<TEvent>
-        where TEvent : IDnsServerEvent
-    {
-        TSubscriber subscriber = ActivatorUtilities.CreateInstance<TSubscriber>(_services);
-        await subscriber.HandleAsync(domainEvent, CancellationToken.None);
-        return await _broadcaster.NextAsync();
-    }
+        where TEvent : IDnsServerEvent => _host.SendAsync<TSubscriber, TEvent>(domainEvent);
 
     private static void AssertEnvelope(
         ClusterConfigSyncEnvelope envelope,
@@ -306,7 +251,7 @@ public sealed class ClusterConfigSyncLiveEnvelopeTests : IDisposable
                 UpdatedAtUtc = Updated,
             }
         );
-        await using (AsyncServiceScope scope = _services.CreateAsyncScope())
+        await using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
         {
             await scope
                 .ServiceProvider.GetRequiredService<IRoleRepository>()
@@ -343,11 +288,11 @@ public sealed class ClusterConfigSyncLiveEnvelopeTests : IDisposable
                 CreatedAtUtc = Created,
             }
         );
-        string totpCipher = _dataProtection
-            .CreateProtector(NinlilDnsUserStore.AuthenticatorKeyProtectorPurpose)
+        string totpCipher = _host
+            .DataProtection.CreateProtector(NinlilDnsUserStore.AuthenticatorKeyProtectorPurpose)
             .Protect("TOTPSECRET");
-        string codesCipher = _dataProtection
-            .CreateProtector(NinlilDnsUserStore.RecoveryCodesProtectorPurpose)
+        string codesCipher = _host
+            .DataProtection.CreateProtector(NinlilDnsUserStore.RecoveryCodesProtectorPurpose)
             .Protect("code1;code2");
         await AddAsync(
             new UserEntity
@@ -370,7 +315,7 @@ public sealed class ClusterConfigSyncLiveEnvelopeTests : IDisposable
                 UpdatedAtUtc = Updated,
             }
         );
-        await using (AsyncServiceScope scope = _services.CreateAsyncScope())
+        await using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
         {
             IUserRepository users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
             await users.AddToRoleAsync(id, roleId);
@@ -451,7 +396,7 @@ public sealed class ClusterConfigSyncLiveEnvelopeTests : IDisposable
             ),
         ];
 
-        await using AsyncServiceScope scope = _services.CreateAsyncScope();
+        await using AsyncServiceScope scope = _host.Services.CreateAsyncScope();
         IClusterSyncTombstoneRepository tombstones =
             scope.ServiceProvider.GetRequiredService<IClusterSyncTombstoneRepository>();
         foreach ((string type, ClusterConfigSyncEnvelope envelope) in sent)
@@ -468,37 +413,5 @@ public sealed class ClusterConfigSyncLiveEnvelopeTests : IDisposable
             Assert.Equal(at, tombstone.GetLastModifiedUtc());
             Assert.Equal(OwnNode, tombstone.OriginatingNodeId);
         }
-    }
-
-    /// <summary>This class records every envelope handed to it and lets a test await the next one.</summary>
-    private sealed class RecordingBroadcaster : IClusterConfigSyncBroadcaster
-    {
-        private readonly System.Threading.Channels.Channel<ClusterConfigSyncEnvelope> _channel =
-            System.Threading.Channels.Channel.CreateUnbounded<ClusterConfigSyncEnvelope>();
-
-        public Task BroadcastAsync(
-            ClusterConfigSyncEnvelope envelope,
-            CancellationToken stoppingToken
-        )
-        {
-            _channel.Writer.TryWrite(envelope);
-            return Task.CompletedTask;
-        }
-
-        public async Task<ClusterConfigSyncEnvelope> NextAsync()
-        {
-            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-            return await _channel.Reader.ReadAsync(timeout.Token);
-        }
-    }
-
-    /// <summary>This class is an options monitor that always returns one value.</summary>
-    private sealed class FixedClusterOptions(ClusterOptions value) : IOptionsMonitor<ClusterOptions>
-    {
-        public ClusterOptions CurrentValue => value;
-
-        public ClusterOptions Get(string name) => value;
-
-        public IDisposable OnChange(Action<ClusterOptions, string> listener) => null;
     }
 }
