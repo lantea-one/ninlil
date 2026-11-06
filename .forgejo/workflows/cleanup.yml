@@ -1,8 +1,8 @@
 name: 'Expire Pre-Releases'
 ##
 ## Removes every pre-release build -- release, git tag, container image tag, and NuGet package
-## version -- and every stale draft once it is 24 hours old. Published releases are never
-## touched. Runs every hour at minute 17, or by hand ("Run workflow") with an optional dry run.
+## version -- and every stale draft once it is 24 hours old, plus this runner's superseded
+## ninlil-builder images. Published releases are never touched. Runs every hour at minute 17, or by hand ("Run workflow") with an optional dry run.
 ## See .forgejo/scripts/cleanup.sh for the rules.
 ##
 on:
@@ -30,7 +30,7 @@ jobs:
   ##
   cleanup:
     name: 'Expire Pre-Releases'
-    runs-on: 'archlinux-multi-platform'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -46,4 +46,20 @@ jobs:
           DRY_RUN: '${{ inputs.dry-run || false }}'
         run: |-
           ./.forgejo/scripts/cleanup.sh
+        shell: 'bash'
+      ##
+      ## in-container.sh tags each toolchain image ninlil-builder-<toolchain>:<hash of
+      ## docker/ci.Dockerfile>, so every change to that file leaves the previous builders on this
+      ## runner. Remove every builder tag whose hash is not this checkout's. Only images labelled
+      ## ninlil.builder are listed, and docker image rm without --force refuses an image a
+      ## container still uses, so a job still running on an older branch keeps its builder.
+      ##
+      - name: 'Remove Superseded Builder Images'
+        if: >-
+          ${{ !inputs.dry-run }}
+        run: |-
+          current="$(sha256sum < docker/ci.Dockerfile | cut -c1-12)"
+          docker images --filter 'label=ninlil.builder' --format '{{.Repository}}:{{.Tag}}' \
+            | grep -v ":${current}\$" \
+            | xargs -r docker image rm > /dev/null 2>&1 || true
         shell: 'bash'

@@ -2,13 +2,11 @@
 #
 # actionlint knows only GitHub Actions. The runner labels the Forgejo workflows use are declared
 # here so it does not report them as unknown:
-#   archlinux-multi-platform  the Linux runners that run every Linux job
-#   windows-latest            the Windows runner that runs the Windows smoke test
-#   lofnheim                  that Windows runner's own name
+#   asgard    the Linux runner that runs every Linux job
+#   lofnheim  the Windows runner that runs the Windows smoke test
 self-hosted-runner:
   labels:
-    - archlinux-multi-platform
-    - windows-latest
+    - asgard
     - lofnheim
 paths:
   # test-dotnet passes a single-quoted script to `bash -c` in the container on purpose: the

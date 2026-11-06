@@ -130,12 +130,12 @@ sudo systemctl enable --now ninlil
 \`ninlil\` packages for Debian 12 and Ubuntu 22.04 and 24.04:
 
 \`\`\`sh
-curl -LO ${downloads}/ninlil_${DEB_VERSION}_amd64.deb
-sudo apt install ./ninlil_${DEB_VERSION}_amd64.deb
+curl -LO ${downloads}/ninlil-${DEB_VERSION}-amd64.deb
+sudo apt install ./ninlil-${DEB_VERSION}-amd64.deb
 sudo systemctl enable --now ninlil
 \`\`\`
 
-(\`ninlil_${DEB_VERSION}_arm64.deb\` for ARM64.)
+(\`ninlil-${DEB_VERSION}-arm64.deb\` for ARM64.)
 
 ### Fedora, RHEL, Rocky Linux and AlmaLinux
 
