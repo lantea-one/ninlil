@@ -15,9 +15,7 @@ namespace Ninlil.Web.Controllers;
 ///     This controller manages which block and allow lists apply directly to one known client,
 ///     nested under it at <c>/api/clients/{clientId}/list-assignments</c>, as
 ///     <see cref="ClientGroupListAssignmentsController" /> does for a group. A client's direct
-///     assignments are added to those of its matched
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> (see
-///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.ResolveApplicableListsAsync</c>). Reads need
+///     assignments are added to those of its matched client group. Reads need
 ///     <c>clients:read</c> and changes need <c>clients:write</c>, as for
 ///     <see cref="ClientsController" />. There is no PUT or PATCH: an assignment only joins a
 ///     client to a list, so changing the list means deleting one assignment and creating another

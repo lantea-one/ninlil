@@ -58,7 +58,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         _options = new DnsOverQuicOptions
         {
             Enable = true,
-            Port = GetFreeUdpPort(),
+            Port = 0,
             Certificate = new TlsCertificateOptions
             {
                 SelfSignedCertificateStatePath = _certificateStatePath,
@@ -331,7 +331,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             await using QuicConnection wrong = await QuicConnection.ConnectAsync(
                 new QuicClientConnectionOptions
                 {
-                    RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, _options.Port),
+                    RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, _listener.BoundPort),
                     ClientAuthenticationOptions = new SslClientAuthenticationOptions
                     {
                         ApplicationProtocols = [new SslApplicationProtocol("h3")],
@@ -349,7 +349,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
                         or System.Security.Authentication.AuthenticationException
             ) { }
 
-        DnsMessage response = await TryQueryAsync(IPAddress.Loopback, _options.Port);
+        DnsMessage response = await TryQueryAsync(IPAddress.Loopback, _listener.BoundPort);
 
         Assert.NotNull(response);
         Assert.True(_listener.IsListening);
@@ -551,7 +551,10 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         (DnsQueryProcessingPipeline pipeline, DnsOverQuicListener listener, int port) =
             await StartListenAddressListenerAsync(
                 $"127.0.0.1, {LocalAddresses.Unassigned}, {other}",
-                logger
+                logger,
+                // Two bound addresses must share one port, but port 0 gives each listener its
+                // own, so this test needs a port known before the listener starts.
+                port: LocalAddresses.GetFreePort()
             );
 
         try
@@ -627,7 +630,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
 
     /// <summary>
     ///     This method starts a separate pipeline and listener bound to the given listen addresses
-    ///     on a free port, apart from the shared one in <see cref="InitializeAsync" /> (which
+    ///     on <paramref name="port" /> (0 picks a free one), apart from the shared one in <see cref="InitializeAsync" /> (which
     ///     listens on every address).
     /// </summary>
     private async Task<(
@@ -637,10 +640,10 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     )> StartListenAddressListenerAsync(
         string listenAddresses,
         ILogger<DnsOverQuicListener> logger,
-        Action<DnsOverQuicOptions> configure = null
+        Action<DnsOverQuicOptions> configure = null,
+        int port = 0
     )
     {
-        int port = LocalAddresses.GetFreePort();
         DnsQueryProcessingPipeline pipeline = new(
             new EchoingDispatcher(),
             new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
@@ -676,7 +679,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         while (!listener.IsListening)
             await Task.Delay(10, timeout.Token);
 
-        return (pipeline, listener, port);
+        return (pipeline, listener, listener.BoundPort);
     }
 
     /// <summary>
@@ -784,7 +787,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             .BuildServiceProvider()
             .GetRequiredService<IServiceScopeFactory>();
 
-    private async Task<QuicConnection> ConnectAsync() => await ConnectToAsync(_options.Port);
+    private async Task<QuicConnection> ConnectAsync() => await ConnectToAsync(_listener.BoundPort);
 
     /// <summary>
     ///     This method opens a stream on a connection, sends a query and reads its answer,
@@ -838,12 +841,6 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
                 DefaultStreamErrorCode = 0,
             }
         );
-
-    private static int GetFreeUdpPort()
-    {
-        using UdpClient probe = new(0);
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
-    }
 
     private static DnsMessage BuildQuery(ushort id, string name)
     {

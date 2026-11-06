@@ -159,12 +159,14 @@ public sealed class PendingStorageSwitchApplierTests : IDisposable
                 SelfSignedCertificateStatePath = Path.Combine(_directory, "no-certificate.pfx"),
             }
         );
+        services.AddSingleton(
+            new BackupPathSettings
+            {
+                DataProtectionKeyRingDirectory = _directory,
+                RuntimeConfigurationFilePath = runtimeFile,
+            }
+        );
         services.AddNinlilDnsServerBackup(configuration);
-        services.PostConfigure<BackupOptions>(options =>
-        {
-            options.DataProtectionKeyRingDirectory = _directory;
-            options.RuntimeConfigurationFilePath = runtimeFile;
-        });
 
         RuntimeConfigurationOptions runtimeOptions = new() { ConfigurationFilePath = runtimeFile };
         services.AddSingleton(runtimeOptions);

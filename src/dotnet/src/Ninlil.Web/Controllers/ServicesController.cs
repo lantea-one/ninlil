@@ -95,11 +95,11 @@ public class ServicesController(IManagedServiceRegistry registry) : ControllerBa
 
     /// <summary>
     ///     This action stops one service and starts it again. Services that reload their state on
-    ///     every start pick up changes this way: <c>AuthoritativeZoneCache</c> and
-    ///     <c>SignedZoneCache</c> reload their whole in-memory snapshot from storage, and their
-    ///     stop leaves the loaded snapshot answering, so for them only a restart has a visible
-    ///     effect. A transport listener re-reads its port, certificate and tuning settings. Returns
-    ///     404 for an unknown name. Requires <c>services:manage</c>.
+    ///     every start pick up changes this way: the authoritative zone cache and the signed zone
+    ///     cache reload their whole in-memory snapshot from storage, and their stop leaves the
+    ///     loaded snapshot answering, so for them only a restart has a visible effect. A transport
+    ///     listener re-reads its port, certificate and tuning settings. Returns 404 for an unknown
+    ///     name. Requires <c>services:manage</c>.
     /// </summary>
     /// <param name="name">The service to restart.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

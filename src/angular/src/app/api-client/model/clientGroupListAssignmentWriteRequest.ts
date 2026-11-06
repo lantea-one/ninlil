@@ -14,7 +14,7 @@
  */
 export interface ClientGroupListAssignmentWriteRequest { 
     /**
-     * The `DnsFilterListEntity` to assign to this group.
+     * The filter list to assign to this group.
      */
     listId?: string;
 }

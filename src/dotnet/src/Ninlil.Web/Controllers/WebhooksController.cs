@@ -343,9 +343,7 @@ public class WebhooksController(
 
         WebhookAuthModeEnum authMode = subscription.AuthMode;
         if (patch.TryGetMergePatchField("authMode", out JsonElement authModeElement))
-            authMode = JsonSerializer.Deserialize<WebhookAuthModeEnum>(
-                authModeElement.GetRawText()
-            );
+            authMode = authModeElement.GetEnumName<WebhookAuthModeEnum>("authMode");
 
         if (patch.TryGetMergePatchField("authCredentials", out JsonElement authCredentialsElement))
         {
@@ -407,9 +405,8 @@ public class WebhooksController(
 
     /// <summary>
     ///     This action lists one subscription's delivery attempts, newest first, one page at a
-    ///     time: every delivery <c>WebhookDeliveryService</c> and
-    ///     <c>WebhookDeliveryRetrySweepService</c> have recorded for it, from the first try to its
-    ///     final outcome or pending retry. It is read only; the API has no way to create, edit or
+    ///     time: every delivery that the webhook delivery and its retry job have recorded for it,
+    ///     from the first try to its final outcome or pending retry. It is read only; the API has no way to create, edit or
     ///     retry an attempt. Returns 404 for an unknown subscription. Requires
     ///     <c>webhooks:read</c>.
     /// </summary>

@@ -5,7 +5,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class decodes a RELAY-FORW or RELAY-REPL message (the RFC 8415 Section 9.1/9.2
+///     This class decodes a RELAY-FORW or RELAY-REPL message (the RFC 9915 Section 9.1/9.2
 ///     header and the Section 21 options) into a <see cref="Dhcpv6RelayMessage" />. It decodes
 ///     the options with <see cref="Dhcpv6MessageReader.TryReadOptions" />.
 ///     <para>
@@ -14,7 +14,7 @@ namespace Ninlil.Dhcp.Common.Wire;
 ///     </para>
 ///     <para>
 ///         <b>Single relay hop.</b> The reader requires a Relay Message option (mandatory per RFC
-///         8415 Section 21.10) and rejects one whose nested payload is itself a RELAY-FORW or
+///         9915 Section 21.10) and rejects one whose nested payload is itself a RELAY-FORW or
 ///         RELAY-REPL, a chain of relays that is not supported (see
 ///         <see cref="Dhcpv6RelayMessage" />). Callers can therefore assume the payload of a
 ///         decoded message is a client/server message for <see cref="Dhcpv6MessageReader" />.
@@ -98,7 +98,7 @@ public static class Dhcpv6RelayMessageReader
         )
             return false;
 
-        // RFC 8415 Section 21.10 makes the Relay Message option mandatory; without it there is
+        // RFC 9915 Section 21.10 makes the Relay Message option mandatory; without it there is
         // nothing to act on.
         if (!result.TryGetRelayMessagePayload(out byte[] nestedPayload))
         {

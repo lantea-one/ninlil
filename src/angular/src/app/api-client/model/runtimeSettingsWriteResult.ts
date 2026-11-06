@@ -14,7 +14,7 @@
  */
 export interface RuntimeSettingsWriteResult { 
     /**
-     * When the change takes effect: at once, after a listener or service restart, or after a process restart (see `RuntimeConfigurationOptions`).
+     * When the change takes effect: at once, after a listener or service restart, or after a process restart.
      */
     note?: string | null;
 }

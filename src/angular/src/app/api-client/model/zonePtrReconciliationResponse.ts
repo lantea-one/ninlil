@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the response of `POST /api/zones/{id}/reconcile-ptr`: what one on-demand PTR sync did, or why it did nothing. It copies `Server.Authoritative.Ptr.PtrReconciliationResult`, as `ZoneCaaReconciliationResponse` does for CAA.
+ * This record is the response of `POST /api/zones/{id}/reconcile-ptr`: what one on-demand PTR sync did, or why it did nothing. It copies the result of the sync, as the CAA reconciliation response does for CAA.
  */
 export interface ZonePtrReconciliationResponse { 
     /**
@@ -26,11 +26,11 @@ export interface ZonePtrReconciliationResponse {
      */
     reverseZonesTouched?: number;
     /**
-     * Whether the pass did nothing (see SkipReason). A pass that ran but found nothing to change reports false with zero counts.
+     * Whether the pass did nothing (see `skipReason`). A pass that ran but found nothing to change reports false with zero counts.
      */
     skipped?: boolean;
     /**
-     * Why the pass was skipped, set only when Skipped is true.
+     * Why the pass was skipped, set only when `skipped` is true.
      */
     skipReason?: string | null;
 }

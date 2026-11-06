@@ -101,9 +101,8 @@ public class RecordsController(
 
     /// <summary>
     ///     This action adds a record to the zone. A zone's first record must be its SOA, since
-    ///     without it there is no serial to advance; that first record bootstraps the zone through
-    ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" />, and later records go through
-    ///     <see cref="IZoneUpdateService.ApplyChangesAsync" />. Returns 400 when the first record
+    ///     without it there is no serial to advance; that first record bootstraps the zone, and later
+    ///     records go through the same change path as DNS dynamic updates. Returns 400 when the first record
     ///     is not an SOA, is an SOA that is not at the zone's own name, the name is not a valid DNS
     ///     name or is neither the zone's name nor below it, or the data does not fit the record
     ///     type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and
@@ -260,9 +259,7 @@ public class RecordsController(
         // type; one that changes both is checked against the new type.
         DnsResourceRecordTypeEnum effectiveType = existingRecord.Type;
         if (patch.TryGetMergePatchField("type", out JsonElement type))
-            effectiveType = System.Text.Json.JsonSerializer.Deserialize<DnsResourceRecordTypeEnum>(
-                type.GetRawText()
-            );
+            effectiveType = type.GetEnumName<DnsResourceRecordTypeEnum>("type");
 
         string patchedName = existingRecord.Name;
         if (patch.TryGetMergePatchField("name", out JsonElement patchName))
@@ -307,9 +304,7 @@ public class RecordsController(
                     record.Type = effectiveType;
 
                     if (patch.TryGetMergePatchField("class", out JsonElement dnsClass))
-                        record.Class = System.Text.Json.JsonSerializer.Deserialize<DnsClassEnum>(
-                            dnsClass.GetRawText()
-                        );
+                        record.Class = dnsClass.GetEnumName<DnsClassEnum>("class");
 
                     if (
                         patch.TryGetMergePatchField(

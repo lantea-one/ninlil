@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
@@ -24,6 +25,15 @@ public sealed class CachedZone
     ///     This property contains the zone's database record.
     /// </summary>
     public ZoneEntity Zone { get; }
+
+    /// <summary>
+    ///     This property contains every stored row this zone was built from, including the
+    ///     disabled ones and the ones <see cref="IsServable" /> left out.
+    ///     <see cref="ZoneCacheBackstopService" /> compares it with the stored rows to find a zone
+    ///     another instance changed: comparing with the served records alone would see a
+    ///     permanently unwritable row as a change on every pass.
+    /// </summary>
+    public IReadOnlyList<RecordEntity> StoredRecords { get; }
 
     /// <summary>
     ///     This property contains this zone's name, parsed once rather than on every lookup.
@@ -69,9 +79,14 @@ public sealed class CachedZone
     /// </summary>
     /// <param name="zone">The zone being cached.</param>
     /// <param name="records">Every record stored in the zone, enabled or not.</param>
-    public CachedZone(ZoneEntity zone, IReadOnlyList<RecordEntity> records)
+    /// <param name="logger">
+    ///     The logger for the Warning about each record left out; <see langword="null" /> logs
+    ///     nothing.
+    /// </param>
+    public CachedZone(ZoneEntity zone, IReadOnlyList<RecordEntity> records, ILogger logger = null)
     {
         Zone = zone;
+        StoredRecords = records;
         ApexName = DnsName.Parse(zone.Name);
 
         bool isSecondary = zone.Type is ZoneTypeEnum.Secondary or ZoneTypeEnum.SecondaryCatalog;
@@ -79,7 +94,7 @@ public sealed class CachedZone
         _recordsByName = [];
         foreach (
             IGrouping<DnsName, RecordEntity> group in records
-                .Where(record => !record.IsDisabled)
+                .Where(record => !record.IsDisabled && IsServable(record, zone.Name, logger))
                 .GroupBy(record => DnsName.Parse(record.Name))
         )
         {
@@ -120,6 +135,41 @@ public sealed class CachedZone
         _delegationPoints = nsOwners
             .Where(entry => cuts.Contains(entry.Key))
             .ToDictionary(entry => entry.Key, entry => entry.Value);
+    }
+
+    /// <summary>
+    ///     This method decides whether a stored record enters the cache. A record whose data cannot
+    ///     be written as RDATA is left out, with one Warning for this load, so every consumer of
+    ///     the cache (the resolver, AXFR and IXFR) sees the same zone and none of them throws
+    ///     per query or per transfer. The DNSSEC signer applies the same rule to the stored rows,
+    ///     so the signed and the unsigned view of the zone omit the same records.
+    ///     <para>
+    ///         The apex SOA is the exception: the zone cannot be served or transferred without it
+    ///         (RFC 1035 §3.3.13, RFC 5936 §2.2), so an unwritable one stays in the cache and logs an
+    ///         Error. A transfer then answers SERVFAIL (see <c>ZoneTransferService</c>).
+    ///     </para>
+    /// </summary>
+    private bool IsServable(RecordEntity record, string zoneName, ILogger logger)
+    {
+        bool isApexSoa =
+            record.Type == DnsResourceRecordTypeEnum.Soa
+            && string.Equals(
+                record.Name?.TrimEnd('.'),
+                zoneName.TrimEnd('.'),
+                StringComparison.OrdinalIgnoreCase
+            );
+
+        if (!isApexSoa)
+            return RecordEntityCodec.CanWriteRdata(record, zoneName, "the served zone", logger);
+
+        if (!RecordEntityCodec.CanWriteRdata(record, zoneName, "", null))
+            logger?.LogError(
+                "Zone {Zone}: the SOA record ({RecordId}) holds data that cannot be written as RDATA; the zone cannot be transferred and negative answers for it fail. Edit the SOA record.",
+                zoneName,
+                record.Id
+            );
+
+        return true;
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Web.Extension;
 
@@ -326,4 +327,34 @@ public class JsonElementMergePatchExtensionTests
         Assert.Contains("'x'", ex.Message);
         Assert.Contains("Monday", ex.Message);
     }
+
+    [Theory]
+    [InlineData("\"Primary\"", ZoneTypeEnum.Primary)]
+    [InlineData("\" stub \"", ZoneTypeEnum.Stub)]
+    public void GetEnumName_ForADeclaredName_ReturnsTheMember(string json, ZoneTypeEnum expected) =>
+        Assert.Equal(expected, Parse(json).GetEnumName<ZoneTypeEnum>("type"));
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("\"1\"")]
+    [InlineData("\"99\"")]
+    [InlineData("null")]
+    [InlineData("true")]
+    [InlineData("\"Nope\"")]
+    public void GetEnumName_ForANonNameValue_ThrowsValidationExceptionNamingTheField(string json)
+    {
+        ValidationException ex = Assert.Throws<ValidationException>(() =>
+            Parse(json).GetEnumName<ZoneTypeEnum>("type")
+        );
+
+        Assert.Contains("'type'", ex.Message);
+        Assert.Contains("Primary", ex.Message);
+    }
+
+    [Fact]
+    public void GetEnumName_ForAWireName_ReturnsTheMember() =>
+        Assert.Equal(
+            DnssecAlgorithmEnum.RsaSha256,
+            Parse("\"RSASHA256\"").GetEnumName<DnssecAlgorithmEnum>("algorithm")
+        );
 }

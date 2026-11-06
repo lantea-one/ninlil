@@ -75,7 +75,7 @@ describe('PresetListComponent', () => {
       of({
         name: 'Baseline',
         appliedAtUtc: '2026-08-30T00:00:00Z',
-        note: 'Applied. Settings bound via IOptionsMonitor take effect immediately; every other setting this preset touched needs a restart to take effect.',
+        note: 'Applied. Settings the server reads live take effect immediately; every other setting this preset touched needs a restart to take effect.',
       }),
     );
 

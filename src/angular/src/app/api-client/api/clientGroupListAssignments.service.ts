@@ -257,7 +257,7 @@ export class ClientGroupListAssignmentsService extends BaseService implements Cl
     }
 
     /**
-     * This action assigns a block or allow list to the group. Returns 400 when the list does not exist (an invalid value in the request, not a missing resource), 404 for an unknown group, and 409 when the list is already assigned. A duplicate would not change filtering, since &#x60;DnsFilterEngine.ResolveApplicableListsAsync&#x60; collects list ids into a System.Collections.Generic.HashSet&#x60;1, but it is refused to keep rows meaningful. Requires &#x60;clientgroups:write&#x60;.
+     * This action assigns a block or allow list to the group. Returns 400 when the list does not exist (an invalid value in the request, not a missing resource), 404 for an unknown group, and 409 when the list is already assigned. A duplicate would not change filtering, since the filter engine collects list ids into a set, but it is refused to keep rows meaningful. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint post /api/client-groups/{groupId}/list-assignments
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

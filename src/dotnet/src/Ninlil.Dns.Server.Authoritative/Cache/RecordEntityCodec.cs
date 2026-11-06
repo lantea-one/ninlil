@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -56,6 +57,68 @@ public static class RecordEntityCodec
             codec.Write(DecodeTypedData(record))
         );
     }
+
+    /// <summary>
+    ///     This method reports whether a stored record can be written as RDATA, and logs a Warning
+    ///     naming the record when it cannot. A stored row can hold data the REST API would refuse
+    ///     (a restore, a storage switch, a cluster sync or a hand edit put it there), and the
+    ///     caller leaves such a row out instead of letting one row stop every query or transfer
+    ///     for its zone. A record whose type has no registered codec is also unwritable: it
+    ///     cannot be served, and <see cref="ToWireRecord" /> would return <see langword="null" />
+    ///     for it, so the caller leaves it out with the same Warning.
+    /// </summary>
+    /// <param name="record">The stored record to try.</param>
+    /// <param name="zoneName">The zone's name, for the Warning.</param>
+    /// <param name="leftOutOf">
+    ///     What the record is left out of, completing the Warning's "it is left out of ..."
+    ///     (for example "the served zone").
+    /// </param>
+    /// <param name="logger">The logger for the Warning; <see langword="null" /> logs nothing.</param>
+    /// <returns>Whether the caller may use <paramref name="record" />.</returns>
+    public static bool CanWriteRdata(
+        RecordEntity record,
+        string zoneName,
+        string leftOutOf,
+        ILogger logger
+    )
+    {
+        try
+        {
+            if (ToWireRecord(record, DnsName.Parse(record.Name)) is null)
+            {
+                LogUnwritable(record, zoneName, leftOutOf, logger, "no RDATA codec for the type");
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogUnwritable(record, zoneName, leftOutOf, logger, exception.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     This method writes the one Warning an unwritable record gets, whether its data is bad
+    ///     or its type has no codec.
+    /// </summary>
+    private static void LogUnwritable(
+        RecordEntity record,
+        string zoneName,
+        string leftOutOf,
+        ILogger logger,
+        string reason
+    ) =>
+        logger?.LogWarning(
+            "Zone {Zone}: the {Type} record '{Name}' ({RecordId}) holds data that cannot be written as RDATA ({Reason}); it is left out of {LeftOutOf}. Edit or delete the record.",
+            zoneName,
+            record.Type,
+            record.Name,
+            record.Id,
+            reason,
+            leftOutOf
+        );
 
     /// <summary>
     ///     This method converts a wire record (from a zone transfer, for example) into a

@@ -240,6 +240,7 @@ public sealed class Dhcpv4AllocationIntegrityTests : IAsyncLifetime
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = scope.Id,
                     ScopeName = scope.Name,
                     ClientIdentifier = clientIdentifier,
                     IpAddress = ipAddress,

@@ -26,7 +26,7 @@ export interface BlockedServiceDetail {
      */
     description?: string | null;
     /**
-     * The third-party domain list this entry subscribes to when enabled. `BlockedServiceCatalog` documents its source and license.
+     * The third-party domain list this entry subscribes to when enabled. The catalog entry records its source and license.
      */
     subscriptionUrl?: string | null;
     /**
@@ -34,7 +34,7 @@ export interface BlockedServiceDetail {
      */
     isEnabled?: boolean;
     /**
-     * The identifier of the entry\'s managed `DnsFilterListEntity` when one exists, so the UI can link to it on the Filter Lists page; otherwise null.
+     * The identifier of the entry\'s managed filter list when one exists, so the UI can link to it on the Filter Lists page; otherwise null.
      */
     filterListId?: string | null;
 }

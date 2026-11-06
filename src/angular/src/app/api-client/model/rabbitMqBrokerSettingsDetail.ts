@@ -10,7 +10,7 @@
 
 
 /**
- * This record carries the `RabbitMqEventBrokerOptions` settings without `Password`. A `GET` never returns the password, as with every other secret, even though this one is stored in the plaintext configuration file rather than encrypted with an `IDataProtector`.
+ * This record carries the RabbitMQ event broker settings (configuration section `DnsServer:Events:RabbitMq`) without `Password`. A `GET` never returns the password, as with every other secret, even though this one is stored in the plaintext configuration file rather than encrypted like the SMTP password.
  */
 export interface RabbitMqBrokerSettingsDetail { 
     hostName?: string | null;

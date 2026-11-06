@@ -22,6 +22,7 @@ import {
 import { DnsResourceRecordTypeEnum, RecordsService, ZonesService } from '../../../../api-client';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
+import { resolveRecordName } from './record-name';
 import { RecordDataFormComponent } from '../record-type-forms/record-type-form.model';
 import {
   RECORD_TYPE_FORM_REGISTRY,
@@ -133,6 +134,15 @@ export class RecordFormComponent implements OnInit {
   /** The selected record type, mirrored into a signal since `valueChanges` is not one. */
   readonly selectedType = signal<DnsResourceRecordTypeEnum>(DnsResourceRecordTypeEnum.A);
 
+  /** The text in the owner name field, mirrored into a signal for {@link storedName}. */
+  private readonly typedName = signal('');
+
+  /**
+   * The full name the record is saved under: the typed name resolved against the zone. The form
+   * shows it under the field so the user sees what is stored.
+   */
+  readonly storedName = computed(() => resolveRecordName(this.typedName(), this.zoneName()));
+
   /** The type-specific form component to mount for {@link selectedType}, or `null` if unsupported. */
   readonly dataFormComponentType = computed(
     () => RECORD_TYPE_FORM_REGISTRY[this.selectedType()] ?? null,
@@ -143,6 +153,7 @@ export class RecordFormComponent implements OnInit {
 
   constructor() {
     this.form.controls.type.valueChanges.subscribe((type) => this.selectedType.set(type));
+    this.form.controls.name.valueChanges.subscribe((name) => this.typedName.set(name));
   }
 
   ngOnInit(): void {
@@ -184,7 +195,8 @@ export class RecordFormComponent implements OnInit {
       this.form.getRawValue();
 
     const request = {
-      name,
+      // The API refuses a name outside the zone, so a short name gets the zone appended here.
+      name: resolveRecordName(name, this.zoneName()),
       type,
       timeToLiveSeconds,
       data: dataFormComponent.getData(),

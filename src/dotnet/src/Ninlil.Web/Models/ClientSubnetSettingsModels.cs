@@ -3,8 +3,9 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record is the REST shape of the EDNS Client Subnet settings
-///     (<c>EdnsClientSubnetOptions</c>) that <c>GET /api/client-subnet-settings</c> returns.
-///     Nothing in it is secret, so a <c>PATCH</c> to the same endpoint accepts the same fields.
+///     (configuration section <c>DnsServer:ClientSubnet</c>) that
+///     <c>GET /api/client-subnet-settings</c> returns. Nothing in it is secret, so a <c>PATCH</c>
+///     to the same endpoint accepts the same fields.
 /// </summary>
 /// <param name="Enable">Whether outbound queries carry an ECS option. Defaults to <see langword="false" />.</param>
 /// <param name="SourcePrefixLengthIPv4">How many leading bits of an IPv4 address are sent upstream; also caps an ECS option a client sends. Defaults to 24.</param>

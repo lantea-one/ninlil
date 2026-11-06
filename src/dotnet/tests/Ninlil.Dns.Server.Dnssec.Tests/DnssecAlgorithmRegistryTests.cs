@@ -8,8 +8,8 @@ namespace Ninlil.Dns.Server.Dnssec.Tests;
 /// <summary>
 ///     This class tests every algorithm <see cref="DnssecAlgorithmRegistry" /> registers: a
 ///     generate, sign and verify round trip, tamper detection and rejection with another key. It
-///     also checks the wire sizes of ECDSA and DSA keys and signatures, and that ECC-GOST is
-///     absent.
+///     also checks the wire sizes of ECDSA and DSA keys and signatures, that ECC-GOST is
+///     absent, and the wording and algorithm names of the signing-refusal sentence.
 /// </summary>
 public class DnssecAlgorithmRegistryTests
 {
@@ -179,4 +179,40 @@ public class DnssecAlgorithmRegistryTests
         Assert.Equal(41, signature.Length);
         Assert.Equal(keyPair.PublicKeyWireFormat[0], signature[0]);
     }
+
+    [Theory]
+    [InlineData(
+        DnssecAlgorithmEnum.RsaMd5,
+        "DNSSEC algorithm 'RSAMD5' is prohibited for signing (RFC 9904 §3)."
+    )]
+    [InlineData(
+        DnssecAlgorithmEnum.Dsa,
+        "DNSSEC algorithm 'DSA' is prohibited for signing (RFC 9904 §3)."
+    )]
+    [InlineData(
+        DnssecAlgorithmEnum.DsaNsec3Sha1,
+        "DNSSEC algorithm 'DSA-NSEC3-SHA1' is prohibited for signing (RFC 9904 §3)."
+    )]
+    [InlineData(
+        DnssecAlgorithmEnum.EccGost,
+        "DNSSEC algorithm 'ECC-GOST' is prohibited for signing (RFC 9904 §3)."
+    )]
+    [InlineData(
+        DnssecAlgorithmEnum.RsaSha1,
+        "Ninlil does not sign with 'RSASHA1' (RFC 9904 §3 marks it NOT RECOMMENDED for signing)."
+    )]
+    [InlineData(
+        DnssecAlgorithmEnum.RsaSha1Nsec3Sha1,
+        "Ninlil does not sign with 'RSASHA1-NSEC3-SHA1' (RFC 9904 §3 marks it NOT RECOMMENDED for signing)."
+    )]
+    public void DescribeSigningRefusal_ForARefusedAlgorithm_NamesItByItsIanaMnemonic(
+        DnssecAlgorithmEnum algorithm,
+        string expected
+    ) => Assert.Equal(expected, DnssecAlgorithmRegistry.DescribeSigningRefusal(algorithm));
+
+    [Fact]
+    public void DescribeSigningRefusal_ForAPermittedAlgorithm_ReturnsNull() =>
+        Assert.Null(
+            DnssecAlgorithmRegistry.DescribeSigningRefusal(DnssecAlgorithmEnum.EcdsaP256Sha256)
+        );
 }

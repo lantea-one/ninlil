@@ -26,11 +26,11 @@ export interface DnsAccessControlRuleDetail {
      */
     cidr?: string | null;
     /**
-     * The capabilities the rule grants, as an array of `DnsAccessControlCapabilityEnum` member names (see `DnsAccessControlRuleWriteRequest.Capabilities`).
+     * The capabilities the rule grants, as an array of `DnsAccessControlCapabilityEnum` member names (see `DnsAccessControlRuleWriteRequest.capabilities`).
      */
     capabilities?: Array<string> | null;
     /**
-     * Whether the rule is disabled. The enforcement engine ignores a disabled rule (see `DnsAccessControlRuleEntity.IsDisabled`).
+     * Whether the rule is disabled. The enforcement engine ignores a disabled rule.
      */
     isDisabled?: boolean;
     /**

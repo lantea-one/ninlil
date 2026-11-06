@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the admin sign-in rate limiter settings (`AdminLoginRateLimitOptions`) that `GET /api/admin-login-rate-limit-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the admin sign-in rate limiter settings (configuration section `DnsServer:AdminLoginRateLimit`) that `GET /api/admin-login-rate-limit-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface AdminLoginRateLimitSettingsDetail { 
     /**
@@ -18,11 +18,11 @@ export interface AdminLoginRateLimitSettingsDetail {
      */
     enable?: boolean;
     /**
-     * How many sign-in attempts one client address may make within one `AdminLoginRateLimitSettingsDetail.Window`. Defaults to 5.
+     * How many sign-in attempts one client address may make within one `window`. Defaults to 5.
      */
     permitLimit?: number;
     /**
-     * The fixed window `AdminLoginRateLimitSettingsDetail.PermitLimit` is counted over, which is also the lockout length. Defaults to five minutes.
+     * The fixed window `permitLimit` is counted over, which is also the lockout length. Defaults to five minutes.
      */
     window?: string;
 }

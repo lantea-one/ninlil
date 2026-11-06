@@ -195,7 +195,7 @@ public class Dhcpv6RelayMessageCodecTests
     public void TryRead_MissingRelayMessageOption_ReturnsFalseWithAReason()
     {
         // A valid 34-byte RELAY-FORW header with no options, so no Relay Message option, which
-        // RFC 8415 Section 21.10 makes mandatory. It is built by hand because the code never
+        // RFC 9915 Section 21.10 makes mandatory. It is built by hand because the code never
         // produces such a message through the writer.
         byte[] bytes = new byte[34];
         bytes[0] = (byte)Dhcpv6MessageTypeEnum.RelayForward;

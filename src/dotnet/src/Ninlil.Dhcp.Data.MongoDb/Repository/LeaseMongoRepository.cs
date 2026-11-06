@@ -19,30 +19,28 @@ public class LeaseMongoRepository(NinlilDnsMongoContext context, MongoChangeTrac
 {
     /// <inheritdoc />
     public Task<LeaseEntity> FindByClientIdentifierAsync(
-        string scopeName,
+        Guid scopeId,
         string clientIdentifier,
         CancellationToken stoppingToken = default
     ) =>
         Collection
-            .Find(lease =>
-                lease.ScopeName == scopeName && lease.ClientIdentifier == clientIdentifier
-            )
+            .Find(lease => lease.ScopeId == scopeId && lease.ClientIdentifier == clientIdentifier)
             .FirstOrDefaultAsync(stoppingToken);
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<LeaseEntity>> ListByScopeNameAsync(
-        string scopeName,
+    public async Task<IReadOnlyList<LeaseEntity>> ListByScopeIdAsync(
+        Guid scopeId,
         CancellationToken stoppingToken = default
-    ) => await Collection.Find(lease => lease.ScopeName == scopeName).ToListAsync(stoppingToken);
+    ) => await Collection.Find(lease => lease.ScopeId == scopeId).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
     public Task<LeaseEntity> FindByIpAddressAsync(
-        string scopeName,
+        Guid scopeId,
         string ipAddress,
         CancellationToken stoppingToken = default
     ) =>
         Collection
-            .Find(lease => lease.ScopeName == scopeName && lease.IpAddress == ipAddress)
+            .Find(lease => lease.ScopeId == scopeId && lease.IpAddress == ipAddress)
             .FirstOrDefaultAsync(stoppingToken);
 
     /// <inheritdoc />
@@ -89,27 +87,27 @@ public class LeaseMongoRepository(NinlilDnsMongoContext context, MongoChangeTrac
             );
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<LeaseEntity>> SearchByScopeNameAsync(
-        string scopeName,
+    public async Task<IReadOnlyList<LeaseEntity>> SearchByScopeIdAsync(
+        Guid scopeId,
         int skip,
         int take,
         CancellationToken stoppingToken = default
     ) =>
         await Collection
-            .Find(lease => lease.ScopeName == scopeName)
+            .Find(lease => lease.ScopeId == scopeId)
             .SortBy(lease => lease.ClientIdentifier)
             .Skip(skip)
             .Limit(take)
             .ToListAsync(stoppingToken);
 
     /// <inheritdoc />
-    public async Task<int> CountByScopeNameAsync(
-        string scopeName,
+    public async Task<int> CountByScopeIdAsync(
+        Guid scopeId,
         CancellationToken stoppingToken = default
     ) =>
         (int)
             await Collection.CountDocumentsAsync(
-                lease => lease.ScopeName == scopeName,
+                lease => lease.ScopeId == scopeId,
                 cancellationToken: stoppingToken
             );
 

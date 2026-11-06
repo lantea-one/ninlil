@@ -13,7 +13,8 @@ public class UserProfileDetailExample : IExamplesProvider<UserProfileDetail>
 {
     /// <summary>
     ///     This method returns a caller with a display name and phone number set, and the account's
-    ///     e-mail address, which cannot be changed here.
+    ///     e-mail address, which changes only through the e-mail change action, and the default that a
+    ///     changed address must be confirmed first.
     /// </summary>
     public UserProfileDetail GetExamples() =>
         new(
@@ -21,6 +22,7 @@ public class UserProfileDetailExample : IExamplesProvider<UserProfileDetail>
             "jsmith",
             "jsmith@example.com",
             "Jamie Smith",
-            "+1-555-0100"
+            "+1-555-0100",
+            true
         );
 }

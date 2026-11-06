@@ -6,7 +6,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class encodes a <see cref="Dhcpv6Message" /> into bytes (RFC 8415 Sections 8 and 21).
+///     This class encodes a <see cref="Dhcpv6Message" /> into bytes (RFC 9915 Sections 8 and 21).
 ///     Like <see cref="Dhcpv4MessageWriter" />, it encodes messages Ninlil builds, so it throws
 ///     <see cref="ArgumentException" /> on an invalid shape (a transaction ID over 24 bits, a relay
 ///     message type, an option value longer than a 16-bit length allows) instead of tolerating

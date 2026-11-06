@@ -8,7 +8,7 @@ namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 /// <summary>
 ///     This class represents a DHCP scope: a named pool the server hands out leases from, with
 ///     its lease times and the options sent with each lease. DHCPv4 scopes (IPv4 addresses) and
-///     DHCPv6 scopes (RFC 8415 stateful addresses, or delegated prefixes when <see cref="Kind" />
+///     DHCPv6 scopes (RFC 9915 stateful addresses, or delegated prefixes when <see cref="Kind" />
 ///     is <see cref="DhcpScopeKindEnum.PrefixDelegation" />) share this shape;
 ///     <see cref="ProtocolVersion" /> says which one this is. The scope resolvers in
 ///     <c>Ninlil.Dhcp.Server.Core</c> pick the scope for a request, and
@@ -17,9 +17,10 @@ namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 public class DhcpScopeEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains the scope's operator-chosen, unique name. Leases refer to their
-    ///     scope by this name (<see cref="LeaseEntity.ScopeName" />); reservations and options
-    ///     refer to it by identifier (<see cref="DhcpReservationEntity.ScopeId" />).
+    ///     This property contains the scope's operator-chosen, unique name. Leases, reservations
+    ///     and options refer to the scope by identifier (<see cref="LeaseEntity.ScopeId" />,
+    ///     <see cref="DhcpReservationEntity.ScopeId" />), so the name can change; a lease keeps a
+    ///     copy of it for display (<see cref="LeaseEntity.ScopeName" />).
     /// </summary>
     public string Name { get; set; }
 

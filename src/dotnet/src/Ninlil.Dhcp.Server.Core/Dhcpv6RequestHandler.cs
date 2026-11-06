@@ -26,7 +26,7 @@ namespace Ninlil.Dhcp.Server.Core;
 ///         <b>Messages.</b> SOLICIT (with optional Rapid Commit), REQUEST, RENEW, REBIND, RELEASE,
 ///         DECLINE, CONFIRM and INFORMATION-REQUEST are handled. REQUEST, RENEW and REBIND share
 ///         <see cref="HandleConfirmingExchangeAsync" />, since each commits an address or prefix
-///         the client names; REQUEST and RENEW must name this server (RFC 8415 Sections 16.4 and
+///         the client names; REQUEST and RENEW must name this server (RFC 9915 Sections 16.4 and
 ///         16.6); SOLICIT, CONFIRM and REBIND that carry a Server Identifier are discarded (Sections
 ///         16.2, 16.5 and 16.7), as is an INFORMATION-REQUEST that names another server or
 ///         includes an IA (Section 16.12; see <c>MustBeDiscarded</c>). Server message types get no answer. RELAY-FORW arrives through
@@ -118,10 +118,10 @@ public sealed class Dhcpv6RequestHandler(
     );
 
     /// <summary>
-    ///     This constant is the highest RELAY-FORW hop count (RFC 8415 Section 9.1 "hop-count")
+    ///     This constant is the highest RELAY-FORW hop count (RFC 9915 Section 9.1 "hop-count")
     ///     that is still processed, a guard against relay loops and malformed input like
     ///     <c>Ninlil.Dhcp.Server.Relay.Dhcpv4RelayAgent.MaxHops</c>. A single-hop chain (see
-    ///     <see cref="Dhcpv6RelayMessage" />) arrives with hop count 0. RFC 8415 Section 7.6 sets
+    ///     <see cref="Dhcpv6RelayMessage" />) arrives with hop count 0. RFC 9915 Section 7.6 sets
     ///     the relay agent's HOP_COUNT_LIMIT to 8; this server's limit is its own.
     /// </summary>
     private const byte MaxRelayHopCount = 16;
@@ -212,14 +212,14 @@ public sealed class Dhcpv6RequestHandler(
         {
             MessageType = Dhcpv6MessageTypeEnum.RelayReply,
             // A RELAY-REPL copies hop-count, link-address and peer-address from the RELAY-FORW
-            // it answers (RFC 8415).
+            // it answers (RFC 9915).
             HopCount = message.HopCount,
             LinkAddress = message.LinkAddress,
             PeerAddress = message.PeerAddress,
         };
         relayReply.SetRelayMessagePayload(Dhcpv6MessageWriter.Write(innerReply));
 
-        // RFC 8415 Section 21.18: echo the relay agent's Interface-ID unchanged.
+        // RFC 9915 Section 21.18: echo the relay agent's Interface-ID unchanged.
         if (message.TryGetInterfaceId(out byte[] interfaceId))
             relayReply.SetInterfaceId(interfaceId);
 
@@ -230,7 +230,7 @@ public sealed class Dhcpv6RequestHandler(
     ///     This method handles one client message for both <see cref="HandleRequestAsync" /> and
     ///     <see cref="HandleRelayMessageAsync" />; the only difference is whether the relay fields
     ///     (<see cref="Dhcpv6Message.RelayLinkAddress" /> and others) are set. A message without a
-    ///     Client Identifier is ignored, and so is one that RFC 8415 Section 16 has a server
+    ///     Client Identifier is ignored, and so is one that RFC 9915 Section 16 has a server
     ///     discard (see <see cref="MustBeDiscarded" />).
     /// </summary>
     private async Task<Dhcpv6Message> ProcessMessageAsync(
@@ -239,7 +239,7 @@ public sealed class Dhcpv6RequestHandler(
         CancellationToken cancellationToken
     )
     {
-        // RFC 8415 requires a Client Identifier on the client messages handled here, and without
+        // RFC 9915 requires a Client Identifier on the client messages handled here, and without
         // one no lease can be found or named.
         byte[] clientDuid = Dhcpv6ClientIdentifier.Resolve(request);
 
@@ -265,7 +265,7 @@ public sealed class Dhcpv6RequestHandler(
         if (MustBeDiscarded(request))
         {
             logger.LogDebug(
-                "Discarding a DHCPv6 {MessageType} from {RemoteEndPoint} that RFC 8415 Section 16 tells a server to discard.",
+                "Discarding a DHCPv6 {MessageType} from {RemoteEndPoint} that RFC 9915 Section 16 tells a server to discard.",
                 request.MessageType,
                 remoteEndPoint
             );
@@ -357,12 +357,12 @@ public sealed class Dhcpv6RequestHandler(
 
     /// <summary>
     ///     This method handles a SOLICIT: it resolves a scope for the first IA_NA and IA_PD, offers
-    ///     an address or prefix for each, and returns an ADVERTISE (RFC 8415 Section 18.3.9). When
+    ///     an address or prefix for each, and returns an ADVERTISE (RFC 9915 Section 18.3.9). When
     ///     the client asks for Rapid Commit and
     ///     <see cref="DhcpServerOptions.EnableDhcpv6RapidCommit" /> is on, it commits them at once
     ///     and returns a REPLY. When a scope serves the client's link but nothing can be offered,
     ///     the reply still goes out, with <c>NoAddrsAvail</c> in each IA_NA and
-    ///     <c>NoPrefixAvail</c> in each IA_PD that got nothing (RFC 8415 Section 18.3.9: the
+    ///     <c>NoPrefixAvail</c> in each IA_PD that got nothing (RFC 9915 Section 18.3.9: the
     ///     server "MUST include the IA option in the Advertise message with no addresses in that
     ///     IA and a Status Code option ... containing status code NoAddrsAvail"). The RFC asks for
     ///     no top-level Status Code, so none is added. With Rapid Commit the same holds for the
@@ -529,7 +529,7 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles REQUEST, RENEW and REBIND (RFC 8415 Sections 18.3.2, 18.3.4 and
+    ///     This method handles REQUEST, RENEW and REBIND (RFC 9915 Sections 18.3.2, 18.3.4 and
     ///     18.3.5; see the class summary). It commits the address and prefix the client names in
     ///     its first IA_NA and IA_PD and always replies, with a Status Code in any IA that could
     ///     not be confirmed.
@@ -546,7 +546,7 @@ public sealed class Dhcpv6RequestHandler(
     )
     {
         if (requireServerIdentifierMatch && !HasOurServerIdentifier(request))
-            // No Server Identifier, or another server's: not for us, so stay silent (RFC 8415).
+            // No Server Identifier, or another server's: not for us, so stay silent (RFC 9915).
             return null;
 
         Dhcpv6IdentityAssociationForNonTemporaryAddresses requestedNa = FirstOrDefaultNa(request);
@@ -615,7 +615,7 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method tells whether RFC 8415 Section 16 has a server discard a message before
+    ///     This method tells whether RFC 9915 Section 16 has a server discard a message before
     ///     any other processing. REQUEST, RENEW, RELEASE and DECLINE check their Server Identifier
     ///     in their own handlers. SOLICIT (Section 16.2), CONFIRM (16.5) and REBIND (16.7) are
     ///     discarded when they include a Server Identifier option, since a client sends them to
@@ -661,9 +661,9 @@ public sealed class Dhcpv6RequestHandler(
         && requestedServerDuid.AsSpan().SequenceEqual(serverIdentifierProvider.Value);
 
     /// <summary>
-    ///     This method handles a RELEASE (RFC 8415). Unlike DHCPv4, a DHCPv6 server replies, with
+    ///     This method handles a RELEASE (RFC 9915). Unlike DHCPv4, a DHCPv6 server replies, with
     ///     <c>Success</c> or <c>NoBinding</c> per IA. Only the first address or prefix of each IA is
-    ///     released. A RELEASE without this server's Server Identifier gets no reply (RFC 8415
+    ///     released. A RELEASE without this server's Server Identifier gets no reply (RFC 9915
     ///     Section 16.9).
     /// </summary>
     private async Task<Dhcpv6Message> HandleReleaseAsync(
@@ -743,7 +743,7 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a DECLINE (RFC 8415): the client found addresses in its IA_NAs
+    ///     This method handles a DECLINE (RFC 9915): the client found addresses in its IA_NAs
     ///     already in use by duplicate address detection, and each address that is the client's
     ///     own lease is quarantined. Every IA_NA is processed. Unlike DHCPv4, the server replies
     ///     with one IA per requested IA_NA: <c>Success</c> when at least one of its addresses was
@@ -805,11 +805,11 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a CONFIRM (RFC 8415 Section 18.3.3). Nothing is allocated: it checks
+    ///     This method handles a CONFIRM (RFC 9915 Section 18.3.3). Nothing is allocated: it checks
     ///     whether every address in every IA_NA is on the link of the resolved address-assignment
     ///     scope, judged by the scope's subnet (<c>SubnetPrefixLength</c> around
     ///     <c>RangeStartAddress</c>), and replies <c>NotOnLink</c> if any is not. With no scope it
-    ///     has nothing to judge by and stays silent, as RFC 8415 asks.
+    ///     has nothing to judge by and stays silent, as RFC 9915 asks.
     /// </summary>
     private async Task<Dhcpv6Message> HandleConfirmAsync(
         Dhcpv6Message request,
@@ -862,7 +862,7 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles an INFORMATION-REQUEST (RFC 8415): the client has an address and asks
+    ///     This method handles an INFORMATION-REQUEST (RFC 9915): the client has an address and asks
     ///     only for configuration (DNS servers and tag-rule options). IAs are not processed, since
     ///     a client must not include one. It always replies, even without a scope.
     /// </summary>

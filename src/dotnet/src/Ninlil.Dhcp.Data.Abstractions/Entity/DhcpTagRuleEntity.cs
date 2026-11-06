@@ -78,7 +78,7 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     ///     This property optionally contains the vendor class value to match, compared per
     ///     <see cref="VendorClassIdentifierMatchMode" />. For DHCPv4 it is compared with the
     ///     Vendor Class Identifier (RFC 2132 Section 9.13, option 60); for DHCPv6 it matches if
-    ///     any vendor-class-data instance of the Vendor Class option (RFC 8415 Section 21.16,
+    ///     any vendor-class-data instance of the Vendor Class option (RFC 9915 Section 21.16,
     ///     option 16) matches, optionally narrowed by <see cref="VendorClassEnterpriseNumber" />.
     ///     <see langword="null" /> or empty means the vendor class is not checked.
     /// </summary>
@@ -94,7 +94,7 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     ///     This property optionally contains the user class value to match, compared per
     ///     <see cref="UserClassMatchMode" />. A request matches if any of its User Class instances
     ///     matches, from the DHCPv4 User Class option (RFC 3004, option 77) or the DHCPv6 one (RFC
-    ///     8415 Section 21.15, option 15). <see langword="null" /> or empty means the user class
+    ///     9915 Section 21.15, option 15). <see langword="null" /> or empty means the user class
     ///     is not checked.
     /// </summary>
     public string UserClassMatch { get; set; }
@@ -126,7 +126,7 @@ public class DhcpTagRuleEntity : AuditableEntityBase
     public string RelayAgentRemoteIdHex { get; set; }
 
     /// <summary>
-    ///     This property optionally contains the Interface-ID option value (RFC 8415 Section
+    ///     This property optionally contains the Interface-ID option value (RFC 9915 Section
     ///     21.18) of a relayed DHCPv6 request to require, as an uppercase hex string compared for
     ///     byte equality. It plays the role <see cref="RelayAgentCircuitIdHex" /> plays for DHCPv4
     ///     (which relay interface the client is behind), though the options are unrelated on the
@@ -139,7 +139,7 @@ public class DhcpTagRuleEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property optionally contains the IANA Enterprise Number the DHCPv6 Vendor Class
-    ///     option (RFC 8415 Section 21.16, code 16) must carry. It is checked in addition to
+    ///     option (RFC 9915 Section 21.16, code 16) must carry. It is checked in addition to
     ///     <see cref="VendorClassIdentifierMatch" />, or on its own when that is empty (any vendor
     ///     class from this enterprise). <see langword="null" /> means any enterprise number. The
     ///     DHCPv4 Vendor Class Identifier has no enterprise number, so only

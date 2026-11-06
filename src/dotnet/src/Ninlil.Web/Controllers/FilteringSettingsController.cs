@@ -52,7 +52,7 @@ public class FilteringSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Filtering</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value. Every field takes effect at once. Returns 400
     ///     for an unknown block response mode or precedence, or a sinkhole address of the wrong
     ///     family. Requires <c>filteringsettings:write</c>.

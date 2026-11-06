@@ -43,7 +43,7 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
     }
 
     /**
-     * This action reports each DHCP-family service\&#39;s configured &#x60;Enable&#x60; flag and its live running state. Requires &#x60;dhcpservices:read&#x60;.
+     * This action reports each DHCP-family service\&#39;s configured &#x60;Enable&#x60; setting and its live running state. Requires &#x60;dhcpservices:read&#x60;.
      * @endpoint get /api/dhcp-services
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,7 +98,7 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
     }
 
     /**
-     * This action starts one DHCP-family service now, binding its socket, whatever its &#x60;Enable&#x60; flag says. Starting a running service changes nothing (see &#x60;IDhcpProtocolService.StartAsync&#x60;). Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
+     * This action starts one DHCP-family service now, binding its socket, whatever its &#x60;Enable&#x60; setting says. Starting a running service changes nothing. Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
      * @endpoint post /api/dhcp-services/{kind}/start
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -158,7 +158,7 @@ export class DhcpServiceControlService extends BaseService implements DhcpServic
     }
 
     /**
-     * This action stops one DHCP-family service now, releasing its socket and leaving every other service running. Stopping a stopped service changes nothing (see &#x60;IDhcpProtocolService.StopAsync&#x60;). Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
+     * This action stops one DHCP-family service now, releasing its socket and leaving every other service running. Stopping a stopped service changes nothing. Returns 400 for an unknown kind. Requires &#x60;dhcpservices:manage&#x60;.
      * @endpoint post /api/dhcp-services/{kind}/stop
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

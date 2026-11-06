@@ -20,7 +20,7 @@ export interface CloudProviderCredentialCreateRequest {
     name?: string | null;
     providerType?: CloudDnsProviderTypeEnum;
     /**
-     * The secret material, keyed by field name; the keys depend on `CloudProviderCredentialCreateRequest.ProviderType`. It is stored encrypted, and the values are returned once, in this endpoint\'s response.
+     * The secret material, keyed by field name; the keys depend on `providerType`. It is stored encrypted, and the values are returned once, in this endpoint\'s response.
      */
     credentials?: { [key: string]: string | null; } | null;
     /**

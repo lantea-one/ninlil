@@ -137,7 +137,7 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
             failureReason
         );
         Assert.Equal(Dhcpv6MessageTypeEnum.RelayReply, relayReply.MessageType);
-        // Hop count, link address and peer address are copied unchanged (RFC 8415).
+        // Hop count, link address and peer address are copied unchanged (RFC 9915).
         Assert.Equal(relayForward.HopCount, relayReply.HopCount);
         Assert.Equal(RelayLinkAddress, relayReply.LinkAddress);
         Assert.Equal(ClientPeerAddress, relayReply.PeerAddress);

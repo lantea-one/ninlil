@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Ninlil.Dns.Server.Backup.Options;
 
 // Define our namespace.
@@ -13,6 +14,8 @@ public static class ServiceCollectionBackupExtension
 {
     /// <summary>
     ///     This method binds <see cref="BackupOptions" /> and registers <see cref="IBackupService" />.
+    ///     It also registers a default <see cref="BackupPathSettings" /> unless the host has
+    ///     already registered its own.
     ///     There is no switch to turn backup off: an operator should always be able to take a
     ///     backup, whatever else is enabled.
     /// </summary>
@@ -25,6 +28,7 @@ public static class ServiceCollectionBackupExtension
     )
     {
         instance.Configure<BackupOptions>(configuration.GetSection(BackupOptions.SectionName));
+        instance.TryAddSingleton(new BackupPathSettings());
         instance.AddScoped<IBackupService, SystemBackupService>();
 
         // We're done, return the IServiceCollection instance.

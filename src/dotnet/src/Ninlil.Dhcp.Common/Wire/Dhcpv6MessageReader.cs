@@ -5,7 +5,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class decodes a client/server DHCPv6 message (the RFC 8415 Section 8 header and the
+///     This class decodes a client/server DHCPv6 message (the RFC 9915 Section 8 header and the
 ///     Section 21 options) into a <see cref="Dhcpv6Message" />.
 ///     <para>
 ///         Like <see cref="Dhcpv4MessageReader" />, and for the same reason, it never throws on
@@ -102,7 +102,7 @@ public static class Dhcpv6MessageReader
     }
 
     /// <summary>
-    ///     This method decodes a code/length/value options area. RFC 8415 Section 21 uses one
+    ///     This method decodes a code/length/value options area. RFC 9915 Section 21 uses one
     ///     shape everywhere, so the top-level options, the relay message options
     ///     (<see cref="Dhcpv6RelayMessageReader" />) and the nested options of IA_NA, IA_TA, IA_PD,
     ///     IAADDR and IAPREFIX are all decoded here. DHCPv4, by contrast, has Pad and End at the

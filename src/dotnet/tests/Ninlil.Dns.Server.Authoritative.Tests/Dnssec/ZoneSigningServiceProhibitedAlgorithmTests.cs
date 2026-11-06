@@ -236,7 +236,11 @@ public sealed class ZoneSigningServiceProhibitedAlgorithmTests : IAsyncLifetime
 
         // One Warning for the key, not one per RRset.
         Assert.Single(_warnings.Warnings);
-        Assert.Contains("prohibited", _warnings.Warnings[0], StringComparison.Ordinal);
+        Assert.Contains(
+            "Ninlil does not sign with",
+            _warnings.Warnings[0],
+            StringComparison.Ordinal
+        );
         Assert.Contains("not published", _warnings.Warnings[0], StringComparison.Ordinal);
         Assert.Contains(ZoneName, _warnings.Warnings[0], StringComparison.Ordinal);
     }

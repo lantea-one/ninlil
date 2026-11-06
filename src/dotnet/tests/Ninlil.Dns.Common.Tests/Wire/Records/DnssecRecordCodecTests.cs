@@ -185,6 +185,83 @@ public class DnssecRecordCodecTests
         Assert.Equal(nsec3, decoded);
     }
 
+    // RFC 5155 §3.1.2: the Flags octet sits at offset 1. Only bit 0 (Opt-Out) is defined, but the
+    // other bits survive a round trip so a validator can ignore the record (RFC 5155 §8.2).
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(0xFF)]
+    public void Nsec3RoundTripsTheWholeFlagsOctet(byte flags)
+    {
+        byte[] wire =
+        [
+            1, // Hash Algorithm
+            flags,
+            0x00,
+            0x05, // Iterations
+            0, // Salt Length
+            2,
+            0xAA,
+            0xBB, // Hash Length, Next Hashed Owner Name
+            0x00,
+            0x01,
+            0x40, // Type Bit Maps: window 0, 1 octet, A
+        ];
+
+        Nsec3RecordData decoded = (Nsec3RecordData)
+            DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Nsec3, wire);
+
+        Assert.Equal(flags, decoded.Flags);
+        Assert.Equal((flags & 1) != 0, decoded.IsOptOut);
+        Assert.Equal(flags <= 1, decoded.HasValidFlags);
+        Assert.Equal(
+            wire,
+            DnsRecordDataCodecRegistry.Encode(DnsResourceRecordTypeEnum.Nsec3, decoded)
+        );
+    }
+
+    // RFC 5155 §4.1.2: NSEC3PARAM with a nonzero Flags value must be ignored, so the value has to
+    // survive decoding.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(0x80)]
+    public void Nsec3ParamRoundTripsTheWholeFlagsOctet(byte flags)
+    {
+        byte[] wire = [1, flags, 0x00, 0x0A, 1, 0xCD]; // Hash Algorithm, Flags, Iterations, Salt
+
+        Nsec3ParamRecordData decoded = (Nsec3ParamRecordData)
+            DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Nsec3Param, wire);
+
+        Assert.Equal(flags, decoded.Flags);
+        Assert.Equal(flags == 0, decoded.HasValidFlags);
+        Assert.Equal(
+            wire,
+            DnsRecordDataCodecRegistry.Encode(DnsResourceRecordTypeEnum.Nsec3Param, decoded)
+        );
+    }
+
+    [Fact]
+    public void Nsec3Json_RoundTripsFlagsAndStillReadsIsOptOutAlone()
+    {
+        Nsec3RecordData withFlags = new(1, false, 0, [], [1, 2], []) { Flags = 3 };
+
+        string json = Ninlil.Common.Serializer.JsonSerializer.Serialize(withFlags);
+        Nsec3RecordData back = Ninlil.Common.Serializer.JsonSerializer.Deserialize<Nsec3RecordData>(
+            json
+        );
+        Assert.Equal(withFlags, back);
+
+        // Stored rows and API clients that only know isOptOut keep working.
+        Nsec3RecordData optOutOnly =
+            Ninlil.Common.Serializer.JsonSerializer.Deserialize<Nsec3RecordData>(
+                "{\"hashAlgorithm\":1,\"isOptOut\":true,\"iterations\":0,\"salt\":\"\",\"nextHashedOwnerName\":\"AQI=\",\"types\":[]}"
+            );
+        Assert.Equal(1, optOutOnly.Flags);
+    }
+
     [Fact]
     public void Nsec3ParamRoundTrips()
     {

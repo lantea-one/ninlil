@@ -18,7 +18,7 @@ export interface DnsRewriteWriteRequest {
      */
     domain?: string | null;
     /**
-     * An IP address (answered as an A or AAAA record) or another domain name (answered as a CNAME). It is checked with `DnsRewriteTargetClassifier.TryClassify`, the classifier used at query time, much as `RecordsController` checks a record\'s `data` with the record codec.
+     * An IP address (answered as an A or AAAA record) or another domain name (answered as a CNAME). It is checked with the same rule the server applies at query time, much as a record\'s `data` is checked when a record is written.
      */
     target?: string | null;
     /**

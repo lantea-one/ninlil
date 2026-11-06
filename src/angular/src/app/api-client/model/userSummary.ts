@@ -42,19 +42,19 @@ export interface UserSummary {
      */
     roles?: Array<string> | null;
     /**
-     * The permissions granted to the account directly, not through a role (the counterpart of `RoleSummary.Permissions`).
+     * The permissions granted to the account directly, not through a role (the counterpart of `RoleSummary.permissions`).
      */
     directPermissions?: Array<string> | null;
     /**
-     * The cluster node the account was last created or modified on, or null if it was never written with clustering enabled. The admin console shows it with `UserSummary.LastModifiedUtc` in `ClusterSyncInfoComponent`, as for other synced entities.
+     * The cluster node the account was last created or modified on, or null if it was never written with clustering enabled. The admin console shows it with `lastModifiedUtc`, as for other synced entities.
      */
     originatingNodeId?: string | null;
     /**
-     * An explanation of a cluster username collision this account lost, so an administrator can see it was renamed or overwritten rather than silently dropped or merged (see `UserEntity.ClusterConflictNote`). null when there was none (almost always).
+     * An explanation of a cluster username collision this account lost, so an administrator can see it was renamed or overwritten rather than silently dropped or merged. null when there was none (almost always).
      */
     clusterConflictNote?: string | null;
     /**
-     * When the account was last created or modified (`AuditableEntityBaseExtensions.GetLastModifiedUtc()`).
+     * When the account was last created or modified (the later of its creation and update times).
      */
     lastModifiedUtc?: string | null;
 }

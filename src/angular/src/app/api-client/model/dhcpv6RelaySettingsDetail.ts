@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Dhcpv6RelayOptions` (`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 8415 DHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart of `DhcpRelaySettingsDetail`.
+ * This record is the REST shape of the DHCPv6 relay settings (`GET /api/dhcp-settings/dhcpv6-relay`): whether the server acts as an RFC 9915 DHCPv6 relay agent instead of answering from its own scopes. It is the DHCPv6 counterpart of `DhcpRelaySettingsDetail`.
  */
 export interface Dhcpv6RelaySettingsDetail { 
     /**
@@ -30,7 +30,7 @@ export interface Dhcpv6RelaySettingsDetail {
      */
     relayLinkAddress?: string | null;
     /**
-     * The RFC 8415 Section 21.18 Interface-ID text added to every RELAY-FORW, or null for none.
+     * The RFC 9915 Section 21.18 Interface-ID text added to every RELAY-FORW, or null for none.
      */
     interfaceId?: string | null;
 }

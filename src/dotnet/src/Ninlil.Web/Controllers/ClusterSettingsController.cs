@@ -80,7 +80,7 @@ public class ClusterSettingsController(
 
     /// <summary>
     ///     The shortest accepted <c>heartbeatInterval</c>. The value feeds a
-    ///     <see cref="PeriodicTimer" /> at startup, before the <c>Enable</c> check, and that
+    ///     <see cref="PeriodicTimer" /> at startup, before the <c>enable</c> check, and that
     ///     constructor throws for zero or a negative period.
     /// </summary>
     private static readonly TimeSpan HeartbeatIntervalMinimum = TimeSpan.FromSeconds(1);
@@ -101,7 +101,7 @@ public class ClusterSettingsController(
     /// <summary>
     ///     This action merges a partial update into the <c>Cluster</c> section (and, for
     ///     <c>addressReconcileInterval</c>, the <c>CatalogSync</c> section) as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. There is no <c>nodeId</c>
+    ///     patch, written to the configuration file. There is no <c>nodeId</c>
     ///     field. The response note says whether the change applies at once or needs a restart.
     ///     Returns 400 for a field of the wrong JSON type, a port outside 0-65535 (0 means the
     ///     shared HTTPS port), a missed-heartbeat threshold below 1, a <c>heartbeatInterval</c>

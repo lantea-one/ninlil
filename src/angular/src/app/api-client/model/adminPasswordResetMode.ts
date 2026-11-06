@@ -10,7 +10,7 @@
 
 
 /**
- * This enumeration names the two ways an administrator\'s password reset (see `POST /api/users/{id}/reset-password`) delivers a new credential to a locked-out account. Both are needed: `AdminPasswordResetMode.AutoGenerate` works without any SMTP server, which suits a homelab, while `AdminPasswordResetMode.EmailLink` lets the account holder pick a password the administrator never sees, but needs a configured SMTP server (see `EmailSenderOptions` and `SmtpSettingsController`).
+ * This enumeration names the two ways an administrator\'s password reset (see `POST /api/users/{id}/reset-password`) delivers a new credential to a locked-out account. Both are needed: `AutoGenerate` works without any SMTP server, which suits a homelab, while `EmailLink` lets the account holder pick a password the administrator never sees, but needs a configured SMTP server (see `GET /api/smtp-settings`).
  */
 export const AdminPasswordResetMode = {
     AutoGenerate: 'AutoGenerate',

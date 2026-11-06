@@ -55,7 +55,7 @@ public class OutboundQuerySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:OutboundQuery</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value; <c>excludedSourcePorts</c> replaces the whole
     ///     list. No range checks are applied. Requires <c>outboundquerysettings:write</c>.
     /// </summary>

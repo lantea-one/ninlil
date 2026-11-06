@@ -13,7 +13,7 @@ import { DnsFilterListSourceEnum } from './dnsFilterListSourceEnum';
 
 
 /**
- * This class carries a block or allow list without its entries, as returned by the list, get and write endpoints of `/api/filter-lists`. `LastFetchedAtUtc` is when a subscribed list was last fetched, and `OriginatingNodeId` the cluster node the list was last written on.
+ * This class carries a block or allow list without its entries, as returned by the list, get and write endpoints of `/api/filter-lists`. `lastFetchedAtUtc` is when a subscribed list was last fetched, and `originatingNodeId` the cluster node the list was last written on.
  */
 export interface FilterListDetail { 
     id?: string;

@@ -177,7 +177,7 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
         const string zoneName = "e2e-race.example.com";
 
         Guid zoneId = await SeedForwardZoneAsync(zoneName);
-        await SeedDhcpScopeAsync("race", "192.0.2.30", "192.0.2.40", zoneId);
+        Guid scopeId = await SeedDhcpScopeAsync("race", "192.0.2.30", "192.0.2.40", zoneId);
         IDnsServerEventPublisher publisher =
             _host.Services.GetRequiredService<IDnsServerEventPublisher>();
         Guid leaseId = Guid.NewGuid();
@@ -191,6 +191,7 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
                     Id = leaseId,
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+                    ScopeId = scopeId,
                     ScopeName = "race",
                     ClientIdentifier = "aa:bb:cc:dd:ee:01",
                     IpAddress = "192.0.2.31",
@@ -317,7 +318,7 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
         return zoneId;
     }
 
-    private async Task SeedDhcpScopeAsync(
+    private async Task<Guid> SeedDhcpScopeAsync(
         string name,
         string rangeStartAddress,
         string rangeEndAddress,
@@ -329,10 +330,11 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
             scope.ServiceProvider.GetRequiredService<IDhcpScopeRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
+        Guid scopeId = Guid.NewGuid();
         await scopeRepository.AddAsync(
             new DhcpScopeEntity
             {
-                Id = Guid.NewGuid(),
+                Id = scopeId,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 Name = name,
                 ProtocolVersion = InternetProtocolVersionEnum.IPv4,
@@ -343,6 +345,7 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
             }
         );
         await unitOfWork.SaveChangesAsync();
+        return scopeId;
     }
 
     private async Task<RecordEntity> WaitForManagedRecordAsync(Guid zoneId, string ownerName)

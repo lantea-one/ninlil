@@ -1,0 +1,44 @@
+// The same centering and backdrop as login.component.scss; each public page has a copy.
+.confirm-email-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ninlil-space-5);
+  min-height: 100vh;
+  padding: var(--ninlil-space-4);
+  background:
+    radial-gradient(circle at 15% 15%, rgba(var(--cui-primary-rgb), 0.16), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(var(--cui-primary-rgb), 0.12), transparent 45%),
+    var(--cui-tertiary-bg, var(--cui-body-bg));
+}
+
+.confirm-email-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-2);
+  color: var(--cui-primary);
+}
+
+.confirm-email-brand-text {
+  font-size: var(--ninlil-font-size-xxl);
+  font-weight: 700;
+  color: var(--cui-body-color);
+  letter-spacing: 0.01em;
+}
+
+.confirm-email-card {
+  width: 100%;
+  max-width: var(--ninlil-form-max-width-compact);
+}
+
+.hint {
+  margin: 0 0 var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}

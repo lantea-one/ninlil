@@ -89,6 +89,7 @@ public static class OptionsEnvironmentVariableRegistry
         new(typeof(EmailSenderOptions)),
         new(typeof(AdminLoginRateLimitOptions)),
         new(typeof(OidcSsoOptions)),
+        new(typeof(EmailChangeOptions)),
         // Protocol transports (Ninlil.Dns.Protocol.*).
         new(typeof(PlainProtocolOptions)),
         new(typeof(DnsOverTlsOptions)),

@@ -258,4 +258,56 @@ public class StorageConnectionStringAssemblerTests
 
         Assert.Equal(string.Empty, connectionString);
     }
+
+    private static StorageEngineSwitchApiRequest RelationalRequest(
+        StorageEngineEnum engine,
+        string encryptionMode
+    )
+    {
+        RelationalStorageConnectionFields fields = new(
+            "db.example.internal",
+            engine == StorageEngineEnum.MySql ? 3306 : 5432,
+            "ninlil",
+            "ninlil_app",
+            "correct-horse-battery-staple",
+            encryptionMode
+        );
+        return new StorageEngineSwitchApiRequest(
+            engine,
+            Sqlite: null,
+            PostgreSql: engine == StorageEngineEnum.PostgreSql ? fields : null,
+            MySql: engine == StorageEngineEnum.MySql ? fields : null,
+            SqlServer: null
+        );
+    }
+
+    [Theory]
+    [InlineData(StorageEngineEnum.PostgreSql, "1")]
+    [InlineData(StorageEngineEnum.PostgreSql, "99")]
+    [InlineData(StorageEngineEnum.PostgreSql, "Require,Prefer")]
+    [InlineData(StorageEngineEnum.MySql, "1")]
+    [InlineData(StorageEngineEnum.MySql, "99")]
+    [InlineData(StorageEngineEnum.MySql, "None,Required")]
+    public void Assemble_WithADigitStringEncryptionMode_ThrowsValidationException(
+        StorageEngineEnum engine,
+        string mode
+    ) =>
+        Assert.Throws<ValidationException>(() =>
+            StorageConnectionStringAssembler.Assemble(RelationalRequest(engine, mode))
+        );
+
+    [Theory]
+    [InlineData(StorageEngineEnum.PostgreSql, "require")]
+    [InlineData(StorageEngineEnum.PostgreSql, "VERIFYFULL")]
+    [InlineData(StorageEngineEnum.MySql, "required")]
+    [InlineData(StorageEngineEnum.MySql, " VerifyCA ")]
+    public void Assemble_WithAnEncryptionModeNameInAnyCase_BuildsTheConnectionString(
+        StorageEngineEnum engine,
+        string mode
+    ) =>
+        Assert.False(
+            string.IsNullOrEmpty(
+                StorageConnectionStringAssembler.Assemble(RelationalRequest(engine, mode))
+            )
+        );
 }

@@ -16,7 +16,7 @@ import { WebhookSubscriptionDetail } from './webhookSubscriptionDetail';
 export interface WebhookSubscriptionCreateResponse { 
     subscription?: WebhookSubscriptionDetail;
     /**
-     * The delivery POST\'s credentials, or null when `WebhookSubscriptionDetail.AuthMode` is `None`.
+     * The delivery POST\'s credentials, or null when `WebhookSubscriptionDetail.authMode` is `None`.
      */
     authCredentials?: { [key: string]: string | null; } | null;
     /**

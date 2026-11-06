@@ -11,11 +11,11 @@ import { RefreshTokenDeliveryEnum } from './refreshTokenDeliveryEnum';
 
 
 /**
- * This class carries the second-factor code a caller submits to finish a sign-in that `LoginResponse.RequiresTwoFactor` flagged as still pending.
+ * This class carries the second-factor code a caller submits to finish a sign-in that `LoginResponse.requiresTwoFactor` flagged as still pending.
  */
 export interface TwoFactorLoginRequest { 
     /**
-     * The opaque token `LoginResponse.MfaToken` returned.
+     * The opaque token `LoginResponse.mfaToken` returned.
      */
     mfaToken?: string | null;
     /**
@@ -23,11 +23,11 @@ export interface TwoFactorLoginRequest {
      */
     code?: string | null;
     /**
-     * Which second factor Code comes from: `\"Authenticator\"`, `\"Email\"` or `\"RecoveryCode\"`. A recovery code is one of the caller\'s single-use fallback codes from `POST /api/auth/two-factor/recovery-codes/generate`; this call redeems it, so it cannot be used again. Any other value is treated as `\"Authenticator\"`.
+     * Which second factor `code` comes from: `\"Authenticator\"`, `\"Email\"` or `\"RecoveryCode\"`. A recovery code is one of the caller\'s single-use fallback codes from `POST /api/auth/two-factor/recovery-codes/generate`; this call redeems it, so it cannot be used again. Any other value is treated as `\"Authenticator\"`.
      */
     provider?: string | null;
     /**
-     * The same choice `LoginRequest.RememberMe` describes, repeated for this final step.
+     * The same choice `LoginRequest.rememberMe` describes, repeated for this final step.
      */
     rememberMe?: boolean;
     refreshTokenDelivery?: RefreshTokenDeliveryEnum;

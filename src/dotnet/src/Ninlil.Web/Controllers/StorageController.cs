@@ -54,13 +54,13 @@ public class StorageController(IStorageEngineSwitchService switchService) : Cont
     ///     <para>
     ///         The request carries per-engine connection fields (a file path for SQLite; host,
     ///         port, database, username, password and encryption mode for the others) rather than a
-    ///         free-text connection string. The server builds the connection string with each
-    ///         engine's <c>*ConnectionStringBuilder</c>. An unreachable target, a target that a
-    ///         newer Ninlil upgraded, a request naming MongoDB, or a request made while a read replica
-    ///         or cluster setting of the engine in use is configured returns 400 and saves nothing. A
-    ///         second request replaces the first. The answer says whether Ninlil points the
-    ///         runtime configuration file at the target itself, or the operator must first set
-    ///         the storage environment variables.
+    ///         free-text connection string. The server builds the connection string with the
+    ///         engine's own connection string syntax. An unreachable target, a target that a newer
+    ///         Ninlil upgraded, a request naming MongoDB, or a request made while a read replica or
+    ///         cluster setting of the engine in use is configured returns 400 and saves nothing. A
+    ///         second request replaces the first. The answer says whether Ninlil points the runtime
+    ///         configuration file at the target itself, or the operator must first set the storage
+    ///         environment variables.
     ///     </para>
     /// </summary>
     /// <param name="request">The engine to switch to and its connection fields.</param>

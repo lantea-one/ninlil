@@ -314,6 +314,60 @@ public class DnsFilterPatternPrefilterTests
     }
 
     /// <summary>
+    ///     This test checks that the compiled regex of every awkward wildcard and regex gives the
+    ///     same answer as a plain backtracking regex with the same options, so moving a pattern
+    ///     to <see cref="RegexOptions.NonBacktracking" /> changes no decision. A name on which the
+    ///     reference itself times out is skipped.
+    /// </summary>
+    [Fact]
+    public void Compiled_ForEveryAwkwardEntryAndName_AgreesWithTheBacktrackingEngine()
+    {
+        foreach (
+            (DnsFilterEntryKindEnum kind, string pattern) in Wildcards
+                .Select(w => (DnsFilterEntryKindEnum.Wildcard, w))
+                .Concat(Regexes.Select(r => (DnsFilterEntryKindEnum.Regex, r)))
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Item2))
+        )
+        {
+            DnsFilterPatternEntry entry = EntryFor(kind, pattern);
+
+            if (entry.Compiled is null)
+                continue;
+
+            Regex reference = new(
+                kind == DnsFilterEntryKindEnum.Wildcard
+                    ? DnsFilterEngine.BuildWildcardRegexPattern(pattern)
+                    : pattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                TimeSpan.FromSeconds(2)
+            );
+
+            foreach (string name in Names)
+            {
+                string normalized = DnsFilterListIndex.NormalizeDomain(name);
+
+                bool expected;
+
+                try
+                {
+                    expected = reference.IsMatch(normalized);
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    // The backtracking reference blew up on a catastrophic pattern (^(a+)+$); the
+                    // linear engine has nothing to be compared with on this name.
+                    continue;
+                }
+
+                Assert.True(
+                    expected == entry.MatchRegex.IsMatch(normalized),
+                    $"{kind} entry '{pattern}' and name '{normalized}'"
+                );
+            }
+        }
+    }
+
+    /// <summary>
     ///     This test checks entries shaped like the benchmark data set's wildcard and regex
     ///     entries against names that match them, share their prefix and are unrelated.
     /// </summary>
@@ -631,13 +685,75 @@ public class DnsFilterPatternPrefilterTests
     }
 
     /// <summary>
-    ///     This test checks the documented timeout rule through the real engine: a regex that
-    ///     times out is no match and the engine logs a warning, so the name is allowed. The
-    ///     name makes <c>^(a+)+$</c> backtrack exponentially, which outlasts the 250 ms
-    ///     timeout on any machine.
+    ///     This test checks the documented timeout rule through the real engine on the backtracking
+    ///     fallback: a backreference keeps the pattern off the linear engine, so a regex that
+    ///     times out is no match and the engine logs a warning, so the name is allowed. The name
+    ///     makes <c>^(a+)+\1$</c> backtrack exponentially, which outlasts the 250 ms timeout on
+    ///     any machine.
     /// </summary>
     [Fact]
-    public async Task EvaluateDomainAsync_ForARegexThatTimesOut_AllowsTheNameAndLogsAWarning()
+    public async Task EvaluateDomainAsync_ForABackreferenceRegexThatTimesOut_AllowsTheNameAndLogsAWarning()
+    {
+        TimeoutCountingLogger engineLogger = new();
+        DnsFilterEngineTests.Fixture fixture = new(engineLogger: engineLogger);
+        DnsClientGroupEntity defaultGroup = fixture.AddGroup("default", isDefault: true);
+        DnsFilterListEntity list = fixture.AddListWithKindedEntry(
+            "block",
+            DnsFilterListActionEnum.Block,
+            DnsFilterEntryKindEnum.Regex,
+            @"^(a+)+\1$"
+        );
+        fixture.AssignListToGroup(defaultGroup.Id, list.Id);
+
+        DnsFilterDecision decision = await fixture.Engine.EvaluateDomainAsync(
+            DnsName.Parse(new string('a', 40) + "b.test"),
+            IPAddress.Parse("10.0.0.5")
+        );
+
+        Assert.False(decision.IsDenied);
+        Assert.Equal(1, engineLogger.Timeouts);
+        Assert.True(EntryFor(DnsFilterEntryKindEnum.Regex, @"^(a+)+\1$").UsesBacktrackingFallback);
+    }
+
+    /// <summary>
+    ///     This test checks that a catastrophic pattern runs in linear time: the first branch of
+    ///     <c>^(a+)+$|b\.test$</c> backtracks exponentially on this name on the backtracking
+    ///     engine, which times out and allows the name; the linear engine reaches the second
+    ///     branch and blocks the name, with no timeout warning.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateDomainAsync_ForACatastrophicRegex_BlocksTheNameWithoutATimeout()
+    {
+        TimeoutCountingLogger engineLogger = new();
+        DnsFilterEngineTests.Fixture fixture = new(engineLogger: engineLogger);
+        DnsClientGroupEntity defaultGroup = fixture.AddGroup("default", isDefault: true);
+        DnsFilterListEntity list = fixture.AddListWithKindedEntry(
+            "block",
+            DnsFilterListActionEnum.Block,
+            DnsFilterEntryKindEnum.Regex,
+            @"^(a+)+$|b\.test$"
+        );
+        fixture.AssignListToGroup(defaultGroup.Id, list.Id);
+
+        DnsFilterDecision decision = await fixture.Engine.EvaluateDomainAsync(
+            DnsName.Parse(new string('a', 40) + "b.test"),
+            IPAddress.Parse("10.0.0.5")
+        );
+
+        Assert.True(decision.IsDenied);
+        Assert.Equal(0, engineLogger.Timeouts);
+        Assert.False(
+            EntryFor(DnsFilterEntryKindEnum.Regex, @"^(a+)+$|b\.test$").UsesBacktrackingFallback
+        );
+    }
+
+    /// <summary>
+    ///     This test checks the plain nested-quantifier case: <c>^(a+)+$</c> against 40 letters
+    ///     blocks the name with no warning. It passes on a backtracking engine too, because a
+    ///     successful match is quick there; it guards the result, not the speed.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateDomainAsync_ForANestedQuantifierRegexOnAMatchingName_BlocksTheName()
     {
         TimeoutCountingLogger engineLogger = new();
         DnsFilterEngineTests.Fixture fixture = new(engineLogger: engineLogger);
@@ -651,12 +767,45 @@ public class DnsFilterPatternPrefilterTests
         fixture.AssignListToGroup(defaultGroup.Id, list.Id);
 
         DnsFilterDecision decision = await fixture.Engine.EvaluateDomainAsync(
-            DnsName.Parse(new string('a', 40) + "b.test"),
+            DnsName.Parse(new string('a', 40)),
             IPAddress.Parse("10.0.0.5")
         );
 
-        Assert.False(decision.IsDenied);
-        Assert.Equal(1, engineLogger.Timeouts);
+        Assert.True(decision.IsDenied);
+        Assert.Equal(0, engineLogger.Timeouts);
+    }
+
+    /// <summary>
+    ///     This test checks which patterns need the backtracking fallback and that the set of
+    ///     valid patterns is the one the backtracking engine accepts: a malformed pattern is
+    ///     still rejected, a plain one is linear, and backreferences, lookarounds and atomic
+    ///     groups fall back.
+    /// </summary>
+    [Theory]
+    [InlineData(@"^ads\.example\.com$", false, true)]
+    [InlineData(@"^(a+)+$", false, true)]
+    [InlineData(@"^(a)\1$", true, true)]
+    [InlineData(@"^(?=ads)ads\.example\.com$", true, true)]
+    [InlineData(@"^(?>a+)b$", true, true)]
+    [InlineData(@"(unclosed", false, false)]
+    public void CompileOrNull_ForEachPattern_ChoosesTheEngineAndKeepsTheValidPatternSet(
+        string pattern,
+        bool fallback,
+        bool valid
+    )
+    {
+        Regex compiled = DnsFilterEngine.CompileOrNull(pattern);
+
+        Assert.Equal(valid, compiled is not null);
+
+        if (valid)
+        {
+            Assert.Equal(fallback, (compiled.Options & RegexOptions.NonBacktracking) == 0);
+            Assert.Equal(
+                fallback ? TimeSpan.FromMilliseconds(250) : Regex.InfiniteMatchTimeout,
+                compiled.MatchTimeout
+            );
+        }
     }
 
     /// <summary>

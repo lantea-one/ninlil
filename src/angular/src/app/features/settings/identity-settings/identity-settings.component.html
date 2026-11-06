@@ -102,6 +102,25 @@
           >
         </c-form-check>
 
+        <h6 class="section-heading">E-mail address changes</h6>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="identity-require-email-change-confirmation"
+            formControlName="requireEmailChangeConfirmation"
+          />
+          <label cFormCheckLabel for="identity-require-email-change-confirmation"
+            >Require e-mail confirmation</label
+          >
+        </c-form-check>
+        <div cFormText class="mb-3">
+          When on, a user who changes their own e-mail address must open a link sent to the new
+          address first. When off, the address changes at once, so a mistyped address can cut off
+          e-mailed codes.
+        </div>
+
         <h6 class="section-heading">Account lockout</h6>
 
         <div cFormText class="lockout-note">

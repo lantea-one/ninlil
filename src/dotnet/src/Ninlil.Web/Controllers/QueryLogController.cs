@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.Serialization;
 using Microsoft.AspNetCore.Mvc;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -15,8 +16,7 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller serves the persistent query log that
-///     <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber" /> writes for every answered
+///     This controller serves the persistent query log that the server writes for every answered
 ///     query: a searchable history, unlike the dashboard's live SignalR feed, which is capped and
 ///     resets on reload. The route is flat. Searching needs <c>querylog:read</c>; clearing the log
 ///     needs <c>querylog:write</c>.
@@ -136,9 +136,8 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
 
     /// <summary>
     ///     This action deletes every entry in the query log and returns how many were removed. It
-    ///     is separate from the retention-based pruning of
-    ///     <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService" />. Requires
-    ///     <c>querylog:write</c>.
+    ///     is separate from the retention-based pruning that the query log cleanup job does.
+    ///     Requires <c>querylog:write</c>.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpDelete]
@@ -158,7 +157,8 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
     ///     <see cref="DnsResponseCodeEnum" /> members the two differ by more than case
     ///     (<c>FormatError</c>/<c>"FORMERR"</c>, <c>ServerFailure</c>/<c>"SERVFAIL"</c>), and a
     ///     caller should be able to send back a value it just read. A value matching neither is
-    ///     rejected rather than taken as the enum's default member.
+    ///     rejected rather than taken as the enum's default member; a digit string is refused
+    ///     because the API takes enums by name only.
     /// </summary>
     private static bool TryParseOptionalEnum<TEnum>(
         string value,
@@ -173,7 +173,7 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
         if (string.IsNullOrWhiteSpace(value))
             return true;
 
-        if (Enum.TryParse(value, true, out TEnum byMemberName))
+        if (EnumNameParser.TryParseName(value, true, out TEnum byMemberName))
         {
             parsed = byMemberName;
             return true;
@@ -194,7 +194,10 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
             return true;
         }
 
-        error = $"'{value}' is not a valid {typeof(TEnum).Name} value.";
+        error =
+            $"'{value}' is not a valid {typeof(TEnum).Name} value. Valid values: "
+            + EnumNameParser.GetNames<TEnum>()
+            + ".";
         return false;
     }
 

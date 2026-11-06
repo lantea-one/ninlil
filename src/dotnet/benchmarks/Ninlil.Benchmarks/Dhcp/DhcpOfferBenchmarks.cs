@@ -84,7 +84,7 @@ public class DhcpOfferBenchmarks : DnsPathBenchmarkBase
         {
             ILeaseRepository leases = provider.GetRequiredService<ILeaseRepository>();
             LeaseEntity lease = await leases.FindByClientIdentifierAsync(
-                _scope.Name,
+                _scope.Id,
                 "02:be:4c:00:00:01"
             );
 

@@ -121,7 +121,7 @@ public sealed class Dhcpv4RelayAgentTests
     }
 
     [Fact]
-    public async Task RequestAtTheHopLimit_IsDroppedRatherThanForwarded()
+    public async Task RequestAtTheHopLimit_IsForwardedWithHopsIncremented()
     {
         int upstreamPort = GetFreeUdpPort();
 
@@ -132,16 +132,44 @@ public sealed class Dhcpv4RelayAgentTests
             upstreamPort
         );
 
-        Dhcpv4Message request = new()
-        {
-            OperationCode = Dhcpv4OperationCodeEnum.BootRequest,
-            TransactionId = 0x5555_6666,
-            HardwareAddressLength = 6,
-            ClientHardwareAddress = [0x02, 0x00, 0x00, 0x00, 0x00, 0x05],
-            // Dhcpv4RelayAgent.MaxHops.
-            Hops = 16,
-        };
-        request.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
+        Dhcpv4Message request = CreateRequestWithHops(0x5555_6666, 16);
+
+        await agent.HandleRequestAsync(
+            request,
+            new IPEndPoint(IPAddress.Loopback, 0),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        UdpReceiveResult received = await upstreamSocket.ReceiveAsync(timeout.Token);
+
+        Assert.True(
+            Dhcpv4MessageReader.TryRead(
+                received.Buffer,
+                out Dhcpv4Message forwarded,
+                out string reason
+            ),
+            reason
+        );
+
+        // RFC 1542 Section 4.1.1: only "hops" above 16 is discarded, so 16 is relayed, and
+        // "The value of the 'hops' field MUST be incremented" puts 17 on the wire.
+        Assert.Equal((byte)17, forwarded.Hops);
+    }
+
+    [Fact]
+    public async Task RequestAboveTheHopLimit_IsDroppedRatherThanForwarded()
+    {
+        int upstreamPort = GetFreeUdpPort();
+
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            IPAddress.Parse("127.0.0.17"),
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamPort
+        );
+
+        Dhcpv4Message request = CreateRequestWithHops(0x5555_6667, 17);
 
         await agent.HandleRequestAsync(
             request,
@@ -153,6 +181,23 @@ public sealed class Dhcpv4RelayAgentTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await upstreamSocket.ReceiveAsync(timeout.Token)
         );
+    }
+
+    /// <summary>
+    ///     This method builds a client DISCOVER with the given "hops" value.
+    /// </summary>
+    private static Dhcpv4Message CreateRequestWithHops(uint transactionId, byte hops)
+    {
+        Dhcpv4Message request = new()
+        {
+            OperationCode = Dhcpv4OperationCodeEnum.BootRequest,
+            TransactionId = transactionId,
+            HardwareAddressLength = 6,
+            ClientHardwareAddress = [0x02, 0x00, 0x00, 0x00, 0x00, 0x05],
+            Hops = hops,
+        };
+        request.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
+        return request;
     }
 
     [Fact]

@@ -8,7 +8,7 @@ namespace Ninlil.Dhcp.Data.Abstractions.Repository;
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lease lookups the
 ///     allocation services use while handing out and renewing leases, the cross-scope lookup the
 ///     DHCP client identity resolver uses, and paged listing (in the database) for the REST API.
-///     Leases refer to their scope by name (<see cref="LeaseEntity.ScopeName" />).
+///     Leases refer to their scope by id (<see cref="LeaseEntity.ScopeId" />).
 /// </summary>
 public interface ILeaseRepository : IRepository<LeaseEntity>
 {
@@ -16,7 +16,7 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     ///     This method looks up a client's lease within a scope, by exact identifier match (see
     ///     <see cref="IDhcpReservationRepository.FindByClientIdentifierAsync" />).
     /// </summary>
-    /// <param name="scopeName">The DHCP scope to search within.</param>
+    /// <param name="scopeId">The identifier of the DHCP scope to search within.</param>
     /// <param name="clientIdentifier">
     ///     The client's identifier: the MAC address or Client-identifier for DHCPv4, the DUID for
     ///     DHCPv6.
@@ -24,7 +24,7 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The matching lease, or <see langword="null" /> if none exists.</returns>
     Task<LeaseEntity> FindByClientIdentifierAsync(
-        string scopeName,
+        Guid scopeId,
         string clientIdentifier,
         CancellationToken stoppingToken = default
     );
@@ -32,11 +32,11 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     /// <summary>
     ///     This method lists every lease of a scope, in any state, unpaged.
     /// </summary>
-    /// <param name="scopeName">The DHCP scope to list leases for.</param>
+    /// <param name="scopeId">The identifier of the DHCP scope to list leases for.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>Every lease in the scope.</returns>
-    Task<IReadOnlyList<LeaseEntity>> ListByScopeNameAsync(
-        string scopeName,
+    Task<IReadOnlyList<LeaseEntity>> ListByScopeIdAsync(
+        Guid scopeId,
         CancellationToken stoppingToken = default
     );
 
@@ -45,12 +45,12 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     ///     holds it and in any state. Callers check its state and expiry to decide whether the
     ///     address is free.
     /// </summary>
-    /// <param name="scopeName">The DHCP scope to search within.</param>
+    /// <param name="scopeId">The identifier of the DHCP scope to search within.</param>
     /// <param name="ipAddress">The IP address to look up.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The matching lease, or <see langword="null" /> if there is none.</returns>
     Task<LeaseEntity> FindByIpAddressAsync(
-        string scopeName,
+        Guid scopeId,
         string ipAddress,
         CancellationToken stoppingToken = default
     );
@@ -93,15 +93,15 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     );
 
     /// <summary>
-    ///     This method lists one page of all recorded leases across every scope, ordered by scope
-    ///     name then client identifier, with sorting and paging in the database (like
-    ///     <see cref="IDhcpScopeRepository.SearchAsync" />). <see cref="SearchByScopeNameAsync" />
-    ///     is the same query for one scope.
+    ///     This method lists one page of all recorded leases across every scope, ordered by the
+    ///     scope name copy (<see cref="LeaseEntity.ScopeName" />) then client identifier, with
+    ///     sorting and paging in the database (like <see cref="IDhcpScopeRepository.SearchAsync" />).
+    ///     <see cref="SearchByScopeIdAsync" /> is the same query for one scope.
     /// </summary>
     /// <param name="skip">The number of matching leases to skip, for paging.</param>
     /// <param name="take">The maximum number of leases to return.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The matching page of leases, ordered by scope name then client identifier.</returns>
+    /// <returns>The matching page of leases, ordered by the scope name copy then client identifier.</returns>
     Task<IReadOnlyList<LeaseEntity>> SearchAsync(
         int skip,
         int take,
@@ -119,15 +119,15 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     /// <summary>
     ///     This method lists one page of a scope's leases, ordered by client identifier, with
     ///     paging in the database. It is the paged counterpart of
-    ///     <see cref="ListByScopeNameAsync" />, which the allocation services use unpaged.
+    ///     <see cref="ListByScopeIdAsync" />, which the allocation services use unpaged.
     /// </summary>
-    /// <param name="scopeName">The DHCP scope to list leases for.</param>
+    /// <param name="scopeId">The identifier of the DHCP scope to list leases for.</param>
     /// <param name="skip">The number of matching leases to skip, for paging.</param>
     /// <param name="take">The maximum number of leases to return.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The matching page of leases, ordered by client identifier.</returns>
-    Task<IReadOnlyList<LeaseEntity>> SearchByScopeNameAsync(
-        string scopeName,
+    Task<IReadOnlyList<LeaseEntity>> SearchByScopeIdAsync(
+        Guid scopeId,
         int skip,
         int take,
         CancellationToken stoppingToken = default
@@ -135,12 +135,12 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
 
     /// <summary>
     ///     This method counts a scope's leases without loading them, for the total that
-    ///     accompanies a <see cref="SearchByScopeNameAsync" /> page.
+    ///     accompanies a <see cref="SearchByScopeIdAsync" /> page.
     /// </summary>
-    /// <param name="scopeName">The DHCP scope whose leases should be counted.</param>
+    /// <param name="scopeId">The identifier of the DHCP scope whose leases should be counted.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of leases in the scope.</returns>
-    Task<int> CountByScopeNameAsync(string scopeName, CancellationToken stoppingToken = default);
+    Task<int> CountByScopeIdAsync(Guid scopeId, CancellationToken stoppingToken = default);
 
     /// <summary>
     ///     This method marks one lease <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum.Expired" />

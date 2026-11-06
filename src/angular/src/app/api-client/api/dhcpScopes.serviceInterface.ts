@@ -65,7 +65,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesGet(requestParameters: ApiDhcpScopesGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeDetailPagedResult>;
 
     /**
-     * This action deletes a DHCP scope with its reservations and custom options, removed explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases recorded for the scope (which refer to it by &#x60;ScopeName&#x60;, not id) are left alone as operational data, as &#x60;BackupEntityCatalog&#x60; treats them. A tag rule that names the scope (&#x60;DhcpTagRuleEntity.ScopeId&#x60;) is also left alone and simply never matches again. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:write&#x60;.
+     * This action deletes a DHCP scope with its reservations and custom options, removed explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases recorded for the scope (which refer to it by &#x60;scopeId&#x60;) are left alone as operational data. A tag rule that names the scope (a DHCP tag rule\&#39;s scope) is also left alone and simply never matches again. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:write&#x60;.
      * 
      * @endpoint delete /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -97,7 +97,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdPut(requestParameters: ApiDhcpScopesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action reports a scope\&#39;s current utilization: the total addresses or prefixes in its range, how many are leased or offered, how many its reservations account for, and how many remain available. It is computed from the scope\&#39;s settings and its recorded leases and reservations on every call (see &#x60;IDhcpScopeStatisticsService&#x60;). The two slot counts are strings because an IPv6 range can exceed a 64-bit integer. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:read&#x60;.
+     * This action reports a scope\&#39;s current utilization: the total addresses or prefixes in its range, how many are leased or offered, how many its reservations account for, and how many remain available. It is computed from the scope\&#39;s settings and its recorded leases and reservations on every call. The two slot counts are strings because an IPv6 range can exceed a 64-bit integer. Returns 404 for an unknown id. Requires &#x60;dhcpscopes:read&#x60;.
      * 
      * @endpoint get /api/dhcp-scopes/{id}/statistics
 * @param requestParameters

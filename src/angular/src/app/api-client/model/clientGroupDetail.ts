@@ -38,11 +38,11 @@ export interface ClientGroupDetail {
      */
     updatedAtUtc?: string | null;
     /**
-     * The UTC instant until which the group\'s pause blocks DNS resolution for every member (see `DnsClientGroupEntity.PausedUntilUtc`), or null when no pause has been set.
+     * The UTC instant until which the group\'s pause blocks DNS resolution for every member, or null when no pause has been set.
      */
     pausedUntilUtc?: string | null;
     /**
-     * Whether PausedUntilUtc is still in the future, computed when the response is built, as for `ClientDetail.IsCurrentlyPaused`.
+     * Whether `pausedUntilUtc` is still in the future, computed when the response is built, as for `ClientDetail.isCurrentlyPaused`.
      */
     isCurrentlyPaused?: boolean;
 }

@@ -34,7 +34,7 @@ export interface SafeSearchDetail {
      */
     hostnameCount?: number;
     /**
-     * Whether every one of the entry\'s mappings exists as an enabled `DnsRewriteEntity` with the matching scope (global, or the client or client group the request named).
+     * Whether every one of the entry\'s mappings exists as an enabled rewrite with the matching scope (global, or the client or client group the request named).
      */
     isEnabled?: boolean;
 }

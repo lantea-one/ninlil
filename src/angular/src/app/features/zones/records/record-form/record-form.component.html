@@ -25,7 +25,21 @@
         <section class="field-row">
           <div class="field">
             <label cLabel for="record-name">Owner name</label>
-            <input cFormControl id="record-name" formControlName="name" placeholder="www" />
+            <input
+              cFormControl
+              id="record-name"
+              formControlName="name"
+              placeholder="www"
+              aria-describedby="record-name-help"
+            />
+            <div id="record-name-help" class="field-help">
+              Type a short name such as <code>www</code>, or <code>&#64;</code> for the zone itself.
+              The zone name is added when it is missing.
+              @if (storedName()) {
+                <br />
+                Saved as <strong class="stored-name">{{ storedName() }}</strong>
+              }
+            </div>
             @if (form.controls.name.hasError('required')) {
               <div class="field-error">A name is required.</div>
             }

@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the EDNS Client Subnet settings (`EdnsClientSubnetOptions`) that `GET /api/client-subnet-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the EDNS Client Subnet settings (configuration section `DnsServer:ClientSubnet`) that `GET /api/client-subnet-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface ClientSubnetSettingsDetail { 
     /**

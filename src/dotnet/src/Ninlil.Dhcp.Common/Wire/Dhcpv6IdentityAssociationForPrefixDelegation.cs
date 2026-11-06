@@ -6,7 +6,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 8415 Section 21.21's Identity Association for Prefix Delegation
+///     This class represents RFC 9915 Section 21.21's Identity Association for Prefix Delegation
 ///     (IA_PD) option, the prefix counterpart of
 ///     <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />: a container named by a
 ///     client-chosen IAID, with T1/T2 timers and nested options, holding
@@ -28,14 +28,14 @@ public class Dhcpv6IdentityAssociationForPrefixDelegation
 
     /// <summary>
     ///     This property contains how long after this option is sent the client should wait
-    ///     before asking the delegating server to renew the prefixes. This is RFC 8415 Section
+    ///     before asking the delegating server to renew the prefixes. This is RFC 9915 Section
     ///     21.21's "T1" field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan T1 { get; set; }
 
     /// <summary>
     ///     This property contains how long after this option is sent the client should wait
-    ///     before asking any server to extend the prefixes. This is RFC 8415 Section 21.21's "T2"
+    ///     before asking any server to extend the prefixes. This is RFC 9915 Section 21.21's "T2"
     ///     field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan T2 { get; set; }

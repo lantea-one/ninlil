@@ -51,7 +51,7 @@ public class OidcSsoSettingsController(
 {
     /// <summary>
     ///     This action returns the current SSO settings. The client secret is never returned, only
-    ///     whether one is set (see <see cref="OidcSsoSettingsDetail.ClientSecretConfigured" />),
+    ///     whether one is set (see <c>OidcSsoSettingsDetail.clientSecretConfigured</c>),
     ///     whether the plaintext variable overrides it and whether the stored one is unreadable.
     ///     Requires <c>ssosettings:read</c>.
     /// </summary>
@@ -62,12 +62,12 @@ public class OidcSsoSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>Identity:Sso</c> as an RFC 7396 merge patch,
-    ///     through <see cref="PresetConfigurationFileApplier" />. A field absent from
-    ///     <paramref name="patch" /> keeps its value, including <c>clientSecret</c>, so an operator
-    ///     can change only <c>displayName</c> without resupplying a secret <see cref="Get" /> never
-    ///     shows. A blank <c>clientSecret</c> clears it. Returns 400 for a blank display name or
-    ///     client id, an authority that is not an absolute http(s) URL, or scopes without
-    ///     <c>openid</c>. Requires <c>ssosettings:write</c>.
+    ///     written to the configuration file. A field absent from <paramref name="patch" /> keeps
+    ///     its value, including <c>clientSecret</c>, so an operator can change only
+    ///     <c>displayName</c> without resupplying a secret <see cref="Get" /> never shows. A blank
+    ///     <c>clientSecret</c> clears it. Returns 400 for a blank display name or client id, an
+    ///     authority that is not an absolute http(s) URL, or scopes without <c>openid</c>. Requires
+    ///     <c>ssosettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("ssosettings:write")]

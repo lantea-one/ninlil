@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the DNS64 settings (`Dns64Options`) that `GET /api/dns64-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the DNS64 settings (configuration section `DnsServer:Dns64`) that `GET /api/dns64-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface Dns64SettingsDetail { 
     /**

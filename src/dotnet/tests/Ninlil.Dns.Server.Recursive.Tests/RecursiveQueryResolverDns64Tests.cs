@@ -17,7 +17,8 @@ namespace Ninlil.Dns.Server.Recursive.Tests;
 ///     DNS64 synthesis (RFC 6147 §5.5). It uses a fake engine with canned AAAA (NODATA) and A
 ///     results and a validator whose outcome depends on the queried type, so the AAAA lookup and
 ///     the A lookup can validate differently. It also covers the exclusion of IPv4-mapped AAAA
-///     records (RFC 6147 §5.1.4) with canned AAAA answers.
+///     records (RFC 6147 §5.1.4) with canned AAAA answers, and the AAAA error rules of
+///     RFC 6147 §5.1.2 (NXDOMAIN is returned, any other failure synthesizes, bogus never does).
 /// </summary>
 public sealed class RecursiveQueryResolverDns64Tests
 {
@@ -382,5 +383,132 @@ public sealed class RecursiveQueryResolverDns64Tests
 
         Assert.Equal(2, response.Answers.Count);
         Assert.Equal(IPAddress.Parse("::ffff:192.0.2.1"), AddressOf(response.Answers[0]));
+    }
+
+    /// <summary>
+    ///     This method asks the AAAA question when the engine answers it with
+    ///     <paramref name="aaaaResult" /> and the A question with <paramref name="aResult" />
+    ///     (an A record, 198.41.0.4, when <see langword="null" />). The validator returns
+    ///     <paramref name="aaaaValidation" /> for the AAAA lookup.
+    /// </summary>
+    private static async Task<DnsMessage> AskWithAaaaResultAsync(
+        IterativeResolutionResult aaaaResult,
+        DnssecValidationResult aaaaValidation,
+        IterativeResolutionResult aResult = null
+    )
+    {
+        FakeIterativeResolutionEngine engine = new();
+        engine.AddResult(QueriedName, DnsResourceRecordTypeEnum.Aaaa, aaaaResult);
+        engine.AddResult(
+            QueriedName,
+            DnsResourceRecordTypeEnum.A,
+            aResult
+                ?? new IterativeResolutionResult(
+                    RecursiveResolutionStatusEnum.Success,
+                    [
+                        new DnsResourceRecord(
+                            QueriedName,
+                            DnsResourceRecordTypeEnum.A,
+                            DnsClassEnum.Internet,
+                            300,
+                            DnsRecordDataCodecRegistry.Encode(
+                                DnsResourceRecordTypeEnum.A,
+                                new ARecordData(IPAddress.Parse("198.41.0.4"))
+                            )
+                        ),
+                    ],
+                    [],
+                    null,
+                    []
+                )
+        );
+
+        RecursiveQueryResolver resolver = new(
+            engine,
+            new PerTypeValidator(DnssecValidationResult.Secure(), aaaaValidation),
+            new StaticOptionsMonitor<RecursiveServerOptions>(
+                new RecursiveServerOptions { EnableRecursion = true }
+            ),
+            dns64Service: new Dns64SynthesisService(
+                new StaticOptionsMonitor<Dns64Options>(new Dns64Options { Enable = true })
+            )
+        );
+        DnsMessage request = new()
+        {
+            RecursionDesired = true,
+            Questions =
+            [
+                new DnsQuestion(QueriedName, DnsResourceRecordTypeEnum.Aaaa, DnsClassEnum.Internet),
+            ],
+        };
+
+        DnsQueryResolution resolution = await resolver.TryResolveAsync(
+            new DnsQueryContext(
+                request,
+                DnsTransportProtocolEnum.Udp,
+                IPAddress.Parse("203.0.113.5"),
+                DateTimeOffset.UtcNow
+            )
+        );
+
+        Assert.True(resolution.IsHandled);
+
+        return resolution.Response;
+    }
+
+    [Fact]
+    public async Task TryResolveAsync_AnAaaaLookupThatFails_IsSynthesizedFromTheAAnswer()
+    {
+        // RFC 6147 §5.1.2: any RCODE other than NXDOMAIN counts as NOERROR with an empty answer
+        // (§5.1.3: a timeout is SERVFAIL). The engine reports every upstream error, REFUSED
+        // included, as ServFail.
+        DnsMessage response = await AskWithAaaaResultAsync(
+            IterativeResolutionResult.ServFail(),
+            DnssecValidationResult.Indeterminate("not validated")
+        );
+
+        Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+        DnsResourceRecord answer = Assert.Single(response.Answers);
+        Assert.Equal(IPAddress.Parse("64:ff9b::c629:4"), AddressOf(answer));
+        Assert.False(response.AuthenticData);
+    }
+
+    [Fact]
+    public async Task TryResolveAsync_AnAaaaLookupThatFailsAndAFailsToo_KeepsTheAaaaError()
+    {
+        DnsMessage response = await AskWithAaaaResultAsync(
+            IterativeResolutionResult.ServFail(),
+            DnssecValidationResult.Indeterminate("not validated"),
+            IterativeResolutionResult.ServFail()
+        );
+
+        Assert.Equal(DnsResponseCodeEnum.ServerFailure, response.ResponseCode);
+        Assert.Empty(response.Answers);
+    }
+
+    [Fact]
+    public async Task TryResolveAsync_AnAaaaNxDomain_IsReturnedWithoutSynthesis()
+    {
+        // RFC 6147 §5.1.2: RCODE 3 is handled as in normal DNS operation.
+        DnsMessage response = await AskWithAaaaResultAsync(
+            new IterativeResolutionResult(RecursiveResolutionStatusEnum.NxDomain, [], [], null, []),
+            DnssecValidationResult.Insecure()
+        );
+
+        Assert.Equal(DnsResponseCodeEnum.NxDomain, response.ResponseCode);
+        Assert.Empty(response.Answers);
+    }
+
+    [Fact]
+    public async Task TryResolveAsync_ABogusAaaaAnswer_IsServFailWithoutSynthesis()
+    {
+        // RFC 6147 §5.5: a bogus AAAA answer is never replaced by a synthesized one.
+        DnsMessage response = await AskWithAaaaResultAsync(
+            new IterativeResolutionResult(RecursiveResolutionStatusEnum.NoData, [], [], null, []),
+            DnssecValidationResult.Bogus("test")
+        );
+
+        Assert.Equal(DnsResponseCodeEnum.ServerFailure, response.ResponseCode);
+        Assert.Empty(response.Answers);
     }
 }

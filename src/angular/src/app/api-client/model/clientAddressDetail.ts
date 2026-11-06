@@ -11,7 +11,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries one persistent identifier a known client device answers to. It appears in `ClientDetail.Addresses` and in the responses of `ClientAddressesController`.
+ * This class carries one persistent identifier a known client device answers to. It appears in `ClientDetail.addresses` and in the responses of `/api/clients/{clientId}/addresses`.
  */
 export interface ClientAddressDetail { 
     /**
@@ -44,15 +44,15 @@ export interface ClientAddressDetail {
      */
     createdAtUtc?: string;
     /**
-     * The MAC address ClientIdentifier embeds (directly, or inside a DHCPv4 client-id or a link-layer DUID), as lowercase colon-separated hexadecimal, or null when it embeds none.
+     * The MAC address `clientIdentifier` embeds (directly, or inside a DHCPv4 client-id or a link-layer DUID), as lowercase colon-separated hexadecimal, or null when it embeds none.
      */
     macAddress?: string | null;
     /**
-     * The organization IEEE assigned MacAddress\'s block to, computed when the response is built. null when there is no MAC, it is randomized, or no registry lists it.
+     * The organization IEEE assigned `macAddress`\'s block to, computed when the response is built. null when there is no MAC, it is randomized, or no registry lists it.
      */
     vendor?: string | null;
     /**
-     * Whether MacAddress is a randomized (locally administered) address, which is never looked up because it names no manufacturer.
+     * Whether `macAddress` is a randomized (locally administered) address, which is never looked up because it names no manufacturer.
      */
     isRandomizedMacAddress?: boolean;
 }

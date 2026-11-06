@@ -54,7 +54,7 @@ public class ClientSubnetSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:ClientSubnet</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value; a null or blank <c>overrideAddress</c> clears
     ///     it. Returns 400 for a field of the wrong JSON type, a source prefix length outside 0-32
     ///     (IPv4) or 0-128 (IPv6), or an override address that is not an IP address. Requires

@@ -11,7 +11,7 @@ namespace Ninlil.Dhcp.Common.Identity;
 ///     recovered from the other:
 ///     <list type="bullet">
 ///         <item>
-///             A DUID-LLT (type 1, RFC 8415 Section 11.2) or DUID-LL (type 3, RFC 8415
+///             A DUID-LLT (type 1, RFC 9915 Section 11.2) or DUID-LL (type 3, RFC 9915
 ///             Section 11.4) carries a hardware type and a link-layer address; with hardware type 1
 ///             (Ethernet, IANA's ARP hardware-type registry) and a 6-octet address, that address is
 ///             the device's MAC.
@@ -87,7 +87,7 @@ public static class DhcpClientIdentifierLinkKeys
     /// </summary>
     private static void AddDuidKeys(ReadOnlySpan<byte> duid, HashSet<string> keys)
     {
-        // Every DUID begins with a 2-octet type code (RFC 8415 Section 11.1); anything shorter,
+        // Every DUID begins with a 2-octet type code (RFC 9915 Section 11.1); anything shorter,
         // or with nothing after the type, is not a valid DUID.
         if (duid.Length <= 2)
             return;

@@ -202,13 +202,17 @@ public sealed class KeyRingBackupRestoreTests : IDisposable
                 SelfSignedCertificateStatePath = Path.Combine(directory, "unused.pfx"),
             }
         );
+        // Registered before the backup services, whose own default registration only applies
+        // when the host has none.
+        builder.Services.AddSingleton(
+            new BackupPathSettings
+            {
+                DataProtectionKeyRingDirectory = ring,
+                RuntimeConfigurationFilePath = configuration,
+            }
+        );
         builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
-        builder.Services.PostConfigure<BackupOptions>(backup =>
-        {
-            backup.DataProtectionKeyRingDirectory = ring;
-            backup.RuntimeConfigurationFilePath = configuration;
-            backup.MinimumPassphraseLength = 8;
-        });
+        builder.Services.PostConfigure<BackupOptions>(backup => backup.MinimumPassphraseLength = 8);
 
         IHost host = builder.Build();
         await using (AsyncServiceScope scope = host.Services.CreateAsyncScope())

@@ -15,8 +15,8 @@ namespace Ninlil.Web.Models;
 ///     How many hostnames the entry redirects when enabled, without listing every mapping.
 /// </param>
 /// <param name="IsEnabled">
-///     Whether every one of the entry's mappings exists as an enabled <c>DnsRewriteEntity</c>
-///     with the matching scope (global, or the client or client group the request named).
+///     Whether every one of the entry's mappings exists as an enabled rewrite with the matching
+///     scope (global, or the client or client group the request named).
 /// </param>
 public record SafeSearchDetail(
     string Key,

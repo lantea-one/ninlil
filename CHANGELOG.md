@@ -36,6 +36,79 @@ outside Forgejo.
   backups with a passphrase. See [Security](./README.md#security).
   ([#42](https://git.lantea.one/lantea-one/ninlil/issues/42))
 
+### Deprecated
+
+- **The identity settings lockout fields are deprecated.** `defaultLockoutTimeSpan`,
+  `maxFailedAccessAttempts` and `allowedForNewUsers` of `/api/identity-settings`, and the
+  `NINLIL_IDENTITY_LOCKOUT_*` variables, never had an effect: Ninlil has no account lockout, and
+  sign-in is rate limited per client address instead. The OpenAPI document marks the three fields
+  `deprecated`. Reads and writes keep working; a later release removes them
+  ([#32](https://git.lantea.one/lantea-one/ninlil/issues/32)).
+
+### Removed
+
+- **Settings that had no effect are gone.** These variables never changed anything, because
+  DNS-over-HTTPS is served by the web listener and startup sets the two backup paths itself:
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL`
+  - `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY`
+  - `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH`
+
+  An environment that still sets one starts as before and logs a warning that the variable
+  matches no known setting and was ignored; the same keys in a configuration file are ignored
+  silently. Remove them to silence the warning
+  ([#27](https://git.lantea.one/lantea-one/ninlil/issues/27)).
+- **Library API (NuGet).** `DnsOverHttpsOptions.Port` and `Certificate` moved to the new
+  `DnsOverHttpsListenerOptions`, which `DnsOverHttpsHostedService` now also takes in its
+  constructor; Ninlil itself does not bind it. `BackupOptions.DataProtectionKeyRingDirectory` and
+  `RuntimeConfigurationFilePath` moved to the new `BackupPathSettings`, which `SystemBackupService`
+  takes in its constructor. Code that builds these types itself needs the new argument.
+
+### Behaviour worth knowing
+
+- **Renaming a DHCP scope keeps its leases.** A lease refers to its scope by id, so a renamed
+  scope keeps its leases, the DHCP engine renews them, and their DNS records stay registered. On
+  upgrade, each existing lease takes the id of the scope with its scope name, and a lease whose
+  scope name matches no scope (its scope was deleted) is deleted. A backup taken before this
+  change restores the same way: its leases are relinked by scope name and the orphans are
+  dropped. See [DHCP, DHCPv6 and Router
+  Advertisement](./README.md#dhcp-dhcpv6-and-router-advertisement)
+  ([#58](https://git.lantea.one/lantea-one/ninlil/issues/58)).
+- **Settings saved to a custom runtime configuration file now take effect.** If
+  `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` points at a file other than
+  `appsettings.json`, Ninlil now loads and watches that file as a configuration source: its values
+  apply at start, and a saved change applies at once where the page says so. Values already saved
+  in that file, which Ninlil ignored until now, take effect after the upgrade. They override
+  `appsettings.json` and `appsettings.{Environment}.json`; `NINLIL_*` variables and command-line
+  arguments still override them. Review or clear the file before you upgrade. Ninlil creates
+  the file's folder at start when it is missing, so a mistyped path leaves an empty folder. See
+  [Configuration](./README.md#configuration)
+  ([#314](https://git.lantea.one/lantea-one/ninlil/issues/314),
+  [#321](https://git.lantea.one/lantea-one/ninlil/issues/321)).
+- **Enum fields in API requests take names only.** A request body field that holds an enum
+  (for example a zone's `type`) accepts a declared name. Names match without regard to case,
+  and surrounding spaces are ignored. A flags field takes a comma list of names, such as
+  `"Sunday, Monday"` for a schedule's days. A digit string (`"1"`), a JSON number (`1`) or a
+  value that is no name (`"99"`) now answers `400` with a message that lists the valid values,
+  and a `null` for a required enum answers `400` too. This covers create and update bodies,
+  `PATCH` merge-patch bodies, the DNSSEC policy's allowed algorithms, the storage switch's
+  encryption mode and the settings pages that take enum text. Responses are unchanged: they
+  write names, and a number only for a code that has no name. Enums inside a record's `data`
+  payload are not covered by this rule. Enum query-string parameters and route segments
+  (a client list's `presence` and `sort`, the DHCP option catalog's `protocolVersion`, the
+  `{kind}` of `/api/dhcp-services/{kind}/start`) follow it too: a digit string or an undefined
+  name answers `400` with the valid names. Scripts that send numbers
+  must send the names that the OpenAPI document (`/swagger/v1/swagger.json`) lists for the
+  field. The MySQL load-balance and MongoDB read-preference replica settings refuse comma lists
+  and numbers in the same way. See [REST API](./README.md#rest-api)
+  ([#296](https://git.lantea.one/lantea-one/ninlil/issues/296),
+  [#316](https://git.lantea.one/lantea-one/ninlil/issues/316),
+  [#327](https://git.lantea.one/lantea-one/ninlil/issues/327)).
+
 ## v2026.10.31.1
 
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with

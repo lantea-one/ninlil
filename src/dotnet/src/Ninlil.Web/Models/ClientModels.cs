@@ -6,17 +6,17 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This class carries the fields used to register a known client device
-///     (<c>POST /api/clients</c>) with its first address. <see cref="ClientIdentifier" /> and
-///     <see cref="ProtocolVersion" /> become that address's identity, which cannot change later
-///     (see <see cref="ClientsController" />). Further addresses are added through
-///     <see cref="Controllers.ClientAddressesController.Create" />. The device fields that stay
-///     editable are in <see cref="ClientWriteRequest" />, used by <c>PUT</c> and <c>PATCH</c>.
+///     (<c>POST /api/clients</c>) with its first address. <c>clientIdentifier</c> and
+///     <c>protocolVersion</c> become that address's identity, which cannot change later.
+///     Further addresses are added through <c>POST /api/clients/{clientId}/addresses</c>. The
+///     device fields that stay editable are in <see cref="ClientWriteRequest" />, used by
+///     <c>PUT</c> and <c>PATCH</c>.
 /// </summary>
 /// <param name="ClientIdentifier">A MAC address for an IPv4 client, or a DUID for an IPv6 one, in hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned as <c>aa:bb:cc:dd:ee:ff</c>.</param>
-/// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs to.</param>
+/// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <c>clientIdentifier</c> belongs to.</param>
 /// <param name="DisplayName">An optional, operator-chosen, human-readable name for the client.</param>
 /// <param name="ClientGroupId">
-///     The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> the client is
+///     The client group the client is
 ///     explicitly assigned to, or <see langword="null" /> for none.
 /// </param>
 /// <param name="IsDisabled">Whether the client starts out disabled.</param>
@@ -40,15 +40,14 @@ public record ClientCreateRequest(
 
 /// <summary>
 ///     This class carries the editable fields of a known client, replaced in full by
-///     <c>PUT /api/clients/{id}</c>. It has no <see cref="ClientCreateRequest.ClientIdentifier" />
-///     or <see cref="ClientCreateRequest.ProtocolVersion" />, because
-///     <see cref="ClientsController" /> never lets an address's identity change. To change one, add
-///     a new address and delete the old one, as with the shared secret of a
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity" />.
+///     <c>PUT /api/clients/{id}</c>. It has no <c>ClientCreateRequest.clientIdentifier</c>
+///     or <c>ClientCreateRequest.protocolVersion</c>, because an address's identity never
+///     changes. To change one, add a new address and delete the old one, as with the shared secret
+///     of a TSIG key.
 /// </summary>
 /// <param name="DisplayName">An operator-chosen, human-readable name for the client.</param>
 /// <param name="ClientGroupId">
-///     The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> the client is
+///     The client group the client is
 ///     explicitly assigned to, or <see langword="null" /> for none.
 /// </param>
 /// <param name="IsDisabled">Whether the client is disabled.</param>
@@ -70,7 +69,7 @@ public record ClientWriteRequest(
 
 /// <summary>
 ///     This class carries a known client device, as returned by the list, get and create
-///     endpoints of <c>/api/clients</c>. <see cref="Addresses" /> lists every identifier the device
+///     endpoints of <c>/api/clients</c>. <c>addresses</c> lists every identifier the device
 ///     answers to, since one device can have several (a dual-stack device's IPv4 MAC address and
 ///     IPv6 DUID, for instance).
 /// </summary>
@@ -78,7 +77,7 @@ public record ClientWriteRequest(
 /// <param name="Addresses">Every persistent identifier the device answers to (see <see cref="ClientAddressDetail" />).</param>
 /// <param name="DisplayName">An operator-chosen, human-readable name for the client.</param>
 /// <param name="ClientGroupId">
-///     The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> the client is
+///     The client group the client is
 ///     explicitly assigned to, or <see langword="null" /> for none.
 /// </param>
 /// <param name="IsDisabled">Whether the client is disabled.</param>
@@ -87,12 +86,11 @@ public record ClientWriteRequest(
 /// <param name="CreatedAtUtc">When the client was registered.</param>
 /// <param name="UpdatedAtUtc">When the client was last updated, or <see langword="null" /> if never.</param>
 /// <param name="PausedUntilUtc">
-///     The UTC instant until which the client's pause blocks all of its DNS resolution (see
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.PausedUntilUtc" />), or
+///     The UTC instant until which the client's pause blocks all of its DNS resolution, or
 ///     <see langword="null" /> when no pause has been set.
 /// </param>
 /// <param name="IsCurrentlyPaused">
-///     Whether <paramref name="PausedUntilUtc" /> is still in the future, computed when the
+///     Whether <c>pausedUntilUtc</c> is still in the future, computed when the
 ///     response is built. An expired pause is never cleared from storage, so this flag, not the
 ///     timestamp, says whether the client is paused.
 /// </param>
@@ -101,17 +99,17 @@ public record ClientWriteRequest(
 ///     or a reachable neighbor-table entry), or <see langword="null" /> if it has never been seen.
 /// </param>
 /// <param name="IsOnline">
-///     Whether <paramref name="LastSeenUtc" /> falls within the configured online window. It is
+///     Whether <c>lastSeenUtc</c> falls within the configured online window. It is
 ///     computed when the response is built, so it turns false once a device goes quiet.
 /// </param>
 /// <param name="DeviceIconKey">
 ///     The device icon an operator explicitly chose, or <see langword="null" /> when none was.
 /// </param>
 /// <param name="SuggestedDeviceIconKey">
-///     A device icon suggested from <paramref name="Vendor" />, computed when the response is
+///     A device icon suggested from <c>vendor</c>, computed when the response is
 ///     built. It is reported whether or not an explicit choice exists, so a caller can show
 ///     "suggested" apart from "chosen". <see langword="null" /> when the vendor gives no reliable
-///     hint. A display falls back to it only when <paramref name="DeviceIconKey" /> is unset.
+///     hint. A display falls back to it only when <c>deviceIconKey</c> is unset.
 /// </param>
 /// <param name="IsFavorite">Whether an operator has starred the client as a favorite.</param>
 /// <param name="Vendor">
@@ -151,11 +149,11 @@ public record ClientDetail(
 ///     <c>GET /api/clients</c> uses, so a count agrees with the list it links to.
 /// </summary>
 /// <param name="TotalCount">Every known client.</param>
-/// <param name="OnlineCount">Clients with any address seen within <paramref name="OnlineWindow" />.</param>
-/// <param name="OfflineCount">Clients not seen within <paramref name="OnlineWindow" />, including clients never seen; computed as total minus online.</param>
-/// <param name="NewCount">Clients registered at or after <paramref name="NewSinceUtc" />.</param>
+/// <param name="OnlineCount">Clients with any address seen within <c>onlineWindow</c>.</param>
+/// <param name="OfflineCount">Clients not seen within <c>onlineWindow</c>, including clients never seen; computed as total minus online.</param>
+/// <param name="NewCount">Clients registered at or after <c>newSinceUtc</c>.</param>
 /// <param name="FavoriteCount">Clients an operator has starred as a favorite.</param>
-/// <param name="NewSinceUtc">The instant <paramref name="NewCount" /> counts from: the request's <c>newSinceUtc</c>, or 24 hours ago when it was omitted.</param>
+/// <param name="NewSinceUtc">The instant <c>newCount</c> counts from: the request's <c>newSinceUtc</c>, or 24 hours ago when it was omitted.</param>
 /// <param name="OnlineWindow">The online window the presence counts were evaluated against.</param>
 public record ClientSummaryDetail(
     int TotalCount,
@@ -169,13 +167,13 @@ public record ClientSummaryDetail(
 
 /// <summary>
 ///     This class carries one persistent identifier a known client device answers to. It appears
-///     in <see cref="ClientDetail.Addresses" /> and in the responses of
-///     <see cref="Controllers.ClientAddressesController" />.
+///     in <c>ClientDetail.addresses</c> and in the responses of
+///     <c>/api/clients/{clientId}/addresses</c>.
 /// </summary>
 /// <param name="Id">The address's unique identifier.</param>
 /// <param name="ClientId">The owning device's unique identifier.</param>
 /// <param name="ClientIdentifier">A colon-separated MAC address for an IPv4 identity, or a DUID for an IPv6 one.</param>
-/// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs to.</param>
+/// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <c>clientIdentifier</c> belongs to.</param>
 /// <param name="Address">
 ///     The most recently observed source IP address this identifier answered from, or
 ///     <see langword="null" /> if none has been recorded yet.
@@ -187,16 +185,16 @@ public record ClientSummaryDetail(
 /// </param>
 /// <param name="CreatedAtUtc">When the address was created.</param>
 /// <param name="MacAddress">
-///     The MAC address <paramref name="ClientIdentifier" /> embeds (directly, or inside a DHCPv4
+///     The MAC address <c>clientIdentifier</c> embeds (directly, or inside a DHCPv4
 ///     client-id or a link-layer DUID), as lowercase colon-separated hexadecimal, or
 ///     <see langword="null" /> when it embeds none.
 /// </param>
 /// <param name="Vendor">
-///     The organization IEEE assigned <paramref name="MacAddress" />'s block to, computed when the
+///     The organization IEEE assigned <c>macAddress</c>'s block to, computed when the
 ///     response is built. <see langword="null" /> when there is no MAC, it is randomized, or no registry lists it.
 /// </param>
 /// <param name="IsRandomizedMacAddress">
-///     Whether <paramref name="MacAddress" /> is a randomized (locally administered) address, which
+///     Whether <c>macAddress</c> is a randomized (locally administered) address, which
 ///     is never looked up because it names no manufacturer.
 /// </param>
 public record ClientAddressDetail(
@@ -218,11 +216,11 @@ public record ClientAddressDetail(
 ///     (<c>POST /api/clients/{clientId}/addresses</c>). Apart from the first address in
 ///     <see cref="ClientCreateRequest" />, this is the only way a device gains an identifier. The
 ///     request is rejected with <c>409 Conflict</c> when the identifier and protocol pair already
-///     belongs to any device, this one included, matching the unique composite index on
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity" />.
+///     belongs to any device, this one included, matching the unique composite index on the client
+///     address table.
 /// </summary>
 /// <param name="ClientIdentifier">A MAC address for an IPv4 identity, or a DUID for an IPv6 one, in hex. Accepted spellings are <c>aa:bb:cc:dd:ee:ff</c>, <c>aa-bb-cc-dd-ee-ff</c>, <c>aabb.ccdd.eeff</c> and <c>aabbccddeeff</c> (up to 85 bytes); it is stored and returned as <c>aa:bb:cc:dd:ee:ff</c>.</param>
-/// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs to.</param>
+/// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <c>clientIdentifier</c> belongs to.</param>
 public record ClientAddressWriteRequest(
     string ClientIdentifier,
     InternetProtocolVersionEnum ProtocolVersion
@@ -233,11 +231,11 @@ public record ClientAddressWriteRequest(
 ///     (<c>POST /api/clients/{id}/pause</c> and <c>POST /api/client-groups/{id}/pause</c>). It
 ///     takes a duration rather than a timestamp because the UI offers one-click choices such as
 ///     "15 minutes" or "1 hour", and a duration needs no reasoning about the caller's time zone or
-///     clock. The server sets <c>PausedUntilUtc</c> to its current time plus the duration.
+///     clock. The server sets <c>pausedUntilUtc</c> to its current time plus the duration.
 /// </summary>
 /// <param name="DurationMinutes">
 ///     How many minutes from now to pause for. Zero or a negative number is rejected with a
-///     <c>400</c> (<see cref="Ninlil.Dns.Common.Exceptions.ValidationException" />).
+///     <c>400</c>.
 /// </param>
 public record InstantPauseRequest(int DurationMinutes);
 
@@ -248,7 +246,7 @@ public record InstantPauseRequest(int DurationMinutes);
 ///     <c>PATCH</c>: an assignment only joins a client to a list, so assigning a different list
 ///     means deleting one assignment and creating another.
 /// </summary>
-/// <param name="ListId">The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity" /> to assign to the client.</param>
+/// <param name="ListId">The filter list to assign to the client.</param>
 public record ClientListAssignmentWriteRequest(Guid ListId);
 
 /// <summary>

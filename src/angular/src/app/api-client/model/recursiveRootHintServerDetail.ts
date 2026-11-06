@@ -10,7 +10,7 @@
 
 
 /**
- * This record is one `RootHintServerOption` entry in `RecursiveSettingsDetail.RootHintServersOverride`: a root server\'s name and addresses. An empty override list uses the built-in internet root hints.
+ * This record is one entry in `RecursiveSettingsDetail.rootHintServersOverride`: a root server\'s name and addresses. An empty override list uses the built-in internet root hints.
  */
 export interface RecursiveRootHintServerDetail { 
     name?: string | null;

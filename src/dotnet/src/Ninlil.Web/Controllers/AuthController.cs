@@ -29,7 +29,8 @@ namespace Ninlil.Web.Controllers;
 ///     This controller issues, refreshes and revokes sign-in credentials: a short-lived JSON Web
 ///     Token access token, a longer-lived opaque refresh token and, for an account with two-factor
 ///     authentication, the challenge token between the two steps. It also hosts the anonymous
-///     password-recovery actions (<see cref="ForgotPassword" /> and <see cref="ResetPassword" />),
+///     password-recovery actions (<see cref="ForgotPassword" /> and <see cref="ResetPassword" />)
+///     and the confirmation of a self-service e-mail change (<see cref="ConfirmEmailChange" />),
 ///     since their callers are not signed in and every <c>UsersController</c> action needs a
 ///     sign-in. Every action here allows anonymous callers.
 ///     <para>
@@ -45,12 +46,12 @@ namespace Ninlil.Web.Controllers;
 ///     <para>
 ///         <b>Two ways to hold a refresh token.</b> A script or API client gets the refresh token
 ///         in the response body. The browser admin console asks for
-///         <see cref="RefreshTokenDeliveryEnum.Cookie" /> delivery instead: the refresh token then
+///         <c>Cookie</c> delivery instead: the refresh token then
 ///         travels only in the HttpOnly cookie of <see cref="RefreshTokenCookie" />, which page
 ///         scripts cannot read, and <see cref="Refresh" /> and <see cref="Logout" /> use that
 ///         cookie when the request body names no token. A page reload can then renew the session
 ///         without exposing the refresh token to JavaScript. "Remember me"
-///         (<see cref="LoginRequest.RememberMe" />) chooses between a persistent session and a
+///         (<c>LoginRequest.rememberMe</c>) chooses between a persistent session and a
 ///         browser-session one; see <see cref="SessionEntity.IsPersistent" />.
 ///     </para>
 /// </summary>
@@ -85,6 +86,10 @@ namespace Ninlil.Web.Controllers;
 ///     Supplies this node's cluster node id, which <see cref="ResetPassword" /> stamps onto
 ///     <see cref="AuditableEntityBase.OriginatingNodeId" />.
 /// </param>
+/// <param name="emailChangeLinkSender">
+///     Sends the notice to the old address after <see cref="ConfirmEmailChange" /> applies a
+///     change.
+/// </param>
 /// <param name="scopeFactory">
 ///     Creates the service scope <see cref="ForgotPassword" /> sends its e-mail from after the
 ///     response has gone.
@@ -107,6 +112,7 @@ public class AuthController(
     IOptionsMonitor<EmailSenderOptions> emailOptions,
     IDnsServerEventPublisher eventPublisher,
     IOptionsMonitor<ClusterOptions> clusterOptions,
+    EmailChangeLinkSender emailChangeLinkSender,
     IServiceScopeFactory scopeFactory,
     ILogger<AuthController> logger
 ) : ControllerBase
@@ -120,18 +126,17 @@ public class AuthController(
 
     /// <summary>
     ///     This action starts a self-service password reset. Given an e-mail address and no
-    ///     sign-in, it sends a reset-link e-mail through <see cref="PasswordResetLinkSender" />
-    ///     when a matching account exists, is not disabled, has an e-mail address, and SMTP and
-    ///     the public base URL are configured. Allows anonymous callers and is rate limited.
+    ///     sign-in, it sends a reset-link e-mail when a matching account exists, is not disabled,
+    ///     has an e-mail address, and SMTP and the public base URL are configured. Allows anonymous
+    ///     callers and is rate limited.
     ///     <para>
-    ///         <b>The response never varies.</b> It is always 200 with the same
-    ///         <see cref="ForgotPasswordResult" />, whichever condition failed, including "no
-    ///         account has this address". An administrator using
-    ///         <c>UsersController.ResetPassword</c> may learn whether an account has an e-mail
-    ///         address or whether SMTP is configured, but an anonymous caller must not be able to
-    ///         tell from the response which addresses have accounts. A delivery failure (the SMTP
-    ///         server rejects the message, say) is logged rather than returned as a 500 for the
-    ///         same reason.
+    ///         <b>The response never varies.</b> It is always 200 with the same message, whichever
+    ///         condition failed, including "no account has this address". An administrator using
+    ///         <c>POST /api/users/{id}/reset-password</c> may learn whether an account has an
+    ///         e-mail address or whether SMTP is configured, but an anonymous caller must not be
+    ///         able to tell from the response which addresses have accounts. A delivery failure
+    ///         (the SMTP server rejects the message, say) is logged rather than returned as a 500
+    ///         for the same reason.
     ///     </para>
     ///     <para>
     ///         <b>Neither does its timing, as far as is practical.</b> The e-mail is sent in the
@@ -353,9 +358,10 @@ public class AuthController(
     ///     pending sign-in's account. A challenge token that reaches the code check is spent
     ///     whether or not the code is right. Returns 401 for an unknown or used challenge token or
     ///     a wrong code. After 5 wrong codes in 15 minutes for the account (counted across all
-    ///     client addresses and shared with <see cref="TwoFactorController" />) it returns 429
-    ///     with a <c>Retry-After</c> header, without checking the code and without spending the
-    ///     challenge token. Allows anonymous callers and is rate limited per client address.
+    ///     client addresses and shared with the two-factor actions of the signed-in account) it
+    ///     returns 429 with a <c>Retry-After</c> header, without checking the code and without
+    ///     spending the challenge token. Allows anonymous callers and is rate limited per client
+    ///     address.
     /// </summary>
     [HttpPost("login/two-factor")]
     [AllowAnonymous]
@@ -449,7 +455,7 @@ public class AuthController(
     ///     revokes the old refresh token (rotation), so it cannot be reused. The token comes from
     ///     the request body when one is given there, otherwise from the browser's refresh cookie,
     ///     in which case the new refresh token goes back as a cookie rather than in the body. The
-    ///     new session keeps the old one's <see cref="SessionEntity.IsPersistent" /> choice.
+    ///     new session keeps the old one's persistent-session choice.
     ///     Returns 401 for an invalid, expired or revoked token or a disabled account. Allows
     ///     anonymous callers.
     ///     <para>
@@ -536,17 +542,20 @@ public class AuthController(
     /// <summary>
     ///     This action sets a new password from a password-reset token. It is the second step of
     ///     both <see cref="ForgotPassword" /> and the <c>EmailLink</c> mode of
-    ///     <c>UsersController.ResetPassword</c>, called from the admin console's "set new password"
-    ///     page. The caller is not signed in, so it allows anonymous callers;
-    ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
-    ///     <see cref="UserManager{TUser}.ResetPasswordAsync" /> rejects a wrong, expired or used
-    ///     token. An unknown account and an undecodable token return the same 400 message, so the
-    ///     response does not reveal whether an account exists. A successful reset replaces the
-    ///     account's security stamp and revokes every refresh token of the account, so every
-    ///     access token issued before it answers 401 on its next request.
+    ///     <c>POST /api/users/{id}/reset-password</c>, called from the admin console's "set new
+    ///     password" page. The caller is not signed in, so it allows anonymous callers;
+    ///     <c>ConfirmPasswordResetRequest.token</c> is the only proof of authorization, and
+    ///     ASP.NET Core Identity rejects a wrong, expired or used token. An unknown account and an
+    ///     undecodable token return the same 400 message, so the response does not reveal whether
+    ///     an account exists. A successful reset replaces the account's security stamp and revokes
+    ///     every refresh token of the account, so every access token issued before it answers 401
+    ///     on its next request.
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(
+        ServiceCollectionAdminLoginRateLimitingExtension.PasswordResetEndpointPolicyName
+    )]
     [SwaggerRequestExample(
         typeof(ConfirmPasswordResetRequest),
         typeof(ConfirmPasswordResetRequestExample)
@@ -586,6 +595,100 @@ public class AuthController(
         await userManager.UpdateAsync(user);
 
         eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    ///     This action applies a self-service e-mail change from the link
+    ///     <see cref="UsersController.ChangeMyEmail" /> e-mailed to the new address, called from the
+    ///     admin console's "confirm e-mail change" page. The link may be opened in a browser that
+    ///     is not signed in, so it allows anonymous callers; <c>ConfirmEmailChangeRequest.token</c>
+    ///     is the only proof, and ASP.NET Core Identity rejects a wrong, expired, reused or
+    ///     tampered token, and one issued for another address. An unknown, disabled or mismatched
+    ///     account and a bad token return the same 400 message, so the response does not reveal
+    ///     whether an account exists. A successful change sets the address, marks it confirmed,
+    ///     replaces the account's security stamp and revokes every refresh token, so every session
+    ///     of the account must sign in again. A notice goes to the old address when SMTP is
+    ///     configured; a failed send is logged and does not undo the change.
+    /// </summary>
+    [HttpPost("confirm-email-change")]
+    [AllowAnonymous]
+    [EnableRateLimiting(
+        ServiceCollectionAdminLoginRateLimitingExtension.PasswordResetEndpointPolicyName
+    )]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [SwaggerRequestExample(
+        typeof(ConfirmEmailChangeRequest),
+        typeof(ConfirmEmailChangeRequestExample)
+    )]
+    public async Task<IActionResult> ConfirmEmailChange(
+        ConfirmEmailChangeRequest request,
+        CancellationToken stoppingToken
+    )
+    {
+        const string invalidLinkMessage = "This e-mail change link is no longer valid.";
+
+        UserEntity user = await userManager.FindByIdAsync(request.UserId.ToString());
+
+        string rawToken;
+        try
+        {
+            rawToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token));
+        }
+        catch (FormatException)
+        {
+            throw new ValidationException(invalidLinkMessage);
+        }
+
+        // A disabled account cannot sign in, so it must not be able to move its address either.
+        if (user is null || user.IsDisabled || string.IsNullOrWhiteSpace(request.Email))
+            throw new ValidationException(invalidLinkMessage);
+
+        string oldEmail = user.Email;
+
+        IdentityResult result = await userManager.ChangeEmailAsync(user, request.Email, rawToken);
+
+        // Only a valid token gets past InvalidToken, so a different error (the address was taken
+        // in the meantime) is safe to show to the holder of that token.
+        if (
+            result.Errors.Any(error => error.Code == userManager.ErrorDescriber.InvalidToken().Code)
+        )
+            throw new ValidationException(invalidLinkMessage);
+        result.ThrowIfFailed();
+
+        // ChangeEmailAsync has replaced the security stamp; the refresh tokens go too.
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
+
+        user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+        await userManager.UpdateAsync(user);
+
+        eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
+
+        // The change has happened and cannot be undone by a failing mail server, so a failed
+        // notice is logged and not returned.
+        if (
+            !string.IsNullOrWhiteSpace(oldEmail)
+            && !string.IsNullOrWhiteSpace(emailOptions.CurrentValue.SmtpHost)
+        )
+        {
+            try
+            {
+                await emailChangeLinkSender.SendChangedNoticeAsync(
+                    oldEmail,
+                    user.Email,
+                    stoppingToken
+                );
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    exception,
+                    "The e-mail change notice for account {UserId} was not delivered.",
+                    user.Id
+                );
+            }
+        }
 
         return NoContent();
     }

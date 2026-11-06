@@ -203,9 +203,9 @@ public class DhcpScopeCustomOptionsController(
 
     /// <summary>
     ///     This method throws <see cref="ConflictException" /> (409) when the scope already has
-    ///     an option with <paramref name="optionTag" />. The check runs before the save because
-    ///     the relational unique index on (scope, tag) would otherwise surface as a 500, and the
-    ///     MongoDB index is not unique. Two concurrent writes can still both pass the check.
+    ///     an option with <paramref name="optionTag" />. The check runs before the save to give a
+    ///     precise message. Two concurrent writes can both pass it: the unique index on (scope, tag)
+    ///     then rejects the second at save, and every engine maps that rejection to the same 409.
     /// </summary>
     /// <param name="scopeId">The scope the option belongs to.</param>
     /// <param name="optionTag">The tag (or DHCPv6 option code) being written.</param>
@@ -251,12 +251,12 @@ public class DhcpScopeCustomOptionsController(
 
     /// <summary>
     ///     This method checks a custom option request and converts
-    ///     <see cref="DhcpScopeCustomOptionWriteRequest.ValueHex" /> to the uppercase, even-length
+    ///     <c>DhcpScopeCustomOptionWriteRequest.valueHex</c> to the uppercase, even-length
     ///     hex that
     ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity.ValueHex" />
     ///     stores. A blank value is an error only for
-    ///     <see cref="DhcpOptionValueSourceEnum.Custom" />, where the stored value is what gets
-    ///     sent. For <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the server's address is
+    ///     <c>Custom</c>, where the stored value is what gets
+    ///     sent. For <c>ServerAddress</c> the server's address is
     ///     sent instead and the value is never read, so a blank value is stored as an empty string.
     ///     For a DHCPv4 <paramref name="scope" /> the tag and value length must also pass
     ///     <see cref="DhcpRawOptionRules.TryValidateDhcpv4" /> (a server address is 4 bytes) and a

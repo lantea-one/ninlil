@@ -1,0 +1,30 @@
+<div class="confirm-email-page">
+  <div class="confirm-email-brand">
+    <svg cIcon name="cilLan" size="xxl" class="confirm-email-brand-icon"></svg>
+    <span class="confirm-email-brand-text">Ninlil</span>
+  </div>
+
+  <c-card class="confirm-email-card shadow-lg border-0">
+    <c-card-header class="d-flex align-items-center gap-2">
+      <svg cIcon name="cilEnvelopeClosed" size="lg"></svg>
+      <strong>Confirm your new e-mail address</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (confirming()) {
+        <c-spinner class="d-block mx-auto" />
+      } @else if (completed()) {
+        <c-alert color="success" [dismissible]="false" role="status">
+          Your e-mail address has been changed. Every session of your account was signed out. Sign
+          in again to continue.
+        </c-alert>
+        <a cButton color="primary" class="w-100" routerLink="/login">Go to sign in</a>
+      } @else if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+        <a cButton color="secondary" variant="ghost" class="w-100" routerLink="/login">
+          Back to sign in
+        </a>
+      }
+    </c-card-body>
+  </c-card>
+</div>

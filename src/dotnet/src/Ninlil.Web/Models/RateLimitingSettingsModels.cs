@@ -2,10 +2,11 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST shape of the DNS rate limiting settings (<c>DnsRateLimitOptions</c>)
-///     that <c>GET /api/rate-limiting-settings</c> returns. It covers the per-client token bucket
-///     and the per-subnet response limits. A <c>PATCH</c> to the same endpoint accepts every
-///     field except the last two, which are read-only cluster sync bookkeeping.
+///     This record is the REST shape of the DNS rate limiting settings (configuration section
+///     <c>DnsServer:RateLimiting</c>) that <c>GET /api/rate-limiting-settings</c> returns. It
+///     covers the per-client token bucket and the per-subnet response limits. A <c>PATCH</c> to the
+///     same endpoint accepts every field except the last two, which are read-only cluster sync
+///     bookkeeping.
 /// </summary>
 /// <param name="Enable">Whether rate limiting is applied. Defaults to <see langword="false" />.</param>
 /// <param name="QueriesPerSecond">The steady query rate allowed per client. Defaults to 20.</param>

@@ -28,14 +28,14 @@ export interface IdentitySettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action returns the current password-complexity and account-lockout policy. Requires &#x60;identitysettings:read&#x60;.
+     * This action returns the current password-complexity, account-lockout and e-mail change policy. Requires &#x60;identitysettings:read&#x60;.
      * 
      * @endpoint get /api/identity-settings
 */
     apiIdentitySettingsGet(extraHttpRequestParams?: any): Observable<IdentitySettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;Identity:Password&#x60; and &#x60;Identity:Lockout&#x60; as an RFC 7396 merge patch, through &#x60;PresetConfigurationFileApplier&#x60;. Every field takes effect on the next request. Returns 400 for a field of the wrong JSON type, a length or attempt count below 1, a length above 128, a unique-character count above 64 or above the length, or a lockout duration that is negative or longer than 100 years. Requires &#x60;identitysettings:write&#x60;.
+     * This action merges a partial update into &#x60;Identity:Password&#x60;, &#x60;Identity:Lockout&#x60; and &#x60;Identity:EmailChange&#x60; as an RFC 7396 merge patch, written to the configuration file. Every field takes effect on the next request. Returns 400 for a field of the wrong JSON type, a length or attempt count below 1, a length above 128, a unique-character count above 64 or above the length, or a lockout duration that is negative or longer than 100 years. Requires &#x60;identitysettings:write&#x60;.
      * 
      * @endpoint patch /api/identity-settings
 * @param requestParameters

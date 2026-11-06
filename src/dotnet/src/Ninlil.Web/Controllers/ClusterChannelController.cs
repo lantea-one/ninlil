@@ -55,9 +55,8 @@ public class ClusterChannelController(
 {
     /// <summary>
     ///     This action answers a peer's heartbeat with 200, after checking that the body names the
-    ///     peer the key belongs to and storing a newly announced certificate thumbprint (see
-    ///     <see cref="ClusterHeartbeatReceiver" />). Each node's <c>ClusterHeartbeatBackgroundService</c>
-    ///     sets a peer's <see cref="ClusterNodeEntity.Status" /> from whether its own probe of that
+    ///     peer the key belongs to and storing a newly announced certificate thumbprint. Each
+    ///     node's cluster heartbeat job sets a peer's status from whether its own probe of that
     ///     peer succeeded, so each node trusts its own view of a peer's health rather than
     ///     anything the peer reports. An invite key cannot reach this action.
     /// </summary>
@@ -82,11 +81,12 @@ public class ClusterChannelController(
 
     /// <summary>
     ///     This action receives the joining node's callback, the second half of the join handshake
-    ///     (see <see cref="ClusterJoinService.HandleJoinCompleteAsync" />). The TSIG key name comes
-    ///     from the identity <see cref="ClusterTsigAuthenticationHandler" /> authenticated, never
-    ///     from the request body. It is the one action an unused, unexpired invite key may sign;
-    ///     the route must stay <see cref="ClusterTsigAuthenticationDefaults.JoinCompletePath" />.
+    ///     (the join itself is <c>POST /api/cluster/nodes/join</c>). The TSIG key name comes from the
+    ///     identity the cluster channel's TSIG authentication established, never from the request
+    ///     body. It is the one action an unused, unexpired invite key may sign.
     /// </summary>
+    // The route must stay ClusterTsigAuthenticationDefaults.JoinCompletePath: the TSIG handler
+    // lets an invite key sign only that path, and the joining node calls it by that constant.
     [HttpPost("join-complete")]
     public async Task<IActionResult> JoinComplete(
         [FromBody] ClusterJoinCompleteRequest request,
@@ -102,16 +102,14 @@ public class ClusterChannelController(
 
     /// <summary>
     ///     This action receives one config-sync envelope from a peer and passes it to the
-    ///     <see cref="IClusterConfigSyncApplier" /> whose
-    ///     <see cref="IClusterConfigSyncApplier.EntityType" /> matches
-    ///     <see cref="ClusterConfigSyncEnvelope.EntityType" />. Every synced kind of data (filter
-    ///     lists and entries, access-control rules, rewrites, forwarders, users, roles, settings
-    ///     sections) comes through this one endpoint.
+    ///     config-sync handler registered for the envelope's entity type. Every synced kind of data
+    ///     (filter lists and entries, access-control rules, rewrites, forwarders, users, roles,
+    ///     settings sections) comes through this one endpoint.
     ///     <para>
     ///         It always returns 200, even for an entity type this node does not know (logged and
     ///         ignored), so a newer peer sending a kind an older node cannot handle does not look
-    ///         like a channel failure. Accepting, rejecting and last-write-wins are decided by the
-    ///         applier (see <see cref="IClusterConfigSyncApplier" />).
+    ///         like a channel failure. Accepting, rejecting and last-write-wins are decided by that
+    ///         handler.
     ///     </para>
     /// </summary>
     [HttpPost("config-sync")]
@@ -155,12 +153,10 @@ public class ClusterChannelController(
     }
 
     /// <summary>
-    ///     This action tells a peer whether a username exists on this node. A peer's
-    ///     <c>ClusterUsernameUniquenessChecker</c> calls it when creating a user. It is a plain
-    ///     lookup with no lock or reservation, so two nodes creating the same name within moments
-    ///     of each other can both succeed; <see cref="ClusterSyncConflictResolver" />, applied by
-    ///     <c>UserClusterConfigSyncApplier</c>, resolves and flags that collision once the nodes
-    ///     sync.
+    ///     This action tells a peer whether a username exists on this node. A peer calls it when it
+    ///     creates a user. It is a plain lookup with no lock or reservation, so two nodes creating
+    ///     the same name within moments of each other can both succeed; the cluster user sync
+    ///     resolves and flags that collision once the nodes sync.
     /// </summary>
     [HttpPost("username-check")]
     public async Task<ActionResult<ClusterUsernameCheckResult>> UsernameCheck(
@@ -178,7 +174,7 @@ public class ClusterChannelController(
 
     /// <summary>
     ///     This action returns this node's query counts (last hour, last 24 hours, all retained)
-    ///     for the cluster dashboard. A peer's <c>ClusterQueryStatsAggregator</c> calls it when an
+    ///     for the cluster dashboard. A peer's cluster query statistics collection calls it when an
     ///     operator opens that peer's Cluster page. The counts are computed from the query log on
     ///     every call and not cached; a dashboard load can afford that. They are read through a
     ///     scope of their own that uses a read replica when one is eligible: a count that is a few

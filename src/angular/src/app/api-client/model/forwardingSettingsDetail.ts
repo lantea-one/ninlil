@@ -11,7 +11,7 @@ import { ForwarderFailoverStrategyEnum } from './forwarderFailoverStrategyEnum';
 
 
 /**
- * This record is the REST shape of the forwarding engine settings (`ForwardingOptions`) that `GET /api/forwarding-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The forwarders themselves are a separate resource (`ForwardersController`); this record holds the on/off switch, failover and health-check tuning, and the forwarded-answer cache settings that apply to all of them.
+ * This record is the REST shape of the forwarding engine settings (configuration section `DnsServer:Forwarding`) that `GET /api/forwarding-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The forwarders themselves are a separate resource (`/api/forwarders`); this record holds the on/off switch, failover and health-check tuning, and the forwarded-answer cache settings that apply to all of them.
  */
 export interface ForwardingSettingsDetail { 
     /**

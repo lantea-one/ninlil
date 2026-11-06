@@ -19,17 +19,17 @@ namespace Ninlil.Web.Controllers;
 ///     <see cref="Release" /> needs <c>dhcpleases:manage</c>.
 ///     <para>
 ///         <b>One list for all scopes, optionally narrowed.</b> A lease
-///         (<see cref="LeaseEntity" />) names its scope (<see cref="LeaseEntity.ScopeName" />)
-///         rather than referring to it by id, so instead of nesting under
+///         (<see cref="LeaseEntity" />) refers to its scope by id
+///         (<see cref="LeaseEntity.ScopeId" />) and an all-scopes lease table is the usual "what
+///         is my network doing" view, so instead of nesting under
 ///         <c>/api/dhcp-scopes/{scopeId}</c> like <see cref="DhcpReservationsController" />,
-///         <see cref="List" /> is top-level and takes an optional <c>scopeId</c>, which it turns
-///         into the scope's current name for
-///         <see cref="ILeaseRepository.SearchByScopeNameAsync" />. An all-scopes lease table is
-///         also the usual "what is my network doing" view.
+///         <see cref="List" /> is top-level and takes an optional <c>scopeId</c> for
+///         <see cref="ILeaseRepository.SearchByScopeIdAsync" />. The <c>scopeName</c> a lease
+///         reports is its display copy of the scope's name.
 ///     </para>
 /// </summary>
 /// <param name="leaseRepository">Reads leases.</param>
-/// <param name="scopeRepository">Turns an optional <c>scopeId</c> filter into a scope name.</param>
+/// <param name="scopeRepository">Checks that an optional <c>scopeId</c> filter names a scope.</param>
 /// <param name="leaseAdministrationService">
 ///     Performs the force-release for <see cref="Release" />, with the same change and the same
 ///     <c>DhcpLeaseChangedEvent</c> as a release sent by the client.
@@ -82,16 +82,13 @@ public class DhcpLeasesController(
         if (scope is null)
             throw new NotFoundException("DhcpScope", scopeId.Value.ToString());
 
-        IReadOnlyList<LeaseEntity> scopedLeases = await leaseRepository.SearchByScopeNameAsync(
-            scope.Name,
+        IReadOnlyList<LeaseEntity> scopedLeases = await leaseRepository.SearchByScopeIdAsync(
+            scope.Id,
             skip,
             take,
             stoppingToken
         );
-        int scopedTotalCount = await leaseRepository.CountByScopeNameAsync(
-            scope.Name,
-            stoppingToken
-        );
+        int scopedTotalCount = await leaseRepository.CountByScopeIdAsync(scope.Id, stoppingToken);
 
         return Ok(
             new PagedResult<DhcpLeaseDetail>(
@@ -122,9 +119,8 @@ public class DhcpLeasesController(
 
     /// <summary>
     ///     This action force-releases a lease so an operator can reclaim a stuck or stale address
-    ///     without waiting for the client's RELEASE or the expiry sweep. It calls
-    ///     <see cref="IDhcpLeaseAdministrationService.ForceReleaseAsync" />, which makes the same
-    ///     change and raises the same <c>DhcpLeaseChangedEvent</c> as a client release, so the
+    ///     without waiting for the client's RELEASE or the expiry sweep. It makes the same
+    ///     change and raises the same lease-changed event as a client release, so the
     ///     address can be handed out again at once and any DNS record the lease registered is
     ///     removed. Releasing a lease that is already released succeeds and changes nothing.
     ///     Returns 404 for an unknown id. Requires <c>dhcpleases:manage</c>.

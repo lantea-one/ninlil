@@ -14,8 +14,8 @@ namespace Ninlil.Web.Controllers;
 /// <summary>
 ///     This controller shows which of a sample set of domains a candidate filter-list pattern would
 ///     match. The admin console's entry form calls it as the operator types a
-///     <see cref="DnsFilterEntryKindEnum.Wildcard" /> or
-///     <see cref="DnsFilterEntryKindEnum.Regex" /> entry, before it is saved.
+///     <c>Wildcard</c> or
+///     <c>Regex</c> entry, before it is saved.
 ///     <para>
 ///         <b>It uses the filter engine's own pattern compilation</b>
 ///         (<see cref="DnsFilterEngine.CompileOrNull" /> and
@@ -68,12 +68,11 @@ public class FilterPatternPreviewController : ControllerBase
 
     /// <summary>
     ///     This action tests a candidate pattern against the caller's sample domains, or
-    ///     <see cref="DefaultSampleDomains" /> when none are given, and reports which match. An
+    ///     a built-in set of ten sample domains when none are given, and reports which match. An
     ///     invalid pattern is reported in the 200 response, not as an error status. Each match is
-    ///     bounded by the engine's regex timeout (see <see cref="Compile" />). More than
-    ///     <see cref="MaxSampleDomains" /> sample domains, or a sample domain that is null, blank or
-    ///     longer than <see cref="MaxSampleDomainLength" /> characters, is rejected with 400.
-    ///     Requires <c>filterlists:read</c>.
+    ///     bounded by the filter engine's regex timeout. More than 20
+    ///     sample domains, or a sample domain that is null, blank or longer than 253 characters, is
+    ///     rejected with 400. Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("filterlists:read")]
@@ -185,7 +184,7 @@ public class FilterPatternPreviewController : ControllerBase
 
     /// <summary>
     ///     This method applies <c>DnsFilterEngine</c>'s rule for a
-    ///     <see cref="DnsFilterEntryKindEnum.Domain" /> entry: a domain covers itself and every
+    ///     <c>Domain</c> entry: a domain covers itself and every
     ///     subdomain. It is three lines, so it is repeated here rather than exposed as another
     ///     public helper on <see cref="DnsFilterEngine" /> for this one caller.
     /// </summary>

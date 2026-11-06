@@ -12,7 +12,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This record is the REST shape of `DhcpScopeStatistics`, one scope\'s utilization (`GET /api/dhcp-scopes/{id}/statistics`). The figures are computed on each request, not cached; that class documents how. `DhcpScopeStatisticsDetail.TotalSlots` and `DhcpScopeStatisticsDetail.AvailableSlots` are decimal strings rather than JSON numbers because an IPv6 range can hold far more addresses than a JSON number represents exactly (a `/64` holds 2^64).
+ * This record is the REST shape of one scope\'s utilization (`GET /api/dhcp-scopes/{id}/statistics`). The figures are computed on each request, not cached. `totalSlots` and `availableSlots` are decimal strings rather than JSON numbers because an IPv6 range can hold far more addresses than a JSON number represents exactly (a `/64` holds 2^64).
  */
 export interface DhcpScopeStatisticsDetail { 
     /**
@@ -26,7 +26,7 @@ export interface DhcpScopeStatisticsDetail {
     protocolVersion?: InternetProtocolVersionEnum;
     kind?: DhcpScopeKindEnum;
     /**
-     * How many slots the scope\'s range holds, as a decimal string. A slot is an address for an `DhcpScopeKindEnum.AddressAssignment` scope, or a block-aligned delegable prefix for a `DhcpScopeKindEnum.PrefixDelegation` scope.
+     * How many slots the scope\'s range holds, as a decimal string. A slot is an address for an `AddressAssignment` scope, or a block-aligned delegable prefix for a `PrefixDelegation` scope.
      */
     totalSlots?: string | null;
     /**
@@ -42,7 +42,7 @@ export interface DhcpScopeStatisticsDetail {
      */
     reservedCount?: number;
     /**
-     * TotalSlots minus every distinct slot held by a blocking lease or an                 enabled reservation, as a decimal string; never negative.
+     * `totalSlots` minus every distinct slot held by a blocking lease or an                 enabled reservation, as a decimal string; never negative.
      */
     availableSlots?: string | null;
 }

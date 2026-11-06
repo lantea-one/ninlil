@@ -15,8 +15,8 @@ namespace Ninlil.Web.Controllers;
 ///     and <see cref="Dhcpv6OptionCatalog" /> (see each for its IANA and RFC sources). The admin
 ///     console's scope and tag-rule forms use it to offer an option list per protocol, pick a
 ///     value editor (an address field, a duration picker, a text box) from
-///     <see cref="DhcpOptionCatalogEntryDetail.ValueType" />, and offer "use this server's
-///     address" where <see cref="DhcpOptionCatalogEntryDetail.IsServerAddressEligible" /> allows,
+///     <c>DhcpOptionCatalogEntryDetail.valueType</c>, and offer "use this server's
+///     address" where <c>DhcpOptionCatalogEntryDetail.isServerAddressEligible</c> allows,
 ///     without hard-coding that knowledge in the UI.
 ///     <para>
 ///         <b>It is read only.</b> The catalog is compiled into the server, not stored, so there

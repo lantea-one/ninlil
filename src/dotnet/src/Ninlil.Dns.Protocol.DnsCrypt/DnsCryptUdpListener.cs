@@ -188,9 +188,17 @@ public sealed class DnsCryptUdpListener(
             }
             catch (SocketException exception)
             {
-                if (stoppingToken.IsCancellationRequested)
+                // Cancelling a pending receive (StopAsync closing the socket, or the token) can
+                // surface as a SocketException rather than OperationCanceledException or
+                // ObjectDisposedException. If we were asked to stop, that is what this is.
+                // StopAsync clears IsListening before it closes the sockets, and the token is
+                // cancelled only after that, so a receive aborted by the close sees IsListening
+                // false while the token is still live.
+                if (stoppingToken.IsCancellationRequested || !IsListening)
                     break;
 
+                // Otherwise it is an error on one datagram (for example an ICMP error from an
+                // unreachable sender), which must not stop the listener; log it and keep going.
                 logger.LogWarning(exception, "Error receiving a DNSCrypt UDP datagram.");
                 continue;
             }

@@ -77,8 +77,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   RFC 8945 §5.3.1 multi-message TSIG chaining) over plain TCP, TLS, or QUIC.
 - **Recursive & validating resolution**: a full iterative walk (RFC 1034 §5.3.3) with RFC 9156 QNAME
   minimization, RFC 8767 serve-stale, prefetch, EDNS Client Subnet, and DNS64.
-- **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA, MD5 and GOST algorithms
-  are validated but never signed with, per RFC 8624), NSEC/NSEC3 (with RFC 5155 opt-out),
+- **DNSSEC**: RSA/ECDSA/EdDSA signing and validation (the SHA-1, DSA and MD5 algorithms are
+  validated but never signed with, per RFC 9904 §3 and Ninlil's own SHA-1 rule; GOST is neither
+  signed nor validated), NSEC/NSEC3 (with RFC 5155 opt-out),
   automated proactive re-signing, and a full RFC 6781 automated key-rollover state machine
   (Pre-Publish for ZSKs, Double-Signature for KSKs, with automatic DS cutover when the parent zone
   is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side: the first check runs a
@@ -136,7 +137,7 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   INFORMATION-REQUEST with stateful addresses (IA_NA) and prefix delegation (IA_PD) side by side,
   and with optional Rapid Commit.
 - **A relay-agent mode** for each protocol, which replaces the local server for that protocol
-  (RFC 1542 and RFC 2131 §4.1 with the RFC 3046 option for DHCPv4, RFC 8415 §9 and §19
+  (RFC 1542 and RFC 2131 §4.1 with the RFC 3046 option for DHCPv4, RFC 9915 §9 and §19
   RELAY-FORW/RELAY-REPL for DHCPv6).
 - **Router Advertisement** (RFC 4861) for SLAAC, with the RFC 8106 DNS servers and search domains,
   RFC 4191 routes, and different content per interface.
@@ -788,7 +789,13 @@ Ninlil reads its settings from three sources. A later source overrides an earlie
 3. Command-line arguments, such as `--Storage:MigrationSafety:RestoreSnapshot=<id>`.
 
 The admin console's settings pages write your changes to `appsettings.json` and show a note that
-says whether the change applies at once or after a restart. Environment variables are read once, at
+says whether the change applies at once or after a restart. If you set
+[`NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH`](./ENVIRONMENT.md#web-host-kestrel-reverse-proxy-branding)
+to another file, Ninlil loads and watches that file like `appsettings.json`: its values apply at
+start and a saved change applies at once where the page says so. It sits between
+`appsettings.{Environment}.json` and the environment variables in the list above, so a
+`NINLIL_*` variable still overrides it. The path itself comes from an environment variable or from
+`appsettings.json`, never from the custom file. Environment variables are read once, at
 start, so restart Ninlil after you change one. A value set by an environment variable overrides
 the same value saved on a page.
 
@@ -1236,12 +1243,16 @@ child zone's `id`; copy it as `<child-zone-id>`.
    curl -k https://127.0.0.1:18443/api/zones/<zone-id>/records -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"child.example.test","type":"NS","timeToLiveSeconds":300,"data":{"nameServer":"ns.child.example.test"}}'
    ```
 
-8. The parent adds the DS record the next time it is signed. A key added to the child does not start
-   that, so change the parent in any way, for example its comment:
-
-   ```bash
-   curl -k -X PATCH https://127.0.0.1:18443/api/zones/<zone-id> -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"comments":"signed child"}'
-   ```
+8. The parent adds the DS record by itself; there is nothing to call. Ninlil re-signs the parent
+   whenever the child's set of `Active` KSKs changes: when you add a KSK, remove or retire one,
+   switch the child's signing on or off, delete the child, or when a rollover promotes the new
+   KSK. The parent's SOA serial goes up with each such re-sign, so a secondary of the parent
+   transfers the new DS record. If the re-sign fails, Ninlil logs a warning and tries again the
+   next time the child is reloaded. There is no retry timer: that happens when the child changes
+   again or its signatures are refreshed (about 25 days after its last signing with the default
+   settings), and a restart drops the pending retry. Editing any record of the child retries at
+   once. A change to a ZSK leaves the parent alone, because a DS record names a KSK. Step 4 of
+   "Check that it worked" below shows the parent's DS answer.
 
 **Roll a key (optional).** A rollover replaces a key without breaking validation. Ninlil follows
 the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signature for a KSK
@@ -1344,9 +1355,12 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   signing by moments. The console shows a warning icon on the zone list and a banner on the key
   list.
 - **Algorithms Ninlil never signs with.** RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1,
-  RSASHA1-NSEC3-SHA1 and ECC-GOST: RFC 8624 §3.1 marks each as `MUST NOT` or `NOT RECOMMENDED`
-  for signing. Creating such a key, or setting one as the zone's `dnssecAlgorithm`, answers `400`.
-  Ninlil still validates zones that other servers sign with these algorithms. A key like this that
+  RSASHA1-NSEC3-SHA1 and ECC-GOST: RFC 9904 §3 marks RSAMD5, DSA, DSA-NSEC3-SHA1 and ECC-GOST
+  `MUST NOT` for signing. It marks RSASHA1 and RSASHA1-NSEC3-SHA1 `NOT RECOMMENDED`, and Ninlil
+  refuses those two as its own rule. Creating such a key, or setting one as the zone's
+  `dnssecAlgorithm`, answers `400`.
+  Ninlil still validates zones that other servers sign with these algorithms, except ECC-GOST,
+  which it cannot validate because .NET has no audited implementation. A key like this that
   already exists is not published and signs nothing. When it was the zone's only signing key, the
   zone is served unsigned until a key with a permitted algorithm exists. A parent zone at another
   operator that still publishes a DS record for that key must replace or remove the DS record.
@@ -1367,10 +1381,14 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   ("Operators SHOULD NOT use a salt"). The API accepts at most 150 iterations
   (`nsec3Iterations`) and answers `400` above that. Ninlil's own validator treats a zone above 150
   as insecure, and any validator may treat a count above 0 as insecure (RFC 9276 §3.2).
+  The `data` of an NSEC3 or NSEC3PARAM record accepts an optional `flags` number (0 to 255) that
+  takes precedence over `isOptOut` when both are sent. The validator ignores NSEC3 records with Flags
+  above 1 (RFC 5155 §8.2), and an NSEC3PARAM record with nonzero Flags is ignored when choosing a
+  zone's NSEC3 parameters (RFC 5155 §4.1.2).
 - **A record that cannot be signed.** Signing reads every stored record, whatever wrote it. A
-  record whose data cannot be written as RDATA is left out of the signed zone with one warning that
-  names it, and the rest of the zone is signed as usual, so the zone never keeps serving older
-  signatures until they expire.
+  record whose data cannot be written as RDATA, or whose type has no RDATA codec, is left out of
+  the signed zone with one warning that names it, and the rest of the zone is signed as usual, so
+  the zone never keeps serving older signatures until they expire.
 - **Key sizes.** Only RSA keys use `keySizeBits`: `0` for 2048 bits, or a multiple of 64 from 2048
   to 4096. The multiple of 64 comes from Windows, which creates RSA keys only in steps of 64 bits.
   Other algorithms ignore the field.
@@ -1398,7 +1416,8 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
 - **A parent hosted here, at any distance.** To find a parent that Ninlil hosts, Ninlil asks which
   zone answers the child's DS question, however many labels lie between them. The zone counts when
   it is a signed `Primary` or `CloudPrimary` zone and the child's name is the topmost zone cut
-  below it. Ninlil then re-signs that parent when the child's new KSK takes over.
+  below it. Ninlil then re-signs that parent whenever the child's set of `Active` KSKs changes,
+  including when a rollover's new KSK takes over.
 - **Forcing a key state.** `PUT` or `PATCH` on a key with `isRetired` sets the state by hand:
   `true` moves the key to `Removed` at once and `false` moves it to `Active`, whatever state it
   was in, which also cancels a rollover. A `PUT` that leaves out `isRetired` sets it to `false`, which moves the key to `Active`.
@@ -1437,9 +1456,9 @@ the two schemes of RFC 6781: Pre-Publish for a ZSK (§4.1.1.1) and Double-Signat
   the DS record. Publish the DS record and call `confirm-parent-ds-updated` (step 10).
 - *Validators call the zone bogus after a change at the registrar.* The parent's DS record does
   not match a published KSK. Compare the registrar's DS with the `dsRecord` of the `Active` KSK.
-- *The parent hosted here shows no DS record for the child.* Change the parent in any way (step 8)
-  and ask again. The child must be signed, and the delegation NS record must sit at the child's
-  name.
+- *The parent hosted here shows no DS record for the child.* The child must be signed and have an
+  `Active` KSK (a KSK in `DoubleSignature` has none), and the delegation NS record must sit at the
+  child's name in the parent.
 - *A record is missing from a signed zone's answers and the log warns that it "holds data that
   cannot be written as RDATA".* Signing leaves that record out and signs the rest of the zone.
   Edit or delete the record the warning names.
@@ -1908,7 +1927,7 @@ certificate, which Ninlil stores as a PKCS#12 file (`.pfx`).
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    The change shows in a read within a few seconds. In the console: **Presets & Settings**,
@@ -2132,7 +2151,7 @@ Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour wort
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    In the console: **Presets & Settings**, **Recursive Resolver**, tick **Recurse for a query this
@@ -2160,7 +2179,7 @@ Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour wort
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    In the console: **Presets & Settings**, **Forwarding**.
@@ -2333,13 +2352,13 @@ Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour wort
   the public DNS's answer, `NXDOMAIN`, when validation is on and the name is not on the Insecure
   domains list. The log shows `returned a Bogus (DNSSEC-invalid) answer`.
 - **The Insecure domains list.** It starts with the built-in list: `home.arpa` (RFC 8375),
-  `internal` and the locally served reverse zones of RFC 6303 and RFC 7793 (the RFC 1918 ranges,
-  `127.in-addr.arpa`, `254.169.in-addr.arpa`, the documentation ranges and the shared address
-  space, and the `ip6.arpa` zones for `::`, `::1`, `fd00::/8`, `fe80::/10` and `2001:db8::/32`).
-  It does not include `resolver.arpa` and `service.arpa`. A change applies to the next query, and the
-  forwarded cache is flushed, because it remembers whether an answer was validated. Only the
-  queried name counts, so a CNAME from a public name into a listed domain is still validated.
-  In the configuration file, the list (`DnsServer:Recursive:InsecureDomains`) needs
+  `resolver.arpa` (RFC 9462), `service.arpa` (RFC 9665), `internal` and the locally served reverse
+  zones of RFC 6303 and RFC 7793 (the RFC 1918 ranges, `127.in-addr.arpa`, `254.169.in-addr.arpa`,
+  the documentation ranges and the shared address space, and the `ip6.arpa` zones for `::`, `::1`,
+  `fd00::/8`, `fe80::/10` and `2001:db8::/32`). A change applies to the next query, and the
+  forwarded cache is flushed, because it remembers whether an answer was validated. Only the queried
+  name counts, so a CNAME from a public name into a listed domain is still validated. In the
+  configuration file, the list (`DnsServer:Recursive:InsecureDomains`) needs
   `NINLIL_DNS_SERVER_RECURSIVE_USE_CUSTOM_INSECURE_DOMAINS=true`. Without it Ninlil ignores the
   list, uses the built-in one and logs a Warning at start.
 - **Identical queries in flight share one upstream query.** While the response cache is on (the
@@ -2429,7 +2448,7 @@ lists, schedules and rewrites.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    In the console: **Presets & Settings**, **Filtering**.
@@ -2704,8 +2723,16 @@ lists, schedules and rewrites.
   service switched on without a target is, is added for every client.
 - **Entry kinds.** A plain domain entry blocks the name and every name below it, so
   `example.com` also blocks `www.example.com`. A rewrite is different and matches one exact name.
-  A wildcard or regex match that takes longer than 250 milliseconds counts as no match and is
-  logged, so a bad pattern cannot stall queries.
+  Wildcard and regex entries run on the .NET linear-time regex engine
+  (`RegexOptions.NonBacktracking`), so a pattern such as `^(a+)+$` cannot stall a query and never
+  times out. A pattern that engine cannot run (a backreference, lookaround, atomic group or
+  conditional) still saves and runs on the backtracking engine instead; there a match that takes
+  longer than 250 milliseconds counts as no match and is logged, so a bad pattern cannot stall
+  queries, but it does not block (or, in an allow list, allow) that name.
+  A pattern's linear-time regex is built the first time a query reaches it and kept, at about
+  100 KB or more per pattern. A query only reaches patterns whose fixed text it contains, so most
+  entries cost nothing. A pattern with no fixed text, such as `.*`, is reached by every query,
+  and a list of many of them takes that much memory.
 - **List kinds.** `Domain` lists match the queried name. `ResponseIp` lists hold addresses or
   networks and match the A and AAAA addresses in the answer. `ClientSource` lists hold addresses
   or networks and match the client's source address; a `Block` match denies the client and gets
@@ -2727,8 +2754,13 @@ lists, schedules and rewrites.
   rewrite domain needs at least a label there: `*.dev.home.test` does not match `dev.home.test`.
   The record types differ by target. An A rewrite answers only A queries, an AAAA rewrite only
   AAAA queries, and a CNAME rewrite answers A, AAAA and CNAME queries. Any other type is
-  answered as if no rewrite existed, so a name that exists only through a rewrite can answer
-  `NXDOMAIN` to a query of another type. The TTL of every rewrite answer is
+  answered as if no rewrite existed, except that a name with an A or AAAA rewrite always exists:
+  when normal resolution would answer `NXDOMAIN` to a query of another type, the reply is
+  `NOERROR` with no answer records (NODATA, RFC 2308 §2.2). An answer that resolution does give
+  (the real name has AAAA data) is sent as it is. The NODATA reply keeps the zone's SOA from the
+  `NXDOMAIN`, with its TTL cut to the SOA minimum and to the rewrite TTL, and it drops any
+  DNSSEC proof that the name does not exist and the AD flag. A CNAME rewrite is not part of this
+  rule. The TTL of every rewrite answer is
   `NINLIL_DNS_SERVER_REWRITES_TIME_TO_LIVE_SECONDS` (300 by default). Of two rewrites for the same
   name, an exact one beats a wildcard, then a client's beats a group's, which beats a global one.
 - **A CNAME rewrite returns the target's addresses** when the client may use forwarding or
@@ -2786,7 +2818,9 @@ Ninlil can also use these transports towards an upstream. See "Forward to global
 
 **DNS64** helps a client that has only IPv6. For a name with an A record and no AAAA record, Ninlil
 invents an AAAA record by placing the IPv4 address inside an IPv6 prefix that a NAT64 gateway
-translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway.
+translates (RFC 6147, RFC 6052). Skip it if you run no NAT64 gateway. An NXDOMAIN answer to the
+AAAA question is returned as it is; any other AAAA error, or a timeout, still synthesizes from the
+A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never does (§5.5).
 
 **Certificates.** DoT, DoH and DoQ use a TLS certificate.
 
@@ -3171,7 +3205,7 @@ out. Four services take part, and each one is off until you turn it on:
 | Service | Answers | Standard | Default port |
 |---|---|---|---|
 | DHCPv4 | A device that asks for an IPv4 address, router and DNS server | RFC 2131 | UDP `67` (server), `68` (client) |
-| DHCPv6 | A device that asks for an IPv6 address, or for a block of addresses to hand out on a network behind it | RFC 8415 | UDP `547` (server), `546` (client) |
+| DHCPv6 | A device that asks for an IPv6 address, or for a block of addresses to hand out on a network behind it | RFC 9915 | UDP `547` (server), `546` (client) |
 | Router Advertisement (RA) | A device that builds an IPv6 address itself (SLAAC) and needs the network's prefix, router and DNS server | RFC 4861, RFC 8106 | none, it uses raw ICMPv6 |
 | TFTP | A device that fetches a boot file | RFC 1350 | UDP `69`, see [TFTP and PXE](#tftp-and-pxe) |
 
@@ -3182,7 +3216,8 @@ The services run on Linux. For macOS and Windows, see [Download a binary](#downl
   and lease times. A scope is for IPv4 or for IPv6. A scope of kind `PrefixDelegation` hands out
   blocks of IPv6 addresses (prefixes) instead of single addresses.
 - A **lease** is an address that Ninlil has granted to one device for a limited time. A device
-  renews it before it ends.
+  renews it before it ends. A lease belongs to its scope, not to the scope's name, so renaming a
+  scope keeps its leases and their DNS records.
 - A **reservation** ties one address to one device, so the device always gets that address.
 - A **client identifier** is how Ninlil recognises a device: its hardware (MAC) address for
   DHCPv4, or its DHCP unique identifier (DUID) for DHCPv6.
@@ -3250,7 +3285,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   {"note":"Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect."}
    ```
 
    In the console: **Presets & Settings**, **DHCP**, the **DHCPv4 Protocol** card.
@@ -3383,7 +3418,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
     ```
 
     ```text
-    {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+    {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
     ```
 
     In the console: **Presets & Settings**, **DHCP**, the **Router Advertisement Content** card.
@@ -3582,7 +3617,7 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   ignores temporary addresses (`IA_TA`).
 - **Rapid Commit.** DHCPv6 Rapid Commit (a two-message exchange) is off. Turn it on with
   `NINLIL_DHCP_SERVER_CORE_ENABLE_DHCPV6_RAPID_COMMIT=true` only when the network has one DHCPv6
-  server: with several, all but one commit a lease that the device does not use (RFC 8415
+  server: with several, all but one commit a lease that the device does not use (RFC 9915
   Section 21.14).
 - **DNS registration.** Ninlil registers the host name a device sends: the Host Name option for
   DHCPv4, the Client FQDN option for DHCPv6. The name becomes a label of the scope's zone: letters
@@ -3609,8 +3644,8 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   advertisement, and the sweep interval from the next sweep. The start and stop calls of the
   **DHCP Services** page change the running state without saving anything.
 - **A scope is removed with its settings, not its history.** Deleting a scope deletes its
-  reservations and custom options. Its leases stay as records. A tag rule that names the scope
-  stays and never matches.
+  reservations and custom options. Its leases stay as records, and nothing renews them. A tag
+  rule that names the scope stays and never matches.
 - **A cluster does not copy DHCP data** (see [Clustering, events and webhooks](#clustering-events-and-webhooks)).
   Each Ninlil instance that serves DHCP needs separate scopes, and two instances must not serve the
   same range. On MongoDB, do not point two instances at one database (see
@@ -3771,7 +3806,7 @@ mode, in 512-byte blocks. It is off by default and listens on UDP port `69`.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   {"note":"Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect."}
    ```
 
    The environment variables are `NINLIL_DHCP_SERVER_TFTP_ENABLE` and
@@ -3980,7 +4015,7 @@ key.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    If the HTTPS port is not 443, add `"advertisedPort":<port>`. The default `0` means the
@@ -4185,10 +4220,11 @@ Each command below runs on node A unless it says otherwise.
   exists and returns `409` if one has it. A peer that cannot be reached is skipped.
 - **A change on another node reaches DNS answers after a delay.** On the node where you make a
   change, the answer changes at once. On the other nodes, filter and client settings, rewrites,
-  client schedules and forwarder zones show up after at most 60 seconds, and the entries of a
-  filter list after at most 5 minutes. With a [read replica](#read-replicas-and-database-clusters),
-  add the replica's lag limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by
-  default).
+  client schedules, forwarder zones, hosted zones and their records (also the DNSSEC signatures of
+  a signed zone) and access rules show up after at most 60 seconds, and the entries of a filter
+  list after at most 5 minutes. With a [read replica](#read-replicas-and-database-clusters), add
+  the replica's lag limit (`NINLIL_STORAGE_READ_REPLICA_MAX_LAG_SECONDS`, 5 seconds by default);
+  access rules always read the primary and need no such addition.
 - **Static address mappings and DHCP leases refresh every 30 seconds.** Ninlil keeps them in memory
   for client identification. A change another process makes in the same database (a second
   instance, a direct edit) reaches the in-memory copy within 30 seconds. A change made in this
@@ -4202,7 +4238,8 @@ Each command below runs on node A unless it says otherwise.
   events the broker sends back to it. An instance acts only on events it made, with one
   exception: the console's live feed also shows events from every instance that shares the
   broker. A `DnsZoneChanged` from another instance, for example, does not trigger this
-  instance's webhooks, NOTIFY or cache reloads.
+  instance's webhooks, NOTIFY or cache reloads; the one-minute cache check described under DNS
+  caches picks the change up instead.
 - **The broker carries every event except settings sync.** The settings-sync event holds settings
   values, secrets included, so it never leaves the process. Cluster sync uses the cluster channel.
 - **Under load, per-query events are dropped first.** Per-query events (`DnsQueryReceived`,
@@ -4466,7 +4503,7 @@ you out of every session, yours included; sign in again with a code from the app
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptions, not IOptionsMonitor, so a restart is required before this change takes effect."}
+   {"note":"Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect."}
    ```
 
    The console page is **Settings**, **Reverse proxy**. A shared secret header and network ranges
@@ -4527,17 +4564,18 @@ you out of every session, yours included; sign in again with a code from the app
   [`ENVIRONMENT.md`](./ENVIRONMENT.md#identity-authentication--sso) show the values. The bootstrap
   password you set must meet the same rules.
 - **There is no account lockout.** A wrong password never locks an account, so nobody can lock an
-  administrator out by guessing. The `lockout` fields of `/api/identity-settings` have no effect,
+  administrator out by guessing. The `lockout` fields of `/api/identity-settings` are deprecated
+  and have no effect; a later release removes them. The OpenAPI document marks them `deprecated`,
   and the console's Identity page does not show them. Password guessing is limited by the sign-in
   limit instead.
 - **The sign-in limit counts per client address.** It allows 5 attempts in 5 minutes for the
   password sign-in and the second-factor sign-in together, and returns `429 Too Many Requests` after
   that. An IPv6 client counts by its /64 network, so an attacker cannot rotate through addresses of
-  one subscriber. A Forgot password request has a separate count of 5 in 5 minutes. The window is
-  fixed: a client that reaches the limit waits until the window ends, and the `429` carries a
-  `Retry-After` header with the seconds that are left. The settings are read at
-  startup, so a change needs a restart
-  ([`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso)).
+  one subscriber. Forgot password requests, setting a new password with a reset link and
+  confirming an e-mail change share a separate count of 5 in 5 minutes. The window is fixed: a
+  client that reaches the limit waits until the window ends, and the `429` carries a `Retry-After`
+  header with the seconds that are left. The settings are read at startup, so a change needs a
+  restart ([`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso)).
 - **Two-factor codes have separate limits, kept per node in memory.** Five wrong codes in 15
   minutes block that account's second-factor checks (`429`), whichever address they come from. An
   e-mailed code can be requested once a minute, and a pending sign-in may ask for three. A pending
@@ -4557,12 +4595,13 @@ you out of every session, yours included; sign in again with a code from the app
   refresh. API tokens (`Authorization: ApiToken <token>`) use the owner's current permissions at
   each request, and stop working when revoked or when the owner is disabled. The lifetimes are
   [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) settings.
-- **A password change or a two-factor change signs out every session of the account.** Each
+- **A password, e-mail address or two-factor change signs out every session of the account.** Each
   access token carries a digest of the account's security stamp, and Ninlil compares it at every
   request. These changes replace the stamp and revoke every refresh token of the account:
   changing your password, an administrator resetting it
   (`POST /api/users/<id>/reset-password`), setting a new password with a reset link (Forgot
-  password), confirming an authenticator, turning two-factor off, and generating new recovery codes.
+  password), changing your own e-mail address (see the next item), confirming an authenticator,
+  turning two-factor off, and generating new recovery codes.
   Every access token issued before the change then answers `401` on its next request, and no refresh
   token works, so a stolen session is cut off. The session that made the change is cut off too: the
   console signs you out and the sign-in page says why, and an API client signs in again. Starting an
@@ -4572,6 +4611,37 @@ you out of every session, yours included; sign in again with a code from the app
   tokens do not carry a stamp and keep working after these changes: they belong to the account, not
   to a password, and you revoke one by name (see [REST API](#rest-api)). Using a recovery code at
   sign-in does not end other sessions.
+- **Changing your own e-mail address needs your password.** The address receives password-reset
+  links and e-mailed two-factor codes, so the console's **Change e-mail** form on the Profile page
+  (`POST /api/users/me/email` with `{"newEmail": "...", "currentPassword": "..."}`) asks for the
+  current password, as a password change does, and shows a `400` for a wrong password, an invalid
+  address or one that another account uses. What happens next depends on
+  [`NINLIL_IDENTITY_EMAIL_CHANGE_REQUIRE_CONFIRMATION`](./ENVIRONMENT.md#identity-authentication--sso),
+  which is `true` by default and can be changed with the **Require e-mail confirmation** switch
+  under Settings, Identity, or `requireEmailChangeConfirmation` on
+  `PATCH /api/identity-settings`. `GET /api/users/me` shows the current value as
+  `emailChangeRequiresConfirmation`, and the form tells the user which of the two cases applies
+  before they submit. Wrong current passwords on this form and on a password change share one count
+  per account: after 5 within 15 minutes both answer `429 Too Many Requests` with a `Retry-After`
+  header, even for the correct password, until the window ends. The count is per node, so a stolen
+  access token cannot guess the password, and it never locks the account.
+  - **With confirmation (the default)**, SMTP and the public base URL must be configured (see
+    [Single sign-on and e-mail secrets](#single-sign-on-and-e-mail-secrets)); otherwise the request
+    answers `400` and names what is missing. Ninlil e-mails a link to the new address and answers
+    `202` with `{"confirmationSent": true}`; the form then says to check the inbox of the new
+    address. Nothing changes until the link is opened. The link goes to the console page
+    `/confirm-email-change`, which needs no sign-in and submits `{userId, email, token}` to
+    `POST /api/auth/confirm-email-change` once. The link works once and a bad or expired one
+    answers `400`, which the page shows. Opening it sets the address and marks it confirmed.
+  - **Without confirmation**, the address changes at once and the answer is `200` with the profile.
+    The address keeps the confirmed state it had, as when an administrator changes it. E-mailed
+    two-factor codes go only to a confirmed address, and password-reset links go to whatever
+    address the account has, so **a mistyped address can cut off e-mailed two-factor codes and
+    send reset links to someone else.** Leave confirmation on unless SMTP is unavailable.
+  - **Either way**, when the address changes, every session of the account ends, the caller's own
+    included (the console signs you out and the sign-in page says why; the confirmation page also
+    clears a session in the browser that opens the link), and the old address gets a notice if
+    SMTP is configured. The change reaches the other nodes of a cluster like any account change.
 - **The JWT signing key proves a token is Ninlil's.** Whoever holds `data/jwt-signing-key.txt` can
   make a token for any enabled account, the bootstrap administrator's included, and the token then
   gets that account's permissions. Treat the file like a root password.
@@ -4615,7 +4685,7 @@ you out of every session, yours included; sign in again with a code from the app
 | Setting | Variable and row |
 |---|---|
 | Password rules, unique e-mail | [`NINLIL_IDENTITY_PASSWORD_*`, `NINLIL_IDENTITY_USER_REQUIRE_UNIQUE_EMAIL`](./ENVIRONMENT.md#identity-authentication--sso). Console page: **Settings**, **Identity**. |
-| Lockout (no effect) | `NINLIL_IDENTITY_LOCKOUT_*` |
+| Lockout (deprecated, no effect) | `NINLIL_IDENTITY_LOCKOUT_*` |
 | Sign-in limit | [`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_*`](./ENVIRONMENT.md#identity-authentication--sso). Console page: **Settings**, **Admin Login Rate Limit**. |
 | Token lifetimes, issuer, audience, signing key | [`NINLIL_JWT_*`](./ENVIRONMENT.md#identity-authentication--sso) |
 | Bootstrap administrator | [Bootstrap administrator credentials](./ENVIRONMENT.md#bootstrap-administrator-credentials) |
@@ -4908,6 +4978,7 @@ other, it logs a critical entry that begins with `Startup refused:`, explains wh
 | The MySQL server ... has read_only set | The connection string reaches a replica. | Point it at the writable primary. |
 | A setting under `Storage:` is wrong | A storage cluster or replica setting is out of range or contradicts the connection string. | Fix the setting the message names. |
 | MongoDB: unknown schema step, or a backfill failed | See [MongoDB](#mongodb). | |
+| MongoDB: DHCP custom options that share a tag on one scope or tag rule | Two documents in `NinlilDhcpScopeCustomOptions` (same `ScopeId` and `OptionTag`) or in `NinlilDhcpTagRuleOptions` (same `TagRuleId` and `OptionTag`). Ninlil needs a unique index on each pair, as the other engines have, and will not choose which document to keep. Nothing was deleted. | The message lists every group with its collection, scope or tag rule id, tag and document ids. Delete all but one document of each group (for example `db.NinlilDhcpScopeCustomOptions.deleteOne({_id: UUID("<id>")})` in `mongosh`), then start again. |
 
 To see the message: `sudo journalctl -u ninlil -e` (Linux packages), `docker logs ninlil`, or the
 console output of `dotnet run`.
@@ -5107,8 +5178,12 @@ NINLIL_STORAGE_MONGODB_READ_PREFERENCE=SecondaryPreferred
   db.getSiblingDB("ninlil").grantRolesToUser("ninlil", [{ role: "clusterMonitor", db: "admin" }])
   ```
 
-  Without it the lag is unknown and the replica is never used. The optimes have a resolution of
-  one second, so a current secondary can read as 1 second behind.
+  Without it the lag is unknown and the replica is never used. A secondary that has the
+  primary's newest operation has a lag of 0, however old that operation is, so an idle replica set
+  (which writes only a no-op about every 10 to 20 seconds) is not reported as behind. A secondary
+  that lacks it is behind by the time since its own last applied operation, by the primary's
+  clock. A secondary that misses a no-op write by a few milliseconds can read as behind for one
+  check.
 
 **When a replica gets reads**
 
@@ -5148,8 +5223,13 @@ change made on this node read the **primary**, so a change you make shows up in 
 once. A reload that is only due to age (60 seconds for the client directory, filter configuration,
 rewrites, client schedules and forwarder zones, 5 minutes for the entries of a filter list, 30
 seconds for static address mappings) reads an eligible replica. A change made on **another**
-cluster node therefore reaches this node after at most the refresh interval plus the lag limit. The
-zone, signed-zone and access-rule caches have no timer and always read the primary.
+cluster node therefore reaches this node after at most the refresh interval plus the lag limit.
+
+The zone and signed-zone caches check once a minute whether another node changed a zone or one of
+its records. The check reads an eligible replica, compares it with the cached zones and reloads
+only a zone that differs, from the **primary**. A zone that did not change is not signed again.
+This reload sends no zone-changed event, so it starts no NOTIFY, PTR sync or webhook on this node.
+The access-rule cache reloads its whole rule set from the primary once a minute.
 
 **Other limits and warnings**
 
@@ -5217,6 +5297,10 @@ cluster sync tombstones. It also leaves out the JWT signing key, the cluster nod
 anchor file and the ACME certificate files. A restore replaces all stored data with the content
 of the file. There is no partial or merged restore. Ninlil takes no backups by itself; run the
 backup when you want one.
+
+A backup taken before DHCP leases referred to their scope by id still restores. The restore
+relinks each lease to the scope in the file with the same name and drops the leases whose scope
+is not in the file, as the upgrade does for a live database.
 
 #### Before you start
 
@@ -5406,7 +5490,7 @@ Host a feed yourself, on any web server, when you want the notice.
    ```
 
    ```text
-   {"note":"Written to the configuration file. This setting is bound via IOptionsMonitor, so it takes effect immediately -- no restart required."}
+   {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
    ```
 
    The console page is **Settings**, **Self-Update**.
@@ -5558,7 +5642,8 @@ curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/users -H
   cannot name a variable the server ignores. While a read replica is configured, the page hides the
   switch form and shows that Ninlil refuses a switch.
 - **The Identity page has no lockout fields.** Ninlil does not lock accounts after wrong passwords;
-  see [Security](#security). The API still returns the lockout values, but they have no effect.
+  see [Security](#security). The API still returns the lockout values, but they are deprecated,
+  have no effect and go away in a later release.
 - **A secret is shown once.** Creating a TSIG key, a cloud credential, a webhook or an API token,
   creating a cluster invite, resetting a password and generating recovery codes open a dialog with
   the secret. Copy it before you close the dialog; Ninlil cannot show it again.
@@ -5670,6 +5755,10 @@ permissions of the account behind them, and each call needs the permission its r
    ```
 
    Copy the `id`. The commands below call it `<zone-id>`.
+
+   An enum field, such as `type` here, takes one of the names that the OpenAPI document lists for
+   it. Case does not matter. A number, a digit string or an unknown value answers `400` and the
+   message lists the valid names.
 4. Change part of an object with `PATCH`. A `PATCH` body is an RFC 7396 JSON merge patch: a field you
    leave out stays as it is, a field you set replaces the old value, and `null` clears a field that
    may be empty. Change one field and clear another:
@@ -5758,8 +5847,10 @@ Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize**, paste
   and `429` too many sign-in attempts (see [Security](#security)).
 - **Enum values are names, as text.** A zone `type` of `Primary` works; the names are not case
   sensitive, so `primary` also works. A name Ninlil does not know gives `400`, and so does a JSON
-  number: `"type":1` answers `Expected a string value for ZoneTypeEnum but found Number.` The
-  Swagger UI lists the valid names for every field.
+  number: `"type":1` answers `Expected a string value for ZoneTypeEnum but found Number.` Enum
+  query-string parameters and route segments follow the same rule: a digit string or an unknown
+  name answers `400` and lists the valid names. The Swagger UI lists
+  the valid names for every field.
 - **`PATCH` ignores a field it does not know.** A misspelled name in a `PATCH` body is skipped and
   the answer is still `204`. Check the result with a `GET`.
 - **A settings `PATCH` answers with a note.** The note says whether the change is live or needs a

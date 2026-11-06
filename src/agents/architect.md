@@ -16,7 +16,7 @@ Before you design:
 - Clean-room: protocol facts come from IETF RFCs and IANA registries only (or, for a protocol with
   no RFC, its own published specification). Never read or describe another DNS, DHCP or
   ad-blocking project's source, UI or docs, and never name one in a work package. Cite RFC
-  sections ("RFC 8415 §18.2.10"); do not restate them.
+  sections ("RFC 9915 §18.2.10"); do not restate them.
 
 Write the design to the path the prompt names. Without one, use
 `.work-packages/<short-name>.md` (git-ignored). It holds:

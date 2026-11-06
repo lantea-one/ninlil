@@ -20,7 +20,7 @@ export interface StorageSwitchScheduled {
      */
     requestedAtUtc?: string;
     /**
-     * True when the runtime configuration file decides the storage settings, so Ninlil points it at the target itself during the copy. False when an environment variable or another configuration source decides; Note then names what to set.
+     * True when the runtime configuration file decides the storage settings, so Ninlil points it at the target itself during the copy. False when an environment variable or another configuration source decides; `note` then names what to set.
      */
     appliesAutomatically?: boolean;
     /**

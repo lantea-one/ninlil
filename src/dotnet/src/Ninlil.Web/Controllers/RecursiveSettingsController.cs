@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Common.Wire;
@@ -73,7 +74,7 @@ public class RecursiveSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Recursive</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value; an override list, when present, replaces the
     ///     whole list. <c>insecureDomains</c> is the same, and also accepts <c>null</c> to restore the
     ///     built-in list. The response note says whether a restart is needed. Returns 400 for a
@@ -634,7 +635,7 @@ public class RecursiveSettingsController(
             if (
                 !item.TryGetProperty("algorithm", out JsonElement algorithmElement)
                 || algorithmElement.ValueKind != JsonValueKind.String
-                || !Enum.TryParse(
+                || !EnumNameParser.TryParseName(
                     algorithmElement.GetString(),
                     ignoreCase: true,
                     out DnssecAlgorithmEnum algorithm
@@ -642,7 +643,7 @@ public class RecursiveSettingsController(
             )
                 throw new ValidationException(
                     "Each 'trustAnchorsOverride' entry needs a valid 'algorithm'. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<DnssecAlgorithmEnum>())}."
+                        + $"{EnumNameParser.GetNames<DnssecAlgorithmEnum>()}."
                 );
 
             if (

@@ -5,7 +5,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents a decoded client/server DHCPv6 message: the RFC 8415 Section 8
+///     This class represents a decoded client/server DHCPv6 message: the RFC 9915 Section 8
 ///     header (one-byte "msg-type" and 3-byte "transaction-id") followed by the Section 21
 ///     options. <see cref="Dhcpv6MessageReader" /> and <see cref="Dhcpv6MessageWriter" /> convert
 ///     it to and from bytes, independent of transport.
@@ -18,14 +18,14 @@ namespace Ninlil.Dhcp.Common.Wire;
 public class Dhcpv6Message
 {
     /// <summary>
-    ///     This property contains the RFC 8415 Section 7.3 message type (SOLICIT, ADVERTISE,
+    ///     This property contains the RFC 9915 Section 7.3 message type (SOLICIT, ADVERTISE,
     ///     REQUEST, REPLY and so on). This is Section 8's "msg-type" field.
     /// </summary>
     public Dhcpv6MessageTypeEnum MessageType { get; set; }
 
     /// <summary>
     ///     This property contains the transaction identifier a client chooses for an exchange; the
-    ///     server echoes it so the client can match a response to its request. This is RFC 8415
+    ///     server echoes it so the client can match a response to its request. This is RFC 9915
     ///     Section 8's "transaction-id" field. Only the low 24 bits fit on the wire
     ///     (<see cref="Dhcpv6Constants.MaximumTransactionId" />), unlike DHCPv4's 32-bit "xid".
     /// </summary>
@@ -39,7 +39,7 @@ public class Dhcpv6Message
     public List<Dhcpv6Option> Options { get; } = [];
 
     /// <summary>
-    ///     This property carries the RFC 8415 Section 9.1 "link-address" of the RELAY-FORW this
+    ///     This property carries the RFC 9915 Section 9.1 "link-address" of the RELAY-FORW this
     ///     message was unwrapped from, or <see langword="null" /> when it came directly from a
     ///     client. <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c> copies it from
     ///     <see cref="Dhcpv6RelayMessage.LinkAddress" />, and <c>Dhcpv6ScopeResolver</c> uses it to
@@ -50,7 +50,7 @@ public class Dhcpv6Message
     public IPAddress RelayLinkAddress { get; set; }
 
     /// <summary>
-    ///     This property carries the value of the Interface-ID option (RFC 8415 Section 21.18) of
+    ///     This property carries the value of the Interface-ID option (RFC 9915 Section 21.18) of
     ///     the RELAY-FORW this message was unwrapped from, or <see langword="null" /> when the
     ///     message was not relayed or the relay agent sent no Interface-ID. Like
     ///     <see cref="RelayLinkAddress" />, <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c>

@@ -159,8 +159,8 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action creates a cluster invite and returns its code and expiry time (see
-    ///     <see cref="ClusterInviteService" />). Requires <c>clusternodes:write</c>.
+    ///     This action creates a cluster invite and returns its code and expiry time. Requires
+    ///     <c>clusternodes:write</c>.
     /// </summary>
     [HttpPost("invite")]
     [RequirePermission("clusternodes:write")]
@@ -181,8 +181,7 @@ public class ClusterController(
 
     /// <summary>
     ///     This action uses an invite code from another node to complete the join handshake with
-    ///     that node, and returns the new peer (see <see cref="ClusterJoinService" />). Requires
-    ///     <c>clusternodes:write</c>.
+    ///     that node, and returns the new peer. Requires <c>clusternodes:write</c>.
     /// </summary>
     [HttpPost("join")]
     [RequirePermission("clusternodes:write")]
@@ -205,11 +204,10 @@ public class ClusterController(
     /// <summary>
     ///     This action serves the cluster dashboard: a row with this node's query counts (last
     ///     hour, last 24 hours, all retained), then one row per known peer, collected live over the
-    ///     TSIG-authenticated, TLS-encrypted cluster channel by
-    ///     <see cref="IClusterQueryStatsAggregator" />. A peer that cannot be reached is still
-    ///     listed, marked unreachable with null counts, so "no traffic" and "unreachable" look
-    ///     different. With clustering disabled or no known peers, only this node's row is returned.
-    ///     Requires <c>clusternodes:read</c>.
+    ///     TSIG-authenticated, TLS-encrypted cluster channel by this node. A peer that cannot be
+    ///     reached is still listed, marked unreachable with null counts, so "no traffic" and
+    ///     "unreachable" look different. With clustering disabled or no known peers, only this
+    ///     node's row is returned. Requires <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet("stats")]
     [ReadFromReplica]

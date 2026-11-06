@@ -11,7 +11,7 @@ namespace Ninlil.Dhcp.Server.Core.Identity;
 ///     singleton; see
 ///     <see cref="Extension.ServiceCollectionDhcpServerCoreExtension.AddNinlilDhcpv6ServerCore" />).
 ///     It uses <see cref="DhcpServerOptions.ServerDuid" /> when that is valid hex, and otherwise
-///     builds a DUID-LL (RFC 8415 Section 11.4) from the link-layer address of the first
+///     builds a DUID-LL (RFC 9915 Section 11.4) from the link-layer address of the first
 ///     interface that is up, not loopback and has one. A DUID-LL needs no storage to stay stable
 ///     (see <see cref="DhcpServerOptions.ServerDuid" />). With no such interface it falls back to
 ///     a fixed placeholder DUID and logs a warning.
@@ -24,7 +24,7 @@ public sealed class Dhcpv6ServerIdentifierProvider(
 ) : IDhcpv6ServerIdentifierProvider
 {
     /// <summary>
-    ///     The DUID-LL type code (RFC 8415 Section 11.4).
+    ///     The DUID-LL type code (RFC 9915 Section 11.4).
     /// </summary>
     private const ushort DuidTypeLinkLayer = 3;
 

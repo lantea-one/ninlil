@@ -42,7 +42,7 @@ export class FilterPatternPreviewService extends BaseService implements FilterPa
     }
 
     /**
-     * This action tests a candidate pattern against the caller\&#39;s sample domains, or &#x60;FilterPatternPreviewController.DefaultSampleDomains&#x60; when none are given, and reports which match. An invalid pattern is reported in the 200 response, not as an error status. Each match is bounded by the engine\&#39;s regex timeout (see &#x60;FilterPatternPreviewController.Compile&#x60;). More than &#x60;FilterPatternPreviewController.MaxSampleDomains&#x60; sample domains, or a sample domain that is null, blank or longer than &#x60;FilterPatternPreviewController.MaxSampleDomainLength&#x60; characters, is rejected with 400. Requires &#x60;filterlists:read&#x60;.
+     * This action tests a candidate pattern against the caller\&#39;s sample domains, or a built-in set of ten sample domains when none are given, and reports which match. An invalid pattern is reported in the 200 response, not as an error status. Each match is bounded by the filter engine\&#39;s regex timeout. More than 20 sample domains, or a sample domain that is null, blank or longer than 253 characters, is rejected with 400. Requires &#x60;filterlists:read&#x60;.
      * @endpoint post /api/filter-pattern-preview
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

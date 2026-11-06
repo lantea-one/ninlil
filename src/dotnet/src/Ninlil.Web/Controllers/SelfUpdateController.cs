@@ -31,7 +31,7 @@ public class SelfUpdateController(
     ///         <b>Why there is no "apply now" action.</b> The server does not replace its own
     ///         running binary: it is installed from a package, container or install script, and a
     ///         failed in-place update could leave a home DNS server broken with nobody watching.
-    ///         Instead, <see cref="SelfUpdateStatusDetail.UpdateInstructions" /> tells the operator
+    ///         Instead, <c>SelfUpdateStatusDetail.updateInstructions</c> tells the operator
     ///         what to do by hand.
     ///     </para>
     /// </summary>
@@ -42,8 +42,7 @@ public class SelfUpdateController(
 
     /// <summary>
     ///     This action checks the configured release feed now, waits for the result and returns
-    ///     it. It runs the same check as the periodic loop in
-    ///     <see cref="SelfUpdateCheckService" />. Requires <c>selfupdate:manage</c>.
+    ///     it. It runs the same check as the periodic self-update check job. Requires <c>selfupdate:manage</c>.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpPost("check")]
@@ -58,7 +57,7 @@ public class SelfUpdateController(
     /// <summary>
     ///     This method builds the API's <see cref="SelfUpdateStatusDetail" /> from a
     ///     <see cref="SelfUpdateStatus" />, including the plain-language
-    ///     <see cref="SelfUpdateStatusDetail.UpdateInstructions" />.
+    ///     <c>SelfUpdateStatusDetail.updateInstructions</c>.
     /// </summary>
     private static SelfUpdateStatusDetail ToDetail(SelfUpdateStatus status) =>
         new(

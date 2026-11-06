@@ -1,6 +1,7 @@
 using System.Security.Authentication;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Core.Certificates;
@@ -67,7 +68,7 @@ public class WebListenSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Web</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change is written to
+    ///     patch, written to the configuration file. The change is written to
     ///     the file and applied only after a full restart. Returns 400 for a field of the wrong JSON
     ///     type, a port outside 1-65535, an invalid listen address, a certificate poll interval
     ///     that is not positive or exceeds the timer limit, or an unknown TLS protocol name.
@@ -298,10 +299,13 @@ public class WebListenSettingsController(
             string name = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
 
             if (
-                !Enum.TryParse(name, ignoreCase: true, out SslProtocols parsed)
+                !EnumNameParser.TryParseName(name, ignoreCase: true, out SslProtocols parsed)
                 || parsed == SslProtocols.None
             )
-                throw new ValidationException($"'{name}' is not a valid TLS protocol name.");
+                throw new ValidationException(
+                    $"'{name}' is not a valid TLS protocol name. Each entry must be one name, "
+                        + $"never a number or a list. Valid values: {EnumNameParser.GetNames<SslProtocols>()}."
+                );
 
             combined |= parsed;
         }

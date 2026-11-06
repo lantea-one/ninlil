@@ -94,9 +94,11 @@ using Ninlil.Web.Extension;
 using Ninlil.Web.HealthChecks;
 using Ninlil.Web.Hubs;
 using Ninlil.Web.Middleware;
+using Ninlil.Web.ModelBinding;
 using Ninlil.Web.OpenApi;
 using Ninlil.Web.Options;
 using Ninlil.Web.Routing;
+using Ninlil.Web.Serialization;
 using Ninlil.Web.Services;
 using Ninlil.Web.Services.Storage;
 using Ninlil.Web.Startup;
@@ -164,6 +166,22 @@ if (environmentVariablesSources.Count > 0)
     );
 }
 builder.Configuration.Sources.Insert(ninlilSourceInsertIndex, ninlilEnvironmentVariableSource);
+
+// The file the settings pages save to must also be a configuration source that reloads on change,
+// or an IOptionsMonitor never sees a saved value. The default appsettings.json already is one;
+// a custom path is added here, just before the NINLIL_* source, so an environment variable still
+// overrides a saved value and command-line arguments still override both. The path is read
+// from the sources registered so far (environment variables, appsettings.json), so it cannot
+// itself be set inside the custom file.
+string runtimeConfigurationFilePath = RuntimeConfigurationFileSource.ResolvePath(
+    builder.Configuration,
+    builder.Environment.ContentRootPath
+);
+RuntimeConfigurationFileSource.AddIfMissing(
+    builder.Configuration.Sources,
+    runtimeConfigurationFilePath,
+    ninlilSourceInsertIndex
+);
 
 // Everything the host generates and keeps (an auto-generated SQLite database, the Data
 // Protection key ring, the JWT signing key, the cluster node id) lives in one "data" directory
@@ -422,10 +440,7 @@ RuntimeConfigurationOptions runtimeConfigurationOptions =
         .Get<RuntimeConfigurationOptions>()
     ?? new RuntimeConfigurationOptions();
 if (string.IsNullOrWhiteSpace(runtimeConfigurationOptions.ConfigurationFilePath))
-    runtimeConfigurationOptions.ConfigurationFilePath = Path.Combine(
-        builder.Environment.ContentRootPath,
-        "appsettings.json"
-    );
+    runtimeConfigurationOptions.ConfigurationFilePath = runtimeConfigurationFilePath;
 builder.Services.AddSingleton(runtimeConfigurationOptions);
 
 // Encrypts an SMTP password that an earlier version stored in plaintext in that file.
@@ -455,13 +470,16 @@ builder.Services.Configure<BrandingOptions>(
 
 // A full-system backup covers the data directory (the Data Protection key ring) and the runtime
 // configuration file. Their paths are set here after binding rather than configured separately,
-// so each has one source of truth.
+// so each has one source of truth. The settings object is registered first so the extension's
+// default does not replace it.
+builder.Services.AddSingleton(
+    new BackupPathSettings
+    {
+        DataProtectionKeyRingDirectory = dataDirectory,
+        RuntimeConfigurationFilePath = runtimeConfigurationOptions.ConfigurationFilePath,
+    }
+);
 builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
-builder.Services.PostConfigure<BackupOptions>(options =>
-{
-    options.DataProtectionKeyRingDirectory = dataDirectory;
-    options.RuntimeConfigurationFilePath = runtimeConfigurationOptions.ConfigurationFilePath;
-});
 
 // A storage switch is saved by the request side (StorageEngineSwitchService) and applied by
 // PendingStorageSwitchApplier at the next start, before any background service runs. The
@@ -694,11 +712,15 @@ builder.Services.AddSingleton<IManagedServiceRegistry>(serviceProvider =>
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<PendingTwoFactorSignInCache>();
 builder.Services.AddSingleton<TwoFactorCodeAttemptLimiter>();
+builder.Services.AddSingleton<CurrentPasswordAttemptLimiter>();
 builder.Services.AddSingleton<TwoFactorEmailCodeCooldown>();
 
 // Scoped, like IEmailSender and UserManager<TUser>. Used by the EmailLink mode of
 // UsersController.ResetPassword and by AuthController.ForgotPassword.
 builder.Services.AddScoped<PasswordResetLinkSender>();
+
+// Scoped for the same reason. Builds and sends the self-service e-mail change messages.
+builder.Services.AddScoped<EmailChangeLinkSender>();
 
 // DnsEventsHubBroadcaster is one singleton, registered under its concrete type and under each
 // IDnsServerEventSubscriber<TEvent> it implements, all resolving to the same instance, as
@@ -755,8 +777,19 @@ builder.Services.AddExceptionHandler<NinlilExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // MergePatchBodyFilter turns a non-object PATCH body or a wrong-typed field into 400 for every
-// action that takes a [FromBody] JsonElement.
-builder.Services.AddControllers(options => options.Filters.Add<MergePatchBodyFilter>());
+// action that takes a [FromBody] JsonElement. RequestEnumNameJsonConverterFactory makes every
+// request-body enum take declared names only; it is registered for MVC only, so other readers of
+// the shared enum converters (cluster sync, state files) keep their behaviour.
+// EnumNameModelBinderProvider does the same for query-string and route enums.
+builder
+    .Services.AddControllers(options =>
+    {
+        options.Filters.Add<MergePatchBodyFilter>();
+        options.ModelBinderProviders.Insert(0, new EnumNameModelBinderProvider());
+    })
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new RequestEnumNameJsonConverterFactory())
+    );
 builder.Services.AddEndpointsApiExplorer();
 
 // Registers every IExamplesProvider<T> and IMultipleExamplesProvider<T> in this assembly (the
@@ -1107,8 +1140,8 @@ app.UseMiddleware<StorageReadIntentMiddleware>();
 
 // The admin sign-in limiter policies (ServiceCollectionAdminLoginRateLimitingExtension's
 // AuthenticationEndpointPolicyName and PasswordResetEndpointPolicyName) apply only where
-// [EnableRateLimiting] names them (AuthController.Login, TwoFactorLogin and ForgotPassword); this
-// middleware is what enforces that attribute.
+// [EnableRateLimiting] names them (AuthController.Login, TwoFactorLogin, ForgotPassword,
+// ResetPassword and ConfirmEmailChange); this middleware is what enforces that attribute.
 app.UseRateLimiter();
 
 app.MapControllers();

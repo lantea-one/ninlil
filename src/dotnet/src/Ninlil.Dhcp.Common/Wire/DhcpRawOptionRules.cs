@@ -22,7 +22,7 @@ public static class DhcpRawOptionRules
     public const int MaximumDhcpv4ValueLength = byte.MaxValue;
 
     /// <summary>
-    ///     The largest DHCPv6 option value in bytes. The length field is two bytes (RFC 8415
+    ///     The largest DHCPv6 option value in bytes. The length field is two bytes (RFC 9915
     ///     Section 21.1).
     /// </summary>
     public const int MaximumDhcpv6ValueLength = ushort.MaxValue;
@@ -98,7 +98,7 @@ public static class DhcpRawOptionRules
     /// <summary>
     ///     This method checks a DHCPv6 option code and value length. Code 0 is reserved (IANA DHCPv6 option
     ///     codes registry), so are the codes the engine writes itself (see
-    ///     <c>ReservedDhcpv6Codes</c>), and the length field is two bytes (RFC 8415 Section 21.1).
+    ///     <c>ReservedDhcpv6Codes</c>), and the length field is two bytes (RFC 9915 Section 21.1).
     /// </summary>
     /// <param name="code">The option code.</param>
     /// <param name="valueLength">The value length in bytes.</param>

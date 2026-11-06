@@ -12,7 +12,7 @@ import { DnsFilterBlockResponseModeEnum } from './dnsFilterBlockResponseModeEnum
 
 
 /**
- * This record is the REST shape of the filtering engine settings (`DnsFilterOptions`) that `GET /api/filtering-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The lists themselves are managed through `/api/filter-lists`.
+ * This record is the REST shape of the filtering engine settings (configuration section `DnsServer:Filtering`) that `GET /api/filtering-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The lists themselves are managed through `/api/filter-lists`.
  */
 export interface FilteringSettingsDetail { 
     /**

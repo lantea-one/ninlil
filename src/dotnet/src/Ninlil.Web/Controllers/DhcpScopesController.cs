@@ -35,7 +35,7 @@ namespace Ninlil.Web.Controllers;
 ///     Moves a renamed scope's leases to its new name (see <see cref="Replace" />).
 /// </param>
 /// <param name="zoneRepository">
-///     Confirms a scope's <see cref="DhcpScopeWriteRequest.DnsZoneId" /> names an existing zone.
+///     Confirms a scope's <c>DhcpScopeWriteRequest.dnsZoneId</c> names an existing zone.
 ///     Only existence is checked here; whether the zone can take DHCP registrations is decided
 ///     when registering, as for the CAA and PTR settings on <c>ZonesController</c>.
 /// </param>
@@ -100,7 +100,7 @@ public class DhcpScopesController(
     ///     This action reports a scope's current utilization: the total addresses or prefixes in
     ///     its range, how many are leased or offered, how many its reservations account for, and
     ///     how many remain available. It is computed from the scope's settings and its recorded
-    ///     leases and reservations on every call (see <see cref="IDhcpScopeStatisticsService" />).
+    ///     leases and reservations on every call.
     ///     The two slot counts are strings because an IPv6 range can exceed a 64-bit integer.
     ///     Returns 404 for an unknown id. Requires <c>dhcpscopes:read</c>.
     /// </summary>
@@ -277,11 +277,11 @@ public class DhcpScopesController(
         scope.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
         scopeRepository.Update(scope);
-        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
+        await RenameLeasesAsync(scope.Id, oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // Second pass: moves a lease the engine wrote under the old name after the first load.
-        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
+        // Second pass: corrects a lease the engine wrote with the old name copy after the first load.
+        await RenameLeasesAsync(scope.Id, oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
@@ -449,7 +449,7 @@ public class DhcpScopesController(
         }
 
         if (patch.TryGetMergePatchField("kind", out JsonElement kind))
-            scope.Kind = JsonSerializer.Deserialize<DhcpScopeKindEnum>(kind.GetRawText());
+            scope.Kind = kind.GetEnumName<DhcpScopeKindEnum>("kind");
 
         if (
             patch.TryGetMergePatchField(
@@ -516,11 +516,11 @@ public class DhcpScopesController(
 
         scope.UpdatedAtUtc = DateTimeOffset.UtcNow;
         scopeRepository.Update(scope);
-        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
+        await RenameLeasesAsync(scope.Id, oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // Second pass: moves a lease the engine wrote under the old name after the first load.
-        await RenameLeasesAsync(oldName, scope.Name, stoppingToken);
+        // Second pass: corrects a lease the engine wrote with the old name copy after the first load.
+        await RenameLeasesAsync(scope.Id, oldName, scope.Name, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return NoContent();
@@ -529,9 +529,9 @@ public class DhcpScopesController(
     /// <summary>
     ///     This action deletes a DHCP scope with its reservations and custom options, removed
     ///     explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases
-    ///     recorded for the scope (which refer to it by <c>ScopeName</c>, not id) are left alone as
-    ///     operational data, as <c>BackupEntityCatalog</c> treats them. A tag rule
-    ///     that names the scope (<c>DhcpTagRuleEntity.ScopeId</c>) is also left alone and simply
+    ///     recorded for the scope (which refer to it by <c>scopeId</c>) are left alone as
+    ///     operational data. A tag rule
+    ///     that names the scope (a DHCP tag rule's scope) is also left alone and simply
     ///     never matches again. Returns 404 for an unknown id. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
@@ -668,18 +668,19 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method moves the leases of a renamed scope to its new name, staged for the
+    ///     This method rewrites the display copy of the scope name
+    ///     (<see cref="LeaseEntity.ScopeName" />) on the leases of a renamed scope, staged for the
     ///     caller's save so the scope and its leases change together. Leases refer to their scope
-    ///     by name, so without this a rename would orphan them. The unique lease indexes cannot
-    ///     collide, because the caller has already refused a name another scope holds. A lease
-    ///     the DHCP engine writes under the old name while the rename is in flight is moved by one
-    ///     of two parties. The caller runs this method a second time after its save, which moves
-    ///     a row written before that save committed. For a row written after it, the allocation
-    ///     services read the scope's current name after each lease write
+    ///     by id, so a rename never orphans them; the copy is what the lease list shows and sorts
+    ///     by. A lease the DHCP engine writes with the old name while the rename is in flight is
+    ///     corrected by one of two parties. The caller runs this method a second time after its
+    ///     save, which corrects a row written before that save committed. For a row written after
+    ///     it, the allocation services read the scope's current name after each lease write
     ///     (<see cref="IDhcpScopeRepository.GetCurrentNameAsync" />) and correct the row
-    ///     themselves. A scope deleted mid-request leaves its row under the old name.
+    ///     themselves. A scope deleted mid-request leaves its rows with the old name.
     /// </summary>
     private async Task RenameLeasesAsync(
+        Guid scopeId,
         string oldName,
         string newName,
         CancellationToken stoppingToken
@@ -689,9 +690,12 @@ public class DhcpScopesController(
             return;
 
         foreach (
-            LeaseEntity lease in await leaseRepository.ListByScopeNameAsync(oldName, stoppingToken)
+            LeaseEntity lease in await leaseRepository.ListByScopeIdAsync(scopeId, stoppingToken)
         )
         {
+            if (string.Equals(lease.ScopeName, newName, StringComparison.Ordinal))
+                continue;
+
             lease.ScopeName = newName;
             leaseRepository.Update(lease);
         }
@@ -902,10 +906,10 @@ public class DhcpScopesController(
             == (isIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
 
     /// <summary>
-    ///     This method checks the scope kind against <c>DelegatedPrefixLength</c>. A
-    ///     <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope must be IPv6 (DHCPv4 has no
+    ///     This method checks the scope kind against <c>delegatedPrefixLength</c>. A
+    ///     <c>PrefixDelegation</c> scope must be IPv6 (DHCPv4 has no
     ///     prefix delegation; see <c>DhcpScopeKindEnum</c>) and needs a delegated prefix length
-    ///     from 1 to 128. An <see cref="DhcpScopeKindEnum.AddressAssignment" /> scope (every DHCPv4
+    ///     from 1 to 128. An <c>AddressAssignment</c> scope (every DHCPv4
     ///     scope and an ordinary DHCPv6 one) has no delegated prefix length, so setting one is
     ///     rejected rather than ignored.
     /// </summary>

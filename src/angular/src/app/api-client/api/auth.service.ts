@@ -19,6 +19,8 @@ import { OpenApiHttpParams, QueryParamStyle } from '../query.params';
 // @ts-ignore
 import { AuthenticationResult } from '../model/authenticationResult';
 // @ts-ignore
+import { ConfirmEmailChangeRequest } from '../model/confirmEmailChangeRequest';
+// @ts-ignore
 import { ConfirmPasswordResetRequest } from '../model/confirmPasswordResetRequest';
 // @ts-ignore
 import { ForgotPasswordRequest } from '../model/forgotPasswordRequest';
@@ -41,6 +43,7 @@ import { Configuration }                                     from '../configurat
 import { BaseService } from '../api.base.service';
 import {
     AuthServiceInterface,
+    ApiAuthConfirmEmailChangePostRequestParams,
     ApiAuthForgotPasswordPostRequestParams,
     ApiAuthLoginPostRequestParams,
     ApiAuthLoginTwoFactorEmailCodePostRequestParams,
@@ -62,7 +65,73 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
-     * This action starts a self-service password reset. Given an e-mail address and no sign-in, it sends a reset-link e-mail through &#x60;PasswordResetLinkSender&#x60; when a matching account exists, is not disabled, has an e-mail address, and SMTP and the public base URL are configured. Allows anonymous callers and is rate limited.  &lt;b&gt;The response never varies.&lt;/b&gt; It is always 200 with the same     &#x60;ForgotPasswordResult&#x60;, whichever condition failed, including \&quot;no     account has this address\&quot;. An administrator using     &#x60;UsersController.ResetPassword&#x60; may learn whether an account has an e-mail     address or whether SMTP is configured, but an anonymous caller must not be able to     tell from the response which addresses have accounts. A delivery failure (the SMTP     server rejects the message, say) is logged rather than returned as a 500 for the     same reason. &lt;b&gt;Neither does its timing, as far as is practical.&lt;/b&gt; The e-mail is sent in the     background after the response, so a slow SMTP conversation cannot reveal that an     account exists. Only the account lookup and the token generation run inline.
+     * This action applies a self-service e-mail change from the link &#x60;POST /api/users/me/email&#x60; e-mailed to the new address, called from the admin console\&#39;s \&quot;confirm e-mail change\&quot; page. The link may be opened in a browser that is not signed in, so it allows anonymous callers; &#x60;ConfirmEmailChangeRequest.token&#x60; is the only proof, and ASP.NET Core Identity rejects a wrong, expired, reused or tampered token, and one issued for another address. An unknown, disabled or mismatched account and a bad token return the same 400 message, so the response does not reveal whether an account exists. A successful change sets the address, marks it confirmed, replaces the account\&#39;s security stamp and revokes every refresh token, so every session of the account must sign in again. A notice goes to the old address when SMTP is configured; a failed send is logged and does not undo the change.
+     * @endpoint post /api/auth/confirm-email-change
+     * @param requestParameters
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any>;
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<any>>;
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<any>>;
+    public apiAuthConfirmEmailChangePost(requestParameters?: ApiAuthConfirmEmailChangePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        const confirmEmailChangeRequest = requestParameters?.confirmEmailChangeRequest;
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (Bearer) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        // to determine the Content-Type header
+        const consumes: string[] = [
+            'application/json'
+        ];
+        const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
+        if (httpContentTypeSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Content-Type', httpContentTypeSelected);
+        }
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/auth/confirm-email-change`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<any>('post', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                body: confirmEmailChangeRequest,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * This action starts a self-service password reset. Given an e-mail address and no sign-in, it sends a reset-link e-mail when a matching account exists, is not disabled, has an e-mail address, and SMTP and the public base URL are configured. Allows anonymous callers and is rate limited.  &lt;b&gt;The response never varies.&lt;/b&gt; It is always 200 with the same message, whichever     condition failed, including \&quot;no account has this address\&quot;. An administrator using     &#x60;POST /api/users/{id}/reset-password&#x60; may learn whether an account has an     e-mail address or whether SMTP is configured, but an anonymous caller must not be     able to tell from the response which addresses have accounts. A delivery failure     (the SMTP server rejects the message, say) is logged rather than returned as a 500     for the same reason. &lt;b&gt;Neither does its timing, as far as is practical.&lt;/b&gt; The e-mail is sent in the     background after the response, so a slow SMTP conversation cannot reveal that an     account exists. Only the account lookup and the token generation run inline.
      * @endpoint post /api/auth/forgot-password
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -262,7 +331,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
-     * This action completes a sign-in that &#x60;POST /api/auth/login&#x60; marked as needing a second factor, checking an authenticator code, an e-mailed code or a recovery code against the pending sign-in\&#39;s account. A challenge token that reaches the code check is spent whether or not the code is right. Returns 401 for an unknown or used challenge token or a wrong code. After 5 wrong codes in 15 minutes for the account (counted across all client addresses and shared with &#x60;TwoFactorController&#x60;) it returns 429 with a &#x60;Retry-After&#x60; header, without checking the code and without spending the challenge token. Allows anonymous callers and is rate limited per client address.
+     * This action completes a sign-in that &#x60;POST /api/auth/login&#x60; marked as needing a second factor, checking an authenticator code, an e-mailed code or a recovery code against the pending sign-in\&#39;s account. A challenge token that reaches the code check is spent whether or not the code is right. Returns 401 for an unknown or used challenge token or a wrong code. After 5 wrong codes in 15 minutes for the account (counted across all client addresses and shared with the two-factor actions of the signed-in account) it returns 429 with a &#x60;Retry-After&#x60; header, without checking the code and without spending the challenge token. Allows anonymous callers and is rate limited per client address.
      * @endpoint post /api/auth/login/two-factor
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -395,7 +464,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
-     * This action exchanges a valid refresh token for a new access and refresh token pair and revokes the old refresh token (rotation), so it cannot be reused. The token comes from the request body when one is given there, otherwise from the browser\&#39;s refresh cookie, in which case the new refresh token goes back as a cookie rather than in the body. The new session keeps the old one\&#39;s &#x60;SessionEntity.IsPersistent&#x60; choice. Returns 401 for an invalid, expired or revoked token or a disabled account. Allows anonymous callers.  A failed cookie exchange leaves the cookie alone. Two tabs reloading together both     send the same cookie; the first rotates it and the second fails. If that failure     cleared the cookie, its response would erase the new cookie the first tab just got     and sign both out. Left alone, the second tab retries with the rotated cookie. A     dead cookie costs only a 401, and &#x60;POST /api/auth/logout&#x60; clears it.
+     * This action exchanges a valid refresh token for a new access and refresh token pair and revokes the old refresh token (rotation), so it cannot be reused. The token comes from the request body when one is given there, otherwise from the browser\&#39;s refresh cookie, in which case the new refresh token goes back as a cookie rather than in the body. The new session keeps the old one\&#39;s persistent-session choice. Returns 401 for an invalid, expired or revoked token or a disabled account. Allows anonymous callers.  A failed cookie exchange leaves the cookie alone. Two tabs reloading together both     send the same cookie; the first rotates it and the second fails. If that failure     cleared the cookie, its response would erase the new cookie the first tab just got     and sign both out. Left alone, the second tab retries with the rotated cookie. A     dead cookie costs only a 401, and &#x60;POST /api/auth/logout&#x60; clears it.
      * @endpoint post /api/auth/refresh
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -462,7 +531,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
-     * This action sets a new password from a password-reset token. It is the second step of both &#x60;POST /api/auth/forgot-password&#x60; and the &#x60;EmailLink&#x60; mode of &#x60;UsersController.ResetPassword&#x60;, called from the admin console\&#39;s \&quot;set new password\&quot; page. The caller is not signed in, so it allows anonymous callers; &#x60;ConfirmPasswordResetRequest.Token&#x60; is the only proof of authorization, and M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) rejects a wrong, expired or used token. An unknown account and an undecodable token return the same 400 message, so the response does not reveal whether an account exists. A successful reset replaces the account\&#39;s security stamp and revokes every refresh token of the account, so every access token issued before it answers 401 on its next request.
+     * This action sets a new password from a password-reset token. It is the second step of both &#x60;POST /api/auth/forgot-password&#x60; and the &#x60;EmailLink&#x60; mode of &#x60;POST /api/users/{id}/reset-password&#x60;, called from the admin console\&#39;s \&quot;set new password\&quot; page. The caller is not signed in, so it allows anonymous callers; &#x60;ConfirmPasswordResetRequest.token&#x60; is the only proof of authorization, and ASP.NET Core Identity rejects a wrong, expired or used token. An unknown account and an undecodable token return the same 400 message, so the response does not reveal whether an account exists. A successful reset replaces the account\&#39;s security stamp and revokes every refresh token of the account, so every access token issued before it answers 401 on its next request.
      * @endpoint post /api/auth/reset-password
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -41,7 +41,7 @@ public record DnssecKeyWriteRequest(bool IsRetired = false, string Comments = nu
 ///     This class carries a DNSSEC key, as returned by the list, get and create endpoints under
 ///     <c>/api/zones/{zoneId}/dnssec-keys</c>. It never includes the private key. Unlike a TSIG
 ///     secret or a cloud provider credential, a DNSSEC private key never needs to leave the
-///     server: it is used only for signing inside <c>Server.Authoritative</c>, stays encrypted at
+///     server: it is used only for signing inside the server, stays encrypted at
 ///     rest and is never exposed over REST.
 /// </summary>
 /// <param name="Id">The key's identifier.</param>
@@ -52,8 +52,8 @@ public record DnssecKeyWriteRequest(bool IsRetired = false, string Comments = nu
 /// <param name="KeyTag">The key's precomputed key tag (RFC 4034 Appendix B).</param>
 /// <param name="IsRetired">
 ///     Whether the key has been withdrawn from the zone's DNSKEY RRset: <see langword="true" />
-///     when <see cref="LifecycleState" /> is <c>Removed</c>. It is the field
-///     <see cref="DnssecKeyWriteRequest.IsRetired" /> writes.
+///     when <c>lifecycleState</c> is <c>Removed</c>. It is the field
+///     <c>DnssecKeyWriteRequest.isRetired</c> writes.
 /// </param>
 /// <param name="LifecycleState">The key's RFC 6781 lifecycle state.</param>
 /// <param name="PublishedAtUtc">When the key was first published in the zone's DNSKEY RRset.</param>
@@ -75,7 +75,7 @@ public record DnssecKeyWriteRequest(bool IsRetired = false, string Comments = nu
 ///     <see langword="null" /> for a ZSK, which the parent never references.
 /// </param>
 /// <param name="DsDigest">
-///     The digest part of <paramref name="DsRecord" /> on its own, as uppercase hexadecimal, for
+///     The digest part of <c>dsRecord</c> on its own, as uppercase hexadecimal, for
 ///     registrars that ask for the key tag, algorithm, digest type and digest separately.
 /// </param>
 public record DnssecKeyDetail(
@@ -101,7 +101,7 @@ public record DnssecKeyDetail(
 /// <summary>
 ///     This class carries the fields used to start an automated RFC 6781 key rollover for an
 ///     active key (<c>POST /api/zones/{zoneId}/dnssec-keys/{id}/roll</c>). The scheme follows from
-///     the key's <c>Role</c>: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature
+///     the key's <c>role</c>: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature
 ///     (RFC 6781 §4.1.2) for a KSK. The other scheme cannot be requested.
 /// </summary>
 /// <param name="Algorithm">

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>
-            This library is Ninlil's DHCPv6 transport: an RFC 8415 UDP listener that binds the
+            This library is Ninlil's DHCPv6 transport: an RFC 9915 UDP listener that binds the
             DHCPv6 server port, joins its own required multicast group, decodes and encodes
             messages via Ninlil.Dhcp.Common, and hands every decision about how (or whether) to
             answer a request to whichever IDhcpv6RequestHandler dependency injection resolves. It
@@ -28,7 +28,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
     <PackageReference Include="Ninlil.Dhcp.Common" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dhcp.Common -->

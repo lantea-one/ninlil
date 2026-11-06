@@ -14,7 +14,7 @@
  */
 export interface SsoStatusResult { 
     /**
-     * Whether the OpenID Connect authentication scheme is registered in the running process. This can differ from `OidcSsoOptions.Enable` until a restart (see `GET /api/auth/sso`).
+     * Whether the OpenID Connect authentication scheme is registered in the running process. This can differ from `Identity:Sso:Enable` until a restart (see `GET /api/auth/sso`).
      */
     enabled?: boolean;
     /**

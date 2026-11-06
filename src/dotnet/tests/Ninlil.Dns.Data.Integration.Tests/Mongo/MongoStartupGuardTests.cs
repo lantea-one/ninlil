@@ -152,4 +152,76 @@ public sealed class MongoStartupGuardTests(MongoDbEngineFixture fixture)
             second.OrderBy(step => step["_id"].AsString).Select(step => step["appliedAtUtc"])
         );
     }
+
+    private static BsonBinaryData Guid4(Guid id) => new(id, GuidRepresentation.Standard);
+
+    /// <summary>
+    ///     The <c>DhcpLeaseScopeIdBackfill</c> step gives each legacy lease document (no
+    ///     <c>ScopeId</c> field) the <c>_id</c> of the scope whose name it holds, deletes a legacy
+    ///     lease whose name matches no scope, leaves a document that already has a scope id
+    ///     alone, and changes nothing on a second start.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_BackfillsTheScopeIdOfLegacyLeasesAndDeletesOrphans()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        NinlilDnsMongoContext context = GetContext(database);
+        IMongoCollection<BsonDocument> scopes = context.Database.GetCollection<BsonDocument>(
+            "NinlilDhcpScopes"
+        );
+        IMongoCollection<BsonDocument> leases = context.Database.GetCollection<BsonDocument>(
+            "NinlilDhcpLeases"
+        );
+
+        Guid lan = Guid.NewGuid();
+        Guid guest = Guid.NewGuid();
+        Guid alreadyMigrated = Guid.NewGuid();
+        await scopes.InsertManyAsync([
+            new BsonDocument { { "_id", Guid4(lan) }, { "Name", "lan" } },
+            new BsonDocument { { "_id", Guid4(guest) }, { "Name", "guest" } },
+        ]);
+        await leases.InsertManyAsync([
+            LegacyLease("lan", "client-1"),
+            LegacyLease("lan", "client-2"),
+            LegacyLease("guest", "client-1"),
+            LegacyLease("deleted-scope", "client-1"),
+            // A document written by this version keeps the id it has, even though its name
+            // copy matches the lan scope.
+            LegacyLease("lan", "client-3").Add("ScopeId", Guid4(alreadyMigrated)),
+        ]);
+
+        await MongoStartupGuard.RunAsync(context, NullLogger.Instance);
+
+        Assert.Equal(2, await CountByScopeIdAsync(leases, lan));
+        Assert.Equal(1, await CountByScopeIdAsync(leases, guest));
+        Assert.Equal(1, await CountByScopeIdAsync(leases, alreadyMigrated));
+        Assert.Equal(4, await leases.CountDocumentsAsync(_ => true));
+        Assert.Equal(
+            0,
+            await leases.CountDocumentsAsync(Builders<BsonDocument>.Filter.Exists("ScopeId", false))
+        );
+        Assert.Equal(
+            0,
+            await leases.CountDocumentsAsync(new BsonDocument("ScopeName", "deleted-scope"))
+        );
+
+        await MongoStartupGuard.RunAsync(context, NullLogger.Instance);
+
+        Assert.Equal(4, await leases.CountDocumentsAsync(_ => true));
+        Assert.Equal(2, await CountByScopeIdAsync(leases, lan));
+    }
+
+    private static BsonDocument LegacyLease(string scopeName, string clientIdentifier) =>
+        new()
+        {
+            { "_id", Guid4(Guid.NewGuid()) },
+            { "ScopeName", scopeName },
+            { "ClientIdentifier", clientIdentifier },
+            { "IpAddress", "10.0.0.1" },
+        };
+
+    private static Task<long> CountByScopeIdAsync(
+        IMongoCollection<BsonDocument> leases,
+        Guid scopeId
+    ) => leases.CountDocumentsAsync(new BsonDocument("ScopeId", Guid4(scopeId)));
 }
