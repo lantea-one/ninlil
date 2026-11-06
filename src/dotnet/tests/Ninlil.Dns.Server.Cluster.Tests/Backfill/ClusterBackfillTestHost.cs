@@ -223,12 +223,19 @@ internal sealed class ClusterBackfillTestHost : IDisposable
         private readonly List<(Guid PeerId, ClusterConfigSyncEnvelope Envelope)> _sent = [];
         private int _inFlight;
         private int _maxInFlight;
+        private int _finished;
 
         /// <summary>This property contains how long each delivery takes.</summary>
         public TimeSpan Delay { get; set; } = TimeSpan.Zero;
 
+        /// <summary>This property makes every delivery wait until its token is cancelled, which stands in for a slow peer at shutdown.</summary>
+        public bool BlockUntilCancelled { get; set; }
+
         /// <summary>This property is called at the start of each delivery; it returns whether the delivery succeeds.</summary>
         public Func<ClusterNodeEntity, ClusterConfigSyncEnvelope, Task<bool>> OnSend { get; set; }
+
+        /// <summary>This property contains how many deliveries have ended, by result or by cancellation.</summary>
+        public int Finished => Volatile.Read(ref _finished);
 
         /// <summary>This property contains the most deliveries that were in flight at once.</summary>
         public int MaxInFlight => Volatile.Read(ref _maxInFlight);
@@ -260,6 +267,9 @@ internal sealed class ClusterBackfillTestHost : IDisposable
                 lock (_sent)
                     _sent.Add((peer.Id, envelope));
 
+                if (BlockUntilCancelled)
+                    await Task.Delay(Timeout.Infinite, stoppingToken);
+
                 if (Delay > TimeSpan.Zero)
                     await Task.Delay(Delay, stoppingToken);
 
@@ -268,6 +278,7 @@ internal sealed class ClusterBackfillTestHost : IDisposable
             finally
             {
                 Interlocked.Decrement(ref _inFlight);
+                Interlocked.Increment(ref _finished);
             }
         }
     }

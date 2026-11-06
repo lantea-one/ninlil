@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Cluster.Channel;
@@ -35,7 +37,23 @@ namespace Ninlil.Dns.Server.Cluster.Backfill;
 ///         pass. A failed or cut-short pass keeps the row and records the attempt and error; the
 ///         next successful probe runs the whole pass again. That is safe because a re-sent item
 ///         ties on time and origin at the peer and is dropped. The first failure stops the pass,
-///         so a peer that went away is not asked once per remaining item.
+///         so a peer that went away is not asked once per remaining item. A delivery counts as
+///         done when the peer answers 2xx, and the peer's endpoint answers 200 even when applying
+///         the item fails, so an item the peer refuses to apply is not retried; the stage order
+///         keeps that rare.
+///     </para>
+///     <para>
+///         The end of a pass changes the request with single conditional statements
+///         (<see cref="IClusterPeerConfigBackfillRepository.RemoveIfUnchangedAsync" />,
+///         <see cref="IClusterPeerConfigBackfillRepository.RecordFailureAsync" />), not by loading
+///         the row and saving it, because <see cref="RequestBackfillAsync" /> can commit at any
+///         moment and a read-compare-save would delete or overwrite it.
+///     </para>
+///     <para>
+///         The class is also a hosted service whose only job is the stop: at host shutdown it
+///         refuses new passes, cancels the running ones and waits for them for a bounded time, so
+///         no pass uses the service provider after it is disposed. A cancelled pass leaves its
+///         request in place.
 ///     </para>
 ///     <para>
 ///         A request whose peer row is gone is deleted and nothing is sent. The relational engines
@@ -51,7 +69,7 @@ public sealed class ClusterConfigBackfillRunner(
     IServiceScopeFactory scopeFactory,
     IClusterConfigPeerSender peerSender,
     ILogger<ClusterConfigBackfillRunner> logger
-) : IClusterConfigBackfillRunner, IDisposable
+) : IClusterConfigBackfillRunner, IHostedService, IAsyncDisposable
 {
     /// <summary>
     ///     This constant is the most deliveries one pass has in flight at once. It bounds the load
@@ -66,52 +84,116 @@ public sealed class ClusterConfigBackfillRunner(
     private const int MaxErrorLength = 1000;
 
     /// <summary>
-    ///     This field holds the peers a pass is running for. Adding to it is the claim that makes
-    ///     <see cref="TryStart" /> atomic, so two heartbeat rounds never run two passes to one peer.
+    ///     This constant is how long <see cref="StopAsync" /> waits for cancelled passes to end.
     /// </summary>
-    private readonly ConcurrentDictionary<Guid, byte> _running = new();
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    ///     This field is cancelled when the runner is disposed at host shutdown, so a pass in the
-    ///     background stops with the process and leaves its request in place.
+    ///     This field guards <see cref="_running" /> and <see cref="_stopped" />. A claim, the
+    ///     check of the stop flag and the start of the task happen under it, so a start and a stop
+    ///     cannot interleave.
+    /// </summary>
+    private readonly object _gate = new();
+
+    /// <summary>
+    ///     This field holds the task of every running pass by peer. A key in it is the claim that
+    ///     makes <see cref="TryStart" /> atomic, so two heartbeat rounds never run two passes to
+    ///     one peer, and the tasks are what <see cref="StopAsync" /> awaits.
+    /// </summary>
+    private readonly Dictionary<Guid, Task> _running = [];
+
+    /// <summary>
+    ///     This field is cancelled when the host stops, so a pass in the background stops with the
+    ///     process and leaves its request in place.
     /// </summary>
     private readonly CancellationTokenSource _shutdown = new();
+
+    private bool _stopped;
+
+    private int _disposed;
 
     /// <inheritdoc />
     public bool TryStart(Guid clusterNodeId)
     {
-        if (!_running.TryAdd(clusterNodeId, 0))
-            return false;
+        lock (_gate)
+        {
+            // After the stop no pass may start: the service provider is about to go away.
+            if (_stopped || _running.ContainsKey(clusterNodeId))
+                return false;
 
-        CancellationToken stoppingToken = _shutdown.Token;
-        _ = Task.Run(
-            async () =>
-            {
-                try
+            CancellationToken stoppingToken = _shutdown.Token;
+            _running[clusterNodeId] = Task.Run(
+                async () =>
                 {
-                    await RunPassAsync(clusterNodeId, stoppingToken);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
-                catch (Exception exception)
-                {
-                    // RunPassAsync reports a failed delivery itself; this is a failure of the
-                    // bookkeeping (for example the database). The request stays and the next
-                    // successful heartbeat tries again.
-                    logger.LogWarning(
-                        exception,
-                        "A config backfill pass to peer {ClusterNodeId} failed unexpectedly.",
-                        clusterNodeId
-                    );
-                }
-                finally
-                {
-                    _running.TryRemove(clusterNodeId, out _);
-                }
-            },
-            CancellationToken.None
-        );
+                    try
+                    {
+                        await RunPassAsync(clusterNodeId, stoppingToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    { }
+                    catch (Exception exception)
+                    {
+                        // RunPassAsync reports a failed delivery itself; this is a failure of the
+                        // bookkeeping (for example the database). The request stays and the next
+                        // successful heartbeat tries again.
+                        logger.LogWarning(
+                            exception,
+                            "A config backfill pass to peer {ClusterNodeId} failed unexpectedly.",
+                            clusterNodeId
+                        );
+                    }
+                    finally
+                    {
+                        // Waits for the lock, so the entry is always added before it is removed.
+                        lock (_gate)
+                            _running.Remove(clusterNodeId);
+                    }
+                },
+                CancellationToken.None
+            );
+            return true;
+        }
+    }
 
-        return true;
+    /// <inheritdoc />
+    public Task StartAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public async Task StopAsync(CancellationToken stoppingToken)
+    {
+        Task[] running;
+        lock (_gate)
+        {
+            _stopped = true;
+            running = [.. _running.Values];
+        }
+
+        await _shutdown.CancelAsync();
+
+        try
+        {
+            await Task.WhenAll(running).WaitAsync(StopTimeout, stoppingToken);
+        }
+        catch (Exception exception)
+            when (exception is TimeoutException or OperationCanceledException)
+        {
+            logger.LogWarning(
+                "{Count} config backfill pass(es) did not end in time at shutdown; their requests stay.",
+                running.Count(task => !task.IsCompleted)
+            );
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        // The container can dispose the one instance more than once, because it is registered
+        // under several service types. Only the first call does anything.
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            return;
+
+        await StopAsync(CancellationToken.None);
+        _shutdown.Dispose();
     }
 
     /// <inheritdoc />
@@ -120,45 +202,51 @@ public sealed class ClusterConfigBackfillRunner(
         CancellationToken stoppingToken = default
     )
     {
-        using IServiceScope scope = scopeFactory.CreateScope();
-        IClusterNodeRepository nodes =
-            scope.ServiceProvider.GetRequiredService<IClusterNodeRepository>();
-        IClusterPeerConfigBackfillRepository requests =
-            scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
-        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        ClusterNodeEntity peer = await nodes.GetByIdAsync(clusterNodeId, stoppingToken);
-        if (peer is null || peer.Status == ClusterNodeStatusEnum.Joining)
-            return false;
-
-        ClusterPeerConfigBackfillEntity request = await requests.FindByClusterNodeIdAsync(
-            clusterNodeId,
-            stoppingToken
-        );
-
-        // The request time moves forward on a repeat, so a pass that started earlier sees the
-        // change when it finishes and keeps the row.
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        if (request is null)
-            await requests.AddAsync(
-                new ClusterPeerConfigBackfillEntity
-                {
-                    Id = Guid.NewGuid(),
-                    ClusterNodeId = clusterNodeId,
-                    RequestedAtUtc = now,
-                    CreatedAtUtc = now,
-                },
-                stoppingToken
-            );
-        else
+        using (IServiceScope check = scopeFactory.CreateScope())
         {
-            request.RequestedAtUtc =
-                now > request.RequestedAtUtc ? now : request.RequestedAtUtc.AddTicks(1);
-            requests.Update(request);
+            ClusterNodeEntity peer = await check
+                .ServiceProvider.GetRequiredService<IClusterNodeRepository>()
+                .GetByIdAsync(clusterNodeId, stoppingToken);
+            if (peer is null || peer.Status == ClusterNodeStatusEnum.Joining)
+                return false;
         }
 
-        await unitOfWork.SaveChangesAsync(stoppingToken);
-        return true;
+        // The request time moves forward on a repeat, so a pass that started earlier sees the
+        // change when it finishes and keeps the row. Touching the row is one statement, so it
+        // cannot throw on a row a finishing pass removed meanwhile. Then the insert runs, and
+        // loses to a concurrent insert of the same peer with a conflict; the loop starts over with
+        // a touch. Each attempt has its own scope, because a failed save leaves its entity tracked.
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            using IServiceScope scope = scopeFactory.CreateScope();
+            IClusterPeerConfigBackfillRepository requests =
+                scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
+
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            if (await requests.TouchAsync(clusterNodeId, now, stoppingToken))
+                return true;
+
+            try
+            {
+                await requests.AddAsync(
+                    new ClusterPeerConfigBackfillEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        ClusterNodeId = clusterNodeId,
+                        RequestedAtUtc = now,
+                        CreatedAtUtc = now,
+                    },
+                    stoppingToken
+                );
+                await scope
+                    .ServiceProvider.GetRequiredService<IUnitOfWork>()
+                    .SaveChangesAsync(stoppingToken);
+                return true;
+            }
+            catch (ConflictException) { }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -330,10 +418,10 @@ public sealed class ClusterConfigBackfillRunner(
     }
 
     /// <summary>
-    ///     This method stores the end of a pass: it removes the request after a full success, unless
-    ///     the request time moved during the pass (a newer request needs another pass), and
-    ///     otherwise records the attempt and the error. It reads the row again in a new scope
-    ///     because the pass can last minutes.
+    ///     This method stores the end of a pass: it removes the request after a full success,
+    ///     unless the request time moved during the pass (a newer request needs another pass),
+    ///     and otherwise records the attempt and the error. Both are single conditional
+    ///     statements (see the class summary).
     /// </summary>
     private async Task RecordOutcomeAsync(
         Guid clusterNodeId,
@@ -345,37 +433,15 @@ public sealed class ClusterConfigBackfillRunner(
         using IServiceScope scope = scopeFactory.CreateScope();
         IClusterPeerConfigBackfillRepository requests =
             scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
-        ClusterPeerConfigBackfillEntity request = await requests.FindByClusterNodeIdAsync(
-            clusterNodeId,
-            stoppingToken
-        );
-        if (request is null)
-            return;
 
         if (error is null)
-        {
-            if (request.RequestedAtUtc != requestedAtUtc)
-                return;
-
-            requests.Remove(request);
-        }
+            await requests.RemoveIfUnchangedAsync(clusterNodeId, requestedAtUtc, stoppingToken);
         else
-        {
-            request.AttemptCount++;
-            request.LastAttemptAtUtc = DateTimeOffset.UtcNow;
-            request.LastError = error.Length > MaxErrorLength ? error[..MaxErrorLength] : error;
-            requests.Update(request);
-        }
-
-        await scope
-            .ServiceProvider.GetRequiredService<IUnitOfWork>()
-            .SaveChangesAsync(stoppingToken);
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        _shutdown.Cancel();
-        _shutdown.Dispose();
+            await requests.RecordFailureAsync(
+                clusterNodeId,
+                DateTimeOffset.UtcNow,
+                error.Length > MaxErrorLength ? error[..MaxErrorLength] : error,
+                stoppingToken
+            );
     }
 }

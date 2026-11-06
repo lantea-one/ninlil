@@ -182,7 +182,7 @@ public sealed class ClusterConfigBackfillRunnerTests
                 return true;
             },
         };
-        using ClusterConfigBackfillRunner runner = host.CreateRunner(sender);
+        await using ClusterConfigBackfillRunner runner = host.CreateRunner(sender);
 
         Assert.True(runner.TryStart(peerId));
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -199,6 +199,34 @@ public sealed class ClusterConfigBackfillRunnerTests
         deadline = DateTime.UtcNow.AddSeconds(10);
         while (!runner.TryStart(peerId) && DateTime.UtcNow < deadline)
             await Task.Delay(20);
+    }
+
+    [Fact]
+    public async Task StopAsync_WithAPassInFlight_CancelsAndAwaitsItKeepsTheRequestAndRefusesNewPasses()
+    {
+        using ClusterBackfillTestHost host = new(new ClusterBackfillTestHost.FakeSource(0, 4));
+        Guid peerId = await host.AddPeerAsync();
+        await host.AddRequestAsync(peerId);
+        ClusterBackfillTestHost.RecordingSender sender = new() { BlockUntilCancelled = true };
+        ClusterConfigBackfillRunner runner = host.CreateRunner(sender);
+        Assert.True(runner.TryStart(peerId));
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+        while (sender.Sent.Count == 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+        Assert.NotEmpty(sender.Sent);
+
+        await runner.StopAsync(CancellationToken.None);
+
+        // The blocked delivery was cancelled and has ended by the time StopAsync returns.
+        Assert.Equal(sender.Sent.Count, sender.Finished);
+        ClusterPeerConfigBackfillEntity request = await host.FindRequestAsync(peerId);
+        Assert.NotNull(request);
+        Assert.Equal(0, request.AttemptCount);
+        Assert.False(runner.TryStart(peerId));
+        await runner.DisposeAsync();
+        // The container disposes an instance registered under several types more than once.
+        await runner.DisposeAsync();
+        Assert.False(runner.TryStart(peerId));
     }
 
     [Fact]

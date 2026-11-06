@@ -759,9 +759,7 @@ builder
         options.Filters.Add<MergePatchBodyFilter>();
         options.ModelBinderProviders.Insert(0, new EnumNameModelBinderProvider());
     })
-    .AddJsonOptions(options =>
-        options.JsonSerializerOptions.Converters.Add(new RequestEnumNameJsonConverterFactory())
-    );
+    .AddJsonOptions(MvcJsonSerialization.Configure);
 builder.Services.AddEndpointsApiExplorer();
 
 // Registers every IExamplesProvider<T> and IMultipleExamplesProvider<T> in this assembly (the

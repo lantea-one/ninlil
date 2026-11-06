@@ -113,6 +113,66 @@ public abstract class ClusterPeerConfigBackfillTestsBase(EngineFixtureBase fixtu
     }
 
     /// <summary>
+    ///     A conditional remove with the request time a pass read at its start keeps a request
+    ///     whose time moved after that, and removes one whose time is unchanged. This is what makes
+    ///     the end of a pass safe against a request that commits meanwhile.
+    /// </summary>
+    [Fact]
+    public async Task RemoveIfUnchangedAsync_AfterTheRequestTimeMoved_KeepsTheRequest()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        await EnsureIndexesAsync(database);
+        ClusterNodeEntity node = NewNode("peer");
+        await SaveNodesAsync(database, node);
+        await SaveRequestAsync(database, node.Id);
+        DateTimeOffset readAtPassStart = (await FindRequestAsync(database, node.Id)).RequestedAtUtc;
+
+        await using AsyncServiceScope scope = database.Services.CreateAsyncScope();
+        IClusterPeerConfigBackfillRepository repository =
+            scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
+        Assert.True(await repository.TouchAsync(node.Id, readAtPassStart.AddMinutes(1)));
+
+        Assert.False(await repository.RemoveIfUnchangedAsync(node.Id, readAtPassStart));
+        ClusterPeerConfigBackfillEntity kept = await FindRequestAsync(database, node.Id);
+        Assert.NotNull(kept);
+
+        Assert.True(await repository.RemoveIfUnchangedAsync(node.Id, kept.RequestedAtUtc));
+        Assert.Null(await FindRequestAsync(database, node.Id));
+    }
+
+    /// <summary>
+    ///     Touching and recording a failure change one existing request in place and report false
+    ///     for a peer that has none.
+    /// </summary>
+    [Fact]
+    public async Task TouchAsyncAndRecordFailureAsync_UpdateTheRequestInPlace()
+    {
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync();
+        await EnsureIndexesAsync(database);
+        ClusterNodeEntity node = NewNode("peer");
+        await SaveNodesAsync(database, node);
+        await SaveRequestAsync(database, node.Id);
+        ClusterPeerConfigBackfillEntity before = await FindRequestAsync(database, node.Id);
+
+        await using AsyncServiceScope scope = database.Services.CreateAsyncScope();
+        IClusterPeerConfigBackfillRepository repository =
+            scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
+        DateTimeOffset attempted = before.RequestedAtUtc.AddMinutes(2);
+
+        Assert.True(await repository.RecordFailureAsync(node.Id, attempted, "boom"));
+        Assert.True(await repository.RecordFailureAsync(node.Id, attempted, "boom again"));
+        Assert.False(await repository.RecordFailureAsync(Guid.NewGuid(), attempted, "x"));
+        Assert.False(await repository.TouchAsync(Guid.NewGuid(), attempted));
+
+        ClusterPeerConfigBackfillEntity after = await FindRequestAsync(database, node.Id);
+        Assert.Equal(before.Id, after.Id);
+        Assert.Equal(2, after.AttemptCount);
+        Assert.Equal("boom again", after.LastError);
+        Assert.Equal(before.RequestedAtUtc, after.RequestedAtUtc);
+        Assert.NotNull(after.LastAttemptAtUtc);
+    }
+
+    /// <summary>
     ///     A backfill pass for a request whose peer row is gone deletes the request and sends
     ///     nothing. MongoDB has no foreign key, so removing the peer through the repository leaves
     ///     the request behind, as a backup restore or an older build's delete can; the relational

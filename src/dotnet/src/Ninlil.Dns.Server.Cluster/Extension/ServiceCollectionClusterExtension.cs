@@ -63,7 +63,15 @@ public static class ServiceCollectionClusterExtension
 
         // Pushes every synced item to a peer that is owed a backfill (a peer that just joined).
         // A singleton, because it tracks which peers a pass is running for.
-        instance.AddSingleton<IClusterConfigBackfillRunner, ClusterConfigBackfillRunner>();
+        instance.AddSingleton<ClusterConfigBackfillRunner>();
+        instance.AddSingleton<IClusterConfigBackfillRunner>(provider =>
+            provider.GetRequiredService<ClusterConfigBackfillRunner>()
+        );
+
+        // Its only hosted-service job is the stop: it cancels and awaits running passes at shutdown.
+        instance.AddHostedService(provider =>
+            provider.GetRequiredService<ClusterConfigBackfillRunner>()
+        );
 
         // The best-effort cluster-wide username check (see IClusterUsernameUniquenessChecker).
         instance.AddSingleton<

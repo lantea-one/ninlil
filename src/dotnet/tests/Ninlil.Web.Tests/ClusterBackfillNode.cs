@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,7 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Web.ClusterSync;
 using Ninlil.Web.Options;
+using Ninlil.Web.Serialization;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -255,6 +257,19 @@ internal sealed class ClusterBackfillNode : IDisposable
     /// <param name="target">The node that receives the envelopes.</param>
     public sealed class LoopbackSender(ClusterBackfillNode target) : IClusterConfigPeerSender
     {
+        /// <summary>
+        ///     This field holds the JSON options MVC binds a request body with, built from the same
+        ///     configuration <c>Program.cs</c> applies, so the loopback reads an envelope the way
+        ///     <c>ClusterChannelController.ConfigSync</c> does (case-insensitive names, declared
+        ///     enum names only).
+        /// </summary>
+        private static readonly JsonSerializerOptions MvcJsonOptions = new ServiceCollection()
+            .AddControllers()
+            .AddJsonOptions(MvcJsonSerialization.Configure)
+            .Services.BuildServiceProvider()
+            .GetRequiredService<IOptions<JsonOptions>>()
+            .Value.JsonSerializerOptions;
+
         private readonly List<string> _payloads = [];
         private int _sent;
 
@@ -286,7 +301,7 @@ internal sealed class ClusterBackfillNode : IDisposable
                 _payloads.Add(json);
 
             await target.ReceiveAsync(
-                JsonSerializer.Deserialize<ClusterConfigSyncEnvelope>(json),
+                JsonSerializer.Deserialize<ClusterConfigSyncEnvelope>(json, MvcJsonOptions),
                 stoppingToken
             );
             return true;

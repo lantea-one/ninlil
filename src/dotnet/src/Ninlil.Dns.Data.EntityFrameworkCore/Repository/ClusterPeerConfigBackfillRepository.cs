@@ -27,4 +27,47 @@ public class ClusterPeerConfigBackfillRepository(NinlilDnsContext context)
         await Set.AsNoTracking()
             .Select(request => request.ClusterNodeId)
             .ToListAsync(stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<bool> RemoveIfUnchangedAsync(
+        Guid clusterNodeId,
+        DateTimeOffset requestedAtUtc,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Set.Where(request =>
+                request.ClusterNodeId == clusterNodeId && request.RequestedAtUtc == requestedAtUtc
+            )
+            .ExecuteDeleteAsync(stoppingToken) > 0;
+
+    /// <inheritdoc />
+    public async Task<bool> TouchAsync(
+        Guid clusterNodeId,
+        DateTimeOffset requestedAtUtc,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Set.Where(request => request.ClusterNodeId == clusterNodeId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(request => request.RequestedAtUtc, requestedAtUtc),
+                stoppingToken
+            ) > 0;
+
+    /// <inheritdoc />
+    public async Task<bool> RecordFailureAsync(
+        Guid clusterNodeId,
+        DateTimeOffset attemptedAtUtc,
+        string error,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Set.Where(request => request.ClusterNodeId == clusterNodeId)
+            .ExecuteUpdateAsync(
+                setters =>
+                    setters
+                        .SetProperty(
+                            request => request.AttemptCount,
+                            request => request.AttemptCount + 1
+                        )
+                        .SetProperty(request => request.LastAttemptAtUtc, attemptedAtUtc)
+                        .SetProperty(request => request.LastError, error),
+                stoppingToken
+            ) > 0;
 }
