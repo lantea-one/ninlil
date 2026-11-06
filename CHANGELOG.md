@@ -124,6 +124,12 @@ outside Forgejo.
   [#316](https://git.lantea.one/lantea-one/ninlil/issues/316),
   [#327](https://git.lantea.one/lantea-one/ninlil/issues/327)).
 
+- **A zone transfer or DNSCrypt answer over TCP is no longer lost when the client sent one more
+  message.** After the last reply the server shuts down its side, discards what the client still
+  sends for up to 2 seconds, and then closes, so the close is not a connection reset. On Windows
+  a reset made the client throw away the final reply it had not read yet.
+  ([#12](https://git.lantea.one/lantea-one/ninlil/issues/12))
+
 ## v2026.10.31.1
 
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with

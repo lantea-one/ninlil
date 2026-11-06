@@ -181,6 +181,14 @@ public sealed class FramedDnsStreamSession
     public long DroppedResponseCount => Interlocked.Read(ref _droppedResponses);
 
     /// <summary>
+    ///     This property is <see langword="true" /> once <see cref="RunAsync" /> returned because
+    ///     a handler asked to close after the drain and every reply was written, not because of an
+    ///     abort or an idle client. The client may still have unread data on the socket in that
+    ///     case, so the owner closes with <see cref="LingeringSocketClose.CloseAsync" />.
+    /// </summary>
+    public bool ClosedAfterDrain { get; private set; }
+
+    /// <summary>
     ///     This method ends the connection now. Queued frames are discarded, in-flight slots are
     ///     released as their queries finish, and <see cref="RunAsync" /> returns. It is safe to
     ///     call more than once, from any thread.
@@ -295,7 +303,10 @@ public sealed class FramedDnsStreamSession
         try
         {
             if (await ReadLoopAsync(handleFrameAsync))
+            {
                 await WaitForInFlightQueriesAsync();
+                ClosedAfterDrain = !Lifetime.IsCancellationRequested;
+            }
         }
         catch (OperationCanceledException)
         {

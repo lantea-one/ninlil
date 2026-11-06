@@ -640,7 +640,16 @@ public sealed class FramedDnsStreamSessionTests
             }
             finally
             {
-                _serverSocket.Close();
+                // The listeners close this way after a drained close; a plain Close with the
+                // client's unread second frame on the socket is a reset, and on Windows it
+                // destroys the reply the client has not read yet.
+                if (Session.ClosedAfterDrain)
+                    await LingeringSocketClose.CloseAsync(
+                        _serverSocket,
+                        TimeSpan.FromMilliseconds(200)
+                    );
+                else
+                    _serverSocket.Close();
             }
         }
 
