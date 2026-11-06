@@ -215,12 +215,7 @@ try
 }
 catch (DatabaseStartupRefusedException refusal)
 {
-    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
-        logging.AddConsole()
-    );
-    refusalLoggerFactory
-        .CreateLogger("Ninlil.Web.DataProtection")
-        .LogCritical("Startup refused: {Message}", refusal.Message);
+    StartupRefusalReporter.Report(null, "Ninlil.Web.DataProtection", refusal);
     Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
     return;
 }
@@ -274,12 +269,7 @@ try
 }
 catch (DatabaseStartupRefusedException refusal)
 {
-    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
-        logging.AddConsole()
-    );
-    refusalLoggerFactory
-        .CreateLogger("Ninlil.Web.Jwt")
-        .LogCritical("Startup refused: {Message}", refusal.Message);
+    StartupRefusalReporter.Report(null, "Ninlil.Web.Jwt", refusal);
     Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
     return;
 }
@@ -412,12 +402,7 @@ try
 }
 catch (DatabaseStartupRefusedException refusal)
 {
-    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
-        logging.AddConsole()
-    );
-    refusalLoggerFactory
-        .CreateLogger("Ninlil.Web.Storage")
-        .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+    StartupRefusalReporter.Report(null, "Ninlil.Web.Storage", refusal);
     Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
     return;
 }
@@ -949,9 +934,12 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
     {
         // The database is in a state this version must not run on. Exit 78 (EX_CONFIG) so the
         // systemd units, which list it in RestartPreventExitStatus, do not restart in a loop.
-        app.Services.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(RelationalStartupMigrator).FullName)
-            .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+        StartupRefusalReporter.Report(
+            app.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(RelationalStartupMigrator).FullName),
+            null,
+            refusal
+        );
         await migrationScope.DisposeAsync();
         await app.DisposeAsync();
         Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
@@ -977,11 +965,7 @@ else
     catch (DatabaseStartupRefusedException refusal)
     {
         // Same exit path as the relational guard: 78 stops the systemd restart loop.
-        mongoGuardLogger.LogCritical(
-            refusal.InnerException,
-            "Startup refused: {Message}",
-            refusal.Message
-        );
+        StartupRefusalReporter.Report(mongoGuardLogger, null, refusal);
         await backfillScope.DisposeAsync();
         await app.DisposeAsync();
         Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
@@ -1014,9 +998,12 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
     catch (DatabaseStartupRefusedException refusal)
     {
         // The configured target could not be filled; same exit path as the guards above.
-        app.Services.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(PendingStorageSwitchApplier).FullName)
-            .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+        StartupRefusalReporter.Report(
+            app.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(PendingStorageSwitchApplier).FullName),
+            null,
+            refusal
+        );
         await app.DisposeAsync();
         Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
         return;

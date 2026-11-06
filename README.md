@@ -480,6 +480,18 @@ so the install steps do it (step 4). Read the entries in Event Viewer under Wind
 or with `Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Ninlil.Web'}`.
 Under a virtual service account, a service without the registered source logs nothing.
 
+A start that Ninlil refuses on purpose (a wrong `DataProtection:CertificatePassword`, a database that a
+newer version upgraded, a storage setting that contradicts itself) writes one error entry under the
+source `Ninlil.Web` that names the setting, never a password. To find out why the service stopped:
+
+1. Run `Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Ninlil.Web'} -MaxEvents 5 | Format-List TimeCreated, Message`.
+2. Read the newest entry that starts with `Startup refused:`.
+3. Fix the setting, then `Start-Service Ninlil`.
+
+The refusal happens before the service reports to the Service Control Manager, so `Start-Service` fails
+and `sc.exe query Ninlil` shows `STATE: STOPPED`. The process itself exits with code 78, which Windows
+does not show in `sc.exe query`; a console run of `Ninlil.Web.exe` prints the same message and exits with 78.
+
 To remove it: `Stop-Service Ninlil; sc.exe delete Ninlil; Remove-EventLog -Source Ninlil.Web`. Your `C:\Ninlil\data` folder stays. Windows
 keeps the virtual account's profile folder `C:\Windows\ServiceProfiles\Ninlil` loaded until the next
 restart; delete it after that restart, together with the key and certificate files described below.
