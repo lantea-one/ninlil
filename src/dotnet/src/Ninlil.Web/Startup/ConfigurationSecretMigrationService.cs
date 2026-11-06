@@ -118,6 +118,7 @@ public sealed class ConfigurationSecretMigrationService(
                         or UnauthorizedAccessException
                         or JsonException
                         or InvalidDataException
+                        or ArgumentException
                         or CryptographicException
             )
         {

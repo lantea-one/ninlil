@@ -96,6 +96,74 @@ public class ClusterSyncedSettingsCatalogTests
     }
 
     [Fact]
+    public async Task ApplyAndRecordAsync_ForAnUncataloguedKey_LeavesTheFileUntouched()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"ninlil-catalog-{Guid.NewGuid():N}.json");
+        const string original = """{"DnsServer":{"Cookies":{"Enable":true}}}""";
+        await File.WriteAllTextAsync(path, original);
+
+        try
+        {
+            (ClusterConfigSyncSettingsRecorder recorder, _) = CreateRecorder();
+            PresetConfigurationSetting[] settings =
+            [
+                new(DnsCookieOptions.SectionName, "Require", true),
+                new(DnsCookieOptions.SectionName, "NewKey", 1),
+            ];
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                recorder.ApplyAndRecordAsync(
+                    DnsCookieOptions.SectionName,
+                    settings,
+                    settings,
+                    path,
+                    CancellationToken.None
+                )
+            );
+
+            // Neither the catalogued key nor the refused one reached the file.
+            Assert.Equal(original, await File.ReadAllTextAsync(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ApplyAndRecordAsync_ForCataloguedKeys_WritesTheFileAndPublishes()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"ninlil-catalog-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            (
+                ClusterConfigSyncSettingsRecorder recorder,
+                SettingsClusterSyncRoundTripTests.CapturingPublisher publisher
+            ) = CreateRecorder();
+            PresetConfigurationSetting[] settings =
+            [
+                new(DnsCookieOptions.SectionName, "Require", true),
+            ];
+
+            await recorder.ApplyAndRecordAsync(
+                DnsCookieOptions.SectionName,
+                settings,
+                settings,
+                path,
+                CancellationToken.None
+            );
+
+            Assert.Contains("\"Require\": true", await File.ReadAllTextAsync(path));
+            Assert.NotNull(publisher.Published);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Sections_NeverListAnEncryptedSecretKey()
     {
         // Ciphertext opens only with the key ring that made it, so it must never be a synced key.

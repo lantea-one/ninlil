@@ -18,6 +18,12 @@ namespace Ninlil.Web.Tests;
 ///     host's runtime file and checks that every key under the section's paths is catalogued or the
 ///     encrypted sibling of a secret. A field added to a controller must be added to the patch
 ///     here, and the file check catches the case where it is not.
+///     <para>
+///         <b>Limit.</b> The controllers take a raw <c>JsonElement</c> patch, so there is no
+///         request model to enumerate by reflection. A new field with no entry in the patch body
+///         below is not exercised, and nothing here fails for it; the reviewer of a new field
+///         adds it to the body and to the catalogue.
+///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClusterSyncedSettingsControllerCatalogTests(NinlilDnsWebApplicationFactory factory)

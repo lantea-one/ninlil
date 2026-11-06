@@ -22,8 +22,11 @@ public static class RuntimeConfigurationFileReader
 {
     /// <summary>
     ///     This method reads and parses the file. Comments and trailing commas are accepted, as
-    ///     the configuration system accepts them, and property names match without regard to
-    ///     case, as configuration keys do.
+    ///     the configuration system accepts them. Property names match exactly, the way
+    ///     <c>PresetConfigurationFileApplier</c> writes them: a lookup that ignored case could
+    ///     match a hand-edited key the applier would not overwrite, and a caller that then wrote
+    ///     the canonical key would leave two keys that differ only in case, which the
+    ///     configuration system refuses to load.
     /// </summary>
     /// <param name="path">The runtime configuration file.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -33,6 +36,7 @@ public static class RuntimeConfigurationFileReader
     /// </returns>
     /// <exception cref="IOException">The file cannot be read.</exception>
     /// <exception cref="JsonException">The file is not valid JSON.</exception>
+    /// <exception cref="ArgumentException">The file repeats a property name.</exception>
     public static async Task<JsonObject> ReadRootAsync(
         string path,
         CancellationToken stoppingToken = default
@@ -43,15 +47,43 @@ public static class RuntimeConfigurationFileReader
 
         JsonNode root = JsonNode.Parse(
             await File.ReadAllTextAsync(path, stoppingToken),
-            new JsonNodeOptions { PropertyNameCaseInsensitive = true },
-            new JsonDocumentOptions
+            nodeOptions: null,
+            documentOptions: new JsonDocumentOptions
             {
                 CommentHandling = JsonCommentHandling.Skip,
                 AllowTrailingCommas = true,
             }
         );
 
+        // JsonObject builds its property table on first access, and a repeated property name
+        // throws then. Touching every object here makes the failure part of the read, so a caller
+        // handles one unreadable-file error and not a surprise at its first lookup.
+        Validate(root);
+
         return root as JsonObject;
+    }
+
+    /// <summary>
+    ///     This method visits every object and array below a node so each object builds its
+    ///     property table.
+    /// </summary>
+    private static void Validate(JsonNode node)
+    {
+        switch (node)
+        {
+            case JsonObject jsonObject:
+                _ = jsonObject.ContainsKey(string.Empty);
+
+                foreach (KeyValuePair<string, JsonNode> property in jsonObject)
+                    Validate(property.Value);
+
+                break;
+            case JsonArray jsonArray:
+                foreach (JsonNode item in jsonArray)
+                    Validate(item);
+
+                break;
+        }
     }
 
     /// <summary>

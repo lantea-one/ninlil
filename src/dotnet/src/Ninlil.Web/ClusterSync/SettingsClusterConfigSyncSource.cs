@@ -86,7 +86,12 @@ public sealed class SettingsClusterConfigSyncSource(
             );
         }
         catch (Exception exception)
-            when (exception is IOException or UnauthorizedAccessException or JsonException)
+            when (exception
+                    is IOException
+                        or UnauthorizedAccessException
+                        or JsonException
+                        or ArgumentException
+            )
         {
             logger.LogWarning(
                 exception,
@@ -211,8 +216,10 @@ public sealed class SettingsClusterConfigSyncSource(
             }
 
             // Both keys present and empty is how the file records a cleared secret, and a clear is
-            // part of the section's state, so it is sent as an empty value.
-            plaintext ??= string.Empty;
+            // part of the section's state. Live sync sends a clear as JSON null (the controller
+            // passes null), so a backfill sends null too and the wire stays the same.
+            if (string.IsNullOrEmpty(plaintext))
+                plaintext = null;
         }
 
         value = JsonSerializer.SerializeToElement(plaintext);

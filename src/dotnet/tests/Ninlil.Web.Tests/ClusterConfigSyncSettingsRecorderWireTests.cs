@@ -128,6 +128,20 @@ public class ClusterConfigSyncSettingsRecorderWireTests
     }
 
     [Fact]
+    public async Task Record_ForAClearedSecret_PublishesJsonNull()
+    {
+        string payload = await RecordAsync(
+            ReverseProxyOptions.SectionName,
+            new PresetConfigurationSetting(ReverseProxyOptions.SectionName, "SharedSecret", null)
+        );
+
+        Assert.Equal(
+            "[{\"SectionPath\":\"DnsServer:ReverseProxy\",\"Key\":\"SharedSecret\",\"Value\":null}]",
+            payload
+        );
+    }
+
+    [Fact]
     public async Task Record_ForTheEventBroker_PublishesThePasswordAsEnteredUnderThePlainKey()
     {
         string payload = await RecordAsync(

@@ -506,4 +506,45 @@ public sealed class ConfigurationSecretReverseProxyTests : IDisposable
 
         Assert.False(File.Exists(path));
     }
+
+    /// <summary>
+    ///     This test pins the exact-case match. The applier writes the canonical key name, so a
+    ///     migration that matched a hand-edited <c>sharedsecret</c> would write
+    ///     <c>SharedSecret</c> beside it, and the configuration system refuses a file with two keys
+    ///     that differ only in case.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"DnsServer":{"ReverseProxy":{"sharedsecret":"x"}}}""")]
+    [InlineData("""{"dnsserver":{"reverseproxy":{"SharedSecret":"x"}}}""")]
+    public async Task Migrate_WithAKeyOfAnotherCase_LeavesTheFileUntouchedAndLoadable(string json)
+    {
+        string path = WriteFile(json);
+
+        await ConfigurationSecretMigrationService.MigrateAsync(
+            path,
+            nodeKeyRing,
+            NullLogger.Instance
+        );
+
+        Assert.Equal(json, await File.ReadAllTextAsync(path));
+        new ConfigurationBuilder().AddJsonFile(path).Build();
+    }
+
+    [Fact]
+    public async Task Migrate_WithARepeatedPropertyName_LogsAWarningAndLeavesTheFileUntouched()
+    {
+        string json = """{"DnsServer":{"ReverseProxy":{"SharedSecret":"a","SharedSecret":"b"}}}""";
+        string path = WriteFile(json);
+        CapturingLoggerProvider logs = new();
+        using ILoggerFactory factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+
+        await ConfigurationSecretMigrationService.MigrateAsync(
+            path,
+            nodeKeyRing,
+            factory.CreateLogger("test")
+        );
+
+        Assert.Equal(json, await File.ReadAllTextAsync(path));
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Warning);
+    }
 }

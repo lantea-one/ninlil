@@ -55,6 +55,42 @@ public class ClusterConfigSyncSettingsRecorder(
 )
 {
     /// <summary>
+    ///     This method is the one way a synced settings controller saves a write: it checks the
+    ///     catalogue, merges the file settings into the runtime configuration file, then records
+    ///     and publishes the write (<see cref="RecordAndPublishAsync" />). The catalogue check
+    ///     comes first so a refused write leaves the file untouched, and this node and its peers
+    ///     never disagree about a key that only one of them has.
+    /// </summary>
+    /// <param name="sectionName">The section name; see <see cref="RecordAndPublishAsync" />.</param>
+    /// <param name="settings">
+    ///     The values as the operator entered them. They are catalogued and sent to peers.
+    /// </param>
+    /// <param name="fileSettings">
+    ///     What is written to this node's file: <paramref name="settings" /> as they are, or with
+    ///     secrets encrypted by <see cref="Ninlil.Web.Configuration.ConfigurationSecretSettings.ProtectForFile" />.
+    /// </param>
+    /// <param name="configurationFilePath">The runtime configuration file.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     The section or a key is not in <see cref="ClusterSyncedSettingsCatalog" />. Nothing is
+    ///     written.
+    /// </exception>
+    public async Task ApplyAndRecordAsync(
+        string sectionName,
+        IReadOnlyList<PresetConfigurationSetting> settings,
+        IReadOnlyList<PresetConfigurationSetting> fileSettings,
+        string configurationFilePath,
+        CancellationToken stoppingToken
+    )
+    {
+        ClusterSyncedSettingsCatalog.EnsureCatalogued(sectionName, settings);
+
+        await PresetConfigurationFileApplier.ApplyAsync(fileSettings, configurationFilePath);
+
+        await RecordAndPublishAsync(sectionName, settings, stoppingToken);
+    }
+
+    /// <summary>
     ///     This method records a settings write that has just been applied, with this node as its
     ///     origin, and publishes it to the cluster. Each value is sent as a
     ///     <see cref="JsonElement" /> (see <see cref="SettingsSyncEntry" />), so lists, numbers,

@@ -206,7 +206,7 @@ public sealed class SettingsClusterConfigSyncSourceTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadBackfillAsync_ForAClearedSecret_SendsAnEmptyValue()
+    public async Task ReadBackfillAsync_ForAClearedSecret_SendsJsonNullAsLiveSyncDoes()
     {
         IDataProtectionProvider keyRing = new EphemeralDataProtectionProvider();
         await WriteFileAsync(
@@ -218,11 +218,28 @@ public sealed class SettingsClusterConfigSyncSourceTests : IDisposable
 
         ClusterConfigSyncEnvelope envelope = Assert.Single(await ReadAsync(keyRing, state));
 
-        // The clear is part of the section's state, so the peer clears its own copy too.
+        // The clear is part of the section's state, so the peer clears its own copy too. Live
+        // sync sends a clear as JSON null, and so does the backfill.
         Assert.Equal(
-            string.Empty,
-            Entries(envelope).Single(entry => entry.Key == "SharedSecret").Value.GetString()
+            "[{\"SectionPath\":\"DnsServer:ReverseProxy\",\"Key\":\"SharedSecret\",\"Value\":null}]",
+            envelope.PayloadJson
         );
+    }
+
+    [Fact]
+    public async Task ReadBackfillAsync_ForAFileWithARepeatedPropertyName_SendsNothingAndWarns()
+    {
+        await File.WriteAllTextAsync(
+            filePath,
+            """{"DnsServer":{"Cookies":{"Enable":true,"Enable":false}}}"""
+        );
+        SettingsClusterSyncRoundTripTests.FakeStateRepository state = new();
+        await AddStateAsync(state, DnsCookieOptions.SectionName, DateTimeOffset.UtcNow, null);
+        CapturingLoggerProvider logs = new();
+
+        Assert.Empty(await ReadAsync(new EphemeralDataProtectionProvider(), state, logs));
+
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Warning);
     }
 
     [Fact]
