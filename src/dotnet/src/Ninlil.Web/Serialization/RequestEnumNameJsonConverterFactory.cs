@@ -90,12 +90,6 @@ public sealed class RequestEnumNameJsonConverterFactory : JsonConverterFactory
 public sealed class RequestEnumNameJsonConverter<TEnum> : JsonConverter<TEnum>
     where TEnum : struct, Enum
 {
-    private static readonly Lazy<Dictionary<string, TEnum>> names = new(BuildNames);
-
-    private static readonly Lazy<string> validNames = new(() =>
-        string.Join(", ", WrittenPairs().Select(p => p.Name).Distinct(StringComparer.Ordinal))
-    );
-
     private readonly JsonConverter<TEnum> writer;
 
     /// <summary>Creates the converter.</summary>
@@ -108,7 +102,7 @@ public sealed class RequestEnumNameJsonConverter<TEnum> : JsonConverter<TEnum>
     ///     The names <see cref="Write" /> emits for each defined member, joined with commas. A
     ///     400 message lists them.
     /// </summary>
-    public static string ValidNames => validNames.Value;
+    public static string ValidNames => RequestEnumNames<TEnum>.ValidNames;
 
     /// <summary>Reads the enum from a JSON string holding declared names only.</summary>
     /// <param name="reader">The JSON reader.</param>
@@ -141,7 +135,7 @@ public sealed class RequestEnumNameJsonConverter<TEnum> : JsonConverter<TEnum>
         }
 
         string text = reader.GetString();
-        if (TryParse(text, out TEnum value))
+        if (RequestEnumNames<TEnum>.TryParse(text, out TEnum value))
             return value;
 
         throw new JsonException(
@@ -159,86 +153,6 @@ public sealed class RequestEnumNameJsonConverter<TEnum> : JsonConverter<TEnum>
     /// <param name="options">The serializer options.</param>
     public override void Write(Utf8JsonWriter writer, TEnum value, JsonSerializerOptions options) =>
         this.writer.Write(writer, value, options);
-
-    private static IEnumerable<(TEnum Member, string Name)> WrittenPairs()
-    {
-        // The writer is built with default options, so the names do not depend on the host's
-        // naming policy.
-        JsonSerializerOptions options = new();
-        var attributeConverter =
-            (JsonConverter<TEnum>)AttributeConverters.Create(typeof(TEnum), options);
-        foreach (TEnum value in Enum.GetValues<TEnum>())
-        {
-            using MemoryStream stream = new();
-            using (Utf8JsonWriter jsonWriter = new(stream))
-                attributeConverter.Write(jsonWriter, value, options);
-
-            yield return (value, JsonSerializer.Deserialize<string>(stream.ToArray()));
-        }
-    }
-
-    private static Dictionary<string, TEnum> BuildNames()
-    {
-        Dictionary<string, TEnum> map = new(StringComparer.OrdinalIgnoreCase);
-
-        // Names come from the same three attributes the type's converter reads, plus the written
-        // names, so every spelling the console takes from the OpenAPI document is accepted.
-        foreach (
-            FieldInfo field in typeof(TEnum).GetFields(BindingFlags.Public | BindingFlags.Static)
-        )
-        {
-            var member = (TEnum)field.GetValue(null);
-            map.TryAdd(field.Name, member);
-            foreach (
-                string description in typeof(TEnum).GetEnumDescriptions(field, DeclaredNameChecks)
-            )
-                map.TryAdd(description.Trim(), member);
-        }
-
-        foreach ((TEnum member, string name) in WrittenPairs())
-            map.TryAdd(name, member);
-
-        return map;
-    }
-
-    private static IEnumerable<GetEnumDescriptionsTypeExtension.EnumToStringExtensionAttributeDelegate> DeclaredNameChecks =>
-        [
-            attribute => attribute is JsonStringEnumMemberNameAttribute a ? a.Name.Trim() : null,
-            attribute =>
-                attribute is System.Runtime.Serialization.EnumMemberAttribute a
-                && a.Value?.Trim() is not (null or { Length: 0 })
-                    ? a.Value.Trim()
-                    : null,
-            attribute =>
-                attribute is System.ComponentModel.DisplayNameAttribute a
-                    ? a.DisplayName.Trim()
-                    : null,
-        ];
-
-    private static bool TryParse(string text, out TEnum value)
-    {
-        value = default;
-        if (text is null)
-            return false;
-
-        // A non-flags type takes exactly one name; a comma never belongs to a declared name.
-        if (!typeof(TEnum).IsDefined(typeof(FlagsAttribute), false))
-            return names.Value.TryGetValue(text.Trim(), out value);
-
-        // A flags list ORs its parts; every part must be a declared name, so "Sunday,3" and
-        // "Sunday,,Monday" are refused.
-        long combined = 0;
-        foreach (string part in text.Split(','))
-        {
-            if (!names.Value.TryGetValue(part.Trim(), out TEnum member))
-                return false;
-
-            combined |= Convert.ToInt64(member, System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        value = (TEnum)Enum.ToObject(typeof(TEnum), combined);
-        return true;
-    }
 }
 
 /// <summary>

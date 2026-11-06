@@ -26892,7 +26892,7 @@
           "Tftp"
         ],
         "type": "string",
-        "description": "This enumeration names the four DHCP-family services that\n`/api/dhcp-services` reports on and controls, one per service. The\n`{kind}` route segment of `POST /api/dhcp-services/{kind}/start`\nand `POST /api/dhcp-services/{kind}/stop` binds to it\ncase-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model\nbinding before the action runs."
+        "description": "This enumeration names the four DHCP-family services that\n`/api/dhcp-services` reports on and controls, one per service. The\n`{kind}` route segment of `POST /api/dhcp-services/{kind}/start`\nand `POST /api/dhcp-services/{kind}/stop` binds to it\nby declared name only, case-insensitively, so a digit string or an unknown segment fails\nmodel binding with 400 before the action runs."
       },
       "DhcpServiceStatus": {
         "type": "object",

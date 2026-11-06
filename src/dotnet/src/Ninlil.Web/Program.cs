@@ -92,6 +92,7 @@ using Ninlil.Web.Extension;
 using Ninlil.Web.HealthChecks;
 using Ninlil.Web.Hubs;
 using Ninlil.Web.Middleware;
+using Ninlil.Web.ModelBinding;
 using Ninlil.Web.OpenApi;
 using Ninlil.Web.Options;
 using Ninlil.Web.Routing;
@@ -744,8 +745,13 @@ builder.Services.AddProblemDetails();
 // action that takes a [FromBody] JsonElement. RequestEnumNameJsonConverterFactory makes every
 // request-body enum take declared names only; it is registered for MVC only, so other readers of
 // the shared enum converters (cluster sync, state files) keep their behaviour.
+// EnumNameModelBinderProvider does the same for query-string and route enums.
 builder
-    .Services.AddControllers(options => options.Filters.Add<MergePatchBodyFilter>())
+    .Services.AddControllers(options =>
+    {
+        options.Filters.Add<MergePatchBodyFilter>();
+        options.ModelBinderProviders.Insert(0, new EnumNameModelBinderProvider());
+    })
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(new RequestEnumNameJsonConverterFactory())
     );
