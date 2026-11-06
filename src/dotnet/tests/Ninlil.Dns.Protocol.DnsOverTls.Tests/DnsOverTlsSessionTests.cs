@@ -39,6 +39,11 @@ public sealed class DnsOverTlsSessionTests
     /// </summary>
     private static readonly TimeSpan ServedDeadline = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    ///     The longest one attempt waits for its transfer to start before it tries again.
+    /// </summary>
+    private static readonly TimeSpan StartBound = TimeSpan.FromSeconds(3);
+
     [Fact]
     public async Task AClientThatNeverSendsAClientHello_IsClosedAtTheHandshakeTimeout_AndOthersAreServed()
     {
@@ -86,38 +91,40 @@ public sealed class DnsOverTlsSessionTests
     public async Task ManyPipelinedQueriesOnOneTlsConnection_AreAllAnswered()
     {
         await using Host host = await Host.StartAsync();
-        using SslStream client = await ConnectWithRetryAsync(host);
 
         const int count = 40;
 
-        for (ushort id = 0; id < count; id++)
-            await WriteQueryAsync(client, BuildQuery(id, $"pipelined-{id}.example."));
+        // The first write can reach a connection the listener already closed for being idle, so
+        // the connect, the writes and the reads retry as a unit.
+        await RunUntilServedAsync(async () =>
+        {
+            using SslStream client = await host.ConnectAsync();
 
-        HashSet<ushort> answered = [];
+            for (ushort id = 0; id < count; id++)
+                await WriteQueryAsync(client, BuildQuery(id, $"pipelined-{id}.example."));
 
-        for (int index = 0; index < count; index++)
-            answered.Add((await ReadResponseAsync(client)).Id);
+            HashSet<ushort> answered = [];
 
-        Assert.Equal(count, answered.Count);
+            for (int index = 0; index < count; index++)
+                answered.Add((await ReadResponseAsync(client)).Id);
+
+            Assert.Equal(count, answered.Count);
+        });
     }
 
     [Fact]
     public async Task AClientThatStopsReading_IsCutByTheWriteDeadline_WithoutHurtingOthers()
     {
-        TaskCompletionSource transferEnded = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-        BulkZoneTransferService.TransferEnded = transferEnded;
         await using Host host = await Host.StartAsync(
             transferService: typeof(BulkZoneTransferService)
         );
 
-        // The handshake deadline is the 400 ms idle timeout, which a loaded host can exceed for
-        // a client that must succeed, so the stalled client retries its handshake too.
-        using SslStream stalledStream = await ConnectWithRetryAsync(host, receiveBufferSize: 4096);
-
-        // The transfer yields far more than the socket buffers hold; this client never reads.
-        await WriteQueryAsync(stalledStream, BuildAxfr(5));
+        // The listener closes a connection that sends no query within the 400 ms idle timeout,
+        // and a loaded host can delay the client's write past it. The stalled client therefore
+        // connects and sends its AXFR as a unit until the transfer has started.
+        (SslStream stalledStream, TaskCompletionSource transferEnded) =
+            await StartTransferWithRetryAsync(host);
+        using SslStream stalled = stalledStream;
 
         // Another client is answered while the first one is stuck.
         DnsMessage answer = await ConnectUntilServedAsync(host, 6, "other.example.");
@@ -133,22 +140,28 @@ public sealed class DnsOverTlsSessionTests
     public async Task AnAxfr_ThatTakesLongerThanTheIdleTimeout_Completes()
     {
         await using Host host = await Host.StartAsync(typeof(SlowZoneTransferService));
-        using SslStream client = await ConnectWithRetryAsync(host);
 
-        Stopwatch stopwatch = Stopwatch.StartNew();
-        await WriteQueryAsync(client, BuildAxfr(9));
+        // The first write can reach a connection the listener already closed for being idle, so
+        // the whole exchange retries as a unit.
+        await RunUntilServedAsync(async () =>
+        {
+            using SslStream client = await host.ConnectAsync();
 
-        List<ushort> ids = [];
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            await WriteQueryAsync(client, BuildAxfr(9));
 
-        for (int index = 0; index < SlowZoneTransferService.MessageCount; index++)
-            ids.Add((await ReadResponseAsync(client)).Id);
+            List<ushort> ids = [];
 
-        Assert.Equal([1, 2, 3], ids);
-        Assert.True(stopwatch.Elapsed > IdleTimeout * 3);
+            for (int index = 0; index < SlowZoneTransferService.MessageCount; index++)
+                ids.Add((await ReadResponseAsync(client)).Id);
 
-        // The server closes the connection after a transfer.
-        using CancellationTokenSource timeout = new(SafetyTimeout);
-        Assert.Equal(0, await ReadToEndAsync(client, timeout.Token));
+            Assert.Equal([1, 2, 3], ids);
+            Assert.True(stopwatch.Elapsed > IdleTimeout * 3);
+
+            // The server closes the connection after a transfer.
+            using CancellationTokenSource timeout = new(SafetyTimeout);
+            Assert.Equal(0, await ReadToEndAsync(client, timeout.Token));
+        });
     }
 
     /// <summary>
@@ -195,15 +208,17 @@ public sealed class DnsOverTlsSessionTests
     }
 
     /// <summary>
-    ///     This method opens a TLS connection and retries the connect and handshake, as
-    ///     <see cref="ConnectUntilServedAsync" /> does, for a client that sends its query itself.
+    ///     This method runs a whole client exchange again with a new connection when the server
+    ///     cuts it. The 400 ms idle timeout also closes a connection whose first query is late on
+    ///     a busy host, which the client sees as a reset, a broken pipe or a failed handshake;
+    ///     assertion failures are not retried.
     /// </summary>
-    /// <param name="host">The listener to connect to.</param>
-    /// <param name="receiveBufferSize">The client receive buffer, or 0 for the default.</param>
+    /// <param name="exchange">The connect, the writes, the reads and the assertions.</param>
     /// <exception cref="TimeoutException">
-    ///     No handshake finished within <see cref="ServedDeadline" />.
+    ///     No attempt completed within <see cref="ServedDeadline" />; the last failure is the
+    ///     inner exception.
     /// </exception>
-    private static async Task<SslStream> ConnectWithRetryAsync(Host host, int receiveBufferSize = 0)
+    private static async Task RunUntilServedAsync(Func<Task> exchange)
     {
         using CancellationTokenSource deadline = new(ServedDeadline);
         Exception last = null;
@@ -212,16 +227,81 @@ public sealed class DnsOverTlsSessionTests
         {
             try
             {
-                return await host.ConnectAsync(deadline.Token, receiveBufferSize);
+                await exchange();
+                return;
             }
             catch (Exception exception)
-                when (exception is IOException or AuthenticationException or SocketException)
+                when (exception
+                        is IOException
+                            or AuthenticationException
+                            or SocketException
+                            or EndOfStreamException
+                )
             {
                 last = exception;
             }
         }
 
-        throw new TimeoutException("No handshake finished before the deadline.", last);
+        throw new TimeoutException("No exchange was served before the deadline.", last);
+    }
+
+    /// <summary>
+    ///     This method opens a connection that never reads and sends an AXFR on it, and starts
+    ///     again with a new connection until <see cref="BulkZoneTransferService" /> reports that
+    ///     the transfer began. The listener closes a connection whose first query arrives after
+    ///     the idle timeout, which leaves the client with a broken pipe or with a query in a
+    ///     socket buffer that nobody reads, so the connect and the write retry together.
+    /// </summary>
+    /// <param name="host">The listener to connect to.</param>
+    /// <returns>
+    ///     The stalled connection, which the caller disposes, and the signal that its transfer
+    ///     ended.
+    /// </returns>
+    /// <exception cref="TimeoutException">
+    ///     No attempt started a transfer within <see cref="ServedDeadline" />; the last failure
+    ///     is the inner exception.
+    /// </exception>
+    private static async Task<(
+        SslStream Stream,
+        TaskCompletionSource TransferEnded
+    )> StartTransferWithRetryAsync(Host host)
+    {
+        using CancellationTokenSource deadline = new(ServedDeadline);
+        Exception last = null;
+
+        while (!deadline.IsCancellationRequested)
+        {
+            // Each attempt has its own signals, so an abandoned attempt cannot satisfy the next.
+            TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource ended = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            BulkZoneTransferService.TransferStarted = started;
+            BulkZoneTransferService.TransferEnded = ended;
+            SslStream stream = null;
+
+            try
+            {
+                stream = await host.ConnectAsync(deadline.Token, receiveBufferSize: 4096);
+
+                // The transfer yields far more than the socket buffers hold; this client never
+                // reads.
+                await WriteQueryAsync(stream, BuildAxfr(5));
+                await started.Task.WaitAsync(StartBound, deadline.Token);
+                return (stream, ended);
+            }
+            catch (Exception exception)
+                when (exception
+                        is IOException
+                            or AuthenticationException
+                            or SocketException
+                            or TimeoutException
+                )
+            {
+                last = exception;
+                stream?.Dispose();
+            }
+        }
+
+        throw new TimeoutException("No transfer started before the deadline.", last);
     }
 
     private static DnsMessage BuildQuery(ushort id, string name) =>
@@ -311,6 +391,16 @@ public sealed class DnsOverTlsSessionTests
         public const int TotalMessages = 600;
         private static int _yielded;
 
+        /// <summary>
+        ///     Gets or sets the signal the service completes when a transfer begins yielding. A
+        ///     test sets a new one before each attempt.
+        /// </summary>
+        public static TaskCompletionSource TransferStarted { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the signal the service completes when a transfer ends. A test sets a
+        ///     new one before each attempt.
+        /// </summary>
         public static TaskCompletionSource TransferEnded { get; set; }
 
         public static int Yielded => Volatile.Read(ref _yielded);
@@ -321,6 +411,11 @@ public sealed class DnsOverTlsSessionTests
         )
         {
             Volatile.Write(ref _yielded, 0);
+
+            // Capture both signals now: a retrying test replaces the statics for its next
+            // attempt, and this transfer must complete the signals of its own attempt.
+            TaskCompletionSource ended = TransferEnded;
+            TransferStarted?.TrySetResult();
 
             try
             {
@@ -345,7 +440,7 @@ public sealed class DnsOverTlsSessionTests
             }
             finally
             {
-                TransferEnded?.TrySetResult();
+                ended?.TrySetResult();
             }
         }
 
