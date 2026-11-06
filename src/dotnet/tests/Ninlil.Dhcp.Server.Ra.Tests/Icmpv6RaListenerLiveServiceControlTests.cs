@@ -122,11 +122,17 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
 
     /// <summary>
     ///     This method reports whether the process can open a raw ICMPv6 socket and the host can
-    ///     bind the IPv6 loopback address, by trying to, rather than guessing from the platform
-    ///     or a setting. The live tests send their solicitation over <c>::1</c>.
+    ///     bind the IPv6 loopback address, by trying to. It is always false off Linux, the only
+    ///     platform that supports Router Advertisement. The live tests send their solicitation
+    ///     over <c>::1</c>.
     /// </summary>
     private static bool CanUseRawIcmpv6OnLoopback()
     {
+        // Router Advertisement needs Linux (README: "DHCP, Router Advertisement and passive
+        // device presence need Linux"); the live tests fail on Windows.
+        if (!OperatingSystem.IsLinux())
+            return false;
+
         try
         {
             using Socket probe = new(

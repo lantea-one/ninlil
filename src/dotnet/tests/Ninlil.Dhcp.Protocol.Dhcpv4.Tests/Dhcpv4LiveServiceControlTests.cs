@@ -21,6 +21,12 @@ public class Dhcpv4LiveServiceControlTests
     [Fact]
     public async Task Listener_CanBeStoppedAndRestartedLive_OnTheSamePort()
     {
+        // DHCP needs Linux (README: "DHCP, Router Advertisement and passive device presence
+        // need Linux"). On Windows a UDP receive also surfaces an ICMP port-unreachable as a
+        // connection reset, so this test cannot run there.
+        if (!OperatingSystem.IsLinux())
+            return;
+
         int serverPort = GetFreeUdpPort();
         int clientPort = GetFreeUdpPort();
 
