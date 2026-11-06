@@ -1,4 +1,5 @@
 using MySqlConnector;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Topology;
@@ -140,11 +141,7 @@ internal static class MySqlConnectionStringComposer
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
-        if (
-            Enum.TryParse(value.Trim(), true, out MySqlLoadBalance mode)
-            && Enum.IsDefined(mode)
-            && !int.TryParse(value, out _)
-        )
+        if (EnumNameParser.TryParseName(value.Trim(), true, out MySqlLoadBalance mode))
             return mode;
         throw Refusal(
             setting,

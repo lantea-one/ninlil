@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Options;
@@ -200,11 +201,7 @@ public static class MongoClientSettingsComposer
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
-        if (
-            Enum.TryParse(value.Trim(), true, out ReadPreferenceMode mode)
-            && Enum.IsDefined(mode)
-            && !int.TryParse(value, out _)
-        )
+        if (EnumNameParser.TryParseName(value.Trim(), true, out ReadPreferenceMode mode))
             return mode;
         throw Refusal(
             nameof(StorageMongoDbOptions.ReadPreference),

@@ -172,6 +172,26 @@ public sealed class MongoClientSettingsComposerTests
     }
 
     [Fact]
+    public void Compose_WithACommaListReadPreference_IsRefused()
+    {
+        foreach (string mode in new[] { "1,2", "Secondary,Nearest" })
+        {
+            StorageOptions options = Options(ReplicaSetUrl);
+            options.MongoDb.ReadPreference = mode;
+
+            Assert.Contains("ReadPreference", Refused(options).Message);
+        }
+
+        StorageOptions accepted = Options(ReplicaSetUrl);
+        accepted.MongoDb.ReadPreference = "secondarypreferred";
+
+        Assert.Equal(
+            ReadPreferenceMode.SecondaryPreferred,
+            MongoClientSettingsComposer.ComposeReplicaReadPreference(accepted).ReadPreferenceMode
+        );
+    }
+
+    [Fact]
     public void Compose_StalenessWithPrimaryReadPreference_WarnsOnly()
     {
         StorageOptions options = Options(ReplicaSetUrl);
