@@ -55,11 +55,27 @@ public sealed class StartupRefusalReporterTests
         new("DataProtection:CertificatePath names a file that cannot be opened.");
 
     /// <summary>
-    ///     A refusal under a service is logged as critical and written to the event log as one
-    ///     entry under <c>Ninlil.Web</c>, carrying the message.
+    ///     A refusal under a service without a host logger writes one event log entry under
+    ///     <c>Ninlil.Web</c>, carrying the message.
     /// </summary>
     [Fact]
-    public void Report_AsAWindowsService_LogsAndWritesTheEventLogEntry()
+    public void Report_AsAWindowsServiceWithoutAHostLogger_WritesTheEventLogEntry()
+    {
+        FakeEventLogWriter writer = new();
+
+        StartupRefusalReporter.Report(null, "x", Refusal(), true, writer);
+
+        (string source, string message) = Assert.Single(writer.Entries);
+        Assert.Equal("Ninlil.Web", source);
+        Assert.Contains("DataProtection:CertificatePath", message);
+    }
+
+    /// <summary>
+    ///     A refusal under a service with a host logger logs the critical line and writes no
+    ///     explicit entry, because the host's event log provider records that line.
+    /// </summary>
+    [Fact]
+    public void Report_AsAWindowsServiceWithAHostLogger_LogsAndWritesNoExplicitEntry()
     {
         RecordingLogger logger = new();
         FakeEventLogWriter writer = new();
@@ -70,9 +86,7 @@ public sealed class StartupRefusalReporterTests
             logger.Lines,
             l => l.Level == LogLevel.Critical && l.Text.Contains("DataProtection:CertificatePath")
         );
-        (string source, string message) = Assert.Single(writer.Entries);
-        Assert.Equal("Ninlil.Web", source);
-        Assert.Contains("DataProtection:CertificatePath", message);
+        Assert.Empty(writer.Entries);
     }
 
     /// <summary>
@@ -91,19 +105,16 @@ public sealed class StartupRefusalReporterTests
     }
 
     /// <summary>
-    ///     A failing event log (an unregistered source, for example) does not throw and the
-    ///     critical line is still logged.
+    ///     A failing event log (an unregistered source, for example) does not throw.
     /// </summary>
     [Fact]
-    public void Report_WhenTheEventLogFails_DoesNotThrowAndWarns()
+    public void Report_WhenTheEventLogFails_DoesNotThrow()
     {
-        RecordingLogger logger = new();
         FakeEventLogWriter writer = new() { Throw = true };
 
-        StartupRefusalReporter.Report(logger, "x", Refusal(), true, writer);
+        StartupRefusalReporter.Report(null, "x", Refusal(), true, writer);
 
-        Assert.Contains(logger.Lines, l => l.Level == LogLevel.Critical);
-        Assert.Contains(logger.Lines, l => l.Level == LogLevel.Warning);
+        Assert.Empty(writer.Entries);
     }
 
     /// <summary>

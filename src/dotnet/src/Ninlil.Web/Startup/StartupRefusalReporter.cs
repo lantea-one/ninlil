@@ -48,14 +48,18 @@ public sealed class WindowsStartupRefusalEventLogWriter : IStartupRefusalEventLo
 ///     This class reports a deliberate startup refusal (a
 ///     <see cref="DatabaseStartupRefusedException" />) from every refusal handler in
 ///     <c>Program.cs</c>. It logs the message as critical, which reaches the console of a
-///     console run, and, when the process is a Windows service, also writes it as an error to the
-///     Application event log under <see cref="EventLogSource" />, the source the README's
-///     Windows install steps register. A service has no console, so without the event entry an
-///     operator could not tell why the service stopped.
+///     console run, and, when the process is a Windows service and no host logger is passed, also
+///     writes it as an error to the Application event log under <see cref="EventLogSource" />,
+///     the source the README's Windows install steps register. A service has no console, so
+///     without the event entry an operator could not tell why the service stopped. A call that
+///     passes a host logger leaves the event entry to the host's own event log provider, so
+///     each refused start leaves one Error entry under <c>Ninlil.Web</c>.
 ///     <para>
 ///         Every refusal happens before the host starts, so the process has not yet connected to
 ///         the Service Control Manager. The process exit code 78 is set by the caller; this class
-///         only reports.
+///         only reports. The Service Control Manager therefore sees a failed start
+///         (<c>Start-Service</c> reports "Cannot start service") and <c>sc.exe query</c> shows
+///         exit code 0.
 ///     </para>
 /// </summary>
 public static class StartupRefusalReporter
@@ -96,7 +100,7 @@ public static class StartupRefusalReporter
     /// <param name="category">The logger category used when <paramref name="logger" /> is null.</param>
     /// <param name="refusal">The refusal; its message is the text reported.</param>
     /// <param name="isWindowsService">Whether the process runs as a Windows service.</param>
-    /// <param name="eventLogWriter">The event log writer, called only for a service.</param>
+    /// <param name="eventLogWriter">The event log writer, called only for a service without a host logger.</param>
     public static void Report(
         ILogger logger,
         string category,
@@ -106,6 +110,12 @@ public static class StartupRefusalReporter
     )
     {
         ILoggerFactory ownFactory = null;
+        // A host logger comes from the running host's logging setup. Under the service that
+        // setup includes the Windows event log provider, which already records the critical
+        // line under the same source, so a second explicit entry would duplicate it. Only a
+        // call without a host logger (a throwaway console logger) has no other way to reach
+        // the event log.
+        bool hasHostLogger = logger != null;
         try
         {
             if (logger == null)
@@ -119,7 +129,7 @@ public static class StartupRefusalReporter
                 refusal.Message
             );
 
-            if (!isWindowsService)
+            if (!isWindowsService || hasHostLogger)
                 return;
             try
             {
