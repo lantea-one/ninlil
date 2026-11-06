@@ -47,6 +47,27 @@ public interface IRepository<TEntity>
     );
 
     /// <summary>
+    ///     This method lists the identifiers, and nothing else, of every
+    ///     <typeparamref name="TEntity" /> that matches an optional <paramref name="predicate" />.
+    ///     It is a snapshot of ids taken in one query. A batch job that then loads each row with
+    ///     <see cref="GetByIdAsync" /> sees a row deleted mid-pass as missing and skips it, whereas
+    ///     paging with an offset would shift every later row by one and skip a live row. Ids are
+    ///     16 bytes each and are held in memory, so use it for internal batches, not for a REST
+    ///     list (those use <c>SearchAsync</c>/<c>CountAsync</c>). The default implementation lists
+    ///     the entities and keeps the ids; the Entity Framework Core and MongoDB base classes
+    ///     override it with a projection that never loads the entities.
+    /// </summary>
+    /// <param name="predicate">
+    ///     An optional filter; when <see langword="null" />, every identifier is returned.
+    /// </param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The identifiers of the matching entities, in no particular order.</returns>
+    async Task<IReadOnlyList<Guid>> ListIdsAsync(
+        Expression<Func<TEntity, bool>> predicate = null,
+        CancellationToken stoppingToken = default
+    ) => [.. (await ListAsync(predicate, stoppingToken)).Select(entity => entity.Id)];
+
+    /// <summary>
     ///     This method stages a new <typeparamref name="TEntity" /> for insertion. The insert is
     ///     not guaranteed to be visible to other readers until
     ///     <see cref="IUnitOfWork.SaveChangesAsync" /> completes.

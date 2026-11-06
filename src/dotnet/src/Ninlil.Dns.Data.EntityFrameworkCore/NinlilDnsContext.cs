@@ -331,6 +331,13 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
         Set<ClusterSyncTombstoneEntity>();
 
     /// <summary>
+    ///     This property contains the cluster peers that are owed a config backfill, one row per
+    ///     peer.
+    /// </summary>
+    public DbSet<ClusterPeerConfigBackfillEntity> ClusterPeerConfigBackfills =>
+        Set<ClusterPeerConfigBackfillEntity>();
+
+    /// <summary>
     ///     This method applies every <see cref="Microsoft.EntityFrameworkCore.IEntityTypeConfiguration{TEntity}" />
     ///     found in this assembly, so a new entity only needs its configuration class, not a
     ///     registration here.

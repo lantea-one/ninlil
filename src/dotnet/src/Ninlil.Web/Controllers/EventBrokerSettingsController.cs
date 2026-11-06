@@ -198,14 +198,11 @@ public class EventBrokerSettingsController(
         // The file gets the password encrypted with this node's key ring. The cluster payload
         // keeps the password as entered, because a peer can only open what its own key ring
         // protected; it travels on the TLS and TSIG protected cluster channel, never the broker.
-        await PresetConfigurationFileApplier.ApplyAsync(
-            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
-            runtimeConfigurationOptions.ConfigurationFilePath
-        );
-
-        await clusterSyncRecorder.RecordAndPublishAsync(
+        await clusterSyncRecorder.ApplyAndRecordAsync(
             DnsServerEventPublisherOptions.SectionName,
             settings,
+            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
+            runtimeConfigurationOptions.ConfigurationFilePath,
             HttpContext.RequestAborted
         );
 

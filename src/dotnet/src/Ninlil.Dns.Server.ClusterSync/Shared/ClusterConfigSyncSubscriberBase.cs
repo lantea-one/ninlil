@@ -9,18 +9,26 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Shared;
 
 /// <summary>
-///     This class is the sending-side flow shared by the simple config-sync event subscribers
-///     (<c>FilterListClusterSyncEventSubscriber</c> and the four like it). On a local change it
-///     reads the entity again in a new scope (create or update) or records a tombstone (see
-///     <see cref="ClusterSyncTombstones" />) and builds a bare deletion envelope, and hands the <see cref="ClusterConfigSyncEnvelope" /> to
-///     <see cref="IClusterConfigSyncBroadcaster.BroadcastAsync" />. A subclass supplies
-///     <see cref="EntityType" />, <see cref="FindLocalAsync" /> and <see cref="Serialize" />, and
-///     calls <see cref="BroadcastChangeAsync" /> on a detached task from its <c>HandleAsync</c>,
-///     like <c>CatalogZoneAutoProvisioningEventSubscriber</c>, so the event dispatcher is not
-///     held up.
+///     This class is the sending-side flow shared by the config-sync event subscribers (filter
+///     lists, entries, access-control rules, rewrites, forwarders, users and roles). On a local
+///     change it records a tombstone (see <see cref="ClusterSyncTombstones" />) and builds a bare
+///     deletion envelope, or, for a create or update, reads the entity again in a new scope and
+///     asks the entity's <see cref="ClusterConfigSyncSourceBase{TEntity}" /> for the envelope. It
+///     hands the <see cref="ClusterConfigSyncEnvelope" /> to
+///     <see cref="IClusterConfigSyncBroadcaster.BroadcastAsync" />. The payload, the stamping and
+///     the filter of what syncs live only in the source, which a backfill reads too, so a live
+///     change and a backfill produce the same bytes.
+///     <para>
+///         A subclass supplies <see cref="EntityType" /> and calls <see cref="BroadcastChangeAsync" />
+///         on a detached task from its <c>HandleAsync</c>, like
+///         <c>CatalogZoneAutoProvisioningEventSubscriber</c>, so the event dispatcher is not held
+///         up. The source for <typeparamref name="TEntity" /> must be registered as
+///         <c>ClusterConfigSyncSourceBase&lt;TEntity&gt;</c> (see
+///         <c>ServiceCollectionClusterSyncExtension</c>).
+///     </para>
 /// </summary>
 /// <typeparam name="TEntity">The entity type the subscriber's event concerns.</typeparam>
-/// <param name="scopeFactory">The factory used to create a scope, and a repository, per event.</param>
+/// <param name="scopeFactory">The factory used to create a scope, and the source, per event.</param>
 /// <param name="broadcaster">The broadcaster this subscriber forwards a built envelope to.</param>
 /// <param name="clusterOptions">The cluster settings, read for this node's id.</param>
 /// <param name="logger">The logger a broadcast failure is recorded to.</param>
@@ -34,29 +42,10 @@ public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
 {
     /// <summary>
     ///     This property contains the entity type the envelopes carry, which must equal the
-    ///     receiving applier's <c>IClusterConfigSyncApplier.EntityType</c>.
+    ///     receiving applier's <c>IClusterConfigSyncApplier.EntityType</c> and the source's
+    ///     <see cref="IClusterConfigSyncSource.EntityType" />.
     /// </summary>
     protected abstract string EntityType { get; }
-
-    /// <summary>
-    ///     This method reads the entity a create or update event concerns from the repository of
-    ///     a new scope.
-    /// </summary>
-    /// <param name="services">The scope's service provider, to resolve a repository from.</param>
-    /// <param name="id">The entity's identifier.</param>
-    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The entity, or <see langword="null" /> if it was deleted in the meantime.</returns>
-    protected abstract Task<TEntity> FindLocalAsync(
-        IServiceProvider services,
-        Guid id,
-        CancellationToken stoppingToken
-    );
-
-    /// <summary>
-    ///     This method serializes an entity's fields into the JSON the matching
-    ///     <c>IClusterConfigSyncApplier</c> expects.
-    /// </summary>
-    protected abstract string Serialize(TEntity entity);
 
     /// <summary>
     ///     This method builds and broadcasts one envelope, logging any exception other than
@@ -98,11 +87,9 @@ public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
                     );
 
                 await broadcaster.BroadcastAsync(
-                    new ClusterConfigSyncEnvelope(
+                    ClusterConfigSyncEnvelopes.ForDeletion(
                         EntityType,
                         entityId.ToString(),
-                        IsDeleted: true,
-                        PayloadJson: null,
                         occurredAtUtc,
                         ownNodeId
                     ),
@@ -112,23 +99,16 @@ public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
             }
 
             await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-            TEntity entity = await FindLocalAsync(scope.ServiceProvider, entityId, stoppingToken);
+            ClusterConfigSyncEnvelope envelope = await scope
+                .ServiceProvider.GetRequiredService<ClusterConfigSyncSourceBase<TEntity>>()
+                .BuildLiveEnvelopeAsync(entityId, ownNodeId, stoppingToken);
 
-            // The entity was deleted before this task ran; the delete has its own event.
-            if (entity is null)
+            // The entity was deleted before this task ran (the delete has its own event), or it
+            // is not one that syncs, such as a rewrite scoped to a client.
+            if (envelope is null)
                 return;
 
-            await broadcaster.BroadcastAsync(
-                new ClusterConfigSyncEnvelope(
-                    EntityType,
-                    entityId.ToString(),
-                    IsDeleted: false,
-                    Serialize(entity),
-                    entity.GetLastModifiedUtc(),
-                    entity.OriginatingNodeId ?? ownNodeId
-                ),
-                stoppingToken
-            );
+            await broadcaster.BroadcastAsync(envelope, stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

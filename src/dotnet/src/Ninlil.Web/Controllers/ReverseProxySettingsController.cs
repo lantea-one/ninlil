@@ -278,14 +278,11 @@ public class ReverseProxySettingsController(
         // instead (over the TLS and TSIG protected cluster channel only, never the message
         // broker), because they can open only what their own key ring protected: each peer
         // encrypts it again on arrival.
-        await PresetConfigurationFileApplier.ApplyAsync(
-            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
-            runtimeConfigurationOptions.ConfigurationFilePath
-        );
-
-        await clusterSyncRecorder.RecordAndPublishAsync(
+        await clusterSyncRecorder.ApplyAndRecordAsync(
             ReverseProxyOptions.SectionName,
             settings,
+            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
+            runtimeConfigurationOptions.ConfigurationFilePath,
             HttpContext.RequestAborted
         );
 

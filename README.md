@@ -3941,21 +3941,25 @@ This guide covers three ways Ninlil moves information to other servers and syste
 The cluster channel is a set of REST endpoints under `/api/cluster/channel/` on the web HTTPS port.
 Each request is signed with a TSIG key that the invite creates, and TLS encrypts the connection.
 
-**What a cluster copies between nodes.** A change is pushed once, when you save it, to every known
-peer:
+**What a cluster copies between nodes.** A change is pushed to every healthy peer when you save it.
+A node that joins receives everything the inviting node holds, and a peer that missed a change
+catches up, both in a full pass called a **backfill** (see [Behaviour worth
+knowing](#behaviour-worth-knowing-12)). The backfill covers these items, and no others:
 
 | Copied | Details |
 |---|---|
 | Users and roles | Including password hashes and two-factor secrets. See [Security](#security). |
-| Filter lists and their entries | Includes the setting that makes a [blocked service apply to every client](#filtering-rewrites-and-parental-controls). The assignment of a list to a client or group stays on its node. |
+| Filter lists and their entries | Includes the setting that makes a [blocked service apply to every client](#filtering-rewrites-and-parental-controls). The assignment of a list to a client or group stays on its node. A backfill sends every list and the entries of local lists only: a node fetches the entries of a subscribed list from its source itself. |
 | Access control rules and forwarders | |
 | Global rewrites | A rewrite scoped to a client or group stays on its node. |
-| Five settings sections | Event broker, Rate limiting, DNS Cookies, Reverse proxy and the DNS Rewrites settings page. Turning on a Safe Search rewrite also turns the rewrite engine on for every node. |
+| Five settings sections | Event broker, Rate limiting, DNS Cookies, Reverse proxy and the DNS Rewrites settings page. Turning on a Safe Search rewrite also turns the rewrite engine on for every node. A backfill sends the values in the inviting node's runtime configuration file, for each section that was saved on it at least once. |
+| Deletions | A backfill also sends the records of deleted users, roles, lists, rules, rewrites and forwarders, so a deletion is not undone on the joining node. |
 
 **What a cluster does not copy:** zones and records (use zone transfers or catalog zones, see
 [Secondary zones and transfers](#secondary-zones-and-transfers)), refresh tokens and API tokens,
-webhook subscriptions, DHCP data, clients and client groups, TLS certificates and the JWT signing
-key.
+webhook subscriptions, DHCP data, clients and client groups, rewrites scoped to a client or group,
+the entries of subscribed filter lists, TLS certificates and the JWT signing key. A backfill does
+not copy them either.
 
 #### Before you start
 
@@ -3990,6 +3994,17 @@ key.
 4. To use an event broker: a RabbitMQ or ActiveMQ Classic server that every node reaches. Ninlil
    was run against RabbitMQ 4.1 and ActiveMQ Classic 6.1.7.
 5. To use webhooks: a web address that accepts `POST` requests with a JSON body.
+6. On the node that will join, the ids of its own bootstrap administrator account and its
+   `Administrators` role. Read them before you join, because after the join two accounts share a
+   name:
+
+   ```bash
+   curl -k https://<node-b>/api/users -H 'Authorization: Bearer <token-b>'
+   curl -k https://<node-b>/api/roles -H 'Authorization: Bearer <token-b>'
+   ```
+
+   Note the `id` of the `admin` account and of the `Administrators` role. The commands below call
+   them `<bootstrap-user-id>` and `<bootstrap-role-id>`.
 
 #### Steps
 
@@ -4043,6 +4058,37 @@ key.
    ```
 
    The console does the same on the **Cluster** page (**Invite a peer** and **Join a cluster**).
+5. Wait for the backfill. Node A records that it owes node B everything it holds. After the next
+   heartbeat that reaches node B (30 seconds by default), node A sends every item in the
+   [table above](#clustering-events-and-webhooks) to node B and to node B only. A large set of
+   local filter list entries takes longer, because each item is one request. Zones, records and
+   DHCP data are not copied. Follow it in node A's log (see [Behaviour worth
+   knowing](#behaviour-worth-knowing-12)).
+6. Delete node B's own bootstrap administrator account and its `Administrators` role. Do this
+   after the backfill has finished, and only when node B holds no data you want to keep (the
+   [bootstrap account bullet](#behaviour-worth-knowing-12) says why). You need the ids you noted
+   in step 6 of "Before you start".
+
+   1. Use `<token-a>`. It works on node B, because both nodes share the JWT key and node A's
+      administrator account exists on node B. Do not use node B's own token: it belongs to the
+      account you delete.
+   2. List the accounts and roles on node B. Node A's `admin` account and `Administrators` role
+      exist there next to node B's own. The pair that lost the newest-write comparison is
+      renamed to `<name>-conflict-<node-id>` (the node id has 32 hex digits and no dashes) and
+      has a `clusterConflictNote`. The renamed pair is node B's own or node A's, depending on which was written later.
+   3. Delete node B's own account and role by the ids you noted:
+
+      ```bash
+      curl -k -X DELETE https://<node-b>/api/users/<bootstrap-user-id> -H 'Authorization: Bearer <token-a>'
+      curl -k -X DELETE https://<node-b>/api/roles/<bootstrap-role-id> -H 'Authorization: Bearer <token-a>'
+      ```
+
+      Each answers `204`.
+   4. If node A's pair was the one renamed, it keeps its `-conflict-` name on node B. A user name
+      and a role name cannot be edited (`PUT /api/users/<id>` changes the display name, email and
+      disabled flag only, and `PUT /api/roles/<id>` the description only). Sign in on node B as
+      `admin-conflict-<node-id>` with node A's password, or create an account with the plain name
+      and move the roles to it.
 
 **Switch on an event broker** (optional). Do this on every node that should share events.
 
@@ -4148,7 +4194,9 @@ Each command below runs on node A unless it says otherwise.
    ```
 
 2. A setting that the cluster copies reaches the other node. Switch the rewrite engine on at node A,
-   wait a second, then read it at node B:
+   wait a second, then read it at node B. A setting saved at node A before the join reaches node B
+   with the backfill, so you can also read one of those after the first heartbeat that follows the
+   join:
 
    ```bash
    curl -k -X PATCH https://<node-a>/api/rewrite-settings -H 'Authorization: Bearer <token-a>' -H 'Content-Type: application/json' -d '{"enable":true}'
@@ -4160,6 +4208,22 @@ Each command below runs on node A unless it says otherwise.
    ```
 
    `originatingNodeId` names the node where the change was made.
+
+   The log of node A shows the backfill (see [Behaviour worth
+   knowing](#behaviour-worth-knowing-12) for the exact lines):
+
+   ```bash
+   journalctl -u ninlil | grep 'Config backfill'
+   ```
+
+   ```text
+   info: Ninlil.Dns.Server.Cluster.Backfill.ClusterConfigBackfillRunner[0]
+         Config backfill to peer node 'office' started.
+   info: Ninlil.Dns.Server.Cluster.Backfill.ClusterConfigBackfillRunner[0]
+         Config backfill to peer node 'office' done: 42 items delivered.
+   ```
+
+   (your count differs; for a container use `docker logs <container>` instead of `journalctl`).
 3. A token from node A works on node B when both use the same key. Sign in at node A, then call
    node B with that access token (`<token-a>`). The result is `200`. With different keys it is
    `401`:
@@ -4187,12 +4251,66 @@ Each command below runs on node A unless it says otherwise.
 
 #### Behaviour worth knowing
 
-- **A cluster pushes a change once, when you save it.** Ninlil keeps no backlog. A node that was
-  down, or had not joined yet, during a change does not receive it later. To bring such a node up
-  to date, save each of the five synced settings pages once on any node (**Event broker**,
-  **Rate limiting**, **DNS Cookies**, **Reverse proxy** and **DNS Rewrites** under **Settings**),
-  and save the other copied items again; every save is sent. The newest write wins on every node.
-  When two writes carry the same time, every node settles it the same way.
+- **A node that joins receives everything the inviting node holds.** When the join completes, node
+  A records that it owes the new peer a backfill. After the next heartbeat that reaches the peer,
+  node A sends it the items in "What a cluster copies between nodes", in dependency order:
+  roles and filter lists, then users and list entries, then access control rules, global
+  rewrites, forwarders and settings sections, then deletion records. At most four items are in
+  flight at once, and only to that peer. The backfill goes from the inviter to the joiner. The
+  joiner's own accounts and data do not travel to the cluster.
+- **A peer that missed a change catches up with a full backfill.** A live delivery that fails
+  (a connection error, a timeout or a non-2xx answer), and a change made while a peer is
+  `Unreachable`, each mark that peer as owed a backfill. The next heartbeat that reaches the peer
+  starts a full pass, which also covers every other change the peer missed. Nothing is queued per
+  change. A `Joining` peer is not marked: the join backfill covers it.
+- **A failed or interrupted backfill runs again from the start, after a growing wait.** The mark
+  stays until every item was delivered. Once the wait below has passed, the next successful
+  heartbeat repeats the whole pass, and an item the peer already holds is dropped there. The
+  first failed delivery stops the pass.
+  - A request with no failed pass starts at the first successful heartbeat. A peer that was only
+    unreachable heals this way.
+  - After `n` failed passes, the next pass starts only at the time of the last failed attempt plus
+    the heartbeat interval times 2 to the power `n-1`, at most 1 hour. With the default 30-second
+    heartbeat the waits are 30, 60 and 120 seconds, and so on, up to 1 hour.
+  - Another missed change does not shorten the wait. A pass that succeeds resets it.
+- **Newer wins, and a tie settles the same way on every node.** The receiving node compares each
+  item's last-change time and, on a tie, the id of the node that made the change. Data the joining
+  node already holds merges under the same rule. A user or role with the same name but another id
+  is not merged: the one that loses the newest-write comparison (only an exact tie uses the node
+  id) is renamed to `<name>-conflict-<node-id>`, with the id as 32 hex digits and no dashes, and
+  carries a `clusterConflictNote`. The renamed name stays. A fresh node holds its bootstrap `admin` account and `Administrators`
+  role, so every join renames one pair. Delete node B's own pair after the join, as in step 6 of
+  "Form a cluster".
+- **Settings come from the inviter's runtime configuration file.** A section is sent when it was
+  saved on that node at least once, and only the keys the file holds. A value an environment
+  variable pins on node A is not sent unless the file holds it, and a value pinned on node B stays
+  on node B.
+- **Watch a backfill in the log.** The runner logs under the category
+  `Ninlil.Dns.Server.Cluster.Backfill.ClusterConfigBackfillRunner` (the deferral line comes from
+  the heartbeat service, see the table). There is no API field or
+  console view for it. Search the log for these lines:
+
+  | Line | Meaning |
+  |---|---|
+  | `Config backfill to peer node '<name>' started.` | A pass began. |
+  | `Config backfill to peer node '<name>' done: <n> items delivered.` | Every item got a 2xx answer. |
+  | `Config backfill to peer node '<name>' failed after <n> items: <reason> It runs again after the next successful heartbeat.` | A delivery failed. |
+  | `Config backfill to peer node '<name>' is deferred until <time> after <n> failed attempts.` | The wait after failed passes has not passed. Logged once per wait (category `Ninlil.Dns.Server.Cluster.Heartbeat.ClusterHeartbeatBackgroundService`). |
+  | `Peer node '<name>' rejected a config-sync envelope for <type> '<key>' with HTTP <code>.` | The peer answered an item with a non-2xx code (category `Ninlil.Dns.Server.Cluster.Channel.ClusterConfigSyncBroadcaster`). |
+
+- **Limits of the backfill.**
+  - Membership is pairwise and a node does not relay changes. If node B joins through node A in a
+    cluster of A and C, node B receives what A holds, including what A received from C. B and C
+    do not sync with each other afterwards, and a later change made on C reaches A only.
+  - The receiving endpoint answers `200` even when it fails to apply an item (it logs `Failed to
+    apply a config-sync envelope` on that node). The sender counts that as delivered, so an item
+    the peer refuses is not sent again. The dependency order keeps this rare.
+  - An account whose two-factor secret the inviter cannot decrypt (its key ring changed) is
+    skipped with a warning, so the peer never receives it without two-factor sign-in.
+  - Zones, records, DHCP data, the entries of subscribed lists and rewrites scoped to a client or
+    group are not copied.
+  - The time a pass takes grows with the number of items, because each item is one request. Ninlil
+    gives no figure.
 - **A synced setting follows the same restart rule on each node.** The save on node A may say
   "restart required". The same value reaches node B at once, but node B also needs the restart
   before the setting works. The settings page on B shows the updated `lastModifiedUtc` while it still
@@ -4209,9 +4327,10 @@ Each command below runs on node A unless it says otherwise.
 - **Disabling an account or changing permissions reaches issued tokens on every node.** Cluster
   sync copies users and roles to every healthy peer when you save the change, and each peer then
   rejects a disabled account's access token on its next request, and uses the permissions you saved (see
-  [Security](#security)). A peer that was unreachable at that moment keeps the old state until the
-  next save of that user or role, so its access tokens for the account keep working there until
-  they expire (15 minutes by default).
+  [Security](#security)). A peer that was unreachable at that moment keeps the old state until
+  its next successful heartbeat, when a backfill brings it up to date (see the backfill bullets
+  above). Its access tokens for the account keep working there until then, or until they expire
+  (15 minutes by default).
 - **A password or two-factor change reaches every node.** The changed security stamp travels with the
   user, so each peer rejects the account's older access tokens on its next request. Refresh tokens
   belong to the node that issued them: a peer that receives a changed stamp also revokes the
@@ -4660,8 +4779,10 @@ you out of every session, yours included; sign in again with a code from the app
   anyone who may restore a backup on another machine should set a certificate.
 - **A cluster sends some secrets in the clear on the cluster channel.** User two-factor secrets and
   settings that hold a secret travel inside the TLS connection that is also signed with a TSIG key.
-  The receiving node encrypts them with the node's key ring. They never go through the event broker. An
-  invite code contains a TSIG secret, so share it only over a private channel.
+  The receiving node encrypts them with the node's key ring. They never go through the event broker.
+  A join backfill sends every account's password hash and two-factor secret and every synced
+  secret in one pass, so an invite code gives whoever joins with it all of that. An invite code
+  contains a TSIG secret, so share it only over a private channel, and treat it as full trust.
 - **A backup holds the key ring and the TLS certificate with its private key.** Always set a
   passphrase. See [Backup and restore](#backup-and-restore).
 - **Single sign-on accounts start with no permissions.** The first sign-in of an OpenID Connect
@@ -4740,7 +4861,7 @@ removed. A secret from the environment is never written to disk.
 The reverse-proxy shared secret and the event broker passwords are also replicated in a cluster.
 The node you save one on sends it to
 the other nodes over the encrypted, signed cluster channel, and each node encrypts it with its
-own key ring before it writes its file. It never goes through the event broker.
+own key ring before it writes its file. A backfill to a joining node sends them the same way. It never goes through the event broker.
 
 **If the key ring is lost.** The Data Protection key ring lives in the data directory. If it is
 recreated, or the configuration file is copied to another host without it, a stored secret can no

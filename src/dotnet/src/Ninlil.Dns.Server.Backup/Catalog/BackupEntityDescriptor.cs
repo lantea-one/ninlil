@@ -88,6 +88,16 @@ public sealed record BackupEntityDescriptor(
 
                 return existing.Count;
             }
-        );
+        )
+        {
+            EntityType = typeof(TEntity),
+        };
     }
+
+    /// <summary>
+    ///     This property contains the concrete entity type the descriptor covers. A test uses it
+    ///     to check that every entity type is either in <see cref="BackupEntityCatalog.Entries" />
+    ///     or named in <see cref="BackupEntityCatalog.ExcludedEntityTypes" />.
+    /// </summary>
+    public Type EntityType { get; init; }
 }

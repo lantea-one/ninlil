@@ -224,16 +224,13 @@ public class SafeSearchController(
                 ),
             ];
 
-            await PresetConfigurationFileApplier.ApplyAsync(
-                engineSwitch,
-                runtimeConfigurationOptions.ConfigurationFilePath
-            );
-
             // The switch is a cluster-synced setting, so enabling Safe Search anywhere means
             // "rewrites are used" everywhere. The peers apply it to their own files.
-            await clusterSyncRecorder.RecordAndPublishAsync(
+            await clusterSyncRecorder.ApplyAndRecordAsync(
                 DnsRewriteOptions.SectionName,
                 engineSwitch,
+                engineSwitch,
+                runtimeConfigurationOptions.ConfigurationFilePath,
                 stoppingToken
             );
         }

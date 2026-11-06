@@ -194,6 +194,10 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
             ClusterSyncedSettingsStateRepository
         >();
         instance.AddScoped<IClusterSyncTombstoneRepository, ClusterSyncTombstoneRepository>();
+        instance.AddScoped<
+            IClusterPeerConfigBackfillRepository,
+            ClusterPeerConfigBackfillRepository
+        >();
 
         return instance;
     }

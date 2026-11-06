@@ -1,9 +1,7 @@
-using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Data.Abstractions.Entity;
-using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.ClusterSync.Shared;
 using Ninlil.Dns.Server.Core.ClusterSync;
@@ -47,29 +45,4 @@ public class RewriteClusterSyncEventSubscriber(
         );
         return ValueTask.CompletedTask;
     }
-
-    /// <summary>
-    ///     This method returns the rewrite, or <see langword="null" /> (nothing is broadcast) for
-    ///     one scoped to a client or client group. <see cref="RewriteSyncPayload" /> has no scope
-    ///     and clients and groups exist only on their own node, so a peer would create a global
-    ///     rewrite from it.
-    /// </summary>
-    protected override async Task<DnsRewriteEntity> FindLocalAsync(
-        IServiceProvider services,
-        Guid id,
-        CancellationToken stoppingToken
-    )
-    {
-        DnsRewriteEntity rewrite = await services
-            .GetRequiredService<IDnsRewriteRepository>()
-            .GetByIdAsync(id, stoppingToken);
-
-        return rewrite is { ClientId: null, ClientGroupId: null } ? rewrite : null;
-    }
-
-    /// <inheritdoc />
-    protected override string Serialize(DnsRewriteEntity entity) =>
-        JsonSerializer.Serialize(
-            new RewriteSyncPayload(entity.Domain, entity.Target, entity.IsDisabled, entity.Comments)
-        );
 }

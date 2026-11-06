@@ -580,6 +580,13 @@ builder.Services.AddScoped<
     Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier,
     Ninlil.Web.ClusterSync.SettingsClusterConfigSyncApplier
 >();
+
+// The reading half of the same section sync: a backfill to a node that joined later sends each
+// synced section whole through this source, from the runtime file and not from IConfiguration.
+builder.Services.AddScoped<
+    Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncSource,
+    Ninlil.Web.ClusterSync.SettingsClusterConfigSyncSource
+>();
 builder.Services.AddScoped<Ninlil.Web.ClusterSync.ClusterConfigSyncSettingsRecorder>();
 
 builder.Services.AddNinlilDnsServerDnssec(builder.Configuration);
@@ -787,9 +794,7 @@ builder
         options.Filters.Add<MergePatchBodyFilter>();
         options.ModelBinderProviders.Insert(0, new EnumNameModelBinderProvider());
     })
-    .AddJsonOptions(options =>
-        options.JsonSerializerOptions.Converters.Add(new RequestEnumNameJsonConverterFactory())
-    );
+    .AddJsonOptions(MvcJsonSerialization.Configure);
 builder.Services.AddEndpointsApiExplorer();
 
 // Registers every IExamplesProvider<T> and IMultipleExamplesProvider<T> in this assembly (the

@@ -50,6 +50,20 @@ public abstract class EntityFrameworkRepositoryBase<TEntity>(NinlilDnsContext co
     }
 
     /// <inheritdoc />
+    public virtual async Task<IReadOnlyList<Guid>> ListIdsAsync(
+        Expression<Func<TEntity, bool>> predicate = null,
+        CancellationToken stoppingToken = default
+    )
+    {
+        IQueryable<TEntity> query = Set.AsNoTracking();
+
+        if (predicate is not null)
+            query = query.Where(predicate);
+
+        return await query.Select(entity => entity.Id).ToListAsync(stoppingToken);
+    }
+
+    /// <inheritdoc />
     public virtual async Task AddAsync(TEntity entity, CancellationToken stoppingToken = default) =>
         await Set.AddAsync(entity, stoppingToken);
 

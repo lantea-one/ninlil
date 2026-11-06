@@ -173,6 +173,7 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
             ),
             new FixedOptionsMonitor<ClusterOptions>(options),
             _certificateProvider,
+            new Backfill.ClusterBackfillTestHost.FakeRunner(),
             NullLogger<ClusterHeartbeatBackgroundService>.Instance
         );
 

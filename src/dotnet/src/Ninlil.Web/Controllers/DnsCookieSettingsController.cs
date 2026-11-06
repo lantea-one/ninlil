@@ -122,14 +122,11 @@ public class DnsCookieSettingsController(
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
-        await PresetConfigurationFileApplier.ApplyAsync(
-            settings,
-            runtimeConfigurationOptions.ConfigurationFilePath
-        );
-
-        await clusterSyncRecorder.RecordAndPublishAsync(
+        await clusterSyncRecorder.ApplyAndRecordAsync(
             DnsCookieOptions.SectionName,
             settings,
+            settings,
+            runtimeConfigurationOptions.ConfigurationFilePath,
             HttpContext.RequestAborted
         );
 

@@ -1,9 +1,7 @@
-using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Data.Abstractions.Entity;
-using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.ClusterSync.Shared;
 using Ninlil.Dns.Server.Core.ClusterSync;
@@ -47,26 +45,4 @@ public class ForwarderClusterSyncEventSubscriber(
         );
         return ValueTask.CompletedTask;
     }
-
-    /// <inheritdoc />
-    protected override async Task<DnsForwarderEntity> FindLocalAsync(
-        IServiceProvider services,
-        Guid id,
-        CancellationToken stoppingToken
-    ) =>
-        await services
-            .GetRequiredService<IDnsForwarderRepository>()
-            .GetByIdAsync(id, stoppingToken);
-
-    /// <inheritdoc />
-    protected override string Serialize(DnsForwarderEntity entity) =>
-        JsonSerializer.Serialize(
-            new ForwarderSyncPayload(
-                entity.Name,
-                entity.DefinitionString,
-                entity.SortOrder,
-                entity.IsDisabled,
-                entity.Comments
-            )
-        );
 }

@@ -17,8 +17,9 @@ namespace Ninlil.Dns.Data.MongoDb.Maintenance;
 ///     filter or sort of the repository method named next to it.
 /// </summary>
 /// <remarks>
-///     Every index is non-unique except three. The one on
-///     <c>SecondaryZoneRefreshStates.ZoneId</c> and the two compound indexes on the DHCP custom
+///     Every index is non-unique except four. The ones on
+///     <c>SecondaryZoneRefreshStates.ZoneId</c> and <c>ClusterPeerConfigBackfills.ClusterNodeId</c>
+///     (one backfill request per peer) and the two compound indexes on the DHCP custom
 ///     options (scope and tag, tag rule and tag) are unique. For the custom options,
 ///     <see cref="DhcpCustomOptionUniqueIndexes" /> checks the data and creates the indexes
 ///     first, so this catalog only finds them in place. The other relational unique constraints
@@ -343,6 +344,14 @@ public static class MongoIndexCatalog
             new IndexSet<ClusterSyncTombstoneEntity>().Asc(
                 tombstone => tombstone.EntityType,
                 tombstone => tombstone.EntityKey
+            ),
+            logger,
+            stoppingToken
+        );
+        created += await EnsureCollectionAsync(
+            context.ClusterPeerConfigBackfills,
+            new IndexSet<ClusterPeerConfigBackfillEntity>().Unique(request =>
+                request.ClusterNodeId
             ),
             logger,
             stoppingToken

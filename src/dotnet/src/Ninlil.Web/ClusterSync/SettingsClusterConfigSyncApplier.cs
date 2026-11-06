@@ -22,6 +22,14 @@ namespace Ninlil.Web.ClusterSync;
 ///     <c>ClusterConfigSyncApplierBase&lt;TEntity&gt;</c> because it needs
 ///     <see cref="RuntimeConfigurationOptions" />, which only <c>Ninlil.Web</c> declares, so it is
 ///     registered in <c>Program.cs</c> rather than by <c>AddNinlilDnsServerClusterSync</c>.
+///     <para>
+///         It applies a live envelope (the keys one write changed, from
+///         <see cref="ClusterConfigSyncSettingsRecorder" />) and a backfill envelope (every
+///         catalogued key of a section, from <see cref="SettingsClusterConfigSyncSource" />) the
+///         same way, because both carry a list of <see cref="SettingsSyncEntry" /> values and the
+///         same plaintext secrets. Which keys a section can carry is listed in
+///         <see cref="ClusterSyncedSettingsCatalog" />.
+///     </para>
 /// </summary>
 /// <param name="stateRepository">Reads and writes the sync state of a section.</param>
 /// <param name="unitOfWork">Commits the state write.</param>
