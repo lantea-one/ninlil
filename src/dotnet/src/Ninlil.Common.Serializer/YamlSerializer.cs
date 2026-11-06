@@ -29,7 +29,8 @@ public static class YamlSerializer
     public const string ProblemMimeType = "application/problem+yaml";
 
     /// <summary>
-    ///     This list maintains our custom YAML type converters.
+    ///     This list holds the YAML type converters added to every serializer and deserializer this
+    ///     class builds. It is read and changed only under <see cref="_gate" />.
     /// </summary>
     private static readonly List<IYamlTypeConverter> Converters =
     [
@@ -50,8 +51,16 @@ public static class YamlSerializer
     ];
 
     /// <summary>
+    ///     This lock guards <see cref="Converters" />. <see cref="AddConverter(IYamlTypeConverter)" />
+    ///     changes the list while other threads build serializers from it, and enumerating a list
+    ///     while it changes throws <see cref="InvalidOperationException" />.
+    /// </summary>
+    private static readonly object _gate = new();
+
+    /// <summary>
     ///     This method adds a <paramref name="converter" /> to the list
-    ///     of default YAML converters if it doesn't already exist.
+    ///     of default YAML converters if it doesn't already exist. It is safe to call from several
+    ///     threads, also while other threads serialize.
     /// </summary>
     /// <param name="converter">The YAML converter to add.</param>
     /// <exception cref="ArgumentNullException">
@@ -62,9 +71,23 @@ public static class YamlSerializer
         // Ensure we have a converter to add.
         ArgumentNullException.ThrowIfNull(converter);
 
-        // Ensure the converter isn't already registered.
-        if (Converters.All(c => c.GetType() != converter.GetType()))
-            Converters.Add(converter);
+        lock (_gate)
+        {
+            // Ensure the converter isn't already registered.
+            if (Converters.All(c => c.GetType() != converter.GetType()))
+                Converters.Add(converter);
+        }
+    }
+
+    /// <summary>
+    ///     This method copies <see cref="Converters" /> under the lock, so a builder enumerates a
+    ///     snapshot that no other thread changes.
+    /// </summary>
+    /// <returns>The converters registered at the time of the call.</returns>
+    private static IYamlTypeConverter[] SharedConverters()
+    {
+        lock (_gate)
+            return [.. Converters];
     }
 
     /// <summary>
@@ -140,8 +163,9 @@ public static class YamlSerializer
             .WithDuplicateKeyChecking()
             .WithEnforceRequiredMembers();
 
-        // Iterate over our custom YAML type converters and add them to the deserializer builder.
-        Converters.ForEach(c => builder.WithTypeConverter(c));
+        // Add a snapshot of our custom YAML type converters to the deserializer builder.
+        foreach (IYamlTypeConverter converter in SharedConverters())
+            builder.WithTypeConverter(converter);
 
         // We're done, build and return the deserializer.
         return builder.Build();
@@ -161,8 +185,9 @@ public static class YamlSerializer
             .WithIndentedSequences()
             .WithNamingConvention(CamelCaseNamingConvention.Instance);
 
-        // Iterate over our custom YAML type converters and add them to the serializer builder.
-        Converters.ForEach(c => builder.WithTypeConverter(c));
+        // Add a snapshot of our custom YAML type converters to the serializer builder.
+        foreach (IYamlTypeConverter converter in SharedConverters())
+            builder.WithTypeConverter(converter);
 
         // We're done, build and return the serializer.
         return builder.Build();
