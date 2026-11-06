@@ -1,0 +1,24 @@
+# Line endings for every checkout, whatever the local core.autocrlf setting.
+#
+# Every text file is stored and checked out with LF, so a Windows clone with Git's default
+# core.autocrlf=true still passes the format checks (Prettier and CSharpier expect LF). Git
+# detects text and binary files itself; the binary types below are listed so it never guesses.
+# The tree holds no file that must be CRLF; a Windows-only script that needs CRLF (.bat, .cmd)
+# gets its own line here.
+
+* text=auto eol=lf
+
+*.br binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pfx binary
+*.p12 binary
+*.zip binary
+*.gz binary
+*.dll binary
+*.exe binary
