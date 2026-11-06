@@ -20,8 +20,8 @@ public static class LocalAddresses
 
     /// <summary>
     ///     This constant is how many ports <see cref="GetFreePort" /> and the listen-address tests
-    ///     try before they give up. It is above the largest run of ports Windows can refuse in a
-    ///     row (see <see cref="GetFreePort" />).
+    ///     try before they give up. It is set above the longest run of refused ports observed on
+    ///     Windows (see <see cref="GetFreePort" />).
     /// </summary>
     public const int PortSearchLimit = 2000;
 
@@ -38,13 +38,16 @@ public static class LocalAddresses
     ///     to be reserved first and released before they bind it; <see cref="StartOnFreePortAsync{T}" />
     ///     retries a host whose bind lost that race.
     ///     <para>
-    ///         Windows keeps separate excluded port ranges for UDP and TCP, and hands out
-    ///         port-0 binds in sequence. A UDP bind to port 0 can therefore return a port inside
-    ///         a TCP-excluded block, and the next hundreds of UDP ports sit in the same block
-    ///         (adjacent blocks of 100 ports each can make a run of 500 ports), so the TCP bind
-    ///         of the same number is refused with "access permissions" (WSAEACCES) every time
-    ///         until the sequence leaves the block. A refused pair is skipped at once, with no
-    ///         pause, and the search goes on past the whole run.
+    ///         Windows keeps separate excluded port ranges for UDP and TCP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=tcp</c> lists them) and hands
+    ///         out port-0 binds in sequence. A UDP bind to port 0 can therefore return a port
+    ///         inside a TCP-excluded range, the following UDP ports lie in the same range, and
+    ///         the TCP bind of the same number is refused with "access permissions" (WSAEACCES)
+    ///         until the sequence leaves it. On one Windows test host the TCP list held five
+    ///         adjacent 100-port ranges (51111 to 51610), and a probe saw runs of refused
+    ///         pairs lasting up to about 8 seconds. A refused pair is skipped at once, with no
+    ///         pause, and the search goes on until <see cref="PortSearchLimit" />, which is set
+    ///         well above such a run.
     ///     </para>
     /// </summary>
     public static int GetFreePort()
