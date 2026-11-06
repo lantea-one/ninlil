@@ -44,19 +44,28 @@ fi
 # matches the checkout's docker/ci.Dockerfile; an unchanged file costs nothing because every layer
 # is cached. The build output is shown only if it fails.
 build_log="$(mktemp)"
-trap 'rm -f "${build_log}"' EXIT
+image_id_file="$(mktemp)"
+trap 'rm -f "${build_log}" "${image_id_file}"' EXIT
 if ! docker build --progress=plain "${platform[@]}" --target "${toolchain}" --tag "${image}" \
-    --label "ninlil.builder=${toolchain}" \
+    --label "ninlil.builder=${toolchain}" --iidfile "${image_id_file}" \
     - < "${repository_root}/docker/ci.Dockerfile" > "${build_log}" 2>&1; then
     cat "${build_log}" >&2
     exit 1
 fi
 rm -f "${build_log}"
 
+# The container runs the exact image this call built, by ID, not by tag: a job on another branch
+# with a different Dockerfile can move the shared tag between the build and the run.
+image_id="$(cat "${image_id_file}")"
+rm -f "${image_id_file}"
+
 # A changed Dockerfile leaves the previous build of this toolchain untagged on the runner. Remove
 # those: the filter matches only untagged images carrying this toolchain's builder label, so the
-# runner's other images stay, and Docker keeps any image a running container still uses.
-docker image prune --force --filter "label=ninlil.builder=${toolchain}" > /dev/null 2>&1 || true
+# runner's other images stay. Only builds older than an hour go, so a concurrent job that has just
+# built an image and not yet started it never loses it; Docker also keeps any image a container
+# still uses.
+docker image prune --force --filter "label=ninlil.builder=${toolchain}" --filter "until=1h" \
+    > /dev/null 2>&1 || true
 
 arguments=(
     --rm
@@ -92,4 +101,4 @@ if [[ "${docker_socket}" == 'true' ]]; then
     )
 fi
 
-exec docker run "${arguments[@]}" "${image}" "$@"
+exec docker run "${arguments[@]}" "${image_id}" "$@"
