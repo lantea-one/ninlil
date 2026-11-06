@@ -369,7 +369,9 @@ public sealed class KeyRingProtectionTests : IDisposable
             string xml = File.ReadAllText(
                 Assert.Single(Directory.GetFiles(ringDirectory, "key-*.xml"))
             );
-            Assert.DoesNotContain("<value>", xml);
+            // DPAPI keeps its ciphertext in a <value> element too, so only a bare <masterKey>
+            // marks a plaintext key here.
+            Assert.DoesNotContain("<masterKey", xml);
             Assert.Contains("DpapiXmlDecryptor", xml);
         }
 
