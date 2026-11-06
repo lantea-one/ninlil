@@ -4070,11 +4070,13 @@ not copy them either.
    in step 6 of "Before you start".
 
    1. Use `<token-a>`. It works on node B, because both nodes share the JWT key and node A's
-      administrator account exists on node B. Do not use node B's own token: it belongs to
-      the account you delete. Both nodes hold an account named `admin`. The one that lost the
-      tie is renamed to `admin-conflict-<node-id>`, and its `clusterConflictNote` says so. The
-      same holds for the role.
-   2. Delete node B's own account and role by the ids you noted:
+      administrator account exists on node B. Do not use node B's own token: it belongs to the
+      account you delete.
+   2. List the accounts and roles on node B. Node A's `admin` account and `Administrators` role
+      exist there next to node B's own. The pair that lost the newest-write comparison is
+      renamed to `<name>-conflict-<node-id>` (the node id has 32 hex digits and no dashes) and
+      has a `clusterConflictNote`. The renamed pair is node B's own or node A's, depending on which was written later.
+   3. Delete node B's own account and role by the ids you noted:
 
       ```bash
       curl -k -X DELETE https://<node-b>/api/users/<bootstrap-user-id> -H 'Authorization: Bearer <token-a>'
@@ -4082,8 +4084,11 @@ not copy them either.
       ```
 
       Each answers `204`.
-   3. If node A's account or role was the one renamed, give it its name back with
-      `PUT /api/users/<id>` or `PUT /api/roles/<id>`.
+   4. If node A's pair was the one renamed, it keeps its `-conflict-` name on node B. A user name
+      and a role name cannot be edited (`PUT /api/users/<id>` changes the display name, email and
+      disabled flag only, and `PUT /api/roles/<id>` the description only). Sign in on node B as
+      `admin-conflict-<node-id>` with node A's password, or create an account with the plain name
+      and move the roles to it.
 
 **Switch on an event broker** (optional). Do this on every node that should share events.
 
@@ -4258,14 +4263,22 @@ Each command below runs on node A unless it says otherwise.
   `Unreachable`, each mark that peer as owed a backfill. The next heartbeat that reaches the peer
   starts a full pass, which also covers every other change the peer missed. Nothing is queued per
   change. A `Joining` peer is not marked: the join backfill covers it.
-- **A failed or interrupted backfill runs again from the start.** The mark stays until every
-  item was delivered. The next successful heartbeat repeats the whole pass, and an item the peer
-  already holds is dropped there. The first failed delivery stops the pass.
+- **A failed or interrupted backfill runs again from the start, after a growing wait.** The mark
+  stays until every item was delivered. Once the wait below has passed, the next successful
+  heartbeat repeats the whole pass, and an item the peer already holds is dropped there. The
+  first failed delivery stops the pass.
+  - A request with no failed pass starts at the first successful heartbeat. A peer that was only
+    unreachable heals this way.
+  - After `n` failed passes, the next pass starts only at the time of the last failed attempt plus
+    the heartbeat interval times 2 to the power `n-1`, at most 1 hour. With the default 30-second
+    heartbeat the waits are 30, 60 and 120 seconds, and so on, up to 1 hour.
+  - Another missed change does not shorten the wait. A pass that succeeds resets it.
 - **Newer wins, and a tie settles the same way on every node.** The receiving node compares each
   item's last-change time and, on a tie, the id of the node that made the change. Data the joining
   node already holds merges under the same rule. A user or role with the same name but another id
-  is not merged: the loser is renamed to `<name>-conflict-<node-id>` and carries a
-  `clusterConflictNote`. A fresh node holds its bootstrap `admin` account and `Administrators`
+  is not merged: the one that loses the newest-write comparison (only an exact tie uses the node
+  id) is renamed to `<name>-conflict-<node-id>`, with the id as 32 hex digits and no dashes, and
+  carries a `clusterConflictNote`. The renamed name stays. A fresh node holds its bootstrap `admin` account and `Administrators`
   role, so every join renames one pair. Delete node B's own pair after the join, as in step 6 of
   "Form a cluster".
 - **Settings come from the inviter's runtime configuration file.** A section is sent when it was
@@ -4273,7 +4286,8 @@ Each command below runs on node A unless it says otherwise.
   variable pins on node A is not sent unless the file holds it, and a value pinned on node B stays
   on node B.
 - **Watch a backfill in the log.** The runner logs under the category
-  `Ninlil.Dns.Server.Cluster.Backfill.ClusterConfigBackfillRunner`. There is no API field or
+  `Ninlil.Dns.Server.Cluster.Backfill.ClusterConfigBackfillRunner` (the deferral line comes from
+  the heartbeat service, see the table). There is no API field or
   console view for it. Search the log for these lines:
 
   | Line | Meaning |
@@ -4281,7 +4295,8 @@ Each command below runs on node A unless it says otherwise.
   | `Config backfill to peer node '<name>' started.` | A pass began. |
   | `Config backfill to peer node '<name>' done: <n> items delivered.` | Every item got a 2xx answer. |
   | `Config backfill to peer node '<name>' failed after <n> items: <reason> It runs again after the next successful heartbeat.` | A delivery failed. |
-  | `Peer node '<name>' rejected a config-sync envelope for <type> '<key>' with HTTP <code>.` | The peer answered an item with a non-2xx code (category `ClusterConfigSyncBroadcaster`). |
+  | `Config backfill to peer node '<name>' is deferred until <time> after <n> failed attempts.` | The wait after failed passes has not passed. Logged once per wait (category `Ninlil.Dns.Server.Cluster.Heartbeat.ClusterHeartbeatBackgroundService`). |
+  | `Peer node '<name>' rejected a config-sync envelope for <type> '<key>' with HTTP <code>.` | The peer answered an item with a non-2xx code (category `Ninlil.Dns.Server.Cluster.Channel.ClusterConfigSyncBroadcaster`). |
 
 - **Limits of the backfill.**
   - Membership is pairwise and a node does not relay changes. If node B joins through node A in a
