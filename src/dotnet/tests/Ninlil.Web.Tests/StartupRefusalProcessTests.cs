@@ -91,6 +91,53 @@ public sealed class StartupRefusalProcessTests : IDisposable
     }
 
     /// <summary>
+    ///     A key ring certificate file that does not exist stops the process with exit code 78
+    ///     and a message that names the setting, instead of starting with unencrypted keys.
+    /// </summary>
+    [Fact]
+    public async Task Startup_WithAMissingKeyRingCertificate_ExitsWith78NamingTheSetting()
+    {
+        (int exitCode, string text) = await RunUntilExitAsync(
+            Path.Combine(_directory, "unused.sqlite3"),
+            new Dictionary<string, string>
+            {
+                ["NINLIL_DATA_PROTECTION_CERTIFICATE_PATH"] = Path.Combine(
+                    _directory,
+                    "missing.pfx"
+                ),
+            }
+        );
+
+        Assert.True(exitCode == 78, $"Exit code {exitCode}. Output: {text}");
+        Assert.Contains("DataProtection:CertificatePath", text);
+    }
+
+    /// <summary>
+    ///     A key ring certificate with the wrong password stops the process with exit code 78,
+    ///     names both settings and prints neither password.
+    /// </summary>
+    [Fact]
+    public async Task Startup_WithAWrongKeyRingCertificatePassword_ExitsWith78WithoutThePassword()
+    {
+        string pfx = Path.Combine(_directory, "ring.pfx");
+        Fakes.KeyRingTestCertificates.WriteRsaPfx(pfx, "correct-horse");
+
+        (int exitCode, string text) = await RunUntilExitAsync(
+            Path.Combine(_directory, "unused.sqlite3"),
+            new Dictionary<string, string>
+            {
+                ["NINLIL_DATA_PROTECTION_CERTIFICATE_PATH"] = pfx,
+                ["NINLIL_DATA_PROTECTION_CERTIFICATE_PASSWORD"] = "battery-staple",
+            }
+        );
+
+        Assert.True(exitCode == 78, $"Exit code {exitCode}. Output: {text}");
+        Assert.Contains("DataProtection:CertificatePassword", text);
+        Assert.DoesNotContain("battery-staple", text);
+        Assert.DoesNotContain("correct-horse", text);
+    }
+
+    /// <summary>
     ///     This method starts the built host as a child process on a SQLite database, waits for it
     ///     to exit and returns the exit code with everything it printed.
     /// </summary>

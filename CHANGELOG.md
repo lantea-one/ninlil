@@ -11,6 +11,31 @@ outside Forgejo.
 
 ## Unreleased
 
+### Security
+
+- **The Data Protection key ring is encrypted at rest.** Set `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`
+  (an RSA certificate in a PFX file) to encrypt it with that certificate on every platform;
+  `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PATH` keeps entries written under the old certificate
+  readable after a change. With no certificate, Windows encrypts it with DPAPI for the account that
+  runs Ninlil, which cannot be read on another machine or account. Elsewhere it stays unencrypted in
+  an owner-only folder. A certificate setting that does not work stops the start with exit code 78.
+  A restore refuses a backup whose key ring this server cannot read and names the setting to fix.
+  See [Encrypt the key ring](./README.md#security) and
+  [`ENVIRONMENT.md`](./ENVIRONMENT.md#data-protection-key-ring).
+  ([#42](https://git.lantea.one/lantea-one/ninlil/issues/42))
+
+### Accepted risks
+
+- **The JWT signing key is stored unencrypted at rest, and so is the Data Protection key ring when no
+  certificate is set on Linux and macOS.** Both live in the data directory. On Linux and macOS
+  Ninlil sets the folder to mode 0700 and the files to 0600; on Windows you restrict the folder with
+  `icacls`. Anyone who can read the whole data directory can mint tokens for any enabled account,
+  and, with an unencrypted key ring, decrypt the stored secrets (TSIG secrets, DNSSEC private keys,
+  cloud credentials, TOTP keys, the ACME account key). Set a Data Protection certificate to encrypt
+  the key ring. Keep the data directory readable by the administrators of the host only, and protect
+  backups with a passphrase. See [Security](./README.md#security).
+  ([#42](https://git.lantea.one/lantea-one/ninlil/issues/42))
+
 ### Deprecated
 
 - **The identity settings lockout fields are deprecated.** `defaultLockoutTimeSpan`,
