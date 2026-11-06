@@ -51,40 +51,52 @@ public sealed class PlainListenAddressTests
         //
         // The UDP socket picks the port and TCP follows it. Windows can refuse a UDP bind on a
         // port that a TCP port-0 bind returned (WSAEACCES, a reserved or excluded range), so the
-        // UDP side goes first. The TCP bind of the same number can still fail when another
-        // process holds it, so the pair is retried a bounded number of times.
+        // UDP side goes first. Its port-0 binds then walk through a TCP-excluded block of
+        // hundreds of ports, so a refused TCP bind moves on to the next port, up to
+        // LocalAddresses.PortSearchLimit times (see LocalAddresses.GetFreePort). The TCP bind
+        // of the same number can also fail when another process holds it.
         Socket udpOccupant = null;
         Socket tcpOccupant = null;
         int port = 0;
 
         for (int attempt = 1; tcpOccupant is null; attempt++)
         {
-            udpOccupant = new Socket(
+            Socket udpCandidate = new(
                 AddressFamily.InterNetworkV6,
                 SocketType.Dgram,
                 ProtocolType.Udp
             );
-            udpOccupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-            udpOccupant.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
-            port = ((IPEndPoint)udpOccupant.LocalEndPoint).Port;
-
-            Socket candidate = new(
+            Socket tcpCandidate = new(
                 AddressFamily.InterNetworkV6,
                 SocketType.Stream,
                 ProtocolType.Tcp
             );
-            candidate.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
 
             try
             {
-                candidate.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
-                candidate.Listen();
-                tcpOccupant = candidate;
+                udpCandidate.SetSocketOption(
+                    SocketOptionLevel.IPv6,
+                    SocketOptionName.IPv6Only,
+                    false
+                );
+                udpCandidate.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+                port = ((IPEndPoint)udpCandidate.LocalEndPoint).Port;
+
+                tcpCandidate.SetSocketOption(
+                    SocketOptionLevel.IPv6,
+                    SocketOptionName.IPv6Only,
+                    false
+                );
+                tcpCandidate.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+                tcpCandidate.Listen();
+
+                udpOccupant = udpCandidate;
+                tcpOccupant = tcpCandidate;
             }
-            catch (SocketException) when (attempt < 10)
+            catch (SocketException) when (attempt < LocalAddresses.PortSearchLimit)
             {
-                candidate.Dispose();
-                udpOccupant.Dispose();
+                tcpCandidate.Dispose();
+                udpCandidate.Dispose();
             }
         }
 
@@ -124,7 +136,7 @@ public sealed class PlainListenAddressTests
         Assert.Equal(ExpectedAnswer.GetAddressBytes(), udpAnswer.Answers[0].Data.ToArray());
         Assert.NotNull(await QueryTcpAsync(IPAddress.Loopback, listeners.Port));
 
-        Assert.Null(await QueryUdpAsync(other, listeners.Port));
+        Assert.Null(await QueryUdpAsync(other, listeners.Port, expectAnswer: false));
         Assert.Null(await QueryTcpAsync(other, listeners.Port));
     }
 
@@ -191,7 +203,8 @@ public sealed class PlainListenAddressTests
     public async Task OnlyUnusableAddresses_StaysDownWithoutThrowing()
     {
         await using RunningListeners listeners = await RunningListeners.StartAsync(
-            LocalAddresses.Unassigned.ToString()
+            LocalAddresses.Unassigned.ToString(),
+            expectBound: false
         );
 
         Assert.False(listeners.Udp.IsListening);
@@ -208,17 +221,25 @@ public sealed class PlainListenAddressTests
     }
 
     /// <summary>
-    ///     This method sends one query over UDP and waits briefly for the answer, returning
-    ///     <see langword="null" /> when nothing answers (a timeout, or the ICMP "port unreachable"
-    ///     a closed port sends back).
+    ///     This method sends one query over UDP and returns the answer, or <see langword="null" />
+    ///     when nothing answers (a timeout, or the ICMP "port unreachable" a closed port sends
+    ///     back). A query that must be answered waits as long as a loaded machine needs; a query
+    ///     that must not be answered waits only <see cref="NoAnswerWindow" />, since a longer wait
+    ///     cannot make that check stronger on a fast machine and only slows the test.
     /// </summary>
-    private static async Task<DnsMessage> QueryUdpAsync(IPAddress address, int port)
+    private static async Task<DnsMessage> QueryUdpAsync(
+        IPAddress address,
+        int port,
+        bool expectAnswer = true
+    )
     {
         using UdpClient client = new(address.AddressFamily);
         client.Connect(address, port);
         await client.SendAsync(DnsMessageWriter.Write(BuildQuery()));
 
-        using CancellationTokenSource timeout = new(NoAnswerWindow);
+        using CancellationTokenSource timeout = new(
+            expectAnswer ? TimeSpan.FromSeconds(30) : NoAnswerWindow
+        );
 
         try
         {
@@ -298,12 +319,41 @@ public sealed class PlainListenAddressTests
 
         public CapturingLogger<TcpDnsListener> TcpLogger { get; } = new();
 
+        /// <summary>
+        ///     This method starts both listeners with the given listen addresses. With no
+        ///     <paramref name="port" /> it picks a free one and, when the listeners lose it to
+        ///     another process between the pick and the bind, starts again on another. It does
+        ///     not retry when the test brings its own port (the test is about that port being
+        ///     taken) or when <paramref name="expectBound" /> is <see langword="false" /> (the
+        ///     test expects nothing to bind).
+        /// </summary>
         public static async Task<RunningListeners> StartAsync(
             string listenAddresses,
-            int? port = null
+            int? port = null,
+            bool expectBound = true
         )
         {
-            RunningListeners running = new() { Port = port ?? LocalAddresses.GetFreePort() };
+            if (port is not null)
+                return await StartOnPortAsync(listenAddresses, port.Value);
+
+            return await LocalAddresses.StartOnFreePortAsync(async freePort =>
+            {
+                RunningListeners running = await StartOnPortAsync(listenAddresses, freePort);
+
+                if (!expectBound || (running.Udp.IsListening && running.Tcp.IsListening))
+                    return running;
+
+                await running.DisposeAsync();
+                return null;
+            });
+        }
+
+        private static async Task<RunningListeners> StartOnPortAsync(
+            string listenAddresses,
+            int port
+        )
+        {
+            RunningListeners running = new() { Port = port };
 
             running._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher(
@@ -334,9 +384,23 @@ public sealed class PlainListenAddressTests
             await running.Udp.StartAsync(CancellationToken.None);
             await running.Tcp.StartAsync(CancellationToken.None);
 
-            // BackgroundService runs ExecuteAsync (which binds) as a continuation, so give both
-            // listeners a moment to bind before the test sends anything.
-            await Task.Delay(200);
+            // The listeners bind in ExecuteAsync, which may run after StartAsync returns, so wait
+            // for each to report an outcome: listening, or at least one address that failed (and
+            // is logged by then). A fixed delay is too short on a loaded machine.
+            using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
+
+            while (
+                !(running.Udp.IsListening || running.Udp.FailedListenAddresses.Count > 0)
+                || !(running.Tcp.IsListening || running.Tcp.FailedListenAddresses.Count > 0)
+            )
+            {
+                Assert.False(
+                    deadline.IsCancellationRequested,
+                    "The listeners did not report a bind outcome in time."
+                );
+                await Task.Delay(10);
+            }
+
             return running;
         }
 
