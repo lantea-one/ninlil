@@ -545,6 +545,39 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.ToTable("NinlilDnsClusterNodes", (string)null);
             });
 
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterPeerConfigBackfillEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uniqueidentifier");
+
+                b.Property<int>("AttemptCount")
+                    .HasColumnType("int");
+
+                b.Property<Guid>("ClusterNodeId")
+                    .HasColumnType("uniqueidentifier");
+
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("datetimeoffset");
+
+                b.Property<DateTimeOffset?>("LastAttemptAtUtc")
+                    .HasColumnType("datetimeoffset");
+
+                b.Property<string>("LastError")
+                    .HasMaxLength(1000)
+                    .HasColumnType("nvarchar(1000)");
+
+                b.Property<DateTimeOffset>("RequestedAtUtc")
+                    .HasColumnType("datetimeoffset");
+
+                b.HasKey("Id");
+
+                b.HasIndex("ClusterNodeId")
+                    .IsUnique();
+
+                b.ToTable("NinlilDnsClusterPeerConfigBackfills", (string)null);
+            });
+
         modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncTombstoneEntity", b =>
             {
                 b.Property<Guid>("Id")
@@ -2094,6 +2127,15 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
                     .WithMany()
                     .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterPeerConfigBackfillEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity", null)
+                    .WithMany()
+                    .HasForeignKey("ClusterNodeId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
             });

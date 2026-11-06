@@ -34,13 +34,33 @@ namespace Ninlil.Dns.Server.Backup.Catalog;
 ///         restore or an engine switch a missing row starts a fresh Expire interval); and
 ///         <see cref="WebhookDeliveryAttemptEntity" /> (webhook delivery history). Cluster sync
 ///         tombstones (<see cref="ClusterSyncTombstoneEntity" />) are left out too: they only
-///         guard against stale changes still in flight between peers. A new
+///         guard against stale changes still in flight between peers, and the pending config backfill
+///         requests (<see cref="ClusterPeerConfigBackfillEntity" />) are left out because a restored
+///         node starts with no peer owed a push. A new
 ///         configuration entity belongs in this catalog; only a new history table belongs in
 ///         this list.
 ///     </para>
 /// </summary>
 public static class BackupEntityCatalog
 {
+    /// <summary>
+    ///     This property contains every entity type a backup leaves out on purpose: history,
+    ///     telemetry, node-local state and cluster sync bookkeeping (see the class summary). An
+    ///     entity type in neither this list nor <see cref="Entries" /> fails the catalogue
+    ///     completeness test, so a new entity is always classified.
+    /// </summary>
+    public static IReadOnlyList<Type> ExcludedEntityTypes { get; } =
+    [
+        typeof(LogEntity),
+        typeof(MetricEntity),
+        typeof(ZoneChangeJournalEntryEntity),
+        typeof(DnsQueryLogEntryEntity),
+        typeof(SecondaryZoneRefreshStateEntity),
+        typeof(WebhookDeliveryAttemptEntity),
+        typeof(ClusterSyncTombstoneEntity),
+        typeof(ClusterPeerConfigBackfillEntity),
+    ];
+
     /// <summary>
     ///     This property contains every entity type a backup covers, ordered so that importing
     ///     forward or wiping in reverse never violates a foreign key.

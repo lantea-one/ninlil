@@ -91,6 +91,7 @@ public sealed class MongoIndexCatalogTests(MongoDbEngineFixture fixture)
         ["NinlilDhcpScopeCustomOptions"] = ["ScopeId:1,OptionTag:1"],
         ["NinlilDhcpTagRuleOptions"] = ["TagRuleId:1,OptionTag:1"],
         ["NinlilDnsClusterNodes"] = ["RemoteNodeId:1"],
+        ["NinlilDnsClusterPeerConfigBackfills"] = ["ClusterNodeId:1"],
         ["NinlilDnsClusterSyncTombstones"] = ["EntityType:1,EntityKey:1"],
         ["NinlilDnsClusterSyncedSettingsStates"] = ["SectionName:1"],
     };

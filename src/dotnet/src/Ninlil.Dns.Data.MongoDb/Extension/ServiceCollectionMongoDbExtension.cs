@@ -204,6 +204,10 @@ public static class ServiceCollectionMongoDbExtension
             ClusterSyncedSettingsStateMongoRepository
         >();
         instance.AddScoped<IClusterSyncTombstoneRepository, ClusterSyncTombstoneMongoRepository>();
+        instance.AddScoped<
+            IClusterPeerConfigBackfillRepository,
+            ClusterPeerConfigBackfillMongoRepository
+        >();
 
         return instance;
     }
