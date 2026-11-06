@@ -137,7 +137,7 @@ public class ClusterController(
     ///     This action removes a peer from this node's registry only. The peer is not told and
     ///     keeps its own entry for this node, so a clean two-sided break means removing the
     ///     relationship on both nodes. The peer's channel TSIG key goes with it, in the same save,
-    ///     so the peer can no longer authenticate, and so is its pending config backfill request; the key API refuses to delete a cluster key
+    ///     so the peer can no longer authenticate; the key API refuses to delete a cluster key
     ///     any other way. A key of the same name that is not linked to this peer is left alone.
     ///     Returns 404 for an unknown id. Requires
     ///     <c>clusternodes:write</c>.
