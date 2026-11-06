@@ -267,7 +267,7 @@ public class ZonesController(
         }
 
         if (patch.TryGetMergePatchField("type", out JsonElement type))
-            zone.Type = JsonSerializer.Deserialize<ZoneTypeEnum>(type.GetRawText());
+            zone.Type = type.GetEnumName<ZoneTypeEnum>("type");
 
         if (patch.TryGetMergePatchField("isDnssecSigned", out JsonElement isDnssecSigned))
             zone.IsDnssecSigned = isDnssecSigned.GetBoolean();
@@ -277,7 +277,7 @@ public class ZonesController(
             zone.DnssecAlgorithm =
                 dnssecAlgorithm.ValueKind == JsonValueKind.Null
                     ? null
-                    : JsonSerializer.Deserialize<DnssecAlgorithmEnum>(dnssecAlgorithm.GetRawText());
+                    : dnssecAlgorithm.GetEnumName<DnssecAlgorithmEnum>("dnssecAlgorithm");
             ValidateDnssecAlgorithm(zone.DnssecAlgorithm);
         }
 
@@ -288,8 +288,8 @@ public class ZonesController(
             )
         )
             zone.DenialOfExistenceMode =
-                JsonSerializer.Deserialize<DnssecDenialOfExistenceModeEnum>(
-                    denialOfExistenceMode.GetRawText()
+                denialOfExistenceMode.GetEnumName<DnssecDenialOfExistenceModeEnum>(
+                    "denialOfExistenceMode"
                 );
 
         if (patch.TryGetMergePatchField("nsec3Iterations", out JsonElement nsec3Iterations))
@@ -441,8 +441,8 @@ public class ZonesController(
         }
 
         if (patch.TryGetMergePatchField("transferTransport", out JsonElement transferTransport))
-            zone.TransferTransport = JsonSerializer.Deserialize<ZoneTransferTransportEnum>(
-                transferTransport.GetRawText()
+            zone.TransferTransport = transferTransport.GetEnumName<ZoneTransferTransportEnum>(
+                "transferTransport"
             );
 
         zone.UpdatedAtUtc = DateTimeOffset.UtcNow;

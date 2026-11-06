@@ -242,8 +242,8 @@ public class CloudProviderCredentialsController(
 
         CloudDnsProviderTypeEnum providerType = credential.ProviderType;
         if (patch.TryGetMergePatchField("providerType", out JsonElement providerTypeElement))
-            providerType = JsonSerializer.Deserialize<CloudDnsProviderTypeEnum>(
-                providerTypeElement.GetRawText()
+            providerType = providerTypeElement.GetEnumName<CloudDnsProviderTypeEnum>(
+                "providerType"
             );
 
         if (patch.TryGetMergePatchField("credentials", out JsonElement credentialsElement))

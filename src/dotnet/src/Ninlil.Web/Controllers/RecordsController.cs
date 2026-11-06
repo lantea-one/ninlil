@@ -259,9 +259,7 @@ public class RecordsController(
         // type; one that changes both is checked against the new type.
         DnsResourceRecordTypeEnum effectiveType = existingRecord.Type;
         if (patch.TryGetMergePatchField("type", out JsonElement type))
-            effectiveType = System.Text.Json.JsonSerializer.Deserialize<DnsResourceRecordTypeEnum>(
-                type.GetRawText()
-            );
+            effectiveType = type.GetEnumName<DnsResourceRecordTypeEnum>("type");
 
         string patchedName = existingRecord.Name;
         if (patch.TryGetMergePatchField("name", out JsonElement patchName))
@@ -306,9 +304,7 @@ public class RecordsController(
                     record.Type = effectiveType;
 
                     if (patch.TryGetMergePatchField("class", out JsonElement dnsClass))
-                        record.Class = System.Text.Json.JsonSerializer.Deserialize<DnsClassEnum>(
-                            dnsClass.GetRawText()
-                        );
+                        record.Class = dnsClass.GetEnumName<DnsClassEnum>("class");
 
                     if (
                         patch.TryGetMergePatchField(

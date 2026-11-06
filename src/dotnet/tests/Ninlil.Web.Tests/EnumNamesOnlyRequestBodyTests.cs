@@ -387,6 +387,269 @@ public class EnumNamesOnlyRequestBodyTests(NinlilDnsWebApplicationFactory factor
         await AssertBadRequestNamingAsync(response, "mode", "AutoGenerate");
     }
 
+    private static HttpRequestMessage PatchRequest(string url, string json) =>
+        new(HttpMethod.Patch, url)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+
+    [Theory]
+    [InlineData("type", "\"0\"", "Primary")]
+    [InlineData("type", "\"99\"", "Primary")]
+    [InlineData("type", "0", "Primary")]
+    [InlineData("type", "null", "Primary")]
+    [InlineData("dnssecAlgorithm", "\"13\"", "ECDSAP256SHA256")]
+    [InlineData("denialOfExistenceMode", "\"1\"", "NSEC3")]
+    [InlineData("transferTransport", "\"0\"", "Plain")]
+    public async Task PatchZone_WithADigitStringForAnEnumField_ReturnsBadRequestListingTheValidNames(
+        string field,
+        string value,
+        string validName
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        ZoneDetail zone = await CreateZoneAsync(client);
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest($"/api/zones/{zone.Id}", $$"""{"{{field}}":{{value}}}""")
+            );
+
+            await AssertBadRequestNamingAsync(response, field, validName);
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/zones/{zone.Id}");
+        }
+    }
+
+    [Fact]
+    public async Task PatchZone_WithTheConsoleWireNames_Succeeds()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        ZoneDetail zone = await CreateZoneAsync(client);
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    $"/api/zones/{zone.Id}",
+                    """{"type":"primary","dnssecAlgorithm":"ECDSAP256SHA256","denialOfExistenceMode":"NSEC3","transferTransport":"Plain"}"""
+                )
+            );
+
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/zones/{zone.Id}");
+        }
+    }
+
+    [Theory]
+    [InlineData("type", "\"1\"")]
+    [InlineData("class", "\"1\"")]
+    public async Task PatchRecord_WithADigitStringTypeOrClass_ReturnsBadRequest(
+        string field,
+        string value
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        ZoneDetail zone = await CreateZoneAsync(client);
+
+        try
+        {
+            HttpResponseMessage create = await client.PostAsJsonAsync(
+                $"/api/zones/{zone.Id}/records",
+                new
+                {
+                    name = zone.Name,
+                    type = "SOA",
+                    timeToLiveSeconds = 3600,
+                    data = new
+                    {
+                        primaryNameServer = $"ns1.{zone.Name}",
+                        responsiblePersonMailbox = $"admin.{zone.Name}",
+                        serial = 100,
+                        refreshSeconds = 3600,
+                        retrySeconds = 600,
+                        expireSeconds = 604800,
+                        minimumTtlSeconds = 300,
+                    },
+                }
+            );
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+            using JsonDocument record = JsonDocument.Parse(
+                await create.Content.ReadAsStringAsync()
+            );
+            string recordId = record.RootElement.GetProperty("id").GetString();
+
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    $"/api/zones/{zone.Id}/records/{recordId}",
+                    $$"""{"{{field}}":{{value}}}"""
+                )
+            );
+
+            await AssertBadRequestNamingAsync(response, field, field == "type" ? "SOA" : "IN");
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/zones/{zone.Id}");
+        }
+    }
+
+    [Theory]
+    [InlineData("kind", "Domain")]
+    [InlineData("action", "Block")]
+    [InlineData("source", "Local")]
+    public async Task PatchFilterList_WithADigitStringKindActionOrSource_ReturnsBadRequest(
+        string field,
+        string validName
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/filter-lists",
+            new
+            {
+                name = $"enum-list-{Guid.NewGuid():N}",
+                kind = "Domain",
+                action = "Block",
+                source = "Local",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        FilterListDetail list = await create.Content.ReadFromJsonAsync<FilterListDetail>();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest($"/api/filter-lists/{list.Id}", $$"""{"{{field}}":"1"}""")
+            );
+
+            await AssertBadRequestNamingAsync(response, field, validName);
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/filter-lists/{list.Id}");
+        }
+    }
+
+    [Fact]
+    public async Task PatchWebhook_WithADigitStringAuthMode_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/webhooks",
+            new
+            {
+                name = $"enum-hook-{Guid.NewGuid():N}",
+                targetUrl = "https://example.invalid/hook",
+                eventTypeNames = new[] { "DnsZoneChanged" },
+                isDisabled = true,
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        WebhookSubscriptionDetail hook = (
+            await create.Content.ReadFromJsonAsync<WebhookSubscriptionCreateResponse>()
+        ).Subscription;
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest($"/api/webhooks/{hook.Id}", """{"authMode":"1"}""")
+            );
+
+            await AssertBadRequestNamingAsync(response, "authMode", "Bearer");
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/webhooks/{hook.Id}");
+        }
+    }
+
+    [Fact]
+    public async Task PatchDhcpScope_WithADigitStringKind_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/dhcp-scopes",
+            new
+            {
+                name = $"enum-scope-{Guid.NewGuid():N}",
+                protocolVersion = "IPv4",
+                rangeStartAddress = "192.168.201.1",
+                rangeEndAddress = "192.168.201.10",
+                subnetPrefixLength = 24,
+                defaultLeaseDuration = "1.00:00:00",
+                maxLeaseDuration = "7.00:00:00",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        DhcpScopeDetail scope = await create.Content.ReadFromJsonAsync<DhcpScopeDetail>();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest($"/api/dhcp-scopes/{scope.Id}", """{"kind":"0"}""")
+            );
+
+            await AssertBadRequestNamingAsync(response, "kind", "AddressAssignment");
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/dhcp-scopes/{scope.Id}");
+        }
+    }
+
+    [Fact]
+    public async Task PatchCloudProviderCredential_WithADigitStringProviderType_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        HttpResponseMessage create = await client.PostAsJsonAsync(
+            "/api/cloud-provider-credentials",
+            new
+            {
+                name = $"enum-cred-{Guid.NewGuid():N}",
+                providerType = "Cloudflare",
+                credentials = new Dictionary<string, string> { ["ApiToken"] = "t" },
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        CloudProviderCredentialCreateResponse created =
+            await create.Content.ReadFromJsonAsync<CloudProviderCredentialCreateResponse>();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    $"/api/cloud-provider-credentials/{created.Credential.Id}",
+                    """{"providerType":"1"}"""
+                )
+            );
+
+            await AssertBadRequestNamingAsync(response, "providerType", "Cloudflare");
+        }
+        finally
+        {
+            await client.DeleteAsync($"/api/cloud-provider-credentials/{created.Credential.Id}");
+        }
+    }
+
+    [Fact]
+    public async Task PatchDnssecPolicy_WithADigitStringAllowedAlgorithm_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dnssec-policy-settings", """{"allowedAlgorithms":["13"]}""")
+        );
+
+        await AssertBadRequestNamingAsync(response, "13", "ECDSAP256SHA256");
+    }
+
     [Fact]
     public void RequestBodies_EveryEnumPropertyType_IsReadByTheNameOnlyConverter()
     {

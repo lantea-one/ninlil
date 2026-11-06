@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Web.Serialization;
 
 // Define our namespace.
 namespace Ninlil.Web.Extension;
@@ -362,5 +363,40 @@ public static class JsonElementMergePatchExtension
         throw new ValidationException(
             $"'{fieldPath ?? name}' must be one of: {string.Join(", ", Enum.GetNames<TEnum>())}."
         );
+    }
+
+    private static readonly JsonSerializerOptions enumNameOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new RequestEnumNameJsonConverterFactory() },
+    };
+
+    /// <summary>
+    ///     This method reads an enum field of a merge-patch body by declared name only, with the same
+    ///     rule as a typed request body (see <see cref="RequestEnumNameJsonConverterFactory" />): a
+    ///     member name or declared wire name, in any case, or a comma list of them for a flags type.
+    ///     A number, a digit string, <c>null</c> and an undefined name are refused. Callers handle a
+    ///     nullable field's <c>null</c> before they call it.
+    /// </summary>
+    /// <typeparam name="TEnum">The enumeration type.</typeparam>
+    /// <param name="element">The field's value.</param>
+    /// <param name="fieldPath">The name to use in the error message.</param>
+    /// <returns>The member.</returns>
+    /// <exception cref="ValidationException">
+    ///     The value is not a declared name; the message lists the valid names.
+    /// </exception>
+    public static TEnum GetEnumName<TEnum>(this JsonElement element, string fieldPath)
+        where TEnum : struct, Enum
+    {
+        try
+        {
+            return element.Deserialize<TEnum>(enumNameOptions);
+        }
+        catch (JsonException)
+        {
+            // The list comes from the converter, not Enum.GetNames, so wire names are shown.
+            throw new ValidationException(
+                $"'{fieldPath}' must be one of: {RequestEnumNameJsonConverter<TEnum>.ValidNames}."
+            );
+        }
     }
 }
