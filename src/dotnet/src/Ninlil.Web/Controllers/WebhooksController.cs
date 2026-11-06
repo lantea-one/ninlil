@@ -343,9 +343,7 @@ public class WebhooksController(
 
         WebhookAuthModeEnum authMode = subscription.AuthMode;
         if (patch.TryGetMergePatchField("authMode", out JsonElement authModeElement))
-            authMode = JsonSerializer.Deserialize<WebhookAuthModeEnum>(
-                authModeElement.GetRawText()
-            );
+            authMode = authModeElement.GetEnumName<WebhookAuthModeEnum>("authMode");
 
         if (patch.TryGetMergePatchField("authCredentials", out JsonElement authCredentialsElement))
         {

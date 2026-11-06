@@ -12,6 +12,7 @@ using Ninlil.Web.Examples.Settings;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
 using Ninlil.Web.Options;
+using Ninlil.Web.Serialization;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -102,24 +103,23 @@ public class DnssecPolicySettingsController(
 
         foreach (string item in names)
         {
+            // Each item is read by the same names-only rule as the algorithm field of a key
+            // request, so a wire name such as "RSASHA256" passes and "13" does not. The message
+            // names the item, so the caller sees which entry of the list was refused.
             DnssecAlgorithmEnum algorithm;
-
             try
             {
-                algorithm = JsonSerializer.Deserialize<DnssecAlgorithmEnum>(
-                    JsonSerializer.Serialize(item)
+                algorithm = JsonSerializer
+                    .SerializeToElement(item)
+                    .GetEnumName<DnssecAlgorithmEnum>("allowedAlgorithms");
+            }
+            catch (ValidationException)
+            {
+                throw new ValidationException(
+                    $"'{item}' is not a valid DNSSEC algorithm name. Valid values: "
+                        + $"{RequestEnumNameJsonConverter<DnssecAlgorithmEnum>.ValidNames}."
                 );
             }
-            catch (JsonException)
-            {
-                throw new ValidationException($"'{item}' is not a valid DNSSEC algorithm name.");
-            }
-
-            // EnumDescriptionJsonConverter accepts a number string as any value of the underlying
-            // type (wire codes have no member), so "9999" would pass the JsonException catch.
-            // Enum.IsDefined rejects a number that no algorithm uses.
-            if (!Enum.IsDefined(algorithm))
-                throw new ValidationException($"'{item}' is not a valid DNSSEC algorithm name.");
 
             // A policy cannot allow what the server never signs with.
             if (DnssecAlgorithmRegistry.IsSigningProhibited(algorithm))

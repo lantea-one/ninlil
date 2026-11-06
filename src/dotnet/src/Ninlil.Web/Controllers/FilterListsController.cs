@@ -262,16 +262,14 @@ public class FilterListsController(
         }
 
         if (patch.TryGetMergePatchField("kind", out JsonElement kind))
-            list.Kind = JsonSerializer.Deserialize<DnsFilterListKindEnum>(kind.GetRawText());
+            list.Kind = kind.GetEnumName<DnsFilterListKindEnum>("kind");
 
         if (patch.TryGetMergePatchField("action", out JsonElement action))
-            list.Action = JsonSerializer.Deserialize<DnsFilterListActionEnum>(action.GetRawText());
+            list.Action = action.GetEnumName<DnsFilterListActionEnum>("action");
 
         DnsFilterListSourceEnum source = list.Source;
         if (patch.TryGetMergePatchField("source", out JsonElement sourceElement))
-            source = JsonSerializer.Deserialize<DnsFilterListSourceEnum>(
-                sourceElement.GetRawText()
-            );
+            source = sourceElement.GetEnumName<DnsFilterListSourceEnum>("source");
 
         string subscriptionUrl = list.SubscriptionUrl;
         bool subscriptionUrlPresent = patch.TryGetMergePatchField(

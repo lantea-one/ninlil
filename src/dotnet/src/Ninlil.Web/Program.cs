@@ -95,6 +95,7 @@ using Ninlil.Web.Middleware;
 using Ninlil.Web.OpenApi;
 using Ninlil.Web.Options;
 using Ninlil.Web.Routing;
+using Ninlil.Web.Serialization;
 using Ninlil.Web.Services;
 using Ninlil.Web.Services.Storage;
 using Ninlil.Web.Startup;
@@ -740,8 +741,14 @@ builder.Services.AddExceptionHandler<NinlilExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // MergePatchBodyFilter turns a non-object PATCH body or a wrong-typed field into 400 for every
-// action that takes a [FromBody] JsonElement.
-builder.Services.AddControllers(options => options.Filters.Add<MergePatchBodyFilter>());
+// action that takes a [FromBody] JsonElement. RequestEnumNameJsonConverterFactory makes every
+// request-body enum take declared names only; it is registered for MVC only, so other readers of
+// the shared enum converters (cluster sync, state files) keep their behaviour.
+builder
+    .Services.AddControllers(options => options.Filters.Add<MergePatchBodyFilter>())
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new RequestEnumNameJsonConverterFactory())
+    );
 builder.Services.AddEndpointsApiExplorer();
 
 // Registers every IExamplesProvider<T> and IMultipleExamplesProvider<T> in this assembly (the

@@ -449,7 +449,7 @@ public class DhcpScopesController(
         }
 
         if (patch.TryGetMergePatchField("kind", out JsonElement kind))
-            scope.Kind = JsonSerializer.Deserialize<DhcpScopeKindEnum>(kind.GetRawText());
+            scope.Kind = kind.GetEnumName<DhcpScopeKindEnum>("kind");
 
         if (
             patch.TryGetMergePatchField(

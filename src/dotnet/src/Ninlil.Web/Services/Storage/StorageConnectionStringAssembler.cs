@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using MySqlConnector;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Web.Models;
@@ -34,8 +35,9 @@ namespace Ninlil.Web.Services.Storage;
 ///         (<c>None</c>, <c>Disabled</c>, <c>Preferred</c>, <c>Required</c>, <c>VerifyCA</c>,
 ///         <c>VerifyFull</c>). SQL Server: <c>Optional</c>, <c>Mandatory</c> or <c>Strict</c>, checked with
 ///         <see cref="SqlConnectionEncryptOption.TryParse" /> because
-///         <see cref="SqlConnectionEncryptOption" /> is a class, not an enum, so
-///         <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)" /> does not apply.
+///         <see cref="SqlConnectionEncryptOption" /> is a class, not an enum. The two enum modes
+///         are read by name only through <see cref="EnumNameParser" />: a number, a digit string
+///         or a comma list is refused.
 ///     </para>
 /// </summary>
 public static class StorageConnectionStringAssembler
@@ -87,7 +89,13 @@ public static class StorageConnectionStringAssembler
     {
         RelationalFields validated = ValidateCommonFields(fields, "PostgreSql");
 
-        if (!Enum.TryParse(validated.EncryptionMode, ignoreCase: true, out SslMode sslMode))
+        if (
+            !EnumNameParser.TryParseName(
+                validated.EncryptionMode?.Trim(),
+                ignoreCase: true,
+                out SslMode sslMode
+            )
+        )
             throw new ValidationException(
                 $"'{validated.EncryptionMode}' is not a valid PostgreSQL SSL mode. Expected one "
                     + $"of: {string.Join(", ", Enum.GetNames<SslMode>())}."
@@ -113,7 +121,13 @@ public static class StorageConnectionStringAssembler
     {
         RelationalFields validated = ValidateCommonFields(fields, "MySql");
 
-        if (!Enum.TryParse(validated.EncryptionMode, ignoreCase: true, out MySqlSslMode sslMode))
+        if (
+            !EnumNameParser.TryParseName(
+                validated.EncryptionMode?.Trim(),
+                ignoreCase: true,
+                out MySqlSslMode sslMode
+            )
+        )
             throw new ValidationException(
                 $"'{validated.EncryptionMode}' is not a valid MySQL SSL mode. Expected one of: "
                     + $"{string.Join(", ", Enum.GetNames<MySqlSslMode>())}."
