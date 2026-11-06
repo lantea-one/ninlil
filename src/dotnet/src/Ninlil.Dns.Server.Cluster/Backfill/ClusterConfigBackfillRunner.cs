@@ -109,8 +109,16 @@ public sealed class ClusterConfigBackfillRunner(
     /// </summary>
     private readonly CancellationTokenSource _shutdown = new();
 
+    /// <summary>
+    ///     This field is set, under <see cref="_gate" />, when the host stops; no pass starts after
+    ///     it.
+    /// </summary>
     private bool _stopped;
 
+    /// <summary>
+    ///     This field is 1 once <see cref="DisposeAsync" /> ran, so the container's repeated
+    ///     dispose calls do nothing.
+    /// </summary>
     private int _disposed;
 
     /// <inheritdoc />
@@ -216,9 +224,6 @@ public sealed class ClusterConfigBackfillRunner(
     /// </returns>
     public async Task<bool> RunPassAsync(Guid clusterNodeId, CancellationToken stoppingToken)
     {
-        // Before the request is read: a request made from here on must reach the database.
-        requester.NotePassStarted(clusterNodeId);
-
         DateTimeOffset requestedAtUtc;
         ClusterNodeEntity peer;
         using (IServiceScope scope = scopeFactory.CreateScope())
@@ -229,6 +234,11 @@ public sealed class ClusterConfigBackfillRunner(
                 clusterNodeId,
                 stoppingToken
             );
+            // After the read, never before: a request that lands after this point touches the row
+            // to a later time and must reach the database. Cleared before the read, a request
+            // could set the mark and be answered from memory while this pass has already read
+            // the row and missed its change.
+            requester.NotePassStarted(clusterNodeId);
             if (request is null)
                 return true;
 
@@ -392,7 +402,11 @@ public sealed class ClusterConfigBackfillRunner(
             scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
 
         if (error is null)
-            await requests.RemoveIfUnchangedAsync(clusterNodeId, requestedAtUtc, stoppingToken);
+        {
+            // The mark is dropped together with the row, so it cannot outlive it.
+            if (await requests.RemoveIfUnchangedAsync(clusterNodeId, requestedAtUtc, stoppingToken))
+                requester.NotePassStarted(clusterNodeId);
+        }
         else
             await requests.RecordFailureAsync(
                 clusterNodeId,

@@ -132,6 +132,65 @@ public sealed class ClusterConfigSyncBroadcasterBackfillTests : IDisposable
         Assert.True((await _host.FindRequestAsync(peerId)).RequestedAtUtc > first);
     }
 
+    [Fact]
+    public async Task Pass_WhenARequestLandsAfterThePassReadTheRow_KeepsTheRowAndTheMarkNeverOutlivesIt()
+    {
+        Guid peerId = await _host.AddPeerAsync();
+        await _host.AddRequestAsync(peerId);
+        ClusterConfigBackfillRequester real = _host.CreateRequester();
+        ClusterConfigBackfillRunner runner = new(
+            _host.Services.GetRequiredService<IServiceScopeFactory>(),
+            new ClusterBackfillTestHost.RecordingSender(),
+            new InterleavingRequester(real),
+            NullLogger<ClusterConfigBackfillRunner>.Instance
+        );
+
+        Assert.True(await runner.RunPassAsync(peerId, CancellationToken.None));
+
+        // The request that landed during the pass moved the request time, so the pass kept the
+        // row for another pass.
+        Assert.NotNull(await _host.FindRequestAsync(peerId));
+
+        // A plain pass now covers it and removes the row; a later miss must write a new row, so
+        // no mark may be left behind.
+        ClusterConfigBackfillRunner second = new(
+            _host.Services.GetRequiredService<IServiceScopeFactory>(),
+            new ClusterBackfillTestHost.RecordingSender(),
+            real,
+            NullLogger<ClusterConfigBackfillRunner>.Instance
+        );
+        Assert.True(await second.RunPassAsync(peerId, CancellationToken.None));
+        Assert.Null(await _host.FindRequestAsync(peerId));
+        Assert.True(await real.RequestAsync(peerId));
+        Assert.NotNull(await _host.FindRequestAsync(peerId));
+    }
+
+    /// <summary>
+    ///     This class is a requester that records a request at the moment a pass reports that it
+    ///     read the row, which is the interleaving a request can have with a running pass.
+    /// </summary>
+    /// <param name="inner">The requester that does the work.</param>
+    private sealed class InterleavingRequester(ClusterConfigBackfillRequester inner)
+        : IClusterConfigBackfillRequester
+    {
+        private int _calls;
+
+        /// <inheritdoc />
+        public void NotePassStarted(Guid clusterNodeId)
+        {
+            inner.NotePassStarted(clusterNodeId);
+            // Only the first call, which is the pass's own read; the request lands right after.
+            if (Interlocked.Increment(ref _calls) == 1)
+                inner.RequestAsync(clusterNodeId).GetAwaiter().GetResult();
+        }
+
+        /// <inheritdoc />
+        public Task<bool> RequestAsync(
+            Guid clusterNodeId,
+            CancellationToken stoppingToken = default
+        ) => inner.RequestAsync(clusterNodeId, stoppingToken);
+    }
+
     /// <summary>This method builds a broadcaster whose peers all answer with <paramref name="status" />.</summary>
     private ClusterConfigSyncBroadcaster CreateBroadcaster(
         HttpStatusCode status,

@@ -56,6 +56,12 @@ public class ClusterHeartbeatBackgroundService(
     ILogger<ClusterHeartbeatBackgroundService> logger
 ) : BackgroundService
 {
+    /// <summary>
+    ///     This field holds, by peer, the attempt time of the failed pass whose deferral was
+    ///     logged, so the log has one line per backoff window and not one per heartbeat.
+    /// </summary>
+    private readonly Dictionary<Guid, DateTimeOffset?> _loggedDeferrals = [];
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -149,12 +155,59 @@ public class ClusterHeartbeatBackgroundService(
         // After the save, so the pass sees the peer's stored state. The pending list is bounded
         // by the number of peers. A pass runs detached; a pass already running for a peer makes
         // TryStart return false and the round moves on.
-        IReadOnlyList<Guid> pending = await scope
+        IReadOnlyList<ClusterPeerConfigBackfillEntity> pending = await scope
             .ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>()
-            .ListPendingClusterNodeIdsAsync(stoppingToken);
+            .ListAsync(stoppingToken: stoppingToken);
+        DateTimeOffset roundTime = DateTimeOffset.UtcNow;
         for (int index = 0; index < peers.Count; index++)
-            if (reached[index] && pending.Contains(peers[index].Id))
-                backfillRunner.TryStart(peers[index].Id);
+        {
+            ClusterPeerConfigBackfillEntity request = pending.FirstOrDefault(row =>
+                row.ClusterNodeId == peers[index].Id
+            );
+            if (!reached[index] || request is null)
+                continue;
+
+            if (
+                ClusterConfigBackfillBackoff.NextAttemptAtUtc(request, options.HeartbeatInterval)
+                    is DateTimeOffset notBefore
+                && roundTime < notBefore
+            )
+            {
+                LogDeferral(peers[index], request, notBefore);
+                continue;
+            }
+
+            backfillRunner.TryStart(peers[index].Id);
+        }
+    }
+
+    /// <summary>
+    ///     This method logs that a pass waits for its backoff, once per window: the key is the
+    ///     attempt time of the failed pass, which changes only when another pass fails.
+    /// </summary>
+    private void LogDeferral(
+        ClusterNodeEntity peer,
+        ClusterPeerConfigBackfillEntity request,
+        DateTimeOffset notBefore
+    )
+    {
+        lock (_loggedDeferrals)
+        {
+            if (
+                _loggedDeferrals.TryGetValue(peer.Id, out DateTimeOffset? logged)
+                && logged == request.LastAttemptAtUtc
+            )
+                return;
+            _loggedDeferrals[peer.Id] = request.LastAttemptAtUtc;
+        }
+
+        logger.LogInformation(
+            "Config backfill to peer node '{PeerName}' is deferred until {NotBeforeUtc:O} after "
+                + "{AttemptCount} failed attempts.",
+            peer.Name,
+            notBefore,
+            request.AttemptCount
+        );
     }
 
     /// <summary>

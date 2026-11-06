@@ -130,7 +130,11 @@ internal sealed class ClusterBackfillTestHost : IDisposable
     }
 
     /// <summary>This method records a backfill request for a peer and returns it.</summary>
-    public async Task<ClusterPeerConfigBackfillEntity> AddRequestAsync(Guid peerId)
+    public async Task<ClusterPeerConfigBackfillEntity> AddRequestAsync(
+        Guid peerId,
+        int attemptCount = 0,
+        DateTimeOffset? lastAttemptAtUtc = null
+    )
     {
         using IServiceScope scope = Services.CreateScope();
         ClusterPeerConfigBackfillEntity request = new()
@@ -139,6 +143,8 @@ internal sealed class ClusterBackfillTestHost : IDisposable
             ClusterNodeId = peerId,
             RequestedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
             CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            AttemptCount = attemptCount,
+            LastAttemptAtUtc = lastAttemptAtUtc,
         };
         await scope
             .ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>()

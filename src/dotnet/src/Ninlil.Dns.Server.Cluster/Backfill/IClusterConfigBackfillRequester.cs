@@ -22,8 +22,9 @@ public interface IClusterConfigBackfillRequester
     Task<bool> RequestAsync(Guid clusterNodeId, CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method tells the requester that a pass to a peer is about to read the peer's
-    ///     request, so a later <see cref="RequestAsync" /> must reach the database again.
+    ///     This method tells the requester that a pass to a peer has read the peer's request (or
+    ///     found none), or has removed it, so a later <see cref="RequestAsync" /> must reach the
+    ///     database again.
     /// </summary>
     /// <param name="clusterNodeId">The identifier of the peer's local row.</param>
     void NotePassStarted(Guid clusterNodeId);
