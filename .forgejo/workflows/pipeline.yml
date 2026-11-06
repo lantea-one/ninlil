@@ -18,6 +18,12 @@ name: 'Ninlil Pipeline'
 ## test listener (Karma's included) also takes a port the operating system reports as free, so
 ## two copies of the suite never meet.
 ##
+## Every job sets timeout-minutes at roughly three times its longest normal run (read from recent
+## successful runs), so a hung step ends the job instead of holding the single runner until a
+## person cancels it. `npm ci` has a tighter limit and one retry of its own (npm-ci.sh), because
+## it has hung with no output. The limit sits on the jobs of this file: a job that calls a
+## reusable workflow (build.yml, release.yml) cannot carry timeout-minutes.
+##
 ## Job graph (the tests and lint start alongside version; 'verify' runs only test-dotnet,
 ## test-admin-console and lint):
 ##
@@ -62,6 +68,7 @@ jobs:
     if: >-
       inputs.kind != 'verify'
     runs-on: 'asgard'
+    timeout-minutes: 5
     outputs:
       version: '${{ steps.version.outputs.version }}'
       assembly-version: '${{ steps.version.outputs.assembly-version }}'
@@ -113,6 +120,7 @@ jobs:
   test-dotnet:
     name: 'Test .NET'
     runs-on: 'asgard'
+    timeout-minutes: 60
     steps:
       ##
       - name: 'Checkout Sources'
@@ -172,6 +180,7 @@ jobs:
   test-admin-console:
     name: 'Test Admin Console'
     runs-on: 'asgard'
+    timeout-minutes: 30
     steps:
       ##
       - name: 'Checkout Sources'
@@ -184,7 +193,7 @@ jobs:
         run: |-
           ./.forgejo/scripts/in-container.sh node bash -c '
             cd src/angular
-            npm ci --no-audit --no-fund
+            ../../.forgejo/scripts/npm-ci.sh
           '
         shell: 'bash'
       ##
@@ -214,6 +223,7 @@ jobs:
   lint:
     name: 'Lint and Script Tests'
     runs-on: 'asgard'
+    timeout-minutes: 15
     steps:
       ##
       - name: 'Checkout Sources'
@@ -239,6 +249,7 @@ jobs:
       - 'test-dotnet'
       - 'test-admin-console'
     runs-on: 'asgard'
+    timeout-minutes: 10
     steps:
       ##
       - name: 'Checkout Sources'
@@ -273,6 +284,7 @@ jobs:
       - 'version'
       - 'draft'
     runs-on: 'asgard'
+    timeout-minutes: 45
     strategy:
       matrix:
         ## 'file' is the name publish-binary.sh writes (the Windows one is a zip holding the .exe and
@@ -332,6 +344,7 @@ jobs:
       - 'version'
       - 'binaries'
     runs-on: 'asgard'
+    timeout-minutes: 20
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'
@@ -376,6 +389,7 @@ jobs:
       - 'version'
       - 'binaries'
     runs-on: 'asgard'
+    timeout-minutes: 40
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'
@@ -423,6 +437,7 @@ jobs:
       - 'version'
       - 'binaries'
     runs-on: 'asgard'
+    timeout-minutes: 40
     steps:
       ##
       - name: 'Checkout Sources'
@@ -490,6 +505,7 @@ jobs:
       - 'test-dotnet'
       - 'test-admin-console'
     runs-on: 'asgard'
+    timeout-minutes: 20
     strategy:
       matrix:
         include:
@@ -567,6 +583,7 @@ jobs:
       - 'version'
       - 'binaries'
     runs-on: 'lofnheim'
+    timeout-minutes: 20
     steps:
       ##
       - name: 'Checkout Sources'
@@ -601,6 +618,7 @@ jobs:
       - 'image'
       - 'packages'
     runs-on: 'asgard'
+    timeout-minutes: 15
     steps:
       ##
       - name: 'Checkout Sources'

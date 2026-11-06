@@ -31,6 +31,7 @@ jobs:
   cleanup:
     name: 'Expire Pre-Releases'
     runs-on: 'asgard'
+    timeout-minutes: 15
     steps:
       ##
       - name: 'Checkout Sources'
