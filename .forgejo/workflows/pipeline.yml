@@ -18,9 +18,9 @@ name: 'Ninlil Pipeline'
 ## test listener (Karma's included) also takes a port the operating system reports as free, so
 ## two copies of the suite never meet.
 ##
-## Every job sets timeout-minutes at roughly three times its longest normal run (read from recent
-## successful runs), so a hung step ends the job instead of holding the single runner until a
-## person cancels it. `npm ci` has a tighter limit and one retry of its own (npm-ci.sh), because
+## Every job sets timeout-minutes generously, well above its longest normal run in recent
+## successful runs, with room for a cold builder image and one npm retry, so a hung step ends the
+## job instead of holding the single runner until a person cancels it. `npm ci` has a tighter limit and one retry of its own (npm-ci.sh), because
 ## it has hung with no output. The limit sits on the jobs of this file: a job that calls a
 ## reusable workflow (build.yml, release.yml) cannot carry timeout-minutes.
 ##
@@ -180,7 +180,7 @@ jobs:
   test-admin-console:
     name: 'Test Admin Console'
     runs-on: 'asgard'
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       ##
       - name: 'Checkout Sources'
@@ -344,7 +344,7 @@ jobs:
       - 'version'
       - 'binaries'
     runs-on: 'asgard'
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'

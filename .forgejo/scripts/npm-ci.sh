@@ -17,8 +17,9 @@
 #   NPM_CI_KILL_AFTER    Grace between the TERM and the KILL signal. Default 20s.
 #
 # Output: npm's output, and a message on stderr for each timeout.
-# Exit status: npm's status; 1 when both attempts hang (message "npm hung"); 2 when `timeout`
-# itself is unusable.
+# Exit status: npm's status; 1 when both attempts hang (message "npm hung"). When `timeout` itself
+# fails (125, 126 or 127, for example a missing npm), that status is passed through. An outside
+# SIGKILL of npm, such as the OOM killer, also gives 137 and is retried once like a hang.
 
 set -uo pipefail
 

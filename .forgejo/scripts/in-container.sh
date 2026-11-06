@@ -21,8 +21,8 @@
 #             back through the host gateway.
 #
 # BUILD_VERSION, BUILD_PACKAGE_VERSION, BUILD_ASSEMBLY_VERSION, RELEASE_TAG, ARCH_VERSION,
-# DEB_VERSION, RPM_VERSION, RPM_RELEASE, NPM_CI_TIMEOUT and NPM_CI_KILL_AFTER (see npm-ci.sh) are passed through when they are set. Exits with the
-# command's status, or 1 when the toolchain image fails to build (its build log is printed then).
+# DEB_VERSION, RPM_VERSION, RPM_RELEASE, NPM_CI_TIMEOUT and NPM_CI_KILL_AFTER (see npm-ci.sh) are
+# passed through when they are set. Exits with the command's status, or 1 when the toolchain image fails to build (its build log is printed then).
 
 set -euo pipefail
 
