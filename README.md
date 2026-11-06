@@ -569,8 +569,8 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
 
    | Distribution | CPU | File |
    |---|---|---|
-   | Debian, Ubuntu | x86-64 | `ninlil_<version>_amd64.deb` |
-   | Debian, Ubuntu | ARM64 | `ninlil_<version>_arm64.deb` |
+   | Debian, Ubuntu | x86-64 | `ninlil-<version>-amd64.deb` |
+   | Debian, Ubuntu | ARM64 | `ninlil-<version>-arm64.deb` |
    | Fedora, RHEL, Rocky Linux, AlmaLinux | x86-64 | `ninlil-<version>-1.x86_64.rpm` |
    | Fedora, RHEL, Rocky Linux, AlmaLinux | ARM64 | `ninlil-<version>-1.aarch64.rpm` |
 
@@ -582,7 +582,7 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
    release's tag and the file name with yours:
 
    ```bash
-   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil_<version>_amd64.deb
+   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-<version>-amd64.deb
    curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/SHA256SUMS
    sha256sum --check --ignore-missing SHA256SUMS
    ```
@@ -594,7 +594,7 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
    the local file:
 
    ```bash
-   sudo apt install ./ninlil_<version>_amd64.deb        # Debian, Ubuntu
+   sudo apt install ./ninlil-<version>-amd64.deb        # Debian, Ubuntu
    sudo dnf install ./ninlil-<version>-1.x86_64.rpm     # Fedora, RHEL, Rocky Linux, AlmaLinux
    ```
 

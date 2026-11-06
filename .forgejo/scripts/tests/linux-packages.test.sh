@@ -47,14 +47,14 @@ versions=(DEB_VERSION='2026.10.09.3~develop.a1b2c3d' RPM_VERSION=2026.10.09.3 RP
 
 output="$(PATH="${work_root}/bin:${PATH}" NFPM_LOG="${log}" env "${versions[@]}" bash "${script}" "${work_root}/binaries" 2>&1)"
 assert_eq 'linux-packages: builds with the fake nfpm: exit code' 0 "$?"
-assert_contains 'linux-packages: amd64 Deb' "$(cat "${log}")" 'deb amd64 2026.10.09.3~develop.a1b2c3d [] ninlil_2026.10.09.3~develop.a1b2c3d_amd64.deb binary=ninlil-linux-amd64'
-assert_contains 'linux-packages: arm64 Deb' "$(cat "${log}")" 'deb arm64 2026.10.09.3~develop.a1b2c3d [] ninlil_2026.10.09.3~develop.a1b2c3d_arm64.deb binary=ninlil-linux-arm64'
+assert_contains 'linux-packages: amd64 Deb' "$(cat "${log}")" 'deb amd64 2026.10.09.3~develop.a1b2c3d [] ninlil-2026.10.09.3~develop.a1b2c3d-amd64.deb binary=ninlil-linux-amd64'
+assert_contains 'linux-packages: arm64 Deb' "$(cat "${log}")" 'deb arm64 2026.10.09.3~develop.a1b2c3d [] ninlil-2026.10.09.3~develop.a1b2c3d-arm64.deb binary=ninlil-linux-arm64'
 assert_contains 'linux-packages: x86_64 RPM' "$(cat "${log}")" 'rpm amd64 2026.10.09.3 [0.develop.a1b2c3d] ninlil-2026.10.09.3-0.develop.a1b2c3d.x86_64.rpm binary=ninlil-linux-amd64'
 assert_contains 'linux-packages: aarch64 RPM' "$(cat "${log}")" 'rpm arm64 2026.10.09.3 [0.develop.a1b2c3d] ninlil-2026.10.09.3-0.develop.a1b2c3d.aarch64.rpm binary=ninlil-linux-arm64'
 assert_eq 'linux-packages: four packages land in the directory' 4 "$(find "${work_root}/binaries" -name 'ninlil[-_]*' ! -name 'ninlil-linux-*' | wc -l)"
 
 # A missing arm64 binary must stop the script before any package is built.
-rm -f "${work_root}/binaries"/ninlil_* "${work_root}/binaries"/ninlil-*.rpm "${work_root}/binaries/ninlil-linux-arm64" "${log}"
+rm -f "${work_root}/binaries"/ninlil-*.deb "${work_root}/binaries"/ninlil-*.rpm "${work_root}/binaries/ninlil-linux-arm64" "${log}"
 output="$(PATH="${work_root}/bin:${PATH}" NFPM_LOG="${log}" env "${versions[@]}" bash "${script}" "${work_root}/binaries" 2>&1)"
 status=$?
 if [[ "${status}" -ne 0 ]]; then pass 'linux-packages: a missing arm64 binary exits non-zero'; else fail 'linux-packages: a missing arm64 binary exits non-zero' "${output}"; fi
@@ -73,7 +73,7 @@ if command -v nfpm > /dev/null 2>&1 && command -v dpkg-deb > /dev/null 2>&1; the
     printf 'arm64' > "${real}/ninlil-linux-arm64"
     output="$(env "${versions[@]}" bash "${script}" "${real}" 2>&1)"
     assert_eq 'linux-packages: real nfpm builds all four: exit code' 0 "$?"
-    deb="${real}/ninlil_2026.10.09.3~develop.a1b2c3d_amd64.deb"
+    deb="${real}/ninlil-2026.10.09.3~develop.a1b2c3d-amd64.deb"
     info="$(dpkg-deb -I "${deb}" 2>&1)"
     assert_contains 'linux-packages: real Deb has the version' "${info}" 'Version: 2026.10.09.3~develop.a1b2c3d'
     assert_contains 'linux-packages: real Deb depends on ICU and OpenSSL alternatives' "${info}" 'libssl3 | libssl3t64, libicu76 | libicu74 | libicu72 | libicu70'

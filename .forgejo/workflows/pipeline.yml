@@ -410,7 +410,7 @@ jobs:
       ##
       - name: 'Attach to the Draft Release'
         run: |-
-          ./.forgejo/scripts/release.sh upload dist/ninlil_*.deb dist/ninlil-*.rpm
+          ./.forgejo/scripts/release.sh upload dist/ninlil-*.deb dist/ninlil-*.rpm
         shell: 'bash'
   ##
   ## The multi-platform container image, built from the two Linux executables on the draft and
