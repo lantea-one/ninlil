@@ -1,8 +1,8 @@
 name: 'Expire Pre-Releases'
 ##
 ## Removes every pre-release build -- release, git tag, container image tag, and NuGet package
-## version -- and every stale draft once it is 24 hours old. Published releases are never
-## touched. Runs every hour at minute 17, or by hand ("Run workflow") with an optional dry run.
+## version -- and every stale draft once it is 24 hours old, plus this runner's superseded
+## ninlil-builder images. Published releases are never touched. Runs every hour at minute 17, or by hand ("Run workflow") with an optional dry run.
 ## See .forgejo/scripts/cleanup.sh for the rules.
 ##
 on:
@@ -46,4 +46,17 @@ jobs:
           DRY_RUN: '${{ inputs.dry-run || false }}'
         run: |-
           ./.forgejo/scripts/cleanup.sh
+        shell: 'bash'
+      ##
+      ## A changed docker/ci.Dockerfile, or two cold builds at once, leave superseded builder
+      ## images untagged on this runner (in-container.sh tags them ninlil-builder-<toolchain> and
+      ## labels them ninlil.builder). Remove the untagged ones built more than 24 hours ago: the
+      ## label filter leaves every other image alone, a job has long started its container by
+      ## then, and Docker refuses to remove an image a container still uses.
+      ##
+      - name: 'Remove Superseded Builder Images'
+        if: >-
+          ${{ !inputs.dry-run }}
+        run: |-
+          docker image prune --force --filter 'label=ninlil.builder' --filter 'until=24h'
         shell: 'bash'

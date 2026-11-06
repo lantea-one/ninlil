@@ -12,7 +12,9 @@
 #
 # Every call builds the toolchain image from the checkout's docker/ci.Dockerfile (cached when the
 # file is unchanged), tags it ninlil-builder-<toolchain> with the label ninlil.builder=<toolchain>,
-# removes that toolchain's superseded untagged builds, and runs the container by image ID.
+# and runs the container by image ID. It never removes an image: concurrent cold builds of one
+# Dockerfile get different IDs and retag each other, so a prune here could remove an image another
+# job is about to start. The hourly cleanup workflow removes superseded builds instead.
 #
 # Usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages> <command> [argument...]
 #   --docker  Also hands the container the host's Docker socket, for the tests that start
@@ -43,14 +45,6 @@ platform=()
 if [[ "${toolchain}" == 'arch' ]]; then
     platform=(--platform linux/amd64)
 fi
-
-# A changed Dockerfile leaves the previous build of this toolchain untagged on the runner. Remove
-# those before building: the filter matches only untagged images carrying this toolchain's builder
-# label, so the runner's other images stay, and Docker keeps any image a container uses. Pruning
-# before the build, not after, means this call never untags and removes an image in one go; the
-# one case left is a job on another branch whose image is untagged and pruned in the few
-# milliseconds between its build and its run, which fails that job loudly and a re-run fixes.
-docker image prune --force --filter "label=ninlil.builder=${toolchain}" > /dev/null 2>&1 || true
 
 # The image is built from the Dockerfile alone, with no build context, on every call, so it always
 # matches the checkout's docker/ci.Dockerfile; an unchanged file costs nothing because every layer
