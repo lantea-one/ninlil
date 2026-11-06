@@ -58,6 +58,23 @@ public class RequestEnumNameJsonConverterTests
     }
 
     [Fact]
+    public void Read_ForNullOnANonNullableEnum_ThrowsJsonExceptionSayingAValueIsRequired()
+    {
+        JsonException exception = Assert.Throws<JsonException>(() => Read<ZoneTypeEnum>("null"));
+
+        Assert.Contains("A value is required for ZoneTypeEnum", exception.Message);
+        Assert.Contains("Primary", exception.Message);
+    }
+
+    [Fact]
+    public void Read_ForAJsonNumber_QuotesTheNumberInTheMessage()
+    {
+        JsonException exception = Assert.Throws<JsonException>(() => Read<ZoneTypeEnum>("99"));
+
+        Assert.Contains("'99' is not a valid value for ZoneTypeEnum", exception.Message);
+    }
+
+    [Fact]
     public void Read_ForAnUndefinedNumberOnABuiltInConverterEnum_ThrowsJsonException() =>
         Assert.Throws<JsonException>(() => Read<SecondEnum>("5"));
 

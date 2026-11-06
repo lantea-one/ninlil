@@ -122,10 +122,23 @@ public sealed class RequestEnumNameJsonConverter<TEnum> : JsonConverter<TEnum>
         JsonSerializerOptions options
     )
     {
+        // Only a string can carry a declared name. A number is quoted back as sent, so the caller
+        // sees what was refused.
         if (reader.TokenType is not JsonTokenType.String)
+        {
+            if (reader.TokenType is JsonTokenType.Null)
+                throw new JsonException(
+                    $"A value is required for {typeof(TEnum).Name}. Valid values: {ValidNames}."
+                );
+
+            string token =
+                reader.TokenType is JsonTokenType.Number
+                    ? System.Text.Encoding.UTF8.GetString(reader.ValueSpan)
+                    : reader.TokenType.ToString();
             throw new JsonException(
-                $"Expected a string value for {typeof(TEnum).Name} but found {reader.TokenType}. Valid values: {ValidNames}."
+                $"'{token}' is not a valid value for {typeof(TEnum).Name}. Valid values: {ValidNames}."
             );
+        }
 
         string text = reader.GetString();
         if (TryParse(text, out TEnum value))

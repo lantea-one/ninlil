@@ -457,9 +457,10 @@ public class EnumNamesOnlyRequestBodyTests(NinlilDnsWebApplicationFactory factor
                 return;
         }
 
-        // Only Ninlil's own models are walked; BCL types hold no body enums.
+        // Models from any Ninlil.* assembly are walked, because a body model can live outside
+        // Ninlil.Web. Types from the BCL and other frameworks are skipped: they hold no body enums.
         if (
-            type.Assembly != typeof(LoginRequest).Assembly
+            type.Assembly.GetName().Name?.StartsWith("Ninlil.", StringComparison.Ordinal) != true
             || typeof(IEnumerable).IsAssignableFrom(type)
         )
             return;
