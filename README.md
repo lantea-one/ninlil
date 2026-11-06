@@ -6219,10 +6219,11 @@ runs with `--filter "Category!=RequiresDocker"`, which skips the PostgreSQL quer
 same-repo branch is pushed before its pull request, and that push build runs them with the socket.
 Mark any new test that starts a container with `[Trait("Category", "RequiresDocker")]`.
 
-**Fork pull requests.** The runners (`asgard` and `lofnheim`) run steps on the host as a user in the Docker group, and a pull
-request from a fork runs its own copy of every workflow, so the rule above cannot stop a malicious
-fork by itself. Workflow runs from fork pull requests wait for a maintainer's approval, and the
-maintainer reads the diff of `.forgejo/` and every script it runs before approving a run.
+**Fork pull requests.** The runners (`asgard` and `lofnheim`) run steps on the host as a user in the
+Docker group, and a pull request from a fork runs its own copy of every workflow, so the rule above
+cannot stop a malicious fork by itself. Workflow runs from fork pull requests wait for a
+maintainer's approval, and the maintainer reads the diff of `.forgejo/` and every script it runs
+before approving a run.
 
 **Linux packages.** The package definition is [`src/linux-packages/nfpm.yaml`](./src/linux-packages/nfpm.yaml);
 the pipeline builds it with [nFPM](https://nfpm.goreleaser.com/) through

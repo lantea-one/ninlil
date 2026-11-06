@@ -10,6 +10,10 @@
 # keep two jobs on one host from extracting the same package into that cache at once, and would
 # otherwise sit in each container's /tmp, where no other container sees them.
 #
+# Every call builds the toolchain image from the checkout's docker/ci.Dockerfile (cached when the
+# file is unchanged), tags it ninlil-builder-<toolchain> with the label ninlil.builder=<toolchain>,
+# removes that toolchain's superseded untagged builds, and runs the container by image ID.
+#
 # Usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages> <command> [argument...]
 #   --docker  Also hands the container the host's Docker socket, for the tests that start
 #             database containers (Testcontainers), and routes those containers' published ports
@@ -40,6 +44,14 @@ if [[ "${toolchain}" == 'arch' ]]; then
     platform=(--platform linux/amd64)
 fi
 
+# A changed Dockerfile leaves the previous build of this toolchain untagged on the runner. Remove
+# those before building: the filter matches only untagged images carrying this toolchain's builder
+# label, so the runner's other images stay, and Docker keeps any image a container uses. Pruning
+# before the build, not after, means this call never untags and removes an image in one go; the
+# one case left is a job on another branch whose image is untagged and pruned in the few
+# milliseconds between its build and its run, which fails that job loudly and a re-run fixes.
+docker image prune --force --filter "label=ninlil.builder=${toolchain}" > /dev/null 2>&1 || true
+
 # The image is built from the Dockerfile alone, with no build context, on every call, so it always
 # matches the checkout's docker/ci.Dockerfile; an unchanged file costs nothing because every layer
 # is cached. The build output is shown only if it fails.
@@ -59,13 +71,6 @@ rm -f "${build_log}"
 image_id="$(cat "${image_id_file}")"
 rm -f "${image_id_file}"
 
-# A changed Dockerfile leaves the previous build of this toolchain untagged on the runner. Remove
-# those: the filter matches only untagged images carrying this toolchain's builder label, so the
-# runner's other images stay. Only builds older than an hour go, so a concurrent job that has just
-# built an image and not yet started it never loses it; Docker also keeps any image a container
-# still uses.
-docker image prune --force --filter "label=ninlil.builder=${toolchain}" --filter "until=1h" \
-    > /dev/null 2>&1 || true
 
 arguments=(
     --rm
