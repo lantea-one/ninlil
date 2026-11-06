@@ -64,6 +64,21 @@ outside Forgejo.
   [Configuration](./README.md#configuration)
   ([#314](https://git.lantea.one/lantea-one/ninlil/issues/314),
   [#321](https://git.lantea.one/lantea-one/ninlil/issues/321)).
+- **Enum fields in API requests take names only.** A request body field that holds an enum
+  (for example a zone's `type`) accepts a declared name. Names match without regard to case,
+  and surrounding spaces are ignored. A flags field takes a comma list of names, such as
+  `"Sunday, Monday"` for a schedule's days. A digit string (`"1"`), a JSON number (`1`) or a
+  value that is no name (`"99"`) now answers `400` with a message that lists the valid values,
+  and a `null` for a required enum answers `400` too. This covers create and update bodies,
+  `PATCH` merge-patch bodies, the DNSSEC policy's allowed algorithms, the storage switch's
+  encryption mode and the settings pages that take enum text. Responses are unchanged: they
+  write names, and a number only for a code that has no name. Enums inside a record's `data`
+  payload and query-string parameters are not covered by this rule. Scripts that send numbers
+  must send the names that the OpenAPI document (`/swagger/v1/swagger.json`) lists for the
+  field. The MySQL load-balance and MongoDB read-preference replica settings refuse comma lists
+  and numbers in the same way. See [REST API](./README.md#rest-api)
+  ([#296](https://git.lantea.one/lantea-one/ninlil/issues/296),
+  [#316](https://git.lantea.one/lantea-one/ninlil/issues/316)).
 
 ## v2026.10.31.1
 

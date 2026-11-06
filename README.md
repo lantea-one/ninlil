@@ -5696,6 +5696,10 @@ permissions of the account behind them, and each call needs the permission its r
    ```
 
    Copy the `id`. The commands below call it `<zone-id>`.
+
+   An enum field, such as `type` here, takes one of the names that the OpenAPI document lists for
+   it. Case does not matter. A number, a digit string or an unknown value answers `400` and the
+   message lists the valid names.
 4. Change part of an object with `PATCH`. A `PATCH` body is an RFC 7396 JSON merge patch: a field you
    leave out stays as it is, a field you set replaces the old value, and `null` clears a field that
    may be empty. Change one field and clear another:
