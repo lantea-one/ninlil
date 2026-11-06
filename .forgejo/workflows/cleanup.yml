@@ -48,15 +48,18 @@ jobs:
           ./.forgejo/scripts/cleanup.sh
         shell: 'bash'
       ##
-      ## A changed docker/ci.Dockerfile, or two cold builds at once, leave superseded builder
-      ## images untagged on this runner (in-container.sh tags them ninlil-builder-<toolchain> and
-      ## labels them ninlil.builder). Remove the untagged ones built more than 24 hours ago: the
-      ## label filter leaves every other image alone, a job has long started its container by
-      ## then, and Docker refuses to remove an image a container still uses.
+      ## in-container.sh tags each toolchain image ninlil-builder-<toolchain>:<hash of
+      ## docker/ci.Dockerfile>, so every change to that file leaves the previous builders on this
+      ## runner. Remove every builder tag whose hash is not this checkout's. Only images labelled
+      ## ninlil.builder are listed, and docker image rm without --force refuses an image a
+      ## container still uses, so a job still running on an older branch keeps its builder.
       ##
       - name: 'Remove Superseded Builder Images'
         if: >-
           ${{ !inputs.dry-run }}
         run: |-
-          docker image prune --force --filter 'label=ninlil.builder' --filter 'until=24h'
+          current="$(sha256sum < docker/ci.Dockerfile | cut -c1-12)"
+          docker images --filter 'label=ninlil.builder' --format '{{.Repository}}:{{.Tag}}' \
+            | grep -v ":${current}\$" \
+            | xargs -r docker image rm > /dev/null 2>&1 || true
         shell: 'bash'

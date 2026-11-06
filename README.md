@@ -6185,9 +6185,9 @@ builds), `git`, `curl`, and `jq`. Every build and test step runs in a throwaway 
 the toolchains in [`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and
 Chromium; `makepkg`; shellcheck and actionlint; nFPM) with just the checkout mounted, through
 [`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). The toolchain images are
-tagged `ninlil-builder-<toolchain>` and rebuilt from that file by every job, so they always match
-the checkout; the weekly pin bump keeps their base images current, and the hourly cleanup
-workflow removes superseded builds after a day. One job, the Windows smoke test, runs on the project's
+tagged `ninlil-builder-<toolchain>:<hash of that file>` and rebuilt from it by every job, so they
+always match the checkout; the weekly pin bump keeps their base images current, and the hourly
+cleanup workflow removes the builders of older versions of the file. One job, the Windows smoke test, runs on the project's
 Windows runner `lofnheim` instead. It runs
 [`windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1), which unzips the Windows release
 asset and starts the executable beside `msquic.dll`, and checks `/status`, the admin console, one DNS query, HTTPS and DNS-over-TLS on the first

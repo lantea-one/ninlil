@@ -2,7 +2,7 @@
 #
 # The toolchains the pipeline's build and test steps run in, one target per toolchain. Nothing
 # from the repository is copied in: .forgejo/scripts/in-container.sh builds a target from this
-# file alone (tagged ninlil-builder-<target>) and runs a script in it with the checkout mounted, so
+# file alone (tagged ninlil-builder-<target>:<hash of this file>) and runs a script in it with the checkout mounted, so
 # the runner needs only Docker, and every build and test stays off the host.
 #
 #   dotnet  The .NET SDK, plus libmsquic from Microsoft's Ubuntu 24.04 repository for the

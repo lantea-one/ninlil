@@ -6,7 +6,7 @@ name: 'Ninlil Pipeline'
 ## Every build and test step runs in a throwaway container of one of the toolchains in
 ## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg; shellcheck and
 ## actionlint; nFPM), through .forgejo/scripts/in-container.sh, with only the checkout mounted;
-## the toolchain images are tagged ninlil-builder-<toolchain>. The Linux jobs run on the amd64
+## the toolchain images are tagged ninlil-builder-<toolchain>:<Dockerfile hash>. The Linux jobs run on the amd64
 ## runner 'asgard' only, which needs just Docker (with buildx), git, curl, and jq, for the version,
 ## the release API calls, and the container image, which is the prebuilt Linux executables copied
 ## onto a chiseled base. Everything cross-compiles, so asgard builds every platform; the arm64

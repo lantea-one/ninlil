@@ -11,10 +11,9 @@
 # otherwise sit in each container's /tmp, where no other container sees them.
 #
 # Every call builds the toolchain image from the checkout's docker/ci.Dockerfile (cached when the
-# file is unchanged), tags it ninlil-builder-<toolchain> with the label ninlil.builder=<toolchain>,
-# and runs the container by image ID. It never removes an image: concurrent cold builds of one
-# Dockerfile get different IDs and retag each other, so a prune here could remove an image another
-# job is about to start. The hourly cleanup workflow removes superseded builds instead.
+# file is unchanged), tags it ninlil-builder-<toolchain>:<first 12 hex digits of the file's
+# SHA-256> with the label ninlil.builder=<toolchain>, and runs the container from that tag. It never
+# removes an image; the hourly cleanup workflow removes builders of other Dockerfile versions.
 #
 # Usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages> <command> [argument...]
 #   --docker  Also hands the container the host's Docker socket, for the tests that start
@@ -36,7 +35,12 @@ toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch|lint|package
 shift
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-image="ninlil-builder-${toolchain}"
+# The tag names the Dockerfile's content, so jobs on branches with different Dockerfiles never
+# share a tag. That matters because Docker's containerd image store deletes an image as soon as
+# its last tag moves elsewhere, which would pull the image from under a job about to start it.
+dockerfile="${repository_root}/docker/ci.Dockerfile"
+dockerfile_hash="$(sha256sum < "${dockerfile}" | cut -c1-12)"
+image="ninlil-builder-${toolchain}:${dockerfile_hash}"
 cache="${XDG_CACHE_HOME:-${HOME}/.cache}/ninlil-ci"
 mkdir -p "${cache}/nuget" "${cache}/nuget-scratch" "${cache}/npm"
 
@@ -48,22 +52,21 @@ fi
 
 # The image is built from the Dockerfile alone, with no build context, on every call, so it always
 # matches the checkout's docker/ci.Dockerfile; an unchanged file costs nothing because every layer
-# is cached. The build output is shown only if it fails.
+# is cached. The build output is shown only if it fails. Builds of one toolchain on this host run
+# one at a time (the lock file in the cache folder): two cold builds at once produce different
+# image IDs for the same tag, and the second would delete the first one's image, while a build
+# that waits finds every layer cached and produces the same image.
 build_log="$(mktemp)"
-image_id_file="$(mktemp)"
-trap 'rm -f "${build_log}" "${image_id_file}"' EXIT
-if ! docker build --progress=plain "${platform[@]}" --target "${toolchain}" --tag "${image}" \
-    --label "ninlil.builder=${toolchain}" --iidfile "${image_id_file}" \
-    - < "${repository_root}/docker/ci.Dockerfile" > "${build_log}" 2>&1; then
+trap 'rm -f "${build_log}"' EXIT
+if ! (
+    flock 9
+    docker build --progress=plain "${platform[@]}" --target "${toolchain}" --tag "${image}" \
+        --label "ninlil.builder=${toolchain}" - < "${dockerfile}"
+) 9> "${cache}/build-${toolchain}.lock" > "${build_log}" 2>&1; then
     cat "${build_log}" >&2
     exit 1
 fi
 rm -f "${build_log}"
-
-# The container runs the exact image this call built, by ID, not by tag: a job on another branch
-# with a different Dockerfile can move the shared tag between the build and the run.
-image_id="$(cat "${image_id_file}")"
-rm -f "${image_id_file}"
 
 
 arguments=(
@@ -100,4 +103,4 @@ if [[ "${docker_socket}" == 'true' ]]; then
     )
 fi
 
-exec docker run "${arguments[@]}" "${image_id}" "$@"
+exec docker run "${arguments[@]}" "${image}" "$@"
