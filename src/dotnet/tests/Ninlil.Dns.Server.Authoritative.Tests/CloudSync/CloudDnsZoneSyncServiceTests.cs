@@ -414,25 +414,43 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
             ? ActivatorUtilities.CreateInstance<CloudDnsZoneSyncService>(_host.Services)
             : _host.Services.GetRequiredService<CloudDnsZoneSyncService>();
 
+        long passesBefore = syncService.CompletedPassCount;
         await syncService.StartAsync(CancellationToken.None);
 
         // BackgroundService.StartAsync returns before ExecuteAsync has run its first pass (as for
-        // DnscryptCertificateRotationService), so poll for the result instead of assuming it.
-        for (int attempt = 0; attempt < 40 && _cloudflareCreateRequests.Count == 0; attempt++)
-            await Task.Delay(50);
+        // DnscryptCertificateRotationService), so wait for the service to report the pass ended.
+        // Both directions (push and pull) have landed in the database by then. The bound is far
+        // above a pass's duration on an idle machine, because many test processes can share one
+        // CI host; stopping the service early would cancel a pass in progress and lose its work.
+        try
+        {
+            using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(60));
 
-        // Give the pull-direction ApplyChangesAsync + its DnsZoneChangedEvent + the cache reload
-        // it triggers a moment to land, on top of the create-request signal above. A
-        // caller that knows what "landed" looks like waits for that instead (bounded),
-        // since stopping the service any earlier would cancel a pass still in progress on a busy
-        // machine.
-        if (completed is null)
-            await Task.Delay(500);
-        else
-            for (int attempt = 0; attempt < 300 && !completed(); attempt++)
-                await Task.Delay(50);
+            while (syncService.CompletedPassCount == passesBefore)
+            {
+                Assert.False(
+                    deadline.IsCancellationRequested,
+                    "The sync pass did not end in time."
+                );
+                await Task.Delay(20);
+            }
 
-        await syncService.StopAsync(CancellationToken.None);
+            // The pass publishes DnsZoneChangedEvent, and the cache reloads from it in the background,
+            // after the pass has ended. A caller that reads through the cache passes a condition for
+            // that, and it is awaited here with the same bound.
+            while (completed is not null && !completed())
+            {
+                Assert.False(
+                    deadline.IsCancellationRequested,
+                    "The sync result did not land in time."
+                );
+                await Task.Delay(20);
+            }
+        }
+        finally
+        {
+            await syncService.StopAsync(CancellationToken.None);
+        }
     }
 
     [Fact]

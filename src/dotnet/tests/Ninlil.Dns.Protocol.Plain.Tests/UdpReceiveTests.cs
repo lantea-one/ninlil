@@ -188,16 +188,25 @@ public sealed class UdpReceiveTests
 
         public CapturingResolver Resolver { get; private init; }
 
-        public static async Task<Host> StartAsync(
+        public static Task<Host> StartAsync(
             bool holdFirstQuery,
             ILogger<UdpDnsListener> listenerLogger = null
+        ) =>
+            LocalAddresses.StartOnFreePortAsync(port =>
+                TryStartAsync(port, holdFirstQuery, listenerLogger)
+            );
+
+        /// <summary>
+        ///     This method makes one start attempt on <paramref name="port" /> and returns
+        ///     <see langword="null" /> when the listener could not bind it.
+        /// </summary>
+        private static async Task<Host> TryStartAsync(
+            int port,
+            bool holdFirstQuery,
+            ILogger<UdpDnsListener> listenerLogger
         )
         {
-            Host host = new()
-            {
-                Port = LocalAddresses.GetFreePort(),
-                Resolver = new CapturingResolver(holdFirstQuery),
-            };
+            Host host = new() { Port = port, Resolver = new CapturingResolver(holdFirstQuery) };
 
             host._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher([host.Resolver], new NoOpEventPublisher()),
@@ -217,13 +226,23 @@ public sealed class UdpReceiveTests
             );
             await host._udp.StartAsync(CancellationToken.None);
 
-            // BackgroundService runs ExecuteAsync (which binds) as a continuation, so wait for
-            // the listener to report that it is receiving.
-            for (int attempt = 0; attempt < 500 && !host._udp.IsListening; attempt++)
+            // The listener binds in ExecuteAsync, which may run after StartAsync returns, so wait
+            // until it reports listening or a failed bind.
+            for (
+                int attempt = 0;
+                attempt < 3000
+                    && !host._udp.IsListening
+                    && host._udp.FailedListenAddresses.Count == 0;
+                attempt++
+            )
                 await Task.Delay(10);
 
-            Assert.True(host._udp.IsListening);
-            return host;
+            if (host._udp.IsListening)
+                return host;
+
+            // Another process took the port after it was released; the caller tries another.
+            await host.DisposeAsync();
+            return null;
         }
 
         public async ValueTask DisposeAsync()

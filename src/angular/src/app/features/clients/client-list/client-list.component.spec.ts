@@ -41,7 +41,12 @@ const DUAL_STACK_CLIENT: ClientDetail = {
   isDisabled: false,
   origin: DnsClientOriginEnum.Manual,
   isOnline: true,
-  lastSeenUtc: new Date(Date.now() - 5 * 60_000).toISOString(),
+  // A getter, not a value computed when this file loads: Karma loads every spec file first and
+  // runs the tests minutes later on a slow CI runner, which would turn "5 min ago" into
+  // "9 min ago". Each read measures from the moment the test builds its component.
+  get lastSeenUtc(): string {
+    return new Date(Date.now() - 5 * 60_000).toISOString();
+  },
   deviceIconKey: DnsClientDeviceIconEnum.Television,
   suggestedDeviceIconKey: DnsClientDeviceIconEnum.SingleBoardComputer,
   isFavorite: true,

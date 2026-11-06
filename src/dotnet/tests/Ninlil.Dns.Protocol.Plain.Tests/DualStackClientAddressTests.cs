@@ -38,7 +38,7 @@ public sealed class DualStackClientAddressTests
         client.Connect(IPAddress.Loopback, host.Port);
         await client.SendAsync(DnsMessageWriter.Write(BuildQuery()));
 
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
         await client.ReceiveAsync(timeout.Token);
 
         IPAddress seen = Assert.Single(host.Resolver.SeenAddresses);
@@ -65,7 +65,7 @@ public sealed class DualStackClientAddressTests
         await stream.WriteAsync(prefix);
         await stream.WriteAsync(message);
 
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
         await stream.ReadExactlyAsync(prefix, timeout.Token);
         await stream.ReadExactlyAsync(
             new byte[BinaryPrimitives.ReadUInt16BigEndian(prefix)],
@@ -90,7 +90,7 @@ public sealed class DualStackClientAddressTests
         client.Connect(IPAddress.IPv6Loopback, host.Port);
         await client.SendAsync(DnsMessageWriter.Write(BuildQuery()));
 
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
         await client.ReceiveAsync(timeout.Token);
 
         Assert.Equal(IPAddress.IPv6Loopback, Assert.Single(host.Resolver.SeenAddresses));
@@ -126,9 +126,15 @@ public sealed class DualStackClientAddressTests
 
         public RecordingResolver Resolver { get; } = new();
 
-        public static async Task<Host> StartAsync()
+        public static Task<Host> StartAsync() => LocalAddresses.StartOnFreePortAsync(TryStartAsync);
+
+        /// <summary>
+        ///     This method makes one start attempt on <paramref name="port" /> and returns
+        ///     <see langword="null" /> when a listener could not bind it.
+        /// </summary>
+        private static async Task<Host> TryStartAsync(int port)
         {
-            Host host = new() { Port = LocalAddresses.GetFreePort() };
+            Host host = new() { Port = port };
 
             host._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher([host.Resolver], new NoOpEventPublisher()),
@@ -160,10 +166,29 @@ public sealed class DualStackClientAddressTests
             await host._udp.StartAsync(CancellationToken.None);
             await host._tcp.StartAsync(CancellationToken.None);
 
-            // BackgroundService runs ExecuteAsync (which binds) as a continuation, so give both
-            // listeners a moment to bind before the test sends anything.
-            await Task.Delay(200);
-            return host;
+            // The listeners bind in ExecuteAsync, which may run after StartAsync returns, so wait
+            // for each to report listening or a failed bind. A fixed delay is too short on a
+            // loaded machine.
+            using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
+
+            while (
+                !(host._udp.IsListening || host._udp.FailedListenAddresses.Count > 0)
+                || !(host._tcp.IsListening || host._tcp.FailedListenAddresses.Count > 0)
+            )
+            {
+                Assert.False(
+                    deadline.IsCancellationRequested,
+                    "The listeners did not report a bind outcome in time."
+                );
+                await Task.Delay(10);
+            }
+
+            if (host._udp.IsListening && host._tcp.IsListening)
+                return host;
+
+            // Another process took the port after it was released; the caller tries another.
+            await host.DisposeAsync();
+            return null;
         }
 
         public async ValueTask DisposeAsync()

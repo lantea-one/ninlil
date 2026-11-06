@@ -56,38 +56,31 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
     /// <summary>
     ///     This method starts the pipeline and a <see cref="TcpDnsListener" /> on a free loopback
     ///     port. <see cref="TcpDnsListener" /> does not expose the port it bound, so the port is
-    ///     reserved and released first and the start is retried a few times when another process
-    ///     takes it in between.
+    ///     reserved and released first (<see cref="LocalAddresses.GetFreePort" />, which searches
+    ///     past the ports Windows excludes) and the start is retried on another port when
+    ///     another process takes it in between.
     /// </summary>
-    public static async Task<TcpStreamTestHost> StartAsync(
+    public static Task<TcpStreamTestHost> StartAsync(
         TimeSpan idleTimeout,
         IZoneTransferService transferService = null,
         IDnsRateLimiter rateLimiter = null
-    )
-    {
-        for (int attempt = 1; ; attempt++)
-        {
-            TcpStreamTestHost host = await TryStartAsync(idleTimeout, transferService, rateLimiter);
-
-            if (host is not null)
-                return host;
-
-            if (attempt == 5)
-                throw new InvalidOperationException("No free TCP port could be bound.");
-        }
-    }
+    ) =>
+        LocalAddresses.StartOnFreePortAsync(port =>
+            TryStartAsync(port, idleTimeout, transferService, rateLimiter)
+        );
 
     /// <summary>
     ///     This method makes one start attempt and returns <see langword="null" /> when the
     ///     port could not be bound.
     /// </summary>
     private static async Task<TcpStreamTestHost> TryStartAsync(
+        int port,
         TimeSpan idleTimeout,
         IZoneTransferService transferService,
         IDnsRateLimiter rateLimiter
     )
     {
-        TcpStreamTestHost host = new() { Port = LocalAddresses.GetFreePort() };
+        TcpStreamTestHost host = new() { Port = port };
 
         host._pipeline = new DnsQueryProcessingPipeline(
             new DnsQueryDispatcher([new HostResolver(host)], new NoOpEventPublisher()),
@@ -121,8 +114,16 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
 
         // BackgroundService runs ExecuteAsync (which binds) as a continuation after StartAsync
         // returns; wait until the listener reports it is accepting or that the bind failed.
+        using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
+
         while (!host._tcp.IsListening && host._tcp.FailedListenAddresses.Count == 0)
+        {
+            Assert.False(
+                deadline.IsCancellationRequested,
+                "The listener did not report a bind outcome in time."
+            );
             await Task.Delay(10);
+        }
 
         if (host._tcp.IsListening)
             return host;
