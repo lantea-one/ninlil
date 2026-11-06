@@ -202,6 +202,9 @@ public abstract class ClusterPeerConfigBackfillTestsBase(EngineFixtureBase fixtu
         ClusterConfigBackfillRunner runner = new(
             database.Services.GetRequiredService<IServiceScopeFactory>(),
             sender,
+            new ClusterConfigBackfillRequester(
+                database.Services.GetRequiredService<IServiceScopeFactory>()
+            ),
             NullLogger<ClusterConfigBackfillRunner>.Instance
         );
 

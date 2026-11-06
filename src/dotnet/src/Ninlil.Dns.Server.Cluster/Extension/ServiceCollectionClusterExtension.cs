@@ -53,6 +53,12 @@ public static class ServiceCollectionClusterExtension
         // reads peers through its own scope.
         // The same instance also sends one envelope to one peer (IClusterConfigPeerSender),
         // which the backfill runner uses.
+        // The broadcaster records missed deliveries through the requester and not the runner:
+        // the runner sends through the broadcaster, so the runner would make a cycle.
+        instance.AddSingleton<ClusterConfigBackfillRequester>();
+        instance.AddSingleton<IClusterConfigBackfillRequester>(provider =>
+            provider.GetRequiredService<ClusterConfigBackfillRequester>()
+        );
         instance.AddSingleton<ClusterConfigSyncBroadcaster>();
         instance.AddSingleton<IClusterConfigSyncBroadcaster>(provider =>
             provider.GetRequiredService<ClusterConfigSyncBroadcaster>()

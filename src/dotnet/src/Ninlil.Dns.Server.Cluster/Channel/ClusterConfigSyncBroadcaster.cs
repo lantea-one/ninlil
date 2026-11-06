@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Cluster.Backfill;
 using Ninlil.Dns.Server.Cluster.Http;
 using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.Core.ClusterSync;
@@ -19,13 +20,16 @@ namespace Ninlil.Dns.Server.Cluster.Channel;
 ///     <c>POST /api/cluster/channel/config-sync</c> on every
 ///     <see cref="ClusterNodeStatusEnum.Healthy" /> peer in parallel.
 ///     <para>
-///         <b>Known limitation</b>: a peer that is <see cref="ClusterNodeStatusEnum.Unreachable" />
-///         or <see cref="ClusterNodeStatusEnum.Joining" /> at that moment is skipped, and a failed
-///         delivery is only logged. A broadcast has no retry or backlog. The one catch-up is the
-///         join backfill (<see cref="Backfill.ClusterConfigBackfillRunner" />), which sends a
-///         peer that just joined everything this node holds; a peer that misses a later broadcast
-///         gets the entity again only when a later change to it is broadcast while the peer is
-///         healthy, or when an operator intervenes.
+///         <b>Missed deliveries</b>: a broadcast keeps no queue. A peer that is
+///         <see cref="ClusterNodeStatusEnum.Unreachable" /> at that moment is skipped, and a
+///         delivery that fails (a transport error, a timeout or a non-2xx answer) is logged. Both
+///         record a backfill request for that peer through
+///         <see cref="IClusterConfigBackfillRequester" />. The next heartbeat that reaches the
+///         peer starts a backfill pass (<see cref="Backfill.ClusterConfigBackfillRunner" />), which
+///         sends the peer everything this node holds, so the peer catches up on every change it
+///         missed. A <see cref="ClusterNodeStatusEnum.Joining" /> peer is neither delivered to nor
+///         recorded: the node has not yet probed it, and a request would push this node's own
+///         accounts to it before the join backfill, which flows from the inviter to the joiner.
 ///     </para>
 ///     <para>
 ///         The class also sends one envelope to one chosen peer (<see cref="SendToPeerAsync" />),
@@ -38,11 +42,17 @@ namespace Ninlil.Dns.Server.Cluster.Channel;
 /// </param>
 /// <param name="httpClientFactory">The factory used to build and sign each outbound request.</param>
 /// <param name="clusterOptions">The cluster settings.</param>
+/// <param name="backfillRequester">
+///     The recorder a skipped or failed delivery marks its peer with. It is the requester, not the
+///     runner, because the runner sends through this class and a dependency on the runner would be
+///     a cycle.
+/// </param>
 /// <param name="logger">The logger this class records a per-peer delivery failure to.</param>
 public class ClusterConfigSyncBroadcaster(
     IServiceScopeFactory scopeFactory,
     ClusterPeerHttpClientFactory httpClientFactory,
     IOptionsMonitor<ClusterOptions> clusterOptions,
+    IClusterConfigBackfillRequester backfillRequester,
     ILogger<ClusterConfigSyncBroadcaster> logger
 ) : IClusterConfigSyncBroadcaster, IClusterConfigPeerSender
 {
@@ -72,22 +82,28 @@ public class ClusterConfigSyncBroadcaster(
         IClusterNodeRepository clusterNodeRepository =
             scope.ServiceProvider.GetRequiredService<IClusterNodeRepository>();
 
-        IReadOnlyList<ClusterNodeEntity> healthyPeers = (
-            await clusterNodeRepository.ListAsync(stoppingToken: stoppingToken)
-        )
+        IReadOnlyList<ClusterNodeEntity> peers = await clusterNodeRepository.ListAsync(
+            stoppingToken: stoppingToken
+        );
+        IReadOnlyList<ClusterNodeEntity> healthyPeers = peers
             .Where(peer => peer.Status == ClusterNodeStatusEnum.Healthy)
             .ToList();
+        IReadOnlyList<ClusterNodeEntity> unreachablePeers = peers
+            .Where(peer => peer.Status == ClusterNodeStatusEnum.Unreachable)
+            .ToList();
 
-        if (healthyPeers.Count == 0)
+        if (healthyPeers.Count == 0 && unreachablePeers.Count == 0)
             return;
 
         string requestBody = JsonSerializer.Serialize(envelope);
 
-        // Delivered concurrently, so one slow peer does not delay the others.
+        // Delivered concurrently, so one slow peer does not delay the others. A skipped peer
+        // only records its request; the requester answers a repeat from memory (see
+        // ClusterConfigBackfillRequester), so a bulk change costs the database one write.
         await Task.WhenAll(
-            healthyPeers.Select(peer =>
-                DeliverToOneAsync(peer, requestBody, envelope, stoppingToken)
-            )
+            healthyPeers
+                .Select(peer => DeliverToOneAsync(peer, requestBody, envelope, stoppingToken))
+                .Concat(unreachablePeers.Select(peer => RecordMissAsync(peer, stoppingToken)))
         );
     }
 
@@ -138,8 +154,9 @@ public class ClusterConfigSyncBroadcaster(
     }
 
     /// <summary>
-    ///     This method delivers one envelope to one peer and logs a rejection or failure instead
-    ///     of throwing (see the class summary), a timeout included.
+    ///     This method delivers one envelope to one peer and, on a rejection or failure, logs it
+    ///     and records a backfill request instead of throwing (see the class summary), a timeout
+    ///     included.
     /// </summary>
     private async Task DeliverToOneAsync(
         ClusterNodeEntity peer,
@@ -150,7 +167,8 @@ public class ClusterConfigSyncBroadcaster(
     {
         try
         {
-            await SendAsync(peer, requestBody, envelope, stoppingToken);
+            if (!await SendAsync(peer, requestBody, envelope, stoppingToken))
+                await RecordMissAsync(peer, stoppingToken);
         }
         // An HttpClient timeout is a TaskCanceledException too; only a cancelled stoppingToken
         // (shutdown) propagates, so a peer that times out counts as failed like any other.
@@ -165,6 +183,31 @@ public class ClusterConfigSyncBroadcaster(
                     + "peer node '{PeerName}'.",
                 envelope.EntityType,
                 envelope.EntityKey,
+                peer.Name
+            );
+            await RecordMissAsync(peer, stoppingToken);
+        }
+    }
+
+    /// <summary>
+    ///     This method marks a peer as owed a backfill because it missed a live change. A failure
+    ///     to record is logged and swallowed: the broadcast must not throw into the event
+    ///     subscriber that saved the change, and the next missed change tries again.
+    /// </summary>
+    private async Task RecordMissAsync(ClusterNodeEntity peer, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await backfillRequester.RequestAsync(peer.Id, stoppingToken);
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException
+                || !stoppingToken.IsCancellationRequested
+            )
+        {
+            logger.LogWarning(
+                exception,
+                "Failed to record a config backfill request for peer node '{PeerName}'.",
                 peer.Name
             );
         }

@@ -7,9 +7,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
 using Ninlil.Dns.Identity.Store;
 using Ninlil.Dns.Server.Cluster.Backfill;
+using Ninlil.Dns.Server.Cluster.Channel;
 using Ninlil.Dns.Server.ClusterSync.Settings;
 using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Dns.Server.Presets;
+using Ninlil.Dns.Server.Tsig;
 using Ninlil.Web.ClusterSync;
 using Ninlil.Web.Configuration;
 
@@ -24,7 +26,8 @@ namespace Ninlil.Web.Tests;
 ///     envelope, through a JSON round trip, to B's real appliers, the way
 ///     <c>ClusterChannelController.ConfigSync</c> does. The tests assert what B holds afterwards:
 ///     every synced item, secrets that B's own key ring opens, tombstones, last-write-wins merges
-///     with data B already held, and a pass that is cut short and then completed.
+///     with data B already held, a pass that is cut short and then completed, and a change B
+///     missed while it was away, which the next pass delivers.
 /// </summary>
 public sealed class ClusterJoinBackfillTests : IDisposable
 {
@@ -243,7 +246,58 @@ public sealed class ClusterJoinBackfillTests : IDisposable
         );
     }
 
+    [Fact]
+    public async Task Backfill_AfterAPeerMissedAChange_DeliversItAtTheNextSuccessfulProbe()
+    {
+        // A holds a rewrite that B received while it was reachable.
+        DnsRewriteEntity before = NewGlobalRewrite("before.example", Old);
+        await _a.AddAsync(before);
+        ClusterBackfillNode.LoopbackSender sender = new(_b);
+        Guid peerId = await _a.AddPeerAsync(_b.NodeId);
+        ClusterBackfillNode.LoopbackClientFactory clientFactory = new(
+            _a.Services.GetRequiredService<IServiceScopeFactory>(),
+            _a.Services.GetRequiredService<TsigSecretProtector>(),
+            _b
+        );
+        ClusterConfigBackfillRequester requester = new(
+            _a.Services.GetRequiredService<IServiceScopeFactory>()
+        );
+        ClusterConfigSyncBroadcaster broadcaster = _a.CreateBroadcaster(clientFactory, requester);
+        ClusterConfigBackfillRunner runner = _a.CreateRunner(sender, requester);
+
+        // B goes away, then A saves a change. The live delivery fails and A owes B a backfill.
+        clientFactory.IsDown = true;
+        DnsRewriteEntity missed = NewGlobalRewrite("missed.example", New);
+        await _a.AddAsync(missed);
+        ClusterConfigSyncEnvelope envelope = (await _a.ReadAllEnvelopesAsync()).Single(e =>
+            e.EntityKey == missed.Id.ToString()
+        );
+        await broadcaster.BroadcastAsync(envelope, CancellationToken.None);
+
+        Assert.Null(await _b.FindAsync<DnsRewriteEntity>(missed.Id));
+        Assert.NotNull(await FindRequestAsync());
+
+        // The next probe reaches B: the heartbeat marks it healthy and starts one pass, which
+        // sends B everything, the missed change included.
+        clientFactory.IsDown = false;
+        Assert.True(await runner.RunPassAsync(peerId, CancellationToken.None));
+
+        Assert.NotNull(await _b.FindAsync<DnsRewriteEntity>(missed.Id));
+        Assert.NotNull(await _b.FindAsync<DnsRewriteEntity>(before.Id));
+        Assert.Null(await FindRequestAsync());
+    }
+
     private Guid _peerId;
+
+    private static DnsRewriteEntity NewGlobalRewrite(string domain, DateTimeOffset at) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Domain = domain,
+            Target = "safe.example.net",
+            CreatedAtUtc = at,
+            UpdatedAtUtc = at,
+        };
 
     /// <summary>
     ///     This method records a request on A for node B and runs one pass through

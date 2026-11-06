@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
-using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Cluster.Channel;
@@ -64,10 +63,12 @@ namespace Ninlil.Dns.Server.Cluster.Backfill;
 /// </summary>
 /// <param name="scopeFactory">The factory used to create a scope per pass, for the scoped repositories and sources.</param>
 /// <param name="peerSender">Sends one envelope to one peer.</param>
+/// <param name="requester">Records requests, and is told when a pass starts reading one.</param>
 /// <param name="logger">The logger a pass reports its start, end and failure to.</param>
 public sealed class ClusterConfigBackfillRunner(
     IServiceScopeFactory scopeFactory,
     IClusterConfigPeerSender peerSender,
+    IClusterConfigBackfillRequester requester,
     ILogger<ClusterConfigBackfillRunner> logger
 ) : IClusterConfigBackfillRunner, IHostedService, IAsyncDisposable
 {
@@ -197,57 +198,10 @@ public sealed class ClusterConfigBackfillRunner(
     }
 
     /// <inheritdoc />
-    public async Task<bool> RequestBackfillAsync(
+    public Task<bool> RequestBackfillAsync(
         Guid clusterNodeId,
         CancellationToken stoppingToken = default
-    )
-    {
-        using (IServiceScope check = scopeFactory.CreateScope())
-        {
-            ClusterNodeEntity peer = await check
-                .ServiceProvider.GetRequiredService<IClusterNodeRepository>()
-                .GetByIdAsync(clusterNodeId, stoppingToken);
-            if (peer is null || peer.Status == ClusterNodeStatusEnum.Joining)
-                return false;
-        }
-
-        // The request time moves forward on a repeat, so a pass that started earlier sees the
-        // change when it finishes and keeps the row. Touching the row is one statement, so it
-        // cannot throw on a row a finishing pass removed meanwhile. Then the insert runs, and
-        // loses to a concurrent insert of the same peer with a conflict; the loop starts over with
-        // a touch. Each attempt has its own scope, because a failed save leaves its entity tracked.
-        for (int attempt = 0; attempt < 3; attempt++)
-        {
-            using IServiceScope scope = scopeFactory.CreateScope();
-            IClusterPeerConfigBackfillRepository requests =
-                scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
-
-            DateTimeOffset now = DateTimeOffset.UtcNow;
-            if (await requests.TouchAsync(clusterNodeId, now, stoppingToken))
-                return true;
-
-            try
-            {
-                await requests.AddAsync(
-                    new ClusterPeerConfigBackfillEntity
-                    {
-                        Id = Guid.NewGuid(),
-                        ClusterNodeId = clusterNodeId,
-                        RequestedAtUtc = now,
-                        CreatedAtUtc = now,
-                    },
-                    stoppingToken
-                );
-                await scope
-                    .ServiceProvider.GetRequiredService<IUnitOfWork>()
-                    .SaveChangesAsync(stoppingToken);
-                return true;
-            }
-            catch (ConflictException) { }
-        }
-
-        return false;
-    }
+    ) => requester.RequestAsync(clusterNodeId, stoppingToken);
 
     /// <summary>
     ///     This method runs one pass to one peer in the caller's task and records the outcome. It
@@ -262,6 +216,9 @@ public sealed class ClusterConfigBackfillRunner(
     /// </returns>
     public async Task<bool> RunPassAsync(Guid clusterNodeId, CancellationToken stoppingToken)
     {
+        // Before the request is read: a request made from here on must reach the database.
+        requester.NotePassStarted(clusterNodeId);
+
         DateTimeOffset requestedAtUtc;
         ClusterNodeEntity peer;
         using (IServiceScope scope = scopeFactory.CreateScope())

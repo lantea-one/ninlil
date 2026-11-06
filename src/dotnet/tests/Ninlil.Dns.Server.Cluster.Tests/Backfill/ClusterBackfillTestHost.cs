@@ -77,8 +77,13 @@ internal sealed class ClusterBackfillTestHost : IDisposable
         new(
             Services.GetRequiredService<IServiceScopeFactory>(),
             sender,
+            CreateRequester(),
             NullLogger<ClusterConfigBackfillRunner>.Instance
         );
+
+    /// <summary>This method builds a requester over this database.</summary>
+    public ClusterConfigBackfillRequester CreateRequester() =>
+        new(Services.GetRequiredService<IServiceScopeFactory>());
 
     /// <summary>
     ///     This method saves a peer with a signing key the probe can use, and returns the peer's
@@ -149,6 +154,15 @@ internal sealed class ClusterBackfillTestHost : IDisposable
         return await scope
             .ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>()
             .FindByClusterNodeIdAsync(peerId);
+    }
+
+    /// <summary>This method lists the peers that are owed a backfill.</summary>
+    public async Task<IReadOnlyList<Guid>> ListPendingAsync()
+    {
+        using IServiceScope scope = Services.CreateScope();
+        return await scope
+            .ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>()
+            .ListPendingClusterNodeIdsAsync();
     }
 
     /// <summary>
@@ -291,27 +305,36 @@ internal sealed class ClusterBackfillTestHost : IDisposable
     /// <param name="scopeFactory">The scope factory the base class reads TSIG keys through.</param>
     /// <param name="secretProtector">The protector the base class opens key secrets with.</param>
     /// <param name="status">The status every request gets.</param>
+    /// <param name="throwConnectionFailure">Whether every request throws a connection failure instead.</param>
     public sealed class StubClientFactory(
         IServiceScopeFactory scopeFactory,
         TsigSecretProtector secretProtector,
-        HttpStatusCode status
+        HttpStatusCode status,
+        bool throwConnectionFailure = false
     ) : ClusterPeerHttpClientFactory(scopeFactory, secretProtector)
     {
         /// <inheritdoc />
         public override HttpClient CreateClient(
             string pinnedCertificateThumbprintHex,
             TimeSpan timeout
-        ) => new(new StubHandler(status)) { Timeout = timeout };
+        ) => new(new StubHandler(status, throwConnectionFailure)) { Timeout = timeout };
     }
 
-    /// <summary>This class is a message handler that answers every request with one status.</summary>
-    private sealed class StubHandler(HttpStatusCode status) : HttpMessageHandler
+    /// <summary>
+    ///     This class is a message handler that answers every request with one status, or throws
+    ///     a connection failure.
+    /// </summary>
+    private sealed class StubHandler(HttpStatusCode status, bool throwConnectionFailure)
+        : HttpMessageHandler
     {
         /// <inheritdoc />
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken stoppingToken
-        ) => Task.FromResult(new HttpResponseMessage(status));
+        ) =>
+            throwConnectionFailure
+                ? throw new HttpRequestException("The peer is down.")
+                : Task.FromResult(new HttpResponseMessage(status));
     }
 
     /// <summary>

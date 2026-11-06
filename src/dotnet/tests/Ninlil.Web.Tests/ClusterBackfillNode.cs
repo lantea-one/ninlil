@@ -15,10 +15,12 @@ using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Identity.Token;
 using Ninlil.Dns.Server.Cluster.Backfill;
 using Ninlil.Dns.Server.Cluster.Channel;
+using Ninlil.Dns.Server.Cluster.Http;
 using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.ClusterSync.Extension;
 using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Dns.Server.Core.Events;
+using Ninlil.Dns.Server.Tsig;
 using Ninlil.Web.ClusterSync;
 using Ninlil.Web.Options;
 using Ninlil.Web.Serialization;
@@ -85,6 +87,8 @@ internal sealed class ClusterBackfillNode : IDisposable
             ClusterPeerConfigBackfillRepository
         >();
         collection.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
+        collection.AddScoped<ITsigKeyRepository, TsigKeyRepository>();
+        collection.AddSingleton<TsigSecretProtector>();
         collection.AddNinlilDnsServerClusterSync();
 
         // The settings applier, source and recorder live in Ninlil.Web, as in Program.cs.
@@ -190,8 +194,34 @@ internal sealed class ClusterBackfillNode : IDisposable
     ///     This method adds a peer row for another node and returns its local id, the id a
     ///     backfill request names. The peer is healthy, as the inviter records a joiner.
     /// </summary>
-    public async Task<Guid> AddPeerAsync(Guid remoteNodeId)
+    public async Task<Guid> AddPeerAsync(
+        Guid remoteNodeId,
+        ClusterNodeStatusEnum status = ClusterNodeStatusEnum.Healthy
+    )
     {
+        // The broadcaster signs each request with the peer's key, so the key must exist locally.
+        await using (AsyncServiceScope scope = Services.CreateAsyncScope())
+        {
+            ITsigKeyRepository keys =
+                scope.ServiceProvider.GetRequiredService<ITsigKeyRepository>();
+            if (await keys.FindByNameAsync("key") is null)
+            {
+                await keys.AddAsync(
+                    new TsigKeyEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = "key",
+                        AlgorithmName = "hmac-sha256",
+                        SecretEncrypted = scope
+                            .ServiceProvider.GetRequiredService<TsigSecretProtector>()
+                            .Protect("a-shared-cluster-channel-secret!"u8.ToArray()),
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+                await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+            }
+        }
+
         ClusterNodeEntity peer = new()
         {
             Id = Guid.NewGuid(),
@@ -201,20 +231,61 @@ internal sealed class ClusterBackfillNode : IDisposable
             Port = 443,
             TsigKeyName = "key",
             TlsCertificateThumbprint = "00",
-            Status = ClusterNodeStatusEnum.Healthy,
+            Status = status,
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         await AddAsync(peer);
         return peer.Id;
     }
 
+    /// <summary>This method sets the status of a peer row, as a heartbeat round does.</summary>
+    public async Task SetPeerStatusAsync(Guid peerId, ClusterNodeStatusEnum status)
+    {
+        await using AsyncServiceScope scope = Services.CreateAsyncScope();
+        NinlilDnsContext context = scope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
+        ClusterNodeEntity peer = await context.Set<ClusterNodeEntity>().FindAsync(peerId);
+        peer.Status = status;
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    ///     This method builds the real live broadcaster on this node. Its requests go through
+    ///     <paramref name="clientFactory" />, which hands them to the target node's appliers.
+    /// </summary>
+    public ClusterConfigSyncBroadcaster CreateBroadcaster(
+        LoopbackClientFactory clientFactory,
+        IClusterConfigBackfillRequester requester
+    ) =>
+        new(
+            Services.GetRequiredService<IServiceScopeFactory>(),
+            clientFactory,
+            Services.GetRequiredService<IOptionsMonitor<ClusterOptions>>(),
+            requester,
+            Services.GetRequiredService<ILogger<ClusterConfigSyncBroadcaster>>()
+        );
+
     /// <summary>
     ///     This method builds a runner on this node that sends to <paramref name="sender" />.
     /// </summary>
     public ClusterConfigBackfillRunner CreateRunner(IClusterConfigPeerSender sender) =>
+        CreateRunner(
+            sender,
+            new ClusterConfigBackfillRequester(Services.GetRequiredService<IServiceScopeFactory>())
+        );
+
+    /// <summary>
+    ///     This method builds a runner on this node that sends to <paramref name="sender" /> and
+    ///     records requests through <paramref name="requester" />, which a test shares with the
+    ///     broadcaster the way the container shares one requester.
+    /// </summary>
+    public ClusterConfigBackfillRunner CreateRunner(
+        IClusterConfigPeerSender sender,
+        IClusterConfigBackfillRequester requester
+    ) =>
         new(
             Services.GetRequiredService<IServiceScopeFactory>(),
             sender,
+            requester,
             Services.GetRequiredService<ILogger<ClusterConfigBackfillRunner>>()
         );
 
@@ -263,7 +334,7 @@ internal sealed class ClusterBackfillNode : IDisposable
         ///     <c>ClusterChannelController.ConfigSync</c> does (case-insensitive names, declared
         ///     enum names only).
         /// </summary>
-        private static readonly JsonSerializerOptions MvcJsonOptions = new ServiceCollection()
+        internal static readonly JsonSerializerOptions MvcJsonOptions = new ServiceCollection()
             .AddControllers()
             .AddJsonOptions(MvcJsonSerialization.Configure)
             .Services.BuildServiceProvider()
@@ -305,6 +376,58 @@ internal sealed class ClusterBackfillNode : IDisposable
                 stoppingToken
             );
             return true;
+        }
+    }
+
+    /// <summary>
+    ///     This class is the HTTP client factory of the live broadcaster in these tests. Each
+    ///     request it signs is answered by a handler that reads the envelope from the body, as
+    ///     <c>ClusterChannelController.ConfigSync</c> does, and hands it to the target node's real
+    ///     applier. While <see cref="IsDown" /> is set the handler throws a connection failure, as
+    ///     a peer that is off does.
+    /// </summary>
+    /// <param name="scopeFactory">The scope factory the base class reads TSIG keys through.</param>
+    /// <param name="secretProtector">The protector the base class opens key secrets with.</param>
+    /// <param name="target">The node that receives the envelopes.</param>
+    public sealed class LoopbackClientFactory(
+        IServiceScopeFactory scopeFactory,
+        TsigSecretProtector secretProtector,
+        ClusterBackfillNode target
+    ) : ClusterPeerHttpClientFactory(scopeFactory, secretProtector)
+    {
+        /// <summary>This property makes every request fail to connect.</summary>
+        public bool IsDown { get; set; }
+
+        /// <inheritdoc />
+        public override HttpClient CreateClient(
+            string pinnedCertificateThumbprintHex,
+            TimeSpan timeout
+        ) => new(new LoopbackHandler(this, target)) { Timeout = timeout };
+
+        private sealed class LoopbackHandler(
+            LoopbackClientFactory owner,
+            ClusterBackfillNode target
+        ) : HttpMessageHandler
+        {
+            /// <inheritdoc />
+            protected override async Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken stoppingToken
+            )
+            {
+                if (owner.IsDown)
+                    throw new HttpRequestException("The peer is down.");
+
+                string json = await request.Content.ReadAsStringAsync(stoppingToken);
+                await target.ReceiveAsync(
+                    JsonSerializer.Deserialize<ClusterConfigSyncEnvelope>(
+                        json,
+                        LoopbackSender.MvcJsonOptions
+                    ),
+                    stoppingToken
+                );
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
+            }
         }
     }
 
