@@ -60,6 +60,12 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
         private readonly X509Certificate2 _certificate;
         private readonly Task _serving;
 
+        /// <summary>
+        ///     This field contains the exception that ended <see cref="ServeOnceAsync" /> for a
+        ///     reason other than the client giving up, or <see langword="null" />.
+        /// </summary>
+        private Exception _failure;
+
         private FakeQuicPrimary(
             QuicListener listener,
             X509Certificate2 certificate,
@@ -157,7 +163,10 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
                 // arrived aborts the client's write side, and on a slow machine the client's
                 // end-of-stream write then fails with "Stream aborted by peer" although the
                 // answer was complete.
-                Assert.Equal(0, await stream.ReadAsync(new byte[1], timeout.Token));
+                if (await stream.ReadAsync(new byte[1], timeout.Token) != 0)
+                    throw new InvalidOperationException(
+                        "The client sent more data after the query."
+                    );
 
                 List<DnsMessage> messages = await handler(query, raw, tsigOffset);
 
@@ -189,6 +198,13 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
                 // The client gave up, or the test ended and disposed the listener while this
                 // task still waited on it; the test's assertions report what went wrong.
             }
+            catch (Exception exception)
+            {
+                // A failure of the fake itself (a protocol violation by the client, a handler
+                // that threw) is kept and rethrown by DisposeAsync, so it is reported with its
+                // cause and is not mistaken for a client that gave up.
+                _failure = exception;
+            }
         }
 
         public async ValueTask DisposeAsync()
@@ -196,6 +212,12 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
             await _listener.DisposeAsync();
             await _serving;
             _certificate.Dispose();
+
+            if (_failure is not null)
+                throw new InvalidOperationException(
+                    "The fake QUIC primary failed while serving the client.",
+                    _failure
+                );
         }
     }
 
