@@ -117,9 +117,10 @@ public sealed partial class ForwarderQueryResolverTests
     )
     {
         // The gated upstream holds a query until the test lets it go, which can take longer than
-        // the default per-forwarder timeout on a loaded machine. A leader cut off by that timeout
-        // would answer NotHandled and fail the test for a reason unrelated to coalescing, so the
-        // timeout is longer than any wait UntilAsync allows.
+        // the 2 s per-forwarder timeout of the caching options (the product default is 3 s) on a
+        // loaded machine. A leader cut off by that timeout would answer NotHandled and fail the
+        // test for a reason unrelated to coalescing, so the timeout is longer than any wait
+        // UntilAsync allows.
         _cachingForwardingOptions.PerForwarderTimeout = _coalescingTimeout * 2;
 
         return CreateResolver(
