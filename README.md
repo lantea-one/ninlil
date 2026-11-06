@@ -5789,8 +5789,8 @@ Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize**, paste
 - **Enum values are names, as text.** A zone `type` of `Primary` works; the names are not case
   sensitive, so `primary` also works. A name Ninlil does not know gives `400`, and so does a JSON
   number: `"type":1` answers `Expected a string value for ZoneTypeEnum but found Number.` Enum
-  query-string parameters such as `sort` and `presence` on `GET /api/clients` follow the same rule:
-  a digit string or an unknown name answers `400` and lists the valid names. The Swagger UI lists
+  query-string parameters and route segments follow the same rule: a digit string or an unknown
+  name answers `400` and lists the valid names. The Swagger UI lists
   the valid names for every field.
 - **`PATCH` ignores a field it does not know.** A misspelled name in a `PATCH` body is skipped and
   the answer is still `204`. Check the result with a `GET`.

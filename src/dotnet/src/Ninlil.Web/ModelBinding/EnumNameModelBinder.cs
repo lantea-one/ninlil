@@ -1,27 +1,49 @@
-using System.Reflection;
-using System.Runtime.Serialization;
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Ninlil.Web.Serialization;
 
 // Define our namespace.
 namespace Ninlil.Web.ModelBinding;
 
 /// <summary>
-///     This model binder reads one enum-typed query-string or route value by declared member name
-///     only, ignoring case and surrounding whitespace. MVC's built-in enum binder also takes digit
+///     This model binder reads one enum-typed query-string or route value by declared name only,
+///     ignoring case and surrounding whitespace. MVC's built-in enum binder also takes digit
 ///     strings, including numbers that name no member, so a caller could send
-///     <c>?sort=7</c> and reach the action with an undefined value. An <c>[EnumMember]</c> wire
-///     name is accepted as well, the same set the request-body converters take.
+///     <c>?sort=7</c> and reach the action with an undefined value. The binder matches through
+///     <see cref="RequestEnumNames{TEnum}" />, the same table the request-body converter
+///     <see cref="RequestEnumNameJsonConverter{TEnum}" /> uses, so a body and a query accept the
+///     same spellings (member names, <c>JsonStringEnumMemberName</c>, <c>EnumMember</c>,
+///     <c>DisplayName</c> and written names) and a 400 lists the same valid names.
 ///     <see cref="EnumNameModelBinderProvider" /> hands this binder to every enum parameter.
 ///     <para>
 ///         A missing or blank value leaves the parameter unbound, so a nullable parameter stays
-///         null and a non-nullable one keeps its default, exactly as before. A refused value adds
-///         a model-state error that lists the valid names, which <c>[ApiController]</c> turns into
-///         a 400 response.
+///         null and a non-nullable one keeps its default. A refused value adds a model-state error
+///         that lists the valid names, which <c>[ApiController]</c> turns into a 400 response. A
+///         parameter sent more than once is checked value by value: one refused value gives a 400,
+///         otherwise the first value binds.
 ///     </para>
 /// </summary>
-/// <param name="enumType">The enum type, with any <see cref="Nullable{T}" /> already removed.</param>
-public sealed class EnumNameModelBinder(System.Type enumType) : IModelBinder
+public sealed class EnumNameModelBinder : IModelBinder
 {
+    private static readonly ConcurrentDictionary<System.Type, IRequestEnumNames> NamesByType =
+        new();
+
+    private readonly System.Type enumType;
+    private readonly IRequestEnumNames names;
+
+    /// <summary>Creates the binder for one enum type.</summary>
+    /// <param name="enumType">The enum type, with any <see cref="Nullable{T}" /> already removed.</param>
+    public EnumNameModelBinder(System.Type enumType)
+    {
+        this.enumType = enumType;
+        names = NamesByType.GetOrAdd(
+            enumType,
+            type =>
+                (IRequestEnumNames)
+                    Activator.CreateInstance(typeof(RequestEnumNames<>).MakeGenericType(type))
+        );
+    }
+
     /// <inheritdoc />
     public Task BindModelAsync(ModelBindingContext bindingContext)
     {
@@ -33,57 +55,43 @@ public sealed class EnumNameModelBinder(System.Type enumType) : IModelBinder
         if (result == ValueProviderResult.None)
             return Task.CompletedTask;
 
-        string text = result.FirstValue?.Trim();
-        if (string.IsNullOrEmpty(text))
-            return Task.CompletedTask;
-
-        bindingContext.ModelState.SetModelValue(bindingContext.ModelName, result);
-
-        if (TryParse(text, out object value))
+        // A repeated parameter must not smuggle a bad value behind a good first one.
+        object first = null;
+        bool hasFirst = false;
+        for (int index = 0; index < result.Values.Count; index++)
         {
-            bindingContext.Result = ModelBindingResult.Success(value);
-            return Task.CompletedTask;
+            string text = result.Values[index]?.Trim();
+            if (string.IsNullOrEmpty(text))
+                continue;
+
+            if (!names.TryParse(text, out object value))
+            {
+                bindingContext.ModelState.SetModelValue(bindingContext.ModelName, result);
+                bindingContext.ModelState.TryAddModelError(
+                    bindingContext.ModelName,
+                    $"'{text}' is not a valid value for {enumType.Name}. Valid values: "
+                        + names.ValidNames
+                        + "."
+                );
+                bindingContext.Result = ModelBindingResult.Failed();
+                return Task.CompletedTask;
+            }
+
+            if (index == 0)
+            {
+                first = value;
+                hasFirst = true;
+            }
         }
 
-        bindingContext.ModelState.TryAddModelError(
-            bindingContext.ModelName,
-            $"'{text}' is not a valid value for {enumType.Name}. Valid values: "
-                + string.Join(", ", Enum.GetNames(enumType))
-                + "."
-        );
-        bindingContext.Result = ModelBindingResult.Failed();
+        // A blank value is not a value; only a non-blank first value binds. The model-state value
+        // is set only then, because an entry for a blank value makes the request invalid.
+        if (hasFirst)
+        {
+            bindingContext.ModelState.SetModelValue(bindingContext.ModelName, result);
+            bindingContext.Result = ModelBindingResult.Success(first);
+        }
+
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    ///     Matches the text against the member names, then the wire names. A digit string matches
-    ///     neither because member names cannot start with a digit and no wire name is a bare number.
-    /// </summary>
-    private bool TryParse(string text, out object value)
-    {
-        foreach (string name in Enum.GetNames(enumType))
-        {
-            if (!string.Equals(name, text, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            value = Enum.Parse(enumType, name);
-            return true;
-        }
-
-        foreach (FieldInfo field in enumType.GetFields(BindingFlags.Public | BindingFlags.Static))
-        {
-            string wireName = field.GetCustomAttribute<EnumMemberAttribute>()?.Value;
-            if (
-                wireName is null
-                || !string.Equals(wireName, text, StringComparison.OrdinalIgnoreCase)
-            )
-                continue;
-
-            value = field.GetValue(null)!;
-            return true;
-        }
-
-        value = null;
-        return false;
     }
 }

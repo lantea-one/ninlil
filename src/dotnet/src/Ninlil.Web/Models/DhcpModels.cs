@@ -586,8 +586,8 @@ public record DhcpRaInterfaceOverrideDetail(
 ///     <c>/api/dhcp-services</c> reports on and controls, one per service. The
 ///     <c>{kind}</c> route segment of <c>POST /api/dhcp-services/{kind}/start</c>
 ///     and <c>POST /api/dhcp-services/{kind}/stop</c> binds to it
-///     case-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model
-///     binding before the action runs.
+///     by declared name only, case-insensitively, so a digit string or an unknown segment fails
+///     model binding with 400 before the action runs.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<DhcpServiceKindEnum>))]
 public enum DhcpServiceKindEnum

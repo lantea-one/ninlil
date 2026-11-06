@@ -73,9 +73,10 @@ outside Forgejo.
   `PATCH` merge-patch bodies, the DNSSEC policy's allowed algorithms, the storage switch's
   encryption mode and the settings pages that take enum text. Responses are unchanged: they
   write names, and a number only for a code that has no name. Enums inside a record's `data`
-  payload are not covered by this rule. Enum query-string parameters (a client list's
-  `presence` and `sort`, the DHCP option catalog's `protocolVersion`) follow it too: a digit
-  string or an undefined name answers `400` with the valid names. Scripts that send numbers
+  payload are not covered by this rule. Enum query-string parameters and route segments
+  (a client list's `presence` and `sort`, the DHCP option catalog's `protocolVersion`, the
+  `{kind}` of `/api/dhcp-services/{kind}/start`) follow it too: a digit string or an undefined
+  name answers `400` with the valid names. Scripts that send numbers
   must send the names that the OpenAPI document (`/swagger/v1/swagger.json`) lists for the
   field. The MySQL load-balance and MongoDB read-preference replica settings refuse comma lists
   and numbers in the same way. See [REST API](./README.md#rest-api)
