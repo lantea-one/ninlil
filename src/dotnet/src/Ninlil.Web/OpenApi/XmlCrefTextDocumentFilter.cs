@@ -34,8 +34,9 @@ public class XmlCrefTextDocumentFilter : IDocumentFilter
         HashSet<string> typeNames = NinlilTypeNames.Value;
         // The C# compiler writes the XML documentation file with the line endings of the platform
         // it runs on, so a Windows build carries "\r\n" in every multi-line summary and Swashbuckle
-        // copies it into the document. Every text passes through here, so one normalisation to "\n"
-        // makes the document identical on every platform.
+        // copies it into the document. Every summary and description this filter walks passes
+        // through here, and those are the only fields filled from the XML documentation file, so
+        // one normalisation to "\n" makes the document identical on every platform.
         string Render(string text) =>
             XmlCrefText
                 .Render(text, operationsByAction, typeNames.Contains)
