@@ -204,6 +204,66 @@
     "exclusive": true
   },
   {
+    "name": "theme/post-release-fixes",
+    "color": "c5def5",
+    "description": "Bugs, Windows test failures, wrong docs and small decided changes found after a release",
+    "exclusive": true
+  },
+  {
+    "name": "theme/tracker-setup",
+    "color": "c5def5",
+    "description": "Labels, templates, workflow docs and agent roles for working from the tracker",
+    "exclusive": true
+  },
+  {
+    "name": "theme/valkey",
+    "color": "c5def5",
+    "description": "Optional ValKey for cross-node cache expiry and the live-feed backplane",
+    "exclusive": true
+  },
+  {
+    "name": "theme/ad-samba-dns",
+    "color": "c5def5",
+    "description": "Active Directory and Samba DNS: GSS-TSIG, name ownership, aging and scavenging",
+    "exclusive": true
+  },
+  {
+    "name": "theme/alternatives-benchmark",
+    "color": "c5def5",
+    "description": "Reproducible black-box benchmark against alternatives",
+    "exclusive": true
+  },
+  {
+    "name": "theme/parity-query",
+    "color": "c5def5",
+    "description": "Query side: query log, filter check, statistics, blocking",
+    "exclusive": true
+  },
+  {
+    "name": "theme/parity-devices",
+    "color": "c5def5",
+    "description": "Devices, DHCP safety features, alerts and notification channels",
+    "exclusive": true
+  },
+  {
+    "name": "theme/console-toolchain",
+    "color": "c5def5",
+    "description": "Admin console, front-end toolchain and test standards",
+    "exclusive": true
+  },
+  {
+    "name": "theme/windows-installer",
+    "color": "c5def5",
+    "description": "Windows data-directory setting, MSI and winget",
+    "exclusive": true
+  },
+  {
+    "name": "theme/later",
+    "color": "c5def5",
+    "description": "Low priority or needs design; not planned for a release yet",
+    "exclusive": true
+  },
+  {
     "name": "resolution/duplicate",
     "color": "ffffff",
     "description": "Closed as a duplicate",
