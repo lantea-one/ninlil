@@ -9,7 +9,8 @@ labels:
 - **Kind:** <bug, feature, docs, chore>
 - **Area:** <for example dns, dhcp, console, storage, docs, pipeline>
 - **Priority:** <high, medium, low, with the reason>
-- **Milestone:** <milestone name>
+- **Milestone:** <`Release: <scope>` when it must ship in that release, otherwise none>
+- **Theme:** <`theme/` label, for example theme/valkey or theme/later>
 - **Agent:** <agent role, for example coder; the roles are listed in [Code conventions](https://git.lantea.one/lantea-one/ninlil/src/branch/main/AGENTS.md#code-conventions)>
 - **Depends on:** <#issue numbers, or none>
 - **Decisions:** <owner decisions that bind this work, or none>
