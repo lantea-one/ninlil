@@ -45,6 +45,21 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **A node that joins a cluster receives the inviting node's configuration, and a peer that missed
+  a change catches up.** When a join completes, the inviting node sends the new peer its
+  filter lists, the entries of local lists, access control rules, global rewrites, forwarders,
+  users, roles, deletion records and the five synced settings sections, after the next heartbeat
+  that reaches it. A failed live delivery, or a change made while a peer is `Unreachable`, makes
+  the next successful heartbeat send that peer a full pass too, so a node that was down catches up
+  without another save. A failed pass runs again in full. Zones, records, DHCP data, the entries
+  of subscribed lists and rewrites scoped to a client or group are not copied. The joining node's
+  own bootstrap account and role merge by the newest-write rule and the loser is renamed: delete the
+  joining node's own pair after the join. Membership stays pairwise and changes are not relayed.
+  Password hashes, two-factor secrets and synced secrets travel inside the signed, encrypted
+  cluster channel, so treat an invite code as full trust. The log shows each pass as `Config
+  backfill to peer node '<name>' started`, `done: <n> items delivered` or `failed`. See
+  [Clustering, events and webhooks](./README.md#clustering-events-and-webhooks)
+  ([#59](https://git.lantea.one/lantea-one/ninlil/issues/59)).
 - **Renaming a DHCP scope keeps its leases.** A lease refers to its scope by id, so a renamed
   scope keeps its leases, the DHCP engine renews them, and their DNS records stay registered. On
   upgrade, each existing lease takes the id of the scope with its scope name, and a lease whose
