@@ -342,6 +342,39 @@ public sealed class FramedDnsStreamSessionTests
     }
 
     [Fact]
+    public async Task ClosedAfterDrain_IsFalseAfterAPeerCloseAndAnIdleTimeout_TrueAfterAHandlerClose()
+    {
+        // The client closes its side at a frame boundary.
+        await using (Harness peerClose = await Harness.StartAsync(TimeSpan.FromSeconds(30)))
+        {
+            peerClose.Client.Client.Shutdown(SocketShutdown.Send);
+            await peerClose.RunTask.WaitAsync(SafetyTimeout);
+            Assert.False(peerClose.Session.ClosedAfterDrain);
+        }
+
+        // The client sends nothing and the idle timeout ends the session.
+        await using (Harness idle = await Harness.StartAsync(TimeSpan.FromMilliseconds(200)))
+        {
+            await idle.RunTask.WaitAsync(SafetyTimeout);
+            Assert.False(idle.Session.ClosedAfterDrain);
+        }
+
+        // A handler asks to close.
+        await using (
+            Harness handlerClose = await Harness.StartAsync(
+                TimeSpan.FromSeconds(30),
+                handler: (message, session, token) =>
+                    Task.FromResult(FrameOutcomeEnum.CloseAfterDrain)
+            )
+        )
+        {
+            await handlerClose.SendFrameAsync(1, 8);
+            await handlerClose.RunTask.WaitAsync(SafetyTimeout);
+            Assert.True(handlerClose.Session.ClosedAfterDrain);
+        }
+    }
+
+    [Fact]
     public async Task EnqueuedAndCloseAfterDrain_WaitsForTheReplyThenClosesWithoutReadingFurther()
     {
         int handled = 0;
@@ -646,7 +679,8 @@ public sealed class FramedDnsStreamSessionTests
                 if (Session.ClosedAfterDrain)
                     await LingeringSocketClose.CloseAsync(
                         _serverSocket,
-                        TimeSpan.FromMilliseconds(200)
+                        TimeSpan.FromMilliseconds(200),
+                        CancellationToken.None
                     );
                 else
                     _serverSocket.Close();

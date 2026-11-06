@@ -182,11 +182,19 @@ public sealed class FramedDnsStreamSession
 
     /// <summary>
     ///     This property is <see langword="true" /> once <see cref="RunAsync" /> returned because
-    ///     a handler asked to close after the drain and every reply was written, not because of an
-    ///     abort or an idle client. The client may still have unread data on the socket in that
-    ///     case, so the owner closes with <see cref="LingeringSocketClose.CloseAsync" />.
+    ///     a handler returned <see cref="FrameOutcomeEnum.CloseAfterDrain" /> or
+    ///     <see cref="FrameOutcomeEnum.EnqueuedAndCloseAfterDrain" /> and every reply was written.
+    ///     It stays <see langword="false" /> after an abort, a peer close or the idle timeout. The
+    ///     client may still have unread data on the socket in the <see langword="true" /> case, so
+    ///     the owner closes with <see cref="LingeringSocketClose.CloseAsync" />.
     /// </summary>
     public bool ClosedAfterDrain { get; private set; }
+
+    /// <summary>
+    ///     This field is set when a handler asked to close after the drain; the read loop then
+    ///     returns like it does for a peer close, so the flag tells the two apart.
+    /// </summary>
+    private bool _handlerRequestedClose;
 
     /// <summary>
     ///     This method ends the connection now. Queued frames are discarded, in-flight slots are
@@ -305,7 +313,7 @@ public sealed class FramedDnsStreamSession
             if (await ReadLoopAsync(handleFrameAsync))
             {
                 await WaitForInFlightQueriesAsync();
-                ClosedAfterDrain = !Lifetime.IsCancellationRequested;
+                ClosedAfterDrain = _handlerRequestedClose && !Lifetime.IsCancellationRequested;
             }
         }
         catch (OperationCanceledException)
@@ -410,7 +418,10 @@ public sealed class FramedDnsStreamSession
                     is FrameOutcomeEnum.CloseAfterDrain
                         or FrameOutcomeEnum.EnqueuedAndCloseAfterDrain
                 )
+                {
+                    _handlerRequestedClose = true;
                     return true;
+                }
             }
             catch
             {

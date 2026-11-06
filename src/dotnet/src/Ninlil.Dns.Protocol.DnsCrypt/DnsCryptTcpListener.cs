@@ -264,7 +264,8 @@ public sealed class DnsCryptTcpListener(
             if (lingeringClose)
                 await LingeringSocketClose.CloseAsync(
                     connection,
-                    LingeringSocketClose.DefaultMaxWait
+                    LingeringSocketClose.DefaultMaxWait,
+                    stoppingToken
                 );
             else
                 connection.Close();

@@ -22,18 +22,27 @@ public static class LingeringSocketClose
 
     /// <summary>
     ///     This method sends the closing FIN, discards what the peer still sends until the peer
-    ///     closes or <paramref name="maxWait" /> passes, and then closes the socket. Reading the
+    ///     closes, <paramref name="maxWait" /> passes or <paramref name="stoppingToken" /> is
+    ///     cancelled (the host is stopping), and then closes the socket. Reading the
     ///     data empties the receive queue, so the final close is not a reset. It never throws.
     /// </summary>
     /// <param name="socket">The connection to close. It is closed before the method returns.</param>
     /// <param name="maxWait">The longest to wait for the peer; <see cref="DefaultMaxWait" />.</param>
-    public static async Task CloseAsync(Socket socket, TimeSpan maxWait)
+    /// <param name="stoppingToken">Ends the wait early when the host stops.</param>
+    public static async Task CloseAsync(
+        Socket socket,
+        TimeSpan maxWait,
+        CancellationToken stoppingToken
+    )
     {
         try
         {
             socket.Shutdown(SocketShutdown.Send);
 
-            using CancellationTokenSource timeout = new(maxWait);
+            using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
+                stoppingToken
+            );
+            timeout.CancelAfter(maxWait);
             byte[] discard = new byte[512];
 
             // A read of zero octets is the peer's own close.

@@ -226,7 +226,8 @@ public sealed class TcpDnsListener(
             if (lingeringClose)
                 await LingeringSocketClose.CloseAsync(
                     connection,
-                    LingeringSocketClose.DefaultMaxWait
+                    LingeringSocketClose.DefaultMaxWait,
+                    stoppingToken
                 );
             else
                 connection.Close();
