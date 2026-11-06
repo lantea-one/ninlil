@@ -7,7 +7,9 @@ namespace Ninlil.TestSupport;
 ///     Removes the temporary files and directories that tests create under
 ///     <see cref="Path.GetTempPath" />. The file is linked into every test project by
 ///     <c>src/dotnet/tests/Directory.Build.props</c>, so each test class calls it from
-///     <c>Dispose</c> or a <c>finally</c> block instead of repeating its own cleanup.
+///     <c>Dispose</c> or a <c>finally</c> block instead of repeating its own cleanup. Deleting a
+///     <c>.pfx</c> file or a directory also removes the Windows certificate-store entries and keys
+///     that loading those certificates created (see <see cref="TlsCertificateStore" />).
 /// </summary>
 /// <remarks>
 ///     SQLite keeps a <c>-wal</c> and a <c>-shm</c> file next to a database in WAL mode and a
@@ -53,6 +55,9 @@ internal static class TemporaryFiles
         if (string.IsNullOrEmpty(directoryPath) || !Directory.Exists(directoryPath))
             return;
 
+        // Certificate files in the tree name the Windows store entries that loading them created.
+        TlsCertificateStore.RemoveEntriesUnder(directoryPath);
+
         // Clear only the pools of the databases under this directory. ClearAllPools would also
         // close connections that tests running in parallel are using.
         foreach (
@@ -81,6 +86,10 @@ internal static class TemporaryFiles
     {
         if (string.IsNullOrEmpty(path))
             return;
+
+        // A certificate file names the Windows store entries that loading it created.
+        if (path.EndsWith(".pfx", StringComparison.OrdinalIgnoreCase))
+            TlsCertificateStore.RemoveEntriesForSource(path);
 
         try
         {

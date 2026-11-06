@@ -104,8 +104,7 @@ public sealed class DnsOverQuicReplyFramingTests
             await pipeline.StopAsync(CancellationToken.None);
             await pipeline.DisposeAsync();
 
-            if (File.Exists(statePath))
-                File.Delete(statePath);
+            TemporaryFiles.DeleteFile(statePath);
         }
     }
 

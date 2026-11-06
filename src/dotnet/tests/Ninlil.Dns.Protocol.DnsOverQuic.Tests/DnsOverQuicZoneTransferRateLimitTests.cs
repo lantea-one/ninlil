@@ -280,8 +280,7 @@ public sealed class DnsOverQuicZoneTransferRateLimitTests
             await _pipeline.StopAsync(CancellationToken.None);
             await _pipeline.DisposeAsync();
 
-            if (File.Exists(_certificateStatePath))
-                File.Delete(_certificateStatePath);
+            TemporaryFiles.DeleteFile(_certificateStatePath);
         }
     }
 

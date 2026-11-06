@@ -6,7 +6,7 @@
     TestSupport/TemporaryFiles.cs is compiled into every test project as an internal type (one
     copy per assembly, no shared test-support assembly). The global using makes
     Ninlil.TestSupport.TemporaryFiles available without a using directive in each test file.
-    PortTakenReason.cs is linked the same way.
+    PortTakenReason.cs and TlsCertificateStore.cs are linked the same way.
   -->
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
@@ -18,6 +18,10 @@
     <Compile
       Include="$(MSBuildThisFileDirectory)TestSupport/PortTakenReason.cs"
       Link="TestSupport/PortTakenReason.cs"
+    />
+    <Compile
+      Include="$(MSBuildThisFileDirectory)TestSupport/TlsCertificateStore.cs"
+      Link="TestSupport/TlsCertificateStore.cs"
     />
     <Using Include="Ninlil.TestSupport" />
   </ItemGroup>
