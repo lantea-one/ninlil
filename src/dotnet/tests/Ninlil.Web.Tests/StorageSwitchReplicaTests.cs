@@ -29,8 +29,7 @@ public sealed class StorageSwitchReplicaTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        Directory.Delete(_directory, recursive: true);
+        TemporaryFiles.DeleteDirectory(_directory);
     }
 
     private StorageEngineSwitchService CreateService(StorageOptions options)

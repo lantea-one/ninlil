@@ -89,8 +89,7 @@ public sealed class SystemBackupServiceAtomicRestoreTests : IAsyncLifetime
     {
         _host.Dispose();
 
-        if (Directory.Exists(_rootDirectory))
-            Directory.Delete(_rootDirectory, recursive: true);
+        TemporaryFiles.DeleteDirectory(_rootDirectory);
 
         return Task.CompletedTask;
     }

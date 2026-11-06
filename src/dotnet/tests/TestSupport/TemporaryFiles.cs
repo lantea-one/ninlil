@@ -43,14 +43,26 @@ internal static class TemporaryFiles
 
     /// <summary>
     ///     Deletes a directory and everything below it, including SQLite databases with their
-    ///     side files. Callers dispose their contexts first; the directory delete does not clear
-    ///     connection pools. A missing directory is ignored.
+    ///     side files. The pool of every <c>*.sqlite3</c> database in the tree is cleared first,
+    ///     so Windows can delete the files. Callers dispose their contexts first. A missing
+    ///     directory is ignored.
     /// </summary>
     /// <param name="directoryPath">The directory to remove.</param>
     public static void DeleteDirectory(string directoryPath)
     {
         if (string.IsNullOrEmpty(directoryPath) || !Directory.Exists(directoryPath))
             return;
+
+        // Clear only the pools of the databases under this directory. ClearAllPools would also
+        // close connections that tests running in parallel are using.
+        foreach (
+            string databasePath in Directory.EnumerateFiles(
+                directoryPath,
+                "*.sqlite3",
+                SearchOption.AllDirectories
+            )
+        )
+            ClearSqliteConnectionPool(databasePath);
 
         try
         {

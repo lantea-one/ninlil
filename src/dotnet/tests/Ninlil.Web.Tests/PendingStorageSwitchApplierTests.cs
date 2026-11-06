@@ -52,8 +52,7 @@ public sealed class PendingStorageSwitchApplierTests : IDisposable
         foreach (ServiceProvider provider in _providers)
             provider.Dispose();
 
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        Directory.Delete(_directory, recursive: true);
+        TemporaryFiles.DeleteDirectory(_directory);
     }
 
     private string DatabasePath(string name) => Path.Combine(_directory, $"{name}.sqlite3");
