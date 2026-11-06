@@ -130,6 +130,11 @@ outside Forgejo.
   a reset made the client throw away the final reply it had not read yet.
   ([#12](https://git.lantea.one/lantea-one/ninlil/issues/12))
 
+- **The OpenAPI document has the same text on Windows as on Linux.** The server turns every
+  `\r\n` in a summary or description into `\n`, so an executable built on Windows serves the same
+  document as one built on Linux.
+  ([#15](https://git.lantea.one/lantea-one/ninlil/issues/15))
+
 ## v2026.10.31.1
 
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with

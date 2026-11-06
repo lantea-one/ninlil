@@ -11,7 +11,8 @@ namespace Ninlil.Web.OpenApi;
 ///     This class runs <see cref="XmlCrefText.Render" /> over every summary and description of the
 ///     published OpenAPI document, so the document and the TypeScript client generated from it name
 ///     endpoints and types instead of internal documentation IDs. It changes only text, never a
-///     path, schema or example value. <see cref="Program" /> registers it with
+///     path, schema or example value. It also turns every <c>\r\n</c> or lone <c>\r</c> into
+///     <c>\n</c>. <see cref="Program" /> registers it with
 ///     <c>SwaggerGenOptions.DocumentFilter</c>.
 ///     <para>
 ///         It walks the document info, tags, security schemes, every operation (parameters, request
@@ -31,8 +32,15 @@ public class XmlCrefTextDocumentFilter : IDocumentFilter
             context.ApiDescriptions
         );
         HashSet<string> typeNames = NinlilTypeNames.Value;
+        // The C# compiler writes the XML documentation file with the line endings of the platform
+        // it runs on, so a Windows build carries "\r\n" in every multi-line summary and Swashbuckle
+        // copies it into the document. Every text passes through here, so one normalisation to "\n"
+        // makes the document identical on every platform.
         string Render(string text) =>
-            XmlCrefText.Render(text, operationsByAction, typeNames.Contains);
+            XmlCrefText
+                .Render(text, operationsByAction, typeNames.Contains)
+                ?.Replace("\r\n", "\n")
+                .Replace('\r', '\n');
 
         HashSet<object> seen = new(ReferenceEqualityComparer.Instance);
 
