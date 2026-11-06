@@ -341,8 +341,10 @@ Every comment is for a reader opening the file cold, today.
 - A closing keyword on an issue with open dependencies does nothing, silently: merge the
   dependency's pull request first, or close the issue by hand. A commit keyword on a commit that
   sits only on `develop`, a release or a hotfix branch closes nothing until it reaches `main`.
-- Milestones are themes, not releases. Close a milestone by hand when its last issue ships; its
-  description names the release.
+- Milestones are releases, named `Release: <scope>`. A release is cut when its milestone has no
+  open issue (scope-based, not dated). Put a new issue in a release milestone only when it must ship
+  in that release; otherwise leave it without a milestone. The theme is an exclusive `theme/*`
+  label. At the cut, the milestone is closed and its description names the version.
 - Never push, and never commit secrets, unless the user explicitly asks.
 
 ## Before you finish
