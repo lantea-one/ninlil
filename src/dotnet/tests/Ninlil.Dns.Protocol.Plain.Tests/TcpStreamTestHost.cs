@@ -30,7 +30,7 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
     private DnsQueryProcessingPipeline _pipeline;
     private TcpDnsListener _tcp;
 
-    public int Port { get; private init; }
+    public int Port { get; private set; }
 
     /// <summary>
     ///     This property contains the gate the <c>slow</c> queries wait on; completing it lets
@@ -54,33 +54,17 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
     private readonly SemaphoreSlim _slowArrived = new(0);
 
     /// <summary>
-    ///     This method starts the pipeline and a <see cref="TcpDnsListener" /> on a free loopback
-    ///     port. <see cref="TcpDnsListener" /> does not expose the port it bound, so the port is
-    ///     reserved and released first (<see cref="LocalAddresses.GetFreePort" />, which searches
-    ///     past the ports Windows excludes) and the start is retried on another port when
-    ///     another process takes it in between.
+    ///     This method starts the pipeline and a <see cref="TcpDnsListener" /> on port 0, so the
+    ///     OS picks a free loopback port, and reads the port it chose from
+    ///     <see cref="TcpDnsListener.BoundPort" />.
     /// </summary>
-    public static Task<TcpStreamTestHost> StartAsync(
+    public static async Task<TcpStreamTestHost> StartAsync(
         TimeSpan idleTimeout,
         IZoneTransferService transferService = null,
         IDnsRateLimiter rateLimiter = null
-    ) =>
-        LocalAddresses.StartOnFreePortAsync(port =>
-            TryStartAsync(port, idleTimeout, transferService, rateLimiter)
-        );
-
-    /// <summary>
-    ///     This method makes one start attempt and returns <see langword="null" /> when the
-    ///     port could not be bound.
-    /// </summary>
-    private static async Task<TcpStreamTestHost> TryStartAsync(
-        int port,
-        TimeSpan idleTimeout,
-        IZoneTransferService transferService,
-        IDnsRateLimiter rateLimiter
     )
     {
-        TcpStreamTestHost host = new() { Port = port };
+        TcpStreamTestHost host = new();
 
         host._pipeline = new DnsQueryProcessingPipeline(
             new DnsQueryDispatcher([new HostResolver(host)], new NoOpEventPublisher()),
@@ -102,7 +86,7 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
             new StaticOptionsMonitor<PlainProtocolOptions>(
                 new PlainProtocolOptions
                 {
-                    Port = host.Port,
+                    Port = 0,
                     ListenAddresses = "127.0.0.1",
                     TcpIdleTimeout = idleTimeout,
                 }
@@ -125,12 +109,14 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
             await Task.Delay(10);
         }
 
-        if (host._tcp.IsListening)
-            return host;
+        if (!host._tcp.IsListening)
+        {
+            await host.DisposeAsync();
+            throw new InvalidOperationException("The TCP listener could not bind a loopback port.");
+        }
 
-        // The port was taken after it was released; the caller tries another.
-        await host.DisposeAsync();
-        return null;
+        host.Port = host._tcp.BoundPort;
+        return host;
     }
 
     /// <summary>

@@ -146,6 +146,22 @@ outside Forgejo.
   retries the file replace for up to about a second instead of failing.
   ([#13](https://git.lantea.one/lantea-one/ninlil/issues/13))
 
+- **On Windows, a client that closes its port before the reply no longer logs a warning.** Windows
+  reports the ICMP "port unreachable" that follows as an error on the server's next UDP receive,
+  and Ninlil logged "Error receiving a UDP datagram" for each one, which any sender could
+  provoke. Plain DNS, DNSCrypt, DHCPv4, DHCPv6, the TFTP listener and the DHCPv6 relay now switch
+  that behaviour off on their UDP sockets. Linux is unaffected.
+  ([#17](https://git.lantea.one/lantea-one/ninlil/issues/17))
+
+- **On Windows, a pooled outbound UDP socket no longer fails a query because of an earlier one.**
+  With the outbound source-port pool on (`EnableSourcePortPool`), one UDP socket carries many
+  queries to different upstreams. Windows reports the ICMP "port unreachable" from a query to a
+  dead upstream as an error on that socket's next receive, which could be a later query to a
+  healthy upstream, and that query then failed. Pooled sockets now switch that behaviour off, so
+  a dead upstream is detected by the per-forwarder timeout, as on Linux. With the pool off (the
+  default), each query still has its own socket and a dead upstream fails at once on Windows.
+  ([#364](https://git.lantea.one/lantea-one/ninlil/issues/364))
+
 - **Registering a YAML converter while another thread serializes no longer throws.** In the
   `Ninlil.Common.Serializer` library, `YamlSerializer.AddConverter` and the serializers it builds
   share one converter list; a YAML request read at the same moment as a registration could fail

@@ -122,19 +122,17 @@ public sealed class DualStackClientAddressTests
         private UdpDnsListener _udp;
         private TcpDnsListener _tcp;
 
-        public int Port { get; private init; }
+        public int Port { get; private set; }
 
         public RecordingResolver Resolver { get; } = new();
 
-        public static Task<Host> StartAsync() => LocalAddresses.StartOnFreePortAsync(TryStartAsync);
-
         /// <summary>
-        ///     This method makes one start attempt on <paramref name="port" /> and returns
-        ///     <see langword="null" /> when a listener could not bind it.
+        ///     This method starts the pipeline and both listeners on one port that the OS picks,
+        ///     and returns once they listen.
         /// </summary>
-        private static async Task<Host> TryStartAsync(int port)
+        public static async Task<Host> StartAsync()
         {
-            Host host = new() { Port = port };
+            Host host = new();
 
             host._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher([host.Resolver], new NoOpEventPublisher()),
@@ -145,50 +143,73 @@ public sealed class DualStackClientAddressTests
             );
             await host._pipeline.StartAsync(CancellationToken.None);
 
-            StaticOptionsMonitor<PlainProtocolOptions> options = new(
-                new PlainProtocolOptions { Port = host.Port, ListenAddresses = "" }
-            );
+            IServiceScopeFactory scopes = new ServiceCollection()
+                .BuildServiceProvider()
+                .GetRequiredService<IServiceScopeFactory>();
 
-            host._udp = new UdpDnsListener(
-                host._pipeline,
-                options,
-                NullLogger<UdpDnsListener>.Instance
-            );
-            host._tcp = new TcpDnsListener(
-                host._pipeline,
-                new ServiceCollection()
-                    .BuildServiceProvider()
-                    .GetRequiredService<IServiceScopeFactory>(),
-                options,
-                NullLogger<TcpDnsListener>.Instance
-            );
+            // UDP and TCP must share one port number. UDP binds port 0 and the OS picks it; TCP
+            // then asks for that number, which another process may have taken for TCP in the
+            // meantime, or which Windows excludes for TCP only (a run of such ports can be
+            // hundreds long, and the OS hands UDP port-0 binds out in sequence). A failed pair
+            // moves on to the next port, up to LocalAddresses.PortSearchLimit times.
+            for (int attempt = 1; ; attempt++)
+            {
+                host._udp = new UdpDnsListener(
+                    host._pipeline,
+                    new StaticOptionsMonitor<PlainProtocolOptions>(
+                        new PlainProtocolOptions { Port = 0, ListenAddresses = "" }
+                    ),
+                    NullLogger<UdpDnsListener>.Instance
+                );
+                await host._udp.StartAsync(CancellationToken.None);
+                await WaitForBindOutcomeAsync(() =>
+                    host._udp.IsListening || host._udp.FailedListenAddresses.Count > 0
+                );
 
-            await host._udp.StartAsync(CancellationToken.None);
-            await host._tcp.StartAsync(CancellationToken.None);
+                Assert.True(host._udp.IsListening);
+                host.Port = host._udp.BoundPort;
 
-            // The listeners bind in ExecuteAsync, which may run after StartAsync returns, so wait
-            // for each to report listening or a failed bind. A fixed delay is too short on a
-            // loaded machine.
+                host._tcp = new TcpDnsListener(
+                    host._pipeline,
+                    scopes,
+                    new StaticOptionsMonitor<PlainProtocolOptions>(
+                        new PlainProtocolOptions { Port = host.Port, ListenAddresses = "" }
+                    ),
+                    NullLogger<TcpDnsListener>.Instance
+                );
+                await host._tcp.StartAsync(CancellationToken.None);
+                await WaitForBindOutcomeAsync(() =>
+                    host._tcp.IsListening || host._tcp.FailedListenAddresses.Count > 0
+                );
+
+                if (host._tcp.IsListening)
+                    return host;
+
+                await host._tcp.StopAsync(CancellationToken.None);
+                await host._udp.StopAsync(CancellationToken.None);
+
+                if (attempt == LocalAddresses.PortSearchLimit)
+                    throw new InvalidOperationException("No port was free for both UDP and TCP.");
+            }
+        }
+
+        /// <summary>
+        ///     This method waits until the listener reports listening or a failed bind. The
+        ///     listeners bind in ExecuteAsync, which may run after StartAsync returns, and a fixed
+        ///     delay is too short on a loaded machine.
+        /// </summary>
+        private static async Task WaitForBindOutcomeAsync(Func<bool> hasOutcome)
+        {
             using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
 
-            while (
-                !(host._udp.IsListening || host._udp.FailedListenAddresses.Count > 0)
-                || !(host._tcp.IsListening || host._tcp.FailedListenAddresses.Count > 0)
-            )
+            while (!hasOutcome())
             {
                 Assert.False(
                     deadline.IsCancellationRequested,
-                    "The listeners did not report a bind outcome in time."
+                    "The listener did not report a bind outcome in time."
                 );
                 await Task.Delay(10);
             }
-
-            if (host._udp.IsListening && host._tcp.IsListening)
-                return host;
-
-            // Another process took the port after it was released; the caller tries another.
-            await host.DisposeAsync();
-            return null;
         }
 
         public async ValueTask DisposeAsync()

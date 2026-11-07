@@ -34,9 +34,9 @@ public static class LocalAddresses
     /// <summary>
     ///     This method returns a port that is free for both UDP and TCP on every address, by
     ///     briefly holding it through dual-stack wildcard sockets. The listeners under test bind
-    ///     UDP and TCP on one port number and do not expose the port they bound, so the number has
-    ///     to be reserved first and released before they bind it; <see cref="StartOnFreePortAsync{T}" />
-    ///     retries a host whose bind lost that race.
+    ///     UDP and TCP on one port number across several sockets, which port 0 cannot give, so
+    ///     the number has to be reserved first and released before they bind it;
+    ///     <see cref="StartOnFreePortAsync{T}" /> retries a host whose bind lost that race.
     ///     <para>
     ///         Windows keeps separate excluded port ranges for UDP and TCP
     ///         (<c>netsh int ipv4 show excludedportrange protocol=tcp</c> lists them) and hands

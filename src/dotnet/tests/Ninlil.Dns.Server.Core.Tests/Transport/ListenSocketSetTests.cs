@@ -31,7 +31,8 @@ public class ListenSocketSetTests
         try
         {
             Socket socket = Assert.Single(set.Sockets);
-            int port = ((IPEndPoint)socket.LocalEndPoint).Port;
+            int port = set.BoundPort;
+            Assert.NotEqual(0, port);
             Assert.Equal(AddressFamily.InterNetworkV6, socket.AddressFamily);
             Assert.True(socket.DualMode);
             Assert.Equal(new IPEndPoint(IPAddress.IPv6Any, port), socket.LocalEndPoint);
@@ -62,8 +63,8 @@ public class ListenSocketSetTests
         try
         {
             Socket socket = Assert.Single(set.Sockets);
-            int port = ((IPEndPoint)socket.LocalEndPoint).Port;
-            Assert.Equal(IPAddress.Loopback, ((IPEndPoint)socket.LocalEndPoint).Address);
+            int port = set.BoundPort;
+            Assert.Equal(new IPEndPoint(IPAddress.Loopback, port), socket.LocalEndPoint);
 
             SendDatagram(IPAddress.Loopback, port);
             Assert.True(socket.Poll(NoReplyWindow, SelectMode.SelectRead));
@@ -96,7 +97,8 @@ public class ListenSocketSetTests
 
         try
         {
-            int port = ((IPEndPoint)Assert.Single(set.Sockets).LocalEndPoint).Port;
+            int port = set.BoundPort;
+
             using (TcpClient client = new(AddressFamily.InterNetwork))
                 await client.ConnectAsync(IPAddress.Loopback, port);
 
@@ -149,21 +151,18 @@ public class ListenSocketSetTests
     public void AnUnbindableAndAMalformedAddress_AreLoggedAndReportedWhileTheRestServe()
     {
         CapturingLogger<ListenSocketSetTests> logger = new();
-        (ListenSocketSet set, int port) = BindOnFreePort(
-            port =>
-                ListenSocketSet.Bind(
-                    "Plain DNS (UDP)",
-                    $"127.0.0.1, {LocalAddresses.Unassigned}, eth0",
-                    port,
-                    ProtocolType.Udp,
-                    logger
-                ),
-            expectedSockets: 1
+        ListenSocketSet set = ListenSocketSet.Bind(
+            "Plain DNS (UDP)",
+            $"127.0.0.1, {LocalAddresses.Unassigned}, eth0",
+            0,
+            ProtocolType.Udp,
+            logger
         );
 
         try
         {
             Socket socket = Assert.Single(set.Sockets);
+            int port = set.BoundPort;
             Assert.Equal(new IPEndPoint(IPAddress.Loopback, port), socket.LocalEndPoint);
 
             Assert.Equal(2, set.FailedAddresses.Count);
@@ -175,7 +174,7 @@ public class ListenSocketSetTests
                 message =>
                     message.Contains("Plain DNS (UDP)")
                     && message.Contains("192.0.2.1")
-                    && message.Contains($"port {port}")
+                    && message.Contains("port 0")
             );
             Assert.Contains(
                 logger.Errors,
@@ -279,6 +278,82 @@ public class ListenSocketSetTests
                 logger.Entries,
                 entry => entry.Level == LogLevel.Warning && entry.Message.Contains("127.0.0.1")
             );
+        }
+        finally
+        {
+            set.Close();
+        }
+    }
+
+    [Fact]
+    public async Task UdpSocket_AfterASendToAClosedPort_StillReceivesFromAnotherSender()
+    {
+        // On Windows a send to a closed port makes the stack report an ICMP port-unreachable,
+        // which fails the next receive on the socket with ConnectionReset unless the set turned
+        // that off when it created the socket (SIO_UDP_CONNRESET). Windows only.
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        ListenSocketSet set = ListenSocketSet.Bind(
+            "test",
+            "127.0.0.1",
+            0,
+            ProtocolType.Udp,
+            NullLogger.Instance
+        );
+
+        try
+        {
+            Socket socket = Assert.Single(set.Sockets);
+
+            IPEndPoint closed;
+
+            using (
+                Socket gone = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
+            )
+            {
+                gone.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+                closed = (IPEndPoint)gone.LocalEndPoint;
+            }
+
+            socket.SendTo([0], closed);
+            await Task.Delay(300);
+
+            SendDatagram(IPAddress.Loopback, set.BoundPort);
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            SocketReceiveFromResult result = await socket.ReceiveFromAsync(
+                new byte[16],
+                new IPEndPoint(IPAddress.Any, 0),
+                timeout.Token
+            );
+            Assert.Equal(3, result.ReceivedBytes);
+        }
+        finally
+        {
+            set.Close();
+        }
+    }
+
+    [Fact]
+    public void BoundPort_AfterBindingPortZero_IsThePortTheSocketGot()
+    {
+        ListenSocketSet set = ListenSocketSet.Bind(
+            "test",
+            "127.0.0.1",
+            0,
+            ProtocolType.Udp,
+            NullLogger.Instance
+        );
+
+        try
+        {
+            Assert.NotEqual(0, set.BoundPort);
+            Assert.Equal(
+                set.BoundPort,
+                ((IPEndPoint)Assert.Single(set.Sockets).LocalEndPoint).Port
+            );
+            Assert.Equal(0, ListenSocketSet.Empty.BoundPort);
         }
         finally
         {

@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Sockets;
 using Ninlil.Dhcp.Common.Control;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
@@ -156,6 +157,10 @@ public sealed class Dhcpv6UdpListener(
             _relayMessageHandler = serviceProvider?.GetService<IDhcpv6RelayMessageHandler>();
 
             socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+
+            // On Windows a client that closes its port before the reply would fail the next
+            // receive with WSAECONNRESET (a warning in the log that any sender can provoke).
+            socket.IgnoreIcmpPortUnreachable();
 
             try
             {

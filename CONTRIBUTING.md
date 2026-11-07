@@ -101,6 +101,9 @@ Docker is only needed for tests marked `RequiresDocker` and for the lint contain
    cd ninlil
    ```
 
+   On Windows too, every text file is checked out with LF line endings (the repository's
+   `.gitattributes` sets this), so the format checks pass whatever `core.autocrlf` says.
+
 2. Restore the local tools (`dotnet-ef`, `csharpier`, `reportgenerator`):
 
    ```bash

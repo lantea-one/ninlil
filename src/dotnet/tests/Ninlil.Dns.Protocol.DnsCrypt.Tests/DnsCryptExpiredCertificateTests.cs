@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Sockets;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Protocol.DnsCrypt.Tests.Fakes;
@@ -19,7 +20,7 @@ namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 ///     that is valid now. DNSCrypt v2 section 13 says a resolver must throw away the previous
 ///     secret key once it has rotated, so a certificate that is past its <c>ts-end</c> but still
 ///     in the store (the rotation service drops it only at its next wake-up) must not answer.
-///     Each test starts a UDP listener on a free loopback port over a store that holds one
+///     Each test starts a UDP listener on an OS-assigned loopback port over a store that holds one
 ///     certificate, and sends it a real encrypted query.
 /// </summary>
 public sealed class DnsCryptExpiredCertificateTests
@@ -74,12 +75,11 @@ public sealed class DnsCryptExpiredCertificateTests
         InMemoryDnsCryptCertificateStore store = new(null);
         store.Save([entry]);
 
-        int port = LocalAddresses.GetFreePort();
         StaticOptionsMonitor<DnsCryptOptions> options = new(
             new DnsCryptOptions
             {
                 Enable = true,
-                Port = port,
+                Port = 0,
                 ProviderName = DnsCryptListenerTestFixture.ProviderName,
                 ListenAddresses = "127.0.0.1",
             }
@@ -109,15 +109,25 @@ public sealed class DnsCryptExpiredCertificateTests
             await pipeline.StartAsync(CancellationToken.None);
             await listener.StartAsync(CancellationToken.None);
 
-            // The listener binds on its background loop, just after StartAsync returns.
-            await Task.Delay(200);
+            // The listener binds on its background loop. Port 0 lets the OS pick the port, and
+            // IsListening turns true only once the socket is bound, so the client never sends
+            // to a port nobody listens on yet.
+            for (int attempt = 0; attempt < 500 && !listener.IsListening; attempt++)
+                await Task.Delay(10);
+
+            Assert.True(listener.IsListening);
 
             (byte[] packet, _) = DnsCryptWireTestHelper.BuildEncryptedQueryPacket(
                 entry,
                 DnsCryptWireTestHelper.BuildEchoQuery(7)
             );
             using UdpClient client = new();
-            client.Connect(IPAddress.Loopback, port);
+
+            // Windows reports an ICMP port-unreachable for an earlier datagram as WSAECONNRESET on
+            // the next receive of a connected UDP socket; switching it off keeps a stray one from
+            // failing the receive this test waits on.
+            client.Client.IgnoreIcmpPortUnreachable();
+            client.Connect(IPAddress.Loopback, listener.BoundPort);
             await client.SendAsync(packet);
 
             using CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(500));
