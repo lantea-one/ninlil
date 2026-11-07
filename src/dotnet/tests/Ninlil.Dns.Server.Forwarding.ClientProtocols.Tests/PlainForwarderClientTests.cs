@@ -24,13 +24,23 @@ namespace Ninlil.Dns.Server.Forwarding.ClientProtocols.Tests;
 /// </summary>
 public sealed class PlainForwarderClientTests : IAsyncLifetime
 {
-    private static readonly int TestPort = GetFreePort();
+    /// <summary>
+    ///     This constant contains how many port numbers <see cref="InitializeAsync" /> tries before
+    ///     it gives up on finding one that both UDP and TCP can bind.
+    /// </summary>
+    private const int PortSearchLimit = 2000;
+
     private static readonly IPAddress ExpectedAnswer = IPAddress.Parse("192.0.2.77");
 
     private DnsQueryProcessingPipeline _pipeline;
     private UdpDnsListener _udpListener;
     private TcpDnsListener _tcpListener;
     private ManyRecordsResolver _manyRecordsResolver;
+
+    /// <summary>
+    ///     This property contains the port both listeners of this test instance are bound to.
+    /// </summary>
+    private int TestPort { get; set; }
 
     /// <inheritdoc />
     public async Task InitializeAsync()
@@ -48,26 +58,71 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
         );
         await _pipeline.StartAsync(CancellationToken.None);
 
-        PlainProtocolOptions options = new() { Port = TestPort };
-
-        _udpListener = new UdpDnsListener(
-            _pipeline,
-            new StaticOptionsMonitor<PlainProtocolOptions>(options),
-            NullLogger<UdpDnsListener>.Instance
-        );
-        await _udpListener.StartAsync(CancellationToken.None);
-
         ServiceProvider emptyProvider = new ServiceCollection().BuildServiceProvider();
 
-        _tcpListener = new TcpDnsListener(
-            _pipeline,
-            emptyProvider.GetRequiredService<IServiceScopeFactory>(),
-            new StaticOptionsMonitor<PlainProtocolOptions>(options),
-            NullLogger<TcpDnsListener>.Instance
-        );
-        await _tcpListener.StartAsync(CancellationToken.None);
+        // UDP and TCP must share one port number, and the client's UDP query must never reach a
+        // port without a UDP listener: Windows reports the resulting ICMP port-unreachable as
+        // WSAECONNRESET on the client's receive, which fails the test. UDP binds port 0 and the OS
+        // picks the number; TCP then asks for that number, which another process may hold for TCP,
+        // or which Windows excludes for TCP only. A failed pair moves on to the next port, up to
+        // PortSearchLimit times. The test starts only after both listeners report listening.
+        for (int attempt = 1; ; attempt++)
+        {
+            _udpListener = new UdpDnsListener(
+                _pipeline,
+                new StaticOptionsMonitor<PlainProtocolOptions>(
+                    new PlainProtocolOptions { Port = 0 }
+                ),
+                NullLogger<UdpDnsListener>.Instance
+            );
+            await _udpListener.StartAsync(CancellationToken.None);
+            await WaitForBindOutcomeAsync(() =>
+                _udpListener.IsListening || _udpListener.FailedListenAddresses.Count > 0
+            );
+            Assert.True(_udpListener.IsListening);
+            TestPort = _udpListener.BoundPort;
 
-        await Task.Delay(200);
+            _tcpListener = new TcpDnsListener(
+                _pipeline,
+                emptyProvider.GetRequiredService<IServiceScopeFactory>(),
+                new StaticOptionsMonitor<PlainProtocolOptions>(
+                    new PlainProtocolOptions { Port = TestPort }
+                ),
+                NullLogger<TcpDnsListener>.Instance
+            );
+            await _tcpListener.StartAsync(CancellationToken.None);
+            await WaitForBindOutcomeAsync(() =>
+                _tcpListener.IsListening || _tcpListener.FailedListenAddresses.Count > 0
+            );
+
+            if (_tcpListener.IsListening)
+                return;
+
+            await _tcpListener.StopAsync(CancellationToken.None);
+            await _udpListener.StopAsync(CancellationToken.None);
+
+            if (attempt == PortSearchLimit)
+                throw new InvalidOperationException("No port was free for both UDP and TCP.");
+        }
+    }
+
+    /// <summary>
+    ///     This method waits until a listener reports listening or a failed bind. The listeners
+    ///     bind in ExecuteAsync, which may run after StartAsync returns, so a fixed delay is too
+    ///     short on a loaded machine.
+    /// </summary>
+    private static async Task WaitForBindOutcomeAsync(Func<bool> hasOutcome)
+    {
+        using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
+
+        while (!hasOutcome())
+        {
+            Assert.False(
+                deadline.IsCancellationRequested,
+                "The listener did not report a bind outcome in time."
+            );
+            await Task.Delay(10);
+        }
     }
 
     /// <inheritdoc />
@@ -188,19 +243,5 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher
     {
         public void Publish(IDnsServerEvent domainEvent) { }
-    }
-
-    /// <summary>
-    ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
-    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
-    ///     so no test listener ever uses a fixed or well-known port.
-    /// </summary>
-    /// <returns>A free TCP port number.</returns>
-    private static int GetFreePort()
-    {
-        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }
