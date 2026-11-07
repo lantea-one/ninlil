@@ -25,7 +25,8 @@ name: 'Ninlil Pipeline'
 ## reusable workflow (build.yml, release.yml) cannot carry timeout-minutes.
 ##
 ## Job graph (the tests and lint start alongside version; 'verify' runs only test-dotnet,
-## test-admin-console and lint):
+## test-admin-console and lint; test-windows runs for builds of develop and main only and
+## nothing waits for it):
 ##
 ##   version ────────────┐
 ##   lint ───────────────┤
@@ -34,6 +35,7 @@ name: 'Ninlil Pipeline'
 ##                       │                          ├─ image ───────────┤
 ##                       │                          └─ windows-smoke ───┤
 ##                       └─ packages (×4) ──────────────────────────────┘
+##   test-windows (stands alone)
 ##
 ## The draft release doubles as the hand-off between jobs: each binary job attaches its
 ## executable to it, the Arch Linux, Deb/RPM and image jobs build from the two Linux executables
@@ -570,8 +572,8 @@ jobs:
         shell: 'bash'
   ##
   ## Starts the Windows executable from the draft on the Windows runner and checks /status, the
-  ## admin console and one DNS query (windows-smoke.ps1). A smoke test only; there is no Windows
-  ## test suite. It runs on the Windows runner 'lofnheim' only (declared in
+  ## admin console and one DNS query (windows-smoke.ps1). A smoke test only; the Windows test
+  ## suite is test-windows. It runs on the Windows runner 'lofnheim' only (declared in
   ## .forgejo/actionlint.yaml). Windows PowerShell 5.1 is always installed there, so the step
   ## uses it instead of requiring pwsh.
   ##
@@ -601,6 +603,92 @@ jobs:
         run: |-
           .\.forgejo\scripts\windows-smoke.ps1 -ReleaseTag $env:RELEASE_TAG -Asset ninlil-windows-amd64.zip
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        shell: 'powershell'
+  ##
+  ## The whole .NET test suite on the Windows runner 'lofnheim', natively, to cover what the Linux
+  ## containers cannot: the Windows socket stack, file system and process behaviour. It runs only
+  ## for a build of develop or main (not for pull requests, other branches or release branches,
+  ## whose commit already passed on main), with no dependencies, so it runs alongside the Linux
+  ## jobs. Neither draft nor publish waits for it: a Windows-only failure turns the run red
+  ## without holding back a pre-release or a release. In a pull request it is skipped, and a
+  ## skipped job of this file does not fail the aggregate 'Pipeline' status.
+  ##
+  ## The tests that need Docker (RequiresDocker) are filtered out, as in pull-request builds:
+  ## the Linux job already runs them against the real database engines. Here they would pull a
+  ## 1.5 GB amd64 SQL Server image and start four database containers on every push, and they
+  ## test the storage layer, not the Windows behaviour this job is for.
+  ##
+  ## The admin console is built on the runner itself (Node.js, npm and Java are installed there),
+  ## because the web host's SpaFallbackTests need it in wwwroot/ and no job hands one to another.
+  ## The steps use Windows PowerShell 5.1, always installed, like windows-smoke. They set
+  ## ErrorActionPreference to Continue, because 5.1 turns any stderr line of a native program
+  ## (npm warnings, dotnet notices) into a terminating error, and check $LASTEXITCODE instead.
+  ##
+  ## The limit covers a cold NuGet and npm cache, the admin console build, one full build and
+  ## the two test runs. With warm caches they took about 50 seconds, 75 seconds and 4 minutes on
+  ## this runner (the web host's tests alone take about 3 minutes), so 30 minutes is a
+  ## generous margin that still frees the single Windows runner when a step hangs.
+  ##
+  test-windows:
+    name: 'Test .NET on Windows'
+    if: >-
+      inputs.kind == 'prerelease' && (forgejo.ref_name == 'develop' || forgejo.ref_name == 'main')
+    runs-on: 'lofnheim'
+    timeout-minutes: 30
+    env:
+      # Keep MSBuild and Roslyn from leaving worker processes that hold files open after the job.
+      MSBUILDDISABLENODEREUSE: '1'
+      DOTNET_CLI_USE_MSBUILD_SERVER: '0'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' # v7.0.1
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Build the Admin Console'
+        run: |-
+          # Git for Windows' bash runs the same script as the Linux jobs (npm-ci.sh needs its
+          # `timeout`).
+          $ErrorActionPreference = 'Continue'
+          & 'C:\Program Files\Git\bin\bash.exe' ./.forgejo/scripts/build-admin-console.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        shell: 'powershell'
+      ##
+      - name: 'Build'
+        run: |-
+          $ErrorActionPreference = 'Continue'
+          dotnet build Ninlil.slnx --configuration Release -p:NinlilSkipAngularBuild=true -p:UseSharedCompilation=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        shell: 'powershell'
+      ##
+      - name: 'Run Every Test Project'
+        run: |-
+          # As on Linux, the timing-sensitive live DNSSEC rollover test runs alone, after the
+          # rest, because CPU contention breaks its two-second TTLs.
+          $ErrorActionPreference = 'Continue'
+          $timing = 'DnssecKeyRolloverZskPrePublishLiveTests'
+          dotnet test Ninlil.slnx --no-build --configuration Release --filter "FullyQualifiedName!~$timing & Category!=RequiresDocker"
+          $rest = $LASTEXITCODE
+          dotnet test Ninlil.slnx --no-build --configuration Release --filter "FullyQualifiedName~$timing & Category!=RequiresDocker"
+          $alone = $LASTEXITCODE
+          if ($rest -ne 0) { exit $rest }
+          if ($alone -ne 0) { exit $alone }
+        shell: 'powershell'
+      ##
+      ## A failed or cancelled run can leave a test host or a Ninlil process running from the
+      ## workspace, which holds its files open and makes the next checkout (clean: true) fail
+      ## on this long-lived runner. Stop every process whose executable lives in the workspace.
+      ##
+      - name: 'Stop Leftover Test Processes'
+        if: >-
+          always()
+        run: |-
+          $workspace = (Get-Location).Path
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($workspace, [System.StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { Write-Host "Stopping $($_.ProcessName) ($($_.Id))"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          exit 0
         shell: 'powershell'
   ##
   ## Turns the draft into the visible release once every artifact is in place.

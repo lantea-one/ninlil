@@ -6187,8 +6187,8 @@ Chromium; `makepkg`; shellcheck and actionlint; nFPM) with just the checkout mou
 [`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). The toolchain images are
 tagged `ninlil-builder-<toolchain>:<hash of that file>` and rebuilt from it by every job, so they
 always match the checkout; the weekly pin bump keeps their base images current, and the hourly
-cleanup workflow removes the builders of older versions of the file. One job, the Windows smoke test, runs on the project's
-Windows runner `lofnheim` instead. It runs
+cleanup workflow removes the builders of older versions of the file. Two jobs run on the project's
+Windows runner `lofnheim` instead. The Windows smoke test runs
 [`windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1), which unzips the Windows release
 asset and starts the executable beside `msquic.dll`, and checks `/status`, the admin console, one DNS query, HTTPS and DNS-over-TLS on the first
 start, and that DNS-over-QUIC is listening (a real DoQ query under PowerShell 7). Locally, `pwsh
@@ -6202,7 +6202,7 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; and finally publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded, nothing waits for it); and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 | `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout commit (below) and opens a pull request into `develop` (by hand, any branch) |
 
@@ -6212,6 +6212,12 @@ installed and started in Debian, Ubuntu, Rocky Linux and Fedora containers), the
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
 on the repository.
+
+The `test-windows` job builds the admin console and runs the whole solution's tests natively on
+`lofnheim`, for the Windows socket, file-system and process behaviour the Linux containers cannot
+show. It runs for builds of `develop` and `main` only, skips the tests that need Docker (the Linux
+job runs those), and starts alongside the Linux jobs. Neither the draft nor the publish step waits
+for it, so a Windows-only failure turns the run red without holding back a release.
 
 **Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
 reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and
