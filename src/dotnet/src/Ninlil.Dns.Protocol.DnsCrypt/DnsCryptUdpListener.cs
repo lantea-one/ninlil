@@ -69,6 +69,13 @@ public sealed class DnsCryptUdpListener(
     public bool IsListening { get; private set; }
 
     /// <summary>
+    ///     This property contains the port of the first bound socket (0 while nothing is bound).
+    ///     A listener configured with port 0 gets its port from the operating system; this is how
+    ///     a caller reads it.
+    /// </summary>
+    public int BoundPort => _sockets.BoundPort;
+
+    /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
     ///     as "address (reason)", for the health check.
     /// </summary>
