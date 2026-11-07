@@ -125,4 +125,88 @@ public class OutboundUdpSocketPoolTests
 
         Assert.NotEqual(discoveredPort, LocalPortOf(excluded.Socket));
     }
+
+    /// <summary>
+    ///     This method sends one datagram from the socket to a loopback UDP port that has no
+    ///     listener, waits for the resulting ICMP port-unreachable to arrive, and then tries to
+    ///     receive. Windows reports that ICMP message as <see cref="SocketError.ConnectionReset" />
+    ///     on the receive of an unconnected socket; Linux reports nothing. The closed port is found
+    ///     by binding port 0 and closing the socket again, which is the only way to get a port
+    ///     nothing listens on.
+    /// </summary>
+    /// <returns>
+    ///     The error the receive failed with, or <see langword="null" /> when it waited until its
+    ///     half-second deadline.
+    /// </returns>
+    private static async Task<SocketError?> ReceiveAfterSendingToAClosedPortAsync(Socket socket)
+    {
+        int closedPort;
+
+        using (
+            Socket reservation = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
+        )
+        {
+            reservation.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            closedPort = LocalPortOf(reservation);
+        }
+
+        await socket.SendToAsync(new byte[] { 0 }, new IPEndPoint(IPAddress.Loopback, closedPort));
+        await Task.Delay(300);
+
+        using CancellationTokenSource deadline = new(TimeSpan.FromMilliseconds(500));
+
+        try
+        {
+            await socket.ReceiveFromAsync(
+                new byte[512],
+                new IPEndPoint(IPAddress.Loopback, closedPort),
+                deadline.Token
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (SocketException exception)
+        {
+            return exception.SocketErrorCode;
+        }
+
+        return null;
+    }
+
+    [Fact]
+    public async Task APooledSocket_AfterASendToAClosedPort_DoesNotFailTheNextReceive()
+    {
+        using OutboundUdpSocketPool pool = CreatePool(
+            new OutboundQueryOptions { EnableSourcePortPool = true }
+        );
+
+        using OutboundUdpSocketLease lease = await pool.RentAsync(AddressFamily.InterNetwork);
+
+        // A reset left over from an earlier lease's send would fail the query that rents the
+        // socket next, although that query's upstream is healthy (see CreateBoundSocket).
+        Assert.Null(await ReceiveAfterSendingToAClosedPortAsync(lease.Socket));
+    }
+
+    [Fact]
+    public async Task AOneOffSocket_AfterASendToAClosedPort_FailsTheReceiveAtOnceOnWindows()
+    {
+        // Only Windows reports the ICMP message; elsewhere there is nothing to observe.
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using OutboundUdpSocketPool pool = CreatePool(
+            new OutboundQueryOptions { EnableSourcePortPool = false }
+        );
+
+        using OutboundUdpSocketLease lease = await pool.RentAsync(AddressFamily.InterNetwork);
+
+        // The forwarder relies on this fast failure to try the next forwarder without waiting for
+        // the per-forwarder timeout.
+        Assert.Equal(
+            SocketError.ConnectionReset,
+            await ReceiveAfterSendingToAClosedPortAsync(lease.Socket)
+        );
+    }
 }

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Sockets;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Core.Transport;
@@ -56,7 +57,11 @@ public sealed class OutboundUdpSocketPool(
     {
         // Pooling disabled: a one-off socket in a lease with no pool, which Dispose discards.
         if (!options.CurrentValue.EnableSourcePortPool)
-            return new OutboundUdpSocketLease(CreateBoundSocket(family), null, family);
+            return new OutboundUdpSocketLease(
+                CreateBoundSocket(family, pooled: false),
+                null,
+                family
+            );
 
         SemaphoreSlim gate = _gates.GetOrAdd(
             family,
@@ -66,7 +71,9 @@ public sealed class OutboundUdpSocketPool(
 
         ConcurrentBag<Socket> bag = _available.GetOrAdd(family, _ => new ConcurrentBag<Socket>());
 
-        Socket socket = bag.TryTake(out Socket pooled) ? pooled : CreateBoundSocket(family);
+        Socket socket = bag.TryTake(out Socket pooled)
+            ? pooled
+            : CreateBoundSocket(family, pooled: true);
 
         return new OutboundUdpSocketLease(socket, this, family);
     }
@@ -97,8 +104,23 @@ public sealed class OutboundUdpSocketPool(
     ///     <see cref="OutboundQueryOptions.ExcludedSourcePorts" />. After
     ///     <see cref="MaxBindAttempts" /> tries it accepts any port, so a query never fails just
     ///     because of the exclusion list.
+    ///     <para>
+    ///         A socket that stays in the pool ignores ICMP port-unreachable messages
+    ///         (<see cref="UdpConnectionResetSocketExtension.IgnoreIcmpPortUnreachable" />). On
+    ///         Windows such a message, for a datagram an earlier lease sent to a dead upstream,
+    ///         can arrive after that lease timed out and ends in the next lease's receive as
+    ///         WSAECONNRESET, which would fail a query to a different, healthy upstream. A
+    ///         one-off socket serves one send, so its reset is always its own and fails the
+    ///         attempt at once, which lets the caller try the next forwarder without waiting for
+    ///         the timeout.
+    ///     </para>
     /// </summary>
-    private Socket CreateBoundSocket(AddressFamily family)
+    /// <param name="family">The address family to bind for.</param>
+    /// <param name="pooled">
+    ///     Whether the socket is kept for later leases (<see langword="true" />) or discarded
+    ///     with its lease.
+    /// </param>
+    private Socket CreateBoundSocket(AddressFamily family, bool pooled)
     {
         List<int> excludedPorts = options.CurrentValue.ExcludedSourcePorts;
         IPAddress bindAddress =
@@ -115,7 +137,12 @@ public sealed class OutboundUdpSocketPool(
                 int boundPort = ((IPEndPoint)candidate.LocalEndPoint).Port;
 
                 if (excludedPorts.Count == 0 || !excludedPorts.Contains(boundPort))
+                {
+                    if (pooled)
+                        candidate.IgnoreIcmpPortUnreachable();
+
                     return candidate;
+                }
 
                 candidate.Dispose();
             }
@@ -134,6 +161,10 @@ public sealed class OutboundUdpSocketPool(
 
         Socket fallback = new(family, SocketType.Dgram, ProtocolType.Udp);
         fallback.Bind(new IPEndPoint(bindAddress, 0));
+
+        if (pooled)
+            fallback.IgnoreIcmpPortUnreachable();
+
         return fallback;
     }
 
