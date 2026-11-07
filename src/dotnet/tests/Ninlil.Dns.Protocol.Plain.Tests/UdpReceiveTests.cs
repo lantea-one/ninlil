@@ -249,9 +249,15 @@ public sealed class UdpReceiveTests
             );
             await host._udp.StartAsync(CancellationToken.None);
 
-            // BackgroundService runs ExecuteAsync (which binds) as a continuation, so wait for
-            // the listener to report that it is receiving.
-            for (int attempt = 0; attempt < 500 && !host._udp.IsListening; attempt++)
+            // The listener binds in ExecuteAsync, which may run after StartAsync returns, so wait
+            // until it reports listening or a failed bind.
+            for (
+                int attempt = 0;
+                attempt < 3000
+                    && !host._udp.IsListening
+                    && host._udp.FailedListenAddresses.Count == 0;
+                attempt++
+            )
                 await Task.Delay(10);
 
             Assert.True(host._udp.IsListening);

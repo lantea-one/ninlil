@@ -22,7 +22,12 @@ const IPV4_ADDRESS: ClientAddressDetail = {
   protocolVersion: 'IPv4',
   address: '192.0.2.42',
   firstSeenUtc: '2026-09-10T09:00:00Z',
-  lastSeenUtc: new Date(Date.now() - 2 * 60_000).toISOString(),
+  // A getter, not a value computed when this file loads: Karma loads every spec file first and
+  // runs the tests minutes later on a slow CI runner, which would turn "2 min ago" into
+  // "7 min ago". Each read measures from the moment the test builds its component.
+  get lastSeenUtc(): string {
+    return new Date(Date.now() - 2 * 60_000).toISOString();
+  },
   macAddress: 'b8:27:eb:12:34:56',
   vendor: 'Raspberry Pi Foundation',
 };

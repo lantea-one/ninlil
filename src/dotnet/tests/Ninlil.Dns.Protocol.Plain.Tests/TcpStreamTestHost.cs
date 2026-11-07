@@ -98,8 +98,16 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
 
         // BackgroundService runs ExecuteAsync (which binds) as a continuation after StartAsync
         // returns; wait until the listener reports it is accepting or that the bind failed.
+        using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
+
         while (!host._tcp.IsListening && host._tcp.FailedListenAddresses.Count == 0)
+        {
+            Assert.False(
+                deadline.IsCancellationRequested,
+                "The listener did not report a bind outcome in time."
+            );
             await Task.Delay(10);
+        }
 
         if (!host._tcp.IsListening)
         {

@@ -19,31 +19,82 @@ public static class LocalAddresses
     public static IPAddress Unassigned { get; } = IPAddress.Parse("192.0.2.1");
 
     /// <summary>
+    ///     This constant is how many ports <see cref="GetFreePort" /> and the listen-address tests
+    ///     try before they give up. It is set above the longest run of refused ports observed on
+    ///     Windows (see <see cref="GetFreePort" />).
+    /// </summary>
+    public const int PortSearchLimit = 2000;
+
+    /// <summary>
+    ///     This constant is how many times <see cref="StartOnFreePortAsync{T}" /> starts a host
+    ///     before it gives up.
+    /// </summary>
+    private const int MaximumHostStarts = 10;
+
+    /// <summary>
     ///     This method returns a port that is free for both UDP and TCP on every address, by
-    ///     briefly holding it through dual-stack wildcard sockets.
+    ///     briefly holding it through dual-stack wildcard sockets. The listeners under test bind
+    ///     UDP and TCP on one port number across several sockets, which port 0 cannot give, so the number has
+    ///     to be reserved first and released before they bind it; <see cref="StartOnFreePortAsync{T}" />
+    ///     retries a host whose bind lost that race.
+    ///     <para>
+    ///         Windows keeps separate excluded port ranges for UDP and TCP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=tcp</c> lists them) and hands
+    ///         out port-0 binds in sequence. A UDP bind to port 0 can therefore return a port
+    ///         inside a TCP-excluded range, the following UDP ports lie in the same range, and
+    ///         the TCP bind of the same number is refused with "access permissions" (WSAEACCES)
+    ///         until the sequence leaves it. On one Windows test host the TCP list held five
+    ///         adjacent 100-port ranges (51111 to 51610), and a probe saw runs of refused
+    ///         pairs lasting up to about 8 seconds. A refused pair is skipped at once, with no
+    ///         pause, and the search goes on until <see cref="PortSearchLimit" />, which is set
+    ///         well above such a run.
+    ///     </para>
     /// </summary>
     public static int GetFreePort()
     {
-        for (int attempt = 0; attempt < 20; attempt++)
+        for (int attempt = 1; attempt <= PortSearchLimit; attempt++)
         {
-            using Socket udp = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
-            udp.Bind(new IPEndPoint(WildcardAddress, 0));
-            int port = ((IPEndPoint)udp.LocalEndPoint).Port;
-
-            using Socket tcp = CreateWildcardSocket(SocketType.Stream, ProtocolType.Tcp);
-
             try
             {
+                using Socket udp = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
+                udp.Bind(new IPEndPoint(WildcardAddress, 0));
+                int port = ((IPEndPoint)udp.LocalEndPoint).Port;
+
+                using Socket tcp = CreateWildcardSocket(SocketType.Stream, ProtocolType.Tcp);
                 tcp.Bind(new IPEndPoint(WildcardAddress, port));
                 return port;
             }
             catch (SocketException)
             {
-                // Taken for TCP by something else; try another.
+                // The TCP side is taken or excluded for this number, or the UDP bind itself was
+                // refused for the moment; ask for the next port.
             }
         }
 
         throw new InvalidOperationException("Could not find a port free for both UDP and TCP.");
+    }
+
+    /// <summary>
+    ///     This method starts a host on a port from <see cref="GetFreePort" /> and starts it again
+    ///     on another port when the bind failed because something took the port after it was
+    ///     released.
+    /// </summary>
+    /// <param name="tryStart">
+    ///     Starts the host on the given port. It returns <see langword="null" /> after cleaning up
+    ///     when the listeners could not bind that port.
+    /// </param>
+    public static async Task<T> StartOnFreePortAsync<T>(Func<int, Task<T>> tryStart)
+        where T : class
+    {
+        for (int attempt = 1; attempt <= MaximumHostStarts; attempt++)
+        {
+            T host = await tryStart(GetFreePort());
+
+            if (host is not null)
+                return host;
+        }
+
+        throw new InvalidOperationException("No free port could be bound by the listeners.");
     }
 
     /// <summary>

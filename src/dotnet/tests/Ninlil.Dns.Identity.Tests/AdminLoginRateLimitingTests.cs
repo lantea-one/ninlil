@@ -239,7 +239,8 @@ public class AdminLoginRateLimitingTests
 
     /// <summary>
     ///     This test checks that <c>Retry-After</c> is the time left in the window, not the whole
-    ///     window: three seconds into an eight-second window it is at most six seconds.
+    ///     window: three seconds into a 60-second window it is at most 59 seconds. The window is long so
+    ///     that a stalled test machine cannot reach the end of it.
     /// </summary>
     [Fact]
     public async Task Login_PartWayThroughTheWindow_SendsTheTimeLeftNotTheWholeWindow()
@@ -247,7 +248,7 @@ public class AdminLoginRateLimitingTests
         (WebApplication app, HttpClient client) = await StartHostAsync(
             enable: true,
             permitLimit: 1,
-            window: TimeSpan.FromSeconds(8)
+            window: TimeSpan.FromSeconds(60)
         );
 
         try
@@ -264,7 +265,7 @@ public class AdminLoginRateLimitingTests
             Assert.InRange(
                 rejected.Headers.RetryAfter.Delta.Value,
                 TimeSpan.FromSeconds(1),
-                TimeSpan.FromSeconds(6)
+                TimeSpan.FromSeconds(59)
             );
         }
         finally
@@ -284,7 +285,9 @@ public class AdminLoginRateLimitingTests
         (WebApplication app, HttpClient client) = await StartHostAsync(
             enable: true,
             permitLimit: 1,
-            window: TimeSpan.FromMilliseconds(200)
+            // Long enough that the first two requests cannot straddle a roll-over when the
+            // machine stalls for a few hundred milliseconds between them.
+            window: TimeSpan.FromSeconds(2)
         );
 
         try
@@ -295,9 +298,20 @@ public class AdminLoginRateLimitingTests
             HttpResponseMessage rejected = await client.PostAsync("/login", content: null);
             Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
 
-            await Task.Delay(TimeSpan.FromMilliseconds(400));
+            // Poll until the window rolls over instead of sleeping a fixed time; a rejected
+            // request does not extend the window, so polling cannot delay the roll-over.
+            using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
+            HttpResponseMessage afterWindow;
 
-            HttpResponseMessage afterWindow = await client.PostAsync("/login", content: null);
+            do
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+                afterWindow = await client.PostAsync("/login", content: null);
+            } while (
+                afterWindow.StatusCode == HttpStatusCode.TooManyRequests
+                && !deadline.IsCancellationRequested
+            );
+
             Assert.Equal(HttpStatusCode.OK, afterWindow.StatusCode);
         }
         finally

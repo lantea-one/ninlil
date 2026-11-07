@@ -103,6 +103,14 @@ public sealed class Dhcpv6UdpListener(
     public bool IsListening { get; private set; }
 
     /// <summary>
+    ///     This property contains the UDP port the socket is bound to, or 0 while the listener is
+    ///     stopped. It differs from the configured server port only when that port is 0, which
+    ///     asks the operating system for a free one; tests use that to avoid reserving a port
+    ///     number and releasing it before the listener binds it.
+    /// </summary>
+    public int BoundPort { get; private set; }
+
+    /// <summary>
     ///     This property reports whether the socket is bound and the receive loop is still
     ///     running, so a dead loop is not reported as a healthy listener.
     /// </summary>
@@ -142,6 +150,7 @@ public sealed class Dhcpv6UdpListener(
                 _receiveLoopCts = null;
                 _receiveLoopTask = null;
                 IsListening = false;
+                BoundPort = 0;
             }
 
             // The relay handler is optional, so it is looked up rather than injected.
@@ -178,11 +187,12 @@ public sealed class Dhcpv6UdpListener(
             _socket = socket;
             _receiveLoopCts = receiveLoopCts;
             IsListening = true;
+            BoundPort = ((IPEndPoint)socket.LocalEndPoint).Port;
             StartFailure = null;
 
             logger.LogInformation(
                 "The DHCPv6 listener started and is now bound to UDP port {ServerPort}.",
-                options.Value.ServerPort
+                BoundPort
             );
 
             _receiveLoopTask = Task.Run(() => RunReceiveLoopAsync(socket, receiveLoopCts.Token));
@@ -212,6 +222,7 @@ public sealed class Dhcpv6UdpListener(
             _receiveLoopCts = null;
             _receiveLoopTask = null;
             IsListening = false;
+            BoundPort = 0;
         }
 
         try

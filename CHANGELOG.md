@@ -153,6 +153,12 @@ outside Forgejo.
   that behaviour off on their UDP sockets. Linux is unaffected.
   ([#17](https://git.lantea.one/lantea-one/ninlil/issues/17))
 
+- **Registering a YAML converter while another thread serializes no longer throws.** In the
+  `Ninlil.Common.Serializer` library, `YamlSerializer.AddConverter` and the serializers it builds
+  share one converter list; a YAML request read at the same moment as a registration could fail
+  with "Collection was modified". The list is now locked, as the JSON serializer's already was.
+  ([#354](https://git.lantea.one/lantea-one/ninlil/issues/354))
+
 ## v2026.10.31.1
 
 Ninlil is a DNS, DHCPv4, DHCPv6 and Router Advertisement server suite that runs as one process with

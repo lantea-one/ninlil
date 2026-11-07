@@ -117,26 +117,17 @@ public class ListenSocketSetTests
         if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return;
 
-        // Two sockets must share one port number, which port 0 cannot give (each socket would
-        // get its own), so the port is picked first and the bind retried a bounded number of
-        // times if something takes it in between.
-        ListenSocketSet set = null;
-
-        for (int attempt = 1; attempt <= 5; attempt++)
-        {
-            set = ListenSocketSet.Bind(
-                "test",
-                "0.0.0.0, ::",
-                LocalAddresses.GetFreePort(),
-                ProtocolType.Udp,
-                NullLogger.Instance
-            );
-
-            if (set.Sockets.Count == 2 || attempt == 5)
-                break;
-
-            set.Close();
-        }
+        (ListenSocketSet set, int _) = BindOnFreePort(
+            port =>
+                ListenSocketSet.Bind(
+                    "test",
+                    "0.0.0.0, ::",
+                    port,
+                    ProtocolType.Udp,
+                    NullLogger.Instance
+                ),
+            expectedSockets: 2
+        );
 
         try
         {
@@ -404,6 +395,29 @@ public class ListenSocketSetTests
         Assert.True(ListenSocketSet.IsAssignedToThisHost(IPAddress.Any));
         Assert.True(ListenSocketSet.IsAssignedToThisHost(IPAddress.IPv6Any));
         Assert.False(ListenSocketSet.IsAssignedToThisHost(LocalAddresses.Unassigned));
+    }
+
+    /// <summary>
+    ///     This method binds a set whose sockets must share one known port. Port 0 would give each
+    ///     socket its own port, so the method picks a free port first and retries a bounded number
+    ///     of times when another program takes it before the bind, which shows as fewer sockets
+    ///     than <paramref name="expectedSockets" />.
+    /// </summary>
+    private static (ListenSocketSet Set, int Port) BindOnFreePort(
+        Func<int, ListenSocketSet> bind,
+        int expectedSockets
+    )
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            int port = LocalAddresses.GetFreePort();
+            ListenSocketSet set = bind(port);
+
+            if (set.Sockets.Count == expectedSockets || attempt == 4)
+                return (set, port);
+
+            set.Close();
+        }
     }
 
     private static void SendDatagram(IPAddress address, int port)
