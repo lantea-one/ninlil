@@ -680,12 +680,14 @@ jobs:
       ## A failed or cancelled run can leave a test host or a Ninlil process running from the
       ## workspace, which holds its files open and makes the next checkout (clean: true) fail
       ## on this long-lived runner. Stop every process whose executable lives in the workspace.
+      ## The runner runs up to three jobs at once, so the prefix ends in a separator: a sibling
+      ## workspace whose name starts the same way must not match.
       ##
       - name: 'Stop Leftover Test Processes'
         if: >-
           always()
         run: |-
-          $workspace = (Get-Location).Path
+          $workspace = (Get-Location).Path.TrimEnd('\') + '\'
           Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($workspace, [System.StringComparison]::OrdinalIgnoreCase) } |
             ForEach-Object { Write-Host "Stopping $($_.ProcessName) ($($_.Id))"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
           exit 0

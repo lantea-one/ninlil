@@ -100,6 +100,8 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
 
             await _tcpListener.StopAsync(CancellationToken.None);
             await _udpListener.StopAsync(CancellationToken.None);
+            _tcpListener.Dispose();
+            _udpListener.Dispose();
 
             if (attempt == PortSearchLimit)
                 throw new InvalidOperationException("No port was free for both UDP and TCP.");

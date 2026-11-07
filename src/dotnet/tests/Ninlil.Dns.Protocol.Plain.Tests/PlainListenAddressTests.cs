@@ -323,11 +323,11 @@ public sealed class PlainListenAddressTests
         ///     This method starts both listeners with the given listen addresses. Several sockets
         ///     (one per listen address, UDP and TCP) must share one port number, which a listener
         ///     asked for port 0 cannot give, because each socket would get its own. So with no
-        ///     <paramref name="port" /> it reserves a free number first and, when the listeners lose it to
-        ///     another process between the pick and the bind, starts again on another. It does
-        ///     not retry when the test brings its own port (the test is about that port being
-        ///     taken) or when <paramref name="expectBound" /> is <see langword="false" /> (the
-        ///     test expects nothing to bind).
+        ///     <paramref name="port" /> it reserves a free number first and, when the listeners
+        ///     lose it to another process between the pick and the bind, starts again on another.
+        ///     It does not retry when the test brings its own port (the test is about that port
+        ///     being taken) or when <paramref name="expectBound" /> is <see langword="false" />
+        ///     (the test expects nothing to bind).
         /// </summary>
         public static async Task<RunningListeners> StartAsync(
             string listenAddresses,
