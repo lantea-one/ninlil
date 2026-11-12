@@ -11,6 +11,8 @@ outside Forgejo.
 
 ## Unreleased
 
+## v2026.11.12.1
+
 ### Security
 
 - **The Data Protection key ring is encrypted at rest.** Set `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`
