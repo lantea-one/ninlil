@@ -143,7 +143,9 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
     ///     then on a held batch blocks every later batch, so a later write cannot become visible.
     ///     The wait needs both secondaries to read the primary's oplog directly, which the set's
     ///     <c>chainingAllowed: false</c> setting guarantees: a secondary that synced from the
-    ///     other, paused one would never receive the probe.
+    ///     other, paused one would never receive the probe. Call
+    ///     <see cref="ResumeReplicationAsync" /> before pausing again: a secondary that already
+    ///     holds a batch cannot enter the fail point a second time, so the wait would time out.
     /// </remarks>
     public override async Task PauseReplicationAsync(string databaseName = null)
     {
