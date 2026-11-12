@@ -79,7 +79,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
 
         for (int attempt = 1; attempt <= MaximumPrimaryStarts && !primaryListening; attempt++)
         {
-            tcpPort = await GetFreeTcpAndUdpPortAsync();
+            tcpPort = GetFreeTcpAndUdpPort();
 
             _primaryHost = BuildPrimaryHost(tcpPort);
             await SeedPrimaryAsync(rawTsigSecret);
@@ -326,43 +326,67 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method finds a loopback port number that is free for both TCP and UDP by
-    ///     briefly binding it with each and releasing it. Windows keeps separate excluded port
-    ///     ranges for the two protocols (<c>netsh int ipv4 show excludedportrange</c>), so a port
-    ///     that binds for TCP can be refused (error 10013) for UDP. When the OS refuses every
-    ///     port for a moment (other test processes on the same machine holding many sockets),
-    ///     it tries again for up to 30 seconds. <see cref="InitializeAsync" /> retries the
-    ///     primary when the port is taken before the listeners bind it.
+    ///     This constant is how many random ports <see cref="GetFreeTcpAndUdpPort" /> tries
+    ///     before it gives up.
     /// </summary>
-    private static async Task<int> GetFreeTcpAndUdpPortAsync()
-    {
-        DateTimeOffset deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
-        SocketException lastFailure = null;
+    private const int PortSearchLimit = 2000;
 
-        while (DateTimeOffset.UtcNow < deadline)
+    /// <summary>
+    ///     This method returns a port number that is free for both TCP and UDP, by briefly
+    ///     holding it with dual-stack wildcard sockets, the addresses the plain listeners bind.
+    ///     <para>
+    ///         The port is picked at random from the dynamic range (RFC 6335 §6, 49152 to 65535)
+    ///         and bound explicitly, not taken from a port-0 bind. Windows hands out port-0 ports
+    ///         one after the other from a machine-wide counter per protocol, and keeps separate
+    ///         excluded port ranges for TCP and UDP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=udp</c>). A TCP port inside a
+    ///         UDP-excluded block is refused (error 10013) for UDP, and so is every following
+    ///         port until the counter leaves the block, which can be hundreds of ports. Random
+    ///         picks spread over the whole range, so a refused pick costs one attempt.
+    ///         <see cref="InitializeAsync" /> retries the primary when the port is taken before
+    ///         the listeners bind it.
+    ///     </para>
+    /// </summary>
+    private static int GetFreeTcpAndUdpPort()
+    {
+        IPAddress wildcard = Socket.OSSupportsIPv6 ? IPAddress.IPv6Any : IPAddress.Any;
+
+        for (int attempt = 1; attempt <= PortSearchLimit; attempt++)
         {
-            TcpListener tcpListener = new(IPAddress.Loopback, 0);
-            tcpListener.Start();
-            int port = ((IPEndPoint)tcpListener.LocalEndpoint).Port;
-            tcpListener.Stop();
+            int port = Random.Shared.Next(49152, 65536);
 
             try
             {
-                using UdpClient udpClient = new(new IPEndPoint(IPAddress.Loopback, port));
+                using Socket tcpSocket = CreateWildcardSocket(SocketType.Stream, ProtocolType.Tcp);
+                tcpSocket.Bind(new IPEndPoint(wildcard, port));
+
+                using Socket udpSocket = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
+                udpSocket.Bind(new IPEndPoint(wildcard, port));
+
                 return port;
             }
-            catch (SocketException exception)
+            catch (SocketException)
             {
-                // The port is excluded or in use for UDP: ask the OS for another one.
-                lastFailure = exception;
-                await Task.Delay(TimeSpan.FromMilliseconds(10));
+                // In use, or excluded for one of the two protocols: pick another.
             }
         }
 
-        throw new InvalidOperationException(
-            "No loopback port was free for both TCP and UDP.",
-            lastFailure
+        throw new InvalidOperationException("No port was free for both TCP and UDP.");
+    }
+
+    private static Socket CreateWildcardSocket(SocketType socketType, ProtocolType protocolType)
+    {
+        bool dualStack = Socket.OSSupportsIPv6;
+        Socket socket = new(
+            dualStack ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork,
+            socketType,
+            protocolType
         );
+
+        if (dualStack)
+            socket.DualMode = true;
+
+        return socket;
     }
 
     private IHost BuildPrimaryHost(int tcpPort)
