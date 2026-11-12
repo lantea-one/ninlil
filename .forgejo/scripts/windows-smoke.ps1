@@ -119,23 +119,39 @@ function Get-DraftAsset([string] $destination) {
     Invoke-WebRequest -Headers $headers -UseBasicParsing -Uri $attachment.browser_download_url -OutFile $destination
 }
 
-# Returns a TCP port the operating system reports as free, also free for UDP (the DNS port).
+# Returns a port that binds for TCP now, and for UDP too when $alsoUdp is set (the DNS and
+# DNS-over-QUIC ports), and that no earlier call returned.
+#
+# The port is a random pick from the dynamic range (RFC 6335 section 6), bound explicitly. Asking
+# the system for port 0 does not work here: Windows hands those out one after the other from one
+# counter per protocol and keeps separate excluded ranges for TCP and UDP
+# (`netsh int ipv4 show excludedportrange protocol=udp`), so a port it gives for TCP can be refused
+# for UDP, and so can the next few hundred. A random pick that is refused costs one attempt.
+$script:pickedPorts = @{}
 function Get-FreePort([bool] $alsoUdp) {
-    for ($attempt = 0; $attempt -lt 20; $attempt++) {
-        $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
-        $listener.Start()
-        $port = $listener.LocalEndpoint.Port
-        $listener.Stop()
-        if (-not $alsoUdp) { return $port }
+    $random = New-Object Random
+    for ($attempt = 0; $attempt -lt 2000; $attempt++) {
+        $port = $random.Next(49152, 65536)
+        if ($script:pickedPorts.ContainsKey($port)) { continue }
+        $listener = $null
+        $udp = $null
         try {
-            $udp = New-Object Net.Sockets.UdpClient(New-Object Net.IPEndPoint([Net.IPAddress]::Loopback, $port))
-            $udp.Close()
+            $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $port)
+            $listener.Start()
+            if ($alsoUdp) {
+                $udp = New-Object Net.Sockets.UdpClient(New-Object Net.IPEndPoint([Net.IPAddress]::Loopback, $port))
+            }
+            $script:pickedPorts[$port] = $true
             return $port
         } catch {
+            # Refused or in use: try another pick.
             continue
+        } finally {
+            if ($udp) { $udp.Close() }
+            if ($listener) { $listener.Stop() }
         }
     }
-    throw 'No free port found.'
+    throw 'No free port found in 2000 random picks from the dynamic range.'
 }
 
 # A small compiled client for the TLS checks. It is C# because the certificate callback runs on a
