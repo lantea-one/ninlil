@@ -24,9 +24,12 @@ const IPV4_ADDRESS: ClientAddressDetail = {
   firstSeenUtc: '2026-09-10T09:00:00Z',
   // A getter, not a value computed when this file loads: Karma loads every spec file first and
   // runs the tests minutes later on a slow CI runner, which would turn "2 min ago" into
-  // "7 min ago". Each read measures from the moment the test builds its component.
+  // "7 min ago". Each read measures from the moment the test builds its component. The extra
+  // 30 seconds keep the result at "2 min ago": the component reads its clock a moment before or
+  // after this getter runs, and exactly two minutes would round down to "1 min ago" when the
+  // getter runs last.
   get lastSeenUtc(): string {
-    return new Date(Date.now() - 2 * 60_000).toISOString();
+    return new Date(Date.now() - 2 * 60_000 - 30_000).toISOString();
   },
   macAddress: 'b8:27:eb:12:34:56',
   vendor: 'Raspberry Pi Foundation',
