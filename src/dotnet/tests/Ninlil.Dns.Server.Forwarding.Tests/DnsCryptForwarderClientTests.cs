@@ -52,17 +52,6 @@ public class DnsCryptForwarderClientTests
         }
     }
 
-    private static int GetEphemeralUdpPort()
-    {
-        using System.Net.Sockets.Socket socket = new(
-            System.Net.Sockets.AddressFamily.InterNetwork,
-            System.Net.Sockets.SocketType.Dgram,
-            System.Net.Sockets.ProtocolType.Udp
-        );
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)socket.LocalEndPoint).Port;
-    }
-
     private static string BuildStamp(string address, byte[] providerPublicKey, string providerName)
     {
         ArrayBufferWriter<byte> buffer = new();
@@ -91,7 +80,6 @@ public class DnsCryptForwarderClientTests
     [Fact]
     public async Task ForwardAsync_CompletesARealEncryptedRoundTripAgainstARealDnsCryptListener()
     {
-        int port = GetEphemeralUdpPort();
         string statePath = Path.Combine(
             Path.GetTempPath(),
             $"forwarding-dnscrypt-test-{Guid.NewGuid():N}.json"
@@ -102,7 +90,8 @@ public class DnsCryptForwarderClientTests
             DnsCryptOptions options = new()
             {
                 Enable = true,
-                Port = port,
+                // Port 0: the operating system picks a free port and the listener reports it.
+                Port = 0,
                 ProviderName = "test.example",
                 CertificateStateFilePath = statePath,
                 EnabledEsVersions = [DnsCryptEsVersion.XChaCha20Poly1305],
@@ -162,7 +151,13 @@ public class DnsCryptForwarderClientTests
                 NullLogger<DnsCryptUdpListener>.Instance
             );
             await listener.StartAsync(CancellationToken.None);
-            await Task.Delay(200);
+
+            // The hosted service binds on its own task, so wait for it to report.
+            for (int attempt = 0; attempt < 80 && !listener.IsListening; attempt++)
+                await Task.Delay(25);
+
+            Assert.True(listener.IsListening);
+            int port = listener.BoundPort;
 
             string stamp = BuildStamp(
                 $"127.0.0.1:{port}",
@@ -440,8 +435,7 @@ public class DnsCryptForwarderClientTests
                     );
                 }
             }
-            catch (Exception exception)
-                when (exception is OperationCanceledException or ObjectDisposedException) { }
+            catch (Exception exception) when (EndedByStop(exception, stoppingToken)) { }
         }
 
         /// <summary>
@@ -480,8 +474,7 @@ public class DnsCryptForwarderClientTests
                     );
                 }
             }
-            catch (Exception exception)
-                when (exception is OperationCanceledException or ObjectDisposedException) { }
+            catch (Exception exception) when (EndedByStop(exception, stoppingToken)) { }
         }
 
         /// <summary>
@@ -498,8 +491,7 @@ public class DnsCryptForwarderClientTests
                     tasks.Add(Task.Run(() => PipeAsync(client, stoppingToken)));
                 }
             }
-            catch (Exception exception)
-                when (exception is OperationCanceledException or ObjectDisposedException) { }
+            catch (Exception exception) when (EndedByStop(exception, stoppingToken)) { }
         }
 
         /// <summary>
@@ -550,6 +542,27 @@ public class DnsCryptForwarderClientTests
                 await to.WriteAsync(frame, stoppingToken);
             }
         }
+
+        /// <summary>
+        ///     This method says whether an exception from a relay loop is the relay stopping and not
+        ///     a failure. <see cref="DisposeAsync" /> cancels <c>stop</c> first and closes the
+        ///     sockets after, so a receive or accept that fails with an abort after the token is
+        ///     cancelled is the stop. Closing a socket, or cancelling a pending operation while the
+        ///     socket closes, completes it on Windows with a <see cref="SocketException" /> whose
+        ///     code is <see cref="SocketError.OperationAborted" /> (995), not with an
+        ///     <see cref="OperationCanceledException" /> or <see cref="ObjectDisposedException" />.
+        ///     The same abort before the stop is a real failure and must fail the test.
+        /// </summary>
+        private static bool EndedByStop(Exception exception, CancellationToken stoppingToken) =>
+            exception is OperationCanceledException or ObjectDisposedException
+            || (
+                exception
+                    is SocketException
+                    {
+                        SocketErrorCode: SocketError.OperationAborted or SocketError.Interrupted
+                    }
+                && stoppingToken.IsCancellationRequested
+            );
 
         /// <inheritdoc />
         public async ValueTask DisposeAsync()
@@ -630,14 +643,17 @@ public class DnsCryptForwarderClientTests
             DnsCryptTcpListener tcp = null;
             FileDnsCryptCertificateStore store = null;
 
-            // The listeners' UDP and TCP sockets must share one port; listener bind failures are
-            // logged, not thrown, so IsListening tells whether both got it.
+            // The listeners' UDP and TCP sockets must share one port, because the stamp has one.
+            // UDP binds port 0 and reports the port the operating system chose; TCP then binds
+            // that port, and another process can take it first, so the whole start repeats a
+            // bounded number of times. Listener bind failures are logged, not thrown, so
+            // IsListening tells whether a listener got its port.
             for (int attempt = 0; ; attempt++)
             {
                 options = new DnsCryptOptions
                 {
                     Enable = true,
-                    Port = GetEphemeralUdpPort(),
+                    Port = 0,
                     ProviderName = "test.example",
                     CertificateStateFilePath = statePath,
                     EnabledEsVersions = [DnsCryptEsVersion.XChaCha20Poly1305],
@@ -690,11 +706,21 @@ public class DnsCryptForwarderClientTests
                     NullLogger<DnsCryptTcpListener>.Instance
                 );
                 await udp.StartAsync(CancellationToken.None);
-                await tcp.StartAsync(CancellationToken.None);
 
                 // The hosted services bind on their own task, so wait for them to report.
-                for (int wait = 0; wait < 40 && !(udp.IsListening && tcp.IsListening); wait++)
+                for (int wait = 0; wait < 40 && !udp.IsListening; wait++)
                     await Task.Delay(25);
+
+                if (udp.IsListening)
+                {
+                    // The options object is shared by reference with the monitor the TCP
+                    // listener reads when it starts.
+                    options.Port = udp.BoundPort;
+                    await tcp.StartAsync(CancellationToken.None);
+
+                    for (int wait = 0; wait < 40 && !tcp.IsListening; wait++)
+                        await Task.Delay(25);
+                }
 
                 if ((udp.IsListening && tcp.IsListening) || attempt >= 10)
                     break;
