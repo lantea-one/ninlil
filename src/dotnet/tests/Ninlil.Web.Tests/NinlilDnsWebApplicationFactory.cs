@@ -101,9 +101,9 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
         );
 
         // Plain DNS always starts (it has no Enable flag), and its default port 53, like the
-        // default web ports 80 and 443, needs root. Free ports
-        // keep these listeners clear of services on the test machine and of another copy of
-        // this suite running alongside, without disabling anything.
+        // default web ports 80 and 443, needs root. Ports that are free for TCP and UDP keep
+        // these listeners clear of services on the test machine and of another copy of this
+        // suite running alongside, without disabling anything.
         PlainDnsPort = GetFreePort();
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT",
