@@ -52,7 +52,7 @@ fi
 git checkout -q -B "${branch}"
 git add --update
 git -c user.name='Ninlil CI' -c user.email='ninlil-ci@noreply.invalid' commit -q \
-    -m 'Base images and the checkout action are now pinned to their newest digests and commits'
+    -m 'Base images and the pinned actions now move to their newest digests and commits'
 summary="$(git show --stat --format= HEAD)"
 
 # The header lives in the environment, not in argv or a file; --force is safe because only this
@@ -62,14 +62,14 @@ GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_VALUE_0="Authorization: token ${NINLIL_CI_TOKEN}" \
     git push --force origin "${branch}"
 
-body="Weekly refresh by bump-pins.yml. Each pinned base image moved to the current multi-architecture index digest of its tag, and actions/checkout to the newest tag of its major version.
+body="Weekly refresh by bump-pins.yml. Each pinned base image moved to the current multi-architecture index digest of its tag, and each pinned action (actions/checkout, forgejo/upload-artifact) to the newest tag of its major version.
 
 \`\`\`
 ${summary}
 \`\`\`
 
 Review the diff, wait for the build, then merge."
-payload="$(jq -n --arg title 'Refresh pinned base images and the checkout action' \
+payload="$(jq -n --arg title 'Refresh pinned base images and actions' \
     --arg head "${branch}" --arg base "${BASE_BRANCH}" --arg body "${body}" \
     '{title: $title, head: $head, base: $base, body: $body}')"
 number="$(forgejo_api POST '/pulls' --header 'Content-Type: application/json' --data "${payload}" | jq -r '.number')"
