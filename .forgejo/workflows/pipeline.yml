@@ -22,7 +22,9 @@ name: 'Ninlil Pipeline'
 ## run artifact named test-results-<job> (14 days of retention), also when the tests fail: the
 ## .NET jobs write one TRX file per test project, the Karma job its console log. The upload uses
 ## the Forgejo build of the upload action, pinned by commit like actions/checkout (bump-pins.sh
-## moves both); the upstream action refuses to run outside GitHub.
+## moves both); the upstream action refuses to run outside GitHub. The pin stays on major version
+## 3: version 4 uses an artifact protocol the Forgejo server refuses ("not currently supported on
+## GHES"), which fails the job, and bump-pins.sh never leaves the major version of a pin.
 ##
 ## Every job sets timeout-minutes generously, well above its longest normal run in recent
 ## successful runs, with room for a cold builder image and one npm retry, so a hung step ends the
@@ -193,12 +195,11 @@ jobs:
       - name: 'Upload the Test Results'
         if: >-
           always()
-        uses: 'https://code.forgejo.org/forgejo/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3' # v4.3.1
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32' # v3.1.3
         with:
           name: 'test-results-test-dotnet'
           path: 'TestResults/ci'
           retention-days: 14
-          overwrite: true
           if-no-files-found: warn
   ##
   ## Lint, format check and the Karma suite of the Angular admin console. Runs for every kind,
@@ -252,12 +253,11 @@ jobs:
       - name: 'Upload the Test Results'
         if: >-
           always()
-        uses: 'https://code.forgejo.org/forgejo/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3' # v4.3.1
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32' # v3.1.3
         with:
           name: 'test-results-test-admin-console'
           path: 'TestResults/ci'
           retention-days: 14
-          overwrite: true
           if-no-files-found: warn
   ##
   ## Lints the shell scripts (shellcheck) and the workflows (actionlint), then runs the script
@@ -736,12 +736,11 @@ jobs:
       - name: 'Upload the Test Results'
         if: >-
           always()
-        uses: 'https://code.forgejo.org/forgejo/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3' # v4.3.1
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32' # v3.1.3
         with:
           name: 'test-results-test-windows'
           path: 'TestResults/ci'
           retention-days: 14
-          overwrite: true
           if-no-files-found: warn
       ##
       ## A failed or cancelled run can leave a test host or a Ninlil process running from the

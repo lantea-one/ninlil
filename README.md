@@ -6234,7 +6234,8 @@ rollover test, which runs alone after the rest). The Karma artifact holds `karma
 console output of the suite, because no JUnit reporter is installed. The upload action is
 [`forgejo/upload-artifact`](https://code.forgejo.org/forgejo/upload-artifact), the Forgejo build of
 the upload action, because the upstream one refuses to run outside GitHub. Its pin moves with the
-weekly bump.
+weekly bump but stays on major version 3: Forgejo refuses the artifact protocol of version 4, and
+the upload step then fails its job.
 
 **Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
 reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and
