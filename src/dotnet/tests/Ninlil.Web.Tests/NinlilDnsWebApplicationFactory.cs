@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -99,9 +101,9 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
         );
 
         // Plain DNS always starts (it has no Enable flag), and its default port 53, like the
-        // default web ports 80 and 443, needs root. Ports the operating system reports as free
-        // keep these listeners clear of services on the test machine and of another copy of
-        // this suite running alongside, without disabling anything.
+        // default web ports 80 and 443, needs root. Ports that are free for TCP and UDP keep
+        // these listeners clear of services on the test machine and of another copy of this
+        // suite running alongside, without disabling anything.
         PlainDnsPort = GetFreePort();
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT",
@@ -315,14 +317,61 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     }
 
     /// <summary>
-    ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned.
+    ///     This constant is how many random ports <see cref="GetFreePort" /> tries before it gives
+    ///     up.
     /// </summary>
-    /// <returns>A free TCP port number.</returns>
-    private static int GetFreePort()
+    private const int PortSearchLimit = 2000;
+
+    /// <summary>
+    ///     This method returns a port number that is free on loopback for both TCP and UDP, by
+    ///     briefly holding it with one socket of each kind. The Plain DNS and DNSCrypt transports
+    ///     listen on the same number over both protocols, so a number that is free for TCP alone
+    ///     is not enough. <see cref="StartupRefusalProcessTests" /> uses it for its child process
+    ///     as well.
+    ///     <para>
+    ///         The port is picked at random from the dynamic range (RFC 6335 §6, 49152 to 65535)
+    ///         and bound explicitly, not taken from a port-0 bind. Windows keeps separate excluded
+    ///         port ranges for TCP and UDP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=udp</c>), so a port-0 TCP port
+    ///         can sit inside a UDP-excluded block. The UDP listener is then refused (error
+    ///         10013), the host keeps running without it, and every test that sends a UDP query
+    ///         fails. The port-0 counter also hands out the following ports of such a block one
+    ///         after the other, while a refused random pick costs one attempt.
+    ///     </para>
+    /// </summary>
+    /// <returns>A port number free for TCP and UDP on loopback.</returns>
+    /// <exception cref="InvalidOperationException">No pick out of <see cref="PortSearchLimit" /> was free.</exception>
+    internal static int GetFreePort()
     {
-        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        for (int attempt = 1; attempt <= PortSearchLimit; attempt++)
+        {
+            int port = Random.Shared.Next(49152, 65536);
+            IPEndPoint endPoint = new(IPAddress.Loopback, port);
+
+            try
+            {
+                using Socket tcpSocket = new(
+                    AddressFamily.InterNetwork,
+                    SocketType.Stream,
+                    ProtocolType.Tcp
+                );
+                tcpSocket.Bind(endPoint);
+
+                using Socket udpSocket = new(
+                    AddressFamily.InterNetwork,
+                    SocketType.Dgram,
+                    ProtocolType.Udp
+                );
+                udpSocket.Bind(endPoint);
+
+                return port;
+            }
+            catch (SocketException)
+            {
+                // In use, or excluded for one of the two protocols: pick another.
+            }
+        }
+
+        throw new InvalidOperationException("No port was free for both TCP and UDP.");
     }
 }

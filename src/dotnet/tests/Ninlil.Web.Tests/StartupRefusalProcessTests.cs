@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -166,9 +164,14 @@ public sealed class StartupRefusalProcessTests : IDisposable
         startInfo.Environment["NINLIL_JWT_SIGNING_KEY"] = Convert.ToBase64String(
             RandomNumberGenerator.GetBytes(64)
         );
-        startInfo.Environment["NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT"] = GetFreePort().ToString();
-        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTP_PORT"] = GetFreePort().ToString();
-        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTPS_PORT"] = GetFreePort().ToString();
+        startInfo.Environment["NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT"] =
+            NinlilDnsWebApplicationFactory.GetFreePort().ToString();
+        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTP_PORT"] = NinlilDnsWebApplicationFactory
+            .GetFreePort()
+            .ToString();
+        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTPS_PORT"] = NinlilDnsWebApplicationFactory
+            .GetFreePort()
+            .ToString();
         startInfo.Environment["NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH"] =
             Path.Combine(_directory, "runtime.json");
         startInfo.Environment["NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_ENABLE"] = "false";
@@ -209,12 +212,5 @@ public sealed class StartupRefusalProcessTests : IDisposable
         lock (output)
             text = output.ToString();
         return (process.ExitCode, text);
-    }
-
-    private static int GetFreePort()
-    {
-        using TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }
