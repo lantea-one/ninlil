@@ -45,7 +45,8 @@ A local executable, or a zip with the same layout as the release asset, to test 
 downloading one.
 
 .PARAMETER StartupTimeoutSeconds
-How long to wait for /status to answer 200. Default 120 (the first start extracts the bundle).
+How long to wait for /status to answer 200 and then to report Healthy. Default 120 (the first
+start extracts the bundle).
 
 .PARAMETER DnsQueryPortOverride
 Test switch: sends the DNS query to this port instead of the one the server was given, which
@@ -118,23 +119,39 @@ function Get-DraftAsset([string] $destination) {
     Invoke-WebRequest -Headers $headers -UseBasicParsing -Uri $attachment.browser_download_url -OutFile $destination
 }
 
-# Returns a TCP port the operating system reports as free, also free for UDP (the DNS port).
+# Returns a port that binds for TCP now, and for UDP too when $alsoUdp is set (the DNS and
+# DNS-over-QUIC ports), and that no earlier call returned.
+#
+# The port is a random pick from the dynamic range (RFC 6335 section 6), bound explicitly. Asking
+# the system for port 0 does not work here: Windows hands those out one after the other from one
+# counter per protocol and keeps separate excluded ranges for TCP and UDP
+# (`netsh int ipv4 show excludedportrange protocol=udp`), so a port it gives for TCP can be refused
+# for UDP, and so can the next few hundred. A random pick that is refused costs one attempt.
+$script:pickedPorts = @{}
 function Get-FreePort([bool] $alsoUdp) {
-    for ($attempt = 0; $attempt -lt 20; $attempt++) {
-        $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
-        $listener.Start()
-        $port = $listener.LocalEndpoint.Port
-        $listener.Stop()
-        if (-not $alsoUdp) { return $port }
+    $random = New-Object Random
+    for ($attempt = 0; $attempt -lt 2000; $attempt++) {
+        $port = $random.Next(49152, 65536)
+        if ($script:pickedPorts.ContainsKey($port)) { continue }
+        $listener = $null
+        $udp = $null
         try {
-            $udp = New-Object Net.Sockets.UdpClient(New-Object Net.IPEndPoint([Net.IPAddress]::Loopback, $port))
-            $udp.Close()
+            $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $port)
+            $listener.Start()
+            if ($alsoUdp) {
+                $udp = New-Object Net.Sockets.UdpClient(New-Object Net.IPEndPoint([Net.IPAddress]::Loopback, $port))
+            }
+            $script:pickedPorts[$port] = $true
             return $port
         } catch {
+            # Refused or in use: try another pick.
             continue
+        } finally {
+            if ($udp) { $udp.Close() }
+            if ($listener) { $listener.Stop() }
         }
     }
-    throw 'No free port found.'
+    throw 'No free port found in 2000 random picks from the dynamic range.'
 }
 
 # A small compiled client for the TLS checks. It is C# because the certificate callback runs on a
@@ -382,8 +399,19 @@ try {
     Write-Host "ok: DNS-over-TLS answered with RCODE $($tlsReply[3] -band 0x0F)"
 
     # 6. DNS-over-QUIC. Every enabled transport must be listening: /status is Unhealthy otherwise.
-    $health = ($status.Content | ConvertFrom-Json).status
-    if ($health -ne 'Healthy') { throw "/status reports '$health', not Healthy: $($status.Content)" }
+    # /status answers before the last listener is bound, so the answer of step 1 can still say
+    # Unhealthy on a busy host. Ask again until it is Healthy or the start-up time is used up.
+    $health = ''
+    while ($health -ne 'Healthy') {
+        if ($process.HasExited) { throw "The executable exited with code $($process.ExitCode) before /status was Healthy." }
+        $status = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$httpPort/status" -TimeoutSec 5
+        $health = ($status.Content | ConvertFrom-Json).status
+        if ($health -ne 'Healthy') {
+            if ((Get-Date) -gt $deadline) { throw "/status reports '$health', not Healthy, $StartupTimeoutSeconds seconds after the start: $($status.Content)" }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    Write-Host 'ok: /status is Healthy, so every enabled transport is listening'
     if ((Get-Content $stdoutFile -Raw) -match 'QUIC is not supported') {
         throw 'The executable reports that QUIC is not supported (msquic.dll did not load beside it).'
     }

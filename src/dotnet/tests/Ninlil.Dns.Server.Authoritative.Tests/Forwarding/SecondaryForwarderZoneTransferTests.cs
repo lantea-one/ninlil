@@ -56,7 +56,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
 
     /// <summary>
     ///     This constant is how many times <see cref="InitializeAsync" /> starts the primary host
-    ///     on a new port when its listener could not bind the reserved one.
+    ///     on a new port when a listener could not bind the reserved one.
     /// </summary>
     private const int MaximumPrimaryStarts = 10;
 
@@ -70,24 +70,25 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
         byte[] rawTsigSecret = new byte[32];
         Random.Shared.NextBytes(rawTsigSecret);
 
-        // The primary's TcpDnsListener does not expose the port it bound, so a port is reserved
-        // and released first. Another process can take it in between, so the primary starts
-        // again on a new port a bounded number of times when its listener could not bind.
+        // The primary's listeners do not expose the port they bound, and the secondary needs one
+        // port number for both the UDP SOA check and the TCP transfer, so a port is reserved and
+        // released first. Another process can take it in between, so the primary starts again on
+        // a new port a bounded number of times when a listener could not bind.
         int tcpPort = 0;
         bool primaryListening = false;
 
         for (int attempt = 1; attempt <= MaximumPrimaryStarts && !primaryListening; attempt++)
         {
-            tcpPort = GetFreeTcpPort();
+            tcpPort = GetFreeTcpAndUdpPort();
 
             _primaryHost = BuildPrimaryHost(tcpPort);
             await SeedPrimaryAsync(rawTsigSecret);
 
-            // Starts AuthoritativeZoneCache's initial load and TcpDnsListener's real socket
-            // bind, so the secondary host below has a real, already-listening primary to pull
+            // Starts AuthoritativeZoneCache's initial load and the listeners' real socket
+            // binds, so the secondary host below has a real, already-listening primary to pull
             // from the moment it starts.
             await _primaryHost.StartAsync();
-            primaryListening = await WaitForPrimaryTcpListenerBindOutcomeAsync();
+            primaryListening = await WaitForPrimaryListenerBindOutcomeAsync();
 
             if (!primaryListening)
             {
@@ -98,7 +99,10 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
             }
         }
 
-        Assert.True(primaryListening, "The primary host's own TcpDnsListener never bound.");
+        Assert.True(
+            primaryListening,
+            "The primary host's TcpDnsListener and UdpDnsListener never both bound."
+        );
 
         _secondaryHost = BuildSecondaryHost(tcpPort);
         await SeedSecondaryAsync(rawTsigSecret);
@@ -280,45 +284,109 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method waits for the primary host's real <see cref="TcpDnsListener" /> to
-    ///     report the outcome of its socket bind -- <see cref="BackgroundService.StartAsync" />
-    ///     (which <see cref="IHost.StartAsync" /> does await) only starts <see cref="TcpDnsListener.ExecuteAsync" />
-    ///     running in the background rather than waiting for its first statements (the real
-    ///     socket bind) to complete, so this closes that small window rather than leaving the
-    ///     secondary host's very first pull attempt to race it. It returns <see langword="true" />
-    ///     when the listener is accepting and <see langword="false" /> when the bind failed.
+    ///     This method waits for the primary host's real <see cref="TcpDnsListener" /> and
+    ///     <see cref="UdpDnsListener" /> to report the outcome of their socket binds --
+    ///     <see cref="BackgroundService.StartAsync" /> (which <see cref="IHost.StartAsync" /> does
+    ///     await) only starts <c>ExecuteAsync</c> running in the background rather than waiting
+    ///     for its first statements (the real socket bind) to complete, so this closes that small
+    ///     window rather than leaving the secondary host's very first pull attempt to race it. It
+    ///     returns <see langword="true" /> when both listeners are accepting and
+    ///     <see langword="false" /> when either bind failed. The UDP listener matters because
+    ///     <c>ZoneTransferPullCodec</c> sends its SOA check over UDP to the same port number as
+    ///     the TCP transfer, and a failed UDP bind leaves every pull without an answer.
     /// </summary>
-    private async Task<bool> WaitForPrimaryTcpListenerBindOutcomeAsync()
+    private async Task<bool> WaitForPrimaryListenerBindOutcomeAsync()
     {
-        TcpDnsListener listener = _primaryHost
+        TcpDnsListener tcpListener = _primaryHost
             .Services.GetServices<IHostedService>()
             .OfType<TcpDnsListener>()
+            .Single();
+        UdpDnsListener udpListener = _primaryHost
+            .Services.GetServices<IHostedService>()
+            .OfType<UdpDnsListener>()
             .Single();
 
         DateTimeOffset deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
 
-        while (
-            !listener.IsListening
-            && listener.FailedListenAddresses.Count == 0
-            && DateTimeOffset.UtcNow < deadline
-        )
-            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (
+                tcpListener.FailedListenAddresses.Count > 0
+                || udpListener.FailedListenAddresses.Count > 0
+            )
+                return false;
 
-        return listener.IsListening;
+            if (tcpListener.IsListening && udpListener.IsListening)
+                return true;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        }
+
+        return false;
     }
 
     /// <summary>
-    ///     This method finds a free loopback TCP port by briefly binding one and releasing it.
-    ///     <see cref="InitializeAsync" /> retries the primary when the port is taken before the
-    ///     listener binds it.
+    ///     This constant is how many random ports <see cref="GetFreeTcpAndUdpPort" /> tries
+    ///     before it gives up.
     /// </summary>
-    private static int GetFreeTcpPort()
+    private const int PortSearchLimit = 2000;
+
+    /// <summary>
+    ///     This method returns a port number that is free for both TCP and UDP, by briefly
+    ///     holding it with dual-stack wildcard sockets, the addresses the plain listeners bind.
+    ///     <para>
+    ///         The port is picked at random from the dynamic range (RFC 6335 §6, 49152 to 65535)
+    ///         and bound explicitly, not taken from a port-0 bind. Windows hands out port-0 ports
+    ///         one after the other from a machine-wide counter per protocol, and keeps separate
+    ///         excluded port ranges for TCP and UDP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=udp</c>). A TCP port inside a
+    ///         UDP-excluded block is refused (error 10013) for UDP, and so is every following
+    ///         port until the counter leaves the block, which can be hundreds of ports. Random
+    ///         picks spread over the whole range, so a refused pick costs one attempt.
+    ///         <see cref="InitializeAsync" /> retries the primary when the port is taken before
+    ///         the listeners bind it.
+    ///     </para>
+    /// </summary>
+    private static int GetFreeTcpAndUdpPort()
     {
-        TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        IPAddress wildcard = Socket.OSSupportsIPv6 ? IPAddress.IPv6Any : IPAddress.Any;
+
+        for (int attempt = 1; attempt <= PortSearchLimit; attempt++)
+        {
+            int port = Random.Shared.Next(49152, 65536);
+
+            try
+            {
+                using Socket tcpSocket = CreateWildcardSocket(SocketType.Stream, ProtocolType.Tcp);
+                tcpSocket.Bind(new IPEndPoint(wildcard, port));
+
+                using Socket udpSocket = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
+                udpSocket.Bind(new IPEndPoint(wildcard, port));
+
+                return port;
+            }
+            catch (SocketException)
+            {
+                // In use, or excluded for one of the two protocols: pick another.
+            }
+        }
+
+        throw new InvalidOperationException("No port was free for both TCP and UDP.");
+    }
+
+    private static Socket CreateWildcardSocket(SocketType socketType, ProtocolType protocolType)
+    {
+        bool dualStack = Socket.OSSupportsIPv6;
+        Socket socket = new(
+            dualStack ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork,
+            socketType,
+            protocolType
+        );
+
+        if (dualStack)
+            socket.DualMode = true;
+
+        return socket;
     }
 
     private IHost BuildPrimaryHost(int tcpPort)

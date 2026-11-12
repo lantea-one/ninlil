@@ -105,7 +105,8 @@ public sealed class ClusterConfigBackfillRunner(
 
     /// <summary>
     ///     This field is cancelled when the host stops, so a pass in the background stops with the
-    ///     process and leaves its request in place.
+    ///     process and leaves its request in place. It is never disposed, so <see cref="StopAsync" />
+    ///     is safe at any time, also after <see cref="DisposeAsync" />.
     /// </summary>
     private readonly CancellationTokenSource _shutdown = new();
 
@@ -201,8 +202,11 @@ public sealed class ClusterConfigBackfillRunner(
         if (Interlocked.Exchange(ref _disposed, 1) == 1)
             return;
 
+        // _shutdown is never disposed: a StopAsync can still arrive after this call (the host
+        // stops its services from more than one thread while a container disposes them), and a
+        // cancel on a disposed source throws. The source has no timer and no link, so it holds
+        // nothing a dispose would release.
         await StopAsync(CancellationToken.None);
-        _shutdown.Dispose();
     }
 
     /// <inheritdoc />
