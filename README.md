@@ -6124,7 +6124,9 @@ trial.
 The image holds nothing but a prebuilt, self-contained `ninlil-linux-<arch>` executable, so
 build those first (see [Build the binaries and packages](./CONTRIBUTING.md#build-the-binaries-and-packages)), then point the
 [`Dockerfile`](./Dockerfile)'s `binaries` build context at them. It only copies files, so a
-two-architecture image needs no CPU emulation:
+two-architecture image needs no CPU emulation. The build needs Docker Engine 23.0 or later and buildx 0.8 or later: the `Dockerfile` has no
+`# syntax=` line, so the engine's built-in Dockerfile frontend must be 1.4 or newer (named build
+contexts need it), and buildx 0.8 added `--build-context`:
 
 ```bash
 .forgejo/scripts/publish-binary.sh linux-amd64 dist

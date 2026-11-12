@@ -1,6 +1,6 @@
 # There is no `# syntax=` line on purpose: it makes BuildKit fetch a frontend image from Docker
-# Hub on every build, an unpinned network dependency. The builder's built-in frontend supports
-# everything used here.
+# Hub on every build, an unpinned network dependency. This file uses nothing newer than Dockerfile
+# 1.4, the frontend built into Docker Engine 23.0 and later.
 #
 # The toolchains the pipeline's build and test steps run in, one target per toolchain. Nothing
 # from the repository is copied in: .forgejo/scripts/in-container.sh builds a target from this
