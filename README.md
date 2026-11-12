@@ -6202,7 +6202,7 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded, nothing waits for it); and finally publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded; only publish waits for it); and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 | `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout commit (below) and opens a pull request into `develop` (by hand, any branch) |
 
@@ -6216,8 +6216,12 @@ on the repository.
 The `test-windows` job builds the admin console and runs the whole solution's tests natively on
 `lofnheim`, for the Windows socket, file-system and process behaviour the Linux containers cannot
 show. It runs for builds of `develop` and `main` only, skips the tests that need Docker (the Linux
-job runs those), and starts alongside the Linux jobs. Neither the draft nor the publish step waits
-for it, so a Windows-only failure turns the run red without holding back a release.
+job runs those), and starts alongside the Linux jobs. The draft does not wait for it, so a green
+run is not slowed by the single Windows runner. Publishing does: a small `windows-gate` job waits
+for `test-windows` and runs when it succeeded or was skipped (every build except one of `develop`
+or `main`), and `publish` needs that gate. A failed or cancelled `test-windows` therefore leaves the
+release an invisible draft, but the pre-release container image and NuGet packages of that build
+are already pushed and expire with the 24-hour clean-up.
 
 **Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
 reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and
