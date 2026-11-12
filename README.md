@@ -6237,6 +6237,10 @@ the upload action, because the upstream one refuses to run outside GitHub. Its p
 weekly bump but stays on major version 3: Forgejo refuses the artifact protocol of version 4, and
 the upload step then fails its job.
 
+**A run that stays waiting.** Runs of one branch queue behind each other. A queued run that
+never starts although the runners are idle is cleared as described in
+[A run stays waiting](./CONTRIBUTING.md#a-run-stays-waiting).
+
 **Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
 reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and
 runs with `--filter "Category!=RequiresDocker"`, which skips the PostgreSQL query-log tests. A
