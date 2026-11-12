@@ -1,4 +1,6 @@
-# syntax=docker/dockerfile:1
+# There is no `# syntax=` line on purpose: it makes BuildKit fetch a frontend image from Docker
+# Hub on every build, an unpinned network dependency. The builder's built-in frontend supports
+# everything used here.
 #
 # Ninlil's container image.
 #
