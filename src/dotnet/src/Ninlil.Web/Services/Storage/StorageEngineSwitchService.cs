@@ -55,6 +55,7 @@ public sealed class StorageEngineSwitchService(
 {
     /// <summary>
     ///     This field is how long the target gets to answer the check before the request fails.
+    ///     The time to build the EF model is not part of it.
     /// </summary>
     private static readonly TimeSpan TargetCheckTimeout = TimeSpan.FromSeconds(15);
 
@@ -316,7 +317,6 @@ public sealed class StorageEngineSwitchService(
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
             stoppingToken
         );
-        timeout.CancelAfter(TargetCheckTimeout);
 
         try
         {
@@ -326,6 +326,12 @@ public sealed class StorageEngineSwitchService(
                         .UseNinlilDnsStorage(targetProbe)
                         .Options;
             await using NinlilDnsContext context = new(options);
+
+            // The first use of the context builds the EF model, which costs seconds of CPU on a
+            // loaded host and never touches the target. It happens before the timer starts so
+            // the limit measures only what the target database does.
+            _ = context.Model;
+            timeout.CancelAfter(TargetCheckTimeout);
 
             List<string> applied =
             [
