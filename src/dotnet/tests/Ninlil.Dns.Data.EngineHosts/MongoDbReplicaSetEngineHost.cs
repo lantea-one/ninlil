@@ -28,7 +28,7 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
 {
     private const string ReplicaSetName = "rs0";
 
-    private readonly int[] _ports = [FreePort(), FreePort(), FreePort()];
+    private int[] _ports = [FreePort(), FreePort(), FreePort()];
     private readonly List<IContainer> _members = [];
     private string _address = "localhost";
 
@@ -43,9 +43,21 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
     /// <inheritdoc />
     public override async Task StartAsync()
     {
-        IContainer first = CreateMember(0, null);
-        _members.Add(first);
-        await first.StartAsync();
+        // Docker publishes the three ports on the first container, so a host port that is taken
+        // fails this start. RetryOnPortConflictAsync explains why the numbers are reserved and
+        // released, and why a new set of numbers is the cure.
+        IContainer first = null;
+        await RetryOnPortConflictAsync(
+            async number =>
+            {
+                if (number > 0)
+                    _ports = [FreePort(), FreePort(), FreePort()];
+                first = CreateMember(0, null);
+                _members.Add(first);
+                await first.StartAsync();
+            },
+            DisposeMembersAsync
+        );
 
         // The Docker endpoint's host name is loopback on a plain host and the override host
         // inside a toolchain container. The set advertises its numeric address because the
@@ -101,9 +113,15 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
     /// <inheritdoc />
     public override async ValueTask DisposeAsync()
     {
+        await DisposeMembersAsync();
+    }
+
+    private async Task DisposeMembersAsync()
+    {
         // The first container owns the network namespace, so it goes last.
         for (int index = _members.Count - 1; index >= 0; index--)
             await _members[index].DisposeAsync();
+        _members.Clear();
     }
 
     /// <summary>
