@@ -16,3 +16,7 @@ paths:
   .github/workflows/pipeline.yml:
     ignore:
       - 'SC2016:info:.*'
+      # The test jobs upload their results with the Forgejo build of the upload action, written as
+      # a full URL because the upstream action refuses to run outside GitHub. actionlint accepts
+      # only {owner}/{repo}@{ref}. Only that one repository is exempt.
+      - 'specifying action "https://code\.forgejo\.org/forgejo/upload-artifact@[0-9a-f]{40}" in invalid format.*'

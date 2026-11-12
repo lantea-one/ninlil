@@ -18,6 +18,12 @@ name: 'Ninlil Pipeline'
 ## test listener (Karma's included) also takes a port the operating system reports as free, so
 ## two copies of the suite never meet.
 ##
+## The three test jobs (test-dotnet, test-windows, test-admin-console) upload their results as a
+## run artifact named test-results-<job> (14 days of retention), also when the tests fail: the
+## .NET jobs write one TRX file per test project, the Karma job its console log. The upload uses
+## the Forgejo build of the upload action, pinned by commit like actions/checkout (bump-pins.sh
+## moves both); the upstream action refuses to run outside GitHub.
+##
 ## Every job sets timeout-minutes generously, well above its longest normal run in recent
 ## successful runs, with room for a cold builder image and one npm retry, so a hung step ends the
 ## job instead of holding the single runner until a person cancels it. `npm ci` has a tighter limit and one retry of its own (npm-ci.sh), because
@@ -166,15 +172,33 @@ jobs:
               docker_flag=()
               category_filter=' & Category!=RequiresDocker'
           fi
+          # Each run writes TRX files (one per test project) into its own folder under
+          # TestResults/ (git-ignored), which the next step uploads: the alone run must not mix
+          # with, or overwrite, the first one's files.
           ./.forgejo/scripts/in-container.sh "${docker_flag[@]}" dotnet bash -c '
             set -euo pipefail
             timing_sensitive="DnssecKeyRolloverZskPrePublishLiveTests"
             dotnet test Ninlil.slnx --no-build --configuration Release \
+              --logger trx --results-directory "${PWD}/TestResults/ci/main" \
               --filter "FullyQualifiedName!~${timing_sensitive}${1}"
             dotnet test Ninlil.slnx --no-build --configuration Release \
+              --logger trx --results-directory "${PWD}/TestResults/ci/rollover" \
               --filter "FullyQualifiedName~${timing_sensitive}${1}"
           ' _ "${category_filter}"
         shell: 'bash'
+      ##
+      ## Runs after a failed test step too, because those are the results worth reading.
+      ##
+      - name: 'Upload the Test Results'
+        if: >-
+          always()
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3' # v4.3.1
+        with:
+          name: 'test-results-test-dotnet'
+          path: 'TestResults/ci'
+          retention-days: 14
+          overwrite: true
+          if-no-files-found: warn
   ##
   ## Lint, format check and the Karma suite of the Angular admin console. Runs for every kind,
   ## with no dependencies.
@@ -212,11 +236,28 @@ jobs:
       - name: 'Run the Jasmine/Karma Suite'
         run: |-
           # Headless Chromium; Karma listens on a free loopback port (karma.conf.js).
+          # The console output is the only result Karma writes (no JUnit reporter is installed),
+          # so it is kept as a log for the upload below. pipefail keeps Karma's exit status.
           ./.forgejo/scripts/in-container.sh node bash -c '
+            set -euo pipefail
+            mkdir -p TestResults/ci
             cd src/angular
-            npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox
+            npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox 2>&1 | tee ../../TestResults/ci/karma.log
           '
         shell: 'bash'
+      ##
+      ## Runs after a failed test step too, because those are the results worth reading.
+      ##
+      - name: 'Upload the Test Results'
+        if: >-
+          always()
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3' # v4.3.1
+        with:
+          name: 'test-results-test-admin-console'
+          path: 'TestResults/ci'
+          retention-days: 14
+          overwrite: true
+          if-no-files-found: warn
   ##
   ## Lints the shell scripts (shellcheck) and the workflows (actionlint), then runs the script
   ## self-tests (.forgejo/scripts/lint.sh). Runs for every kind, with no dependencies; draft and
@@ -670,13 +711,30 @@ jobs:
           # rest, because CPU contention breaks its two-second TTLs.
           $ErrorActionPreference = 'Continue'
           $timing = 'DnssecKeyRolloverZskPrePublishLiveTests'
-          dotnet test Ninlil.slnx --no-build --configuration Release --filter "FullyQualifiedName!~$timing & Category!=RequiresDocker"
+          # TRX files go to TestResults\ci (git-ignored), one folder per run so the alone run does
+          # not overwrite the first one's files; the upload step below collects them.
+          $results = Join-Path (Get-Location).Path 'TestResults\ci'
+          dotnet test Ninlil.slnx --no-build --configuration Release --logger trx --results-directory "$results\main" --filter "FullyQualifiedName!~$timing & Category!=RequiresDocker"
           $rest = $LASTEXITCODE
-          dotnet test Ninlil.slnx --no-build --configuration Release --filter "FullyQualifiedName~$timing & Category!=RequiresDocker"
+          dotnet test Ninlil.slnx --no-build --configuration Release --logger trx --results-directory "$results\rollover" --filter "FullyQualifiedName~$timing & Category!=RequiresDocker"
           $alone = $LASTEXITCODE
           if ($rest -ne 0) { exit $rest }
           if ($alone -ne 0) { exit $alone }
         shell: 'powershell'
+      ##
+      ## Runs after a failed test step too, because those are the results worth reading. Like
+      ## actions/checkout, the upload action runs on the runner's own Node.js.
+      ##
+      - name: 'Upload the Test Results'
+        if: >-
+          always()
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3' # v4.3.1
+        with:
+          name: 'test-results-test-windows'
+          path: 'TestResults/ci'
+          retention-days: 14
+          overwrite: true
+          if-no-files-found: warn
       ##
       ## A failed or cancelled run can leave a test host or a Ninlil process running from the
       ## workspace, which holds its files open and makes the next checkout (clean: true) fail
