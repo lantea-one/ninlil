@@ -6,6 +6,7 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
@@ -17,12 +18,15 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 
 /// <summary>
-///     This class tests <see cref="QuicZoneTransferClient" />. Its pull logic is the shared
+///     This class tests <see cref="QuicZoneTransferClient" /> against a fake DoQ primary on a
+///     loopback QUIC listener (real sockets, OS-assigned port). Its pull logic is the shared
 ///     <c>ZoneTransferPullOverStream</c> covered by <see cref="ZoneTransferPullCodecTests" /> and
-///     <see cref="TlsZoneTransferClientTests" />, and a QUIC handshake needs <c>libmsquic</c>, which
-///     the test environment may lack (as for <c>DnsOverQuicListenerTests</c>). So it checks only
-///     that an unsupported platform (<see cref="QuicConnection.IsSupported" /> false) gives a clean
-///     failure result rather than an exception.
+///     <see cref="TlsZoneTransferClientTests" />; these tests cover what is specific to QUIC:
+///     message ID 0, TSIG over it, and a primary that stops reading before the client's end of
+///     stream. A QUIC handshake needs <c>libmsquic</c>, which the test environment may lack (as for
+///     <c>DnsOverQuicListenerTests</c>); those tests then return early, and one checks that an
+///     unsupported platform (<see cref="QuicConnection.IsSupported" /> false) gives a clean failure
+///     result rather than an exception.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
@@ -69,12 +73,13 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
         private FakeQuicPrimary(
             QuicListener listener,
             X509Certificate2 certificate,
-            Func<DnsMessage, byte[], int, Task<List<DnsMessage>>> handler
+            Func<DnsMessage, byte[], int, Task<List<DnsMessage>>> handler,
+            bool readClientEndOfStream
         )
         {
             _listener = listener;
             _certificate = certificate;
-            _serving = ServeOnceAsync(handler);
+            _serving = ServeOnceAsync(handler, readClientEndOfStream);
         }
 
         /// <summary>
@@ -91,8 +96,15 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
         /// <summary>
         ///     This method starts a fake primary on a free loopback port.
         /// </summary>
+        /// <param name="handler">Returns the response messages for a decoded query.</param>
+        /// <param name="readClientEndOfStream">
+        ///     True to read to the client's end of stream before answering. False to stop reading
+        ///     the stream after the query (a STOP_SENDING for the client's write side) and answer
+        ///     at once, as a primary that never reads the end does.
+        /// </param>
         public static async Task<FakeQuicPrimary> StartAsync(
-            Func<DnsMessage, byte[], int, Task<List<DnsMessage>>> handler
+            Func<DnsMessage, byte[], int, Task<List<DnsMessage>>> handler,
+            bool readClientEndOfStream = true
         )
         {
             // The certificate is exported and re-imported so the private key is a persisted
@@ -134,11 +146,12 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
                 }
             );
 
-            return new FakeQuicPrimary(listener, certificate, handler);
+            return new FakeQuicPrimary(listener, certificate, handler, readClientEndOfStream);
         }
 
         private async Task ServeOnceAsync(
-            Func<DnsMessage, byte[], int, Task<List<DnsMessage>>> handler
+            Func<DnsMessage, byte[], int, Task<List<DnsMessage>>> handler,
+            bool readClientEndOfStream
         )
         {
             try
@@ -163,10 +176,19 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
                 // arrived aborts the client's write side, and on a slow machine the client's
                 // end-of-stream write then fails with "Stream aborted by peer" although the
                 // answer was complete.
-                if (await stream.ReadAsync(new byte[1], timeout.Token) != 0)
-                    throw new InvalidOperationException(
-                        "The client sent more data after the query."
-                    );
+                if (readClientEndOfStream)
+                {
+                    if (await stream.ReadAsync(new byte[1], timeout.Token) != 0)
+                        throw new InvalidOperationException(
+                            "The client sent more data after the query."
+                        );
+                }
+                else
+                {
+                    // Give up the read side with the client's end of stream unread, so the
+                    // client's end-of-stream write fails with "Stream aborted by peer".
+                    stream.Abort(QuicAbortDirection.Read, 0);
+                }
 
                 List<DnsMessage> messages = await handler(query, raw, tsigOffset);
 
@@ -221,22 +243,56 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
         }
     }
 
-    private QuicZoneTransferClient CreateClient(int port) =>
-        new(
-            _scope.ServiceProvider.GetRequiredService<ITsigService>(),
-            new StaticOptionsMonitor<ZoneTransferClientOptions>(
-                new ZoneTransferClientOptions
-                {
-                    PrimaryQuicPort = port,
-                    // A QUIC handshake and a signed transfer take seconds, not milliseconds, when
-                    // the machine runs many test processes at once.
-                    ConnectTimeout = TimeSpan.FromSeconds(30),
-                    ReadTimeout = TimeSpan.FromSeconds(30),
-                    // The fake primary's certificate is self-signed.
-                    ValidateServerCertificate = false,
-                }
-            )
+    /// <summary>
+    ///     This class is a <see cref="QuicZoneTransferClient" /> that holds back its end of
+    ///     stream until the primary's STOP_SENDING has arrived, so the end-of-stream write fails
+    ///     every time. A real primary that drops its read side does this at a time the client
+    ///     cannot choose, which a test cannot reproduce on demand.
+    /// </summary>
+    private sealed class HoldEndOfStreamClient(
+        ITsigService tsigService,
+        IOptionsMonitor<ZoneTransferClientOptions> options
+    ) : QuicZoneTransferClient(tsigService, options)
+    {
+        /// <inheritdoc />
+        protected override async Task OnQueryWrittenAsync(
+            QuicStream stream,
+            CancellationToken stoppingToken
+        )
+        {
+            try
+            {
+                // WritesClosed completes, here with the peer's abort, once the client's write
+                // side is closed; the bound keeps a fake that never aborts from hanging the test.
+                await stream.WritesClosed.WaitAsync(TimeSpan.FromSeconds(30), stoppingToken);
+            }
+            catch (QuicException)
+            {
+                // The abort the test waits for.
+            }
+        }
+    }
+
+    private QuicZoneTransferClient CreateClient(int port, bool holdEndOfStream = false)
+    {
+        StaticOptionsMonitor<ZoneTransferClientOptions> options = new(
+            new ZoneTransferClientOptions
+            {
+                PrimaryQuicPort = port,
+                // A QUIC handshake and a signed transfer take seconds, not milliseconds, when
+                // the machine runs many test processes at once.
+                ConnectTimeout = TimeSpan.FromSeconds(30),
+                ReadTimeout = TimeSpan.FromSeconds(30),
+                // The fake primary's certificate is self-signed.
+                ValidateServerCertificate = false,
+            }
         );
+        ITsigService tsig = _scope.ServiceProvider.GetRequiredService<ITsigService>();
+
+        return holdEndOfStream
+            ? new HoldEndOfStreamClient(tsig, options)
+            : new QuicZoneTransferClient(tsig, options);
+    }
 
     private static bool IsQuicAvailable() => QuicListener.IsSupported && QuicConnection.IsSupported;
 
@@ -392,5 +448,54 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
 
         Assert.False(result.Succeeded);
         Assert.Contains("ID", result.FailureReason);
+    }
+
+    [Fact]
+    public async Task PullAsync_WhenThePrimaryAnswersWithoutReadingTheEndOfStream_CompletesTheTransfer()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        string keyName = await _host.AddKeyAsync();
+
+        // A complete signed answer on a stream whose read side the primary has already aborted:
+        // the client's end-of-stream write may fail, but the answer arrives in full.
+        await using FakeQuicPrimary primary = await FakeQuicPrimary.StartAsync(
+            (query, raw, tsigOffset) => _host.TransferAsync(query, raw, tsigOffset),
+            readClientEndOfStream: false
+        );
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(60));
+
+        ZoneTransferPullResult result = await CreateClient(primary.Port, holdEndOfStream: true)
+            .PullAsync(
+                IPAddress.Loopback,
+                DnsName.Parse(TsigTransferHost.ZoneName),
+                null,
+                keyName,
+                cts.Token
+            );
+
+        Assert.True(result.Succeeded, result.FailureReason);
+        Assert.Equal((uint)100, result.FinalSerial);
+    }
+
+    [Fact]
+    public async Task PullAsync_WhenThePrimaryAbortsWithoutAnswering_ReportsAFailureWithoutThrowing()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        // The primary gives up its read side and sends no message at all, then ends its stream.
+        await using FakeQuicPrimary primary = await FakeQuicPrimary.StartAsync(
+            (_, _, _) => Task.FromResult<List<DnsMessage>>([]),
+            readClientEndOfStream: false
+        );
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(60));
+
+        ZoneTransferPullResult result = await CreateClient(primary.Port, holdEndOfStream: true)
+            .PullAsync(IPAddress.Loopback, Zone, 10, null, cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.NotEmpty(result.FailureReason);
     }
 }

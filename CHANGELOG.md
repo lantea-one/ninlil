@@ -11,6 +11,14 @@ outside Forgejo.
 
 ## Unreleased
 
+### Behaviour worth knowing
+
+- **A QUIC zone transfer completes when the primary closes its stream early.** A secondary that
+  pulls a zone over QUIC no longer fails the transfer, or logs "Unhandled exception while checking
+  secondary zones", when the primary sends the whole answer and drops its stream without reading
+  the secondary's end of stream. A missing or incomplete answer still fails the transfer and
+  reports why. ([#350](https://git.lantea.one/lantea-one/ninlil/issues/350))
+
 ## v2026.11.12.1
 
 ### Security
