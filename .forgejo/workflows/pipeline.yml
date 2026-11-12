@@ -31,8 +31,9 @@ name: 'Ninlil Pipeline'
 ## reusable workflow (build.yml, release.yml) cannot carry timeout-minutes.
 ##
 ## Job graph (the tests and lint start alongside version; 'verify' runs only test-dotnet,
-## test-admin-console and lint; test-windows runs for builds of develop and main only, and only
-## publish waits for it, through windows-gate):
+## test-admin-console and lint; test-windows runs for builds of develop and main only, and the
+## three jobs that make a build visible outside the run wait for it, through windows-gate: image
+## and packages, which push to the registries, and publish):
 ##
 ##   version ────────────┐
 ##   lint ───────────────┤
@@ -41,7 +42,7 @@ name: 'Ninlil Pipeline'
 ##                       │                          ├─ image ───────────┤
 ##                       │                          └─ windows-smoke ───┤
 ##                       └─ packages (×4) ──────────────────────────────┤
-##   test-windows ── windows-gate ─────────────────────────────────────┘
+##   test-windows ── windows-gate ── image, packages (×4) and publish ──┘
 ##
 ## The draft release doubles as the hand-off between jobs: each binary job attaches its
 ## executable to it, the Arch Linux, Deb/RPM and image jobs build from the two Linux executables
@@ -470,7 +471,8 @@ jobs:
         shell: 'bash'
   ##
   ## The multi-platform container image, built from the two Linux executables on the draft and
-  ## pushed to the Forgejo container registry.
+  ## pushed to the Forgejo container registry. A pushed tag can be pulled at once, so the job
+  ## waits for windows-gate: a build whose Windows tests failed pushes no image.
   ##
   image:
     name: 'Build and Push Image'
@@ -478,6 +480,7 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
+      - 'windows-gate'
       - 'binaries'
     runs-on: 'asgard'
     timeout-minutes: 40
@@ -536,7 +539,9 @@ jobs:
         shell: 'bash'
   ##
   ## NuGet packages for the libraries, one matrix job per family, pushed to the Forgejo NuGet
-  ## registry. Runs alongside the draft, binaries and image jobs once the tests and lint pass.
+  ## registry. Runs alongside the draft, binaries and image jobs once the tests and lint pass. A
+  ## pushed package can be restored at once, so the job also waits for windows-gate: a build
+  ## whose Windows tests failed pushes no package.
   ##
   packages:
     name: 'Pack and Push NuGet Packages (${{ matrix.family }})'
@@ -544,6 +549,7 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
+      - 'windows-gate'
       - 'lint'
       - 'test-dotnet'
       - 'test-admin-console'
@@ -650,10 +656,11 @@ jobs:
   ## containers cannot: the Windows socket stack, file system and process behaviour. It runs only
   ## for a build of develop or main (not for pull requests, other branches or release branches,
   ## whose commit already passed on main), with no dependencies, so it runs alongside the Linux
-  ## jobs. Draft does not wait for it, so a green run is not slowed by the single Windows runner;
-  ## publish does, through windows-gate, so a Windows-only failure keeps the draft invisible. In a
-  ## pull request it is skipped, and a skipped job of this file does not fail the aggregate
-  ## 'Pipeline' status.
+  ## jobs. Draft, the binaries and the package builds do not wait for it, so a green run is not
+  ## slowed by the single Windows runner. Image, packages and publish do, through windows-gate,
+  ## so a Windows-only failure pushes no image and no NuGet package and keeps the draft
+  ## invisible. In a pull request it is skipped, and a skipped job of this file does not fail the
+  ## aggregate 'Pipeline' status.
   ##
   ## The tests that need Docker (RequiresDocker) are filtered out, as in pull-request builds:
   ## the Linux job already runs them against the real database engines. Here they would pull a
@@ -752,20 +759,20 @@ jobs:
           exit 0
         shell: 'powershell'
   ##
-  ## Lets publish wait for test-windows without being skipped when test-windows is skipped. A
-  ## job that needs a skipped job is skipped itself, and test-windows is skipped for every kind
-  ## and branch but a build of develop or main. This job needs only test-windows, so its own
-  ## condition is the only place the Windows result is read:
+  ## Lets image, packages and publish wait for test-windows without being skipped when
+  ## test-windows is skipped. A job that needs a skipped job is skipped itself, and test-windows
+  ## is skipped for every kind and branch but a build of develop or main. This job needs only
+  ## test-windows, so its own condition is the only place the Windows result is read:
   ##
-  ## - test-windows succeeded or was skipped: the job runs and succeeds, and publish sees one
-  ##   more successful need.
-  ## - test-windows failed or was cancelled: the job is skipped, so publish (whose implicit
-  ##   success check covers every other need, matrix jobs included) is skipped too. The run is
-  ##   red because of test-windows itself.
+  ## - test-windows succeeded or was skipped: the job runs and succeeds, and the three jobs see
+  ##   one more successful need.
+  ## - test-windows failed or was cancelled: the job is skipped, so image, packages and publish
+  ##   (whose implicit success check covers every other need, matrix jobs included) are skipped
+  ##   too. The run is red because of test-windows itself.
   ##
   ## '!cancelled()' is required: without a status function the runner adds an implicit
-  ## 'success()', which a skipped test-windows fails. It does not widen publish: publish keeps
-  ## its default success check.
+  ## 'success()', which a skipped test-windows fails. It does not widen the three jobs: each
+  ## keeps its default success check.
   ##
   windows-gate:
     name: 'Windows Test Gate'
@@ -786,7 +793,8 @@ jobs:
         shell: 'bash'
   ##
   ## Turns the draft into the visible release once every artifact is in place and, for a build of
-  ## develop or main, the Windows tests have passed (windows-gate).
+  ## develop or main, the Windows tests have passed (windows-gate). It names the gate itself and
+  ## does not rely on image and packages needing it.
   ##
   publish:
     name: 'Publish Release'
