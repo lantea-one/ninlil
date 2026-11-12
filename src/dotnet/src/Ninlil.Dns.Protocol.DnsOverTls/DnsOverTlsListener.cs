@@ -236,7 +236,9 @@ public sealed class DnsOverTlsListener(
     ///     to a <see cref="FramedDnsStreamSession" />. The session reads each length-prefixed query
     ///     and closes the connection when <see cref="DnsOverTlsOptions.IdleTimeout" /> passes with
     ///     no complete message, the client disconnects, a write to the client misses that same
-    ///     timeout, or a zone transfer on it completes. It owns the per-connection limits (16
+    ///     timeout, or a zone transfer on it completes. After a completed transfer it sends the
+    ///     TLS close alert and closes the socket with a bounded linger, so a query the client
+    ///     already sent does not turn the close into a reset. It owns the per-connection limits (16
     ///     queries in flight, one writer task); a query still outstanding when the connection goes
     ///     idle is answered first. A client that connects and never completes the handshake would
     ///     otherwise hold a connection slot until shutdown, so the handshake has its own deadline.

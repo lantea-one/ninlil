@@ -48,7 +48,9 @@ public sealed class DnsOverTlsZoneTransferCloseTests
             Assert.Equal(1, (await ReadMessageOrEndAsync(stream)).Id);
 
             // The session is inside the transfer and does not read; this frame stays unread in
-            // the server's receive queue until the connection closes.
+            // the server's receive queue until the connection closes. Nothing observable says
+            // the frame has arrived, so the short delay below is a best-effort settle: if it is
+            // too short the round passes without exercising the reset, never the other way.
             await WriteQueryAsync(stream, 10, "other.example.", DnsResourceRecordTypeEnum.A);
             await Task.Delay(100);
             service.ReleaseLastMessage.SetResult();
