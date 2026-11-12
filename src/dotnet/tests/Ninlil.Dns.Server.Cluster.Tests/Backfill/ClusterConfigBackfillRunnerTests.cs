@@ -230,6 +230,41 @@ public sealed class ClusterConfigBackfillRunnerTests
     }
 
     [Fact]
+    public async Task StopAsync_AfterDisposeAsync_DoesNothingAndRefusesNewPasses()
+    {
+        using ClusterBackfillTestHost host = new(new ClusterBackfillTestHost.FakeSource(0, 1));
+        Guid peerId = await host.AddPeerAsync();
+        ClusterConfigBackfillRunner runner = host.CreateRunner(
+            new ClusterBackfillTestHost.RecordingSender()
+        );
+        await runner.DisposeAsync();
+
+        // The host stops its services from more than one thread while the container disposes
+        // them, so a stop can arrive after the dispose.
+        await runner.StopAsync(CancellationToken.None);
+        await runner.StopAsync(CancellationToken.None);
+
+        Assert.False(runner.TryStart(peerId));
+    }
+
+    [Fact]
+    public async Task StopAsync_RunningWhileDisposeAsyncRuns_NeverThrows()
+    {
+        using ClusterBackfillTestHost host = new(new ClusterBackfillTestHost.FakeSource(0, 1));
+        for (int i = 0; i < 10; i++)
+        {
+            ClusterConfigBackfillRunner runner = host.CreateRunner(
+                new ClusterBackfillTestHost.RecordingSender()
+            );
+            Task stop = Task.Run(() => runner.StopAsync(CancellationToken.None));
+            Task dispose = Task.Run(() => runner.DisposeAsync().AsTask());
+            Task lateStop = Task.Run(() => runner.StopAsync(CancellationToken.None));
+
+            await Task.WhenAll(stop, dispose, lateStop);
+        }
+    }
+
+    [Fact]
     public async Task Pass_ForARequestWhosePeerRowIsGone_DeletesTheRequestAndSendsNothing()
     {
         using ClusterBackfillTestHost host = new(new ClusterBackfillTestHost.FakeSource(0, 3));
