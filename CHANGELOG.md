@@ -162,6 +162,15 @@ outside Forgejo.
   default), each query still has its own socket and a dead upstream fails at once on Windows.
   ([#364](https://git.lantea.one/lantea-one/ninlil/issues/364))
 
+- **On Windows, a zone transfer over DNS-over-TLS no longer loses its last message when the
+  client sent one more.** A secondary that sent another query before the transfer ended left it
+  unread on the server's socket, and closing a socket in that state sends a reset. On Windows the
+  reset makes the client throw away a reply it had received but not read. After a completed
+  transfer the DNS-over-TLS listener now sends the TLS close alert, waits up to 2 s for the client
+  to close its side, and only then closes the socket, as the plain TCP and DNSCrypt listeners
+  already do. Linux is unaffected.
+  ([#340](https://git.lantea.one/lantea-one/ninlil/issues/340))
+
 - **Registering a YAML converter while another thread serializes no longer throws.** In the
   `Ninlil.Common.Serializer` library, `YamlSerializer.AddConverter` and the serializers it builds
   share one converter list; a YAML request read at the same moment as a registration could fail
