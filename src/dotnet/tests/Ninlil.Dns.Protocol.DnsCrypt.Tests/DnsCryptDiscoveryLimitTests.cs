@@ -286,16 +286,14 @@ public sealed class DnsCryptDiscoveryLimitTests
                 ),
             ]);
 
-            RunningListeners running = new() { Port = LocalAddresses.GetFreePort() };
-            StaticOptionsMonitor<DnsCryptOptions> options = new(
-                new DnsCryptOptions
-                {
-                    Enable = true,
-                    Port = running.Port,
-                    ProviderName = DnsCryptListenerTestFixture.ProviderName,
-                    ListenAddresses = "127.0.0.1",
-                }
-            );
+            RunningListeners running = new();
+            DnsCryptOptions dnscryptOptions = new()
+            {
+                Enable = true,
+                ProviderName = DnsCryptListenerTestFixture.ProviderName,
+                ListenAddresses = "127.0.0.1",
+            };
+            StaticOptionsMonitor<DnsCryptOptions> options = new(dnscryptOptions);
             StaticOptionsMonitor<DnsQueryProcessingPipelineOptions> pipelineOptionsMonitor = new(
                 pipelineOptions ?? new DnsQueryProcessingPipelineOptions()
             );
@@ -313,26 +311,29 @@ public sealed class DnsCryptDiscoveryLimitTests
             );
             await running._pipeline.StartAsync(CancellationToken.None);
 
-            running._udp = new DnsCryptUdpListener(
-                running._pipeline,
-                store,
-                options,
-                NullLogger<DnsCryptUdpListener>.Instance,
-                limiter,
-                pipelineOptionsMonitor
-            );
-            running._tcp = new DnsCryptTcpListener(
-                running._pipeline,
-                store,
-                options,
-                NullLogger<DnsCryptTcpListener>.Instance,
-                limiter
-            );
-            await running._udp.StartAsync(CancellationToken.None);
-            await running._tcp.StartAsync(CancellationToken.None);
-
-            // Binding happens on each listener's background loop, just after StartAsync returns.
-            await Task.Delay(200);
+            (running._udp, running._tcp, int port) =
+                await DnsCryptListenerStartup.StartOnFreePortAsync(
+                    dnscryptOptions,
+                    () =>
+                        (
+                            new DnsCryptUdpListener(
+                                running._pipeline,
+                                store,
+                                options,
+                                NullLogger<DnsCryptUdpListener>.Instance,
+                                limiter,
+                                pipelineOptionsMonitor
+                            ),
+                            new DnsCryptTcpListener(
+                                running._pipeline,
+                                store,
+                                options,
+                                NullLogger<DnsCryptTcpListener>.Instance,
+                                limiter
+                            )
+                        )
+                );
+            running.Port = port;
             return running;
         }
 
