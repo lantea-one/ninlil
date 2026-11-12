@@ -840,7 +840,7 @@ The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README'
 
 Runs of one branch queue behind each other: [`build.yml`](./.forgejo/workflows/build.yml) puts
 them in the concurrency group `build-pull-request-<branch>` (a pull request) or
-`build-branch-<branch>` (a push) with `cancel-in-progress: false`, so a new run waits for the
+`build-branch-<branch>` (a push or a hand-started run) with `cancel-in-progress: false`, so a new run waits for the
 earlier one to finish. That wait is normal. A job that shows "Blocked by required conditions" is
 also normal: it is waiting for the jobs it needs.
 
@@ -851,16 +851,16 @@ A run is stuck when all of these hold:
 - No earlier run of the same branch is still running.
 - The runners are idle.
 
-This can happen when a run is created while a re-run of an earlier run in the same group is
-going. When the re-run ends, Forgejo does not always release the queued run.
+This has happened when a run was created while a re-run of an earlier run in the same group was
+going: the queued run stayed waiting after the re-run ended.
 
 1. Open the run on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions) and
    cancel it.
 2. Start it again: re-run it, or push a new commit to the branch.
 3. Check that it worked: the first job changes from "Waiting to run" to running.
 
-To avoid it, do not re-run a run and push to the same branch at the same time. Wait for the
-re-run to finish first.
+As a precaution that lowers the chance, do not re-run a run and push to the same branch at the
+same time. Wait for the re-run to finish first.
 
 ## Cutting a release
 
