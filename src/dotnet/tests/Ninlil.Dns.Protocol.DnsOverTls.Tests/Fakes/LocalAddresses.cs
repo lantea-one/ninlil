@@ -6,8 +6,8 @@ namespace Ninlil.Dns.Protocol.DnsOverTls.Tests.Fakes;
 
 /// <summary>
 ///     This class finds free ports and usable loopback addresses for the listen-address tests,
-///     which use real sockets. Ports always come from the OS, never a fixed number, because CI
-///     runners run DNS and DHCP services of their own.
+///     which use real sockets. Ports are drawn at random from the dynamic range, never a fixed
+///     number, because CI runners run DNS and DHCP services of their own.
 /// </summary>
 public static class LocalAddresses
 {
@@ -19,27 +19,49 @@ public static class LocalAddresses
     public static IPAddress Unassigned { get; } = IPAddress.Parse("192.0.2.1");
 
     /// <summary>
+    ///     This constant is the most ports <see cref="GetFreePort" /> tries before it gives up.
+    /// </summary>
+    public const int PortSearchLimit = 2000;
+
+    /// <summary>
     ///     This method returns a port that is free for both UDP and TCP on every address, by
-    ///     briefly holding it through dual-stack wildcard sockets.
+    ///     briefly holding it through dual-stack wildcard sockets. The caller binds it after this
+    ///     returns, so the listener tests that need one number for UDP, TCP or several addresses
+    ///     (port 0 gives each socket its own) use it, and a test that can bind port 0 and read the
+    ///     port back does that instead.
+    ///     <para>
+    ///         The port is picked at random from the dynamic range (49152 to 65535) and bound
+    ///         explicitly. It is not taken from a port-0 bind, because Windows hands out port-0
+    ///         ports one after the other from a counter the whole machine shares, and keeps
+    ///         separate excluded ranges for UDP and TCP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=tcp</c> lists them). A port-0
+    ///         port inside an excluded block of the other protocol is refused on the second bind
+    ///         (WSAEACCES), and so is every following port until the counter leaves the block,
+    ///         which can be several hundred ports. A search that follows the counter fails
+    ///         together with every other caller that runs while the counter sits in the block.
+    ///         Random picks spread over the whole range, so a refused pick costs one attempt.
+    ///         <see cref="PortSearchLimit" /> is far above what the excluded blocks need.
+    ///     </para>
     /// </summary>
     public static int GetFreePort()
     {
-        for (int attempt = 0; attempt < 20; attempt++)
+        for (int attempt = 1; attempt <= PortSearchLimit; attempt++)
         {
-            using Socket udp = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
-            udp.Bind(new IPEndPoint(WildcardAddress, 0));
-            int port = ((IPEndPoint)udp.LocalEndPoint).Port;
-
-            using Socket tcp = CreateWildcardSocket(SocketType.Stream, ProtocolType.Tcp);
+            int port = Random.Shared.Next(DynamicPortStart, DynamicPortEnd + 1);
 
             try
             {
+                using Socket tcp = CreateWildcardSocket(SocketType.Stream, ProtocolType.Tcp);
                 tcp.Bind(new IPEndPoint(WildcardAddress, port));
+
+                using Socket udp = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
+                udp.Bind(new IPEndPoint(WildcardAddress, port));
+
                 return port;
             }
             catch (SocketException)
             {
-                // Taken for TCP by something else; try another.
+                // In use, or excluded for one of the two protocols; pick another.
             }
         }
 
@@ -70,6 +92,15 @@ public static class LocalAddresses
             return false;
         }
     }
+
+    /// <summary>
+    ///     This constant is the first port of the IANA dynamic range (RFC 6335 section 6), which
+    ///     <see cref="GetFreePort" /> draws from.
+    /// </summary>
+    private const int DynamicPortStart = 49152;
+
+    /// <summary>This constant is the last port of the dynamic range.</summary>
+    private const int DynamicPortEnd = 65535;
 
     private static IPAddress WildcardAddress =>
         Socket.OSSupportsIPv6 ? IPAddress.IPv6Any : IPAddress.Any;

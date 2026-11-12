@@ -6,8 +6,8 @@ namespace Ninlil.Dns.Protocol.Plain.Tests.Fakes;
 
 /// <summary>
 ///     This class finds free ports and usable loopback addresses for the listen-address tests,
-///     which use real sockets. Ports always come from the OS, never a fixed number, because CI
-///     runners run DNS and DHCP services of their own.
+///     which use real sockets. Ports are drawn at random from the dynamic range, never a fixed
+///     number, because CI runners run DNS and DHCP services of their own.
 /// </summary>
 public static class LocalAddresses
 {
@@ -19,55 +19,55 @@ public static class LocalAddresses
     public static IPAddress Unassigned { get; } = IPAddress.Parse("192.0.2.1");
 
     /// <summary>
-    ///     This constant is how many ports <see cref="GetFreePort" /> and the listen-address tests
-    ///     try before they give up. It is set above the longest run of refused ports observed on
-    ///     Windows (see <see cref="GetFreePort" />).
-    /// </summary>
-    public const int PortSearchLimit = 2000;
-
-    /// <summary>
     ///     This constant is how many times <see cref="StartOnFreePortAsync{T}" /> starts a host
     ///     before it gives up.
     /// </summary>
     private const int MaximumHostStarts = 10;
 
     /// <summary>
+    ///     This constant is the most ports <see cref="GetFreePort" /> tries before it gives up.
+    /// </summary>
+    public const int PortSearchLimit = 2000;
+
+    /// <summary>
     ///     This method returns a port that is free for both UDP and TCP on every address, by
-    ///     briefly holding it through dual-stack wildcard sockets. The listeners under test bind
-    ///     UDP and TCP on one port number across several sockets, which port 0 cannot give, so
-    ///     the number has to be reserved first and released before they bind it;
-    ///     <see cref="StartOnFreePortAsync{T}" /> retries a host whose bind lost that race.
+    ///     briefly holding it through dual-stack wildcard sockets. The caller binds it after this
+    ///     returns, so the listener tests that need one number for UDP, TCP or several addresses
+    ///     (port 0 gives each socket its own) use it, and a test that can bind port 0 and read the
+    ///     port back does that instead.
     ///     <para>
-    ///         Windows keeps separate excluded port ranges for UDP and TCP
-    ///         (<c>netsh int ipv4 show excludedportrange protocol=tcp</c> lists them) and hands
-    ///         out port-0 binds in sequence. A UDP bind to port 0 can therefore return a port
-    ///         inside a TCP-excluded range, the following UDP ports lie in the same range, and
-    ///         the TCP bind of the same number is refused with "access permissions" (WSAEACCES)
-    ///         until the sequence leaves it. On one Windows test host the TCP list held five
-    ///         adjacent 100-port ranges (51111 to 51610), and a probe saw runs of refused
-    ///         pairs lasting up to about 8 seconds. A refused pair is skipped at once, with no
-    ///         pause, and the search goes on until <see cref="PortSearchLimit" />, which is set
-    ///         well above such a run.
+    ///         The port is picked at random from the dynamic range (49152 to 65535) and bound
+    ///         explicitly. It is not taken from a port-0 bind, because Windows hands out port-0
+    ///         ports one after the other from a counter the whole machine shares, and keeps
+    ///         separate excluded ranges for UDP and TCP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=tcp</c> lists them). A port-0
+    ///         port inside an excluded block of the other protocol is refused on the second bind
+    ///         (WSAEACCES), and so is every following port until the counter leaves the block,
+    ///         which can be several hundred ports. A search that follows the counter fails
+    ///         together with every other caller that runs while the counter sits in the block.
+    ///         Random picks spread over the whole range, so a refused pick costs one attempt.
+    ///         <see cref="PortSearchLimit" /> is far above what the excluded blocks need.
     ///     </para>
     /// </summary>
     public static int GetFreePort()
     {
         for (int attempt = 1; attempt <= PortSearchLimit; attempt++)
         {
+            int port = Random.Shared.Next(DynamicPortStart, DynamicPortEnd + 1);
+
             try
             {
-                using Socket udp = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
-                udp.Bind(new IPEndPoint(WildcardAddress, 0));
-                int port = ((IPEndPoint)udp.LocalEndPoint).Port;
-
                 using Socket tcp = CreateWildcardSocket(SocketType.Stream, ProtocolType.Tcp);
                 tcp.Bind(new IPEndPoint(WildcardAddress, port));
+
+                using Socket udp = CreateWildcardSocket(SocketType.Dgram, ProtocolType.Udp);
+                udp.Bind(new IPEndPoint(WildcardAddress, port));
+
                 return port;
             }
             catch (SocketException)
             {
-                // The TCP side is taken or excluded for this number, or the UDP bind itself was
-                // refused for the moment; ask for the next port.
+                // In use, or excluded for one of the two protocols; pick another.
             }
         }
 
@@ -121,6 +121,15 @@ public static class LocalAddresses
             return false;
         }
     }
+
+    /// <summary>
+    ///     This constant is the first port of the IANA dynamic range (RFC 6335 section 6), which
+    ///     <see cref="GetFreePort" /> draws from.
+    /// </summary>
+    private const int DynamicPortStart = 49152;
+
+    /// <summary>This constant is the last port of the dynamic range.</summary>
+    private const int DynamicPortEnd = 65535;
 
     private static IPAddress WildcardAddress =>
         Socket.OSSupportsIPv6 ? IPAddress.IPv6Any : IPAddress.Any;
