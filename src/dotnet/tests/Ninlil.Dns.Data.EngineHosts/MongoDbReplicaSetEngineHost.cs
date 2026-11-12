@@ -79,7 +79,14 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
                 {
                     {
                         "replSetInitiate",
-                        new BsonDocument { { "_id", ReplicaSetName }, { "members", members } }
+                        new BsonDocument
+                        {
+                            { "_id", ReplicaSetName },
+                            { "members", members },
+                            // Both secondaries sync from the primary, never from each other, so
+                            // pausing one cannot starve the other (see PauseReplicationAsync).
+                            { "settings", new BsonDocument("chainingAllowed", false) },
+                        }
                     },
                 }
             );
@@ -123,17 +130,56 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
 
     /// <summary>
     ///     This method stops oplog apply on both secondaries, so writes on the primary stay
-    ///     invisible to secondary reads until <see cref="ResumeReplicationAsync" />.
+    ///     invisible to secondary reads until <see cref="ResumeReplicationAsync" />. It returns
+    ///     only once each secondary is holding a batch at the fail point.
     /// </summary>
+    /// <remarks>
+    ///     The <c>pauseBatchApplicationBeforeCompletion</c> fail point holds a batch only before
+    ///     it completes. A batch that started before the fail point was set can still finish, and
+    ///     it can already contain a write the caller makes right after this method returns, so
+    ///     setting the fail point is not enough. This method therefore writes a probe document
+    ///     on the primary, which forces a batch on every secondary, and waits (server-side, with
+    ///     <c>waitForFailPoint</c>) until each secondary has entered the fail point again. From
+    ///     then on a held batch blocks every later batch, so a later write cannot become visible.
+    ///     The wait needs both secondaries to read the primary's oplog directly, which the set's
+    ///     <c>chainingAllowed: false</c> setting guarantees: a secondary that synced from the
+    ///     other, paused one would never receive the probe.
+    /// </remarks>
     public override async Task PauseReplicationAsync(string databaseName = null)
     {
+        Dictionary<int, long> entered = [];
         foreach (int port in _ports.Skip(1))
-            await SetFailPointAsync(
+        {
+            entered[port] = await SetFailPointAsync(
                 _address,
                 port,
                 "pauseBatchApplicationBeforeCompletion",
                 "alwaysOn"
             );
+        }
+
+        await using (MongoClientHolder primary = new(DirectUrl(_address, _ports[0])))
+        {
+            await primary
+                .Client.GetDatabase("ninlil_replication_probe")
+                .GetCollection<BsonDocument>("probe")
+                .InsertOneAsync(new BsonDocument("at", DateTime.UtcNow));
+        }
+
+        foreach (int port in _ports.Skip(1))
+        {
+            await using MongoClientHolder holder = new(DirectUrl(_address, port));
+            await holder
+                .Client.GetDatabase("admin")
+                .RunCommandAsync<BsonDocument>(
+                    new BsonDocument
+                    {
+                        { "waitForFailPoint", "pauseBatchApplicationBeforeCompletion" },
+                        { "timesEntered", entered[port] + 1 },
+                        { "maxTimeMS", 30000 },
+                    }
+                );
+        }
     }
 
     /// <inheritdoc />
@@ -249,14 +295,24 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
         return status["optimes"]["appliedOpTime"]["ts"].AsBsonTimestamp;
     }
 
-    private static async Task SetFailPointAsync(string address, int port, string name, string mode)
+    /// <summary>
+    ///     This method sets a fail point and returns how many times the member has entered it so
+    ///     far (the <c>count</c> in the command's reply).
+    /// </summary>
+    private static async Task<long> SetFailPointAsync(
+        string address,
+        int port,
+        string name,
+        string mode
+    )
     {
         await using MongoClientHolder holder = new(DirectUrl(address, port));
-        await holder
+        BsonDocument reply = await holder
             .Client.GetDatabase("admin")
             .RunCommandAsync<BsonDocument>(
                 new BsonDocument { { "configureFailPoint", name }, { "mode", mode } }
             );
+        return reply.GetValue("count", 0).ToInt64();
     }
 
     private static int FreePort()
