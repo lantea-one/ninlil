@@ -18,6 +18,14 @@ name: 'Ninlil Pipeline'
 ## test listener (Karma's included) also takes a port the operating system reports as free, so
 ## two copies of the suite never meet.
 ##
+## The three test jobs (test-dotnet, test-windows, test-admin-console) upload their results as a
+## run artifact named test-results-<job> (14 days of retention), also when the tests fail: the
+## .NET jobs write one TRX file per test project, the Karma job its console log. The upload uses
+## the Forgejo build of the upload action, pinned by commit like actions/checkout (bump-pins.sh
+## moves both); the upstream action refuses to run outside GitHub. The pin stays on major version
+## 3: version 4 uses an artifact protocol the Forgejo server refuses ("not currently supported on
+## GHES"), which fails the job, and bump-pins.sh never leaves the major version of a pin.
+##
 ## Every job sets timeout-minutes generously, well above its longest normal run in recent
 ## successful runs, with room for a cold builder image and one npm retry, so a hung step ends the
 ## job instead of holding the single runner until a person cancels it. `npm ci` has a tighter limit and one retry of its own (npm-ci.sh), because
@@ -25,8 +33,9 @@ name: 'Ninlil Pipeline'
 ## reusable workflow (build.yml, release.yml) cannot carry timeout-minutes.
 ##
 ## Job graph (the tests and lint start alongside version; 'verify' runs only test-dotnet,
-## test-admin-console and lint; test-windows runs for builds of develop and main only and
-## nothing waits for it):
+## test-admin-console and lint; test-windows runs for builds of develop and main only, and the
+## three jobs that make a build visible outside the run wait for it, through windows-gate: image
+## and packages, which push to the registries, and publish):
 ##
 ##   version ────────────┐
 ##   lint ───────────────┤
@@ -34,8 +43,8 @@ name: 'Ninlil Pipeline'
 ##   test-admin-console ─┤                          ├─ linux-packages ──┤
 ##                       │                          ├─ image ───────────┤
 ##                       │                          └─ windows-smoke ───┤
-##                       └─ packages (×4) ──────────────────────────────┘
-##   test-windows (stands alone)
+##                       └─ packages (×4) ──────────────────────────────┤
+##   test-windows ── windows-gate ── image, packages (×4) and publish ──┘
 ##
 ## The draft release doubles as the hand-off between jobs: each binary job attaches its
 ## executable to it, the Arch Linux, Deb/RPM and image jobs build from the two Linux executables
@@ -166,15 +175,32 @@ jobs:
               docker_flag=()
               category_filter=' & Category!=RequiresDocker'
           fi
+          # Each run writes TRX files (one per test project) into its own folder under
+          # TestResults/ (git-ignored), which the next step uploads: the alone run must not mix
+          # with, or overwrite, the first one's files.
           ./.forgejo/scripts/in-container.sh "${docker_flag[@]}" dotnet bash -c '
             set -euo pipefail
             timing_sensitive="DnssecKeyRolloverZskPrePublishLiveTests"
             dotnet test Ninlil.slnx --no-build --configuration Release \
+              --logger trx --results-directory "${PWD}/TestResults/ci/main" \
               --filter "FullyQualifiedName!~${timing_sensitive}${1}"
             dotnet test Ninlil.slnx --no-build --configuration Release \
+              --logger trx --results-directory "${PWD}/TestResults/ci/rollover" \
               --filter "FullyQualifiedName~${timing_sensitive}${1}"
           ' _ "${category_filter}"
         shell: 'bash'
+      ##
+      ## Runs after a failed test step too, because those are the results worth reading.
+      ##
+      - name: 'Upload the Test Results'
+        if: >-
+          always()
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32' # v3.1.3
+        with:
+          name: 'test-results-test-dotnet'
+          path: 'TestResults/ci'
+          retention-days: 14
+          if-no-files-found: warn
   ##
   ## Lint, format check and the Karma suite of the Angular admin console. Runs for every kind,
   ## with no dependencies.
@@ -212,11 +238,27 @@ jobs:
       - name: 'Run the Jasmine/Karma Suite'
         run: |-
           # Headless Chromium; Karma listens on a free loopback port (karma.conf.js).
+          # The console output is the only result Karma writes (no JUnit reporter is installed),
+          # so it is kept as a log for the upload below. pipefail keeps Karma's exit status.
           ./.forgejo/scripts/in-container.sh node bash -c '
+            set -euo pipefail
+            mkdir -p TestResults/ci
             cd src/angular
-            npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox
+            npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox 2>&1 | tee ../../TestResults/ci/karma.log
           '
         shell: 'bash'
+      ##
+      ## Runs after a failed test step too, because those are the results worth reading.
+      ##
+      - name: 'Upload the Test Results'
+        if: >-
+          always()
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32' # v3.1.3
+        with:
+          name: 'test-results-test-admin-console'
+          path: 'TestResults/ci'
+          retention-days: 14
+          if-no-files-found: warn
   ##
   ## Lints the shell scripts (shellcheck) and the workflows (actionlint), then runs the script
   ## self-tests (.forgejo/scripts/lint.sh). Runs for every kind, with no dependencies; draft and
@@ -429,7 +471,8 @@ jobs:
         shell: 'bash'
   ##
   ## The multi-platform container image, built from the two Linux executables on the draft and
-  ## pushed to the Forgejo container registry.
+  ## pushed to the Forgejo container registry. A pushed tag can be pulled at once, so the job
+  ## waits for windows-gate: a build whose Windows tests failed pushes no image.
   ##
   image:
     name: 'Build and Push Image'
@@ -437,6 +480,7 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
+      - 'windows-gate'
       - 'binaries'
     runs-on: 'asgard'
     timeout-minutes: 40
@@ -495,7 +539,10 @@ jobs:
         shell: 'bash'
   ##
   ## NuGet packages for the libraries, one matrix job per family, pushed to the Forgejo NuGet
-  ## registry. Runs alongside the draft, binaries and image jobs once the tests and lint pass.
+  ## registry. Runs alongside the draft and binaries jobs once the tests and lint pass and, for a
+  ## build of develop or main, the Windows tests have passed: a pushed package can be restored at
+  ## once, so the job waits for windows-gate and a build whose Windows tests failed pushes no
+  ## package.
   ##
   packages:
     name: 'Pack and Push NuGet Packages (${{ matrix.family }})'
@@ -503,6 +550,7 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
+      - 'windows-gate'
       - 'lint'
       - 'test-dotnet'
       - 'test-admin-console'
@@ -609,9 +657,11 @@ jobs:
   ## containers cannot: the Windows socket stack, file system and process behaviour. It runs only
   ## for a build of develop or main (not for pull requests, other branches or release branches,
   ## whose commit already passed on main), with no dependencies, so it runs alongside the Linux
-  ## jobs. Neither draft nor publish waits for it: a Windows-only failure turns the run red
-  ## without holding back a pre-release or a release. In a pull request it is skipped, and a
-  ## skipped job of this file does not fail the aggregate 'Pipeline' status.
+  ## jobs. Draft, the binaries and the package builds do not wait for it, so a green run is not
+  ## slowed by the single Windows runner. Image, packages and publish do, through windows-gate,
+  ## so a Windows-only failure pushes no image and no NuGet package and keeps the draft
+  ## invisible. In a pull request it is skipped, and a skipped job of this file does not fail the
+  ## aggregate 'Pipeline' status.
   ##
   ## The tests that need Docker (RequiresDocker) are filtered out, as in pull-request builds:
   ## the Linux job already runs them against the real database engines. Here they would pull a
@@ -669,13 +719,29 @@ jobs:
           # rest, because CPU contention breaks its two-second TTLs.
           $ErrorActionPreference = 'Continue'
           $timing = 'DnssecKeyRolloverZskPrePublishLiveTests'
-          dotnet test Ninlil.slnx --no-build --configuration Release --filter "FullyQualifiedName!~$timing & Category!=RequiresDocker"
+          # TRX files go to TestResults\ci (git-ignored), one folder per run so the alone run does
+          # not overwrite the first one's files; the upload step below collects them.
+          $results = Join-Path (Get-Location).Path 'TestResults\ci'
+          dotnet test Ninlil.slnx --no-build --configuration Release --logger trx --results-directory "$results\main" --filter "FullyQualifiedName!~$timing & Category!=RequiresDocker"
           $rest = $LASTEXITCODE
-          dotnet test Ninlil.slnx --no-build --configuration Release --filter "FullyQualifiedName~$timing & Category!=RequiresDocker"
+          dotnet test Ninlil.slnx --no-build --configuration Release --logger trx --results-directory "$results\rollover" --filter "FullyQualifiedName~$timing & Category!=RequiresDocker"
           $alone = $LASTEXITCODE
           if ($rest -ne 0) { exit $rest }
           if ($alone -ne 0) { exit $alone }
         shell: 'powershell'
+      ##
+      ## Runs after a failed test step too, because those are the results worth reading. Like
+      ## actions/checkout, the upload action runs on the runner's own Node.js.
+      ##
+      - name: 'Upload the Test Results'
+        if: >-
+          always()
+        uses: 'https://code.forgejo.org/forgejo/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32' # v3.1.3
+        with:
+          name: 'test-results-test-windows'
+          path: 'TestResults/ci'
+          retention-days: 14
+          if-no-files-found: warn
       ##
       ## A failed or cancelled run can leave a test host or a Ninlil process running from the
       ## workspace, which holds its files open and makes the next checkout (clean: true) fail
@@ -693,7 +759,42 @@ jobs:
           exit 0
         shell: 'powershell'
   ##
-  ## Turns the draft into the visible release once every artifact is in place.
+  ## Lets image, packages and publish wait for test-windows without being skipped when
+  ## test-windows is skipped. A job that needs a skipped job is skipped itself, and test-windows
+  ## is skipped for every kind and branch but a build of develop or main. This job needs only
+  ## test-windows, so its own condition is the only place the Windows result is read:
+  ##
+  ## - test-windows succeeded or was skipped: the job runs and succeeds, and the three jobs see
+  ##   one more successful need.
+  ## - test-windows failed or was cancelled: the job is skipped, so image, packages and publish
+  ##   (whose implicit success check covers every other need, matrix jobs included) are skipped
+  ##   too. The run is red because of test-windows itself.
+  ##
+  ## '!cancelled()' is required: without a status function the runner adds an implicit
+  ## 'success()', which a skipped test-windows fails. It does not widen the three jobs: each
+  ## keeps its default success check.
+  ##
+  windows-gate:
+    name: 'Windows Test Gate'
+    if: >-
+      !cancelled() && inputs.kind != 'verify' &&
+      (needs.test-windows.result == 'success' || needs.test-windows.result == 'skipped')
+    needs:
+      - 'test-windows'
+    runs-on: 'asgard'
+    timeout-minutes: 5
+    steps:
+      ##
+      - name: 'Record that the Windows Tests Allow Publishing'
+        env:
+          WINDOWS_RESULT: '${{ needs.test-windows.result }}'
+        run: |-
+          echo "test-windows: ${WINDOWS_RESULT}; publishing may continue."
+        shell: 'bash'
+  ##
+  ## Turns the draft into the visible release once every artifact is in place and, for a build of
+  ## develop or main, the Windows tests have passed (windows-gate). It names the gate itself and
+  ## does not rely on image and packages needing it.
   ##
   publish:
     name: 'Publish Release'
@@ -701,6 +802,7 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
+      - 'windows-gate'
       - 'binaries'
       - 'windows-smoke'
       - 'arch-packages'

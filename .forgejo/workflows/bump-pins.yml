@@ -1,8 +1,9 @@
 name: 'Bump Pins'
 ##
-## Moves every digest-pinned base image and the pinned actions/checkout commit to the newest
-## upstream version and opens a pull request with the result (bump-pins.sh and open-bump-pr.sh
-## in .forgejo/scripts). Runs weekly on Monday at 05:23 UTC, or by hand ("Run workflow") with
+## Moves every digest-pinned base image and the pinned action commits (actions/checkout and
+## forgejo/upload-artifact) to
+## the newest upstream version and opens a pull request with the result (bump-pins.sh and
+## open-bump-pr.sh in .forgejo/scripts). Runs weekly on Monday at 05:23 UTC, or by hand ("Run workflow") with
 ## the branch the pull request targets: develop by default, or main while there is no
 ## develop-to-main flow yet. The pull request runs the verify build and its branch push runs the
 ## full pipeline, so a bad bump is visible before anyone merges it. It needs only the CI token

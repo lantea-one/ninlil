@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Moves every pinned base image, the checkout action, the native-libraries lock and the Microsoft
-# repository package sum to the newest upstream version, in place.
+# Moves every pinned base image, the pinned actions (checkout and upload-artifact), the
+# native-libraries lock and the Microsoft repository package sum to the newest upstream version,
+# in place.
 #
 # What is pinned, and how:
 #   - Container images are written as `name:tag@sha256:<index digest>` in the Dockerfile,
@@ -15,9 +16,11 @@
 #     manifest and that appears only in files the repository runs on amd64 alone (the list
 #     amd64_only_files below; today the SQL Server test host, whose image exists for amd64 only)
 #     is pinned by that manifest's digest.
-#   - Workflow steps use `actions/checkout@<40-hex commit> # vX.Y.Z`. This script keeps the major
-#     version in the comment and moves to the newest vX.Y.Z tag of that major, pinned by the
-#     commit the tag points at (an annotated tag is peeled to its commit).
+#   - Workflow steps use `actions/checkout@<40-hex commit> # vX.Y.Z` and
+#     `https://code.forgejo.org/forgejo/upload-artifact@<40-hex commit> # vX.Y.Z` (the Forgejo
+#     build of the upload action: the upstream one refuses to run outside GitHub). This script
+#     keeps the major version in the comment and moves to the newest vX.Y.Z tag of that major,
+#     pinned by the commit the tag points at (an annotated tag is peeled to its commit).
 #
 #   - docker/native-libraries.lock (libmsquic and libnuma1 per architecture, version and SHA-256)
 #     is recomputed by refresh-native-lock.sh, which needs dpkg for Debian version ordering and so
@@ -35,6 +38,9 @@
 #   ACTIONS_MIRROR_URL  where the checkout action's repository is looked up, as
 #                       <ACTIONS_MIRROR_URL>/actions/checkout (default https://github.com; set it
 #                       to the instance's actions mirror when Forgejo resolves actions elsewhere)
+#   FORGEJO_ACTIONS_MIRROR_URL  where the upload action's repository is looked up, as
+#                       <FORGEJO_ACTIONS_MIRROR_URL>/forgejo/upload-artifact (default
+#                       https://code.forgejo.org, the host named in the pin)
 #   BUMP_PINS_ROOT      the tree to edit (default: the repository this script is in)
 #   BUMP_PINS_DOCKER    the docker command (default docker; the self-test substitutes a fake)
 #   BUMP_PINS_LOCK_REFRESH   command that writes a fresh lock to the file named by its argument
@@ -62,6 +68,7 @@ esac
 root="${BUMP_PINS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 docker_command="${BUMP_PINS_DOCKER:-docker}"
 mirror="${ACTIONS_MIRROR_URL:-https://github.com}"
+forgejo_mirror="${FORGEJO_ACTIONS_MIRROR_URL:-https://code.forgejo.org}"
 cd "${root}"
 
 image_files=(
@@ -124,13 +131,13 @@ resolve_image_digest() {
     printf '%s' "${digest}"
 }
 
-# Prints the commit of the newest vMAJOR.minor.patch tag of the checkout action, as
-# "<tag> <commit>", or fails. Lightweight tags list their commit directly; an annotated tag lists
-# the tag object and a second "^{}" line with the commit, which wins.
-resolve_checkout() {
-    local major="$1" listing line sha ref name
+# Prints the newest vMAJOR.minor.patch tag of the action repository $1 (a URL) for the major
+# version $2, as "<tag> <commit>", or fails. Lightweight tags list their commit directly; an
+# annotated tag lists the tag object and a second "^{}" line with the commit, which wins.
+resolve_action() {
+    local repository="$1" major="$2" listing line sha ref name
     declare -A commits=()
-    listing="$(git ls-remote --tags "${mirror}/actions/checkout" "refs/tags/${major}.*")"
+    listing="$(git ls-remote --tags "${repository}" "refs/tags/${major}.*")"
     while read -r sha ref; do
         [[ -n "${sha}" ]] || continue
         name="${ref#refs/tags/}"
@@ -141,7 +148,7 @@ resolve_checkout() {
         fi
     done <<< "${listing}"
     if [[ "${#commits[@]}" -eq 0 ]]; then
-        echo "No ${major}.x.y tag found in ${mirror}/actions/checkout." >&2
+        echo "No ${major}.x.y tag found in ${repository}." >&2
         return 1
     fi
     line="$(printf '%s\n' "${!commits[@]}" | sort -V | tail -n 1)"
@@ -169,27 +176,34 @@ for pin in "${image_pins[@]}"; do
     done
 done
 
-# The checkout action. The comment after the commit names the tag, whose major version is kept.
-mapfile -t checkout_pins < <(grep -ohE "actions/checkout@[0-9a-f]{40}' # v[0-9]+\.[0-9]+\.[0-9]+" "${workflow_files[@]}" | sort -u)
-for pin in "${checkout_pins[@]}"; do
-    old_sha="${pin#*@}"
-    old_sha="${old_sha:0:40}"
-    old_tag="${pin##* }"
-    major="${old_tag%%.*}"
-    # Not a process substitution: its failure would not stop the script.
-    resolved="$(resolve_checkout "${major}")"
-    read -r new_tag new_sha <<< "${resolved}"
-    if [[ "${new_sha}" == "${old_sha}" && "${new_tag}" == "${old_tag}" ]]; then
-        echo "checkout  actions/checkout ${major}: unchanged (${old_tag} ${old_sha})"
-        continue
-    fi
-    echo "checkout  actions/checkout ${major}: ${old_tag} ${old_sha} -> ${new_tag} ${new_sha}"
-    changed=$((changed + 1))
-    new_pin="actions/checkout@${new_sha}' # ${new_tag}"
-    for file in "${workflow_files[@]}"; do
-        if grep -qF -- "${pin}" "${file}"; then
-            edits+=("${file}"$'\t'"${pin}"$'\t'"${new_pin}")
+# The pinned actions. Each is `<name>@<commit>' # vX.Y.Z` in a workflow; the comment after the
+# commit names the tag, whose major version is kept. The two arrays are parallel: the name as
+# written in the workflows, and the repository its tags are looked up in.
+action_names=('actions/checkout' 'https://code.forgejo.org/forgejo/upload-artifact')
+action_repositories=("${mirror}/actions/checkout" "${forgejo_mirror}/forgejo/upload-artifact")
+for index in "${!action_names[@]}"; do
+    action="${action_names[${index}]}"
+    mapfile -t action_pins < <(grep -ohE "${action}@[0-9a-f]{40}' # v[0-9]+\.[0-9]+\.[0-9]+" "${workflow_files[@]}" | sort -u)
+    for pin in "${action_pins[@]}"; do
+        old_sha="${pin#*@}"
+        old_sha="${old_sha:0:40}"
+        old_tag="${pin##* }"
+        major="${old_tag%%.*}"
+        # Not a process substitution: its failure would not stop the script.
+        resolved="$(resolve_action "${action_repositories[${index}]}" "${major}")"
+        read -r new_tag new_sha <<< "${resolved}"
+        if [[ "${new_sha}" == "${old_sha}" && "${new_tag}" == "${old_tag}" ]]; then
+            echo "action  ${action} ${major}: unchanged (${old_tag} ${old_sha})"
+            continue
         fi
+        echo "action  ${action} ${major}: ${old_tag} ${old_sha} -> ${new_tag} ${new_sha}"
+        changed=$((changed + 1))
+        new_pin="${action}@${new_sha}' # ${new_tag}"
+        for file in "${workflow_files[@]}"; do
+            if grep -qF -- "${pin}" "${file}"; then
+                edits+=("${file}"$'\t'"${pin}"$'\t'"${new_pin}")
+            fi
+        done
     done
 done
 

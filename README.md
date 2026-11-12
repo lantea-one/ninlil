@@ -6202,11 +6202,12 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded, nothing waits for it); and finally publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded; the image, the NuGet packages and publish wait for it); and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
-| `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout commit (below) and opens a pull request into `develop` (by hand, any branch) |
+| `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout and upload-artifact commits (below) and opens a pull request into `develop` (by hand, any branch) |
 
-A build publishes nothing until lint and every test have passed, and its release stays an invisible draft
+A build publishes nothing until lint and every test have passed (for a build of `develop` or
+`main`, the Windows tests included), and its release stays an invisible draft
 until every binary (and the Windows smoke test), both Arch Linux packages, the Deb and RPM packages (after they
 installed and started in Debian, Ubuntu, Rocky Linux and Fedora containers), the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
@@ -6216,8 +6217,25 @@ on the repository.
 The `test-windows` job builds the admin console and runs the whole solution's tests natively on
 `lofnheim`, for the Windows socket, file-system and process behaviour the Linux containers cannot
 show. It runs for builds of `develop` and `main` only, skips the tests that need Docker (the Linux
-job runs those), and starts alongside the Linux jobs. Neither the draft nor the publish step waits
-for it, so a Windows-only failure turns the run red without holding back a release.
+job runs those), and starts alongside the Linux jobs. The draft, the binaries and the Linux packages
+do not wait for it, so a green run is not slowed by the single Windows runner. Everything that
+makes a build visible does: a small `windows-gate` job waits for `test-windows` and runs when it
+succeeded or was skipped (it is skipped for every build that is not a push to `develop` or
+`main`), and `image`, `packages` and `publish` need that gate. A failed or cancelled
+`test-windows` therefore pushes no container image and no NuGet package and leaves the release an
+invisible draft, which the hourly clean-up removes after 24 hours.
+
+**Test results.** `test-dotnet`, `test-windows` and `test-admin-console` upload their results as a
+run artifact, also when their tests fail. Open the run on the Actions page and look under its
+artifacts for `test-results-test-dotnet`, `test-results-test-windows` and
+`test-results-test-admin-console`; they expire after 14 days. The .NET artifacts hold TRX files, one
+per test project, in two folders: `main` (every test but one) and `rollover` (the live DNSSEC
+rollover test, which runs alone after the rest). The Karma artifact holds `karma.log`, the
+console output of the suite, because no JUnit reporter is installed. The upload action is
+[`forgejo/upload-artifact`](https://code.forgejo.org/forgejo/upload-artifact), the Forgejo build of
+the upload action, because the upstream one refuses to run outside GitHub. Its pin moves with the
+weekly bump but stays on major version 3: Forgejo refuses the artifact protocol of version 4, and
+the upload step then fails its job.
 
 **Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
 reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and
@@ -6242,7 +6260,8 @@ variables) and run `.forgejo/scripts/linux-packages-smoke.sh dist`.
 **Pins.** Every base image is `name:tag@sha256:<multi-architecture index digest>` (the
 [`Dockerfile`](./Dockerfile), [`docker/ci.Dockerfile`](./docker/ci.Dockerfile),
 [`docker-compose.yml`](./docker-compose.yml) and the PostgreSQL test host), and every
-`actions/checkout` is a commit with its tag in a comment. The tag is for readers; the digest or
+`actions/checkout` and `forgejo/upload-artifact` is a commit with its tag in a comment. The tag
+is for readers; the digest or
 commit decides what runs. `bump-pins.yml` runs
 [`.forgejo/scripts/bump-pins.sh`](./.forgejo/scripts/bump-pins.sh) weekly and
 [`open-bump-pr.sh`](./.forgejo/scripts/open-bump-pr.sh) opens a pull request when something moved,
