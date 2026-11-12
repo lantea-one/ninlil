@@ -25,6 +25,12 @@ public class PlainForwarderClientTests
     /// </summary>
     private sealed class ScriptedUpstream : IDisposable
     {
+        /// <summary>
+        ///     This constant is how many TCP and UDP port pairs the constructor tries before the
+        ///     last UDP bind failure is thrown.
+        /// </summary>
+        private const int PortSearchLimit = 2000;
+
         private readonly Socket udpSocket;
         private readonly TcpListener tcpListener;
         private readonly CancellationTokenSource cts = new();
@@ -34,7 +40,11 @@ public class PlainForwarderClientTests
 
         /// <summary>
         ///     This constructor binds a TCP listener on an OS-assigned port, then binds UDP to
-        ///     the same number (retrying with a new TCP port when that number is taken).
+        ///     the same number. When the UDP bind fails, it moves on to the next TCP port, up to
+        ///     <see cref="PortSearchLimit" /> times: another program can hold that number for UDP,
+        ///     and Windows excludes some ranges for UDP only (WSAEACCES). The OS hands out port-0
+        ///     ports in sequence, so one excluded range of several hundred ports makes every
+        ///     attempt inside it fail, and the limit has to be above its size.
         /// </summary>
         /// <param name="script">
         ///     Called with each decoded query and <see langword="true" /> for UDP; returns the
@@ -55,7 +65,7 @@ public class PlainForwarderClientTests
                 {
                     socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
                 }
-                catch (SocketException) when (attempt < 20)
+                catch (SocketException) when (attempt < PortSearchLimit)
                 {
                     socket.Dispose();
                     candidate.Stop();

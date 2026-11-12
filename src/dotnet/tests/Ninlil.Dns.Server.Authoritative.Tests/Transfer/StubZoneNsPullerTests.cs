@@ -18,6 +18,12 @@ public class StubZoneNsPullerTests
 {
     private static readonly DnsName Zone = DnsName.Parse("stub.test.");
 
+    /// <summary>
+    ///     This constant is how many TCP and UDP port pairs <see cref="BindTcpAndUdpOnOnePort" />
+    ///     tries before it throws the last UDP bind failure.
+    /// </summary>
+    private const int PortSearchLimit = 2000;
+
     private sealed class NoOpTsigService : ITsigService
     {
         public Task<DnsMessage> SignAsync(
@@ -196,17 +202,11 @@ public class StubZoneNsPullerTests
         // PullNsRecordsAsync's TCP fallback reuses the same primaryPort number its
         // initial UDP query targeted -- like a real dual-stack primary answering both UDP
         // and TCP on the same well-known port. UDP and TCP occupy independent port namespaces, so
-        // the same number can be (and here, is) bound by both a UdpClient and a
-        // TcpListener at once without conflicting; probed via a throwaway TCP bind first, mirroring
-        // ZoneTransferPullCodecTests's identical "probe, read the port, then reuse the number"
-        // pattern.
-        using TcpListener portProbe = new(IPAddress.Loopback, 0);
-        portProbe.Start();
-        int sharedPort = ((IPEndPoint)portProbe.LocalEndpoint).Port;
-        portProbe.Stop();
-
-        TcpListener tcpListener = new(IPAddress.Loopback, sharedPort);
-        tcpListener.Start();
+        // one number can be bound by both a TcpListener and a UdpClient at once.
+        (TcpListener Tcp, UdpClient Udp, int Port) pair = BindTcpAndUdpOnOnePort();
+        TcpListener tcpListener = pair.Tcp;
+        using UdpClient udpListener = pair.Udp;
+        int sharedPort = pair.Port;
 
         _ = Task.Run(
             async () =>
@@ -241,8 +241,6 @@ public class StubZoneNsPullerTests
             },
             cts.Token
         );
-
-        using UdpClient udpListener = new(new IPEndPoint(IPAddress.Loopback, sharedPort));
 
         _ = Task.Run(
             async () =>
@@ -407,5 +405,33 @@ public class StubZoneNsPullerTests
         );
 
         Assert.False(result.Succeeded);
+    }
+
+    /// <summary>
+    ///     This method starts a TCP listener on an OS-assigned loopback port and binds a UDP
+    ///     socket to the same number, so the pair stays held until the test is done. When the UDP
+    ///     bind fails, it moves on to the next TCP port, up to <see cref="PortSearchLimit" />
+    ///     times: another program can hold the number for UDP, and Windows excludes some ranges
+    ///     for UDP only (WSAEACCES). The OS hands out port-0 ports in sequence, so an excluded
+    ///     range of several hundred ports makes every attempt inside it fail, and the limit has to
+    ///     be above its size.
+    /// </summary>
+    private static (TcpListener Tcp, UdpClient Udp, int Port) BindTcpAndUdpOnOnePort()
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            TcpListener tcp = new(IPAddress.Loopback, 0);
+            tcp.Start();
+            int port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+
+            try
+            {
+                return (tcp, new UdpClient(new IPEndPoint(IPAddress.Loopback, port)), port);
+            }
+            catch (SocketException) when (attempt < PortSearchLimit)
+            {
+                tcp.Stop();
+            }
+        }
     }
 }
