@@ -6206,7 +6206,8 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 | `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout and upload-artifact commits (below) and opens a pull request into `develop` (by hand, any branch) |
 
-A build publishes nothing until lint and every test have passed (for a build of `develop` or `main`, the Windows tests included), and its release stays an invisible draft
+A build publishes nothing until lint and every test have passed (for a build of `develop` or
+`main`, the Windows tests included), and its release stays an invisible draft
 until every binary (and the Windows smoke test), both Arch Linux packages, the Deb and RPM packages (after they
 installed and started in Debian, Ubuntu, Rocky Linux and Fedora containers), the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token

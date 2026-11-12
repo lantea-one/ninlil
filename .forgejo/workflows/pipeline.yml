@@ -539,9 +539,10 @@ jobs:
         shell: 'bash'
   ##
   ## NuGet packages for the libraries, one matrix job per family, pushed to the Forgejo NuGet
-  ## registry. Runs alongside the draft, binaries and image jobs once the tests and lint pass. A
-  ## pushed package can be restored at once, so the job also waits for windows-gate: a build
-  ## whose Windows tests failed pushes no package.
+  ## registry. Runs alongside the draft and binaries jobs once the tests and lint pass and, for a
+  ## build of develop or main, the Windows tests have passed: a pushed package can be restored at
+  ## once, so the job waits for windows-gate and a build whose Windows tests failed pushes no
+  ## package.
   ##
   packages:
     name: 'Pack and Push NuGet Packages (${{ matrix.family }})'
